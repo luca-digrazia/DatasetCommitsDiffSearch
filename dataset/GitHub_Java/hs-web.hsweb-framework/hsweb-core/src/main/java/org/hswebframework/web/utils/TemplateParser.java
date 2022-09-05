@@ -41,8 +41,6 @@ public class TemplateParser {
 
     private int len = 0;
 
-    private byte prepareFlag = 0;
-
     public void setParsed(char[] chars, int end) {
         for (int i = 0; i < end; i++) {
             char aChar = chars[i];
@@ -55,7 +53,7 @@ public class TemplateParser {
     }
 
     public void setParsed(char... chars) {
-        setParsed(chars, chars.length);
+       setParsed(chars,chars.length);
     }
 
     private void init() {
@@ -64,17 +62,11 @@ public class TemplateParser {
         newArr = new char[templateArray.length * 2];
     }
 
-    private boolean isPreparing() {
-        return prepareFlag > 0;
-    }
-
     private boolean isPrepare() {
-        if (prepareStartSymbol[prepareFlag] == symbol) {
-            prepareFlag++;
-        }
-        if (prepareFlag >= prepareStartSymbol.length) {
-            prepareFlag = 0;
-            return true;
+        for (char c : prepareStartSymbol) {
+            if (c == symbol) {
+                return true;
+            }
         }
         return false;
     }
@@ -93,6 +85,7 @@ public class TemplateParser {
         return pos < templateArray.length;
     }
 
+
     public String parse(Function<String, String> propertyMapping) {
         init();
         boolean inPrepare = false;
@@ -105,17 +98,21 @@ public class TemplateParser {
                 inPrepare = true;
             } else if (isPrepareEnd()) {
                 inPrepare = false;
+
+
                 setParsed(propertyMapping.apply(new String(expression, 0, expressionPos)).toCharArray());
                 expressionPos = 0;
             } else if (inPrepare) {
                 expression[expressionPos++] = symbol;
-            } else if (!isPreparing()) {
+            } else {
                 setParsed(symbol);
             }
         }
 
-        if (isPrepareEnd() && expressionPos > 0) {
+        if (isPrepareEnd()) {
+
             setParsed(propertyMapping.apply(new String(expression, 0, expressionPos)).toCharArray());
+
         } else {
             setParsed(symbol);
         }
