@@ -107,27 +107,6 @@ public abstract class Maker {
 				bqb = FilterBuilders.queryFilter((QueryBuilder) bqb);
 			}
 			break;
-        case "match_term":
-        case "matchterm":
-        case "term":
-            if(isQuery){
-                bqb = QueryBuilders.termQuery(name,value.getParameters().get(0));
-            }
-            else {
-                bqb = FilterBuilders.termFilter(name,value.getParameters().get(0));
-            }
-            break;
-        case "in_terms":
-        case "interms":
-        case "terms":
-            Object[] values = value.getParameters().toArray();
-            if(isQuery){
-                bqb =QueryBuilders.termsQuery(name,values);
-            }
-            else {
-                bqb = FilterBuilders.termsFilter(name,values);
-            }
-            break;
 		default:
 			throw new SqlParseException("it did not support this query method " + value.getMethodName());
 
@@ -143,15 +122,16 @@ public abstract class Maker {
 		case IS:
 		case N:
 		case EQ:
-			if (value == null || value instanceof SQLIdentifierExpr) {
-				if(value == null || ((SQLIdentifierExpr) value).getName().equalsIgnoreCase("missing")) {
+			if (value instanceof SQLIdentifierExpr) {
+				SQLIdentifierExpr identifier = (SQLIdentifierExpr) value;
+				if(identifier.getName().equalsIgnoreCase("missing")) {
 					x = FilterBuilders.missingFilter(name);
 					if (isQuery) {
 						x = QueryBuilders.filteredQuery(QueryBuilders.matchAllQuery(), FilterBuilders.missingFilter(name));
 					}
 				}
 				else {
-					throw new SqlParseException(String.format("Cannot recoginze Sql identifer %s", ((SQLIdentifierExpr) value).getName()));
+					throw new SqlParseException(String.format("Cannot recoginze Sql identifer %s", identifier.getName()));
 				}
 				break;
 			} else {
@@ -227,7 +207,7 @@ public abstract class Maker {
         case GEO_INTERSECTS:
             String wkt = cond.getValue().toString();
             try {
-                ShapeBuilder shapeBuilder = getShapeBuilderFromString(wkt);
+                ShapeBuilder shapeBuilder = getShapeBuilderFromWkt(wkt);
                 if(isQuery)
                     x = QueryBuilders.geoShapeQuery(cond.getName(), shapeBuilder);
                 else
@@ -287,23 +267,9 @@ public abstract class Maker {
 		return x;
 	}
 
-    private ShapeBuilder getShapeBuilderFromString(String str) throws IOException {
-        String json;
-        if(str.contains("{")) json  = fixJsonFromElastic(str);
-        else json = WktToGeoJsonConverter.toGeoJson(trimApostrophes(str));
-
+    private ShapeBuilder getShapeBuilderFromWkt(String wkt) throws IOException {
+        String json = WktToGeoJsonConverter.toGeoJson(trimApostrophes(wkt));
         return getShapeBuilderFromJson(json);
-    }
-
-    /*
-    * elastic sends {coordinates=[[[100.0, 0.0], [101.0, 0.0], [101.0, 1.0], [100.0, 1.0], [100.0, 0.0]]], type=Polygon}
-    * proper form is {"coordinates":[[[100.0, 0.0], [101.0, 0.0], [101.0, 1.0], [100.0, 1.0], [100.0, 0.0]]], "type":"Polygon"}
-     *  */
-    private String fixJsonFromElastic(String elasticJson) {
-        String properJson = elasticJson.replaceAll("=",":");
-        properJson = properJson.replaceAll("(type)(:)([a-zA-Z]+)","\"type\":\"$3\"");
-        properJson = properJson.replaceAll("coordinates","\"coordinates\"");
-        return properJson;
     }
 
     private ShapeBuilder getShapeBuilderFromJson(String json) throws IOException {
