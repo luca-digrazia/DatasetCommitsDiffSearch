@@ -22,10 +22,10 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.util.Map;
 
 /**
@@ -68,6 +68,14 @@ public class ActionLookupValue implements SkyValue {
     return generatingActionMap;
   }
 
+  /**
+   * To be used only when setting the owners of deserialized artifacts whose owners were unknown at
+   * creation time -- not by other callers or values.
+   */
+  Iterable<ActionAnalysisMetadata> getActionsForFindingArtifactOwners() {
+    return generatingActionMap.values();
+  }
+
   @VisibleForTesting
   public static SkyKey key(ActionLookupKey ownerKey) {
     return ownerKey.getSkyKey();
@@ -93,24 +101,13 @@ public class ActionLookupValue implements SkyValue {
      */
     abstract SkyFunctionName getType();
 
-    SkyKey getSkyKeyInternal() {
-      return SkyKey.create(getType(), this);
-    }
-
     /**
      * Prefer {@link ActionLookupValue#key} to calling this method directly.
      *
-     * <p>Subclasses may override {@link #getSkyKeyInternal} if the {@link SkyKey} argument should
-     * not be this {@link ActionLookupKey} itself.
+     * <p>Subclasses may override if the value key contents should not be the key itself.
      */
-    final SkyKey getSkyKey() {
-      SkyKey result = getSkyKeyInternal();
-      Preconditions.checkState(
-          result.argument() instanceof ActionLookupKey,
-          "Not ActionLookupKey for %s: %s",
-          this,
-          result);
-      return result;
+    SkyKey getSkyKey() {
+      return SkyKey.create(getType(), this);
     }
   }
 }
