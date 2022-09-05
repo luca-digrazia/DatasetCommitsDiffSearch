@@ -16,37 +16,57 @@
 
 package org.hsweb.web.datasource.dynamic;
 
+import com.atomikos.icatch.config.UserTransactionService;
+import com.atomikos.icatch.config.UserTransactionServiceImp;
 import com.atomikos.icatch.jta.UserTransactionImp;
 import com.atomikos.icatch.jta.UserTransactionManager;
 import com.atomikos.jdbc.AtomikosDataSourceBean;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.reflect.MethodSignature;
+import org.hsweb.commons.ClassUtils;
 import org.hsweb.commons.StringUtils;
+import org.hsweb.web.core.datasource.DataSourceHolder;
 import org.hsweb.web.core.datasource.DynamicDataSource;
-import org.hsweb.web.service.datasource.DynamicDataSourceService;
+import org.hsweb.web.core.utils.AopUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.jta.atomikos.AtomikosProperties;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.transaction.jta.JtaTransactionManager;
 
 import javax.sql.DataSource;
 import javax.transaction.SystemException;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.util.Properties;
 
 @Configuration
 @ConditionalOnMissingBean(DynamicDataSource.class)
+@EnableConfigurationProperties(DynamicDataSourceProperties.class)
 @ComponentScan("org.hsweb.web.datasource.dynamic")
 public class DynamicDataSourceAutoConfiguration {
 
     @Autowired
-    private DataSourceProperties properties;
+    private DynamicDataSourceProperties properties;
 
-    static {
-        //  com.atomikos.icatch.config.Configuration.init();
-        //  com.atomikos.icatch.config.Configuration.installCompositeTransactionManager(new CompositeTransactionManagerImp());
+    @Bean(initMethod = "init", destroyMethod = "shutdownForce")
+    public UserTransactionServiceImp userTransactionService() {
+        AtomikosProperties atomikosProperties = properties.getIcatch();
+        Properties properties = new Properties();
+        properties.putAll(atomikosProperties.asProperties());
+        if (StringUtils.isNullOrEmpty(properties.get("com.atomikos.icatch.service"))) {
+            properties.put("com.atomikos.icatch.service", "com.atomikos.icatch.standalone.UserTransactionServiceFactory");
+        }
+        return new UserTransactionServiceImp(properties);
     }
 
     /**
@@ -54,46 +74,34 @@ public class DynamicDataSourceAutoConfiguration {
      */
     @Primary
     @Bean(initMethod = "init", name = "dataSource", destroyMethod = "close")
+    @ConditionalOnMissingBean(DataSource.class)
+    @Cacheable
     public DataSource dataSource() {
         AtomikosDataSourceBean dataSourceBean = new AtomikosDataSourceBean();
-        dataSourceBean.getXaProperties().putAll(properties.getXa().getProperties());
-        dataSourceBean.setXaDataSourceClassName(properties.getXa().getDataSourceClassName());
-        dataSourceBean.setUniqueResourceName("core");
-        dataSourceBean.setMaxPoolSize(StringUtils.toInt(properties.getXa().getProperties().get("maxPoolSize"), 200));
-        dataSourceBean.setTestQuery(properties.getXa().getProperties().get("validationQuery"));
-        dataSourceBean.setBorrowConnectionTimeout(60);
+        properties.putProperties(dataSourceBean);
         return dataSourceBean;
     }
 
     @Bean(name = "dynamicDataSource")
     public DynamicXaDataSourceImpl dynamicXaDataSource(@Qualifier("dataSource") DataSource dataSource) {
-        return new DynamicXaDataSourceImpl(dataSource);
+        DynamicXaDataSourceImpl dynamicXaDataSource = new DynamicXaDataSourceImpl(dataSource, properties.getType());
+        DataSourceHolder.install(dynamicXaDataSource);
+        return dynamicXaDataSource;
     }
 
-    /**
-     * 动态数据源
-     */
     @Bean(initMethod = "init", destroyMethod = "close")
-    public AtomikosDataSourceBean atomikosDataSourceBean(DynamicXaDataSourceImpl dynamicDataSource) {
-        AtomikosDataSourceBean dataSourceBean = new AtomikosDataSourceBean();
-        dataSourceBean.setXaDataSource(dynamicDataSource);
-        dataSourceBean.setUniqueResourceName("dynamic");
-        dataSourceBean.setMaxPoolSize(StringUtils.toInt(properties.getXa().getProperties().get("maxPoolSize"), 200));
-        dataSourceBean.setBorrowConnectionTimeout(30);
-        return dataSourceBean;
-    }
-
-    @Bean
-    public UserTransactionManager userTransactionManager() {
+    public UserTransactionManager userTransactionManager(
+            UserTransactionService userTransactionService) {
         UserTransactionManager transactionManager = new UserTransactionManager();
         transactionManager.setForceShutdown(true);
+        transactionManager.setStartupTransactionService(false);
         return transactionManager;
     }
 
     @Bean
     public UserTransactionImp userTransaction() throws SystemException {
         UserTransactionImp userTransactionImp = new UserTransactionImp();
-        userTransactionImp.setTransactionTimeout(300);
+        userTransactionImp.setTransactionTimeout(properties.getTransactionTimeout());
         return userTransactionImp;
     }
 
@@ -107,8 +115,58 @@ public class DynamicDataSourceAutoConfiguration {
     }
 
     @Bean(name = "sqlExecutor")
+    @ConditionalOnMissingBean(DynamicDataSourceSqlExecutorService.class)
     public DynamicDataSourceSqlExecutorService sqlExecutor() {
         return new DynamicDataSourceSqlExecutorService();
     }
 
+    @Bean
+    public AnnotationDataSourceChangeConfiguration annotationDataSourceChangeConfiguration() {
+        return new AnnotationDataSourceChangeConfiguration();
+    }
+
+    @Aspect
+    public static class AnnotationDataSourceChangeConfiguration {
+
+        private <T extends Annotation> T getAnn(ProceedingJoinPoint pjp, Class<T> annClass) {
+            MethodSignature signature = (MethodSignature) pjp.getSignature();
+            Method m = signature.getMethod();
+            T a = AnnotationUtils.findAnnotation(m, annClass);
+            if (a != null) return a;
+            Class<?> targetClass = pjp.getTarget().getClass();
+            m = org.springframework.util.ClassUtils.getMostSpecificMethod(m, targetClass);
+            a = AnnotationUtils.findAnnotation(m, annClass);
+            if (a != null) return a;
+            return AnnotationUtils.findAnnotation(pjp.getTarget().getClass(), annClass);
+        }
+
+        @Around(value = "within(@org.hsweb.web.datasource.dynamic.UseDataSource *)||@annotation(org.hsweb.web.datasource.dynamic.UseDataSource)")
+        public Object useDatasource(ProceedingJoinPoint pjp) throws Throwable {
+            UseDataSource ann = getAnn(pjp, UseDataSource.class);
+            try {
+                if (null != ann) {
+                    DynamicDataSource.use(ann.value());
+                }
+                return pjp.proceed();
+            } finally {
+                if (null != ann) {
+                    DynamicDataSource.useDefault(false);
+                }
+            }
+        }
+
+        @Around(value = "within(@org.hsweb.web.datasource.dynamic.UseDefaultDataSource *)||@annotation(org.hsweb.web.datasource.dynamic.UseDataSource)")
+        public Object useDefaultDatasource(ProceedingJoinPoint pjp) throws Throwable {
+            UseDefaultDataSource ann = getAnn(pjp, UseDefaultDataSource.class);
+            try {
+                if (null != ann) {
+                    DynamicDataSource.useDefault(ann.value());
+                }
+                return pjp.proceed();
+            } finally {
+                if (ann != null && ann.value())
+                    DynamicDataSource.useLast();
+            }
+        }
+    }
 }
