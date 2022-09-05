@@ -39,11 +39,10 @@ public interface Preprocessor {
       /**
        * Returns a Preprocessor factory to use for getting Preprocessor instances.
        *
-       * @param loc a package locator for preprocessors to look up other BUILD files
-       * @param outputBase allows non-hermetic access to the file system and output base; use with
-       *        extreme caution
+       * <p>The CachingPackageLocator is provided so the constructed preprocessors can look up
+       * other BUILD files.
        */
-      Factory getFactory(CachingPackageLocator loc, Path outputBase);
+      Factory getFactory(CachingPackageLocator loc);
 
       /** Supplier that always returns {@code NullFactory.INSTANCE}. */
       static class NullSupplier implements Supplier {
@@ -54,7 +53,7 @@ public interface Preprocessor {
         }
 
         @Override
-        public Factory getFactory(CachingPackageLocator loc, Path outputBase) {
+        public Factory getFactory(CachingPackageLocator loc) {
           return NullFactory.INSTANCE;
         }
       }
