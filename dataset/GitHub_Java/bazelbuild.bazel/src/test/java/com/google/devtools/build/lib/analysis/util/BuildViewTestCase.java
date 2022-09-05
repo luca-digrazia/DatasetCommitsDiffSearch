@@ -669,12 +669,12 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   /**
-   * Returns the ConfiguredTarget for the specified label, configured for the "build" (aka "target")
-   * configuration.
+   * Returns the ConfiguredTarget for the specified label, configured for the
+   * "build" (aka "target") configuration.
    */
-  public ConfiguredTarget getConfiguredTarget(String label)
-      throws NoSuchPackageException, NoSuchTargetException, LabelSyntaxException,
-          InterruptedException {
+  protected ConfiguredTarget getConfiguredTarget(String label)
+      throws NoSuchPackageException, NoSuchTargetException,
+      LabelSyntaxException, InterruptedException {
     return getConfiguredTarget(label, targetConfig);
   }
 

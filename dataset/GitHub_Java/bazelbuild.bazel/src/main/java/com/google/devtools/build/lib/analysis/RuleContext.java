@@ -78,7 +78,6 @@ import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
-import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -104,6 +103,7 @@ import javax.annotation.Nullable;
  */
 public final class RuleContext extends TargetContext
     implements ActionConstructionContext, ActionRegistry, RuleErrorConsumer {
+
   /**
    * The configured version of FilesetEntry.
    */
@@ -520,8 +520,8 @@ public final class RuleContext extends TargetContext
    */
   public Root getBinOrGenfilesDirectory() {
     return rule.hasBinaryOutput()
-        ? getConfiguration().getBinDirectory(rule.getRepository())
-        : getConfiguration().getGenfilesDirectory(rule.getRepository());
+        ? getConfiguration().getBinDirectory()
+        : getConfiguration().getGenfilesDirectory();
   }
 
   /**
@@ -537,12 +537,8 @@ public final class RuleContext extends TargetContext
    * guaranteeing that it never clashes with artifacts created by rules in other packages.
    */
   public Artifact getBinArtifact(String relative) {
-    return getBinArtifact(new PathFragment(relative));
-  }
-
-  public Artifact getBinArtifact(PathFragment relative) {
     return getPackageRelativeArtifact(
-        relative, getConfiguration().getBinDirectory(rule.getRepository()));
+        new PathFragment(relative), getConfiguration().getBinDirectory());
   }
 
   /**
@@ -550,12 +546,8 @@ public final class RuleContext extends TargetContext
    * guaranteeing that it never clashes with artifacts created by rules in other packages.
    */
   public Artifact getGenfilesArtifact(String relative) {
-    return getGenfilesArtifact(new PathFragment(relative));
-  }
-
-  public Artifact getGenfilesArtifact(PathFragment relative) {
     return getPackageRelativeArtifact(
-        relative, getConfiguration().getGenfilesDirectory(rule.getRepository()));
+        new PathFragment(relative), getConfiguration().getGenfilesDirectory());
   }
 
   /**
@@ -1319,7 +1311,7 @@ public final class RuleContext extends TargetContext
    */
   public final Artifact getRelatedArtifact(PathFragment pathFragment, String extension) {
     PathFragment file = FileSystemUtils.replaceExtension(pathFragment, extension);
-    return getDerivedArtifact(file, getConfiguration().getBinDirectory(rule.getRepository()));
+    return getDerivedArtifact(file, getConfiguration().getBinDirectory());
   }
 
   /**
@@ -1399,7 +1391,7 @@ public final class RuleContext extends TargetContext
     private final PrerequisiteValidator prerequisiteValidator;
     @Nullable private final String aspectName;
     private final ErrorReporter reporter;
-    private OrderedSetMultimap<Attribute, ConfiguredTarget> prerequisiteMap;
+    private ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap;
     private ImmutableMap<Label, ConfigMatchingProvider> configConditions;
     private NestedSet<PackageSpecification> visibility;
     private ImmutableMap<String, Attribute> aspectAttributes;
@@ -1456,7 +1448,7 @@ public final class RuleContext extends TargetContext
      * Sets the prerequisites and checks their visibility. It also generates appropriate error or
      * warning messages and sets the error flag as appropriate.
      */
-    Builder setPrerequisites(OrderedSetMultimap<Attribute, ConfiguredTarget> prerequisiteMap) {
+    Builder setPrerequisites(ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap) {
       this.prerequisiteMap = Preconditions.checkNotNull(prerequisiteMap);
       return this;
     }
