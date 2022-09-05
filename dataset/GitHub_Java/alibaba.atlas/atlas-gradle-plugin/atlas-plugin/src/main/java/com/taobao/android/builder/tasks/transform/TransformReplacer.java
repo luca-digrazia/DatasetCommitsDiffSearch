@@ -23,7 +23,6 @@ import com.android.build.gradle.internal.transforms.*;
 import com.android.build.gradle.options.BooleanOption;
 import com.android.build.gradle.options.IntegerOption;
 import com.android.build.gradle.options.ProjectOptions;
-import com.android.build.gradle.tasks.ir.FastDeployRuntimeExtractorTask;
 import com.android.builder.core.AtlasBuilder;
 import com.android.builder.core.DefaultDexOptions;
 import com.android.builder.core.DexOptions;
@@ -59,7 +58,6 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static com.google.common.base.Verify.verifyNotNull;
@@ -433,13 +431,30 @@ public class TransformReplacer {
     }
 
     public void repalaceSomeInstantTransform(BaseVariantOutput vod) {
-
-        variantContext.getProject().getTasks().withType(FastDeployRuntimeExtractorTask.class).forEach(fastDeployRuntimeExtractorTask -> fastDeployRuntimeExtractorTask.setEnabled(false));
         List<TransformTask> baseTransforms = TransformManager.findTransformTaskByTransformType(
                 variantContext, InstantRunDependenciesApkBuilder.class);
         if (baseTransforms != null && baseTransforms.size() > 0){
             for (TransformTask transformTask:baseTransforms){
                 transformTask.setEnabled(false);
+//                PackagingScope packagingScope = new DefaultGradlePackagingScope(variantContext.getScope());
+//                TaobaoInstantRunDependenciesApkBuilder taobaoInstantRunDependenciesApkBuilder = new TaobaoInstantRunDependenciesApkBuilder(
+//                        variantContext.getProject().getLogger(),
+//                        variantContext.getProject(),
+//                        variantContext.getScope().getInstantRunBuildContext(),
+//                        variantContext.getScope().getGlobalScope().getAndroidBuilder(),
+//                        variantContext.getScope().getGlobalScope().getBuildCache(),
+//                        packagingScope,
+//                        packagingScope.getSigningConfig(),
+//                        AaptGeneration.AAPT_V1,
+//                        packagingScope.getAaptOptions(),
+//                        new File(packagingScope.getInstantRunSplitApkOutputFolder(), "dep"),
+//                        packagingScope.getInstantRunSupportDir(),
+//                        new File(
+//                                packagingScope.getIncrementalDir(
+//                                        "TaobaoInstantRunDependenciesApkBuilder"),
+//                                "aapt-temp"));
+//                ReflectUtils.updateField(transformTask, "transform",
+//                        taobaoInstantRunDependenciesApkBuilder);
             }
         }
 
@@ -450,15 +465,6 @@ public class TransformReplacer {
                 TaobaoInstantRunTransform taobaoInstantRunTransform = new TaobaoInstantRunTransform(variantContext,variantContext.getAppVariantOutputContext(ApkDataUtils.get(vod)),WaitableExecutor.useGlobalSharedThreadPool(),
                         variantContext.getScope());
                 ReflectUtils.updateField(transformTask,"transform",taobaoInstantRunTransform);
-            }
-        }
-
-
-        List<TransformTask> verifytransforms = TransformManager.findTransformTaskByTransformType(
-                variantContext, InstantRunVerifierTransform.class);
-        if (verifytransforms != null && verifytransforms.size() > 0){
-            for (TransformTask transformTask: verifytransforms){
-               transformTask.setEnabled(false);
             }
         }
 
