@@ -575,15 +575,11 @@ public final class CompilationSupport {
     // the debug symbol bundle, dsymutil will look inside the linked binary for the encoded
     // absolute paths to archive files, which are only valid in the link action.
     if (dsymBundle.isPresent()) {
-      PathFragment dsymPath = FileSystemUtils.removeExtension(dsymBundle.get().getExecPath());
       commandLine
           .add("&&")
           .addPath(DSYMUTIL)
           .add(linkedBinary.getExecPathString())
-          .add("-o " + dsymPath)
-          .add("&& zipped_bundle=${PWD}/" + dsymBundle.get().getShellEscapedExecPathString())
-          .add("&& cd " + dsymPath)
-          .add("&& /usr/bin/zip -q -r \"${zipped_bundle}\" .");
+          .addExecPath("-o", dsymBundle.get());
     }
 
     return new SingleArgCommandLine(commandLine.build());
