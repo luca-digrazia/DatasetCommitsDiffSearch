@@ -14,9 +14,10 @@
 
 package com.google.devtools.build.lib.runtime;
 
+import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.common.options.OptionsParsingException;
+
 import java.util.List;
 
 /**
@@ -39,7 +40,7 @@ public interface ProjectFile {
      * file cannot be parsed, then it throws an exception.
      */
     ProjectFile getProjectFile(Path workingDirectory, List<Path> packagePath, PathFragment path)
-        throws OptionsParsingException;
+        throws AbruptExitException;
   }
 
   /**
