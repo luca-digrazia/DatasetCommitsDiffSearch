@@ -172,19 +172,11 @@ public class BazelLibrary {
         defaultValue = "''",
         doc = "Optional custom error to report if no condition matches."
       )
-    },
-    useLocation = true
+    }
   )
   private static final BuiltinFunction select =
       new BuiltinFunction("select") {
-        public Object invoke(SkylarkDict<?, ?> dict, String noMatchError, Location loc)
-            throws EvalException {
-          for (Object key : dict.keySet()) {
-            if (!(key instanceof String)) {
-              throw new EvalException(loc,
-                  String.format("Invalid key: %s. select keys must be label references", key));
-            }
-          }
+        public Object invoke(SkylarkDict<?, ?> dict, String noMatchError) throws EvalException {
           return SelectorList.of(new SelectorValue(dict, noMatchError));
         }
       };
