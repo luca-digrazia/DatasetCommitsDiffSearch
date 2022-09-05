@@ -36,10 +36,14 @@ public enum Platform {
   WATCHOS_DEVICE("WatchOS"),
   WATCHOS_SIMULATOR("WatchSimulator");
 
+  private static final Set<String> IOS_SIMULATOR_ARCHS = ImmutableSet.of("i386", "x86_64");
+  private static final Set<String> IOS_DEVICE_ARCHS =
+      ImmutableSet.of("armv6", "armv7", "armv7s", "arm64");
+  
   private static final Set<String> IOS_SIMULATOR_TARGET_CPUS =
       ImmutableSet.of("ios_x86_64", "ios_i386");
   private static final Set<String> IOS_DEVICE_TARGET_CPUS =
-      ImmutableSet.of("ios_armv6", "ios_arm64", "ios_armv7", "ios_armv7s");
+      ImmutableSet.of("ios_armv7", "ios_arm64");
   private static final Set<String> MACOSX_TARGET_CPUS =
       ImmutableSet.of("darwin_x86_64");
 
@@ -64,6 +68,26 @@ public enum Platform {
     return nameInPlist.toLowerCase(Locale.US);
   }
 
+  /**
+   * Returns the iOS platform for the given iOS architecture.
+   *
+   * <p>If this method is used in non-iOS contexts, results are undefined. If the input happens
+   * to share an architecture with some iOS platform, this will return that platform even if it is
+   * incorrect (for example, IOS_SIMULATOR for the x86_64 of darwin_x86_64).
+   * 
+   * @throws IllegalArgumentException if there is no valid ios platform for the given architecture
+   */
+  public static Platform forIosArch(String arch) {
+    if (IOS_SIMULATOR_ARCHS.contains(arch)) {
+      return IOS_SIMULATOR;
+    } else if (IOS_DEVICE_ARCHS.contains(arch)) {
+      return IOS_DEVICE;
+    } else {
+      throw new IllegalArgumentException(
+          "No supported ios platform registered for architecture " + arch);
+    }
+  }
+  
   @Nullable
   private static Platform forTargetCpuNullable(String targetCpu) {
     if (IOS_SIMULATOR_TARGET_CPUS.contains(targetCpu)) {
@@ -78,22 +102,10 @@ public enum Platform {
   }
 
   /**
-   * Returns the platform for the given target cpu and platform type.
+   * Returns the platform for the given target cpu.
    * 
-   * @param platformType platform type that the given cpu value is implied for
-   * @param arch architecture representation, such as 'arm64'
    * @throws IllegalArgumentException if there is no valid apple platform for the given target cpu
    */
-  public static Platform forTarget(PlatformType platformType, String arch) {
-    return forTargetCpu(String.format("%s_%s", platformType.toString(), arch));
-  }
-
- /**
-  * Returns the platform for the given target cpu.
-  * 
-  * @param targetCpu cpu value with platform type prefix, such as 'ios_arm64'
-  * @throws IllegalArgumentException if there is no valid apple platform for the given target cpu
-  */
   public static Platform forTargetCpu(String targetCpu) {
     Platform platform = forTargetCpuNullable(targetCpu);
     if (platform != null) {
@@ -120,11 +132,6 @@ public enum Platform {
     IOS,
     WATCHOS,
     TVOS,
-    MACOSX;
-    
-    @Override
-    public String toString() {
-      return name().toLowerCase();
-    }
+    MACOSX
   }
 }

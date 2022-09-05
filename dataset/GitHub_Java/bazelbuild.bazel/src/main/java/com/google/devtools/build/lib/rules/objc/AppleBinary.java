@@ -14,9 +14,13 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -55,8 +59,8 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
       new AppleBinaryTransitionProvider();
 
   @VisibleForTesting
-  static final String REQUIRES_AT_LEAST_ONE_SOURCE_FILE =
-      "At least one source file is required (srcs, non_arc_srcs, or precompiled_srcs).";
+  static final String REQUIRES_AT_LEAST_ONE_LIBRARY_OR_SOURCE_FILE =
+      "At least one library dependency or source file is required.";
 
   @Override
   public final ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
@@ -73,8 +77,6 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
 
     NestedSetBuilder<Artifact> binariesToLipo =
         NestedSetBuilder.<Artifact>stableOrder();
-    NestedSetBuilder<Artifact> archivesToLipo =
-        NestedSetBuilder.<Artifact>stableOrder();
     NestedSetBuilder<Artifact> filesToBuild =
         NestedSetBuilder.<Artifact>stableOrder()
             .add(ruleIntermediateArtifacts.combinedArchitectureBinary());
@@ -85,6 +87,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
       ObjcCommon common = common(ruleContext, childConfig, intermediateArtifacts,
           nullToEmptyList(configToDepsCollectionMap.get(childConfig)),
           nullToEmptyList(configurationToNonPropagatedObjcMap.get(childConfig)));
+      ObjcProvider objcProvider = common.getObjcProvider();
       ImmutableList.Builder<J2ObjcMappingFileProvider> j2ObjcMappingFileProviders =
           ImmutableList.builder();
       J2ObjcEntryClassProvider.Builder j2ObjcEntryClassProviderBuilder =
@@ -102,15 +105,14 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
           J2ObjcMappingFileProvider.union(j2ObjcMappingFileProviders.build());
       J2ObjcEntryClassProvider j2ObjcEntryClassProvider = j2ObjcEntryClassProviderBuilder.build();
       
-      if (!common.getCompilationArtifacts().get().getArchive().isPresent()) {
-        ruleContext.ruleError(REQUIRES_AT_LEAST_ONE_SOURCE_FILE);
+      if (!hasLibraryOrSources(objcProvider)) {
+        ruleContext.ruleError(REQUIRES_AT_LEAST_ONE_LIBRARY_OR_SOURCE_FILE);
         return null;
       }
       if (ruleContext.hasErrors()) {
         return null;
       }
 
-      archivesToLipo.add(common.getCompilationArtifacts().get().getArchive().get());
       binariesToLipo.add(intermediateArtifacts.strippedSingleArchitectureBinary());
       new CompilationSupport(ruleContext, childConfig)
           .registerCompileAndArchiveActions(common)
@@ -127,20 +129,20 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
 
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
-    new LipoSupport(ruleContext)
-        .registerCombineArchitecturesAction(
-            binariesToLipo.build(),
-            ruleIntermediateArtifacts.combinedArchitectureBinary(),
-            appleConfiguration.getIosCpuPlatform())
-        .registerCombineArchitecturesAction(
-            archivesToLipo.build(),
-            ruleContext.getImplicitOutputArtifact(AppleBinaryRule.LIPO_ARCHIVE),
-            appleConfiguration.getIosCpuPlatform());
+    new LipoSupport(ruleContext).registerCombineArchitecturesAction(
+        binariesToLipo.build(),
+        ruleIntermediateArtifacts.combinedArchitectureBinary(),
+        appleConfiguration.getIosCpuPlatform());
 
     RuleConfiguredTargetBuilder targetBuilder =
         ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build());
 
     return targetBuilder.build();
+  }
+
+  private boolean hasLibraryOrSources(ObjcProvider objcProvider) {
+    return !Iterables.isEmpty(objcProvider.get(LIBRARY)) // Includes sources from this target.
+        || !Iterables.isEmpty(objcProvider.get(IMPORTED_LIBRARY));
   }
 
   private ObjcCommon common(RuleContext ruleContext, BuildConfiguration buildConfiguration,
