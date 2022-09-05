@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
@@ -25,6 +24,7 @@ import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 import com.google.devtools.build.lib.util.Pair;
 
@@ -111,8 +111,7 @@ public class RuleFactory {
           ruleClass + " cannot be in the WORKSPACE file " + "(used by " + label + ")");
     }
 
-    AttributesAndLocation generator =
-        generatorAttributesForMacros(attributeValues, env, location, label);
+    AttributesAndLocation generator = generatorAttributesForMacros(attributeValues, env, location);
     try {
       return ruleClass.createRuleWithLabel(
           pkgBuilder, label, generator.attributes, eventHandler, ast, generator.location);
@@ -198,7 +197,7 @@ public class RuleFactory {
    * <p>Otherwise, it returns the given attributes without any changes.
    */
   private static AttributesAndLocation generatorAttributesForMacros(
-      Map<String, Object> args, @Nullable Environment env, Location location, Label label) {
+      Map<String, Object> args, @Nullable Environment env, Location location) {
     // Returns the original arguments if a) there is only the rule itself on the stack
     // trace (=> no macro) or b) the attributes have already been set by Python pre-processing.
     if (env == null) {
@@ -219,38 +218,18 @@ public class RuleFactory {
     BaseFunction function = topCall.second;
     String name = generator.getNameArg();
     ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
-
     builder.putAll(args);
     builder.put("generator_name", (name == null) ? args.get("name") : name);
     builder.put("generator_function", function.getName());
-
     if (generator.getLocation() != null) {
       location = generator.getLocation();
-      builder.put("generator_location", getRelativeLocation(location, label));
     }
 
     try {
       return new AttributesAndLocation(builder.build(), location);
     } catch (IllegalArgumentException ex) {
-      // We just fall back to the default case and swallow any messages.
+      // Just to play it safe.
       return new AttributesAndLocation(args, location);
     }
-  }
-
-  /**
-   * Uses the given label to retrieve the workspace-relative path of the given location.
-   */
-  private static String getRelativeLocation(Location location, Label label) {
-    String absolutePath = Location.printPathAndLine(location);
-    // Instead of using this substring-based approach, we would prefer to construct the path from
-    // the label itself, e.g.
-    // buildFileLabel.getPackageFragment().getRelative(buildFileLabel.getName()).getPathString().
-    // However, this seems to conflict with python pre-processing since we had seen cases where the
-    // label of the BUILD file is something like //package:BUILD while the location is actually
-    // /path/to/workspace/package/with/subpackage/BUILD. Consequently, we would lose the
-    // "with/subpackage" part.
-    int pos = absolutePath.indexOf(label.getPackageName());
-    Preconditions.checkArgument(pos > -1, "Cannot retrieve relative path for %s", absolutePath);
-    return absolutePath.substring(pos);
   }
 }
