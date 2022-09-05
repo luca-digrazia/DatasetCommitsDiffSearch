@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
+
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -58,7 +59,6 @@ public abstract class WorkspaceStatusAction extends AbstractAction {
     @Option(name = "embed_label",
         defaultValue = "",
         category = "misc",
-        valueHelp = "<string>",
         help = "Embed source control revision or release label in binary")
     public String embedLabel;
 
@@ -66,7 +66,6 @@ public abstract class WorkspaceStatusAction extends AbstractAction {
         defaultValue = "",
         category = "misc",
         converter = OptionsUtils.PathFragmentConverter.class,
-        valueHelp = "<path>",
         help = "A command invoked at the beginning of the build to provide status "
             + "information about the workspace in the form of key/value pairs.  "
             + "See the User's Manual for the full specification.")
@@ -180,8 +179,7 @@ public abstract class WorkspaceStatusAction extends AbstractAction {
      * will be unconditionally re-executed on every build)
      */
     WorkspaceStatusAction createWorkspaceStatusAction(
-        ArtifactFactory artifactFactory, ArtifactOwner artifactOwner, Supplier<UUID> buildId,
-        String workspaceName);
+        ArtifactFactory artifactFactory, ArtifactOwner artifactOwner, Supplier<UUID> buildId);
 
     /**
      * Creates a dummy workspace status map. Used in cases where the build failed, so that part of
