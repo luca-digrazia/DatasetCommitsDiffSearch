@@ -22,24 +22,23 @@ import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.PropertyUtilsBean;
 import org.apache.ibatis.mapping.ResultMap;
 import org.apache.ibatis.mapping.ResultMapping;
-import org.hswebframework.ezorm.core.ValueConverter;
-import org.hswebframework.ezorm.core.param.InsertParam;
-import org.hswebframework.ezorm.core.param.QueryParam;
-import org.hswebframework.ezorm.core.param.Term;
-import org.hswebframework.ezorm.core.param.UpdateParam;
-import org.hswebframework.ezorm.rdb.meta.RDBColumnMetaData;
-import org.hswebframework.ezorm.rdb.meta.RDBDatabaseMetaData;
-import org.hswebframework.ezorm.rdb.meta.RDBTableMetaData;
-import org.hswebframework.ezorm.rdb.meta.converter.DateTimeConverter;
-import org.hswebframework.ezorm.rdb.meta.converter.NumberValueConverter;
-import org.hswebframework.ezorm.rdb.render.SqlAppender;
-import org.hswebframework.ezorm.rdb.render.SqlRender;
-import org.hswebframework.ezorm.rdb.render.dialect.Dialect;
-import org.hswebframework.ezorm.rdb.render.dialect.H2RDBDatabaseMetaData;
-import org.hswebframework.ezorm.rdb.render.dialect.MysqlRDBDatabaseMetaData;
-import org.hswebframework.ezorm.rdb.render.dialect.OracleRDBDatabaseMetaData;
-import org.hswebframework.ezorm.rdb.render.support.simple.CommonSqlRender;
-import org.hswebframework.ezorm.rdb.render.support.simple.SimpleWhereSqlBuilder;
+import org.hsweb.ezorm.core.param.InsertParam;
+import org.hsweb.ezorm.core.param.QueryParam;
+import org.hsweb.ezorm.core.param.Term;
+import org.hsweb.ezorm.core.param.UpdateParam;
+import org.hsweb.ezorm.rdb.meta.RDBColumnMetaData;
+import org.hsweb.ezorm.rdb.meta.RDBDatabaseMetaData;
+import org.hsweb.ezorm.rdb.meta.RDBTableMetaData;
+import org.hsweb.ezorm.rdb.meta.converter.DateTimeConverter;
+import org.hsweb.ezorm.rdb.meta.converter.NumberValueConverter;
+import org.hsweb.ezorm.rdb.render.SqlAppender;
+import org.hsweb.ezorm.rdb.render.SqlRender;
+import org.hsweb.ezorm.rdb.render.dialect.Dialect;
+import org.hsweb.ezorm.rdb.render.dialect.H2RDBDatabaseMetaData;
+import org.hsweb.ezorm.rdb.render.dialect.MysqlRDBDatabaseMetaData;
+import org.hsweb.ezorm.rdb.render.dialect.OracleRDBDatabaseMetaData;
+import org.hsweb.ezorm.rdb.render.support.simple.CommonSqlRender;
+import org.hsweb.ezorm.rdb.render.support.simple.SimpleWhereSqlBuilder;
 import org.hswebframework.web.BusinessException;
 import org.hswebframework.web.dao.mybatis.plgins.pager.Pager;
 import org.hswebframework.web.dao.mybatis.utils.ResultMapsUtils;
@@ -94,9 +93,7 @@ public class EasyOrmSqlBuilder {
 
     public static String getJavaType(Class type) {
         String javaType = simpleName.get(type);
-        if (javaType == null) {
-            javaType = type.getName();
-        }
+        if (javaType == null) javaType = type.getName();
         return javaType;
     }
 
@@ -146,34 +143,17 @@ public class EasyOrmSqlBuilder {
         resultMappings.addAll(resultMaps.getIdResultMappings());
         resultMappings.forEach(resultMapping -> {
             if (resultMapping.getNestedQueryId() == null) {
-                RDBColumnMetaData column = new RDBColumnMetaData(){
-                    @Override
-                    public RDBColumnMetaData clone() {
-                        RDBColumnMetaData target = super.clone();
-                        target.setValueConverter(getValueConverter());
-                        return target;
-                    }
-                };
+                RDBColumnMetaData column = new RDBColumnMetaData();
                 column.setJdbcType(JDBCType.valueOf(resultMapping.getJdbcType().name()));
                 column.setName(resultMapping.getColumn());
-                if (!StringUtils.isNullOrEmpty(resultMapping.getProperty())) {
+                if (!StringUtils.isNullOrEmpty(resultMapping.getProperty()))
                     column.setAlias(resultMapping.getProperty());
-                }
                 column.setJavaType(resultMapping.getJavaType());
                 column.setProperty("resultMapping", resultMapping);
-                ValueConverter dateConvert=new DateTimeConverter("yyyy-MM-dd HH:mm:ss", column.getJavaType()){
-                    @Override
-                    public Object getData(Object value) {
-                        if(value instanceof Number){
-                            return new Date(((Number) value).longValue());
-                        }
-                        return super.getData(value);
-                    }
-                };
                 if (column.getJdbcType() == JDBCType.DATE) {
-                    column.setValueConverter(dateConvert);
+                    column.setValueConverter(new DateTimeConverter("yyyy-MM-dd", column.getJavaType()));
                 } else if (column.getJdbcType() == JDBCType.TIMESTAMP) {
-                    column.setValueConverter(dateConvert);
+                    column.setValueConverter(new DateTimeConverter("yyyy-MM-dd HH:mm:ss", column.getJavaType()));
                 } else if (column.getJdbcType() == JDBCType.NUMERIC) {
                     column.setValueConverter(new NumberValueConverter(column.getJavaType()));
                 }
@@ -195,17 +175,11 @@ public class EasyOrmSqlBuilder {
         SqlAppender appender = new SqlAppender();
         columns.forEach(column -> {
             RDBColumnMetaData columnMetaData = column.getRDBColumnMetaData();
-            if (columnMetaData == null) {
-                return;
-            }
-            if (columnMetaData.getName().contains(".")) {
-                return;
-            }
+            if (columnMetaData == null) return;
+            if (columnMetaData.getName().contains(".")) return;
             try {
                 Object tmp = propertyUtils.getProperty(param.getData(), columnMetaData.getAlias());
-                if (tmp == null) {
-                    return;
-                }
+                if (tmp == null) return;
             } catch (Exception e) {
                 return;
             }
@@ -215,11 +189,8 @@ public class EasyOrmSqlBuilder {
                     ",jdbcType=", columnMetaData.getJdbcType(),
                     "}");
         });
-        if (!appender.isEmpty()) {
-            appender.removeFirst();
-        } else {
-            throw new UnsupportedOperationException("{no_columns_will_be_update}");
-        }
+        if (!appender.isEmpty()) appender.removeFirst();
+        else throw new UnsupportedOperationException("{no_columns_will_be_update}");
         return appender.toString();
     }
 
@@ -235,11 +206,10 @@ public class EasyOrmSqlBuilder {
     public String buildInsertSql(String resultMapId, String tableName, Object param) {
         Pager.reset();
         InsertParam insertParam;
-        if (param instanceof InsertParam) {
+        if (param instanceof InsertParam)
             insertParam = ((InsertParam) param);
-        } else {
+        else
             insertParam = new InsertParam<>(param);
-        }
         RDBTableMetaData tableMetaData = createMeta(tableName, resultMapId);
         SqlRender<InsertParam> render = tableMetaData.getDatabaseMetaData().getRenderer(SqlRender.TYPE.INSERT);
         String sql = render.render(tableMetaData, insertParam).getSql();
@@ -270,13 +240,9 @@ public class EasyOrmSqlBuilder {
         SqlAppender appender = new SqlAppender();
         columns.forEach(column -> {
             RDBColumnMetaData columnMetaData = column.getRDBColumnMetaData();
-            if (columnMetaData == null) {
-                return;
-            }
+            if (columnMetaData == null) return;
             String cname = columnMetaData.getName();
-            if (!cname.contains(".")) {
-                cname = tableName.concat(".").concat(cname);
-            }
+            if (!cname.contains(".")) cname = tableName.concat(".").concat(cname);
             appender.add(",", encodeColumn(dialect, cname)
                     , " AS "
                     , dialect.getQuoteStart()
@@ -284,9 +250,7 @@ public class EasyOrmSqlBuilder {
                     , dialect.getQuoteEnd());
         });
         param.getIncludes().remove("*");
-        if (appender.isEmpty()) {
-            return "*";
-        }
+        if (appender.isEmpty()) return "*";
         appender.removeFirst();
         return appender.toString();
     }
@@ -300,21 +264,14 @@ public class EasyOrmSqlBuilder {
         param.getSorts()
                 .forEach(sort -> {
                     RDBColumnMetaData column = tableMetaData.getColumn(sort.getName());
-                    if (column == null) {
+                    if (column == null)
                         column = tableMetaData.findColumn(sort.getName());
-                    }
-                    if (column == null) {
-                        return;
-                    }
+                    if (column == null) return;
                     String cname = column.getName();
-                    if (!cname.contains(".")) {
-                        cname = tableName.concat(".").concat(cname);
-                    }
+                    if (!cname.contains(".")) cname = tableName.concat(".").concat(cname);
                     appender.add(encodeColumn(tableMetaData.getDatabaseMetaData().getDialect(), cname), " ", sort.getOrder(), ",");
                 });
-        if (appender.isEmpty()) {
-            return "";
-        }
+        if (appender.isEmpty()) return "";
         appender.removeLast();
         return appender.toString();
     }
