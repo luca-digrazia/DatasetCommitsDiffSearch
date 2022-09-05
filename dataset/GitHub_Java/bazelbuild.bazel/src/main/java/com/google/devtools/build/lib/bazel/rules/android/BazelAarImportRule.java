@@ -27,10 +27,7 @@ public final class BazelAarImportRule implements RuleDefinition {
 
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
-    return builder
-        .removeAttribute("javacopts")
-        .removeAttribute("plugins")
-        .build();
+    return builder.build();
   }
 
   @Override
