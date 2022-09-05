@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.worker;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.ActionContextConsumer;
@@ -25,7 +26,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsBase;
 
@@ -56,7 +56,7 @@ public class WorkerModule extends BlazeModule {
     env.getEventBus().register(this);
 
     if (workers == null) {
-      Path logDir = env.getOutputBase().getRelative("worker-logs");
+      Path logDir = env.getRuntime().getOutputBase().getRelative("worker-logs");
       try {
         logDir.createDirectory();
       } catch (IOException e) {
@@ -112,7 +112,8 @@ public class WorkerModule extends BlazeModule {
     Preconditions.checkNotNull(workers);
 
     return ImmutableList.<ActionContextProvider>of(
-        new WorkerActionContextProvider(env, buildRequest, workers));
+        new WorkerActionContextProvider(
+            env.getRuntime(), buildRequest, workers, env.getEventBus()));
   }
 
   @Override
