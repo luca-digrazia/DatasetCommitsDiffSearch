@@ -82,7 +82,7 @@ public class XmlResourceValues {
   private static final XMLEventFactory XML_EVENT_FACTORY = XMLEventFactory.newInstance();
 
   static final String XLIFF_NAMESPACE = "urn:oasis:names:tc:xliff:document:1.2";
-  static final String XLIFF_PREFIX = "xliff";
+  private static final String XLIFF_PREFIX = "xliff";
 
   static XmlResourceValue parsePlurals(XMLEventReader eventReader) throws XMLStreamException {
     ImmutableMap.Builder<String, String> values = ImmutableMap.builder();
@@ -131,23 +131,22 @@ public class XmlResourceValues {
       XMLEventReader eventReader,
       StartElement start)
       throws XMLStreamException {
-    Map<FullyQualifiedName, Boolean> members = new LinkedHashMap<>();
+    List<String> members = new ArrayList<>();
     for (XMLEvent element = nextTag(eventReader);
         !isEndTag(element, TAG_DECLARE_STYLEABLE);
         element = nextTag(eventReader)) {
       if (isStartTag(element, TAG_ATTR)) {
         StartElement attr = element.asStartElement();
-        FullyQualifiedName attrName = fqnFactory.create(ResourceType.ATTR, getElementName(attr));
+        String attrName = getElementName(attr);
+        members.add(attrName);
         // If there is format and the next tag is a starting tag, treat it as an attr definition.
         // Without those, it will be an attr reference.
         if (XmlResourceValues.getElementAttributeByName(attr, ATTR_FORMAT) != null
             || (XmlResourceValues.peekNextTag(eventReader) != null
                 && XmlResourceValues.peekNextTag(eventReader).isStartElement())) {
           overwritingConsumer.consume(
-              attrName, DataResourceXml.of(path, parseAttr(eventReader, attr)));
-          members.put(attrName, Boolean.TRUE);
-        } else {
-          members.put(attrName, Boolean.FALSE);
+              fqnFactory.create(ResourceType.ATTR, attrName),
+              DataResourceXml.of(path, parseAttr(eventReader, attr)));
         }
       }
     }
