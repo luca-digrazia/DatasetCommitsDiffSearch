@@ -13,12 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.OS;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 
 import java.io.File;
@@ -345,9 +345,6 @@ public class Path implements Comparable<Path>, Serializable {
       return false;
     }
     Path otherPath = (Path) other;
-    if (hashCode != otherPath.hashCode) {
-      return false;
-    }
     return fileSystem.equals(otherPath.fileSystem) && name.equals(otherPath.name)
         && Objects.equals(parent, otherPath.parent);
   }
@@ -533,25 +530,6 @@ public class Path implements Comparable<Path>, Serializable {
    */
   public boolean isFile(Symlinks followSymlinks) {
     return fileSystem.isFile(this, followSymlinks.toBoolean());
-  }
-
-  /**
-   * Returns true iff this path denotes an existing special file (e.g. fifo).
-   * Follows symbolic links.
-   */
-  public boolean isSpecialFile() {
-    return fileSystem.isSpecialFile(this, true);
-  }
-
-  /**
-   * Returns true iff this path denotes an existing special file (e.g. fifo).
-   *
-   * @param followSymlinks if {@link Symlinks#FOLLOW}, and this path denotes a
-   *        symbolic link, the link is dereferenced until a path other than a
-   *        symbolic link is found.
-   */
-  public boolean isSpecialFile(Symlinks followSymlinks) {
-    return fileSystem.isSpecialFile(this, followSymlinks.toBoolean());
   }
 
   /**
@@ -836,7 +814,7 @@ public class Path implements Comparable<Path>, Serializable {
    * Returns the size in bytes of the file denoted by the current path,
    * following symbolic links.
    *
-   * <p>The size of a directory or special file is undefined and should not be used.
+   * <p>The size of directory or special file is undefined.
    *
    * @throws FileNotFoundException if the file denoted by the current path does
    *         not exist
