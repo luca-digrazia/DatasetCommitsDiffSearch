@@ -436,6 +436,7 @@ public final class ReleaseBundlingSupport {
     Artifact processedIpa = releaseBundling.getIpaArtifact();
     Artifact unprocessedIpa = intermediateArtifacts.unprocessedIpa();
 
+    boolean processingNeeded = false;
     NestedSetBuilder<Artifact> inputs =
         NestedSetBuilder.<Artifact>stableOrder().add(unprocessedIpa);
 
@@ -453,58 +454,45 @@ public final class ReleaseBundlingSupport {
 
     FilesToRunProvider processor = attributes.ipaPostProcessor();
     if (processor != null) {
+      processingNeeded = true;
       actionCommandLine += processor.getExecutable().getShellEscapedExecPathString() + " ${t} && ";
     }
 
+    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
     if (platform.isDevice()) {
-      actionCommandLine += deviceSigningCommandLine();
-
+      processingNeeded = true;
       registerEntitlementsActions();
-      inputs.add(releaseBundling.getProvisioningProfile())
-          .add(intermediateArtifacts.entitlements());
-    } else {
-      actionCommandLine += simulatorSigningCommandLine();
+      actionCommandLine += signingCommandLine();
+      inputs.add(releaseBundling.getProvisioningProfile()).add(
+          intermediateArtifacts.entitlements());
     }
 
     actionCommandLine += "cd ${t} && /usr/bin/zip -q -r \"${signed_ipa}\" .";
 
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
-    SpawnAction.Builder processAction =
-        ObjcRuleClasses.spawnBashOnDarwinActionBuilder(actionCommandLine)
-            .setEnvironment(ObjcRuleClasses.appleToolchainEnvironment(appleConfiguration, platform))
-            .setMnemonic("ObjcProcessIpa")
-            .setProgressMessage("Processing iOS IPA: " + ruleContext.getLabel())
-            .disableSandboxing()
-            .addTransitiveInputs(inputs.build())
-            .addOutput(processedIpa);
+    if (processingNeeded) {
+      SpawnAction.Builder processAction =
+          ObjcRuleClasses.spawnBashOnDarwinActionBuilder(actionCommandLine)
+              .setEnvironment(
+                  ObjcRuleClasses.appleToolchainEnvironment(appleConfiguration, platform))
+              .setMnemonic("ObjcProcessIpa")
+              .setProgressMessage("Processing iOS IPA: " + ruleContext.getLabel())
+              .disableSandboxing()
+              .addTransitiveInputs(inputs.build())
+              .addOutput(processedIpa);
 
-    if (processor != null) {
-      processAction.addTool(processor);
+      if (processor != null) {
+        processAction.addTool(processor);
+      }
+
+      ruleContext.registerAction(processAction.build(ruleContext));
+    } else {
+      ruleContext.registerAction(
+          new SymlinkAction(
+              ruleContext.getActionOwner(), unprocessedIpa, processedIpa, "Processing IPA"));
     }
-
-    ruleContext.registerAction(processAction.build(ruleContext));
   }
 
-  private String deviceSigningCommandLine() {
-    StringBuilder codesignCommandLineBuilder = new StringBuilder();
-    for (String dir : getDirsToSign()) {
-      codesignCommandLineBuilder.append(deviceCodesignCommand("${t}/" + dir)).append(" && ");
-    }
-    return codesignCommandLineBuilder.toString();
-  }
-
-  private String simulatorSigningCommandLine() {
-    StringBuilder codesignCommandLineBuilder = new StringBuilder();
-    for (String dir : getDirsToSign()) {
-      codesignCommandLineBuilder
-          .append("/usr/bin/codesign --force --sign \"-\" ${t}/")
-          .append(dir)
-          .append(" && ");
-    }
-    return codesignCommandLineBuilder.toString();
-  }
-
-  private ImmutableList<String> getDirsToSign() {
+  private String signingCommandLine() {
     // The order here is important. The innermost code must singed first.
     ImmutableList.Builder<String> dirsToSign = new ImmutableList.Builder<>();
     String bundleDir = ShellUtils.shellEscape(bundling.getBundleDir());
@@ -517,7 +505,11 @@ public final class ReleaseBundlingSupport {
     }
     dirsToSign.add(bundleDir);
 
-    return dirsToSign.build();
+    StringBuilder codesignCommandLineBuilder = new StringBuilder();
+    for (String dir : dirsToSign.build()) {
+      codesignCommandLineBuilder.append(codesignCommand("${t}/" + dir)).append(" && ");
+    }
+    return codesignCommandLineBuilder.toString();
   }
 
   /**
@@ -728,6 +720,7 @@ public final class ReleaseBundlingSupport {
         Substitution.of("%ipa_file%", ipaInput.getRunfilesPathString()),
         Substitution.of("%sim_device%", escapedSimDevice),
         Substitution.of("%sdk_version%", escapedSdkVersion),
+        Substitution.of("%iossim%", attributes.iossim().getRunfilesPathString()),
         Substitution.of("%std_redirect_dylib_path%",
             attributes.stdRedirectDylib().getRunfilesPathString()));
 
@@ -745,6 +738,7 @@ public final class ReleaseBundlingSupport {
         ruleContext.getWorkspaceName(), ruleContext.getConfiguration().legacyExternalRunfiles())
         .addArtifact(releaseBundling.getIpaArtifact())
         .addArtifact(runnerScript)
+        .addArtifact(attributes.iossim())
         .addArtifact(attributes.stdRedirectDylib())
         .build();
     return RunfilesSupport.withExecutable(ruleContext, runfiles, runnerScript);
@@ -1064,21 +1058,13 @@ public final class ReleaseBundlingSupport {
       return;
     }
 
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
-
-    CustomCommandLine.Builder commandLine = CustomCommandLine.builder();
-    if (appleConfiguration.getXcodeToolchain() != null) {
-      commandLine.add("--toolchain").add(appleConfiguration.getXcodeToolchain());
-    }
-
-    commandLine
-        .add("--output_zip_path")
-        .addPath(intermediateArtifacts.swiftFrameworksFileZip().getExecPath())
-        .add("--bundle_path")
-        .add("Frameworks")
-        .add("--platform")
-        .add(platform.getLowerCaseNameInPlist())
-        .addExecPath("--scan-executable", combinedArchBinary);
+    CustomCommandLine.Builder commandLine =
+        CustomCommandLine.builder()
+            .addPath(intermediateArtifacts.swiftFrameworksFileZip().getExecPath())
+            .add("Frameworks")
+            .add("--platform")
+            .add(platform.getLowerCaseNameInPlist())
+            .addExecPath("--scan-executable", combinedArchBinary);
 
     ruleContext.registerAction(
         ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext, platform)
@@ -1096,21 +1082,13 @@ public final class ReleaseBundlingSupport {
       return;
     }
 
-    AppleConfiguration configuration = ruleContext.getFragment(AppleConfiguration.class);
-
-    CustomCommandLine.Builder commandLine = CustomCommandLine.builder();
-    if (configuration.getXcodeToolchain() != null) {
-      commandLine.add("--toolchain").add(configuration.getXcodeToolchain());
-    }
-
-    commandLine
-        .add("--output_zip_path")
-        .addPath(intermediateArtifacts.swiftSupportZip().getExecPath())
-        .add("--bundle_path")
-        .add("SwiftSupport/" + platform.getLowerCaseNameInPlist())
-        .add("--platform")
-        .add(platform.getLowerCaseNameInPlist())
-        .addExecPath("--scan-executable", combinedArchBinary);
+    CustomCommandLine.Builder commandLine =
+        CustomCommandLine.builder()
+            .addPath(intermediateArtifacts.swiftSupportZip().getExecPath())
+            .add("SwiftSupport/" + platform.getLowerCaseNameInPlist())
+            .add("--platform")
+            .add(platform.getLowerCaseNameInPlist())
+            .addExecPath("--scan-executable", combinedArchBinary);
 
     ruleContext.registerAction(
         ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext, platform)
@@ -1126,7 +1104,7 @@ public final class ReleaseBundlingSupport {
     return "security cms -D -i " + ShellUtils.shellEscape(provisioningProfile.getExecPathString());
   }
 
-  private String deviceCodesignCommand(String appDir) {
+  private String codesignCommand(String appDir) {
     String signingCertName = ObjcRuleClasses.objcConfiguration(ruleContext).getSigningCertName();
     Artifact entitlements = intermediateArtifacts.entitlements();
 
@@ -1249,6 +1227,10 @@ public final class ReleaseBundlingSupport {
      */
     FilesToRunProvider plmerge() {
       return ruleContext.getExecutablePrerequisite("$plmerge", Mode.HOST);
+    }
+
+    Artifact iossim() {
+      return checkNotNull(ruleContext.getPrerequisiteArtifact("$iossim", Mode.HOST));
     }
 
     Artifact stdRedirectDylib() {
