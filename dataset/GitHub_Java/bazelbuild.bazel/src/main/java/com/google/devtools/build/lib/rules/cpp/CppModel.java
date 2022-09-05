@@ -228,14 +228,6 @@ public final class CppModel {
     this.featureConfiguration = featureConfiguration;
     return this;
   }
-  
-  /**
-   * @returns whether we want to provide header modules for the current target.
-   */
-  private boolean shouldProvideHeaderModules() {
-    return featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES)
-        && !cppConfiguration.isLipoContextCollector();
-  }
 
   /**
    * @return the non-pic header module artifact for the current target.
@@ -280,14 +272,17 @@ public final class CppModel {
    * @return whether this target needs to generate a pic header module.
    */
   public boolean getGeneratesPicHeaderModule() {
-    return shouldProvideHeaderModules() && !fake && getGeneratePicActions();
+    // TODO(bazel-team): Make sure cc_fake_binary works with header module support. 
+    return featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES) && !fake
+        && getGeneratePicActions();
   }
 
   /**
    * @return whether this target needs to generate a non-pic header module.
    */
   public boolean getGeneratesNoPicHeaderModule() {
-    return shouldProvideHeaderModules() && !fake && getGenerateNoPicActions();
+    return featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES) && !fake
+        && getGenerateNoPicActions();
   }
 
   /**
@@ -305,6 +300,7 @@ public final class CppModel {
     builder.setExtraSystemIncludePrefixes(additionalIncludes);
     builder.setFdoBuildStamp(CppHelper.getFdoBuildStamp(ruleContext));
     builder.setFeatureConfiguration(featureConfiguration);
+    
     return builder;
   }
 
@@ -395,7 +391,7 @@ public final class CppModel {
     CcToolchainFeatures.Variables variables = buildVariables.build();
     builder.setVariables(variables);
   }
-  
+
   /**
    * Constructs the C++ compiler actions. It generally creates one action for every specified source
    * file. It takes into account LIPO, fake-ness, coverage, and PIC, in addition to using the
@@ -407,7 +403,7 @@ public final class CppModel {
     AnalysisEnvironment env = ruleContext.getAnalysisEnvironment();
     PathFragment objectDir = CppHelper.getObjDirectory(ruleContext.getLabel());
     
-    if (shouldProvideHeaderModules()) {
+    if (featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES)) {
       Artifact moduleMapArtifact = context.getCppModuleMap().getArtifact();
       Label moduleMapLabel = Label.parseAbsoluteUnchecked(context.getCppModuleMap().getName());
       PathFragment outputName = getObjectOutputPath(moduleMapArtifact, objectDir);
@@ -646,6 +642,7 @@ public final class CppModel {
             .addLTOBitcodeFiles(ccOutputs.getLtoBitcodeFiles())
             .setLinkType(linkType)
             .setLinkStaticness(LinkStaticness.FULLY_STATIC)
+            .setFeatureConfiguration(featureConfiguration)
             .build();
     env.registerAction(maybePicAction);
     result.addStaticLibrary(maybePicAction.getOutputLibrary());
@@ -666,6 +663,7 @@ public final class CppModel {
               .addLTOBitcodeFiles(ccOutputs.getLtoBitcodeFiles())
               .setLinkType(picLinkType)
               .setLinkStaticness(LinkStaticness.FULLY_STATIC)
+              .setFeatureConfiguration(featureConfiguration)
               .build();
       env.registerAction(picAction);
       result.addPicStaticLibrary(picAction.getOutputLibrary());
@@ -694,18 +692,20 @@ public final class CppModel {
 
     // Should we also link in any libraries that this library depends on?
     // That is required on some systems...
-    CppLinkAction action = newLinkActionBuilder(soImpl)
-        .setInterfaceOutput(soInterface)
-        .addNonLibraryInputs(ccOutputs.getObjectFiles(usePicForSharedLibs))
-        .addNonLibraryInputs(ccOutputs.getHeaderTokenFiles())
-        .setLinkType(LinkTargetType.DYNAMIC_LIBRARY)
-        .setLinkStaticness(LinkStaticness.DYNAMIC)
-        .addLinkopts(linkopts)
-        .addLinkopts(sonameLinkopts)
-        .setRuntimeInputs(
-            CppHelper.getToolchain(ruleContext).getDynamicRuntimeLinkMiddleman(),
-            CppHelper.getToolchain(ruleContext).getDynamicRuntimeLinkInputs())
-        .build();
+    CppLinkAction action =
+        newLinkActionBuilder(soImpl)
+            .setInterfaceOutput(soInterface)
+            .addNonLibraryInputs(ccOutputs.getObjectFiles(usePicForSharedLibs))
+            .addNonLibraryInputs(ccOutputs.getHeaderTokenFiles())
+            .setLinkType(LinkTargetType.DYNAMIC_LIBRARY)
+            .setLinkStaticness(LinkStaticness.DYNAMIC)
+            .addLinkopts(linkopts)
+            .addLinkopts(sonameLinkopts)
+            .setRuntimeInputs(
+                CppHelper.getToolchain(ruleContext).getDynamicRuntimeLinkMiddleman(),
+                CppHelper.getToolchain(ruleContext).getDynamicRuntimeLinkInputs())
+            .setFeatureConfiguration(featureConfiguration)
+            .build();
     env.registerAction(action);
 
     LibraryToLink dynamicLibrary = action.getOutputLibrary();
