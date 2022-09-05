@@ -13,15 +13,9 @@ import javax.ws.rs.core.FeatureContext;
 public class MetricsFeature implements Feature {
 
     private final MetricRegistry registry;
-    private final InstrumentedResourceMethodApplicationListener.ClockProvider clockProvider;
 
     public MetricsFeature(MetricRegistry registry) {
-        this(registry, null);
-    }
-
-    public MetricsFeature(MetricRegistry registry, InstrumentedResourceMethodApplicationListener.ClockProvider clockProvider) {
         this.registry = registry;
-        this.clockProvider = clockProvider;
     }
 
     public MetricsFeature(String registryName) {
@@ -49,7 +43,7 @@ public class MetricsFeature implements Feature {
      */
     @Override
     public boolean configure(FeatureContext context) {
-        context.register(new InstrumentedResourceMethodApplicationListener(registry, clockProvider));
+        context.register(new InstrumentedResourceMethodApplicationListener(registry));
         return true;
     }
 }
