@@ -15,33 +15,31 @@
 package com.google.devtools.build.lib.rules.java;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import java.util.Collection;
 
-/** An interface for objects that provide information on how to include them in Java builds. */
+/**
+ * An interface for objects that provide information on how to include them in
+ * Java builds.
+ */
 @AutoValue
 @Immutable
-@AutoCodec
 public abstract class JavaCompilationArgsProvider implements TransitiveInfoProvider {
 
-  @AutoCodec.Instantiator
   public static JavaCompilationArgsProvider create(
       JavaCompilationArgs javaCompilationArgs,
       JavaCompilationArgs recursiveJavaCompilationArgs,
-      NestedSet<Artifact> compileTimeJavaDependencyArtifacts,
-      NestedSet<Artifact> runTimeJavaDependencyArtifacts) {
+      NestedSet<Artifact> compileTimeJavaDepArtifacts,
+      NestedSet<Artifact> runTimeJavaDepArtifacts) {
     return new AutoValue_JavaCompilationArgsProvider(
         javaCompilationArgs,
         recursiveJavaCompilationArgs,
-        compileTimeJavaDependencyArtifacts,
-        runTimeJavaDependencyArtifacts);
+        compileTimeJavaDepArtifacts,
+        runTimeJavaDepArtifacts);
   }
 
   public static JavaCompilationArgsProvider create(
@@ -88,12 +86,7 @@ public abstract class JavaCompilationArgsProvider implements TransitiveInfoProvi
    */
   public abstract NestedSet<Artifact> getRunTimeJavaDependencyArtifacts();
 
-  public static JavaCompilationArgsProvider merge(
-      Collection<JavaCompilationArgsProvider> providers) {
-    if (providers.size() == 1) {
-      return Iterables.get(providers, 0);
-    }
-
+  public static JavaCompilationArgsProvider merge(Iterable<JavaCompilationArgsProvider> providers) {
     JavaCompilationArgs.Builder javaCompilationArgs = JavaCompilationArgs.builder();
     JavaCompilationArgs.Builder recursiveJavaCompilationArgs = JavaCompilationArgs.builder();
     NestedSetBuilder<Artifact> compileTimeJavaDepArtifacts = NestedSetBuilder.stableOrder();

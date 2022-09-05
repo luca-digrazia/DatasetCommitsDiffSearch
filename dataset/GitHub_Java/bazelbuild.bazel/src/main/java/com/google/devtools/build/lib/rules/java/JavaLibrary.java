@@ -168,7 +168,6 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     NestedSet<Artifact> proguardSpecs = new ProguardLibrary(ruleContext).collectProguardSpecs();
 
-    CcLinkParamsProvider ccLinkParamsProvider = new CcLinkParamsProvider(ccLinkParamsStore);
     builder
         .add(
             JavaRuleOutputJarsProvider.class,
@@ -191,8 +190,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
             JavaCompilationArgsProvider.create(
                 javaCompilationArgs, recursiveJavaCompilationArgs,
                 compileTimeJavaDepArtifacts, runTimeJavaDepArtifacts))
-        .add(CcLinkParamsProvider.class, ccLinkParamsProvider)
-        .addNativeDeclaredProvider(ccLinkParamsProvider)
+        .add(CcLinkParamsProvider.class, new CcLinkParamsProvider(ccLinkParamsStore))
         .add(
             JavaNativeLibraryProvider.class,
             new JavaNativeLibraryProvider(transitiveJavaNativeLibraries))

@@ -24,8 +24,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
@@ -41,26 +39,32 @@ import java.util.List;
  * Java compiler.
  */
 public final class JavaLibraryHelper {
+  private static final String DEFAULT_SUFFIX_IS_EMPTY_STRING = "";
+
   private final RuleContext ruleContext;
+  private final String implicitAttributesSuffix;
 
   private Artifact output;
   private final List<Artifact> sourceJars = new ArrayList<>();
-  private final List<Artifact> sourceFiles = new ArrayList<>();
-  private final List<Artifact> resources = new ArrayList<>();
 
   /**
    * Contains all the dependencies; these are treated as both compile-time and runtime dependencies.
    */
   private final List<JavaCompilationArgsProvider> deps = new ArrayList<>();
   private ImmutableList<String> javacOpts = ImmutableList.of();
-  private ImmutableList<Artifact> sourcePathEntries = ImmutableList.of();
+
   private StrictDepsMode strictDepsMode = StrictDepsMode.OFF;
   private JavaClasspathMode classpathMode = JavaClasspathMode.OFF;
 
   public JavaLibraryHelper(RuleContext ruleContext) {
+    this(ruleContext, DEFAULT_SUFFIX_IS_EMPTY_STRING);
+  }
+
+  public JavaLibraryHelper(RuleContext ruleContext, String implicitAttributesSuffix) {
     this.ruleContext = ruleContext;
     ruleContext.getConfiguration();
     this.classpathMode = ruleContext.getFragment(JavaConfiguration.class).getReduceJavaClasspath();
+    this.implicitAttributesSuffix = implicitAttributesSuffix;
   }
 
   /**
@@ -88,22 +92,9 @@ public final class JavaLibraryHelper {
     return this.addSourceJars(Arrays.asList(sourceJars));
   }
 
-  public JavaLibraryHelper addResources(Iterable<Artifact> resources) {
-    Iterables.addAll(this.resources, resources);
-    return this;
-  }
-
   public JavaLibraryHelper addDep(JavaCompilationArgsProvider provider) {
     checkNotNull(provider);
     this.deps.add(provider);
-    return this;
-  }
-
-  /**
-   * Adds the given source files to be compiled.
-   */
-  public JavaLibraryHelper addSourceFiles(Iterable<Artifact> sourceFiles) {
-    Iterables.addAll(this.sourceFiles, sourceFiles);
     return this;
   }
 
@@ -118,11 +109,6 @@ public final class JavaLibraryHelper {
    */
   public JavaLibraryHelper setJavacOpts(Iterable<String> javacOpts) {
     this.javacOpts = ImmutableList.copyOf(javacOpts);
-    return this;
-  }
-
-  public JavaLibraryHelper setSourcePathEntries(List<Artifact> sourcepathEntries) {
-    this.sourcePathEntries = ImmutableList.copyOf(sourcepathEntries);
     return this;
   }
 
@@ -142,26 +128,17 @@ public final class JavaLibraryHelper {
     return this;
   }
 
-  /** Creates the compile actions. */
-  public JavaCompilationArtifacts build(
-      JavaSemantics semantics,
-      JavaToolchainProvider javaToolchainProvider,
-      NestedSet<Artifact> hostJavabase,
-      Iterable<Artifact> jacocoInstrumental) {
+  /**
+   * Creates the compile actions.
+   */
+  public JavaCompilationArgs build(JavaSemantics semantics) {
     Preconditions.checkState(output != null, "must have an output file; use setOutput()");
     JavaTargetAttributes.Builder attributes = new JavaTargetAttributes.Builder(semantics);
     attributes.addSourceJars(sourceJars);
-    attributes.addSourceFiles(sourceFiles);
     addDepsToAttributes(attributes);
     attributes.setStrictJavaDeps(strictDepsMode);
     attributes.setRuleKind(ruleContext.getRule().getRuleClass());
     attributes.setTargetLabel(ruleContext.getLabel());
-    attributes.setSourcePath(sourcePathEntries);
-
-    for (Artifact resource : resources) {
-      attributes.addResource(
-          JavaHelper.getJavaResourcePath(semantics, ruleContext, resource), resource);
-    }
 
     if (isStrict() && classpathMode != JavaClasspathMode.OFF) {
       JavaCompilationHelper.addDependencyArtifactsToAttributes(
@@ -170,10 +147,8 @@ public final class JavaLibraryHelper {
 
     JavaCompilationArtifacts.Builder artifactsBuilder = new JavaCompilationArtifacts.Builder();
     JavaCompilationHelper helper =
-        new JavaCompilationHelper(ruleContext, semantics, javacOpts, attributes,
-            javaToolchainProvider,
-            hostJavabase,
-            jacocoInstrumental);
+        new JavaCompilationHelper(
+            ruleContext, semantics, javacOpts, attributes, implicitAttributesSuffix);
     Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(output, artifactsBuilder);
     helper.createCompileAction(
         output,
@@ -184,7 +159,7 @@ public final class JavaLibraryHelper {
     helper.createCompileTimeJarAction(output, artifactsBuilder);
     artifactsBuilder.addRuntimeJar(output);
 
-    return artifactsBuilder.build();
+    return JavaCompilationArgs.builder().merge(artifactsBuilder.build()).build();
   }
 
   /**
@@ -199,8 +174,7 @@ public final class JavaLibraryHelper {
    *     compilation. Contrast this with {@link #setCompilationStrictDepsMode}.
    */
   public JavaCompilationArgsProvider buildCompilationArgsProvider(
-      JavaCompilationArtifacts artifacts, boolean isReportedAsStrict) {
-    JavaCompilationArgs directArgs = JavaCompilationArgs.builder().merge(artifacts).build();
+      JavaCompilationArgs directArgs, boolean isReportedAsStrict) {
     JavaCompilationArgs transitiveArgs =
         JavaCompilationArgs.builder()
             .addTransitiveArgs(directArgs, BOTH)
@@ -208,10 +182,7 @@ public final class JavaLibraryHelper {
             .build();
 
     return JavaCompilationArgsProvider.create(
-        isReportedAsStrict ? directArgs : transitiveArgs,
-        transitiveArgs,
-        NestedSetBuilder.create(Order.STABLE_ORDER, artifacts.getCompileTimeDependencyArtifact()),
-        NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER));
+        isReportedAsStrict ? directArgs : transitiveArgs, transitiveArgs);
   }
 
   private void addDepsToAttributes(JavaTargetAttributes.Builder attributes) {
