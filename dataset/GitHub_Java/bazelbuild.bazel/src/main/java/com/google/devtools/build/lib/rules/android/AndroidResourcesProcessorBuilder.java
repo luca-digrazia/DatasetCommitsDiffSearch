@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
@@ -69,7 +68,7 @@ public class AndroidResourcesProcessorBuilder {
   private Artifact rTxtOut;
   private Artifact sourceJarOut;
   private boolean debug = false;
-  private ResourceConfigurationFilter resourceConfigs;
+  private List<String> resourceConfigs = Collections.emptyList();
   private List<String> uncompressedExtensions = Collections.emptyList();
   private Artifact apkOut;
   private final AndroidSdkProvider sdk;
@@ -96,7 +95,6 @@ public class AndroidResourcesProcessorBuilder {
     this.sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
     this.ruleContext = ruleContext;
     this.spawnActionBuilder = new SpawnAction.Builder();
-    this.resourceConfigs = ResourceConfigurationFilter.empty(ruleContext);
   }
 
   /**
@@ -139,8 +137,7 @@ public class AndroidResourcesProcessorBuilder {
     return this;
   }
 
-  public AndroidResourcesProcessorBuilder setConfigurationFilters(
-      ResourceConfigurationFilter resourceConfigs) {
+  public AndroidResourcesProcessorBuilder setConfigurationFilters(List<String> resourceConfigs) {
     this.resourceConfigs = resourceConfigs;
     return this;
   }
@@ -203,9 +200,6 @@ public class AndroidResourcesProcessorBuilder {
   public ResourceContainer build(ActionConstructionContext context) {
     List<Artifact> outs = new ArrayList<>();
     CustomCommandLine.Builder builder = new CustomCommandLine.Builder();
-    
-    // Set the busybox tool.
-    builder.add("--tool").add("PACKAGE").add("--");
 
     if (!Strings.isNullOrEmpty(sdk.getBuildToolsVersion())) {
       builder.add("--buildToolsVersion").add(sdk.getBuildToolsVersion());
@@ -214,9 +208,7 @@ public class AndroidResourcesProcessorBuilder {
     builder.addExecPath("--aapt", sdk.getAapt().getExecutable());
     // Use a FluentIterable to avoid flattening the NestedSets
     NestedSetBuilder<Artifact> inputs = NestedSetBuilder.naiveLinkOrder();
-    inputs.addAll(
-        ruleContext
-            .getExecutablePrerequisite("$android_resources_busybox", Mode.HOST)
+    inputs.addAll(ruleContext.getExecutablePrerequisite("$android_resources_processor", Mode.HOST)
             .getRunfilesSupport()
             .getRunfilesArtifactsWithoutMiddlemen());
 
@@ -274,7 +266,7 @@ public class AndroidResourcesProcessorBuilder {
       outs.add(apkOut);
     }
     if (!resourceConfigs.isEmpty()) {
-      builder.add("--resourceConfigs").add(resourceConfigs.getFilterString());
+      builder.addJoinStrings("--resourceConfigs", ",", resourceConfigs);
     }
     if (!densities.isEmpty()) {
       builder.addJoinStrings("--densities", ",", densities);
@@ -318,13 +310,12 @@ public class AndroidResourcesProcessorBuilder {
     // Create the spawn action.
     ruleContext.registerAction(
         this.spawnActionBuilder
-            .useParameterFile(ParameterFileType.UNQUOTED)
             .addTool(sdk.getAapt())
             .addTransitiveInputs(inputs.build())
             .addOutputs(ImmutableList.<Artifact>copyOf(outs))
             .setCommandLine(builder.build())
             .setExecutable(
-                ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST))
+                ruleContext.getExecutablePrerequisite("$android_resources_processor", Mode.HOST))
             .setProgressMessage("Processing Android resources for " + ruleContext.getLabel())
             .setMnemonic("AndroidAapt")
             .build(context));

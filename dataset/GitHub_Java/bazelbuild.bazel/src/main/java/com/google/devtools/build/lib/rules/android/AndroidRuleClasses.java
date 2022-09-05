@@ -278,6 +278,7 @@ public final class AndroidRuleClasses {
       "cc_library",
       "java_import",
       "java_library",
+      "proto_library" // TODO(gregce): remove this line when no such dependencies exist
   };
 
   public static final boolean hasProguardSpecs(AttributeMap rule) {

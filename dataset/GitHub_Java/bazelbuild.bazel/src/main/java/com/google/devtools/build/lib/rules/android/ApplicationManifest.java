@@ -453,7 +453,6 @@ public final class ApplicationManifest {
 
       if (resourceContainer.getSymbols() != null) {
         new AndroidResourceParsingActionBuilder(ruleContext)
-            .withPrimary(resourceContainer)
             .setParse(data)
             .setOutput(resourceContainer.getSymbols())
             .build(ruleContext);

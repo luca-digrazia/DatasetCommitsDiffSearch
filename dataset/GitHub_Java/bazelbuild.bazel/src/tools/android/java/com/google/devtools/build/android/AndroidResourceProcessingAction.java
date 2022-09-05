@@ -36,7 +36,6 @@ import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.TriState;
 import java.io.IOException;
-import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -212,7 +211,6 @@ public class AndroidResourceProcessingAction {
     final Stopwatch timer = Stopwatch.createStarted();
     OptionsParser optionsParser = OptionsParser.newOptionsParser(
         Options.class, AaptConfigOptions.class);
-    optionsParser.enableParamsFileSupport(FileSystems.getDefault());
     optionsParser.parseAndExitUponError(args);
     aaptConfigOptions = optionsParser.getOptions(AaptConfigOptions.class);
     options = optionsParser.getOptions(Options.class);
@@ -245,7 +243,7 @@ public class AndroidResourceProcessingAction {
               .asList();
 
       final MergedAndroidData mergedData =
-          AndroidResourceMerger.mergeData(
+          resourceProcessor.mergeData(
               options.primaryData,
               options.directData,
               options.transitiveData,
@@ -268,19 +266,18 @@ public class AndroidResourceProcessingAction {
               "Density filtering finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       MergedAndroidData processedData =
-          AndroidManifestProcessor.with(STD_LOGGER)
-              .processManifest(
-                  options.packageType,
-                  options.packageForR,
-                  options.applicationId,
-                  options.versionCode,
-                  options.versionName,
-                  filteredData,
-                  processedManifest);
+          resourceProcessor.processManifest(
+              options.packageType,
+              options.packageForR,
+              options.applicationId,
+              options.versionCode,
+              options.versionName,
+              filteredData,
+              processedManifest);
 
       // Write manifestOutput now before the dummy manifest is created.
       if (options.manifestOutput != null) {
-        AndroidResourceOutputs.copyManifestToOutput(processedData, options.manifestOutput);
+        resourceProcessor.copyManifestToOutput(processedData, options.manifestOutput);
       }
 
       if (options.packageType == VariantType.LIBRARY) {
@@ -314,15 +311,19 @@ public class AndroidResourceProcessingAction {
       logger.fine(String.format("aapt finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       if (options.srcJarOutput != null) {
-        AndroidResourceOutputs.createSrcJar(
-            generatedSources, options.srcJarOutput, VariantType.LIBRARY == options.packageType);
+        resourceProcessor.createSrcJar(
+            generatedSources,
+            options.srcJarOutput,
+            VariantType.LIBRARY == options.packageType);
       }
       if (options.rOutput != null) {
-        AndroidResourceOutputs.copyRToOutput(
-            generatedSources, options.rOutput, VariantType.LIBRARY == options.packageType);
+        resourceProcessor.copyRToOutput(
+            generatedSources,
+            options.rOutput,
+            VariantType.LIBRARY == options.packageType);
       }
       if (options.resourcesOutput != null) {
-        AndroidResourceOutputs.createResourcesZip(
+        resourceProcessor.createResourcesZip(
             processedData.getResourceDir(),
             processedData.getAssetDir(),
             options.resourcesOutput,
