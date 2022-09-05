@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.packages;
 
+import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -206,122 +207,7 @@ public class MethodLibrary {
       return env.isSkylarkEnabled() ? SkylarkList.list(result, String.class) : result;
     }
   };
-  
-  @SkylarkSignature(name = "partition", objectType = StringModule.class,
-      returnType = HackHackEitherList.class,
-      doc = "Splits the input string at the first occurrence of the separator "
-          + "<code>sep</code> and returns the resulting partition as a three-element "
-          + "list of the form [substring_before, separator, substring_after].",
-      mandatoryPositionals = {
-        @Param(name = "self", type = String.class, doc = "This string.")},
-      optionalPositionals = {
-        @Param(name = "sep", type = String.class,
-          defaultValue = "' '", doc = "The string to split on, default is space (\" \").")},
-      useEnvironment = true,
-      useLocation = true)
-  private static BuiltinFunction partition = new BuiltinFunction("partition") {
-    @SuppressWarnings("unused")
-    public Object invoke(String self, String sep, Location loc, Environment env)
-        throws EvalException {
-      return partitionWrapper(self, sep, true, env.isSkylarkEnabled(), loc);
-    }
-  };
 
-  @SkylarkSignature(name = "rpartition", objectType = StringModule.class,
-      returnType = HackHackEitherList.class,
-      doc = "Splits the input string at the last occurrence of the separator "
-          + "<code>sep</code> and returns the resulting partition as a three-element "
-          + "list of the form [substring_before, separator, substring_after].",
-      mandatoryPositionals = {
-        @Param(name = "self", type = String.class, doc = "This string.")},
-      optionalPositionals = {
-        @Param(name = "sep", type = String.class,
-          defaultValue = "' '", doc = "The string to split on, default is space (\" \").")},
-      useEnvironment = true,
-      useLocation = true)
-  private static BuiltinFunction rpartition = new BuiltinFunction("rpartition") {
-    @SuppressWarnings("unused")
-    public Object invoke(String self, String sep, Location loc, Environment env)
-        throws EvalException {
-      return partitionWrapper(self, sep, false, env.isSkylarkEnabled(), loc);
-    }
-  };
-
-  /**
-   * Wraps the stringPartition() method and converts its results and exceptions 
-   * to the expected types.
-   *
-   * @param self The input string
-   * @param separator The string to split on
-   * @param forward A flag that controls whether the input string is split around 
-   *    the first ({@code true}) or last ({@code false}) occurrence of the separator. 
-   * @param isSkylarkEnabled Controls whether a SkylarkList ({@code true})or a 
-   *    {@code java.util.List} ({@code false}) is returned
-   * @param loc The location that is used for potential exceptions
-   * @return A list with three elements
-   */
-  private static Object partitionWrapper(String self, String separator, boolean forward,
-      boolean isSkylarkEnabled, Location loc) throws EvalException {
-    try {
-      List<String> result = stringPartition(self, separator, forward);
-      return isSkylarkEnabled ? SkylarkList.list(result, String.class) : result;
-    } catch (IllegalArgumentException ex) {
-      throw new EvalException(loc, ex);
-    }
-  }
-
-  /**
-   * Splits the input string at the {first|last} occurrence of the given separator
-   * and returns the resulting partition as a three-tuple of Strings, contained 
-   * in a {@code List}.
-   * 
-   * <p>If the input string does not contain the separator, the tuple will
-   * consist of the original input string and two empty strings.
-   * 
-   * <p>This method emulates the behavior of Python's str.partition() and 
-   * str.rpartition(), depending on the value of the {@code forward} flag.
-   * 
-   * @param input The input string
-   * @param separator The string to split on
-   * @param forward A flag that controls whether the input string is split around 
-   *    the first ({@code true}) or last ({@code false}) occurrence of the separator. 
-   * @return A three-tuple (List) of the form [part_before_separator, separator, 
-   *    part_after_separator].
-   *    
-   */
-  private static List<String> stringPartition(String input, String separator, boolean forward)
-      throws IllegalArgumentException {
-    if (separator.isEmpty()) {
-      throw new IllegalArgumentException("Empty separator");
-    }
-
-    int partitionSize = 3;
-    ArrayList<String> result = new ArrayList<>(partitionSize);
-    int pos = forward ? input.indexOf(separator) : input.lastIndexOf(separator);
-
-    if (pos < 0) {
-      for (int i = 0; i < partitionSize; ++i) {
-        result.add("");
-      }
-
-      // Following Python's implementation of str.partition() and str.rpartition(),
-      // the input string is copied to either the first or the last position in the
-      // list, depending on the value of the forward flag.
-      result.set(forward ? 0 : partitionSize - 1, input);
-    } else {
-      result.add(input.substring(0, pos));
-      result.add(separator);
-
-      // pos + sep.length() is at most equal to input.length(). This worst-case
-      // happens when the separator is at the end of the input string. However,
-      // substring() will return an empty string in this scenario, thus making
-      // any additional safety checks obsolete.
-      result.add(input.substring(pos + separator.length()));
-    }
-
-    return result;
-  }
-  
   /**
    * Common implementation for find, rfind, index, rindex.
    * @param forward true if we want to return the last matching index.
@@ -803,7 +689,7 @@ public class MethodLibrary {
   @SkylarkSignature(name = "bool", returnType = Boolean.class,
       doc = "Converts an object to boolean. "
       + "It returns False if the object is None, False, an empty string, the number 0, or an "
-      + "empty collection. Otherwise, it returns True. As in Python, <code>bool</code> "
+      + "empty collection. Otherwise, it returns True. Similarly to Python <code>bool</code> "
       + "is also a type.",
       mandatoryPositionals = {@Param(name = "x", doc = "The variable to convert.")})
   private static BuiltinFunction bool = new BuiltinFunction("bool") {
@@ -880,9 +766,9 @@ public class MethodLibrary {
   };
 
   @SkylarkSignature(name = "enumerate",  returnType = SkylarkList.class,
-      doc = "Return a list of pairs (two-element tuples), with the index (int) and the item from"
+      doc = "Return a list of pairs (two-element lists), with the index (int) and the item from"
           + " the input list.\n<pre class=\"language-python\">"
-          + "enumerate([24, 21, 84]) == [(0, 24), (1, 21), (2, 84)]</pre>\n",
+          + "enumerate([24, 21, 84]) == [[0, 24], [1, 21], [2, 84]]</pre>\n",
       mandatoryPositionals = {@Param(name = "list", type = SkylarkList.class, doc = "input list")},
       useLocation = true)
   private static BuiltinFunction enumerate = new BuiltinFunction("enumerate") {
@@ -994,14 +880,13 @@ public class MethodLibrary {
 
   @SkylarkSignature(name = "getattr",
       doc = "Returns the struct's field of the given name if exists, otherwise <code>default</code>"
-          + " if specified, otherwise raises an error. For example, <code>getattr(x, \"foobar\")"
-          + "</code> is equivalent to <code>x.foobar</code>, except that it returns "
-          + "<code>default</code> for a non-existant attribute instead of raising an error."
-          + "<br>"
+          + " if specified, otherwise rasies an error. For example, <code>getattr(x, \"foobar\")"
+          + "</code> is equivalent to <code>x.foobar</code>."
+          + "Example:<br>"
           + "<pre class=\"language-python\">getattr(ctx.attr, \"myattr\")\n"
           + "getattr(ctx.attr, \"myattr\", \"mydefault\")</pre>",
       mandatoryPositionals = {
-        @Param(name = "object", doc = "The struct whose field is accessed."),
+        @Param(name = "object", doc = "The struct which's field is accessed."),
         @Param(name = "name", doc = "The name of the struct field.")},
       optionalPositionals = {
         @Param(name = "default", defaultValue = "None",
@@ -1156,10 +1041,8 @@ public class MethodLibrary {
       + "Strings are iterable and support the <code>in</code> operator. Examples:<br>"
       + "<pre class=\"language-python\">\"a\" in \"abc\"   # evaluates as True\n"
       + "x = []\n"
-      + "for s in \"abc\":\n"
-      + "  x += [s]     # x == [\"a\", \"b\", \"c\"]</pre>\n"
-      + "Implicit concatenation of strings is not allowed; use the <code>+</code> "
-      + "operator instead.")
+     + "for s in \"abc\":\n"
+      + "  x += [s]     # x == [\"a\", \"b\", \"c\"]</pre>")
   public static final class StringModule {}
 
   /**
@@ -1187,8 +1070,8 @@ public class MethodLibrary {
   public static final class DictModule {}
 
   public static final List<BaseFunction> stringFunctions = ImmutableList.<BaseFunction>of(
-      count, endswith, find, index, format, join, lower, partition, replace, rfind,
-      rindex, rpartition, slice, split, startswith, strip, upper);
+      count, endswith, find, index, format, join, lower, replace, rfind,
+      rindex, slice, split, startswith, strip, upper);
 
   public static final List<BaseFunction> listPureFunctions = ImmutableList.<BaseFunction>of(
       slice);
