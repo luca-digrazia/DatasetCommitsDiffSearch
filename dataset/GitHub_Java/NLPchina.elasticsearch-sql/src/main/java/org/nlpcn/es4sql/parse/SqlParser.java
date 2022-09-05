@@ -71,7 +71,7 @@ public class SqlParser {
 
 
 	private boolean isCond(SQLBinaryOpExpr expr) {
-		return expr.getLeft() instanceof SQLIdentifierExpr || expr.getLeft() instanceof SQLPropertyExpr || expr.getLeft() instanceof SQLVariantRefExpr;
+		return expr.getLeft() instanceof SQLIdentifierExpr || expr.getLeft() instanceof SQLPropertyExpr;
 	}
 
 	private void parseWhere(SQLExpr expr, Where where) throws SqlParseException {
@@ -252,12 +252,8 @@ public class SqlParser {
         }
 
         if ( sameAliases.contains(null) ) return null;
-        String firstAlias = sameAliases.get(0);
-        //return null if more than one alias
-        for(String alias : sameAliases){
-            if(!alias.equals(firstAlias)) return null;
-        }
-        return firstAlias;
+        if ( sameAliases.stream().distinct().count() != 1 ) return null;
+        return sameAliases.get(0);
     }
 
 	private void findOrderBy(MySqlSelectQueryBlock query, Select select) throws SqlParseException {

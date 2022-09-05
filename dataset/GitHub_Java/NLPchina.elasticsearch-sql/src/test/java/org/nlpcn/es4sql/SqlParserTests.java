@@ -31,6 +31,8 @@ public class SqlParserTests {
         parser = new SqlParser();
     }
 
+
+
     @Test
     public void joinParseCheckSelectedFieldsSplit() throws SqlParseException {
         String query = "SELECT a.firstname ,a.lastname , a.gender ,  d.holdersName ,d.name  FROM elasticsearch-sql_test_index/account a " +
@@ -281,20 +283,6 @@ public class SqlParserTests {
         Assert.assertEquals("Test Index",from.getIndex());
         Assert.assertEquals("type1",from.getType());
     }
-
-
-    @Test
-    public void fieldWithSpacesWithinBrackets() throws SqlParseException {
-        String query = "SELECT insert_time FROM name/type1 WHERE [first name] = 'Name'";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        List<Where> where = select.getWhere().getWheres();
-        Assert.assertEquals(1,where.size());
-        Condition condition = (Condition) where.get(0);
-        Assert.assertEquals("first name",condition.getName());
-        Assert.assertEquals("Name",condition.getValue());
-    }
-
     @Test
     public void twoIndices() throws SqlParseException {
         String query = "SELECT insert_time FROM index1/type1 , index2/type2 WHERE age > 3";
@@ -310,90 +298,6 @@ public class SqlParserTests {
                 && from2.getIndex().equals("index1") && from2.getType().equals("type1");
         Assert.assertTrue(preservedOrder || notPreservedOrder);
     }
-
-    @Test
-    public void fieldWithATcharAtWhere() throws SqlParseException {
-        String query = "SELECT * FROM index/type where @field = 6 ";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        LinkedList<Where> wheres = select.getWhere().getWheres();
-        Assert.assertEquals(1,wheres.size());
-        Condition condition = (Condition) wheres.get(0);
-        Assert.assertEquals("@field", condition.getName());
-    }
-
-    @Test
-    public void fieldWithATcharAtSelect() throws SqlParseException {
-        String query = "SELECT @field FROM index/type where field2 = 6 ";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        List<Field> fields = select.getFields();
-        Assert.assertEquals(1,fields.size());
-        Field field = fields.get(0);
-        Assert.assertEquals(field.getName(),"@field");
-    }
-    @Test
-    public void fieldWithColonCharAtSelect() throws SqlParseException {
-        String query = "SELECT a:b FROM index/type where field2 = 6 ";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        List<Field> fields = select.getFields();
-        Assert.assertEquals(1,fields.size());
-        Field field = fields.get(0);
-        Assert.assertEquals(field.getName(),"a:b");
-    }
-
-    @Test
-    public void fieldWithColonCharAtWhere() throws SqlParseException {
-        String query = "SELECT * FROM index/type where a:b = 6 ";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        LinkedList<Where> wheres = select.getWhere().getWheres();
-        Assert.assertEquals(1,wheres.size());
-        Condition condition = (Condition) wheres.get(0);
-        Assert.assertEquals("a:b", condition.getName());
-    }
-
-    @Test
-    public void fieldIsNull() throws SqlParseException {
-        String query = "SELECT * FROM index/type where a IS NOT NULL";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        LinkedList<Where> wheres = select.getWhere().getWheres();
-        Assert.assertEquals(1,wheres.size());
-        Condition condition = (Condition) wheres.get(0);
-        Assert.assertEquals("a", condition.getName());
-        Assert.assertNull(condition.getValue());
-    }
-
-    @Test
-    public void innerQueryTest() throws SqlParseException {
-        String query = String.format("select * from %s/dog where holdersName IN (select firstname from %s/account where firstname = 'eliran')",TEST_INDEX,TEST_INDEX);
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Assert.assertTrue(select.containsSubQueries());
-        Assert.assertEquals(1,select.getSubQueries().size());
-    }
-
-    @Test
-    public void inTermsSubQueryTest() throws SqlParseException {
-        String query = String.format("select * from %s/dog where holdersName = IN_TERMS (select firstname from %s/account where firstname = 'eliran')",TEST_INDEX,TEST_INDEX);
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Assert.assertTrue(select.containsSubQueries());
-        Assert.assertEquals(1,select.getSubQueries().size());
-    }
-
-
-    @Test
-    public void innerQueryTestTwoQueries() throws SqlParseException {
-        String query = String.format("select * from %s/dog where holdersName IN (select firstname from %s/account where firstname = 'eliran') and age IN (select name.ofHisName from %s/gotCharacters) ",TEST_INDEX,TEST_INDEX,TEST_INDEX);
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Assert.assertTrue(select.containsSubQueries());
-        Assert.assertEquals(2,select.getSubQueries().size());
-    }
-
 
 
     private SQLExpr queryToExpr(String query) {

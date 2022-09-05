@@ -8,11 +8,8 @@ import com.alibaba.druid.sql.ast.statement.SQLJoinTableSource;
 import com.alibaba.druid.sql.dialect.mysql.ast.statement.MySqlSelectQueryBlock;
 import com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser;
 import com.alibaba.druid.sql.parser.*;
+import com.alibaba.druid.util.JdbcUtils;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.plugin.nlpcn.ElasticResultHandler;
-import org.elasticsearch.plugin.nlpcn.QueryActionElasticExecutor;
-import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.search.SearchHits;
 import org.nlpcn.es4sql.domain.Delete;
 import org.nlpcn.es4sql.domain.JoinSelect;
 import org.nlpcn.es4sql.domain.Select;
@@ -20,12 +17,8 @@ import org.nlpcn.es4sql.exception.SqlParseException;
 import org.nlpcn.es4sql.parse.ElasticLexer;
 import org.nlpcn.es4sql.parse.ElasticSqlExprParser;
 import org.nlpcn.es4sql.parse.SqlParser;
-import org.nlpcn.es4sql.parse.SubQueryExpression;
-import org.nlpcn.es4sql.query.join.ESJoinQueryActionFactory;
 
 import java.sql.SQLFeatureNotSupportedException;
-import java.util.ArrayList;
-import java.util.List;
 
 public class ESActionFactory {
 
@@ -37,73 +30,33 @@ public class ESActionFactory {
 	 * @return Query object.
 	 */
 	public static QueryAction create(Client client, String sql) throws SqlParseException, SQLFeatureNotSupportedException {
-		sql = sql.replaceAll("\n"," ");
-        String firstWord = sql.substring(0, sql.indexOf(' '));
+		String firstWord = sql.substring(0, sql.indexOf(' '));
         switch (firstWord.toUpperCase()) {
 			case "SELECT":
 				SQLQueryExpr sqlExpr = (SQLQueryExpr) toSqlExpr(sql);
                 if(isJoin(sqlExpr,sql)){
                     JoinSelect joinSelect = new SqlParser().parseJoinSelect(sqlExpr);
-                    handleSubQueries(client, joinSelect.getFirstTable());
-                    handleSubQueries(client, joinSelect.getSecondTable());
-                    return ESJoinQueryActionFactory.createJoinAction(client, joinSelect);
+                    return new ESHashJoinQueryAction(client,joinSelect);
                 }
                 else {
                     Select select = new SqlParser().parseSelect(sqlExpr);
-                    handleSubQueries(client, select);
-                    return handleSelect(client, select);
+
+                    if (select.isAgg) {
+                        return new AggregationQueryAction(client, select);
+                    } else {
+                        return new DefaultQueryAction(client, select);
+                    }
                 }
 			case "DELETE":
                 SQLStatementParser parser = createSqlStatementParser(sql);
 				SQLDeleteStatement deleteStatement = parser.parseDeleteStatement();
 				Delete delete = new SqlParser().parseDelete(deleteStatement);
 				return new DeleteQueryAction(client, delete);
-            case "SHOW":
-                return new ShowQueryAction(client,sql);
+
 			default:
 				throw new SQLFeatureNotSupportedException(String.format("Unsupported query: %s", sql));
 		}
 	}
-
-    private static void handleSubQueries(Client client, Select select) throws SqlParseException {
-        if (select.containsSubQueries())
-        {
-            for(SubQueryExpression subQueryExpression : select.getSubQueries()){
-                QueryAction queryAction = handleSelect(client, subQueryExpression.getSelect());
-                executeAndFillSubQuery(client , subQueryExpression,queryAction);
-            }
-        }
-    }
-
-    private static void executeAndFillSubQuery(Client client , SubQueryExpression subQueryExpression,QueryAction queryAction) throws SqlParseException {
-        List<Object> values = new ArrayList<>();
-        Object queryResult;
-        try {
-            queryResult = QueryActionElasticExecutor.executeAnyAction(client,queryAction);
-        } catch (Exception e) {
-            throw new SqlParseException("could not execute SubQuery: " +  e.getMessage());
-        }
-
-        String returnField = subQueryExpression.getReturnField();
-        if(queryResult instanceof SearchHits) {
-            SearchHits hits = (SearchHits) queryResult;
-            for (SearchHit hit : hits) {
-                values.add(ElasticResultHandler.getFieldValue(hit,returnField));
-            }
-        }
-        else {
-            throw new SqlParseException("on sub queries only support queries that return Hits and not aggregations");
-        }
-        subQueryExpression.setValues(values.toArray());
-    }
-
-    private static QueryAction handleSelect(Client client, Select select) {
-        if (select.isAgg) {
-            return new AggregationQueryAction(client, select);
-        } else {
-            return new DefaultQueryAction(client, select);
-        }
-    }
 
     private static SQLStatementParser createSqlStatementParser(String sql) {
         ElasticLexer lexer = new ElasticLexer(sql);
@@ -126,7 +79,4 @@ public class ESActionFactory {
 
         return expr;
     }
-
-
-
 }
