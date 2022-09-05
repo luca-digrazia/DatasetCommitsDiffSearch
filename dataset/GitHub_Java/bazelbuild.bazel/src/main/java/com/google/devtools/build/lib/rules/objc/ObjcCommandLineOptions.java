@@ -92,7 +92,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
 
   @Option(name = "objc_generate_debug_symbols",
       defaultValue = "false",
-      category = "flags",
+      category = "undocumented",
       help = "Specifies whether to generate debug symbol(.dSYM) file.")
   public boolean generateDebugSymbols;
 

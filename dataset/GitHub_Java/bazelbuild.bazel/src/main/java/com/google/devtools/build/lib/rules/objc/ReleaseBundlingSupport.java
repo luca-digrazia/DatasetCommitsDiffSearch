@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
-import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.objc.BundleSupport.ExtraActoolArgs;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.Type;
@@ -245,7 +244,7 @@ public final class ReleaseBundlingSupport {
     Artifact ipaOutput = ruleContext.getImplicitOutputArtifact(IPA);
 
     Artifact maybeSignedIpa;
-    if (objcConfiguration.getBundlingPlatform() == Platform.IOS_SIMULATOR) {
+    if (objcConfiguration.getBundlingPlatform() == Platform.SIMULATOR) {
       maybeSignedIpa = ipaOutput;
     } else if (attributes.provisioningProfile() == null) {
       throw new IllegalStateException(DEVICE_NO_PROVISIONING_PROFILE);
@@ -430,9 +429,7 @@ public final class ReleaseBundlingSupport {
         Substitution.of("%ipa_file%", ipaInput.getRootRelativePath().getPathString()),
         Substitution.of("%sim_device%", escapedSimDevice),
         Substitution.of("%sdk_version%", escapedSdkVersion),
-        Substitution.of("%iossim%", attributes.iossim().getRootRelativePath().getPathString()),
-        Substitution.of("%std_redirect_dylib_path%",
-            attributes.stdRedirectDylib().getRootRelativePath().getPathString()));
+        Substitution.of("%iossim%", attributes.iossim().getRootRelativePath().getPathString()));
 
     ruleContext.registerAction(
         new TemplateExpansionAction(ruleContext.getActionOwner(), attributes.runnerScriptTemplate(),
@@ -469,7 +466,7 @@ public final class ReleaseBundlingSupport {
       String bundleDirFormat, String bundleName, String minimumOsVersion) {
     ImmutableList<BundleableFile> extraBundleFiles;
     ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
-    if (objcConfiguration.getBundlingPlatform() == Platform.IOS_DEVICE) {
+    if (objcConfiguration.getBundlingPlatform() == Platform.DEVICE) {
       extraBundleFiles = ImmutableList.of(new BundleableFile(
           new Attributes(ruleContext).provisioningProfile(),
           PROVISIONING_PROFILE_BUNDLE_FILE));
@@ -866,10 +863,6 @@ public final class ReleaseBundlingSupport {
 
     Artifact iossim() {
       return checkNotNull(ruleContext.getPrerequisiteArtifact("$iossim", Mode.HOST));
-    }
-
-    Artifact stdRedirectDylib() {
-      return checkNotNull(ruleContext.getPrerequisiteArtifact("$std_redirect_dylib", Mode.HOST));
     }
 
     Artifact runnerScriptTemplate() {
