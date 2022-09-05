@@ -464,7 +464,7 @@ public final class XcodeProvider implements TransitiveInfoProvider {
   @VisibleForTesting
   static final EnumSet<XcodeProductType> CAN_LINK_PRODUCT_TYPES = EnumSet.of(
       XcodeProductType.APPLICATION, XcodeProductType.BUNDLE, XcodeProductType.UNIT_TEST,
-      XcodeProductType.EXTENSION, XcodeProductType.FRAMEWORK);
+      XcodeProductType.EXTENSION);
 
   /**
    * Returns the name of the Xcode target that corresponds to a build target with the given name.
@@ -556,10 +556,6 @@ public final class XcodeProvider implements TransitiveInfoProvider {
             .addSupportFile(buildFilePath);
 
     if (CAN_LINK_PRODUCT_TYPES.contains(productType)) {
-      // For builds with --ios_multi_cpus set, we may have several copies of some XCodeProviders
-      // in the dependencies (one per cpu architecture). We deduplicate the corresponding
-      // xcode target names with a LinkedHashSet before adding to the TargetControl.
-      Set<DependencyControl> dependencySet = new LinkedHashSet<>();
       for (XcodeProvider dependency : propagatedDependencies) {
         // Only add a library target to a binary's dependencies if it has source files to compile
         // and it is not from the "non_propagated_deps" attribute. Xcode cannot build targets
@@ -576,15 +572,10 @@ public final class XcodeProvider implements TransitiveInfoProvider {
         boolean hasSources = dependency.compilationArtifacts.isPresent()
             && dependency.compilationArtifacts.get().getArchive().isPresent();
         if (hasSources || (dependency.productType == XcodeProductType.BUNDLE)) {
-          String dependencyXcodeTargetName = dependency.dependencyXcodeTargetName();
-          dependencySet.add(DependencyControl.newBuilder()
-                .setTargetLabel(dependencyXcodeTargetName)
+            targetControl.addDependency(DependencyControl.newBuilder()
+                .setTargetLabel(dependency.dependencyXcodeTargetName())
                 .build());
         }
-      }
-
-      for (DependencyControl dependencyControl : dependencySet) {
-        targetControl.addDependency(dependencyControl);
       }
     }
     for (XcodeProvider justTestHost : testHost.asSet()) {
