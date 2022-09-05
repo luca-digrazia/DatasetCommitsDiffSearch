@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,10 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.FileTarget;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
@@ -28,6 +25,9 @@ import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.util.BinaryPredicate;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -117,11 +117,11 @@ final class CompileOneDependencyTransformer {
 
     // For each rule, see if it has directCompileTimeInputAttribute,
     // and if so check the targets listed in that attribute match the label.
-    DependencyFilter directCompileTimeInput =
-        new DependencyFilter() {
+    final BinaryPredicate<Rule, Attribute> directCompileTimeInput =
+        new BinaryPredicate<Rule, Attribute>() {
           @Override
           public boolean apply(Rule rule, Attribute attribute) {
-            return DependencyFilter.DIRECT_COMPILE_TIME_INPUT.apply(rule, attribute)
+            return Rule.DIRECT_COMPILE_TIME_INPUT.apply(rule, attribute)
                 // We don't know which path to follow for configurable attributes, so skip them.
                 && !rule.isConfigurableAttribute(attribute.getName());
           }
@@ -160,16 +160,16 @@ final class CompileOneDependencyTransformer {
     for (Rule rule : orderedRuleList) {
       RawAttributeMapper attributes = RawAttributeMapper.of(rule);
       // We don't know which path to follow for configurable attributes, so skip them.
-      if (attributes.isConfigurable("deps", BuildType.LABEL_LIST)
-          || attributes.isConfigurable("srcs", BuildType.LABEL_LIST)) {
+      if (attributes.isConfigurable("deps", Type.LABEL_LIST)
+          || attributes.isConfigurable("srcs", Type.LABEL_LIST)) {
         continue;
       }
       RuleClass ruleClass = rule.getRuleClassObject();
-      if (ruleClass.hasAttr("deps", BuildType.LABEL_LIST) &&
-          ruleClass.hasAttr("srcs", BuildType.LABEL_LIST)) {
-        for (Label dep : attributes.get("deps", BuildType.LABEL_LIST)) {
+      if (ruleClass.hasAttr("deps", Type.LABEL_LIST) &&
+          ruleClass.hasAttr("srcs", Type.LABEL_LIST)) {
+        for (Label dep : attributes.get("deps", Type.LABEL_LIST)) {
           if (dep.equals(result.getLabel())) {
-            if (!attributes.get("srcs", BuildType.LABEL_LIST).isEmpty()) {
+            if (!attributes.get("srcs", Type.LABEL_LIST).isEmpty()) {
               return rule;
             }
           }
