@@ -26,7 +26,7 @@ public class TimerTest {
     private final Timer timer = new Timer(reservoir, clock);
 
     @Test
-    public void hasRates() {
+    public void hasRates() throws Exception {
         assertThat(timer.getCount())
                 .isZero();
 
@@ -44,7 +44,7 @@ public class TimerTest {
     }
 
     @Test
-    public void updatesTheCountOnUpdates() {
+    public void updatesTheCountOnUpdates() throws Exception {
         assertThat(timer.getCount())
                 .isZero();
 
@@ -81,7 +81,7 @@ public class TimerTest {
     }
 
     @Test
-    public void timesRunnableInstances() {
+    public void timesRunnableInstances() throws Exception {
         final AtomicBoolean called = new AtomicBoolean();
         timer.time(() -> called.set(true));
 
@@ -95,7 +95,7 @@ public class TimerTest {
     }
 
     @Test
-    public void timesContexts() {
+    public void timesContexts() throws Exception {
         timer.time().stop();
 
         assertThat(timer.getCount())
@@ -105,7 +105,7 @@ public class TimerTest {
     }
 
     @Test
-    public void returnsTheSnapshotFromTheReservoir() {
+    public void returnsTheSnapshotFromTheReservoir() throws Exception {
         final Snapshot snapshot = mock(Snapshot.class);
         when(reservoir.getSnapshot()).thenReturn(snapshot);
 
@@ -114,7 +114,7 @@ public class TimerTest {
     }
 
     @Test
-    public void ignoresNegativeValues() {
+    public void ignoresNegativeValues() throws Exception {
         timer.update(-1, TimeUnit.SECONDS);
 
         assertThat(timer.getCount())
