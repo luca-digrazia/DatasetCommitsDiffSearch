@@ -28,8 +28,6 @@ public class AtlasMainDexHelper {
 
     private   Map<String, Boolean> mainRes = new LinkedHashMap<>();
 
-    private Map<QualifiedContent,List<File>>mainDexAchives = new HashMap<>();
-
     public void addMainDexJars(Set<BuildAtlasEnvTask.FileIdentity>maindexs){
         mainDexJar.addAll(maindexs);
     }
@@ -137,13 +135,5 @@ public class AtlasMainDexHelper {
 
     public Map<String,Boolean> getMainResFiles() {
         return mainRes;
-    }
-
-    public void addMainDexAchives(Map<QualifiedContent, List<File>> cacheableItems) {
-            this.mainDexAchives.putAll(cacheableItems);
-    }
-
-    public Map<QualifiedContent, List<File>> getMainDexAchives() {
-        return mainDexAchives;
     }
 }

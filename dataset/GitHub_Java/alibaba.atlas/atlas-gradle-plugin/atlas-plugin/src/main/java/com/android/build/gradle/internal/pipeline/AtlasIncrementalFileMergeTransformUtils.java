@@ -24,9 +24,7 @@ import com.taobao.android.builder.dependency.model.AwbBundle;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * @author lilong
@@ -286,7 +284,7 @@ public class AtlasIncrementalFileMergeTransformUtils {
         for (JarInput jarInput : transformInput.getJarInputs()) {
 
             if (awbTransform == null) {
-                if (!AtlasBuildContext.mainResMap.containsKey(jarInput.getFile().getAbsolutePath())) {
+                if (!AtlasBuildContext.atlasMainDexHelper.getMainResFiles().containsKey(jarInput.getFile().getAbsolutePath())) {
                     continue;
                 }
             } else {
@@ -300,7 +298,7 @@ public class AtlasIncrementalFileMergeTransformUtils {
 
         for (DirectoryInput dirInput : transformInput.getDirectoryInputs()) {
             if (awbTransform == null) {
-                if (!AtlasBuildContext.mainNativeSoMap.containsKey(dirInput.getFile().getAbsolutePath())) {
+                if (!AtlasBuildContext.atlasMainDexHelper.getMainSoFiles().containsKey(dirInput.getFile().getAbsolutePath())) {
                     continue;
                 }
 
@@ -311,6 +309,26 @@ public class AtlasIncrementalFileMergeTransformUtils {
             }
 
             builder.add(toIncrementalInput(dirInput, contentMap));
+        }
+
+        for (DirectoryInput dirInput : buildLocalDirInput()) {
+            if (awbTransform == null) {
+                if (!AtlasBuildContext.atlasMainDexHelper.getMainSoFiles().containsKey(dirInput.getFile().getAbsolutePath())) {
+                    continue;
+                }
+
+            }else {
+                if (!awbTransform.getLibraryJniLibsInputDir().contains(dirInput.getFile())){
+                    continue;
+                }
+            }
+
+            IncrementalFileMergerInput mergeInput =
+                    toIncrementalInput(dirInput, contentMap);
+            if (mergeInput != null) {
+                builder.add(mergeInput);
+            }
+
         }
 
         return builder.build();
@@ -340,7 +358,7 @@ public class AtlasIncrementalFileMergeTransformUtils {
 
         for (JarInput jarInput : transformInput.getJarInputs()) {
             if (awbTransform == null) {
-                if (!AtlasBuildContext.mainResMap.containsKey(jarInput.getFile().getAbsolutePath())) {
+                if (!AtlasBuildContext.atlasMainDexHelper.getMainResFiles().containsKey(jarInput.getFile().getAbsolutePath())) {
                     continue;
                 }
             } else {
@@ -359,7 +377,7 @@ public class AtlasIncrementalFileMergeTransformUtils {
 
         for (DirectoryInput dirInput : transformInput.getDirectoryInputs()) {
             if (awbTransform == null) {
-                if (!AtlasBuildContext.mainNativeSoMap.containsKey(dirInput.getFile().getAbsolutePath())) {
+                if (!AtlasBuildContext.atlasMainDexHelper.getMainSoFiles().containsKey(dirInput.getFile().getAbsolutePath())) {
                     continue;
                 }
 
@@ -376,6 +394,9 @@ public class AtlasIncrementalFileMergeTransformUtils {
             }
 
         }
+
+
+
         return builder.build();
     }
 
@@ -417,6 +438,27 @@ public class AtlasIncrementalFileMergeTransformUtils {
             }
         }
 
+        for (DirectoryInput dirInput : buildLocalDirInput()) {
+            if (awbBundle == null) {
+                if (!AtlasBuildContext.atlasMainDexHelper.getMainSoFiles().containsKey(dirInput.getFile().getAbsolutePath())) {
+                    continue;
+                }
+
+            }else {
+                if (!awbBundle.getLibraryJniLibsInputDir().contains(dirInput.getFile())){
+                    continue;
+                }
+            }
+
+            IncrementalFileMergerInput mergeInput =
+                    toNonIncrementalInput(dirInput, contentMap);
+            if (mergeInput != null) {
+                builder.add(mergeInput);
+            }
+
+        }
+
+
         return builder.build();
     }
 
@@ -440,5 +482,42 @@ public class AtlasIncrementalFileMergeTransformUtils {
             default:
                 throw new AssertionError();
         }
+    }
+
+    private static Collection<? extends DirectoryInput> buildLocalDirInput() {
+        Set<DirectoryInput>directoryInputs = new HashSet<>();
+        for (File file: AtlasBuildContext.localLibs){
+            DirectoryInput directoryInput = new DirectoryInput() {
+                @Override
+                public Map<File, Status> getChangedFiles() {
+                     return ImmutableMap.of(file, Status.NOTCHANGED);
+                }
+
+                @Override
+                public String getName() {
+                    return "localLibs";
+                }
+
+                @Override
+                public File getFile() {
+                    return file;
+                }
+
+                @Override
+                public Set<ContentType> getContentTypes() {
+                    return TransformManager.CONTENT_NATIVE_LIBS;
+                }
+
+                @Override
+                public Set<? super Scope> getScopes() {
+                    return TransformManager.SCOPE_FULL_PROJECT;
+                }
+            };
+
+            directoryInputs.add(directoryInput);
+        }
+        return directoryInputs;
+
+
     }
 }
