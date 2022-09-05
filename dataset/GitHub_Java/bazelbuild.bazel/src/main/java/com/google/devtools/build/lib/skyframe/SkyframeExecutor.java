@@ -136,7 +136,6 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import com.google.devtools.build.skyframe.WalkableGraph;
 import com.google.devtools.build.skyframe.WalkableGraph.WalkableGraphFactory;
 
 import java.io.IOException;
@@ -340,12 +339,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(SkyFunctions.TARGET_PATTERN, new TargetPatternFunction());
     map.put(SkyFunctions.PREPARE_DEPS_OF_PATTERNS, new PrepareDepsOfPatternsFunction());
     map.put(SkyFunctions.PREPARE_DEPS_OF_PATTERN, new PrepareDepsOfPatternFunction(pkgLocator));
-    map.put(
-        SkyFunctions.PREPARE_DEPS_OF_TARGETS_UNDER_DIRECTORY,
-        new PrepareDepsOfTargetsUnderDirectoryFunction());
-    map.put(
-        SkyFunctions.COLLECT_PACKAGES_UNDER_DIRECTORY,
-        new CollectPackagesUnderDirectoryFunction(directories));
+    map.put(SkyFunctions.PREPARE_DEPS_OF_TARGETS_UNDER_DIRECTORY,
+        new PrepareDepsOfTargetsUnderDirectoryFunction(directories));
     map.put(SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES, new BlacklistedPackagePrefixesFunction());
     map.put(SkyFunctions.TESTS_IN_SUITE, new TestsInSuiteFunction());
     map.put(SkyFunctions.TEST_SUITE_EXPANSION, new TestSuiteExpansionFunction());
@@ -1456,16 +1451,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return evaluationResult;
   }
 
-  @Override
-  public void afterUse(WalkableGraph walkableGraph) {
-  }
-
   /**
    * Get metadata related to the prepareAndGet() lookup. Resulting data is specific to the
    * underlying evaluation implementation.
    */
-  public String prepareAndGetMetadata(Collection<String> patterns, String offset)
-      throws AbruptExitException, InterruptedException {
+  public String prepareAndGetMetadata(Collection<String> patterns, String offset) {
     return buildDriver.meta(ImmutableList.of(getUniverseKey(patterns, offset)));
   }
 

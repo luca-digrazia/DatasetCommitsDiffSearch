@@ -80,9 +80,6 @@ public interface WalkableGraph {
     EvaluationResult<SkyValue> prepareAndGet(Collection<String> roots, String offset,
         int numThreads, EventHandler eventHandler) throws InterruptedException;
 
-    /** Consumers of the graph given by {@link #prepareAndGet} may call this after they are done. */
-    void afterUse(WalkableGraph walkableGraph);
-
     /** Returns the {@link SkyKey} that defines this universe. */
     SkyKey getUniverseKey(Collection<String> roots, String offset);
   }

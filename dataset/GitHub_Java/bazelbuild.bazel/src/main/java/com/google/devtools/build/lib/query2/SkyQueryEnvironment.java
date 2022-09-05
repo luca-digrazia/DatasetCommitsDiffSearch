@@ -324,8 +324,8 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
   }
 
   @Override
-  public void getTargetsMatchingPattern(
-      QueryExpression owner, String pattern, Callback<Target> callback) throws QueryException {
+  public Set<Target> getTargetsMatchingPattern(QueryExpression owner, String pattern)
+      throws QueryException {
     Set<Target> targets = new LinkedHashSet<>(resolvedTargetPatterns.get(pattern));
 
     // Sets.filter would be more convenient here, but can't deal with exceptions.
@@ -336,11 +336,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
         targetIterator.remove();
       }
     }
-    try {
-      callback.process(targets);
-    } catch (InterruptedException e) {
-      throw new QueryException(owner, e.getMessage());
-    }
+    return targets;
   }
 
   @Override
