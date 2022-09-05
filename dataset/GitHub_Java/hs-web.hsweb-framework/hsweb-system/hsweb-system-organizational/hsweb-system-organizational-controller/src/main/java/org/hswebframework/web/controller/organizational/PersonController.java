@@ -17,6 +17,7 @@
 
 package org.hswebframework.web.controller.organizational;
 
+import org.hswebframework.web.NotFoundException;
 import org.hswebframework.web.authorization.Permission;
 import org.hswebframework.web.authorization.annotation.Authorize;
 import org.hswebframework.web.authorization.annotation.RequiresDataAccess;
@@ -30,6 +31,7 @@ import org.hswebframework.web.entity.organizational.PersonAuthBindEntity;
 import org.hswebframework.web.entity.organizational.PersonEntity;
 import org.hswebframework.web.entity.organizational.PositionEntity;
 import org.hswebframework.web.logging.AccessLogger;
+import org.hswebframework.web.organizational.authorization.PersonnelAuthorization;
 import org.hswebframework.web.service.organizational.PersonService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -65,6 +67,48 @@ public class PersonController implements SimpleGenericEntityController<PersonEnt
         return SimpleGenericEntityController.super.list(param);
     }
 
+    @GetMapping("/me")
+    @AccessLogger("查看当前登录用户的人员信息")
+    @Authorize(merge = false)
+    public ResponseMessage<PersonAuthBindEntity> getLoginUserPerson() {
+        PersonnelAuthorization authorization = PersonnelAuthorization
+                .current()
+                .orElseThrow(NotFoundException::new);
+        return getDetail(authorization.getPersonnel().getId());
+    }
+
+    @PutMapping("/me")
+    @AccessLogger("修改个人信息")
+    @Authorize(merge = false)
+    public ResponseMessage<String> updateMePersonInfo(@RequestBody PersonAuthBindEntity bindEntity) {
+        PersonnelAuthorization authorization = PersonnelAuthorization
+                .current()
+                .orElseThrow(NotFoundException::new);
+        PersonAuthBindEntity old = personService
+                .selectAuthBindByPk(authorization.getPersonnel().getId());
+
+        bindEntity.setUserId(old.getUserId());
+        bindEntity.setId(old.getId());
+        bindEntity.setPositionIds(null);
+
+        if (bindEntity.getPersonUser() != null) {
+            bindEntity.getPersonUser().setUsername(old.getPersonUser().getUsername());
+        }
+
+        personService.updateByPk(bindEntity);
+        return ResponseMessage.ok();
+    }
+
+    @GetMapping("/me/authorization")
+    @AccessLogger("查看当前登录用户的人员权限信息")
+    @Authorize(merge = false)
+    public ResponseMessage<PersonnelAuthorization> getLoginUserPersonDetail() {
+        PersonnelAuthorization authorization = PersonnelAuthorization
+                .current()
+                .orElseThrow(NotFoundException::new);
+        return ResponseMessage.ok(authorization);
+    }
+
     @GetMapping("/{id}/detail")
     @AccessLogger("查看人员详情")
     @Authorize(action = Permission.ACTION_GET)
@@ -80,7 +124,7 @@ public class PersonController implements SimpleGenericEntityController<PersonEnt
         return ResponseMessage.ok(personService.insert(bindEntity));
     }
 
-    @PostMapping("/{id}/detail")
+    @PutMapping("/{id}/detail")
     @AccessLogger("修改人员信息,并关联用户信息")
     @Authorize(action = Permission.ACTION_UPDATE)
     public ResponseMessage<String> getDetail(@PathVariable String id, @RequestBody PersonAuthBindEntity bindEntity) {
@@ -89,7 +133,7 @@ public class PersonController implements SimpleGenericEntityController<PersonEnt
         return ResponseMessage.ok();
     }
 
-    @PostMapping("/in-position/{positionId}")
+    @GetMapping("/in-position/{positionId}")
     @AccessLogger("获取指定岗位的人员")
     @Authorize(action = Permission.ACTION_GET)
     public ResponseMessage<List<PersonEntity>> getByPositionId(@PathVariable String positionId) {
