@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
-import static com.google.common.truth.Truth.assertWithMessage;
+import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
@@ -38,16 +38,20 @@ import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsProvider;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 
-/** Tests the handling of rc-options in {@link BlazeCommandDispatcher}. */
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Tests the handling of rc-options in {@link BlazeCommandDispatcher}.
+ */
 @RunWith(JUnit4.class)
 public class BlazeCommandDispatcherRcoptionsTest {
 
@@ -79,7 +83,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
     }
 
     @Override
-    public void editOptions(OptionsParser optionsParser) {}
+    public void editOptions(CommandEnvironment env, OptionsParser optionsParser) {}
   }
 
   @Command(
@@ -101,7 +105,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
     }
 
     @Override
-    public void editOptions(OptionsParser optionsParser) {}
+    public void editOptions(CommandEnvironment env, OptionsParser optionsParser) {}
   }
 
   @Command(
@@ -166,7 +170,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
 
     dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
     String out = outErr.outAsLatin1();
-    assertWithMessage("Common options should be used").that(out).isEqualTo("99");
+    assertEquals("Common options should be used", "99", out);
   }
 
   @Test
@@ -183,7 +187,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
 
     dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
     String out = outErr.outAsLatin1();
-    assertWithMessage("Specific options should dominate common options").that(out).isEqualTo("42");
+    assertEquals("Specific options should dominate common options", "42", out);
   }
 
   @Test
@@ -200,7 +204,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
 
     dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
     String out = outErr.outAsLatin1();
-    assertWithMessage("Specific options should dominate common options").that(out).isEqualTo("42");
+    assertEquals("Specific options should dominate common options", "42", out);
   }
 
   @Test
@@ -218,9 +222,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
 
     dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
     String out = outErr.outAsLatin1();
-    assertWithMessage("Options should get accumulated over different rc files")
-        .that(out)
-        .isEqualTo("99 foo");
+    assertEquals("Options should get accumulated over different rc files", "99 foo", out);
   }
 
   @Test
@@ -239,7 +241,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
 
     dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
     String out = outErr.outAsLatin1();
-    assertWithMessage("The more specific rc-file should override").that(out).isEqualTo("99 foo");
+    assertEquals("The more specific rc-file should override", "99 foo", out);
   }
 
   @Test
@@ -258,9 +260,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
 
     dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
     String out = outErr.outAsLatin1();
-    assertWithMessage("The more specific rc-file should override irrespective of name")
-        .that(out)
-        .isEqualTo("99 foo");
+    assertEquals("The more specific rc-file should override irrespective of name", "99 foo", out);
   }
 
   @Test
@@ -288,11 +288,12 @@ public class BlazeCommandDispatcherRcoptionsTest {
 
       dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
       String out = outErr.outAsLatin1();
-      assertWithMessage(String.format(
+      assertEquals(
+          String.format(
               "The more specific option should override, irrespective of source file or order. %s",
-              orderedOpts))
-          .that(out)
-          .isEqualTo("42 reportallinherited");
+              orderedOpts),
+          "42 reportallinherited",
+          out);
     }
   }
 
