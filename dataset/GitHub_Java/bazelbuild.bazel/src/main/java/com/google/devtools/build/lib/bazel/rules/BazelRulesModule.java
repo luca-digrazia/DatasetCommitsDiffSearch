@@ -61,7 +61,7 @@ public class BazelRulesModule extends BlazeModule {
 
     @Option(
         name = "genrule_strategy",
-        defaultValue = "standalone",
+        defaultValue = "standalone", 
         category = "strategy",
         help = "Specify how to execute genrules."
             + "'standalone' means run all of them locally."
@@ -111,11 +111,10 @@ public class BazelRulesModule extends BlazeModule {
 
     @Override
     public Map<Class<? extends ActionContext>, String> getActionContexts() {
-      return ImmutableMap.<Class<? extends ActionContext>, String>builder()
-          .put(CppCompileActionContext.class, "")
-          .put(CppLinkActionContext.class, "")
-          .put(WriteAdbArgsActionContext.class, "")
-          .build();
+      return ImmutableMap.of(
+          CppCompileActionContext.class, "",
+          CppLinkActionContext.class, "",
+          WriteAdbArgsActionContext.class, "");
     }
   }
 
@@ -146,7 +145,7 @@ public class BazelRulesModule extends BlazeModule {
     return ImmutableList.<ActionContextConsumer>of(new BazelActionContextConsumer(
         optionsProvider.getOptions(BazelExecutionOptions.class)));
   }
-
+  
   @Subscribe
   public void gotOptions(GotOptionsEvent event) {
     optionsProvider = event.getOptions();
