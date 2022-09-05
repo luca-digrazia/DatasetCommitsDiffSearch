@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.CommonCommandOptions;
 import com.google.devtools.build.lib.runtime.ProjectFile;
 import com.google.devtools.build.lib.util.AbruptExitException;
@@ -45,9 +44,8 @@ public final class ProjectFileSupport {
    * accordingly. If project files cannot be read or if they contain unparsable options, or if they
    * are not enabled, then it throws an exception instead.
    */
-  public static void handleProjectFiles(CommandEnvironment env, OptionsParser optionsParser,
+  public static void handleProjectFiles(BlazeRuntime runtime, OptionsParser optionsParser,
       String command) throws AbruptExitException {
-    BlazeRuntime runtime = env.getRuntime();
     List<String> targets = optionsParser.getResidue();
     ProjectFile.Provider projectFileProvider = runtime.getProjectFileProvider();
     if (projectFileProvider != null && !targets.isEmpty()
@@ -67,11 +65,11 @@ public final class ProjectFileSupport {
       List<Path> packagePath = PathPackageLocator.create(
           runtime.getOutputBase(),
           optionsParser.getOptions(PackageCacheOptions.class).packagePath,
-          env.getReporter(),
+          runtime.getReporter(),
           runtime.getWorkspace(),
           runtime.getWorkingDirectory()).getPathEntries();
       ProjectFile projectFile = projectFileProvider.getProjectFile(packagePath, projectFilePath);
-      env.getReporter().handle(Event.info("Using " + projectFile.getName()));
+      runtime.getReporter().handle(Event.info("Using " + projectFile.getName()));
 
       try {
         optionsParser.parse(
@@ -79,7 +77,7 @@ public final class ProjectFileSupport {
       } catch (OptionsParsingException e) {
         throw new AbruptExitException(e.getMessage(), ExitCode.COMMAND_LINE_ERROR);
       }
-      env.getEventBus().post(new GotProjectFileEvent(projectFile.getName()));
+      runtime.getEventBus().post(new GotProjectFileEvent(projectFile.getName()));
     }
   }
 
