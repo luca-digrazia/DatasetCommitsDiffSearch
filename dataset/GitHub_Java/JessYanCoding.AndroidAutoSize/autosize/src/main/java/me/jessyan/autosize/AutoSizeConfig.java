@@ -119,19 +119,7 @@ public final class AutoSizeConfig {
      * @param application {@link Application}
      */
     public AutoSizeConfig init(Application application) {
-        return init(application, true, null);
-    }
-
-    /**
-     * 建议在 Application 启动时完成初始化, 只能调用一次初始化方法, 否则报错
-     * 此方法使用默认的 {@link AutoAdaptStrategy} 策略, 如想使用自定义的 {@link AutoAdaptStrategy} 策略
-     * 请调用 {@link #init(Application, boolean, AutoAdaptStrategy)}
-     *
-     * @param application   {@link Application}
-     * @param isBaseOnWidth 详情请查看 {@link #isBaseOnWidth} 的注释
-     */
-    public AutoSizeConfig init(Application application, boolean isBaseOnWidth) {
-        return init(application, isBaseOnWidth, null);
+        return init(application, true);
     }
 
     /**
@@ -139,13 +127,11 @@ public final class AutoSizeConfig {
      *
      * @param application   {@link Application}
      * @param isBaseOnWidth 详情请查看 {@link #isBaseOnWidth} 的注释
-     * @param strategy      {@link AutoAdaptStrategy}, 传 {@code null} 则使用 {@link DefaultAutoAdaptStrategy}
      */
-    public AutoSizeConfig init(final Application application, boolean isBaseOnWidth, AutoAdaptStrategy strategy) {
+    public AutoSizeConfig init(final Application application, boolean isBaseOnWidth) {
         Preconditions.checkArgument(mInitDensity == -1, "AutoSizeConfig#init() can only be called once");
         Preconditions.checkNotNull(application, "application == null");
-        this.mApplication = application;
-        this.isBaseOnWidth = isBaseOnWidth;
+        mApplication = application;
         final DisplayMetrics displayMetrics = application.getResources().getDisplayMetrics();
 
         getMetaData(application);
@@ -172,7 +158,7 @@ public final class AutoSizeConfig {
             }
         });
         LogUtils.d("initDensity = " + mInitDensity + " , initScaledDensity = " + mInitScaledDensity);
-        mActivityLifecycleCallbacks = new ActivityLifecycleCallbacksImpl(strategy == null ? new DefaultAutoAdaptStrategy() : strategy);
+        mActivityLifecycleCallbacks = new ActivityLifecycleCallbacksImpl();
         application.registerActivityLifecycleCallbacks(mActivityLifecycleCallbacks);
         return this;
     }
@@ -203,17 +189,6 @@ public final class AutoSizeConfig {
                 isStop = true;
             }
         }
-    }
-
-    /**
-     * 设置屏幕适配逻辑策略类
-     *
-     * @param autoAdaptStrategy {@link AutoAdaptStrategy}
-     */
-    public void setAutoAdaptStrategy(AutoAdaptStrategy autoAdaptStrategy) {
-        Preconditions.checkNotNull(autoAdaptStrategy, "autoAdaptStrategy == null");
-        Preconditions.checkNotNull(mActivityLifecycleCallbacks, "Please call the AutoSizeConfig#init() first");
-        mActivityLifecycleCallbacks.setAutoAdaptStrategy(autoAdaptStrategy);
     }
 
     /**
