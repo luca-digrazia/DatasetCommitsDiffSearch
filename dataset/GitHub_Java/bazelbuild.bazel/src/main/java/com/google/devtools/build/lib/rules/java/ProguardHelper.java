@@ -365,7 +365,6 @@ public abstract class ProguardHelper {
         .addInputs(proguardSpecs)
         .setExecutable(proguard)
         .setMnemonic("Proguard")
-        .addArgument("-forceprocessing")
         .addArgument("-injars")
         .addArgument(programJar.getExecPathString())
         // This is handled by the build system there is no need for proguard to check if things are
