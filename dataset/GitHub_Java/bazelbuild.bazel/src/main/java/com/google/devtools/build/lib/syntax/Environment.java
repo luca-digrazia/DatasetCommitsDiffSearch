@@ -147,7 +147,7 @@ public class Environment {
     update("None", NONE);
   }
 
-  public boolean isSkylark() {
+  public boolean isSkylarkEnabled() {
     return false;
   }
 
@@ -296,7 +296,7 @@ public class Environment {
     }
 
     Object value = importedExtensions.get(extension).lookup(nameInLoadedFile);
-    if (!isSkylark()) {
+    if (!isSkylarkEnabled()) {
       value = SkylarkType.convertFromSkylark(value);
     }
 

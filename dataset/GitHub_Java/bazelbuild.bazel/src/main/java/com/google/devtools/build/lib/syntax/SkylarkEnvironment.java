@@ -154,7 +154,7 @@ public class SkylarkEnvironment extends Environment implements Serializable {
   }
 
   @Override
-  public boolean isSkylark() {
+  public boolean isSkylarkEnabled() {
     return true;
   }
 
