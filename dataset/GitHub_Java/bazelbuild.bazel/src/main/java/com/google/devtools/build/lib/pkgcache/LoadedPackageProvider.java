@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,14 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.pkgcache;
 
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.Uninterruptibles;
-import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
+import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
-
-import java.util.concurrent.Callable;
+import com.google.devtools.build.lib.syntax.Label;
 
 /**
  * Read-only API for retrieving packages, i.e., calling this API should not result in packages being
@@ -32,6 +30,13 @@ import java.util.concurrent.Callable;
 public interface LoadedPackageProvider {
 
   /**
+   * Returns a package if it was recently loaded, i.e., since the most recent cache sync. This
+   * throws an exception if the package was not loaded, even if it exists on disk. Returns the
+   * package even if it is in error.
+   */
+  Package getLoadedPackage(PackageIdentifier packageIdentifier) throws NoSuchPackageException;
+
+  /**
    * Returns a target if it was recently loaded, i.e., since the most recent cache sync. This
    * throws an exception if the target was not loaded or not validated, even if it exists in the
    * surrounding package. If the surrounding package is in error, still attempts to retrieve the
@@ -40,44 +45,8 @@ public interface LoadedPackageProvider {
   Target getLoadedTarget(Label label) throws NoSuchPackageException, NoSuchTargetException;
 
   /**
-   * A bridge class that implements the legacy semantics of {@link #getLoadedTarget} using a
-   * normal {@link PackageProvider} instance.
+   * Returns true iff the specified target is current, i.e. a request for its label using {@link
+   * #getLoadedTarget} would return the same target instance.
    */
-  public static final class Bridge implements LoadedPackageProvider {
-    private final PackageProvider packageProvider;
-    private final EventHandler eventHandler;
-
-    public Bridge(PackageProvider packageProvider, EventHandler eventHandler) {
-      this.packageProvider = packageProvider;
-      this.eventHandler = eventHandler;
-    }
-
-    @Override
-    public Target getLoadedTarget(final Label label)
-        throws NoSuchPackageException, NoSuchTargetException {
-      return getLoadedTarget(packageProvider, eventHandler, label);
-    }
-
-    /**
-     * Uninterruptible method to convert a label into a target using a given package provider and
-     * event handler.
-     */
-    public static Target getLoadedTarget(
-        final PackageProvider packageProvider, final EventHandler eventHandler, final Label label)
-            throws NoSuchPackageException, NoSuchTargetException {
-      try {
-        return Uninterruptibles.callUninterruptibly(new Callable<Target>() {
-          @Override
-          public Target call()
-              throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
-            return packageProvider.getTarget(eventHandler, label);
-          }
-        });
-      } catch (NoSuchPackageException | NoSuchTargetException e) {
-        throw e;
-      } catch (Exception e) {
-        throw new IllegalStateException(e);
-      }
-    }
-  }
+  boolean isTargetCurrent(Target target);
 }
