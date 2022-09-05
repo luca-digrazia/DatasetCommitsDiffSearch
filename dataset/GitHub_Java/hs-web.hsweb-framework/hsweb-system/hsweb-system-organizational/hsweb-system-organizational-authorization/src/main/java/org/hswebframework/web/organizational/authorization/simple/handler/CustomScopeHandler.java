@@ -2,22 +2,27 @@ package org.hswebframework.web.organizational.authorization.simple.handler;
 
 import org.hswebframework.web.authorization.access.DataAccessConfig;
 import org.hswebframework.web.authorization.access.DataAccessHandler;
-import org.hswebframework.web.authorization.define.AuthorizingContext;
+import org.hswebframework.web.authorization.access.ScopeDataAccessConfig;
+import org.hswebframework.web.boost.aop.context.MethodInterceptorParamContext;
 import org.hswebframework.web.organizational.authorization.access.DataAccessType;
+import org.hswebframework.web.organizational.authorization.simple.CustomScope;
 import org.hswebframework.web.organizational.authorization.simple.SimpleCustomScopeDataAccessConfig;
 import org.hswebframework.web.organizational.authorization.simple.SimpleScopeDataAccessConfig;
 
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
+ * TODO 完成注释
+ *
  * @author zhouhao
  */
 public class CustomScopeHandler implements DataAccessHandler {
 
     private List<DataAccessHandler> handlers = Arrays.asList(
-            new DistrictScopeDataAccessHandler(),
+            new AreaScopeDataAccessHandler(),
             new DepartmentScopeDataAccessHandler(),
             new OrgScopeDataAccessHandler(),
             new PersonScopeDataAccessHandler(),
@@ -30,7 +35,7 @@ public class CustomScopeHandler implements DataAccessHandler {
     }
 
     @Override
-    public boolean handle(DataAccessConfig access, AuthorizingContext context) {
+    public boolean handle(DataAccessConfig access, MethodInterceptorParamContext context) {
         return ((SimpleCustomScopeDataAccessConfig) access).getScope()
                 .stream()
                 .map(scope -> new SimpleScopeDataAccessConfig(scope.getType(), DataAccessType.SCOPE_TYPE_CUSTOM, access.getAction(), new HashSet<>(scope.getIds())))

@@ -11,7 +11,6 @@ import java.util.Set;
  * @author zhouhao
  */
 public class SimpleCustomScopeDataAccessConfig extends AbstractDataAccessConfig {
-    private static final long serialVersionUID = 1_0;
     private Set<CustomScope> scope;
 
     @Override
