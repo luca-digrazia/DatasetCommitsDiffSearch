@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.when;
@@ -33,18 +32,20 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skyframe.LoadingPhaseStartedEvent;
 import com.google.devtools.build.lib.skyframe.PackageProgressReceiver;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
+import com.google.devtools.build.lib.testutil.LoggingTerminalWriter;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.io.LoggingTerminalWriter;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
-import java.io.IOException;
-import java.util.concurrent.TimeUnit;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
+
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Tests {@link ExperimentalStateTracker}.
@@ -560,13 +561,5 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     assertTrue(
         "Progress bar should contain 'Other action', but was:\n" + output,
         output.contains("Other action"));
-  }
-
-
-  @Test
-  public void testSuffix() throws Exception {
-    assertEquals("bar", ExperimentalStateTracker.suffix("foobar", 3));
-    assertEquals("", ExperimentalStateTracker.suffix("foo", -2));
-    assertEquals("foobar", ExperimentalStateTracker.suffix("foobar", 200));
   }
 }

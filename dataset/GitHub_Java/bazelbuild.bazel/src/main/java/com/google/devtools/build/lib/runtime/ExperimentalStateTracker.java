@@ -129,20 +129,9 @@ class ExperimentalStateTracker {
     }
   }
 
-  /**
-   * Make the state tracker aware of the fact that the analyis has finished. Return a summary of the
-   * work done in the analysis phase.
-   */
-  synchronized String analysisComplete(AnalysisPhaseCompleteEvent event) {
-    String workDone = "Analysed " + additionalMessage;
-    if (packageProgressReceiver != null) {
-      Pair<String, String> progress = packageProgressReceiver.progressState();
-      workDone += " (" + progress.getFirst() + ")";
-    }
-    workDone += ".";
+  void analysisComplete(AnalysisPhaseCompleteEvent event) {
     status = null;
     packageProgressReceiver = null;
-    return workDone;
   }
 
   void progressReceiverAvailable(ExecutionProgressReceiverAvailableEvent event) {
