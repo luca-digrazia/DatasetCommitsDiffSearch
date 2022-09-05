@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.analysis.RunfilesSupplierImpl;
 import com.google.devtools.build.lib.analysis.config.BinTools;
@@ -167,14 +166,13 @@ public class StandaloneTestStrategy extends TestStrategy {
 
   private TestResultData execute(
       ActionExecutionContext actionExecutionContext, Spawn spawn, TestRunnerAction action)
-      throws ExecException, InterruptedException {
+      throws TestExecException, InterruptedException {
     Executor executor = actionExecutionContext.getExecutor();
     Closeable streamed = null;
     Path testLogPath = action.getTestLog().getPath();
     TestResultData.Builder builder = TestResultData.newBuilder();
 
     long startTime = executor.getClock().currentTimeMillis();
-    SpawnActionContext spawnActionContext = executor.getSpawnActionContext(action.getMnemonic());
     try {
       try {
         if (executionOptions.testOutput.equals(TestOutputFormat.STREAMED)) {
@@ -182,7 +180,7 @@ public class StandaloneTestStrategy extends TestStrategy {
               Reporter.outErrForReporter(
                   actionExecutionContext.getExecutor().getEventHandler()), testLogPath);
         }
-        spawnActionContext.exec(spawn, actionExecutionContext);
+        executor.getSpawnActionContext(action.getMnemonic()).exec(spawn, actionExecutionContext);
 
         builder.setTestPassed(true)
             .setStatus(BlazeTestStatus.PASSED)
@@ -197,9 +195,6 @@ public class StandaloneTestStrategy extends TestStrategy {
             .setTestPassed(false)
             .setStatus(e.hasTimedOut() ? BlazeTestStatus.TIMEOUT : BlazeTestStatus.FAILED)
             .addFailedLogs(testLogPath.getPathString());
-        if (spawnActionContext.shouldPropagateExecException()) {
-          throw e;
-        }
       } finally {
         long duration = executor.getClock().currentTimeMillis() - startTime;
         builder.addTestTimes(duration);
@@ -236,15 +231,15 @@ public class StandaloneTestStrategy extends TestStrategy {
       }
     } finally {
       if (isPassed) {
-        executor.getEventHandler().handle(Event.of(EventKind.PASS, null, result.getTestName()));
+        executor.getEventHandler().handle(new Event(EventKind.PASS, null, result.getTestName()));
       } else {
         if (result.getData().getStatus() == BlazeTestStatus.TIMEOUT) {
           executor.getEventHandler().handle(
-              Event.of(EventKind.TIMEOUT, null, result.getTestName()
+              new Event(EventKind.TIMEOUT, null, result.getTestName()
                   + " (see " + testOutput + ")"));
         } else {
           executor.getEventHandler().handle(
-              Event.of(EventKind.FAIL, null, result.getTestName() + " (see " + testOutput + ")"));
+              new Event(EventKind.FAIL, null, result.getTestName() + " (see " + testOutput + ")"));
         }
       }
     }

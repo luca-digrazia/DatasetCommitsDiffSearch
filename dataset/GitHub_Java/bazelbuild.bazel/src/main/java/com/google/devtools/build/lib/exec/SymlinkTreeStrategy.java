@@ -18,10 +18,13 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
-import com.google.devtools.build.lib.analysis.actions.SymlinkTreeAction;
-import com.google.devtools.build.lib.analysis.actions.SymlinkTreeActionContext;
+import com.google.devtools.build.lib.actions.Executor;
+import com.google.devtools.build.lib.analysis.SymlinkTreeAction;
+import com.google.devtools.build.lib.analysis.SymlinkTreeActionContext;
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
+import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.logging.Logger;
 
 /**
@@ -44,32 +47,28 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
   public void createSymlinks(
       SymlinkTreeAction action,
       ActionExecutionContext actionExecutionContext,
-      ImmutableMap<String, String> shellEnvironment,
-      boolean enableRunfiles)
+      PathFragment shExecutable,
+      ImmutableMap<String, String> shellEnvironment)
       throws ActionExecutionException, InterruptedException {
+    Executor executor = actionExecutionContext.getExecutor();
     try (AutoProfiler p =
             AutoProfiler.logged(
                 "running " + action.prettyPrint(), LOG, /*minTimeForLoggingInMilliseconds=*/ 100)) {
       try {
         SymlinkTreeHelper helper = new SymlinkTreeHelper(
-            action.getInputManifest().getPath(),
-            action.getOutputManifest().getPath().getParentDirectory(), action.isFilesetTree());
+            action.getInputManifest().getExecPath(),
+            action.getOutputManifest().getExecPath().getParentDirectory(), action.isFilesetTree());
         if (outputService != null && outputService.canCreateSymlinkTree()) {
           outputService.createSymlinkTree(action.getInputManifest().getPath(),
               action.getOutputManifest().getPath(),
-              action.isFilesetTree(),
-              action.getOutputManifest().getExecPath().getParentDirectory());
+              action.isFilesetTree(), helper.getSymlinkTreeRoot());
         } else {
           helper.createSymlinks(
-              action,
-              actionExecutionContext,
-              binTools,
-              shellEnvironment,
-              enableRunfiles);
+              action, actionExecutionContext, binTools, shExecutable, shellEnvironment);
         }
       } catch (ExecException e) {
         throw e.toActionExecutionException(
-            action.getProgressMessage(), actionExecutionContext.getVerboseFailures(), action);
+            action.getProgressMessage(), executor.getVerboseFailures(), action);
       }
     }
   }

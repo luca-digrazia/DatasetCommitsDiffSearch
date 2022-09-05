@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
@@ -44,7 +43,6 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 /** Represents the collection of native libraries (.so) to be installed in the APK. */
-@Immutable
 public final class NativeLibs {
   public static final NativeLibs EMPTY =
       new NativeLibs(ImmutableMap.<String, Iterable<Artifact>>of(), null);
@@ -107,10 +105,10 @@ public final class NativeLibs {
   }
 
   // Map from architecture (CPU folder to place the library in) to libraries for that CPU
-  private final ImmutableMap<String, Iterable<Artifact>> nativeLibs;
+  private final Map<String, Iterable<Artifact>> nativeLibs;
   private final Artifact nativeLibsName;
 
-  private NativeLibs(ImmutableMap<String, Iterable<Artifact>> nativeLibs, Artifact nativeLibsName) {
+  private NativeLibs(Map<String, Iterable<Artifact>> nativeLibs, Artifact nativeLibsName) {
     this.nativeLibs = nativeLibs;
     this.nativeLibsName = nativeLibsName;
   }
@@ -149,7 +147,7 @@ public final class NativeLibs {
     Artifact inputManifest = AndroidBinary.getDxArtifact(ruleContext, "native_symlinks.manifest");
     ruleContext.registerAction(new SourceManifestAction.Builder(
         ruleContext.getWorkspaceName(), ManifestType.SOURCE_SYMLINKS, ruleContext.getActionOwner(),
-        inputManifest, ruleContext.getConfiguration().legacyExternalRunfiles())
+        inputManifest)
             .addRootSymlinks(symlinks)
             .build());
     Artifact outputManifest = AndroidBinary.getDxArtifact(ruleContext, "native_symlinks/MANIFEST");

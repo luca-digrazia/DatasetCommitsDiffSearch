@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SymlinkTreeHelper;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.util.io.FileWatcher;
 import com.google.devtools.build.lib.util.io.OutErr;
@@ -42,6 +41,7 @@ import com.google.devtools.common.options.Converters.RangeConverter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.OptionsClassProvider;
 import com.google.devtools.common.options.OptionsParsingException;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
@@ -51,6 +51,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import javax.annotation.Nullable;
 
 /**
@@ -126,9 +128,8 @@ public abstract class TestStrategy implements TestActionContext {
   // Used for selecting subset of testcase / testmethods.
   private static final String TEST_BRIDGE_TEST_FILTER_ENV = "TESTBRIDGE_TEST_ONLY";
 
-  // Used for generating unique temporary directory names. Contains the next numeric index for every
-  // executable base name.
-  private final Map<String, Integer> tmpIndex = new HashMap<>();
+  // Used for generating unique temporary directory names.
+  private final AtomicInteger tmpIndex = new AtomicInteger(0);
   protected final ImmutableMap<String, String> clientEnv;
   protected final ExecutionOptions executionOptions;
   protected final BinTools binTools;
@@ -191,13 +192,7 @@ public abstract class TestStrategy implements TestActionContext {
    */
   protected List<String> getArgs(
       String testScript, String coverageScript, TestRunnerAction testAction) {
-    List<String> args = Lists.newArrayList();
-    if (OS.getCurrent() == OS.WINDOWS) {
-      args.add(testAction.getShExecutable().getPathString());
-      args.add("-c");
-      args.add("$0 $*");
-    }
-    args.add(testScript);
+    List<String> args = Lists.newArrayList(testScript);
     TestTargetExecutionSettings execSettings = testAction.getExecutionSettings();
 
     List<String> execArgs = new ArrayList<>();
@@ -296,13 +291,7 @@ public abstract class TestStrategy implements TestActionContext {
    * <p>This does not create the directory.</p>
    */
   protected String getTmpDirName(PathFragment execPath) {
-    String basename = execPath.getBaseName();
-
-    synchronized (tmpIndex) {
-      int index = tmpIndex.containsKey(basename) ? tmpIndex.get(basename) : 1;
-      tmpIndex.put(basename, index + 1);
-      return basename + "_" + index;
-    }
+    return execPath.getBaseName() + "_" + tmpIndex.incrementAndGet();
   }
 
   /**
@@ -360,8 +349,8 @@ public abstract class TestStrategy implements TestActionContext {
       TestRunnerAction testAction,
       ActionExecutionContext actionExecutionContext,
       BinTools binTools,
-      ImmutableMap<String, String> shellEnvironment,
-      boolean enableRunfiles)
+      PathFragment shExecutable,
+      ImmutableMap<String, String> shellEnvironment)
       throws ExecException, InterruptedException {
     TestTargetExecutionSettings execSettings = testAction.getExecutionSettings();
 
@@ -384,13 +373,8 @@ public abstract class TestStrategy implements TestActionContext {
     long startTime = Profiler.nanoTimeMaybe();
     synchronized (execSettings.getInputManifest()) {
       Profiler.instance().logSimpleTask(startTime, ProfilerTask.WAIT, testAction);
-      updateLocalRunfilesDirectory(
-          testAction,
-          runfilesDir,
-          actionExecutionContext,
-          binTools,
-          shellEnvironment,
-          enableRunfiles);
+      updateLocalRunfilesDirectory(testAction, runfilesDir, actionExecutionContext, binTools,
+          shExecutable, shellEnvironment);
     }
 
     return runfilesDir;
@@ -407,8 +391,8 @@ public abstract class TestStrategy implements TestActionContext {
       Path runfilesDir,
       ActionExecutionContext actionExecutionContext,
       BinTools binTools,
-      ImmutableMap<String, String> shellEnvironment,
-      boolean enableRunfiles)
+      PathFragment shExecutable,
+      ImmutableMap<String, String> shellEnvironment)
       throws ExecException, InterruptedException {
     Executor executor = actionExecutionContext.getExecutor();
 
@@ -428,15 +412,11 @@ public abstract class TestStrategy implements TestActionContext {
         "Building runfiles directory for '" + execSettings.getExecutable().prettyPrint() + "'."));
 
     new SymlinkTreeHelper(
-            execSettings.getInputManifest().getPath(),
-            runfilesDir,
+            execSettings.getInputManifest().getExecPath(),
+            runfilesDir.relativeTo(executor.getExecRoot()), /* filesetTree= */
             false)
         .createSymlinks(
-            testAction,
-            actionExecutionContext,
-            binTools,
-            shellEnvironment,
-            enableRunfiles);
+            testAction, actionExecutionContext, binTools, shExecutable, shellEnvironment);
 
     executor.getEventHandler().handle(Event.progress(testAction.getProgressMessage()));
   }
