@@ -1,7 +1,6 @@
 package org.hswebframework.web.system.authorization.defaults.configuration;
 
 import org.hswebframework.web.system.authorization.defaults.webflux.*;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,7 +30,6 @@ public class AuthorizationWebAutoConfiguration {
 
 
         @Bean
-        @ConditionalOnMissingBean
         public WebFluxUserController webFluxUserController() {
             return new WebFluxUserController();
         }
