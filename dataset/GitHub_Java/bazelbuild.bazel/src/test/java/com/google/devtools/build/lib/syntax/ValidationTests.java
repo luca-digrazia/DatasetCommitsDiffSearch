@@ -334,7 +334,7 @@ public class ValidationTests extends EvaluationTestCase {
         "  b = [3, 4]",
         "  if a not b:",
         "    print(a)");
-    assertContainsEvent("syntax error at 'b': expected in");
+    assertContainsEvent("syntax error at 'not': expected :");
     // Parser uses "$error" symbol for error recovery.
     // It should not be used in error messages.
     for (Event event : getEventCollector()) {
