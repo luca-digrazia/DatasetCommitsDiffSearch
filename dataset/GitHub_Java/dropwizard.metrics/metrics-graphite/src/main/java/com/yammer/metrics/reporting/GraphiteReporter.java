@@ -1,11 +1,10 @@
 package com.yammer.metrics.reporting;
 
 import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.MetricsRegistry;
 import com.yammer.metrics.core.*;
 import com.yammer.metrics.util.MetricPredicate;
 import com.yammer.metrics.util.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -17,6 +16,9 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static com.yammer.metrics.core.VirtualMachineMetrics.*;
 
@@ -182,11 +184,7 @@ public class GraphiteReporter implements Runnable {
             printRegularMetrics(epoch);
             writer.flush();
         } catch (Exception e) {
-            if (log.isDebugEnabled()) {
-                log.debug("Error writing to Graphite", e);
-            } else {
-                log.warn("Error writing to Graphite: {}", e.getMessage());
-            }
+            log.error("Error:", e);
             if (writer != null) {
                 try {
                     writer.flush();
