@@ -22,18 +22,24 @@ public class CastParser {
     private String alias;
     private String tableAlias;
 
+    private String name;
+
     public CastParser(SQLCastExpr castExpr, String alias, String tableAlias) {
         this.castExpr = castExpr;
         this.alias = alias;
         this.tableAlias = tableAlias;
+        this.name = "field_"+SQLFunctions.random();
     }
 
+    public String getName(){
+        return this.name ;
+    }
     public String parse(boolean isReturn) throws SqlParseException {
         List<String> result = new ArrayList<>();
 
         String dataType = castExpr.getDataType().getName().toUpperCase();
         String fileName = String.format("doc['%s'].value",Util.expr2Object(castExpr.getExpr()));
-        String name = "field_"+SQLFunctions.random();
+
 
         try {
             if (DataType.valueOf(dataType) == DataType.INT) {
