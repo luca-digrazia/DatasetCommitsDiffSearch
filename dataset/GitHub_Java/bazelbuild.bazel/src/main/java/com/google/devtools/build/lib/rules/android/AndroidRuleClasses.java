@@ -51,8 +51,10 @@ import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.ProguardHelper;
 import com.google.devtools.build.lib.util.FileType;
+
 import java.util.ArrayList;
 import java.util.List;
+
 import javax.annotation.Nullable;
 
 /**
@@ -431,7 +433,7 @@ public final class AndroidRuleClasses {
   public static final class AndroidResourceSupportRule implements RuleDefinition {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
-      return builder
+      return builder.setUndocumented()
           /* <!-- #BLAZE_RULE($android_resource_support).ATTRIBUTE(manifest) -->
           The name of the Android manifest file, normally <code>AndroidManifest.xml</code>.
           Must be defined if resource_files or assets are defined.
@@ -469,10 +471,7 @@ public final class AndroidRuleClasses {
           and for any <code>android_binary</code> that has an <code>android_library</code>
           in its transitive closure.
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-          .add(
-              attr("inline_constants", BOOLEAN)
-                  .undocumented("deprecated noop on library")
-                  .value(false))
+          .add(attr("inline_constants", BOOLEAN).value(false))
           /* <!-- #BLAZE_RULE($android_resource_support).ATTRIBUTE(custom_package) -->
           Java package for which java sources will be generated.
           By default the package is inferred from the directory where the BUILD file
@@ -481,7 +480,7 @@ public final class AndroidRuleClasses {
           libraries that will only be detected at runtime.
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(attr("custom_package", STRING))
-          .build();
+        .build();
     }
 
     @Override
@@ -694,10 +693,28 @@ com/google/common/base/Objects.class
           re-used to apply the same mapping to a new build.
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(attr("proguard_apply_mapping", LABEL).legacyAllowAnyFileType())
-          // TODO(mstaib): Remove this attribute and the matching flag after some cleanup of users
-          .add(attr("legacy_native_support", TRISTATE)
-              .value(TriState.AUTO)
-              .undocumented("No-op, soon to be removed"))
+          /* <!-- #BLAZE_RULE($android_binary_base).ATTRIBUTE(legacy_native_support) -->
+          Enables legacy native support, where pre-compiled native libraries are copied
+          directly into the APK.
+          Possible values:
+          <ul>
+              <li><code>legacy_native_support = 1</code>: Pre-built .so files found in the
+                dependencies of cc_libraries in the transitive closure will be copied into
+                the APK without being modified in any way. All cc_libraries in the transitive
+                closure of this rule must wrap .so files. (<em class="harmful">deprecated</em> -
+                legacy_native_support = 0 will become the default and this attribute will be
+                removed in a future Blaze release.)</li>
+              <li><code>legacy_native_support = 0</code>: Native dependencies in the transitive
+                closure will be linked together into a single lib[ruleName].so
+                before being placed in the APK. This ensures that, e.g., only one copy of
+                //base will be loaded into memory. This lib[ruleName].so can be loaded
+                via System.loadLibrary as normal.</li>
+              <li><code>legacy_native_support = -1</code>: Linking is controlled by the
+                <a href="../blaze-user-manual.html#flag--legacy_android_native_support">
+                --[no]legacy_android_native_support</a> Blaze flag.</li>
+            </ul>
+          <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+          .add(attr("legacy_native_support", TRISTATE).value(TriState.AUTO))
           .add(attr(":extra_proguard_specs", LABEL_LIST).value(JavaSemantics.EXTRA_PROGUARD_SPECS))
           .advertiseProvider(JavaCompilationArgsProvider.class)
           .build();

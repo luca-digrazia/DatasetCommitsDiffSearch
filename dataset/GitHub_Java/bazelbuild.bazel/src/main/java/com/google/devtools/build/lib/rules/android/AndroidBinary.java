@@ -68,12 +68,14 @@ import com.google.devtools.build.lib.rules.java.ProguardHelper.ProguardOutput;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -165,13 +167,10 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       toolchainMap.put(cpu, toolchain);
     }
 
-    NativeLibs nativeLibs =
-        NativeLibs.fromLinkedNativeDeps(
-            ruleContext,
-            androidSemantics.getNativeDepsFileName(),
-            depsByArchitecture,
-            toolchainMap,
-            configurationMap);
+    NativeLibs nativeLibs = shouldLinkNativeDeps(ruleContext)
+        ? NativeLibs.fromLinkedNativeDeps(ruleContext, androidSemantics.getNativeDepsFileName(),
+            depsByArchitecture, toolchainMap, configurationMap)
+        : NativeLibs.fromPrecompiledObjects(ruleContext, depsByArchitecture);
 
     // TODO(bazel-team): Resolve all the different cases of resource handling so this conditional
     // can go away: recompile from android_resources, and recompile from android_binary attributes.
@@ -799,8 +798,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   }
 
   private static Artifact getStubDex(
-      RuleContext ruleContext, JavaSemantics javaSemantics, boolean split)
-      throws InterruptedException {
+      RuleContext ruleContext, JavaSemantics javaSemantics, boolean split) {
     String attribute =
         split ? "$incremental_split_stub_application" : "$incremental_stub_application";
 
@@ -870,12 +868,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
   /** Generates an uncompressed _deploy.jar of all the runtime jars. */
   public static Artifact createDeployJar(
-      RuleContext ruleContext,
-      JavaSemantics javaSemantics,
-      AndroidCommon common,
-      JavaTargetAttributes attributes,
-      Artifact deployJar)
-      throws InterruptedException {
+      RuleContext ruleContext, JavaSemantics javaSemantics, AndroidCommon common,
+      JavaTargetAttributes attributes, Artifact deployJar) {
     new DeployArchiveBuilder(javaSemantics, ruleContext)
         .setOutputJar(deployJar)
         .setAttributes(attributes)
@@ -1667,6 +1661,19 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         || ruleContext.attributes().isAttributeValueExplicitlySpecified(
             "resource_configuration_filters")
         || ruleContext.attributes().isAttributeValueExplicitlySpecified("nocompress_extensions");
+  }
+
+  /**
+   * Returns whether to use NativeDepsHelper to link native dependencies.
+   */
+  public static boolean shouldLinkNativeDeps(RuleContext ruleContext) {
+    TriState attributeValue = ruleContext.attributes().get(
+        "legacy_native_support", BuildType.TRISTATE);
+    if (attributeValue == TriState.AUTO) {
+      return !ruleContext.getFragment(AndroidConfiguration.class).getLegacyNativeSupport();
+    } else {
+      return attributeValue == TriState.NO;
+    }
   }
 
   /**
