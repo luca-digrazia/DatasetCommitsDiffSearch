@@ -2,8 +2,8 @@ package com.yammer.metrics.reporting;
 
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.*;
-import com.yammer.metrics.stats.Snapshot;
-import com.yammer.metrics.core.MetricPredicate;
+import com.yammer.metrics.core.VirtualMachineMetrics.GarbageCollector;
+import com.yammer.metrics.util.MetricPredicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,7 +106,7 @@ public class GraphiteReporter extends AbstractPollingReporter implements MetricP
                                                                    predicate,
                                                                    new DefaultSocketProvider(host,
                                                                                              port),
-                                                                   Clock.defaultClock());
+                                                                   Clock.DEFAULT);
             reporter.start(period, unit);
         } catch (Exception e) {
             LOG.error("Error creating/starting Graphite reporter:", e);
@@ -139,7 +139,7 @@ public class GraphiteReporter extends AbstractPollingReporter implements MetricP
              prefix,
              MetricPredicate.ALL,
              new DefaultSocketProvider(host, port),
-             Clock.defaultClock());
+             Clock.DEFAULT);
     }
 
     /**
@@ -306,33 +306,33 @@ public class GraphiteReporter extends AbstractPollingReporter implements MetricP
     @Override
     public void processHistogram(MetricName name, Histogram histogram, Long epoch) throws IOException {
         final String sanitizedName = sanitizeName(name);
-        sendSummarizable(epoch, sanitizedName, histogram);
-        sendSampling(epoch, sanitizedName, histogram);
+        sendSummarized(epoch, sanitizedName, histogram);
+        sendQuantized(epoch, sanitizedName, histogram);
     }
 
     @Override
     public void processTimer(MetricName name, Timer timer, Long epoch) throws IOException {
         processMeter(name, timer, epoch);
         final String sanitizedName = sanitizeName(name);
-        sendSummarizable(epoch, sanitizedName, timer);
-        sendSampling(epoch, sanitizedName, timer);
+        sendSummarized(epoch, sanitizedName, timer);
+        sendQuantized(epoch, sanitizedName, timer);
     }
 
-    private void sendSummarizable(long epoch, String sanitizedName, Summarizable metric) throws IOException {
+    private void sendSummarized(long epoch, String sanitizedName, Summarized metric) throws IOException {
         sendFloat(epoch, sanitizedName, "min", metric.min());
         sendFloat(epoch, sanitizedName, "max", metric.max());
         sendFloat(epoch, sanitizedName, "mean", metric.mean());
         sendFloat(epoch, sanitizedName, "stddev", metric.stdDev());
     }
 
-    private void sendSampling(long epoch, String sanitizedName, Sampling metric) throws IOException {
-        final Snapshot snapshot = metric.getSnapshot();
-        sendFloat(epoch, sanitizedName, "median", snapshot.getMedian());
-        sendFloat(epoch, sanitizedName, "75percentile", snapshot.get75thPercentile());
-        sendFloat(epoch, sanitizedName, "95percentile", snapshot.get95thPercentile());
-        sendFloat(epoch, sanitizedName, "98percentile", snapshot.get98thPercentile());
-        sendFloat(epoch, sanitizedName, "99percentile", snapshot.get99thPercentile());
-        sendFloat(epoch, sanitizedName, "999percentile", snapshot.get999thPercentile());
+    private void sendQuantized(long epoch, String sanitizedName, Quantized metric) throws IOException {
+        final Double[] quantiles = metric.quantiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
+        sendFloat(epoch, sanitizedName, "median", quantiles[0]);
+        sendFloat(epoch, sanitizedName, "75percentile", quantiles[1]);
+        sendFloat(epoch, sanitizedName, "95percentile", quantiles[2]);
+        sendFloat(epoch, sanitizedName, "98percentile", quantiles[3]);
+        sendFloat(epoch, sanitizedName, "99percentile", quantiles[4]);
+        sendFloat(epoch, sanitizedName, "999percentile", quantiles[5]);
     }
 
     private void printVmMetrics(long epoch) {
@@ -351,7 +351,7 @@ public class GraphiteReporter extends AbstractPollingReporter implements MetricP
             sendFloat(epoch, "jvm.thread-states", entry.getKey().toString().toLowerCase(), entry.getValue());
         }
 
-        for (Entry<String, VirtualMachineMetrics.GarbageCollectorStats> entry : vm.garbageCollectors().entrySet()) {
+        for (Entry<String, GarbageCollector> entry : vm.garbageCollectors().entrySet()) {
             final String name = "jvm.gc." + entry.getKey();
             sendInt(epoch, name, "time", entry.getValue().getTime(TimeUnit.MILLISECONDS));
             sendInt(epoch, name, "runs", entry.getValue().getRuns());

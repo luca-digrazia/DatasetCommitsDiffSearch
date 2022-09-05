@@ -2,7 +2,6 @@ package com.yammer.metrics.reporting;
 
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.*;
-import com.yammer.metrics.stats.Snapshot;
 import com.yammer.metrics.util.MetricPredicate;
 
 import java.io.PrintStream;
@@ -19,7 +18,6 @@ import java.util.concurrent.TimeUnit;
  */
 public class ConsoleReporter extends AbstractPollingReporter implements
                                                              MetricProcessor<PrintStream> {
-    private static final int CONSOLE_WIDTH = 80;
 
     /**
      * Enables the console reporter for the default metrics registry, and causes it to print to
@@ -127,7 +125,7 @@ public class ConsoleReporter extends AbstractPollingReporter implements
             final String dateTime = format.format(new Date(clock.time()));
             out.print(dateTime);
             out.print(' ');
-            for (int i = 0; i < (CONSOLE_WIDTH - dateTime.length() - 1); i++) {
+            for (int i = 0; i < (80 - dateTime.length() - 1); i++) {
                 out.print('=');
             }
             out.println();
@@ -185,34 +183,34 @@ public class ConsoleReporter extends AbstractPollingReporter implements
 
     @Override
     public void processHistogram(MetricName name, Histogram histogram, PrintStream stream) {
-        final Snapshot snapshot = histogram.getSnapshot();
+        final Double[] quantiles = histogram.quantiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
         stream.printf(locale, "               min = %2.2f\n", histogram.min());
         stream.printf(locale, "               max = %2.2f\n", histogram.max());
         stream.printf(locale, "              mean = %2.2f\n", histogram.mean());
         stream.printf(locale, "            stddev = %2.2f\n", histogram.stdDev());
-        stream.printf(locale, "            median = %2.2f\n", snapshot.getMedian());
-        stream.printf(locale, "              75%% <= %2.2f\n", snapshot.get75thPercentile());
-        stream.printf(locale, "              95%% <= %2.2f\n", snapshot.get95thPercentile());
-        stream.printf(locale, "              98%% <= %2.2f\n", snapshot.get98thPercentile());
-        stream.printf(locale, "              99%% <= %2.2f\n", snapshot.get99thPercentile());
-        stream.printf(locale, "            99.9%% <= %2.2f\n", snapshot.get999thPercentile());
+        stream.printf(locale, "            median = %2.2f\n", quantiles[0]);
+        stream.printf(locale, "              75%% <= %2.2f\n", quantiles[1]);
+        stream.printf(locale, "              95%% <= %2.2f\n", quantiles[2]);
+        stream.printf(locale, "              98%% <= %2.2f\n", quantiles[3]);
+        stream.printf(locale, "              99%% <= %2.2f\n", quantiles[4]);
+        stream.printf(locale, "            99.9%% <= %2.2f\n", quantiles[5]);
     }
 
     @Override
     public void processTimer(MetricName name, Timer timer, PrintStream stream) {
         processMeter(name, timer, stream);
         final String durationUnit = abbrev(timer.durationUnit());
-        final Snapshot snapshot = timer.getSnapshot();
+        final Double[] quantiles = timer.quantiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
         stream.printf(locale, "               min = %2.2f%s\n", timer.min(), durationUnit);
         stream.printf(locale, "               max = %2.2f%s\n", timer.max(), durationUnit);
         stream.printf(locale, "              mean = %2.2f%s\n", timer.mean(), durationUnit);
         stream.printf(locale, "            stddev = %2.2f%s\n", timer.stdDev(), durationUnit);
-        stream.printf(locale, "            median = %2.2f%s\n", snapshot.getMedian(), durationUnit);
-        stream.printf(locale, "              75%% <= %2.2f%s\n", snapshot.get75thPercentile(), durationUnit);
-        stream.printf(locale, "              95%% <= %2.2f%s\n", snapshot.get95thPercentile(), durationUnit);
-        stream.printf(locale, "              98%% <= %2.2f%s\n", snapshot.get98thPercentile(), durationUnit);
-        stream.printf(locale, "              99%% <= %2.2f%s\n", snapshot.get99thPercentile(), durationUnit);
-        stream.printf(locale, "            99.9%% <= %2.2f%s\n", snapshot.get999thPercentile(), durationUnit);
+        stream.printf(locale, "            median = %2.2f%s\n", quantiles[0], durationUnit);
+        stream.printf(locale, "              75%% <= %2.2f%s\n", quantiles[1], durationUnit);
+        stream.printf(locale, "              95%% <= %2.2f%s\n", quantiles[2], durationUnit);
+        stream.printf(locale, "              98%% <= %2.2f%s\n", quantiles[3], durationUnit);
+        stream.printf(locale, "              99%% <= %2.2f%s\n", quantiles[4], durationUnit);
+        stream.printf(locale, "            99.9%% <= %2.2f%s\n", quantiles[5], durationUnit);
     }
 
     private String abbrev(TimeUnit unit) {

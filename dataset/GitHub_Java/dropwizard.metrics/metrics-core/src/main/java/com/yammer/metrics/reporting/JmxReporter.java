@@ -23,7 +23,7 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
         ObjectName objectName();
     }
 
-    private abstract static class AbstractBean implements MetricMBean {
+    private static abstract class AbstractBean implements MetricMBean {
         private final ObjectName objectName;
 
         protected AbstractBean(ObjectName objectName) {
