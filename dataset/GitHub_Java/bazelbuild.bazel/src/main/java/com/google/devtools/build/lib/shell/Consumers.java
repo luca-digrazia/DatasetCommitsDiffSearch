@@ -260,7 +260,7 @@ class Consumers {
         }
       } finally {
         // Read this for detailed explanation:
-        // http://www.ibm.com/developerworks/java/library/j-jtp05236/
+        // http://www-128.ibm.com/developerworks/java/library/j-jtp05236.html
         if (wasInterrupted) {
           Thread.currentThread().interrupt(); // preserve interrupted status
         }
