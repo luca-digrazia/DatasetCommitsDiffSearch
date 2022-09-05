@@ -21,7 +21,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIB
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MERGE_ZIP;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.NESTED_BUNDLE;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.ROOT_MERGE_ZIP;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STORYBOARD;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STRINGS;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCDATAMODEL;
@@ -290,9 +289,6 @@ final class Bundling {
       Optional<Artifact> combinedArchitectureBinary = combinedArchitectureBinary();
       NestedSet<BundleableFile> binaryStringsFiles = binaryStringsFiles();
       NestedSet<Artifact> mergeZips = mergeZips(actoolzipOutput);
-      NestedSet<Artifact> rootMergeZips =
-          NestedSetBuilder.<Artifact>stableOrder()
-              .addTransitive(objcProvider.get(ROOT_MERGE_ZIP)).build();
 
       bundleFilesBuilder.addAll(binaryStringsFiles).addAll(objcProvider.get(BUNDLE_FILE));
       ImmutableList<BundleableFile> bundleFiles =
@@ -304,7 +300,6 @@ final class Bundling {
               .addAll(combinedArchitectureBinary.asSet())
               .addAll(bundleInfoplist.asSet())
               .addTransitive(mergeZips)
-              .addTransitive(rootMergeZips)
               .addAll(BundleableFile.toArtifacts(binaryStringsFiles))
               .addAll(BundleableFile.toArtifacts(bundleFiles));
 
@@ -317,7 +312,6 @@ final class Bundling {
           actoolzipOutput,
           bundleContentArtifactsBuilder.build(),
           mergeZips,
-          rootMergeZips,
           primaryBundleId,
           fallbackBundleId,
           architecture,
@@ -346,7 +340,6 @@ final class Bundling {
   private final Optional<Artifact> actoolzipOutput;
   private final NestedSet<Artifact> bundleContentArtifacts;
   private final NestedSet<Artifact> mergeZips;
-  private final NestedSet<Artifact> rootMergeZips;
   private final String primaryBundleId;
   private final String fallbackBundleId;
   private final DottedVersion minimumOsVersion;
@@ -366,7 +359,6 @@ final class Bundling {
       Optional<Artifact> actoolzipOutput,
       NestedSet<Artifact> bundleContentArtifacts,
       NestedSet<Artifact> mergeZips,
-      NestedSet<Artifact> rootMergeZips,
       String primaryBundleId,
       String fallbackBundleId,
       String architecture,
@@ -386,7 +378,6 @@ final class Bundling {
     this.actoolzipOutput = Preconditions.checkNotNull(actoolzipOutput);
     this.bundleContentArtifacts = Preconditions.checkNotNull(bundleContentArtifacts);
     this.mergeZips = Preconditions.checkNotNull(mergeZips);
-    this.rootMergeZips = Preconditions.checkNotNull(rootMergeZips);
     this.fallbackBundleId = fallbackBundleId;
     this.primaryBundleId = primaryBundleId;
     this.architecture = Preconditions.checkNotNull(architecture);
@@ -501,19 +492,6 @@ final class Bundling {
    */
   public NestedSet<Artifact> getMergeZips() {
     return mergeZips;
-  }
-
-  /**
-   * Returns all zip files whose contents should be merged into final ipa and outside the
-   * main bundle. For instance, if a merge zip contains files dir1/file1, then the resulting
-   * bundling would have additional files at:
-   * <ul>
-   *   <li>dir1/file1
-   *   <li>{bundleDir}/other_files
-   * </ul>
-   */
-  public NestedSet<Artifact> getRootMergeZips() {
-    return rootMergeZips;
   }
 
   /**

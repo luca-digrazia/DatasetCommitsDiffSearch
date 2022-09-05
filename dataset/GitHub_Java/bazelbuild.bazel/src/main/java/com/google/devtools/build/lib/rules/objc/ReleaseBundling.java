@@ -59,6 +59,7 @@ final class ReleaseBundling {
     private final NestedSetBuilder<Artifact> infoplistInputs = NestedSetBuilder.stableOrder();
     private Iterable<Artifact> infoPlistsFromRule;
     private ImmutableSet<TargetDeviceFamily> families;
+    private IntermediateArtifacts intermediateArtifacts;
     private String artifactPrefix;
 
     public Builder setIpaArtifact(Artifact ipaArtifact) {
@@ -121,6 +122,11 @@ final class ReleaseBundling {
       return this;
     }
 
+    public Builder setIntermediateArtifacts(IntermediateArtifacts intermediateArtifacts) {
+      this.intermediateArtifacts = intermediateArtifacts;
+      return this;
+    }
+
     public Builder setTargetDeviceFamilies(ImmutableSet<TargetDeviceFamily> families) {
       this.families = families;
       return this;
@@ -132,6 +138,7 @@ final class ReleaseBundling {
     }
 
     public ReleaseBundling build() {
+      Preconditions.checkNotNull(intermediateArtifacts, "intermediateArtifacts");
       Preconditions.checkNotNull(families, FAMILIES_ATTR);
       return new ReleaseBundling(
           ipaArtifact,
@@ -146,6 +153,7 @@ final class ReleaseBundling {
           infoplistInputs.build(),
           infoPlistsFromRule,
           families,
+          intermediateArtifacts,
           artifactPrefix);
     }
   }
@@ -203,6 +211,7 @@ final class ReleaseBundling {
         .setProvisioningProfile(provisioningProfile)
         .setProvisioningProfileAttributeName(PROVISIONING_PROFILE_ATTR)
         .setTargetDeviceFamilies(families)
+        .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
         .build();
   }
 
@@ -220,6 +229,7 @@ final class ReleaseBundling {
   private final String provisioningProfileAttributeName;
   private final NestedSet<Artifact> infoplistInputs;
   private final ImmutableSet<TargetDeviceFamily> families;
+  private final IntermediateArtifacts intermediateArtifacts;
   private final Iterable<Artifact> infoPlistsFromRule;
   private final String artifactPrefix;
 
@@ -236,6 +246,7 @@ final class ReleaseBundling {
       NestedSet<Artifact> infoplistInputs,
       Iterable<Artifact> infoPlistsFromRule,
       ImmutableSet<TargetDeviceFamily> families,
+      IntermediateArtifacts intermediateArtifacts,
       String artifactPrefix) {
     this.ipaArtifact = Preconditions.checkNotNull(ipaArtifact);
     this.bundleId = bundleId;
@@ -250,6 +261,7 @@ final class ReleaseBundling {
     this.infoplistInputs = Preconditions.checkNotNull(infoplistInputs);
     this.infoPlistsFromRule = infoPlistsFromRule;
     this.families = Preconditions.checkNotNull(families);
+    this.intermediateArtifacts = Preconditions.checkNotNull(intermediateArtifacts);
     this.artifactPrefix = artifactPrefix;
   }
 
@@ -323,6 +335,13 @@ final class ReleaseBundling {
    */
   public ImmutableSet<TargetDeviceFamily> getTargetDeviceFamilies() {
     return families;
+  }
+
+  /**
+   * Returns {@link IntermediateArtifacts} used to create this bundle.
+   */
+  public IntermediateArtifacts getIntermediateArtifacts() {
+    return intermediateArtifacts;
   }
 
   /**

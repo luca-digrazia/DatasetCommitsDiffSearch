@@ -572,8 +572,7 @@ public class ObjcRuleClasses {
             "j2objc_library",
             "cc_library",
             "cc_inc_library",
-            "ios_framework",
-            "swift_binary");
+            "ios_framework");
 
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {

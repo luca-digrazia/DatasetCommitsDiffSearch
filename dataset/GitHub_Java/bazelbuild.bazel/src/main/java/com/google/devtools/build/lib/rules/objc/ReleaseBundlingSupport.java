@@ -1191,7 +1191,7 @@ public final class ReleaseBundlingSupport {
 
     /** Returns the configuration distinguisher for this transition instance. */
     protected ConfigurationDistinguisher getConfigurationDistinguisher() {
-      return ConfigurationDistinguisher.IOS_APPLICATION;
+      return ConfigurationDistinguisher.APPLICATION;
     }
 
     /**
@@ -1199,7 +1199,7 @@ public final class ReleaseBundlingSupport {
      * transition may exist with the same value in a single Bazel invocation.
      */
     enum ConfigurationDistinguisher {
-      IOS_EXTENSION, IOS_APPLICATION, FRAMEWORK, UNKNOWN
+      EXTENSION, APPLICATION, FRAMEWORK, UNKNOWN
     }
   }
 }
