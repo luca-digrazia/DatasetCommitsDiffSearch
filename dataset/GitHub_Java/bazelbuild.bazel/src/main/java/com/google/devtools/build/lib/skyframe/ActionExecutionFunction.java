@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.Iterables;
@@ -38,7 +39,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -576,8 +576,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         throw firstActionExecutionException;
       }
       throw new ActionExecutionException(firstActionExecutionException.getMessage(),
-          firstActionExecutionException.getCause(), action, rootCauses.build(), catastrophe,
-          firstActionExecutionException.getExitCode());
+          firstActionExecutionException.getCause(), action, rootCauses.build(), catastrophe);
     }
 
     if (missingCount > 0) {
