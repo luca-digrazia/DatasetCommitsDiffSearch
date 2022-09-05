@@ -27,11 +27,11 @@ import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
+import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.rules.test.TestRunnerAction;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -62,9 +63,11 @@ import java.util.concurrent.atomic.AtomicReference;
 )
 public class DarwinSandboxedStrategy extends SandboxStrategy {
 
+  private final BuildRequest buildRequest;
   private final ImmutableMap<String, String> clientEnv;
   private final BlazeDirectories blazeDirs;
   private final Path execRoot;
+  private final ExecutorService backgroundWorkers;
   private final boolean sandboxDebug;
   private final boolean verboseFailures;
   private final String productName;
@@ -78,18 +81,17 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
       BuildRequest buildRequest,
       Map<String, String> clientEnv,
       BlazeDirectories blazeDirs,
+      ExecutorService backgroundWorkers,
       boolean verboseFailures,
       String productName,
       ImmutableList<Path> confPaths,
       SpawnHelpers spawnHelpers) {
-    super(
-        buildRequest,
-        blazeDirs,
-        verboseFailures,
-        buildRequest.getOptions(SandboxOptions.class));
+    super(blazeDirs, verboseFailures, buildRequest.getOptions(SandboxOptions.class));
+    this.buildRequest = buildRequest;
     this.clientEnv = ImmutableMap.copyOf(clientEnv);
     this.blazeDirs = blazeDirs;
     this.execRoot = blazeDirs.getExecRoot();
+    this.backgroundWorkers = Preconditions.checkNotNull(backgroundWorkers);
     this.sandboxDebug = buildRequest.getOptions(SandboxOptions.class).sandboxDebug;
     this.verboseFailures = verboseFailures;
     this.productName = productName;
@@ -101,6 +103,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
       BuildRequest buildRequest,
       Map<String, String> clientEnv,
       BlazeDirectories blazeDirs,
+      ExecutorService backgroundWorkers,
       boolean verboseFailures,
       String productName)
       throws IOException {
@@ -119,6 +122,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
         buildRequest,
         clientEnv,
         blazeDirs,
+        backgroundWorkers,
         verboseFailures,
         productName,
         writablePaths.build(),
@@ -186,52 +190,52 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
 
     Path runUnderPath = getRunUnderPath(spawn);
 
-    HardlinkedExecRoot hardlinkedExecRoot =
-        new HardlinkedExecRoot(execRoot, sandboxPath, sandboxExecRoot, errWriter);
-    ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
     try {
+      HardlinkedExecRoot hardlinkedExecRoot =
+          new HardlinkedExecRoot(execRoot, sandboxPath, sandboxExecRoot, errWriter);
+
+      ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
       hardlinkedExecRoot.createFileSystem(
           getMounts(spawn, actionExecutionContext), outputs, writableDirs);
-    } catch (IOException e) {
-      throw new UserExecException("Could not prepare sandbox directory", e);
-    }
 
-    // Flush our logs before executing the spawn, otherwise they might get overwritten.
-    if (errWriter != null) {
-      errWriter.flush();
-    }
+      if (errWriter != null) {
+        errWriter.flush();
+      }
 
-    DarwinSandboxRunner runner =
-        new DarwinSandboxRunner(
-            sandboxPath,
-            sandboxExecRoot,
-            getWritableDirs(sandboxExecRoot, spawnEnvironment),
-            getInaccessiblePaths(),
-            runUnderPath,
-            verboseFailures);
-    try {
-      runSpawn(
-          spawn,
-          actionExecutionContext,
-          spawnEnvironment,
-          hardlinkedExecRoot,
-          outputs,
-          runner,
-          writeOutputFiles);
-    } finally {
-      if (!sandboxDebug) {
-        try {
-          FileSystemUtils.deleteTree(sandboxPath);
-        } catch (IOException e) {
-          executor
-              .getEventHandler()
-              .handle(
-                  Event.error(
-                      String.format(
-                          "Cannot delete sandbox directory after action execution: %s (%s)",
-                          sandboxPath.getPathString(), e)));
+      DarwinSandboxRunner runner;
+      runner =
+          new DarwinSandboxRunner(
+              sandboxPath,
+              sandboxExecRoot,
+              getWritableDirs(sandboxExecRoot, spawnEnvironment),
+              getInaccessiblePaths(),
+              runUnderPath,
+              verboseFailures);
+
+      try {
+        runner.run(
+            spawn.getArguments(),
+            spawnEnvironment,
+            actionExecutionContext.getFileOutErr(),
+            Spawns.getTimeoutSeconds(spawn),
+            SandboxHelpers.shouldAllowNetwork(buildRequest, spawn));
+      } finally {
+        if (writeOutputFiles != null
+            && !writeOutputFiles.compareAndSet(null, DarwinSandboxedStrategy.class)) {
+          Thread.currentThread().interrupt();
+        } else {
+          hardlinkedExecRoot.copyOutputs(execRoot, outputs);
+        }
+        if (!sandboxDebug) {
+          SandboxHelpers.lazyCleanup(backgroundWorkers, runner);
         }
       }
+    } catch (IOException e) {
+      throw new UserExecException("I/O error during sandboxed execution", e);
+    }
+
+    if (Thread.interrupted()) {
+      throw new InterruptedException();
     }
   }
 
