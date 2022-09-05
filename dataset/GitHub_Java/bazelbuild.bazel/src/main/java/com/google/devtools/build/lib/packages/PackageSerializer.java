@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,9 +45,9 @@ import com.google.devtools.build.lib.query2.proto.proto2api.Build;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.Rule.Builder;
 import com.google.devtools.build.lib.syntax.GlobCriteria;
 import com.google.devtools.build.lib.syntax.GlobList;
-import com.google.protobuf.CodedOutputStream;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
@@ -131,10 +131,15 @@ public class PackageSerializer {
    * encoding the targets.
    *
    * @param pkg the {@link Package} to be serialized
-   * @param codedOut the stream to pkg's serialized representation to
+   * @param out the stream to pkg's serialized representation to
    * @throws IOException on failure writing to {@code out}
    */
-  public void serialize(Package pkg, CodedOutputStream codedOut) throws IOException {
+  public void serialize(Package pkg, OutputStream out) throws IOException {
+    serializePackageInternal(pkg, out);
+  }
+
+  /** Serializes pkg to out as a series of protocol buffers */
+  private void serializePackageInternal(Package pkg, OutputStream out) throws IOException {
     Build.Package.Builder builder = Build.Package.newBuilder();
     builder.setName(pkg.getName());
     builder.setRepository(pkg.getPackageIdentifier().getRepository().toString());
@@ -192,11 +197,11 @@ public class PackageSerializer {
 
     builder.setWorkspaceName(pkg.getWorkspaceName());
 
-    codedOut.writeMessageNoTag(builder.build());
+    builder.build().writeDelimitedTo(out);
 
     // Targets are emitted separately as individual protocol buffers as to prevent overwhelming
     // protocol buffer deserialization size limits.
-    emitTargets(pkg.getTargets(), codedOut);
+    emitTargets(pkg.getTargets(), out);
   }
 
   /**
@@ -425,7 +430,7 @@ public class PackageSerializer {
 
   private Build.Target serializeInputFile(InputFile inputFile) {
     Build.SourceFile.Builder builder = Build.SourceFile.newBuilder();
-    builder.setName(inputFile.getLabel().getName());
+    builder.setName(inputFile.getLabel().toString());
     if (inputFile.isVisibilitySpecified()) {
       for (Label visibilityLabel : inputFile.getVisibility().getDeclaredLabels()) {
         builder.addVisibilityLabel(visibilityLabel.toString());
@@ -444,7 +449,7 @@ public class PackageSerializer {
   private Build.Target serializePackageGroup(PackageGroup packageGroup) {
     Build.PackageGroup.Builder builder = Build.PackageGroup.newBuilder();
 
-    builder.setName(packageGroup.getLabel().getName());
+    builder.setName(packageGroup.getLabel().toString());
 
     for (PackageSpecification packageSpecification : packageGroup.getPackageSpecifications()) {
       builder.addContainedPackage(packageSpecification.toString());
@@ -462,7 +467,7 @@ public class PackageSerializer {
 
   private Build.Target serializeRule(Rule rule) {
     Build.Rule.Builder builder = Build.Rule.newBuilder();
-    builder.setName(rule.getLabel().getName());
+    builder.setName(rule.getLabel().toString());
     builder.setRuleClass(rule.getRuleClass());
     builder.setPublicByDefault(rule.getRuleClassObject().isPublicByDefault());
     for (Attribute attribute : rule.getAttributes()) {
@@ -536,31 +541,31 @@ public class PackageSerializer {
   }
 
   /** Writes targets as a series of separate TargetOrTerminator messages to out. */
-  private void emitTargets(Collection<Target> targets, CodedOutputStream codedOut)
-      throws IOException {
+  private void emitTargets(Collection<Target> targets, OutputStream out) throws IOException {
     for (Target target : targets) {
       if (target instanceof InputFile) {
-        emitTarget(serializeInputFile((InputFile) target), codedOut);
+        emitTarget(serializeInputFile((InputFile) target), out);
       } else if (target instanceof OutputFile) {
         // Output files are not serialized; they are recreated by the RuleClass on deserialization.
       } else if (target instanceof PackageGroup) {
-        emitTarget(serializePackageGroup((PackageGroup) target), codedOut);
+        emitTarget(serializePackageGroup((PackageGroup) target), out);
       } else if (target instanceof Rule) {
-        emitTarget(serializeRule((Rule) target), codedOut);
+        emitTarget(serializeRule((Rule) target), out);
       }
     }
 
     // Terminate stream with isTerminator = true.
-    codedOut.writeMessageNoTag(Build.TargetOrTerminator.newBuilder()
+    Build.TargetOrTerminator.newBuilder()
         .setIsTerminator(true)
-        .build());
+        .build()
+        .writeDelimitedTo(out);
   }
 
-  private static void emitTarget(Build.Target target, CodedOutputStream codedOut)
-      throws IOException {
-    codedOut.writeMessageNoTag(Build.TargetOrTerminator.newBuilder()
+  private static void emitTarget(Build.Target target, OutputStream out) throws IOException {
+    Build.TargetOrTerminator.newBuilder()
         .setTarget(target)
-        .build());
+        .build()
+        .writeDelimitedTo(out);
   }
 
   // This is needed because I do not want to use the SymlinkBehavior from the
