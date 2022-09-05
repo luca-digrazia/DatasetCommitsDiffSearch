@@ -795,11 +795,8 @@ public class PackageFunction implements SkyFunction {
           containingPkg.getPackageFragment().segmentCount()
               - label.getPackageFragment().segmentCount(),
           labelNameFragment.segmentCount());
-      message += " (perhaps you meant to put the colon here: '";
-      if (containingPkg.getRepository().isDefault()) {
-        message += "//";
-      }
-      message += containingPkg + ":" + labelNameInContainingPackage + "'?)";
+      message += " (perhaps you meant to put the colon here: "
+          + "'//" + containingPkg + ":" + labelNameInContainingPackage + "'?)";
     } else {
       message += " (have you deleted " + containingPkg + "/BUILD? "
           + "If so, use the --deleted_packages=" + containingPkg + " option)";

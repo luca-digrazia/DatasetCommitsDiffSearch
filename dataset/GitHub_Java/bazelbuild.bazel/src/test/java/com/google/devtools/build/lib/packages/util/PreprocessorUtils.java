@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.packages.util;
 
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
 import com.google.devtools.build.lib.packages.Preprocessor;
-import com.google.devtools.build.lib.vfs.Path;
 
 import javax.annotation.Nullable;
 
@@ -41,7 +40,7 @@ public class PreprocessorUtils {
     }
 
     @Override
-    public Factory getFactory(CachingPackageLocator loc, Path outputBase) {
+    public Factory getFactory(CachingPackageLocator loc) {
       valid = true;
       return factory;
     }
