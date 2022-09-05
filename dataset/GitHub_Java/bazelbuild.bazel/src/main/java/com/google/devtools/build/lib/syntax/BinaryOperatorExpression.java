@@ -95,8 +95,17 @@ public final class BinaryOperatorExpression extends Expression {
    * <p>Publicly accessible for reflection and compiled Skylark code.
    */
   public static boolean in(Object lval, Object rval, Location location) throws EvalException {
-    if (rval instanceof SkylarkQueryable) {
-      return ((SkylarkQueryable) rval).containsKey(lval, location);
+    if (rval instanceof SkylarkList) {
+      for (Object obj : (SkylarkList) rval) {
+        if (obj.equals(lval)) {
+          return true;
+        }
+      }
+      return false;
+    } else if (rval instanceof SkylarkDict) {
+      return ((SkylarkDict<?, ?>) rval).containsKey(lval);
+    } else if (rval instanceof SkylarkNestedSet) {
+      return ((SkylarkNestedSet) rval).expandedSet().contains(lval);
     } else if (rval instanceof String) {
       if (lval instanceof String) {
         return ((String) rval).contains((String) lval);

@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
-import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.LocalMetadataCollector;
@@ -162,7 +161,7 @@ public final class PyCommon {
    */
   public static SkylarkClassObject createSourceProvider(
       NestedSet<Artifact> transitivePythonSources, boolean isUsingSharedLibrary) {
-    return SkylarkClassObjectConstructor.STRUCT.create(
+    return new SkylarkClassObject(
         ImmutableMap.<String, Object>of(
             TRANSITIVE_PYTHON_SRCS,
             SkylarkNestedSet.of(Artifact.class, transitivePythonSources),

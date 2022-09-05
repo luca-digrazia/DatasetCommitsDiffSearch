@@ -139,11 +139,13 @@ public class ValidationTest extends EvaluationTestCase {
 
   @Test
   public void testFuncReturningDictAssignmentAsLValue() throws Exception {
-    parse(
+    checkError(
+        "can only assign to variables and tuples, not to 'my_dict()['b']'",
         "def my_dict():",
         "  return {'a': 1}",
         "def func():",
-        "  my_dict()['b'] = 2");
+        "  my_dict()['b'] = 2",
+        "  return d\n");
   }
 
   @Test

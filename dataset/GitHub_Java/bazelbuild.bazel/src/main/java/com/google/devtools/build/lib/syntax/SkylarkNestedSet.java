@@ -78,7 +78,7 @@ import javax.annotation.Nullable;
       + "nested sets."
 )
 @Immutable
-public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue, SkylarkQueryable {
+public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue {
 
   private final SkylarkType contentType;
   @Nullable private final List<Object> items;
@@ -271,10 +271,5 @@ public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue, S
       Printer.append(buffer, ", order = \"" + order.getName() + "\"");
     }
     Printer.append(buffer, ")");
-  }
-
-  @Override
-  public final boolean containsKey(Object key, Location loc) throws EvalException {
-    return (this.expandedSet().contains(key));
   }
 }
