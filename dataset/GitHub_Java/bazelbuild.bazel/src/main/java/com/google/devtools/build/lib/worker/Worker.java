@@ -14,20 +14,17 @@
 package com.google.devtools.build.lib.worker;
 
 import com.google.common.hash.HashCode;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
-import com.google.devtools.build.lib.shell.Subprocess;
-import com.google.devtools.build.lib.shell.SubprocessBuilder;
+import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.SortedMap;
+import java.lang.ProcessBuilder.Redirect;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Interface to a worker process running as a child process.
@@ -40,56 +37,94 @@ import java.util.SortedMap;
  * <p>Other code in Blaze can talk to the worker process via input / output streams provided by this
  * class.
  */
-class Worker {
-  private final WorkerKey workerKey;
+final class Worker {
+  private static final AtomicInteger pidCounter = new AtomicInteger();
   private final int workerId;
-  private final Path workDir;
-  private final Path logFile;
+  private final Process process;
+  private final Thread shutdownHook;
+  private final HashCode workerFilesHash;
 
-  private Subprocess process;
-  private Thread shutdownHook;
-
-  Worker(WorkerKey workerKey, int workerId, final Path workDir, Path logFile) {
-    this.workerKey = workerKey;
-    this.workerId = workerId;
-    this.workDir = workDir;
-    this.logFile = logFile;
-
-    final Worker self = this;
-    this.shutdownHook =
-        new Thread(
-            () -> {
-              try {
-                self.shutdownHook = null;
-                self.destroy();
-              } catch (IOException e) {
-                // We can't do anything here.
-              }
-            });
-    Runtime.getRuntime().addShutdownHook(shutdownHook);
+  private Worker(Process process, Thread shutdownHook, int pid, HashCode workerFilesHash) {
+    this.process = process;
+    this.shutdownHook = shutdownHook;
+    this.workerId = pid;
+    this.workerFilesHash = workerFilesHash;
   }
 
-  void createProcess() throws IOException {
-    List<String> args = workerKey.getArgs();
-    File executable = new File(args.get(0));
+  static Worker create(WorkerKey key, Path logDir, Reporter reporter, boolean verbose)
+      throws IOException {
+    Preconditions.checkNotNull(key);
+    Preconditions.checkNotNull(logDir);
+
+    int workerId = pidCounter.getAndIncrement();
+    Path logFile = logDir.getRelative("worker-" + workerId + "-" + key.getMnemonic() + ".log");
+
+    String[] command = key.getArgs().toArray(new String[0]);
+
+    // Follows the logic of {@link com.google.devtools.build.lib.shell.Command}.
+    File executable = new File(command[0]);
     if (!executable.isAbsolute() && executable.getParent() != null) {
-      args = new ArrayList<>(args);
-      args.set(0, new File(workDir.getPathFile(), args.get(0)).getAbsolutePath());
+      command[0] = new File(key.getWorkDir().getPathFile(), command[0]).getAbsolutePath();
     }
-    SubprocessBuilder processBuilder = new SubprocessBuilder();
-    processBuilder.setArgv(args);
-    processBuilder.setWorkingDirectory(workDir.getPathFile());
-    processBuilder.setStderr(logFile.getPathFile());
-    processBuilder.setEnv(workerKey.getEnv());
-    this.process = processBuilder.start();
+    ProcessBuilder processBuilder =
+        new ProcessBuilder(command)
+            .directory(key.getWorkDir().getPathFile())
+            .redirectError(Redirect.appendTo(logFile.getPathFile()));
+    processBuilder.environment().putAll(key.getEnv());
+
+    final Process process = processBuilder.start();
+
+    Thread shutdownHook =
+        new Thread() {
+          @Override
+          public void run() {
+            destroyProcess(process);
+          }
+        };
+    Runtime.getRuntime().addShutdownHook(shutdownHook);
+
+    if (verbose) {
+      reporter.handle(
+          Event.info(
+              "Created new "
+                  + key.getMnemonic()
+                  + " worker (id "
+                  + workerId
+                  + "), logging to "
+                  + logFile));
+    }
+
+    return new Worker(process, shutdownHook, workerId, key.getWorkerFilesHash());
   }
 
-  void destroy() throws IOException {
-    if (shutdownHook != null) {
-      Runtime.getRuntime().removeShutdownHook(shutdownHook);
-    }
-    if (process != null) {
-      process.destroyAndWait();
+  void destroy() {
+    Runtime.getRuntime().removeShutdownHook(shutdownHook);
+    destroyProcess(process);
+  }
+
+  /**
+   * Destroys a process and waits for it to exit. This is necessary for the child to not become a
+   * zombie.
+   *
+   * @param process the process to destroy.
+   */
+  private static void destroyProcess(Process process) {
+    boolean wasInterrupted = false;
+    try {
+      process.destroy();
+      while (true) {
+        try {
+          process.waitFor();
+          return;
+        } catch (InterruptedException ie) {
+          wasInterrupted = true;
+        }
+      }
+    } finally {
+      // Read this for detailed explanation: http://www.ibm.com/developerworks/library/j-jtp05236/
+      if (wasInterrupted) {
+        Thread.currentThread().interrupt(); // preserve interrupted status
+      }
     }
   }
 
@@ -101,18 +136,19 @@ class Worker {
     return this.workerId;
   }
 
-  HashCode getWorkerFilesCombinedHash() {
-    return workerKey.getWorkerFilesCombinedHash();
-  }
-
-  SortedMap<PathFragment, HashCode> getWorkerFilesWithHashes() {
-    return workerKey.getWorkerFilesWithHashes();
+  HashCode getWorkerFilesHash() {
+    return workerFilesHash;
   }
 
   boolean isAlive() {
     // This is horrible, but Process.isAlive() is only available from Java 8 on and this is the
     // best we can do prior to that.
-    return !process.finished();
+    try {
+      process.exitValue();
+      return false;
+    } catch (IllegalThreadStateException e) {
+      return true;
+    }
   }
 
   InputStream getInputStream() {
@@ -121,19 +157,5 @@ class Worker {
 
   OutputStream getOutputStream() {
     return process.getOutputStream();
-  }
-
-  public void prepareExecution(
-      SandboxInputs inputFiles, SandboxOutputs outputs, Set<PathFragment> workerFiles)
-      throws IOException {
-    if (process == null) {
-      createProcess();
-    }
-  }
-
-  public void finishExecution(Path execRoot) throws IOException {}
-
-  public Path getLogFile() {
-    return logFile;
   }
 }
