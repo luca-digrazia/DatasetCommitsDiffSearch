@@ -355,7 +355,7 @@ public final class HelpCommand implements BlazeCommand {
       result.append("\n");
 
       result.append("<h2><a name=\"common_options\">Options Common to all Commands</a></h2>\n");
-      appendOptionsHtml(result, BlazeCommandUtils.getCommonOptions(runtime.getBlazeModules()));
+      appendOptionsHtml(result, BlazeCommandUtils.getCommonOptions());
       result.append("\n");
 
       for (Map.Entry<String, BlazeCommand> e : commandsByName.entrySet()) {
