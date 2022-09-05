@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,17 +14,16 @@
 package com.google.devtools.build.lib.runtime;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.OutErr;
 
 import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -43,8 +42,6 @@ public abstract class BugReport {
   private static BlazeVersionInfo versionInfo = BlazeVersionInfo.instance();
 
   private static BlazeRuntime runtime = null;
-
-  private static AtomicBoolean alreadyHandlingCrash = new AtomicBoolean(false);
 
   public static void setRuntime(BlazeRuntime newRuntime) {
     Preconditions.checkNotNull(newRuntime);
@@ -68,38 +65,25 @@ public abstract class BugReport {
     logException(exception, filterClientEnv(args), values);
   }
 
-  private static void logCrash(Throwable throwable, String... args) {
+  /**
+   * Print and send a bug report, and exit with the proper Blaze code.
+   */
+  public static void handleCrash(Throwable throwable, String... args) {
     BugReport.sendBugReport(throwable, Arrays.asList(args));
     BugReport.printBug(OutErr.SYSTEM_OUT_ERR, throwable);
     System.err.println("Blaze crash in async thread:");
     throwable.printStackTrace();
-  }
-
-  /**
-   * Print and send a bug report, and exit with the proper Blaze code. Does not exit if called a
-   * second time.
-   */
-  public static void handleCrash(Throwable throwable, String... args) {
-    if (alreadyHandlingCrash.compareAndSet(false, true)) {
-      int exitCode = getExitCodeForThrowable(throwable);
-      try {
-        logCrash(throwable, args);
-        if (runtime != null) {
-          runtime.notifyCommandComplete(exitCode);
-          // We don't call runtime#shutDown() here because all it does is shut down the modules, and
-          // who knows if they can be trusted.
-        }
-      } finally {
-        // Avoid shutdown deadlock issues: If an application shutdown hook crashes, it will trigger
-        // our Blaze crash handler (this method). Calling System#exit() here, would therefore induce
-        // a deadlock. This call would block on the shutdown sequence completing, but the shutdown
-        // sequence would in turn be blocked on this thread finishing. Instead, exit fast via
-        // halt().
-        Runtime.getRuntime().halt(exitCode);
-      }
-    } else {
-      logCrash(throwable, args);
+    int exitCode = getExitCodeForThrowable(throwable);
+    if (runtime != null) {
+      runtime.notifyCommandComplete(exitCode);
+      // We don't call runtime#shutDown() here because all it does is shut down the modules, and who
+      // knows if they can be trusted.
     }
+    // Avoid shutdown deadlock issues: If an application shutdown hook crashes, it will trigger our
+    // Blaze crash handler (this method). Calling System#exit() here, would therefore induce a
+    // deadlock. This call would block on the shutdown sequence completing, but the shutdown
+    // sequence would in turn be blocked on this thread finishing. Instead, exit fast via halt().
+    Runtime.getRuntime().halt(exitCode);
   }
 
   /** Get exit code corresponding to throwable. */
