@@ -61,8 +61,6 @@ public interface ClassObject {
           + "See the global <a href=\"globals.html#struct\">struct</a> function "
           + "for more details.")
   public class SkylarkClassObject implements ClassObject {
-    /** Error message to use when errorMessage argument is null. */
-    private static final String DEFAULT_ERROR_MESSAGE = "'struct' object has no attribute '%s'";
 
     private final ImmutableMap<String, Object> values;
     private final Location creationLoc;
@@ -75,13 +73,13 @@ public interface ClassObject {
     public SkylarkClassObject(Map<String, Object> values, String errorMessage) {
       this.values = ImmutableMap.copyOf(values);
       this.creationLoc = null;
-      this.errorMessage = Preconditions.checkNotNull(errorMessage);
+      this.errorMessage = errorMessage;
     }
 
     public SkylarkClassObject(Map<String, Object> values, Location creationLoc) {
       this.values = ImmutableMap.copyOf(values);
       this.creationLoc = Preconditions.checkNotNull(creationLoc);
-      this.errorMessage = DEFAULT_ERROR_MESSAGE;
+      this.errorMessage = null;
     }
 
     @Override
@@ -112,10 +110,7 @@ public interface ClassObject {
 
     @Override
     public String errorMessage(String name) {
-      String suffix =
-          "Available attributes: "
-              + Joiner.on(", ").join(Ordering.natural().sortedCopy(values.keySet()));
-      return String.format(errorMessage, name) + "\n" + suffix;
+      return errorMessage != null ? String.format(errorMessage, name) : null;
     }
 
     /**
