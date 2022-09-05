@@ -31,17 +31,16 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.syntax.Argument;
 import com.google.devtools.build.lib.syntax.BaseFunction;
-import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.FragmentClassNameResolver;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.GlobList;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Label.SyntaxException;
 import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkEnvironment;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -499,11 +498,10 @@ public final class RuleClass {
     private BaseFunction configuredTargetFunction = null;
     private Function<? super Rule, Map<String, Label>> externalBindingsFunction =
         NO_EXTERNAL_BINDINGS;
-    private Environment ruleDefinitionEnvironment = null;
+    private SkylarkEnvironment ruleDefinitionEnvironment = null;
     private Set<Class<?>> configurationFragments = new LinkedHashSet<>();
     private MissingFragmentPolicy missingFragmentPolicy = MissingFragmentPolicy.FAIL_ANALYSIS;
-    private Map<ConfigurationTransition, ImmutableSet<String>> requiredFragmentNames =
-        new LinkedHashMap<>();
+    private Set<String> requiredFragmentNames = new LinkedHashSet<>();
     private FragmentClassNameResolver fragmentNameResolver;
 
     private boolean supportsConstraintChecking = true;
@@ -592,7 +590,7 @@ public final class RuleClass {
           configuredTargetFactory, validityPredicate, preferredDependencyPredicate,
           ImmutableSet.copyOf(advertisedProviders), configuredTargetFunction,
           externalBindingsFunction, ruleDefinitionEnvironment, configurationFragments,
-          ImmutableMap.copyOf(requiredFragmentNames), fragmentNameResolver, missingFragmentPolicy,
+          requiredFragmentNames, fragmentNameResolver, missingFragmentPolicy,
           supportsConstraintChecking, attributes.values().toArray(new Attribute[0]));
     }
 
@@ -617,18 +615,14 @@ public final class RuleClass {
       this.missingFragmentPolicy = missingFragmentPolicy;
       return this;
     }
-
+    
     /**
-     * Declares the configuration fragments that are required by this rule.
-     *
-     * <p>In contrast to {@link #requiresConfigurationFragments(Class...)}, this method a) takes the
-     * names of fragments instead of their classes and b) distinguishes whether the fragments can be
-     * accessed in host (HOST) or target (NONE) configuration.
+     * Does the same as {@link #requiresConfigurationFragments(Class...)}, except for taking names
+     * of fragments instead of classes.
      */
     public Builder requiresConfigurationFragments(
-        FragmentClassNameResolver fragmentNameResolver,
-        Map<ConfigurationTransition, ImmutableSet<String>> configurationFragmentNames) {
-      requiredFragmentNames.putAll(configurationFragmentNames);
+        FragmentClassNameResolver fragmentNameResolver, String... configurationFragmentNames) {
+      Collections.addAll(requiredFragmentNames, configurationFragmentNames);
       this.fragmentNameResolver = fragmentNameResolver;
       return this;
     }
@@ -798,7 +792,7 @@ public final class RuleClass {
     /**
      *  Sets the rule definition environment. Meant for Skylark usage.
      */
-    public Builder setRuleDefinitionEnvironment(Environment env) {
+    public Builder setRuleDefinitionEnvironment(SkylarkEnvironment env) {
       this.ruleDefinitionEnvironment = env;
       return this;
     }
@@ -970,7 +964,7 @@ public final class RuleClass {
    * The Skylark rule definition environment of this RuleClass.
    * Null for non Skylark executable RuleClasses.
    */
-  @Nullable private final Environment ruleDefinitionEnvironment;
+  @Nullable private final SkylarkEnvironment ruleDefinitionEnvironment;
 
   /**
    * The set of required configuration fragments; this should list all fragments that can be
@@ -980,12 +974,10 @@ public final class RuleClass {
   private final ImmutableSet<Class<?>> requiredConfigurationFragments;
 
   /**
-   * A dictionary that maps configurations (NONE for target configuration, HOST for host
-   * configuration) to lists of names of required configuration fragments.
+   * Same idea as requiredConfigurationFragments, but stores fragments by name instead of by class
    */
-  private final ImmutableMap<ConfigurationTransition, ImmutableSet<String>>
-      requiredConfigurationFragmentNames;
-
+  private final ImmutableSet<String> requiredConfigurationFragmentNames;
+  
   /**
    * Used to resolve the names of fragments in order to compare them to values in {@link
    * #requiredConfigurationFragmentNames}
@@ -1023,7 +1015,7 @@ public final class RuleClass {
       ImmutableSet<Class<?>> advertisedProviders,
       @Nullable BaseFunction configuredTargetFunction,
       Function<? super Rule, Map<String, Label>> externalBindingsFunction,
-      @Nullable Environment ruleDefinitionEnvironment,
+      @Nullable SkylarkEnvironment ruleDefinitionEnvironment,
       Set<Class<?>> allowedConfigurationFragments,
       MissingFragmentPolicy missingFragmentPolicy,
       boolean supportsConstraintChecking,
@@ -1045,8 +1037,7 @@ public final class RuleClass {
         externalBindingsFunction,
         ruleDefinitionEnvironment,
         allowedConfigurationFragments,
-        ImmutableMap.<ConfigurationTransition, ImmutableSet<String>>of(),
-        null, // FragmentClassNameResolver
+        ImmutableSet.<String>of(), null,
         missingFragmentPolicy,
         supportsConstraintChecking,
         attributes);
@@ -1085,9 +1076,9 @@ public final class RuleClass {
       ImmutableSet<Class<?>> advertisedProviders,
       @Nullable BaseFunction configuredTargetFunction,
       Function<? super Rule, Map<String, Label>> externalBindingsFunction,
-      @Nullable Environment ruleDefinitionEnvironment,
+      @Nullable SkylarkEnvironment ruleDefinitionEnvironment,
       Set<Class<?>> allowedConfigurationFragments,
-      ImmutableMap<ConfigurationTransition, ImmutableSet<String>> allowedConfigurationFragmentNames,
+      Set<String> allowedConfigurationFragmentNames,
       @Nullable FragmentClassNameResolver fragmentNameResolver,
       MissingFragmentPolicy missingFragmentPolicy,
       boolean supportsConstraintChecking,
@@ -1111,7 +1102,8 @@ public final class RuleClass {
     this.workspaceOnly = workspaceOnly;
     this.outputsDefaultExecutable = outputsDefaultExecutable;
     this.requiredConfigurationFragments = ImmutableSet.copyOf(allowedConfigurationFragments);
-    this.requiredConfigurationFragmentNames = allowedConfigurationFragmentNames;
+    this.requiredConfigurationFragmentNames =
+        ImmutableSet.copyOf(allowedConfigurationFragmentNames);
     this.fragmentNameResolver = fragmentNameResolver;
     this.missingFragmentPolicy = missingFragmentPolicy;
     this.supportsConstraintChecking = supportsConstraintChecking;
@@ -1268,32 +1260,24 @@ public final class RuleClass {
   }
 
   /**
-   * Checks if the configuration fragment may be accessed (i.e., if it's declared) in the specified
-   * configuration (target or host).
+   * Checks if the configuration fragment may be accessed (i.e., if it's declared). If no fragments
+   * are declared, this allows access to all fragments for backwards compatibility.
    */
-  public boolean isLegalConfigurationFragment(
-      Class<?> configurationFragment, ConfigurationTransition config) {
-    return requiredConfigurationFragments.contains(configurationFragment)
-        || hasLegalFragmentName(configurationFragment, config);
-  }
-
   public boolean isLegalConfigurationFragment(Class<?> configurationFragment) {
-    // NONE means target configuration.
-    return isLegalConfigurationFragment(configurationFragment, ConfigurationTransition.NONE);
+    return requiredConfigurationFragments.contains(configurationFragment)
+        || hasLegalFragmentName(configurationFragment);
   }
 
   /**
-   * Checks whether the name of the given fragment class was declared as required fragment in the
-   * specified configuration (target or host).
+   * Checks whether the name of the given fragment class was declared as required fragment
    */
-  private boolean hasLegalFragmentName(
-      Class<?> configurationFragment, ConfigurationTransition config) {
+  private boolean hasLegalFragmentName(Class<?> configurationFragment) {
     if (fragmentNameResolver == null) {
       return false;
     }
 
     String name = fragmentNameResolver.resolveName(configurationFragment);
-    return (name != null && requiredConfigurationFragmentNames.get(config).contains(name));
+    return (name != null && requiredConfigurationFragmentNames.contains(name));
   }
 
   /**
@@ -1741,7 +1725,7 @@ public final class RuleClass {
   /**
    * Returns this RuleClass's rule definition environment.
    */
-  @Nullable public Environment getRuleDefinitionEnvironment() {
+  @Nullable public SkylarkEnvironment getRuleDefinitionEnvironment() {
     return ruleDefinitionEnvironment;
   }
 

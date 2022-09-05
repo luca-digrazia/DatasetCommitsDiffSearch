@@ -39,7 +39,7 @@ public class FunctionDefStatement extends Statement {
   }
 
   @Override
-  void doExec(Environment env) throws EvalException, InterruptedException {
+  void exec(Environment env) throws EvalException, InterruptedException {
     List<Expression> defaultExpressions = signature.getDefaultValues();
     ArrayList<Object> defaultValues = null;
     ArrayList<SkylarkType> types = null;
@@ -50,14 +50,10 @@ public class FunctionDefStatement extends Statement {
         defaultValues.add(expr.eval(env));
       }
     }
-    env.update(
-        ident.getName(),
-        new UserDefinedFunction(
-            ident,
-            FunctionSignature.WithValues.<Object, SkylarkType>create(
-                signature.getSignature(), defaultValues, types),
-            statements,
-            env.getGlobals()));
+    env.update(ident.getName(), new UserDefinedFunction(
+        ident, FunctionSignature.WithValues.<Object, SkylarkType>create(
+            signature.getSignature(), defaultValues, types),
+        statements, (SkylarkEnvironment) env));
   }
 
   @Override

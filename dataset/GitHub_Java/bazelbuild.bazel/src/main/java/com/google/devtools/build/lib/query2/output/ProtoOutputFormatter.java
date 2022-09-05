@@ -37,8 +37,8 @@ import com.google.devtools.build.lib.query2.output.AspectResolver.BuildFileDepen
 import com.google.devtools.build.lib.query2.output.OutputFormatter.UnorderedFormatter;
 import com.google.devtools.build.lib.query2.output.QueryOptions.OrderOutput;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build;
-import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.syntax.SkylarkEnvironment;
 import com.google.devtools.build.lib.util.BinaryPredicate;
 
 import java.io.IOException;
@@ -137,11 +137,11 @@ public class ProtoOutputFormatter extends OutputFormatter implements UnorderedFo
           continue;
         }
         rulePb.addAttribute(PackageSerializer.getAttributeProto(attr,
-            PackageSerializer.getAttributeValues(rule, attr),
-            rule.isAttributeValueExplicitlySpecified(attr), /*includeGlobs=*/ false));
+            PackageSerializer.getAttributeValues(rule, attr), null,
+            rule.isAttributeValueExplicitlySpecified(attr), false));
       }
 
-      Environment env = rule.getRuleClassObject().getRuleDefinitionEnvironment();
+      SkylarkEnvironment env = rule.getRuleClassObject().getRuleDefinitionEnvironment();
       if (env != null) {
         // The RuleDefinitionEnvironment is always defined for Skylark rules and
         // always null for non Skylark rules.
@@ -150,7 +150,7 @@ public class ProtoOutputFormatter extends OutputFormatter implements UnorderedFo
                 .setName(RULE_IMPLEMENTATION_HASH_ATTR_NAME)
                 .setType(ProtoUtils.getDiscriminatorFromType(
                     com.google.devtools.build.lib.packages.Type.STRING))
-                .setStringValue(env.getTransitiveContentHashCode()));
+                .setStringValue(env.getTransitiveFileContentHashCode()));
       }
 
       ImmutableMultimap<Attribute, Label> aspectsDependencies =
@@ -158,8 +158,7 @@ public class ProtoOutputFormatter extends OutputFormatter implements UnorderedFo
       // Add information about additional attributes from aspects.
       for (Entry<Attribute, Collection<Label>> entry : aspectsDependencies.asMap().entrySet()) {
         rulePb.addAttribute(PackageSerializer.getAttributeProto(entry.getKey(),
-            Lists.<Object>newArrayList(entry.getValue()),
-            /*explicitlySpecified=*/ false, /*includeGlobs=*/ false));
+            Lists.<Object>newArrayList(entry.getValue()), null, false, false));
       }
       // Add all deps from aspects as rule inputs of current target.
       for (Label label : aspectsDependencies.values()) {
@@ -222,8 +221,6 @@ public class ProtoOutputFormatter extends OutputFormatter implements UnorderedFo
         for (String feature : inputFile.getPackage().getFeatures()) {
           input.addFeature(feature);
         }
-
-        input.setPackageContainsErrors(inputFile.getPackage().containsErrors());
       }
 
       for (Label visibilityDependency : target.getVisibility().getDependencyLabels()) {

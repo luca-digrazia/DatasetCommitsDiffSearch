@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
@@ -57,13 +58,6 @@ public final class EvaluationContext {
       }
     };
 
-  public static final EventHandler PRINT_HANDLER = new EventHandler() {
-      @Override
-      public void handle(Event event) {
-        System.out.print(event.getMessage());
-      }
-    };
-
   public static EvaluationContext newBuildContext(EventHandler eventHandler, Environment env,
       boolean parsePython) {
     return new EvaluationContext(eventHandler, env, null, parsePython);
@@ -86,25 +80,18 @@ public final class EvaluationContext {
     return newSkylarkContext(new SkylarkEnvironment(eventHandler), new ValidationEnvironment());
   }
 
+  /** Base context for Skylark evaluation for internal use only, while initializing builtins */
+  static final EvaluationContext SKYLARK_INITIALIZATION = newSkylarkContext(FAIL_FAST_HANDLER);
+
+  @VisibleForTesting
   public Environment getEnvironment() {
     return env;
   }
 
-  public EventHandler getEventHandler() {
-    return eventHandler;
-  }
-
-  public ValidationEnvironment getValidationEnvironment() {
-    return validationEnv;
-  }
-
-  /** Base context for Skylark evaluation for internal use only, while initializing builtins */
-  static final EvaluationContext SKYLARK_INITIALIZATION = newSkylarkContext(FAIL_FAST_HANDLER);
-
   /** Mock package locator */
   private static final class EmptyPackageLocator implements CachingPackageLocator {
     @Override
-    public Path getBuildFileForPackage(String packageName) {
+    public Path getBuildFileForPackage(PackageIdentifier packageName) {
       return null;
     }
   }
@@ -121,7 +108,7 @@ public final class EvaluationContext {
 
   /** Is this a Skylark evaluation context? */
   public boolean isSkylark() {
-    return env.isSkylarkEnabled();
+    return env.isSkylark();
   }
 
   /** Parse a string without a supporting file, returning statements and comments */
@@ -191,8 +178,7 @@ public final class EvaluationContext {
   public EvaluationContext update(String varname, Object value) throws EvalException {
     env.update(varname, value);
     if (validationEnv != null) {
-      validationEnv.update(
-          varname, SkylarkType.typeForInference(SkylarkType.of(value.getClass())), null);
+      validationEnv.declare(varname, null);
     }
     return this;
   }
@@ -200,20 +186,6 @@ public final class EvaluationContext {
   /** Lookup a variable in the environment */
   public Object lookup(String varname) throws NoSuchVariableException {
     return env.lookup(varname);
-  }
-
-  /** Print a String in this context */
-  public void print(String msg) {
-    if (msg != null) {
-      eventHandler.handle(new Event(EventKind.STDOUT, null, msg));
-    }
-  }
-
-  /** Print a String in this context */
-  public void println(String msg) {
-    if (msg != null) {
-      print(msg + "\n");
-    }
   }
 
   /** Evaluate a series of statements */

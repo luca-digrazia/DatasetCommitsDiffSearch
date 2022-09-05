@@ -797,10 +797,12 @@ public class PackageFunction implements SkyFunction {
       try {
         Globber globber = packageFactory.createLegacyGlobber(buildFilePath.getParentDirectory(),
             packageId, packageLocator);
+        StoredEventHandler localReporter = new StoredEventHandler();
         Preprocessor.Result preprocessingResult = preprocessCache.getIfPresent(packageId);
         if (preprocessingResult == null) {
           preprocessingResult = replacementSource == null
-              ? packageFactory.preprocess(packageId, buildFilePath, inputSource, globber)
+              ? packageFactory.preprocess(packageId, buildFilePath, inputSource, globber,
+                  localReporter)
               : Preprocessor.Result.noPreprocessing(replacementSource);
           preprocessCache.put(packageId, preprocessingResult);
         }
@@ -819,7 +821,7 @@ public class PackageFunction implements SkyFunction {
         preprocessCache.invalidate(packageId);
 
         pkgBuilder = packageFactory.createPackageFromPreprocessingResult(externalPkg, packageId,
-            buildFilePath, preprocessingResult, preprocessingResult.events, preludeStatements,
+            buildFilePath, preprocessingResult, localReporter.getEvents(), preludeStatements,
             importResult.importMap, importResult.fileDependencies, packageLocator,
             defaultVisibility, globber);
         numPackagesLoaded.incrementAndGet();

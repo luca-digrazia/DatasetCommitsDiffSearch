@@ -776,7 +776,7 @@ public class MethodLibrary {
       new BuiltinFunction("append") {
         public Runtime.NoneType invoke(List<Object> self, Object item,
             Location loc, Environment env) throws EvalException, ConversionException {
-          if (env.isCallerSkylark()) {
+          if (env.isSkylark()) {
             throw new EvalException(loc,
                 "function 'append' is not available in Skylark");
           }
@@ -806,7 +806,7 @@ public class MethodLibrary {
       new BuiltinFunction("extend") {
         public Runtime.NoneType invoke(List<Object> self, List<Object> items,
             Location loc, Environment env) throws EvalException, ConversionException {
-          if (env.isCallerSkylark()) {
+          if (env.isSkylark()) {
             throw new EvalException(loc,
                 "function 'append' is not available in Skylark");
           }
@@ -920,7 +920,7 @@ public class MethodLibrary {
       List<Object> list = Lists.newArrayListWithCapacity(dict.size());
       for (Map.Entry<?, ?> entries : dict.entrySet()) {
         List<?> item = ImmutableList.of(entries.getKey(), entries.getValue());
-        list.add(env.isCallerSkylark() ? SkylarkList.tuple(item) : item);
+        list.add(env.isSkylark() ? SkylarkList.tuple(item) : item);
       }
       return convert(list, env, loc);
     }
@@ -966,7 +966,7 @@ public class MethodLibrary {
   @SuppressWarnings("unchecked")
   private static Iterable<Object> convert(Collection<?> list, Environment env, Location loc)
       throws EvalException {
-    if (env.isCallerSkylark()) {
+    if (env.isSkylark()) {
       return SkylarkList.list(list, loc);
     } else {
       return Lists.newArrayList(list);
@@ -1082,7 +1082,7 @@ public class MethodLibrary {
   private static BuiltinFunction struct = new BuiltinFunction("struct") {
       @SuppressWarnings("unchecked")
     public SkylarkClassObject invoke(Map<String, Object> kwargs, Location loc)
-        throws EvalException {
+        throws EvalException, InterruptedException {
       return new SkylarkClassObject(kwargs, loc);
     }
   };
@@ -1183,7 +1183,7 @@ public class MethodLibrary {
       useEnvironment = true)
   private static BuiltinFunction enumerate = new BuiltinFunction("enumerate") {
     public Object invoke(Object input, Location loc, Environment env)
-        throws EvalException, ConversionException {
+        throws EvalException, ConversionException, InterruptedException {
       int count = 0;
       List<SkylarkList> result = Lists.newArrayList();
       for (Object obj : Type.OBJECT_LIST.convert(input, "input")) {
@@ -1217,7 +1217,7 @@ public class MethodLibrary {
   private static final BuiltinFunction range = new BuiltinFunction("range") {
       public Object invoke(Integer startOrStop, Object stopOrNone, Integer step, Location loc,
           Environment env)
-        throws EvalException, ConversionException {
+        throws EvalException, ConversionException, InterruptedException {
       int start;
       int stop;
       if (stopOrNone == Runtime.NONE) {
@@ -1255,7 +1255,7 @@ public class MethodLibrary {
       mandatoryPositionals = {
         @Param(name = "x", type = Map.class, doc = "The parameter to convert.")})
   private static final BuiltinFunction select = new BuiltinFunction("select") {
-    public Object invoke(Map<?, ?> dict) throws EvalException {
+    public Object invoke(Map<?, ?> dict) throws EvalException, InterruptedException {
       return SelectorList.of(new SelectorValue(dict));
     }
   };
@@ -1386,7 +1386,7 @@ public class MethodLibrary {
       useLocation = true, useEnvironment = true)
   private static final BuiltinFunction print = new BuiltinFunction("print") {
     public Runtime.NoneType invoke(String sep, SkylarkList starargs,
-        Location loc, Environment env) throws EvalException {
+        Location loc, SkylarkEnvironment env) throws EvalException {
       String msg = Joiner.on(sep).join(Iterables.transform(starargs,
               new com.google.common.base.Function<Object, String>() {
                 @Override
@@ -1412,7 +1412,7 @@ public class MethodLibrary {
       returnType = SkylarkList.class, useLocation = true)
   private static final BuiltinFunction zip = new BuiltinFunction("zip") {
     public SkylarkList invoke(SkylarkList args, Location loc)
-        throws EvalException {
+        throws EvalException, InterruptedException {
       Iterator<?>[] iterators = new Iterator<?>[args.size()];
       for (int i = 0; i < args.size(); i++) {
         iterators[i] = EvalUtils.toIterable(args.get(i), loc).iterator();
@@ -1491,6 +1491,19 @@ public class MethodLibrary {
       .add(dir, fail, getattr, hasattr, print, set, struct, type)
       .build();
 
+
+  /**
+   * Set up a given environment for supported class methods.
+   */
+  public static void setupMethodEnvironment(Environment env) {
+    setupMethodEnvironment(env, env.isSkylark() ? skylarkGlobalFunctions : buildGlobalFunctions);
+  }
+
+  private static void setupMethodEnvironment(Environment env, Iterable<BaseFunction> functions) {
+    for (BaseFunction function : functions) {
+      env.update(function.getName(), function);
+    }
+  }
 
   /**
    * Collect global functions for the validation environment.
