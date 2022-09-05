@@ -25,8 +25,7 @@ import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
-import com.google.devtools.build.lib.packages.PackageIdentifier;
-import com.google.devtools.build.lib.testutil.MoreAsserts;
+import com.google.devtools.build.lib.testutil.JunitTestUtils;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
 
@@ -46,8 +45,8 @@ public class BuildFileASTTest {
 
   private class ScratchPathPackageLocator implements CachingPackageLocator {
     @Override
-    public Path getBuildFileForPackage(PackageIdentifier packageName) {
-      return scratch.resolve(packageName.getPackageFragment()).getRelative("BUILD");
+    public Path getBuildFileForPackage(String packageName) {
+      return scratch.resolve(packageName).getRelative("BUILD");
     }
   }
 
@@ -98,7 +97,7 @@ public class BuildFileASTTest {
     BuildFileAST buildfile = BuildFileAST.parseBuildFile(buildFile, reporter, null, false);
 
     assertFalse(buildfile.exec(env, reporter));
-    Event e = MoreAsserts.assertContainsEvent(collector,
+    Event e = JunitTestUtils.assertContainsEvent(collector,
         "unsupported operand type(s) for +: 'int' and 'List'");
     assertEquals(4, e.getLocation().getStartLineAndColumn().getLine());
   }
@@ -265,7 +264,7 @@ public class BuildFileASTTest {
 
   private class EmptyPackageLocator implements CachingPackageLocator {
     @Override
-    public Path getBuildFileForPackage(PackageIdentifier packageName) {
+    public Path getBuildFileForPackage(String packageName) {
       return null;
     }
   }

@@ -39,7 +39,7 @@ public class BuildFileAST extends ASTNode {
 
   private ImmutableSet<PathFragment> loads;
 
-  private ImmutableSet<Label> includes;
+  private ImmutableSet<String> subincludes;
 
   /**
    * Whether any errors were encountered during scanning or parsing.
@@ -70,38 +70,28 @@ public class BuildFileAST extends ASTNode {
     }
   }
 
-  private ImmutableSet<Label> fetchIncludes(List<Statement> stmts) {
-    ImmutableSet.Builder<Label> result = new ImmutableSet.Builder<>();
+  /** Collects labels from all subinclude statements */
+  private ImmutableSet<String> fetchSubincludes(List<Statement> stmts) {
+    ImmutableSet.Builder<String> subincludes = new ImmutableSet.Builder<>();
     for (Statement stmt : stmts) {
+      // The code below matches:  subinclude("literal string")
       if (!(stmt instanceof ExpressionStatement)) {
         continue;
       }
-
-      ExpressionStatement expr = (ExpressionStatement) stmt;
-      if (!(expr.getExpression() instanceof FuncallExpression)) {
+      Expression expr = ((ExpressionStatement) stmt).getExpression();
+      if (!(expr instanceof FuncallExpression)) {
         continue;
       }
-
-      FuncallExpression funcall = (FuncallExpression) expr.getExpression();
-      if (!funcall.getFunction().getName().equals("include")
-          || funcall.getArguments().size() != 1) {
+      FuncallExpression call = (FuncallExpression) expr;
+      if (!call.getFunction().getName().equals("subinclude") || call.getArguments().size() != 1) {
         continue;
       }
-
-      Expression arg = funcall.getArguments().get(0).value;
-      if (!(arg instanceof StringLiteral)) {
-        continue;
-      }
-
-      try {
-        Label label = Label.parseAbsolute(((StringLiteral) arg).getValue());
-        result.add(label);
-      } catch (Label.SyntaxException e) {
-        // Ignore. This will be reported when the BUILD file is actually evaluated.
+      Expression arg = call.getArguments().get(0).getValue();
+      if (arg instanceof StringLiteral) {
+        subincludes.add(((StringLiteral) arg).getValue());
       }
     }
-
-    return result.build();
+    return subincludes.build();
   }
 
   /** Collects paths from all load statements */
@@ -149,12 +139,14 @@ public class BuildFileAST extends ASTNode {
     return loads;
   }
 
-  public synchronized ImmutableSet<Label> getIncludes() {
-    if (includes == null) {
-      includes = fetchIncludes(stmts);
+  /**
+   * Returns a set of subincludes in this BUILD file.
+   */
+  public synchronized ImmutableSet<String> getSubincludes() {
+    if (subincludes == null) {
+      subincludes = fetchSubincludes(stmts);
     }
-
-    return includes;
+    return subincludes;
   }
 
   /**
