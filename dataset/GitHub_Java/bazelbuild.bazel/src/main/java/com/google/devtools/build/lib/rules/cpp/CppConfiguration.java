@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,13 +39,13 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader.CppConfigurationParameters;
 import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoException;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SkylarkCallable;
 import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.util.IncludeScanningUtil;
@@ -1226,12 +1226,8 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * @param features default settings affecting this link
    * @param sharedLib true if the output is a shared lib, false if it's an executable
    */
-  @SkylarkCallable(name = "fully_static_link_options",
-      doc = "Returns the immutable list of linker options for fully statically linked "
-      + "outputs. Does not include command-line options passed via --linkopt or "
-      + "--linkopts.")
   public List<String> getFullyStaticLinkOptions(Collection<String> features,
-      Boolean sharedLib) {
+      boolean sharedLib) {
     if (sharedLib) {
       return getSharedLibraryLinkOptions(mostlyStaticLinkFlags, features);
     } else {
@@ -1247,12 +1243,8 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * @param features default settings affecting this link
    * @param sharedLib true if the output is a shared lib, false if it's an executable
    */
-  @SkylarkCallable(name = "mostly_static_link_options",
-      doc = "Returns the immutable list of linker options for mostly statically linked "
-      + "outputs. Does not include command-line options passed via --linkopt or "
-      + "--linkopts.")
   public List<String> getMostlyStaticLinkOptions(Collection<String> features,
-      Boolean sharedLib) {
+      boolean sharedLib) {
     if (sharedLib) {
       return getSharedLibraryLinkOptions(
           supportsEmbeddedRuntimes ? mostlyStaticSharedLinkFlags : dynamicLinkFlags,
@@ -1270,12 +1262,8 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * @param features default settings affecting this link
    * @param sharedLib true if the output is a shared lib, false if it's an executable
    */
-  @SkylarkCallable(name = "dynamic_link_options",
-      doc = "Returns the immutable list of linker options for artifacts that are not "
-      + "fully or mostly statically linked. Does not include command-line options "
-      + "passed via --linkopt or --linkopts.")
   public List<String> getDynamicLinkOptions(Collection<String> features,
-      Boolean sharedLib) {
+      boolean sharedLib) {
     if (sharedLib) {
       return getSharedLibraryLinkOptions(dynamicLinkFlags, features);
     } else {

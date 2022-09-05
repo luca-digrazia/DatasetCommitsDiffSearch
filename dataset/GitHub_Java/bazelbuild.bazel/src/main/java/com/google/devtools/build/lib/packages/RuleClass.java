@@ -29,7 +29,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
@@ -42,6 +41,7 @@ import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.FragmentClassNameResolver;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.GlobList;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.StringUtil;
@@ -770,16 +770,13 @@ public final class RuleClass {
 
     /**
      * Adds or overrides the attribute in the rule class. Meant for Skylark usage.
-     *
-     * @throws IllegalArgumentException if the attribute overrides an existing attribute (will be
-     * legal in the future).
      */
     public void addOrOverrideAttribute(Attribute attribute) {
-      String name = attribute.getName();
-      // Attributes may be overridden in the future.
-      Preconditions.checkArgument(!attributes.containsKey(name),
-          "There is already a built-in attribute '%s' which cannot be overridden", name);
-      addAttribute(attribute);
+      if (attributes.containsKey(attribute.getName())) {
+        overrideAttribute(attribute);
+      } else {
+        addAttribute(attribute);
+      }
     }
 
     /** True if the rule class contains an attribute named {@code name}. */

@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.analysis.DependencyResolver;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection.Transitions;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -54,6 +53,7 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.test.TestActionBuilder;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SkylarkCallable;
 import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.syntax.SkylarkModuleNameResolver;
@@ -812,15 +812,6 @@ public final class BuildConfiguration {
         category = "undocumented")
     public Label objcGcovBinary;
 
-    // This performs the same function as objc_gcov_binary but applies to experminental_ios_test
-    // rather than ios_test.
-    // TODO(bazel-team): Remove this once experimental_ios_test replaces to ios_test.
-    @Option(name = "experimental_objc_gcov_binary",
-            converter = LabelConverter.class,
-            defaultValue = "//third_party/gcov:gcov_for_xcode_osx",
-            category = "undocumented")
-    public Label experimentalObjcGcovBinary;
-
     @Option(name = "experimental_dynamic_configs",
         defaultValue = "false",
         category = "undocumented",
@@ -884,7 +875,6 @@ public final class BuildConfiguration {
       }
       if (collectCodeCoverage) {
         labelMap.put("objc_gcov", objcGcovBinary);
-        labelMap.put("experimental_objc_gcov", experimentalObjcGcovBinary);
       }
     }
   }

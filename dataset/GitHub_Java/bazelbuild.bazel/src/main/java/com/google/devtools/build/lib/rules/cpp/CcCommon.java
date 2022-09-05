@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -39,6 +38,7 @@ import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.Local
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProviderImpl;
 import com.google.devtools.build.lib.shell.ShellUtils;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -47,6 +47,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -265,6 +266,31 @@ public final class CcCommon {
     return hdrs;
   }
 
+  HeadersCheckingMode determineHeadersCheckingMode() {
+    HeadersCheckingMode headersCheckingMode = cppConfiguration.getHeadersCheckingMode();
+
+    // Package default overrides command line option.
+    if (ruleContext.getRule().getPackage().isDefaultHdrsCheckSet()) {
+      String value =
+          ruleContext.getRule().getPackage().getDefaultHdrsCheck().toUpperCase(Locale.ENGLISH);
+      headersCheckingMode = HeadersCheckingMode.valueOf(value);
+    }
+
+    // 'hdrs_check' attribute overrides package default.
+    if (hasAttribute("hdrs_check", Type.STRING)
+        && ruleContext.getRule().isAttributeValueExplicitlySpecified("hdrs_check")) {
+      try {
+        String value = ruleContext.attributes().get("hdrs_check", Type.STRING)
+            .toUpperCase(Locale.ENGLISH);
+        headersCheckingMode = HeadersCheckingMode.valueOf(value);
+      } catch (IllegalArgumentException e) {
+        ruleContext.attributeError("hdrs_check", "must be one of: 'loose', 'warn' or 'strict'");
+      }
+    }
+
+    return headersCheckingMode;
+  }
+
   private static ImmutableList<String> getPackageCopts(RuleContext ruleContext) {
     List<String> unexpanded = ruleContext.getRule().getPackage().getDefaultCopts();
     return ImmutableList.copyOf(CppHelper.expandMakeVariables(ruleContext, "copts", unexpanded));
@@ -474,18 +500,17 @@ public final class CcCommon {
 
   /**
    * Creates the feature configuration for a given rule.
-   *
-   * @param ruleContext the context of the rule we want the feature configuration for.
+   * 
+   * @param ruleContext the context of the rule we want the feature configuration for. 
    * @param ruleSpecificRequestedFeatures features that will be requested, and thus be always
    * enabled if the toolchain supports them.
    * @param ruleSpecificUnsupportedFeatures features that are not supported in the current context.
    * @return the feature configuration for the given {@code ruleContext}.
    */
-  public static FeatureConfiguration configureFeatures(
-      RuleContext ruleContext,
+  public static FeatureConfiguration configureFeatures(RuleContext ruleContext,
       Set<String> ruleSpecificRequestedFeatures,
-      Set<String> ruleSpecificUnsupportedFeatures,
-      CcToolchainProvider toolchain) {
+      Set<String> ruleSpecificUnsupportedFeatures) {
+    CcToolchainProvider toolchain = CppHelper.getToolchain(ruleContext);    
     ImmutableSet.Builder<String> unsupportedFeaturesBuilder = ImmutableSet.builder();
     unsupportedFeaturesBuilder.addAll(ruleSpecificUnsupportedFeatures);
     if (!toolchain.supportsHeaderParsing()) {
@@ -524,24 +549,11 @@ public final class CcCommon {
   
   /**
    * Creates a feature configuration for a given rule.
-   *
-   * @param ruleContext the context of the rule we want the feature configuration for.
-   * @param toolchain the toolchain we want the feature configuration for.
-   * @return the feature configuration for the given {@code ruleContext}.
-   */
-  public static FeatureConfiguration configureFeatures(
-      RuleContext ruleContext, CcToolchainProvider toolchain) {
-    return configureFeatures(
-        ruleContext, ImmutableSet.<String>of(), ImmutableSet.<String>of(), toolchain);
-  }
-
-  /**
-   * Creates a feature configuration for a given rule.
-   *
-   * @param ruleContext the context of the rule we want the feature configuration for.
+   * 
+   * @param ruleContext the context of the rule we want the feature configuration for. 
    * @return the feature configuration for the given {@code ruleContext}.
    */
   public static FeatureConfiguration configureFeatures(RuleContext ruleContext) {
-    return configureFeatures(ruleContext, CppHelper.getToolchain(ruleContext));
+    return configureFeatures(ruleContext, ImmutableSet.<String>of(), ImmutableSet.<String>of());
   }
 }
