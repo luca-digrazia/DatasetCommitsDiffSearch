@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2019 http://www.hswebframework.org
+ *  * Copyright 2016 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -19,9 +19,7 @@
 package org.hswebframework.web.service;
 
 import org.hswebframework.web.commons.entity.GenericEntity;
-import org.hswebframework.web.commons.entity.LogicalDeleteEntity;
 import org.hswebframework.web.commons.entity.RecordCreationEntity;
-import org.hswebframework.web.commons.entity.RecordModifierEntity;
 import org.hswebframework.web.dao.CrudDao;
 import org.hswebframework.web.id.IDGenerator;
 import org.hswebframework.web.validator.DuplicateKeyException;
@@ -70,36 +68,23 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
 
     @Override
     public E deleteByPk(PK pk) {
+        Assert.notNull(pk, "parameter can not be null");
         E old = selectByPk(pk);
-        if (old == null) {
-            return null;
-        }
-        if (old instanceof LogicalDeleteEntity) {
-            LogicalDeleteEntity deleteEntity = (LogicalDeleteEntity) old;
-            deleteEntity.setDeleted(true);
-            deleteEntity.setDeleteTime(System.currentTimeMillis());
-            createUpdate()
-                    .set(deleteEntity::getDeleted)
-                    .set(deleteEntity::getDeleteTime)
-                    .where(GenericEntity.id, pk)
-                    .exec();
-        } else {
-            getDao().deleteByPk(pk);
-        }
+        getDao().deleteByPk(pk);
         return old;
     }
 
     @Override
     public int updateByPk(PK pk, E entity) {
         Assert.notNull(pk, "primary key can not be null");
-        Assert.hasText(String.valueOf(pk), "primary key can not be null");
         Assert.notNull(entity, "entity can not be null");
         entity.setId(pk);
         tryValidate(entity, UpdateGroup.class);
+
         return createUpdate(entity)
                 //如果是RecordCreationEntity则不修改creator_id和creator_time
                 .when(entity instanceof RecordCreationEntity,
-                        update -> update.and().excludes(((RecordCreationEntity) entity).getCreatorIdProperty(), RecordCreationEntity.createTime))
+                        update -> update.and().excludes(RecordCreationEntity.creatorId, RecordCreationEntity.createTime))
                 .where(GenericEntity.id, pk)
                 .exec();
     }
