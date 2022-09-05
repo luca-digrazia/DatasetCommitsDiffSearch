@@ -69,7 +69,7 @@ public abstract class GenericController<PO, PK> {
             data = getService().select(param);
         else
             data = getService().selectPager(param);
-        return ResponseMessage.ok(data)
+        return new ResponseMessage(true, data)
                 .include(getPOType(), param.getIncludes())
                 .exclude(getPOType(), param.getExcludes())
                 .onlyData();
@@ -88,7 +88,7 @@ public abstract class GenericController<PO, PK> {
         PO po = getService().selectByPk(id);
         if (po == null)
             throw new BusinessException("data is not found!", 404);
-        return ResponseMessage.ok(po);
+        return new ResponseMessage(true, po);
     }
 
 
@@ -103,7 +103,7 @@ public abstract class GenericController<PO, PK> {
     @Authorize(action = "R")
     public ResponseMessage total(QueryParam param) throws Exception {
         // 获取条件查询
-        return ResponseMessage.ok(getService().total(param));
+        return new ResponseMessage(true, getService().total(param));
     }
 
     /**
@@ -118,7 +118,7 @@ public abstract class GenericController<PO, PK> {
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseMessage add(@RequestBody PO object) throws Exception {
         PK pk = getService().insert(object);
-        return ResponseMessage.created(pk);
+        return new ResponseMessage(true, pk);
     }
 
     /**
@@ -134,7 +134,7 @@ public abstract class GenericController<PO, PK> {
         PO old = getService().selectByPk(id);
         if (old == null) throw new BusinessException("data is not found!", 404);
         int number = getService().delete(id);
-        return ResponseMessage.ok(number);
+        return new ResponseMessage(true, number);
     }
 
     /**
@@ -153,7 +153,7 @@ public abstract class GenericController<PO, PK> {
             ((GenericPo) object).setU_id(id);
         }
         int number = getService().update(object);
-        return ResponseMessage.ok(number);
+        return new ResponseMessage(true, number);
     }
 
     /**
@@ -178,6 +178,6 @@ public abstract class GenericController<PO, PK> {
         } else {
             throw new BusinessException("请求数据格式错误!");
         }
-        return ResponseMessage.ok(number);
+        return new ResponseMessage(true, number);
     }
 }
