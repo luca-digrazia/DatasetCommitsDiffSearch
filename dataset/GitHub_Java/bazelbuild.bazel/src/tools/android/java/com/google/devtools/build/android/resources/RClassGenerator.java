@@ -14,6 +14,7 @@
 package com.google.devtools.build.android.resources;
 
 import com.android.SdkConstants;
+import com.android.builder.internal.SymbolLoader;
 import com.android.builder.internal.SymbolLoader.SymbolEntry;
 import com.android.resources.ResourceType;
 import com.google.common.base.Preconditions;
@@ -21,6 +22,7 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Table;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -67,12 +69,12 @@ public class RClassGenerator {
   public static RClassGenerator fromSymbols(
       Path outFolder,
       String packageName,
-      ResourceSymbols values,
-      Collection<ResourceSymbols> packageSymbols,
+      SymbolLoader values,
+      Collection<SymbolLoader> packageSymbols,
       boolean finalFields)
       throws IOException {
     Table<String, String, SymbolEntry> symbolsTable = getAllSymbols(packageSymbols);
-    Table<String, String, SymbolEntry> valuesTable = values.asTable();
+    Table<String, String, SymbolEntry> valuesTable = getSymbols(values);
     Map<ResourceType, List<FieldInitializer>> initializers =
         getInitializers(symbolsTable, valuesTable);
     return new RClassGenerator(outFolder, packageName, initializers, finalFields);
@@ -98,15 +100,30 @@ public class RClassGenerator {
   }
 
   private static Table<String, String, SymbolEntry> getAllSymbols(
-      Collection<ResourceSymbols> symbols) throws IOException {
-    Table<String, String, SymbolEntry> mergedSymbols = HashBasedTable.create();
-    for (ResourceSymbols tableProvider : symbols) {
-      mergedSymbols.putAll(tableProvider.asTable());
+      Collection<SymbolLoader> symbolLoaders) throws IOException {
+    Table<String, String, SymbolEntry> symbols = HashBasedTable.create();
+    for (SymbolLoader symbolLoader : symbolLoaders) {
+      symbols.putAll(getSymbols(symbolLoader));
     }
-    return mergedSymbols;
+    return symbols;
   }
 
-  /** Convert the {@link SymbolTableProvider} data, to a map of {@link FieldInitializer}. */
+  private static Table<String, String, SymbolEntry> getSymbols(SymbolLoader symbolLoader)
+      throws IOException {
+    // TODO(bazel-team): remove when we update android_ide_common to a version w/ public visibility
+    try {
+      Method getSymbols = SymbolLoader.class.getDeclaredMethod("getSymbols");
+      getSymbols.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      Table<String, String, SymbolEntry> result =
+          (Table<String, String, SymbolEntry>) getSymbols.invoke(symbolLoader);
+      return result;
+    } catch (ReflectiveOperationException e) {
+      throw new IOException(e);
+    }
+  }
+
+  /** Convert the {@link SymbolLoader} data, to a map of {@link FieldInitializer}. */
   private static Map<ResourceType, List<FieldInitializer>> getInitializers(
       Table<String, String, SymbolEntry> symbols, Table<String, String, SymbolEntry> values) {
     Map<ResourceType, List<FieldInitializer>> initializers = new EnumMap<>(ResourceType.class);
