@@ -16,7 +16,6 @@ package com.google.devtools.build.android.xml;
 import com.google.common.base.Function;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.FluentIterable;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.android.AndroidDataWritingVisitor;
 import com.google.devtools.build.android.FullyQualifiedName;
@@ -69,10 +68,9 @@ public class PluralXmlResourceValue implements XmlResourceValue {
       FullyQualifiedName key, Path source, AndroidDataWritingVisitor mergedDataWriter) {
     mergedDataWriter.writeToValuesXml(
         key,
-        FluentIterable.from(
-                ImmutableList.of(
-                    String.format("<!-- %s -->", source),
-                    String.format("<plurals name='%s'>", key.name())))
+        FluentIterable.of(
+                String.format("<!-- %s -->", source),
+                String.format("<plurals name='%s'>", key.name()))
             .append(FluentIterable.from(values.entrySet()).transform(ENTRY_TO_PLURAL))
             .append("</plurals>"));
   }

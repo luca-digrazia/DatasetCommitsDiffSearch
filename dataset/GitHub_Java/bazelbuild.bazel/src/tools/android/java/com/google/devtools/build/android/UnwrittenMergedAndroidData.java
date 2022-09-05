@@ -16,8 +16,6 @@ package com.google.devtools.build.android;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 
-import com.android.ide.common.res2.MergingException;
-
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map.Entry;
@@ -30,7 +28,7 @@ public class UnwrittenMergedAndroidData {
 
   private final Path manifest;
   private final ParsedAndroidData primary;
-  private final ParsedAndroidData transitive;
+  private final ParsedAndroidData deps;
 
   public static UnwrittenMergedAndroidData of(
       Path manifest, ParsedAndroidData resources, ParsedAndroidData deps) {
@@ -38,29 +36,26 @@ public class UnwrittenMergedAndroidData {
   }
 
   private UnwrittenMergedAndroidData(
-      Path manifest, ParsedAndroidData primary, ParsedAndroidData transitive) {
+      Path manifest, ParsedAndroidData primary, ParsedAndroidData deps) {
     this.manifest = manifest;
     this.primary = primary;
-    this.transitive = transitive;
+    this.deps = deps;
   }
 
   /**
    * Writes the android data to the filesystem.
-   *
    * @param mergedDataWriter Destination writer.
    * @return A MergedAndroidData that is ready for further tool processing.
    * @throws IOException when something goes wrong while writing.
-   * @throws MergingException when something goes wrong with the merge.
    */
-  public MergedAndroidData write(AndroidDataWriter mergedDataWriter)
-      throws IOException, MergingException {
+  public MergedAndroidData write(AndroidDataWriter mergedDataWriter) throws IOException {
     try {
       writeParsedAndroidData(primary, mergedDataWriter);
-      writeParsedAndroidData(transitive, mergedDataWriter);
+      writeParsedAndroidData(deps, mergedDataWriter);
       return new MergedAndroidData(
           mergedDataWriter.resourceDirectory(),
           mergedDataWriter.assetDirectory(),
-          this.manifest != null ? mergedDataWriter.copyManifest(this.manifest) : null);
+          mergedDataWriter.copyManifest(this.manifest));
     } finally {
       // Flush to make sure all writing is completed before returning a MergedAndroidData.
       // If resources aren't fully written, the MergedAndroidData might be invalid.
@@ -69,8 +64,7 @@ public class UnwrittenMergedAndroidData {
   }
 
   private void writeParsedAndroidData(
-      ParsedAndroidData resources, AndroidDataWritingVisitor mergedDataWriter)
-      throws IOException, MergingException {
+      ParsedAndroidData resources, AndroidDataWritingVisitor mergedDataWriter) throws IOException {
     for (Entry<DataKey, DataAsset> entry : resources.iterateAssetEntries()) {
       // TODO(corysmith): Resolve the nit of casting to a RelativeAssetPath by sorting
       // out the type structure and generics of DataKey, ParsedAndroidData, AndroidDataMerger and
@@ -85,31 +79,12 @@ public class UnwrittenMergedAndroidData {
     }
   }
 
-  public void writeResourceClass(AndroidResourceClassWriter resourceClassWriter)
-      throws IOException {
-    writeResourceClassItems(primary, resourceClassWriter);
-    writeResourceClassItems(transitive, resourceClassWriter);
-    resourceClassWriter.flush();
-  }
-
-  private void writeResourceClassItems(
-      ParsedAndroidData resources, AndroidResourceClassWriter resourceClassWriter)
-      throws IOException {
-    for (Entry<DataKey, DataResource> entry : resources.iterateDataResourceEntries()) {
-      // TODO(corysmith): Resolve the nit of casting to a FullyQualifiedName by sorting
-      // out the type structure and generics of DataKey, ParsedAndroidData, AndroidDataMerger and
-      // MergeConflict.
-      entry.getValue()
-          .writeResourceToClass((FullyQualifiedName) entry.getKey(), resourceClassWriter);
-    }
-  }
-
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
         .add("manifest", manifest)
         .add("primary", primary)
-        .add("transitive", transitive)
+        .add("deps", deps)
         .toString();
   }
 
@@ -124,12 +99,12 @@ public class UnwrittenMergedAndroidData {
     UnwrittenMergedAndroidData that = (UnwrittenMergedAndroidData) other;
     return Objects.equals(manifest, that.manifest)
         && Objects.equals(primary, that.primary)
-        && Objects.equals(transitive, that.transitive);
+        && Objects.equals(deps, that.deps);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(manifest, primary, transitive);
+    return Objects.hash(manifest, primary, deps);
   }
 
   @VisibleForTesting
@@ -143,16 +118,7 @@ public class UnwrittenMergedAndroidData {
   }
 
   @VisibleForTesting
-  ParsedAndroidData getTransitive() {
-    return transitive;
-  }
-
-  public void serializeTo(AndroidDataSerializer serializer) {
-    for (Entry<DataKey, DataAsset> entry : primary.iterateAssetEntries()) {
-      serializer.queueForSerialization(entry.getKey(), entry.getValue());
-    }
-    for (Entry<DataKey, DataResource> entry : primary.iterateDataResourceEntries()) {
-      serializer.queueForSerialization(entry.getKey(), entry.getValue());
-    }
+  ParsedAndroidData getDeps() {
+    return deps;
   }
 }

@@ -15,6 +15,7 @@ package com.google.devtools.build.android;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -29,9 +30,9 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -51,72 +52,6 @@ import javax.xml.stream.XMLStreamException;
  */
 @Immutable
 public class ParsedAndroidData {
-
-  static class Builder {
-    private final Map<DataKey, DataResource> overwritingResources;
-    private final Map<DataKey, DataResource> nonOverwritingResources;
-    private final Map<DataKey, DataAsset> assets;
-    private final Set<MergeConflict> conflicts;
-    private final List<Exception> errors = new ArrayList<>();
-
-    public Builder(
-        Map<DataKey, DataResource> overwritingResources,
-        Map<DataKey, DataResource> nonOverwritingResources,
-        Map<DataKey, DataAsset> assets,
-        Set<MergeConflict> conflicts) {
-      this.overwritingResources = overwritingResources;
-      this.nonOverwritingResources = nonOverwritingResources;
-      this.assets = assets;
-      this.conflicts = conflicts;
-    }
-
-    static Builder newBuilder() {
-      final Map<DataKey, DataResource> overwritingResources = new LinkedHashMap<>();
-      final Map<DataKey, DataResource> nonOverwritingResources = new LinkedHashMap<>();
-      final Map<DataKey, DataAsset> assets = new LinkedHashMap<>();
-      final Set<MergeConflict> conflicts = new LinkedHashSet<>();
-      return new Builder(overwritingResources, nonOverwritingResources, assets, conflicts);
-    }
-
-    private void checkForErrors() throws MergingException {
-      if (!errors.isEmpty()) {
-        StringBuilder messageBuilder = new StringBuilder();
-        for (Exception e : errors) {
-          messageBuilder.append("\n").append(e.getMessage());
-        }
-        throw new MergingException(messageBuilder.toString());
-      }
-    }
-
-    ParsedAndroidData build() throws MergingException {
-      checkForErrors();
-      return ParsedAndroidData.of(
-          ImmutableSet.copyOf(conflicts),
-          ImmutableMap.copyOf(overwritingResources),
-          ImmutableMap.copyOf(nonOverwritingResources),
-          ImmutableMap.copyOf(assets));
-    }
-
-    ResourceFileVisitor resourceVisitor() {
-      return new ResourceFileVisitor(
-          new OverwritableConsumer<>(overwritingResources, conflicts),
-          new NonOverwritableConsumer(nonOverwritingResources),
-          errors);
-    }
-
-    AssetFileVisitor assetVisitorFor(Path path) {
-      return new AssetFileVisitor(
-          RelativeAssetPath.Factory.of(path), new OverwritableConsumer<>(assets, conflicts));
-    }
-
-    public KeyValueConsumers consumers() {
-      return KeyValueConsumers.of(
-          new OverwritableConsumer<>(overwritingResources, conflicts),
-          new NonOverwritableConsumer(nonOverwritingResources),
-          new OverwritableConsumer<>(assets, conflicts));
-    }
-  }
-
   /** A Consumer style interface that will appendTo a DataKey and DataValue. */
   interface KeyValueConsumer<K extends DataKey, V extends DataValue> {
     void consume(K key, V value);
@@ -127,7 +62,7 @@ public class ParsedAndroidData {
 
     private Map<DataKey, DataResource> target;
 
-    NonOverwritableConsumer(Map<DataKey, DataResource> target) {
+    public NonOverwritableConsumer(Map<DataKey, DataResource> target) {
       this.target = target;
     }
 
@@ -163,31 +98,67 @@ public class ParsedAndroidData {
   /**
    * An AndroidDataPathWalker that collects DataAsset and DataResources for an ParsedAndroidData.
    */
-  static final class ParsedAndroidDataBuildingPathWalker implements AndroidDataPathWalker {
+  private static final class ParsedAndroidDataBuildingPathWalker implements AndroidDataPathWalker {
+    private final Set<MergeConflict> conflicts;
+    private final Map<DataKey, DataAsset> assets;
+    private final ResourceFileVisitor resourceVisitor;
     private static final ImmutableSet<FileVisitOption> FOLLOW_LINKS =
         ImmutableSet.of(FileVisitOption.FOLLOW_LINKS);
-    private final Builder builder;
+    private Map<DataKey, DataResource> overwritingResources;
+    private Map<DataKey, DataResource> nonOverwritingResources;
 
-    private ParsedAndroidDataBuildingPathWalker(Builder builder) {
-      this.builder = builder;
+    private static ParsedAndroidDataBuildingPathWalker create() {
+      final Map<DataKey, DataResource> overwritingResources = new HashMap<>();
+      final Map<DataKey, DataResource> nonOverwritingResources = new HashMap<>();
+      final Map<DataKey, DataAsset> assets = new HashMap<>();
+      final Set<MergeConflict> conflicts = new HashSet<>();
+
+      final ResourceFileVisitor resourceVisitor =
+          new ResourceFileVisitor(
+              new OverwritableConsumer<>(overwritingResources, conflicts),
+              new NonOverwritableConsumer(nonOverwritingResources));
+      return new ParsedAndroidDataBuildingPathWalker(
+          conflicts, assets, overwritingResources, nonOverwritingResources, resourceVisitor);
     }
 
-    static ParsedAndroidDataBuildingPathWalker create(Builder builder) {
-      return new ParsedAndroidDataBuildingPathWalker(builder);
+    private ParsedAndroidDataBuildingPathWalker(
+        Set<MergeConflict> conflicts,
+        Map<DataKey, DataAsset> assets,
+        Map<DataKey, DataResource> overwritingResources,
+        Map<DataKey, DataResource> nonOverwritingResources,
+        ResourceFileVisitor resourceVisitor) {
+      this.conflicts = conflicts;
+      this.assets = assets;
+      this.overwritingResources = overwritingResources;
+      this.nonOverwritingResources = nonOverwritingResources;
+      this.resourceVisitor = resourceVisitor;
     }
 
     @Override
     public void walkResources(Path path) throws IOException {
-      Files.walkFileTree(path, FOLLOW_LINKS, Integer.MAX_VALUE, builder.resourceVisitor());
+      Files.walkFileTree(path, FOLLOW_LINKS, Integer.MAX_VALUE, resourceVisitor);
     }
 
     @Override
     public void walkAssets(Path path) throws IOException {
-      Files.walkFileTree(path, FOLLOW_LINKS, Integer.MAX_VALUE, builder.assetVisitorFor(path));
+      Files.walkFileTree(
+          path,
+          FOLLOW_LINKS,
+          Integer.MAX_VALUE,
+          new AssetFileVisitor(
+              RelativeAssetPath.Factory.of(path), new OverwritableConsumer<>(assets, conflicts)));
     }
 
-    ParsedAndroidData createParsedAndroidData() throws MergingException {
-      return builder.build();
+    /**
+     * Creates an {@link ParsedAndroidData} from {@link DataAsset} and {@link DataResource}.
+     */
+    public ParsedAndroidData createParsedAndroidData() throws MergingException {
+      resourceVisitor.checkForErrors();
+      return ParsedAndroidData.of(
+          ImmutableSet.copyOf(conflicts),
+          ImmutableMap.copyOf(overwritingResources),
+          ImmutableMap.copyOf(nonOverwritingResources),
+          ImmutableMap.copyOf(assets));
     }
   }
 
@@ -198,7 +169,7 @@ public class ParsedAndroidData {
     private final RelativeAssetPath.Factory dataKeyFactory;
     private KeyValueConsumer<DataKey, DataAsset> assetConsumer;
 
-    AssetFileVisitor(
+    public AssetFileVisitor(
         RelativeAssetPath.Factory dataKeyFactory,
         KeyValueConsumer<DataKey, DataAsset> assetConsumer) {
       this.dataKeyFactory = dataKeyFactory;
@@ -220,20 +191,18 @@ public class ParsedAndroidData {
    * A FileVisitor that walks a resource tree and extract FullyQualifiedName and resource values.
    */
   private static class ResourceFileVisitor extends SimpleFileVisitor<Path> {
-    private final KeyValueConsumer<DataKey, DataResource> overwritingConsumer;
-    private final KeyValueConsumer<DataKey, DataResource> nonOverwritingConsumer;
-    private final List<Exception> errors;
+    private final List<Exception> errors = new ArrayList<>();
+    private final OverwritableConsumer<DataKey, DataResource> overwritingConsumer;
+    private final NonOverwritableConsumer nonOverwritingConsumer;
     private boolean inValuesSubtree;
     private FullyQualifiedName.Factory fqnFactory;
     private final XMLInputFactory xmlInputFactory = XMLInputFactory.newFactory();
 
-    ResourceFileVisitor(
-        KeyValueConsumer<DataKey, DataResource> overwritingConsumer,
-        KeyValueConsumer<DataKey, DataResource> nonOverwritingConsumer,
-        List<Exception> errors) {
+    public ResourceFileVisitor(
+        OverwritableConsumer<DataKey, DataResource> overwritingConsumer,
+        NonOverwritableConsumer nonOverwritingConsumer) {
       this.overwritingConsumer = overwritingConsumer;
       this.nonOverwritingConsumer = nonOverwritingConsumer;
-      this.errors = errors;
     }
 
     private static String deriveRawFullyQualifiedName(Path path) {
@@ -253,19 +222,37 @@ public class ParsedAndroidData {
       return pathWithExtension;
     }
 
+    private void checkForErrors() throws MergingException {
+      if (!getErrors().isEmpty()) {
+        StringBuilder errors = new StringBuilder();
+        for (Exception e : getErrors()) {
+          errors.append("\n").append(e.getMessage());
+        }
+        throw new MergingException(errors.toString());
+      }
+    }
+
     @Override
     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
         throws IOException {
       final String[] dirNameAndQualifiers = dir.getFileName().toString().split("-");
       inValuesSubtree = "values".equals(dirNameAndQualifiers[0]);
-      fqnFactory = FullyQualifiedName.Factory.fromDirectoryName(dirNameAndQualifiers);
+      fqnFactory = FullyQualifiedName.Factory.from(getQualifiers(dirNameAndQualifiers));
       return FileVisitResult.CONTINUE;
+    }
+
+    private List<String> getQualifiers(String[] dirNameAndQualifiers) {
+      if (dirNameAndQualifiers.length == 1) {
+        return ImmutableList.of();
+      }
+      return Arrays.asList(
+          Arrays.copyOfRange(dirNameAndQualifiers, 1, dirNameAndQualifiers.length));
     }
 
     @Override
     public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
       try {
-        if (!Files.isDirectory(path) && !path.getFileName().toString().startsWith(".")) {
+        if (!Files.isDirectory(path)) {
           if (inValuesSubtree) {
             DataResourceXml.parse(
                 xmlInputFactory, path, fqnFactory, overwritingConsumer, nonOverwritingConsumer);
@@ -279,6 +266,10 @@ public class ParsedAndroidData {
         errors.add(e);
       }
       return super.visitFile(path, attrs);
+    }
+
+    public List<Exception> getErrors() {
+      return errors;
     }
   }
 
@@ -304,7 +295,7 @@ public class ParsedAndroidData {
   public static ParsedAndroidData from(UnvalidatedAndroidData primary)
       throws IOException, MergingException {
     final ParsedAndroidDataBuildingPathWalker pathWalker =
-        ParsedAndroidDataBuildingPathWalker.create(Builder.newBuilder());
+        ParsedAndroidDataBuildingPathWalker.create();
     primary.walk(pathWalker);
     return pathWalker.createParsedAndroidData();
   }
@@ -323,7 +314,7 @@ public class ParsedAndroidData {
   public static ParsedAndroidData from(List<DependencyAndroidData> dependencyAndroidDataList)
       throws IOException, MergingException {
     final ParsedAndroidDataBuildingPathWalker pathWalker =
-        ParsedAndroidDataBuildingPathWalker.create(Builder.newBuilder());
+        ParsedAndroidDataBuildingPathWalker.create();
     for (DependencyAndroidData data : dependencyAndroidDataList) {
       data.walk(pathWalker);
     }
@@ -378,30 +369,28 @@ public class ParsedAndroidData {
   /**
    * Returns a list of resources that would overwrite other values when defined.
    *
-   * <p>
-   * Example:
+   * <p>Example:
    *
    * A string resource (string.Foo=bar) could be redefined at string.Foo=baz.
    *
    * @return A map of key -&gt; overwriting resources.
    */
   @VisibleForTesting
-  Map<DataKey, DataResource> getOverwritingResources() {
+  public Map<DataKey, DataResource> getOverwritingResources() {
     return overwritingResources;
   }
 
   /**
    * Returns a list of resources that would not overwrite other values when defined.
    *
-   * <p>
-   * Example:
+   * <p>Example:
    *
    * A id resource (id.Foo) could be redefined at id.Foo with no adverse effects.
    *
    * @return A map of key -&gt; non-overwriting resources.
    */
   @VisibleForTesting
-  Map<DataKey, DataResource> getNonOverwritingResources() {
+  public Map<DataKey, DataResource> getNonOverwritingResources() {
     return nonOverwritingResources;
   }
 
@@ -409,8 +398,7 @@ public class ParsedAndroidData {
    * Returns a list of assets.
    *
    * Assets always overwrite during merging, just like overwriting resources.
-   * <p>
-   * Example:
+   * <p>Example:
    *
    * A text asset (foo/bar.txt, containing fooza) could be replaced with (foo/bar.txt, containing
    * ouza!) depending on the merging process.
@@ -429,7 +417,7 @@ public class ParsedAndroidData {
     return overwritingResources.entrySet();
   }
 
-  Iterable<Entry<DataKey, DataResource>> iterateDataResourceEntries() {
+  public Iterable<Entry<DataKey, DataResource>> iterateDataResourceEntries() {
     return Iterables.concat(overwritingResources.entrySet(), nonOverwritingResources.entrySet());
   }
 

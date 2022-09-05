@@ -27,7 +27,6 @@ public interface AndroidDataWritingVisitor {
 
   /**
    * Copies the source asset to the relative destination path.
-   *
    * @param source The source file to copy.
    * @param relativeDestinationPath The relative destination path to write the asset to.
    * @throws IOException if there are errors during copying.
@@ -36,13 +35,11 @@ public interface AndroidDataWritingVisitor {
 
   /**
    * Copies the source resource to the relative destination path.
-   *
    * @param source The source file to copy.
    * @param relativeDestinationPath The relative destination path to write the resource to.
    * @throws IOException if there are errors during copying.
    */
-  void copyResource(Path source, String relativeDestinationPath)
-      throws IOException;
+  void copyResource(Path source, String relativeDestinationPath) throws IOException;
 
   /**
    * Adds a xml string fragment to the values file.
@@ -50,6 +47,5 @@ public interface AndroidDataWritingVisitor {
    * @param key Used to ensure a constant order of the written xml.
    * @param xmlFragment the xml fragment as an Iterable<String> which allows lazy generation.
    */
-  // TODO(corysmith): Change this to pass in a xml writer. Safer all around.
   void writeToValuesXml(FullyQualifiedName key, Iterable<String> xmlFragment);
 }

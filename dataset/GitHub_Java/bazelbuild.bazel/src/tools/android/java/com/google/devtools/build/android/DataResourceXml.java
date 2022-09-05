@@ -17,25 +17,14 @@ import static com.android.resources.ResourceType.DECLARE_STYLEABLE;
 import static com.android.resources.ResourceType.ID;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.android.FullyQualifiedName.Factory;
 import com.google.devtools.build.android.ParsedAndroidData.KeyValueConsumer;
-import com.google.devtools.build.android.proto.SerializeFormat;
 import com.google.devtools.build.android.xml.ArrayXmlResourceValue;
-import com.google.devtools.build.android.xml.AttrXmlResourceValue;
-import com.google.devtools.build.android.xml.IdXmlResourceValue;
-import com.google.devtools.build.android.xml.PluralXmlResourceValue;
-import com.google.devtools.build.android.xml.SimpleXmlResourceValue;
-import com.google.devtools.build.android.xml.StyleXmlResourceValue;
-import com.google.devtools.build.android.xml.StyleableXmlResourceValue;
-import com.google.protobuf.InvalidProtocolBufferException;
 
 import com.android.resources.ResourceType;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
@@ -49,9 +38,8 @@ import javax.xml.stream.events.StartElement;
 /**
  * Represents an Android Resource defined in the xml and value folder.
  *
- * <p>
- * Basically, if the resource is defined inside a &lt;resources&gt; tag, this class will handle it.
- * Layouts are treated separately as they don't declare anything besides ids.
+ * <p>Basically, if the resource is defined inside a &lt;resources&gt; tag, this class will
+ * handle it. Layouts are treated separately as they don't declare anything besides ids.
  */
 public class DataResourceXml implements DataResource {
 
@@ -65,7 +53,7 @@ public class DataResourceXml implements DataResource {
    * @param path The path to the xml resource to be parsed.
    * @param fqnFactory Used to create {@link FullyQualifiedName}s from the resource names.
    * @param overwritingConsumer A consumer for overwritable {@link DataResourceXml}s.
-   * @param nonOverwritingConsumer A consumer for nonoverwritable {@link DataResourceXml}s.
+   * @param nonOverwritingConsumer  A consumer for nonoverwritable {@link DataResourceXml}s.
    * @throws XMLStreamException Thrown with the resource format is invalid.
    * @throws FactoryConfigurationError Thrown with the {@link XMLInputFactory} is misconfigured.
    * @throws IOException Thrown when there is an error reading a file.
@@ -79,84 +67,33 @@ public class DataResourceXml implements DataResource {
       throws XMLStreamException, FactoryConfigurationError, IOException {
     XMLEventReader eventReader =
         xmlInputFactory.createXMLEventReader(Files.newBufferedReader(path, StandardCharsets.UTF_8));
-    try {
-      // TODO(corysmith): Make the xml parsing more readable.
-      while (XmlResourceValues.moveToResources(eventReader)) {
-        for (StartElement start = XmlResourceValues.findNextStart(eventReader);
-            start != null;
-            start = XmlResourceValues.findNextStart(eventReader)) {
-          if (XmlResourceValues.isEatComment(start) || XmlResourceValues.isSkip(start)) {
-            continue;
-          }
-          ResourceType resourceType = getResourceType(start);
-          if (resourceType == null) {
-            throw new XMLStreamException(
-                path + " contains an unrecognized resource type:" + start, start.getLocation());
-          }
-          if (resourceType == DECLARE_STYLEABLE) {
-            // Styleables are special, as they produce multiple overwrite and non-overwrite values,
-            // so we let the value handle the assignments.
-            XmlResourceValues.parseDeclareStyleable(
-                fqnFactory, path, overwritingConsumer, nonOverwritingConsumer, eventReader, start);
-          } else {
-            // Of simple resources, only IDs are nonOverwriting.
-            KeyValueConsumer<DataKey, DataResource> consumer =
-                resourceType == ID ? nonOverwritingConsumer : overwritingConsumer;
-            FullyQualifiedName key =
-                fqnFactory.create(resourceType, XmlResourceValues.getElementName(start));
-            consumer.consume(
-                key, DataResourceXml.of(path, parseXmlElements(resourceType, eventReader, start)));
-          }
+    // TODO(corysmith): Make the xml parsing more readable.
+    while (XmlResourceValues.moveToResources(eventReader)) {
+      for (StartElement start = XmlResourceValues.findNextStart(eventReader);
+          start != null;
+          start = XmlResourceValues.findNextStart(eventReader)) {
+        ResourceType resourceType = getResourceType(start);
+        if (resourceType == DECLARE_STYLEABLE) {
+          // Styleables are special, as they produce multiple overwrite and non-overwrite values,
+          // so we let the value handle the assignments.
+          XmlResourceValues.parseDeclareStyleable(
+              fqnFactory, path, overwritingConsumer, nonOverwritingConsumer, eventReader, start);
+        } else {
+          // Of simple resources, only IDs are nonOverwriting.
+          KeyValueConsumer<DataKey, DataResource> consumer =
+              resourceType == ID ? nonOverwritingConsumer : overwritingConsumer;
+          FullyQualifiedName key =
+              fqnFactory.create(resourceType, XmlResourceValues.getElementName(start));
+          consumer.consume(
+              key, DataResourceXml.of(path, parseXmlElements(resourceType, eventReader, start)));
         }
       }
-    } catch (XMLStreamException e) {
-      throw new XMLStreamException(path + ":" + e.getMessage(), e.getLocation(), e);
-    } catch (RuntimeException e) {
-      throw new RuntimeException("Error parsing " + path, e);
-    }
-  }
-
-  public static DataValue from(SerializeFormat.DataValue protoValue, FileSystem currentFileSystem)
-      throws InvalidProtocolBufferException {
-    return of(
-        currentFileSystem.getPath(protoValue.getSource().getFilename()),
-        valueFromProto(protoValue.getXmlValue()));
-  }
-
-  private static XmlResourceValue valueFromProto(SerializeFormat.DataValueXml proto)
-      throws InvalidProtocolBufferException {
-    Preconditions.checkArgument(proto.hasType());
-    switch (proto.getType()) {
-      case ARRAY:
-        return ArrayXmlResourceValue.from(proto);
-      case SIMPLE:
-        return SimpleXmlResourceValue.from(proto);
-      case ATTR:
-        return AttrXmlResourceValue.from(proto);
-      case ID:
-        return IdXmlResourceValue.of();
-      case PLURAL:
-        return PluralXmlResourceValue.from(proto);
-      case STYLE:
-        return StyleXmlResourceValue.from(proto);
-      case STYLEABLE:
-        return StyleableXmlResourceValue.from(proto);
-      default:
-        throw new IllegalArgumentException();
     }
   }
 
   private static XmlResourceValue parseXmlElements(
       ResourceType resourceType, XMLEventReader eventReader, StartElement start)
       throws XMLStreamException {
-    // Handle ids first, as they are a special kind of item.
-    if (resourceType == ID) {
-      return XmlResourceValues.parseId();
-    }
-    // Handle item stubs.
-    if (XmlResourceValues.isItem(start)) {
-      return XmlResourceValues.parseSimple(eventReader, resourceType, start); 
-    }
     switch (resourceType) {
       case STYLE:
         return XmlResourceValues.parseStyle(eventReader, start);
@@ -166,26 +103,13 @@ public class DataResourceXml implements DataResource {
         return XmlResourceValues.parsePlurals(eventReader);
       case ATTR:
         return XmlResourceValues.parseAttr(eventReader, start);
-      case LAYOUT:
-      case DIMEN:
+      case ID:
+        return XmlResourceValues.parseId();
       case STRING:
       case BOOL:
       case COLOR:
-      case FRACTION:
-      case INTEGER:
-      case DRAWABLE:
-      case ANIM:
-      case ANIMATOR:
-      case DECLARE_STYLEABLE:
-      case INTERPOLATOR:
-      case MENU:
-      case MIPMAP:
-      case PUBLIC:
-      case RAW:
-      case STYLEABLE:
-      case TRANSITION:
-      case XML:
-        return XmlResourceValues.parseSimple(eventReader, resourceType, start);
+      case DIMEN:
+        return XmlResourceValues.parseSimple(eventReader, resourceType);
       default:
         throw new XMLStreamException(
             String.format("Unhandled resourceType %s", resourceType), start.getLocation());
@@ -238,10 +162,5 @@ public class DataResourceXml implements DataResource {
   @Override
   public void writeResource(FullyQualifiedName key, AndroidDataWritingVisitor mergedDataWriter) {
     xml.write(key, source, mergedDataWriter);
-  }
-
-  @Override
-  public int serializeTo(DataKey key, OutputStream outStream) throws IOException {
-    return xml.serializeTo(source, outStream);
   }
 }

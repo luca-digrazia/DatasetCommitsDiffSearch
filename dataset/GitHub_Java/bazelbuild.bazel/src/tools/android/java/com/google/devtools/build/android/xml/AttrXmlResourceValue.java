@@ -231,11 +231,10 @@ public class AttrXmlResourceValue implements XmlResourceValue {
       FullyQualifiedName key, Path source, AndroidDataWritingVisitor mergedDataWriter) {
     ImmutableList<String> formatKeys = Ordering.natural().immutableSortedCopy(formats.keySet());
     FluentIterable<String> iterable =
-        FluentIterable.from(
-            ImmutableList.of(
-                String.format("<!-- %s -->", source),
-                String.format(
-                    "<attr name='%s' format='%s'>", key.name(), Joiner.on('|').join(formatKeys))));
+        FluentIterable.of(
+            String.format("<!-- %s -->", source),
+            String.format(
+                "<attr name='%s' format='%s'>", key.name(), Joiner.on('|').join(formatKeys)));
     for (String formatKey : formatKeys) {
       iterable = formats.get(formatKey).appendTo(iterable);
     }
@@ -247,7 +246,7 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     FluentIterable<String> appendTo(FluentIterable<String> iterable);
   }
 
-  // TODO(corysmith): The ResourceXmlAttrValue implementors, other than enum and flag, share a
+  // TODO(corysmith): The ResourceXmlAttrValue implementors, other than enum and flag, share a 
   // lot of boilerplate. Determine how to reduce it.
   /** Represents an Android Enum Attribute resource. */
   @VisibleForTesting

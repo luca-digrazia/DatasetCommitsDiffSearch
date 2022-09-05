@@ -15,11 +15,7 @@ package com.google.devtools.build.android;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
-import com.google.devtools.build.android.proto.SerializeFormat;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.file.FileSystem;
 import java.nio.file.Path;
 import java.util.Objects;
 
@@ -57,13 +53,6 @@ public class RelativeAssetPath implements DataKey, Comparable<RelativeAssetPath>
       }
       return RelativeAssetPath.of(assetRoot.relativize(assetPath));
     }
-  }
-
-  /**
-   * Reconstitutes the relative asset path from a protocol buffer and {@link FileSystem}.
-   */
-  static RelativeAssetPath fromProto(SerializeFormat.DataKey serialized, FileSystem fileSystem) {
-    return of(fileSystem.getPath(serialized.getKeyValue()));
   }
 
   private final Path relativeAssetPath;
@@ -105,19 +94,5 @@ public class RelativeAssetPath implements DataKey, Comparable<RelativeAssetPath>
   @Override
   public int compareTo(RelativeAssetPath relativeAssetPath) {
     return this.relativeAssetPath.compareTo(relativeAssetPath.relativeAssetPath);
-  }
-
-  @Override
-  public void serializeTo(OutputStream output, int valueSize) throws IOException {
-    SerializeFormat.DataKey.newBuilder()
-        .setKeyValue(relativeAssetPath.toString())
-        .setValueSize(valueSize)
-        .build()
-        .writeDelimitedTo(output);
-  }
-
-  @Override
-  public String toPrettyString() {
-    return "asset:" + relativeAssetPath;
   }
 }

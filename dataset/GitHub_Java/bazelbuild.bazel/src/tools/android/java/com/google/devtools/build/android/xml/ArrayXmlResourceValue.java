@@ -122,8 +122,7 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
       FullyQualifiedName key, Path source, AndroidDataWritingVisitor mergedDataWriter) {
     mergedDataWriter.writeToValuesXml(
         key,
-        FluentIterable.from(
-                ImmutableList.of(String.format("<!-- %s -->", source), arrayType.openTag(key)))
+        FluentIterable.of(String.format("<!-- %s -->", source), arrayType.openTag(key))
             .append(FluentIterable.from(values).transform(ITEM_TO_XML))
             .append(arrayType.closeTag()));
   }
