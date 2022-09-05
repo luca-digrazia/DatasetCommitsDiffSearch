@@ -55,7 +55,7 @@ public class QueryUtils {
                 .map(mapping)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
-        return PagerResult.of(total, list, entity);
+        return PagerResult.of(total, list);
     }
 
     public static <U, T extends Query<?, U>> void applyQueryParam(T query, QueryParamEntity entity, BiConsumer<Term, T> notFound) {
