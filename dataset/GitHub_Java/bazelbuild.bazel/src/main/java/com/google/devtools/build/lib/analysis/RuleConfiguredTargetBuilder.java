@@ -52,11 +52,11 @@ import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.TreeMap;
 
 /**
  * Builder class for analyzed rule instances (i.e., instances of {@link ConfiguredTarget}).
@@ -66,7 +66,8 @@ public final class RuleConfiguredTargetBuilder {
   private final Map<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> providers =
       new LinkedHashMap<>();
   private final ImmutableMap.Builder<String, Object> skylarkProviders = ImmutableMap.builder();
-  private final Map<String, NestedSetBuilder<Artifact>> outputGroupBuilders = new TreeMap<>();
+  private final ImmutableMap.Builder<String, NestedSet<Artifact>> outputGroups =
+      ImmutableMap.builder();
 
   /** These are supported by all configured targets and need to be specially handled. */
   private NestedSet<Artifact> filesToBuild = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
@@ -92,27 +93,15 @@ public final class RuleConfiguredTargetBuilder {
       return null;
     }
 
+    ImmutableMap<String, NestedSet<Artifact>> outputGroupMap = outputGroups.build();
+    if (!outputGroupMap.isEmpty()) {
+      add(TopLevelArtifactProvider.class, new TopLevelArtifactProvider(outputGroupMap));
+    }
+
     FilesToRunProvider filesToRunProvider = new FilesToRunProvider(ruleContext.getLabel(),
         RuleContext.getFilesToRun(runfilesSupport, filesToBuild), runfilesSupport, executable);
     add(FileProvider.class, new FileProvider(ruleContext.getLabel(), filesToBuild));
     add(FilesToRunProvider.class, filesToRunProvider);
-
-    if (runfilesSupport != null) {
-      // If a binary is built, build its runfiles, too
-      addOutputGroup(
-          TopLevelArtifactProvider.HIDDEN_TOP_LEVEL, runfilesSupport.getRunfilesMiddleman());
-    } else if (providers.get(RunfilesProvider.class) != null) {
-      // If we don't have a RunfilesSupport (probably because this is not a binary rule), we still
-      // want to build the files this rule contributes to runfiles of dependent rules so that we
-      // report an error if one of these is broken.
-      //
-      // Note that this is a best-effort thing: there is .getDataRunfiles() and all the language-
-      // specific *RunfilesProvider classes, which we don't add here for reasons that are lost in
-      // the mists of time.
-      addOutputGroup(TopLevelArtifactProvider.HIDDEN_TOP_LEVEL,
-          ((RunfilesProvider) providers.get(RunfilesProvider.class))
-              .getDefaultRunfiles().getAllArtifacts());
-    }
 
     // Create test action and artifacts if target was successfully initialized
     // and is a test.
@@ -121,16 +110,6 @@ public final class RuleConfiguredTargetBuilder {
       add(TestProvider.class, initializeTestProvider(filesToRunProvider));
     }
     add(ExtraActionArtifactsProvider.class, initializeExtraActions());
-    if (!outputGroupBuilders.isEmpty()) {
-      ImmutableMap.Builder<String, NestedSet<Artifact>> outputGroups = ImmutableMap.builder();
-      for (Map.Entry<String, NestedSetBuilder<Artifact>> entry : outputGroupBuilders.entrySet()) {
-        outputGroups.put(entry.getKey(), entry.getValue().build());
-      }
-
-      add(TopLevelArtifactProvider.class, new TopLevelArtifactProvider(outputGroups.build()));
-    }
-
-
     return new RuleConfiguredTarget(
         ruleContext, mandatoryStampFiles, skylarkProviders.build(), providers);
   }
@@ -266,7 +245,7 @@ public final class RuleConfiguredTargetBuilder {
   /**
    * Populates the configuration specific mnemonicToExtraActionMap
    * based on all action_listers selected by the user (via the blaze option
-   * {@code --experimental_action_listener=<target>}).
+   * --experimental_action_listener=<target>).
    */
   private Multimap<String, ExtraActionSpec> computeMnemonicsToExtraActionMap() {
     // We copy the multimap here every time. This could be expensive.
@@ -423,42 +402,29 @@ public final class RuleConfiguredTargetBuilder {
     return this;
   }
 
-  private NestedSetBuilder<Artifact> getOutputGroupBuilder(String name) {
-    NestedSetBuilder<Artifact> result = outputGroupBuilders.get(name);
-    if (result != null) {
-      return result;
-    }
-
-    result = NestedSetBuilder.<Artifact>stableOrder();
-    outputGroupBuilders.put(name, result);
-    return result;
-  }
-
   /**
-   * Adds a set of files to an output group.
+   * Add an output group.
    */
   public RuleConfiguredTargetBuilder addOutputGroup(String name, NestedSet<Artifact> artifacts) {
-    getOutputGroupBuilder(name).addTransitive(artifacts);
+    outputGroups.put(name, artifacts);
     return this;
   }
 
   /**
-   * Adds a file to an output group.
+   * Add an output group.
    */
   public RuleConfiguredTargetBuilder addOutputGroup(String name, Artifact artifact) {
-    getOutputGroupBuilder(name).add(artifact);
+    outputGroups.put(name, NestedSetBuilder.create(Order.STABLE_ORDER, artifact));
     return this;
   }
 
   /**
-   * Adds multiple output groups.
+   * Set the baseline coverage Artifacts.
    */
-  public RuleConfiguredTargetBuilder addOutputGroups(Map<String, NestedSet<Artifact>> groups) {
-    for (Map.Entry<String, NestedSet<Artifact>> group : groups.entrySet()) {
-      getOutputGroupBuilder(group.getKey()).addTransitive(group.getValue());
-    }
-
-    return this;
+  public RuleConfiguredTargetBuilder setBaselineCoverageArtifacts(
+      Collection<Artifact> artifacts) {
+    return add(BaselineCoverageArtifactsProvider.class,
+        new BaselineCoverageArtifactsProvider(ImmutableList.copyOf(artifacts)));
   }
 
   /**
