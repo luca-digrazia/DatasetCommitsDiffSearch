@@ -328,8 +328,7 @@ public final class CppModel {
       // A header module compile action is just like a normal compile action, but:
       // - the compiled source file is the module map
       // - it creates a header module (.pcm file).
-      createSourceAction(outputName, result, env, moduleMapArtifact, builder, ".pcm", ".pcm.d",
-          /*addObject=*/false);
+      createSourceAction(outputName, result, env, moduleMapArtifact, builder, ".pcm", ".pcm.d");
     }
 
     for (Pair<Artifact, Label> source : sourceFiles) {
@@ -341,8 +340,7 @@ public final class CppModel {
       if (CppFileTypes.CPP_HEADER.matches(source.first.getExecPath())) {
         createHeaderAction(outputName, result, env, builder);
       } else {
-        createSourceAction(outputName, result, env, sourceArtifact, builder, ".o", ".d",
-            /*addObject=*/true);
+        createSourceAction(outputName, result, env, sourceArtifact, builder, ".o", ".d");
       }
     }
 
@@ -370,8 +368,7 @@ public final class CppModel {
       Artifact sourceArtifact,
       CppCompileActionBuilder builder,
       String outputExtension,
-      String dependencyFileExtension,
-      boolean addObject) {
+      String dependencyFileExtension) {
     PathFragment ccRelativeName = semantics.getEffectiveSourcePath(sourceArtifact);
     LipoContextProvider lipoProvider = null;
     if (cppConfiguration.isLipoOptimization()) {
@@ -397,9 +394,7 @@ public final class CppModel {
       semantics.finalizeCompileActionBuilder(ruleContext, builder);
       CppCompileAction action = builder.build();
       env.registerAction(action);
-      if (addObject) {
-        result.addObjectFile(action.getOutputFile());
-      }
+      result.addObjectFile(action.getOutputFile());
     } else {
       boolean generatePicAction = getGeneratePicActions();
       // If we always need pic for everything, then don't bother to create a no-pic action.
@@ -427,9 +422,7 @@ public final class CppModel {
         semantics.finalizeCompileActionBuilder(ruleContext, picBuilder);
         CppCompileAction picAction = picBuilder.build();
         env.registerAction(picAction);
-        if (addObject) {
-          result.addPicObjectFile(picAction.getOutputFile());          
-        }
+        result.addPicObjectFile(picAction.getOutputFile());
         if (picAction.getDwoFile() != null) {
           // Host targets don't produce .dwo files.
           result.addPicDwoFile(picAction.getDwoFile());
@@ -461,9 +454,7 @@ public final class CppModel {
         CppCompileAction compileAction = builder.build();
         env.registerAction(compileAction);
         Artifact objectFile = compileAction.getOutputFile();
-        if (addObject) {
-          result.addObjectFile(objectFile);
-        }
+        result.addObjectFile(objectFile);
         if (compileAction.getDwoFile() != null) {
           // Host targets don't produce .dwo files.
           result.addDwoFile(compileAction.getDwoFile());
