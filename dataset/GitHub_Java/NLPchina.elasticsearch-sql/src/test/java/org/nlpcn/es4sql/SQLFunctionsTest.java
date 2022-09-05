@@ -3,6 +3,7 @@ package org.nlpcn.es4sql;
 
 import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.expr.SQLQueryExpr;
+import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.settings.Settings;
@@ -22,6 +23,8 @@ import org.nlpcn.es4sql.parse.ElasticSqlExprParser;
 import org.nlpcn.es4sql.parse.ScriptFilter;
 import org.nlpcn.es4sql.parse.SqlParser;
 import org.nlpcn.es4sql.query.QueryAction;
+import org.nlpcn.es4sql.query.SqlElasticRequestBuilder;
+import org.nlpcn.es4sql.query.SqlElasticSearchRequestBuilder;
 import org.junit.Test;
 
 import java.net.UnknownHostException;
@@ -29,6 +32,8 @@ import java.sql.SQLFeatureNotSupportedException;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static org.nlpcn.es4sql.TestsConstants.TEST_INDEX;
 
 /**
  * Created by allwefantasy on 8/25/16.
@@ -124,10 +129,10 @@ public class SQLFunctionsTest {
     @Test
     public void test() throws Exception {
 
-        String query = "SELECT  gender,lastname,age from  " + TestsConstants.TEST_INDEX + " where lastname='Heath'";
-
-        SearchDao searchDao = MainTestSuite.getSearchDao() != null ? MainTestSuite.getSearchDao() : getSearchDao();
-        System.out.println(searchDao.explain(query).explain().explain());
+//        String query = "select * from 5ed516e548a8458c825ec3655127cd46";
+//
+//        SearchDao searchDao = MainTestSuite.getSearchDao() != null ? MainTestSuite.getSearchDao() : getSearchDao();
+//        System.out.println(searchDao.explain(query).explain().explain());
     }
 
     @Test
@@ -257,14 +262,14 @@ public class SQLFunctionsTest {
 
 
     private CSVResult getCsvResult(boolean flat, String query) throws SqlParseException, SQLFeatureNotSupportedException, Exception, CsvExtractorException {
-        return getCsvResult(flat, query, false, false,false);
+        return getCsvResult(flat, query, false, false);
     }
 
-    private CSVResult getCsvResult(boolean flat, String query, boolean includeScore, boolean includeType,boolean includeId) throws SqlParseException, SQLFeatureNotSupportedException, Exception, CsvExtractorException {
+    private CSVResult getCsvResult(boolean flat, String query, boolean includeScore, boolean includeType) throws SqlParseException, SQLFeatureNotSupportedException, Exception, CsvExtractorException {
         SearchDao searchDao = MainTestSuite.getSearchDao() != null ? MainTestSuite.getSearchDao() : getSearchDao();
         QueryAction queryAction = searchDao.explain(query);
         Object execution = QueryActionElasticExecutor.executeAnyAction(searchDao.getClient(), queryAction);
-        return new CSVResultsExtractor(includeScore, includeType, includeId).extractResults(execution, flat, ",");
+        return new CSVResultsExtractor(includeScore, includeType).extractResults(execution, flat, ",");
     }
 
 
