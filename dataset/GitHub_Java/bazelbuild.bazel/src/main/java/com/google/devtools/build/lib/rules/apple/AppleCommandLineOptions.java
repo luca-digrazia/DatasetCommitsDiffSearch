@@ -136,16 +136,6 @@ public class AppleCommandLineOptions extends FragmentOptions {
       help = "Specifies to target CPU of iOS compilation.")
   public String iosCpu;
 
-  @Option(
-      name = "apple_crosstool_top",
-      defaultValue = "@bazel_tools//tools/cpp:toolchain",
-      category = "version",
-      converter = LabelConverter.class,
-      help = "The label of the crosstool package to be used in Apple and Objc rules and their"
-            + " dependencies."
-    )
-  public Label appleCrosstoolTop;  
-
   @Option(name = "apple_platform_type",
       defaultValue = "IOS",
       category = "undocumented",
@@ -247,14 +237,6 @@ public class AppleCommandLineOptions extends FragmentOptions {
       help = "Specify the Apple bitcode mode for compile steps. "
              + "Values: 'none', 'embedded_markers', 'embedded'.")
   public AppleBitcodeMode appleBitcodeMode;
-
-  @Option(
-    name = "apple_crosstool_transition",
-    defaultValue = "false",
-    category = "undocumented",
-    help = "If true, the apple crosstool is used for all apple rules."
-  )
-  public boolean enableAppleCrosstoolTransition;
 
   private Platform getPlatform() {
     for (String architecture : iosMultiCpus) {
