@@ -47,6 +47,8 @@ import javax.sql.DataSource;
 
 @Configuration
 @EnableConfigurationProperties(MybatisProperties.class)
+@ConditionalOnClass({SqlSessionFactory.class, SqlSessionFactoryBean.class})
+//@AutoConfigureAfter(name = {"org.hswebframework.web.datasource.jta.AtomikosDataSourceAutoConfiguration"})
 public class MyBatisAutoConfiguration {
 
     @Autowired(required = false)
