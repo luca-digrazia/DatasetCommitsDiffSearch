@@ -365,6 +365,7 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
         try {
           if (showProgress && (progressBarNeedsRefresh || timeBasedRefresh())) {
             progressBarNeedsRefresh = false;
+            lastRefreshMillis = nowMillis;
             clearProgressBar();
             addProgressBar();
             terminal.flush();
@@ -497,11 +498,10 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
     terminal.writeString("\n");
   }
 
-  private synchronized void addProgressBar() throws IOException {
+  private void addProgressBar() throws IOException {
     LineCountingAnsiTerminalWriter countingTerminalWriter =
         new LineCountingAnsiTerminalWriter(terminal);
     AnsiTerminalWriter terminalWriter = countingTerminalWriter;
-    lastRefreshMillis = clock.currentTimeMillis();
     if (cursorControl) {
       terminalWriter = new LineWrappingAnsiTerminalWriter(terminalWriter, terminalWidth - 1);
     }
