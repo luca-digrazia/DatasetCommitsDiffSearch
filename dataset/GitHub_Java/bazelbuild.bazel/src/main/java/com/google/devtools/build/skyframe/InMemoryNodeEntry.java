@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -356,7 +356,9 @@ public class InMemoryNodeEntry implements NodeEntry {
   @Override
   public synchronized Set<SkyKey> markClean() {
     this.value = buildingState.getLastBuildValue();
-    Preconditions.checkState(buildingState.depsUnchangedFromLastBuild(),
+    // This checks both the value and the direct deps, but since we're passing in the same value,
+    // the value check should be trivial.
+    Preconditions.checkState(buildingState.unchangedFromLastBuild(this.value),
         "Direct deps must be the same as those found last build for node to be marked clean: %s",
         this);
     Preconditions.checkState(isDirty(), this);

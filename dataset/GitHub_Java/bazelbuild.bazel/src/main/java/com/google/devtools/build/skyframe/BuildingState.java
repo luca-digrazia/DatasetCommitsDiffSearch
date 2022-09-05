@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -301,15 +301,6 @@ public class BuildingState {
   boolean unchangedFromLastBuild(SkyValue newValue) {
     checkFinishedBuildingWhenAboutToSetValue();
     return getLastBuildValue().equals(newValue) && lastBuildDirectDeps.equals(directDeps);
-  }
-
-  /**
-   * Returns true if the deps requested during this evaluation are exactly those requested the
-   * last time this node was built, in the same order.
-   */
-  boolean depsUnchangedFromLastBuild() {
-    checkFinishedBuildingWhenAboutToSetValue();
-    return lastBuildDirectDeps.equals(directDeps);
   }
 
   boolean noDepsLastBuild() {

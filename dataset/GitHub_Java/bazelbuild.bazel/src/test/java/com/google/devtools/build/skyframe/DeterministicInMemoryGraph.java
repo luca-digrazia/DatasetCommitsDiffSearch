@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,14 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.devtools.build.lib.util.GroupedList;
+import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -77,10 +82,20 @@ public class DeterministicInMemoryGraph extends NotifyingInMemoryGraph {
     }
 
     @Override
-    public synchronized Set<SkyKey> getTemporaryDirectDeps() {
-      TreeSet<SkyKey> result = new TreeSet<>(ALPHABETICAL_SKYKEY_COMPARATOR);
-      result.addAll(super.getTemporaryDirectDeps());
-      return result;
+    public synchronized void addTemporaryDirectDeps(GroupedListHelper<SkyKey> helper) {
+      GroupedList<SkyKey> groupedList = new GroupedList<>();
+      groupedList.append(helper);
+      GroupedListHelper<SkyKey> orderedHelper = new GroupedListHelper<>();
+      for (Iterable<SkyKey> group : groupedList) {
+        orderedHelper.startGroup();
+        List<SkyKey> orderedGroup = Lists.newArrayList(group);
+        Collections.sort(orderedGroup, ALPHABETICAL_SKYKEY_COMPARATOR);
+        for (SkyKey dep : orderedGroup) {
+          orderedHelper.add(dep);
+        }
+        orderedHelper.endGroup();
+      }
+      super.addTemporaryDirectDeps(orderedHelper);
     }
   }
 }

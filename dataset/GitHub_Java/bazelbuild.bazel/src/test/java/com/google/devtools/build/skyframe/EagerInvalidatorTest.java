@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,10 +26,10 @@ import static org.junit.Assert.fail;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.common.testing.GcFinalization;
-import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.Pair;
@@ -143,7 +143,7 @@ public class EagerInvalidatorTest {
         new ParallelEvaluator(
             graph,
             graphVersion,
-            tester.getSkyFunctionMap(),
+            ImmutableMap.of(GraphTester.NODE_TYPE, tester.createDelegatingFunction()),
             reporter,
             new MemoizingEvaluator.EmittedEventState(),
             InMemoryMemoizingEvaluator.DEFAULT_STORED_EVENT_FILTER,
@@ -639,15 +639,8 @@ public class EagerInvalidatorTest {
       // Dirty the node, and ensure that the tracker is aware of it:
       Iterable<SkyKey> diff1 = ImmutableList.of(skyKey("a"));
       InvalidationState state1 = new DirtyingInvalidationState();
-      Preconditions.checkNotNull(
-              EagerInvalidator.createInvalidatingVisitorIfNeeded(
-                  graph,
-                  diff1,
-                  receiver,
-                  state1,
-                  dirtyKeyTracker,
-                  AbstractQueueVisitor.EXECUTOR_FACTORY))
-          .run();
+      Preconditions.checkNotNull(EagerInvalidator.createInvalidatingVisitorIfNeeded(graph, diff1,
+          receiver, state1, dirtyKeyTracker)).run();
       assertThat(dirtyKeyTracker.getDirtyKeys()).containsExactly(skyKey("a"), skyKey("ab"));
 
       // Delete the node, and ensure that the tracker is no longer tracking it:
@@ -669,12 +662,7 @@ public class EagerInvalidatorTest {
       Iterable<SkyKey> diff = ImmutableList.copyOf(keys);
       DirtyingNodeVisitor dirtyingNodeVisitor =
           EagerInvalidator.createInvalidatingVisitorIfNeeded(
-              graph,
-              diff,
-              invalidationReceiver,
-              state,
-              dirtyKeyTracker,
-              AbstractQueueVisitor.EXECUTOR_FACTORY);
+              graph, diff, invalidationReceiver, state, dirtyKeyTracker);
       if (dirtyingNodeVisitor != null) {
         visitor.set(dirtyingNodeVisitor);
         dirtyingNodeVisitor.run();

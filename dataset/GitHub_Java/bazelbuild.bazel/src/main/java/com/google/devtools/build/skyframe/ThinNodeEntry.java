@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,29 +89,11 @@ public interface ThinNodeEntry {
    * the caller will only ever want to call {@code markDirty()} a second time if a transition from a
    * dirty-unchanged state to a dirty-changed state is required.
    *
-   * @return A {@link ThinNodeEntry.MarkedDirtyResult} if the node was previously clean, and
-   * {@code null} if it was already dirty. If it was already dirty, the caller should abort its
-   * handling of this node, since another thread is already dealing with it.
+   * @return true if the node was previously clean, and false if it was already dirty. If it was
+   * already dirty, the caller should abort its handling of this node, since another thread is
+   * already dealing with it.
    */
   @Nullable
   @ThreadSafe
-  MarkedDirtyResult markDirty(boolean isChanged);
-
-  /**
-   * Returned by {@link #markDirty} if that call changed the node from clean to dirty. Contains an
-   * iterable of the node's reverse deps for efficiency, because the single use case for {@link
-   * #markDirty} is during invalidation, and if such an invalidation call wins, the invalidator
-   * must immediately afterwards schedule the invalidation of the node's reverse deps.
-   */
-  class MarkedDirtyResult {
-    private final Iterable<SkyKey> reverseDepsUnsafe;
-
-    public MarkedDirtyResult(Iterable<SkyKey> reverseDepsUnsafe) {
-      this.reverseDepsUnsafe = reverseDepsUnsafe;
-    }
-
-    public Iterable<SkyKey> getReverseDepsUnsafe() {
-      return reverseDepsUnsafe;
-    }
-  }
+  boolean markDirty(boolean isChanged);
 }

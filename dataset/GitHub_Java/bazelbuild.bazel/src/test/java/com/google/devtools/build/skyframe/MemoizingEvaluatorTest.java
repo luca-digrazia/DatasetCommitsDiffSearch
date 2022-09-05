@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -337,9 +337,7 @@ public class MemoizingEvaluatorTest {
       initializeReporter();
       EvaluationResult<StringValue> result = tester.eval(false, "top");
       assertTrue(result.hasError());
-      if (i == 0 || rootCausesStored()) {
-        assertThat(result.getError(topKey).getRootCauses()).containsExactly(topKey);
-      }
+      assertThat(result.getError(topKey).getRootCauses()).containsExactly(topKey);
       assertEquals(topKey.toString(), result.getError(topKey).getException().getMessage());
       assertTrue(result.getError(topKey).getException() instanceof SomeErrorException);
       if (i == 0 || eventsStored()) {
@@ -357,9 +355,7 @@ public class MemoizingEvaluatorTest {
       initializeReporter();
       EvaluationResult<StringValue> result = tester.eval(false, "top");
       assertTrue(result.hasError());
-      if (i == 0 || rootCausesStored()) {
-        assertThat(result.getError(topKey).getRootCauses()).containsExactly(topKey);
-      }
+      assertThat(result.getError(topKey).getRootCauses()).containsExactly(topKey);
       assertEquals(topKey.toString(), result.getError(topKey).getException().getMessage());
       assertTrue(result.getError(topKey).getException() instanceof SomeErrorException);
       if (i == 0 || eventsStored()) {
@@ -2666,10 +2662,8 @@ public class MemoizingEvaluatorTest {
     assertThat(result.getError(midKey).getRootCauses()).containsExactly(badKey);
     // Do it again with keepGoing.  We should also see an error for the top key this time.
     result = tester.eval(/*keepGoing=*/ true, topKey, midKey);
-    if (rootCausesStored()) {
-      assertThat(result.getError(midKey).getRootCauses()).containsExactly(badKey);
-      assertThat(result.getError(topKey).getRootCauses()).containsExactly(badKey);
-    }
+    assertThat(result.getError(midKey).getRootCauses()).containsExactly(badKey);
+    assertThat(result.getError(topKey).getRootCauses()).containsExactly(badKey);
   }
 
   @Test

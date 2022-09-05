@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,8 @@ public class NotifyingInMemoryGraph extends InMemoryGraph {
     this.graphListener = new ErrorRecordingDelegatingListener(graphListener);
   }
 
-  protected NodeEntry createIfAbsent(SkyKey key) {
+  @Override
+  public NodeEntry createIfAbsent(SkyKey key) {
     graphListener.accept(key, EventType.CREATE_IF_ABSENT, Order.BEFORE, null);
     NodeEntry newval = getEntry(key);
     NodeEntry oldval = getNodeMap().putIfAbsent(key, newval);

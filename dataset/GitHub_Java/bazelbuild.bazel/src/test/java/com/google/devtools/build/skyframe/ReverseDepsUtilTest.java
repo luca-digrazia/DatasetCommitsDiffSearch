@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
 
-import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -62,7 +61,7 @@ public class ReverseDepsUtilTest {
         }
 
         @Override
-        void setDataToConsolidate(Example container, List<Object> dataToConsolidate) {
+        void setDataToConsolidate(Example container, Object dataToConsolidate) {
           container.dataToConsolidate = dataToConsolidate;
         }
 
@@ -77,7 +76,7 @@ public class ReverseDepsUtilTest {
         }
 
         @Override
-        List<Object> getDataToConsolidate(Example container) {
+        Object getDataToConsolidate(Example container) {
           return container.dataToConsolidate;
         }
       };
@@ -86,7 +85,7 @@ public class ReverseDepsUtilTest {
 
     Object reverseDeps = ImmutableList.of();
     boolean single;
-    List<Object> dataToConsolidate;
+    Object dataToConsolidate;
 
     @Override
     public String toString() {
@@ -143,49 +142,6 @@ public class ReverseDepsUtilTest {
       REVERSE_DEPS_UTIL.getReverseDeps(example);
       assertThat(numElements).isEqualTo(0);
     } catch (Exception expected) { }
-  }
-
-  @Test
-  public void doubleAddThenRemove() {
-    Example example = new Example();
-    SkyKey key = new SkyKey(NODE_TYPE, 0);
-    REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(key));
-    // Should only fail when we call getReverseDeps().
-    REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(key));
-    REVERSE_DEPS_UTIL.removeReverseDep(example, key);
-    try {
-      REVERSE_DEPS_UTIL.getReverseDeps(example);
-      Assert.fail();
-    } catch (IllegalStateException expected) {
-    }
-  }
-
-  @Test
-  public void doubleAddThenRemoveCheckedOnSize() {
-    Example example = new Example();
-    SkyKey fixedKey = new SkyKey(NODE_TYPE, 0);
-    SkyKey key = new SkyKey(NODE_TYPE, 1);
-    REVERSE_DEPS_UTIL.addReverseDeps(example, ImmutableList.of(fixedKey, key));
-    // Should only fail when we reach the limit.
-    REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(key));
-    REVERSE_DEPS_UTIL.removeReverseDep(example, key);
-    REVERSE_DEPS_UTIL.checkReverseDep(example, fixedKey);
-    try {
-      REVERSE_DEPS_UTIL.checkReverseDep(example, fixedKey);
-      Assert.fail();
-    } catch (IllegalStateException expected) {
-    }
-  }
-
-  @Test
-  public void addRemoveAdd() {
-    Example example = new Example();
-    SkyKey fixedKey = new SkyKey(NODE_TYPE, 0);
-    SkyKey key = new SkyKey(NODE_TYPE, 1);
-    REVERSE_DEPS_UTIL.addReverseDeps(example, ImmutableList.of(fixedKey, key));
-    REVERSE_DEPS_UTIL.removeReverseDep(example, key);
-    REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(key));
-    assertThat(REVERSE_DEPS_UTIL.getReverseDeps(example)).containsExactly(fixedKey, key);
   }
 
   @Test

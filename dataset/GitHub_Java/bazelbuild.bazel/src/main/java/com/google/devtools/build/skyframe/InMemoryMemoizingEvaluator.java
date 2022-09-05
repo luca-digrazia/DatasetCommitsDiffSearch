@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -222,7 +222,10 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
     if (valuesToInject.isEmpty()) {
       return;
     }
-    ParallelEvaluator.injectValues(valuesToInject, version, graph, dirtyKeyTracker);
+    for (Entry<SkyKey, SkyValue> entry : valuesToInject.entrySet()) {
+      ParallelEvaluator.injectValue(
+          entry.getKey(), entry.getValue(), version, graph, dirtyKeyTracker);
+    }
     // Start with a new map to avoid bloat since clear() does not downsize the map.
     valuesToInject = new HashMap<>();
   }
@@ -307,10 +310,6 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
     }
   }
 
-  public ImmutableMap<? extends SkyFunctionName, ? extends SkyFunction>
-      getSkyFunctionsForTesting() {
-    return skyFunctions;
-  }
   public static final Predicate<Event> DEFAULT_STORED_EVENT_FILTER = new Predicate<Event>() {
     @Override
     public boolean apply(Event event) {
