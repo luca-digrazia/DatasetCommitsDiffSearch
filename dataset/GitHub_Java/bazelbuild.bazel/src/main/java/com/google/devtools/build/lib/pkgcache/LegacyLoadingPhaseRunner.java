@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.pkgcache;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -35,7 +36,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TestTargetUtils;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -385,10 +385,9 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
     // Error out if any of the labels needed for the configuration could not be loaded.
     Multimap<Label, Label> rootCauses = pkgLoader.getRootCauses();
     for (Map.Entry<String, Label> entry : labelsToLoadUnconditionally.entries()) {
-      Label label = entry.getValue();
-      if (rootCauses.containsKey(label)) {
-        throw new LoadingFailedException(
-            String.format("Failed to load required %s target: '%s'", entry.getKey(), label));
+      if (rootCauses.containsKey(entry.getValue())) {
+        throw new LoadingFailedException("Failed to load required " + entry.getKey()
+            + " target: '" + entry.getValue() + "'");
       }
     }
 

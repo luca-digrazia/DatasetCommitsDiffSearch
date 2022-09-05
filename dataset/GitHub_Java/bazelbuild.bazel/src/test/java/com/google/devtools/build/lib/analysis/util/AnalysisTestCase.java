@@ -68,6 +68,7 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
 
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -131,7 +132,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    analysisMock = AnalysisMock.get();
+    analysisMock = getAnalysisMock();
     pkgLocator = new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory));
     directories = new BlazeDirectories(outputBase, outputBase, rootDirectory);
     workspaceStatusActionFactory =
@@ -143,6 +144,16 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     configurationFactory = analysisMock.createConfigurationFactory();
 
     useRuleClassProvider(TestRuleClassProvider.getRuleClassProvider());
+  }
+
+  protected AnalysisMock getAnalysisMock() {
+    try {
+      Class<?> providerClass = Class.forName(TestConstants.TEST_ANALYSIS_MOCK);
+      Field instanceField = providerClass.getField("INSTANCE");
+      return (AnalysisMock) instanceField.get(null);
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
   }
 
   /**

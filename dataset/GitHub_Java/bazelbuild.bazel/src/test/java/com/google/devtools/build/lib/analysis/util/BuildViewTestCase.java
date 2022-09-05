@@ -506,14 +506,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return getActionGraph().getGeneratingAction(artifact);
   }
 
-  /**
-   * Returns the SpawnAction that generates an artifact.
-   * Implicitly assumes the action is a SpawnAction.
-   */
-  protected final SpawnAction getGeneratingSpawnAction(Artifact artifact) {
-    return (SpawnAction) getGeneratingAction(artifact);
-  }
-
   protected void simulateLoadingPhase() {
     try {
       ensureTargetsVisited(targetConfig.getAllLabels().values());
@@ -1364,9 +1356,11 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return result;
   }
 
-  protected SpawnAction getGeneratingAction(ConfiguredTarget target, String outputName) {
-    return getGeneratingSpawnAction(
-        Iterables.find(getFilesToBuild(target), artifactNamed(outputName)));
+  protected SpawnAction getGeneratingAction(ConfiguredTarget target,
+      String outputName) {
+    Artifact found = Iterables.find(getFilesToBuild(target),
+        artifactNamed(outputName));
+    return (SpawnAction) getGeneratingAction(found);
   }
 
   protected String getErrorMsgSingleFile(String attrName, String ruleType, String ruleName,

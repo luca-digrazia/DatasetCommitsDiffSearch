@@ -56,7 +56,7 @@ final class TargetPatternPhaseFunction implements SkyFunction {
 
     // Determine targets to build:
     ResolvedTargets<Target> targets = getTargetsToBuild(env,
-        options.getTargetPatterns(), options.getOffset(), options.getCompileOneDependency());
+        options.getTargetPatterns(), options.getCompileOneDependency());
 
     // If the --build_tests_only option was specified or we want to run tests, we need to determine
     // the list of targets to test. For that, we remove manual tests and apply the command-line
@@ -64,8 +64,7 @@ final class TargetPatternPhaseFunction implements SkyFunction {
     // set as build list as well.
     ResolvedTargets<Target> testTargets = null;
     if (options.getDetermineTests() || options.getBuildTestsOnly()) {
-      testTargets = determineTests(env,
-          options.getTargetPatterns(), options.getOffset(), options.getTestFilter());
+      testTargets = determineTests(env, options.getTargetPatterns(), options.getTestFilter());
       Preconditions.checkState(env.valuesMissing() || (testTargets != null));
     }
 
@@ -169,10 +168,10 @@ final class TargetPatternPhaseFunction implements SkyFunction {
    *     {@link LoadingOptions#compileOneDependency}
    */
   private static ResolvedTargets<Target> getTargetsToBuild(Environment env,
-      List<String> targetPatterns, String offset, boolean compileOneDependency) {
+      List<String> targetPatterns, boolean compileOneDependency) {
     List<SkyKey> patternSkyKeys = new ArrayList<>();
     for (TargetPatternSkyKeyOrException keyOrException :
-        TargetPatternValue.keys(targetPatterns, FilteringPolicies.FILTER_MANUAL, offset)) {
+        TargetPatternValue.keys(targetPatterns, FilteringPolicies.FILTER_MANUAL, "")) {
       try {
         patternSkyKeys.add(keyOrException.getSkyKey());
       } catch (TargetParsingException e) {
@@ -224,10 +223,10 @@ final class TargetPatternPhaseFunction implements SkyFunction {
    * @param testFilter the test filter
    */
   private static ResolvedTargets<Target> determineTests(Environment env,
-      List<String> targetPatterns, String offset, TestFilter testFilter) {
+      List<String> targetPatterns, TestFilter testFilter) {
     List<SkyKey> patternSkyKeys = new ArrayList<>();
     for (TargetPatternSkyKeyOrException keyOrException :
-        TargetPatternValue.keys(targetPatterns, FilteringPolicies.FILTER_TESTS, offset)) {
+        TargetPatternValue.keys(targetPatterns, FilteringPolicies.FILTER_TESTS, "")) {
       try {
         patternSkyKeys.add(keyOrException.getSkyKey());
       } catch (TargetParsingException e) {
