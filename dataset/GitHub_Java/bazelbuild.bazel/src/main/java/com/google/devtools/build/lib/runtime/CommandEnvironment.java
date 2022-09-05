@@ -108,11 +108,11 @@ public final class CommandEnvironment {
     }
   }
 
-  CommandEnvironment(BlazeRuntime runtime, BlazeWorkspace workspace, EventBus eventBus) {
+  public CommandEnvironment(BlazeRuntime runtime, UUID commandId, EventBus eventBus) {
     this.runtime = runtime;
-    this.workspace = workspace;
+    this.workspace = runtime.getWorkspace();
     this.directories = workspace.getDirectories();
-    this.commandId = UUID.randomUUID();
+    this.commandId = commandId;
     this.reporter = new Reporter();
     this.eventBus = eventBus;
     this.blazeModuleEnvironment = new BlazeModuleEnvironment();
@@ -126,8 +126,6 @@ public final class CommandEnvironment {
     // TODO(ulfjack): We don't call beforeCommand() in tests, but rely on workingDirectory being set
     // in setupPackageCache(). This leads to NPE if we don't set it here.
     this.workingDirectory = directories.getWorkspace();
-
-    workspace.getSkyframeExecutor().setEventBus(eventBus);
   }
 
   public BlazeRuntime getRuntime() {

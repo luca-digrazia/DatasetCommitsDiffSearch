@@ -241,8 +241,7 @@ public final class BuildTool {
         env.getEventBus()
             .post(
                 new BuildInfoEvent(
-                    env.getBlazeWorkspace().getWorkspaceStatusActionFactory()
-                        .createDummyWorkspaceStatus()));
+                    runtime.getworkspaceStatusActionFactory().createDummyWorkspaceStatus()));
       }
     }
 

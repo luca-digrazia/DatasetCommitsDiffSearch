@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.SubscriberExceptionContext;
 import com.google.common.eventbus.SubscriberExceptionHandler;
 import com.google.common.util.concurrent.Futures;
@@ -151,6 +152,7 @@ public final class BlazeRuntime {
   // We pass this through here to make it available to the MasterLogWriter.
   private final OptionsProvider startupOptionsProvider;
 
+  private final SubscriberExceptionHandler eventBusExceptionHandler;
   private final BinTools binTools;
   private final WorkspaceStatusAction.Factory workspaceStatusActionFactory;
   private final ProjectFile.Provider projectFileProvider;
@@ -185,11 +187,11 @@ public final class BlazeRuntime {
     this.configurationFactory = configurationFactory;
     this.clock = clock;
     this.startupOptionsProvider = startupOptionsProvider;
+    this.eventBusExceptionHandler = eventBusExceptionHandler;
     this.queryEnvironmentFactory = queryEnvironmentFactory;
 
     // Workspace state
-    this.workspace = new BlazeWorkspace(
-        this, directories, skyframeExecutor, eventBusExceptionHandler);
+    this.workspace = new BlazeWorkspace(this, directories, skyframeExecutor);
   }
 
   private static InvocationPolicy createInvocationPolicyFromModules(
@@ -246,7 +248,10 @@ public final class BlazeRuntime {
   }
 
   public CommandEnvironment initCommand() {
-    return workspace.initCommand();
+    EventBus eventBus = new EventBus(eventBusExceptionHandler);
+    workspace.getSkyframeExecutor().setEventBus(eventBus);
+    UUID commandId = UUID.randomUUID();
+    return new CommandEnvironment(this, commandId, eventBus);
   }
 
   @Nullable
