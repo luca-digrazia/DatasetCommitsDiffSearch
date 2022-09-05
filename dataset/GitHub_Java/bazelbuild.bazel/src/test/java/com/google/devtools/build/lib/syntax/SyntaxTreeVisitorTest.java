@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,14 +15,18 @@ package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.packages.CachingPackageLocator;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 
 /** Tests for @{code SyntaxTreeVisitor} */
@@ -31,10 +35,20 @@ public class SyntaxTreeVisitorTest {
 
   private Scratch scratch = new Scratch();
 
+  private class ScratchPathPackageLocator implements CachingPackageLocator {
+    @Override
+    public Path getBuildFileForPackage(PackageIdentifier packageName) {
+      return scratch.resolve(packageName.getPackageFragment()).getRelative("BUILD");
+    }
+  }
+
+  private CachingPackageLocator locator = new ScratchPathPackageLocator();
+
   /** Parses the contents of the specified string and returns the AST. */
   private BuildFileAST parse(String... lines) throws IOException {
     Path file = scratch.file("/a/build/file/BUILD", lines);
-    return BuildFileAST.parseSkylarkFile(file, null /* reporter */);
+    return BuildFileAST.parseSkylarkFile(
+        file, null /* reporter */, locator, null /*validationEnvironment*/);
   }
 
   @Test
