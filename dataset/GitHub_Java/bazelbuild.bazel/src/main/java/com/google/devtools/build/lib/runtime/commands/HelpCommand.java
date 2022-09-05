@@ -40,6 +40,7 @@ import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsProvider;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -135,6 +136,9 @@ public final class HelpCommand implements BlazeCommand {
              "Version options, for selecting which version of other tools will be used")
         .put("what",
              "Output selection options, for determining what to build/test");
+    for (BlazeModule module : runtime.getBlazeModules()) {
+      optionCategoriesBuilder.putAll(module.getOptionCategories());
+    }
     return optionCategoriesBuilder.build();
   }
 
