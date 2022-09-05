@@ -410,7 +410,7 @@ final class ProtoSupport {
     ruleContext.registerAction(
         ObjcRuleClasses.spawnOnDarwinActionBuilder()
             .setMnemonic("GenObjcProtos")
-            .addTransitiveInputs(getGenerateActionInputs())
+            .addInputs(getGenerateActionInputs())
             .addOutputs(getGenerateActionOutputs())
             .setExecutable(new PathFragment("/usr/bin/python"))
             .setCommandLine(getGenerateCommandLine())

@@ -69,6 +69,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   private final boolean useAbsolutePathsForActions;
   private final boolean prioritizeStaticLibs;
   private final boolean debugWithGlibcxx;
+  private final boolean experimentalAutoTopLevelUnionObjCProtos;
   @Nullable private final Label extraEntitlements;
   private final boolean deviceDebugEntitlements;
 
@@ -94,6 +95,8 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.prioritizeStaticLibs = objcOptions.prioritizeStaticLibs;
     this.debugWithGlibcxx = objcOptions.debugWithGlibcxx;
     this.extraEntitlements = objcOptions.extraEntitlements;
+    this.experimentalAutoTopLevelUnionObjCProtos =
+        objcOptions.experimentalAutoTopLevelUnionObjCProtos;
     this.deviceDebugEntitlements = objcOptions.deviceDebugEntitlements;
   }
 
@@ -265,6 +268,14 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   @Nullable
   public Label getExtraEntitlements() {
     return extraEntitlements;
+  }
+
+  /**
+   * Whether the experimental feature of only generating proto sources at the linking target is
+   * enabled or not.
+   */
+  public boolean experimentalAutoTopLevelUnionObjCProtos() {
+    return experimentalAutoTopLevelUnionObjCProtos;
   }
 
   /**

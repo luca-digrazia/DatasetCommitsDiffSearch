@@ -32,27 +32,19 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(final RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
-
-    ProtoAttributes attributes = new ProtoAttributes(ruleContext);
-    attributes.validate();
-
-    if (attributes.hasPortableProtoFilters()) {
-      return createProtobufTarget(ruleContext);
-    } else {
-      return createProtocolBuffers2Target(ruleContext);
-    }
-  }
-
-  private ConfiguredTarget createProtobufTarget(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException {
-    NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
     XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
+    NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
 
     ProtoSupport protoSupport =
         new ProtoSupport(ruleContext, TargetType.PROTO_TARGET)
+            .validate()
             .addXcodeProviderOptions(xcodeProviderBuilder)
             .addFilesToBuild(filesToBuild)
             .registerActions();
+
+    if (ruleContext.hasErrors()) {
+      return null;
+    }
 
     ObjcCommon common = protoSupport.getCommon();
 
@@ -65,6 +57,8 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
             xcodeProviderBuilder, new Attribute(ObjcRuleClasses.PROTO_LIB_ATTR, Mode.TARGET))
         .registerActions(xcodeProviderBuilder.build());
 
+    boolean usesProtobufLibrary = protoSupport.usesProtobufLibrary();
+
     boolean experimentalAutoUnion =
         ObjcRuleClasses.objcConfiguration(ruleContext).experimentalAutoTopLevelUnionObjCProtos();
 
@@ -72,7 +66,7 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
 
     // If the experimental flag is not set, or if it's set and doesn't use the protobuf library,
     // register the compilation actions, as the output needs to be linked in the final binary.
-    if (!experimentalAutoUnion) {
+    if (!experimentalAutoUnion || !usesProtobufLibrary) {
       compilationSupport.registerCompileAndArchiveActions(common);
     } else {
       // Even though there is nothing to compile, still generate a module map based on this target
@@ -85,25 +79,4 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
         .addProvider(ObjcProvider.class, common.getObjcProvider())
         .build();
   }
-
-  private ConfiguredTarget createProtocolBuffers2Target(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException {
-    NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
-
-    ProtocolBuffers2Support protoSupport =
-        new ProtocolBuffers2Support(ruleContext)
-            .registerGenerationActions()
-            .registerCompilationActions()
-            .addFilesToBuild(filesToBuild);
-
-    XcodeProvider xcodeProvider = protoSupport.getXcodeProvider();
-
-    new XcodeSupport(ruleContext).registerActions(xcodeProvider).addFilesToBuild(filesToBuild);
-
-    return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
-        .addProvider(ObjcProvider.class, protoSupport.getObjcProvider())
-        .addProvider(XcodeProvider.class, xcodeProvider)
-        .build();
-  }
-
 }
