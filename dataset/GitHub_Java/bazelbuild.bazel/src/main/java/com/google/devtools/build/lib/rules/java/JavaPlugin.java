@@ -17,7 +17,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.syntax.Type;
 
@@ -33,8 +32,7 @@ public class JavaPlugin implements RuleConfiguredTargetFactory {
   }
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException {
+  public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
     JavaLibrary javaLibrary = new JavaLibrary(semantics);
     JavaCommon common = new JavaCommon(ruleContext, semantics);
     RuleConfiguredTargetBuilder builder = javaLibrary.init(ruleContext, common);

@@ -84,7 +84,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         resourceApk = applicationManifest.packWithDataAndResources(
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK),
             ruleContext,
-            ResourceDependencies.fromRuleDeps(ruleContext, JavaCommon.isNeverLink(ruleContext)),
+            ResourceDependencies.fromRuleDeps(ruleContext),
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_SYMBOLS_TXT),
             ImmutableList.<String>of(), /* configurationFilters */
@@ -103,7 +103,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       }
     } else {
       resourceApk = ResourceApk.fromTransitiveResources(
-          ResourceDependencies.fromRuleResourceAndDeps(ruleContext, false /* neverlink */));
+          ResourceDependencies.fromRuleResourceAndDeps(ruleContext));
     }
 
     JavaTargetAttributes javaTargetAttributes = androidCommon.init(

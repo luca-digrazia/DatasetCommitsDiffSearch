@@ -122,7 +122,8 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     Artifact iJar = null;
     if ((attributes.hasSourceFiles() || attributes.hasSourceJars()) && jar != null) {
-      iJar = helper.createCompileTimeJarAction(jar, javaArtifactsBuilder);
+      iJar = helper.createCompileTimeJarAction(jar, outputDepsProto,
+          javaArtifactsBuilder);
     }
 
     boolean neverLink = JavaCommon.isNeverLink(ruleContext);
