@@ -88,15 +88,11 @@ public final class IosTest implements RuleConfiguredTargetFactory {
     addResourceFilesToBuild(ruleContext, common.getObjcProvider(), filesToBuild);
   
     XcodeProductType productType = getProductType(ruleContext);
-    String bundleFormat;
+    ExtraLinkArgs extraLinkArgs;
+    Iterable<Artifact> extraLinkInputs;
     if (!isXcTest(ruleContext)) {
-      bundleFormat = ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT;
-      new CompilationSupport(ruleContext)
-          .registerLinkActions(
-              common.getObjcProvider(), new ExtraLinkArgs(), ImmutableList.<Artifact>of())
-          .registerCompileAndArchiveActions(common)
-          .addXcodeSettings(xcodeProviderBuilder, common)
-          .validateAttributes();
+      extraLinkArgs = new ExtraLinkArgs();
+      extraLinkInputs = ImmutableList.of();
     } else {
       XcodeProvider appIpaXcodeProvider =
           ruleContext.getPrerequisite(XCTEST_APP, Mode.TARGET, XcodeProvider.class);
@@ -106,38 +102,34 @@ public final class IosTest implements RuleConfiguredTargetFactory {
   
       XcTestAppProvider testApp = xcTestAppProvider(ruleContext);
       Artifact bundleLoader = testApp.getBundleLoader();
-      LibrariesToLink librariesToLink =
-          LibrariesToLink.xcTestLibraries(ruleContext, common.getObjcProvider());
-
+  
       // -bundle causes this binary to be linked as a bundle and not require an entry point
       // (i.e. main())
       // -bundle_loader causes the code in this test to have access to the symbols in the test rig,
       // or more specifically, the flag causes ld to consider the given binary when checking for
       // missing symbols.
-      ExtraLinkArgs extraLinkArgs =
-          new ExtraLinkArgs("-bundle", "-bundle_loader", bundleLoader.getExecPathString());
+      extraLinkArgs = new ExtraLinkArgs(
+          "-bundle",
+          "-bundle_loader", bundleLoader.getExecPathString());
   
-      bundleFormat = ReleaseBundlingSupport.XCTEST_BUNDLE_DIR_FORMAT;
-      
+      extraLinkInputs = ImmutableList.of(bundleLoader);
+  
       filesToBuild.add(testApp.getIpa());
-
-      new CompilationSupport(ruleContext)
-          .registerLinkActionsForXcTest(
-              common.getObjcProvider(),
-              extraLinkArgs,
-              ImmutableList.of(bundleLoader),
-              librariesToLink)
-          .registerCompileAndArchiveActions(common)
-          .addXcodeSettings(xcodeProviderBuilder, common)
-          .validateAttributes();
     }
   
+    new CompilationSupport(ruleContext)
+        .registerLinkActions(common.getObjcProvider(), extraLinkArgs, extraLinkInputs)
+        .registerJ2ObjcCompileAndArchiveActions(common.getObjcProvider())
+        .registerCompileAndArchiveActions(common)
+        .addXcodeSettings(xcodeProviderBuilder, common)
+        .validateAttributes();
+    
     ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     new ReleaseBundlingSupport(
             ruleContext,
             common.getObjcProvider(),
             LinkedBinary.LOCAL_AND_DEPENDENCIES,
-            bundleFormat,
+            ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT,
             objcConfiguration.getMinimumOs())
         .registerActions()
         .addXcodeSettings(xcodeProviderBuilder)
@@ -230,6 +222,7 @@ public final class IosTest implements RuleConfiguredTargetFactory {
           .add(ruleContext.getPrerequisite(MEMLEAKS_DEP, Mode.TARGET, ObjcProvider.class));
     }
     return ObjcLibrary.common(ruleContext, extraSdkFrameworks, /*alwayslink=*/false,
+        new ObjcLibrary.ExtraImportLibraries(ObjcRuleClasses.j2ObjcLibraries(ruleContext)),
         extraDepObjcProviders);
   }
   
