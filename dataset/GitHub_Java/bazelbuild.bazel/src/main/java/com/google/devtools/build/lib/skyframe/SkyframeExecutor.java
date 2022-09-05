@@ -422,17 +422,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * factory methods and as an implementation detail of {@link #resetEvaluator}).
    */
   protected void init() {
-    progressReceiver = newSkyframeProgressReceiver();
+    progressReceiver = new SkyframeProgressReceiver();
     Map<SkyFunctionName, SkyFunction> skyFunctions = skyFunctions(
         directories.getBuildDataDirectory(), pkgFactory, allowedMissingInputs);
     memoizingEvaluator = evaluatorSupplier.create(
         skyFunctions, evaluatorDiffer(), progressReceiver, emittedEventState,
         hasIncrementalState());
     buildDriver = newBuildDriver();
-  }
-
-  protected SkyframeProgressReceiver newSkyframeProgressReceiver() {
-    return new SkyframeProgressReceiver();
   }
 
   /**
