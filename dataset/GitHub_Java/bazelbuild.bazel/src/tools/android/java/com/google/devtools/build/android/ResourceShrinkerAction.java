@@ -13,12 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.android.build.gradle.tasks.ResourceUsageAnalyzer;
-import com.android.builder.core.VariantType;
-import com.android.ide.common.xml.AndroidManifestParser;
-import com.android.ide.common.xml.ManifestData;
-import com.android.io.StreamException;
-import com.android.utils.StdLogger;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
@@ -27,11 +21,20 @@ import com.google.devtools.build.android.AndroidResourceProcessor.FlagAaptOption
 import com.google.devtools.build.android.Converters.ExistingPathConverter;
 import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.build.android.Converters.PathListConverter;
-import com.google.devtools.build.android.Converters.VariantTypeConverter;
+import com.google.devtools.build.android.Converters.VariantConfigurationTypeConverter;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
+
+import com.android.builder.core.VariantConfiguration;
+import com.android.ide.common.xml.AndroidManifestParser;
+import com.android.ide.common.xml.ManifestData;
+import com.android.io.StreamException;
+import com.android.utils.StdLogger;
+
+import org.xml.sax.SAXException;
+
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -45,8 +48,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+
 import javax.xml.parsers.ParserConfigurationException;
-import org.xml.sax.SAXException;
 
 /**
  * An action to perform resource shrinking using the Gradle resource shrinker.
@@ -151,11 +154,11 @@ public class ResourceShrinkerAction {
 
     @Option(name = "packageType",
         defaultValue = "DEFAULT",
-        converter = VariantTypeConverter.class,
+        converter = VariantConfigurationTypeConverter.class,
         category = "config",
         help = "Variant configuration type for packaging the resources."
-            + " Acceptible values DEFAULT, LIBRARY, ANDROID_TEST, UNIT_TEST")
-    public VariantType packageType;
+            + " Acceptible values DEFAULT, LIBRARY, TEST")
+    public VariantConfiguration.Type packageType;
   }
 
   private static AaptConfigOptions aaptConfigOptions;
@@ -216,7 +219,7 @@ public class ResourceShrinkerAction {
       }
 
       // Shrink resources.
-      ResourceUsageAnalyzer resourceShrinker = new ResourceUsageAnalyzer(
+      ResourceShrinker resourceShrinker = new ResourceShrinker(
           resourcePackages,
           options.rTxt,
           options.shrunkJar,
@@ -239,12 +242,12 @@ public class ResourceShrinkerAction {
           aaptConfigOptions.aapt,
           aaptConfigOptions.androidJar,
           aaptConfigOptions.buildToolsVersion,
-          VariantType.DEFAULT,
+          VariantConfiguration.Type.DEFAULT,
           aaptConfigOptions.debug,
           null /* packageForR */,
           new FlagAaptOptions(aaptConfigOptions),
           aaptConfigOptions.resourceConfigs,
-          aaptConfigOptions.splits,
+          ImmutableList.<String>of() /* splits */,
           new MergedAndroidData(
               shrunkResources, resourceFiles.resolve("assets"), options.primaryManifest),
           ImmutableList.<DependencyAndroidData>of() /* libraries */,
@@ -262,7 +265,7 @@ public class ResourceShrinkerAction {
         resourceProcessor.copyRToOutput(
             generatedSources,
             options.rTxtOutput,
-            options.packageType == VariantType.LIBRARY);
+            options.packageType == VariantConfiguration.Type.LIBRARY);
       }
       logger.fine(String.format("Packing resources finished at %sms",
           timer.elapsed(TimeUnit.MILLISECONDS)));
