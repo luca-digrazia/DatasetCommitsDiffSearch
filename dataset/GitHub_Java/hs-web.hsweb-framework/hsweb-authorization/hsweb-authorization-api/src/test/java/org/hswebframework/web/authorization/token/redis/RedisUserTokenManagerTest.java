@@ -68,6 +68,11 @@ public class RedisUserTokenManagerTest {
                 .as(StepVerifier::create)
                 .expectNext(TokenState.normal)
                 .verifyComplete();
+
+        tokenManager.signOutByToken("test-token")
+                .as(StepVerifier::create)
+                .verifyComplete();
+
     }
 
 
@@ -120,8 +125,8 @@ public class RedisUserTokenManagerTest {
 
         tokenManager.touch("test-token_2")
                 .as(StepVerifier::create)
-                .expectFusion()
-                .verifyComplete();
+                .expectComplete()
+                .verify();
 
         Thread.sleep(2000);
         tokenManager.getByToken("test-token_2")
