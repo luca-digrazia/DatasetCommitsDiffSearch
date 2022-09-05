@@ -150,7 +150,9 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
     BuildConfigurationCollection collection = skyframeExecutor.createConfigurations(
         configurationFactory,
         new BuildConfigurationKey(buildOptions,
-        new BlazeDirectories(outputBase, outputBase, workspace), multiCpu));
+        new BlazeDirectories(outputBase, outputBase, workspace),
+        ImmutableMap.<String, String>of(),
+        multiCpu));
     return collection;
   }
 

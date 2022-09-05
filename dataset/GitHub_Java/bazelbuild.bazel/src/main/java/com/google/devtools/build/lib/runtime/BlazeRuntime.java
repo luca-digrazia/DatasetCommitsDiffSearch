@@ -226,6 +226,29 @@ public final class BlazeRuntime {
 
   private final ProjectFile.Provider projectFileProvider;
 
+  /**
+   * Returns user-specified test environment variables and their values, as
+   * set by the --test_env options.
+   *
+   * @param envOverrides The --test_env flag values.
+   * @param clientEnvironment The full client environment.
+   */
+  private static Map<String, String> computeTestEnv(List<Map.Entry<String, String>> envOverrides,
+      Map<String, String> clientEnvironment) {
+    Map<String, String> testEnv = new TreeMap<>();
+    for (Map.Entry<String, String> var : envOverrides) {
+      if (var.getValue() != null) {
+        testEnv.put(var.getKey(), var.getValue());
+      } else {
+        String value = clientEnvironment.get(var.getKey());
+        if (value != null) {
+          testEnv.put(var.getKey(), value);
+        }
+      }
+    }
+    return testEnv;
+  }
+
   private class BlazeModuleEnvironment implements BlazeModule.ModuleEnvironment {
     @Override
     public Path getFileFromDepot(Label label)
@@ -711,7 +734,7 @@ public final class BlazeRuntime {
    * @param options The CommonCommandOptions used by every command.
    * @throws AbruptExitException if this command is unsuitable to be run as specified
    */
-  void beforeCommand(Command command, OptionsParser optionsParser,
+  void beforeCommand(String commandName, OptionsParser optionsParser,
       CommonCommandOptions options, long execStartTimeNanos)
       throws AbruptExitException {
     commandStartTime -= options.startupTime;
@@ -784,31 +807,7 @@ public final class BlazeRuntime {
       }
     }
 
-    if (command.builds()) {
-      Map<String, String> testEnv = new TreeMap<>();
-      for (Map.Entry<String, String> entry :
-          optionsParser.getOptions(BuildConfiguration.Options.class).testEnvironment) {
-        testEnv.put(entry.getKey(), entry.getValue());
-      }
-
-      try {
-        for (Map.Entry<String, String> entry : testEnv.entrySet()) {
-          if (entry.getValue() == null) {
-            String clientValue = clientEnv.get(entry.getKey());
-            if (clientValue != null) {
-              optionsParser.parse(OptionPriority.SOFTWARE_REQUIREMENT,
-                  "test environment variable from client environment",
-                  ImmutableList.of(
-                      "--test_env=" + entry.getKey() + "=" + clientEnv.get(entry.getKey())));
-            }
-          }
-        }
-      } catch (OptionsParsingException e) {
-        throw new IllegalStateException(e);
-      }
-    }
-
-    eventBus.post(new CommandStartEvent(command.name(), commandId, clientEnv, workingDirectory));
+    eventBus.post(new CommandStartEvent(commandName, commandId, clientEnv, workingDirectory));
     // Initialize exit code to dummy value for afterCommand.
     storedExitCode.set(ExitCode.RESERVED.getNumericExitCode());
   }
@@ -986,7 +985,10 @@ public final class BlazeRuntime {
    */
   public BuildConfigurationKey getBuildConfigurationKey(BuildOptions buildOptions,
       ImmutableSortedSet<String> multiCpu) {
-    return new BuildConfigurationKey(buildOptions, directories, multiCpu);
+    Map<String, String> testEnv = computeTestEnv(
+        buildOptions.get(BuildConfiguration.Options.class).testEnvironment,
+        clientEnv);
+    return new BuildConfigurationKey(buildOptions, directories, testEnv, multiCpu);
   }
 
   /**
