@@ -283,21 +283,19 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
     doRefresh();
   }
 
-  private void doRefresh() {
+  private synchronized void doRefresh() {
     long nowMillis = clock.currentTimeMillis();
     if (lastRefreshMillis + minimalDelayMillis < nowMillis) {
-      synchronized (this) {
-        try {
-          if (progressBarNeedsRefresh || timeBasedRefresh()) {
-            progressBarNeedsRefresh = false;
-            lastRefreshMillis = nowMillis;
-            clearProgressBar();
-            addProgressBar();
-            terminal.flush();
-          }
-        } catch (IOException e) {
-          LOG.warning("IO Error writing to output stream: " + e);
+      try {
+        if (progressBarNeedsRefresh || timeBasedRefresh()) {
+          progressBarNeedsRefresh = false;
+          lastRefreshMillis = nowMillis;
+          clearProgressBar();
+          addProgressBar();
+          terminal.flush();
         }
+      } catch (IOException e) {
+        LOG.warning("IO Error writing to output stream: " + e);
       }
       if (!stateTracker.progressBarTimeDependent()) {
         stopUpdateThread();
@@ -329,49 +327,37 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
     lastRefreshMillis = clock.currentTimeMillis() - minimalDelayMillis - 1;
   }
 
-  private void startUpdateThread() {
-    Thread threadToStart = null;
-    synchronized (this) {
-      if (updateThread == null) {
-        final ExperimentalEventHandler eventHandler = this;
-        updateThread =
-            new Thread(
-                new Runnable() {
-                  @Override
-                  public void run() {
-                    try {
-                      while (true) {
-                        Thread.sleep(minimalUpdateInterval);
-                        eventHandler.doRefresh();
-                      }
-                    } catch (InterruptedException e) {
-                      // Ignore
+  private synchronized void startUpdateThread() {
+    if (updateThread == null) {
+      final ExperimentalEventHandler eventHandler = this;
+      updateThread =
+          new Thread(
+              new Runnable() {
+                @Override
+                public void run() {
+                  try {
+                    while (true) {
+                      Thread.sleep(minimalUpdateInterval);
+                      eventHandler.doRefresh();
                     }
+                  } catch (InterruptedException e) {
+                    // Ignore
                   }
-                });
-        threadToStart = updateThread;
-      }
-      if (threadToStart != null) {
-        threadToStart.start();
-      }
+                }
+              });
+      updateThread.start();
     }
   }
 
-  private void stopUpdateThread() {
-    Thread threadToWaitFor = null;
-    synchronized (this) {
-      if (updateThread != null) {
-        threadToWaitFor = updateThread;
-        updateThread = null;
-      }
-    }
-    if (threadToWaitFor != null) {
-      threadToWaitFor.interrupt();
+  private synchronized void stopUpdateThread() {
+    if (updateThread != null) {
+      updateThread.interrupt();
       try {
-        threadToWaitFor.join();
+        updateThread.join();
       } catch (InterruptedException e) {
         // Ignore
       }
+      updateThread = null;
     }
   }
 
