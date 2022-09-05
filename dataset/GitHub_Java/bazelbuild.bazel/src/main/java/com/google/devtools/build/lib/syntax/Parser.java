@@ -1418,9 +1418,10 @@ public class Parser {
   private FlowStatement parseFlowStatement(TokenKind kind) {
     int start = token.left;
     expect(kind);
-    FlowStatement.Kind flowKind =
-        kind == TokenKind.BREAK ? FlowStatement.Kind.BREAK : FlowStatement.Kind.CONTINUE;
-    return setLocation(new FlowStatement(flowKind), start, token.right);
+    return setLocation(
+        kind == TokenKind.BREAK ? FlowStatement.BREAK : FlowStatement.CONTINUE,
+        start,
+        token.right);
   }
 
   // return_stmt ::= RETURN [expr]
