@@ -15,10 +15,10 @@
 package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.actions.ActionContextProvider;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.OS;
@@ -31,7 +31,7 @@ final class SandboxActionContextProvider extends ActionContextProvider {
 
   public static final String SANDBOX_NOT_SUPPORTED_MESSAGE =
       "Sandboxed execution is not supported on your system and thus hermeticity of actions cannot "
-          + "be guaranteed. See http://bazel.build/docs/bazel-user-manual.html#sandboxing for more "
+          + "be guaranteed. See http://bazel.io/docs/bazel-user-manual.html#sandboxing for more "
           + "information. You can turn off this warning via --ignore_unsupported_sandboxing";
 
   @SuppressWarnings("unchecked")
@@ -49,22 +49,18 @@ final class SandboxActionContextProvider extends ActionContextProvider {
     switch (OS.getCurrent()) {
       case LINUX:
         if (LinuxSandboxedStrategy.isSupported(env)) {
+          boolean fullySupported = LinuxSandboxRunner.isSupported(env);
+          if (!fullySupported
+              && !buildRequest.getOptions(SandboxOptions.class).ignoreUnsupportedSandboxing) {
+            env.getReporter().handle(Event.warn(SANDBOX_NOT_SUPPORTED_MESSAGE));
+          }
           contexts.add(
               new LinuxSandboxedStrategy(
                   buildRequest,
                   env.getDirectories(),
                   verboseFailures,
-                  env.getRuntime().getProductName()));
-        } else {
-          if (!buildRequest.getOptions(SandboxOptions.class).ignoreUnsupportedSandboxing) {
-            env.getReporter().handle(Event.warn(SANDBOX_NOT_SUPPORTED_MESSAGE));
-          }
-          contexts.add(
-              new ProcessWrapperSandboxedStrategy(
-                  buildRequest,
-                  env.getDirectories(),
-                  verboseFailures,
-                  env.getRuntime().getProductName()));
+                  env.getRuntime().getProductName(),
+                  fullySupported));
         }
         break;
       case DARWIN:
@@ -81,14 +77,6 @@ final class SandboxActionContextProvider extends ActionContextProvider {
             env.getReporter().handle(Event.warn(SANDBOX_NOT_SUPPORTED_MESSAGE));
           }
         }
-        break;
-      case FREEBSD:
-        contexts.add(
-            new ProcessWrapperSandboxedStrategy(
-                buildRequest,
-                env.getDirectories(),
-                verboseFailures,
-                env.getRuntime().getProductName()));
         break;
       default:
         // No sandboxing available.
