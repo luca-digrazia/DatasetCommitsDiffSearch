@@ -4,9 +4,7 @@ import com.yammer.metrics.core.HistogramMetric.SampleType;
 import com.yammer.metrics.util.ThreadPools;
 
 import javax.management.MalformedObjectNameException;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -17,21 +15,9 @@ import java.util.concurrent.TimeUnit;
  * A registry of metric instances.
  */
 public class MetricsRegistry {
-
     private final ConcurrentMap<MetricName, Metric> metrics = newMetricsMap();
+
     private final ThreadPools threadPools = new ThreadPools();
-    private final List<MetricsRegistryListener> listeners = Collections.synchronizedList(new ArrayList<MetricsRegistryListener>());
-
-
-   /**
-    * Adds a {@link MetricsRegistryListener} to a collection of listeners that will be notified on
-    * metric creation.  Listeners will be notified in the order in which they are added.
-    *
-    * @param listener the listener that will be notified
-    */
-    public void addListener(MetricsRegistryListener listener) {
-      listeners.add(listener);
-    }
 
     /**
      * Given a new {@link com.yammer.metrics.core.GaugeMetric}, registers it
@@ -143,8 +129,7 @@ public class MetricsRegistry {
      * @param name  the name of the metric
      * @return a new {@link com.yammer.metrics.core.CounterMetric}
      */
-    public CounterMetric newCounter(Class<?> klass,
-                                    String name) {
+    public CounterMetric newCounter(Class<?> klass, String name) {
         return newCounter(klass, name, null);
     }
 
@@ -214,8 +199,7 @@ public class MetricsRegistry {
      * @param name the name of the metric
      * @return a new {@link HistogramMetric}
      */
-    public HistogramMetric newHistogram(Class<?> klass,
-                                        String name) {
+    public HistogramMetric newHistogram(Class<?> klass, String name) {
         return newHistogram(klass, name, false);
     }
 
@@ -304,25 +288,11 @@ public class MetricsRegistry {
             final MeterMetric metric = MeterMetric.newMeter(newMeterTickThreadPool(), eventType, unit);
             final Metric justAddedMetric = metrics.putIfAbsent(metricName, metric);
             if (justAddedMetric == null) {
-                notify(metricName, metric);
                 return metric;
             }
             return (MeterMetric) justAddedMetric;
         }
         return (MeterMetric) existingMetric;
-    }
-
-    /**
-     * Creates a new {@link TimerMetric} and registers it under the given class and name, measuring
-     * elapsed time in milliseconds and invocations per second.
-     *
-     * @param klass        the class which owns the metric
-     * @param name         the name of the metric
-     * @return a new {@link TimerMetric}
-     */
-    public TimerMetric newTimer(Class<?> klass,
-                                String name) {
-        return newTimer(klass, name, null, TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
     }
 
     /**
@@ -340,21 +310,6 @@ public class MetricsRegistry {
                                 TimeUnit durationUnit,
                                 TimeUnit rateUnit) {
         return newTimer(klass, name, null, durationUnit, rateUnit);
-    }
-
-    /**
-     * Creates a new {@link TimerMetric} and registers it under the given class, name, and scope,
-     * measuring elapsed time in milliseconds and invocations per second.
-     *
-     * @param klass        the class which owns the metric
-     * @param name         the name of the metric
-     * @param scope        the scope of the metric
-     * @return a new {@link TimerMetric}
-     */
-    public TimerMetric newTimer(Class<?> klass,
-                                String name,
-                                String scope) {
-        return newTimer(klass, name, scope, TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
     }
 
     /**
@@ -393,7 +348,6 @@ public class MetricsRegistry {
             final TimerMetric metric = new TimerMetric(newMeterTickThreadPool(), durationUnit, rateUnit);
             final Metric justAddedMetric = metrics.putIfAbsent(metricName, metric);
             if (justAddedMetric == null) {
-                notify(metricName, metric);
                 return metric;
             }
             return (TimerMetric) justAddedMetric;
@@ -423,8 +377,7 @@ public class MetricsRegistry {
      * @param klass the klass the metric is associated with
      * @param name the name of the metric
      */
-    public void removeMetric(Class<?> klass,
-                             String name) {
+    public void removeMetric(Class<?> klass, String name) {
         removeMetric(klass, name, null);
     }
 
@@ -435,8 +388,7 @@ public class MetricsRegistry {
      * @param name the name of the metric
      * @param scope the scope of the metric
      */
-    public void removeMetric(Class<?> klass, String name,
-                             String scope) {
+    public void removeMetric(Class<?> klass, String name, String scope) {
         removeMetric(new MetricName(klass, name, scope));
     }
 
@@ -472,19 +424,10 @@ public class MetricsRegistry {
         if (existingMetric == null) {
             final Metric justAddedMetric = metrics.putIfAbsent(name, metric);
             if (justAddedMetric == null) {
-                notify(name, metric);
                 return metric;
             }
             return (T) justAddedMetric;
         }
         return (T) existingMetric;
     }
-
-    private void notify(MetricName name, Metric metric) {
-      // clone the listeners for thread safety
-      for (MetricsRegistryListener listener : listeners.toArray(new MetricsRegistryListener[] {})) {
-        listener.newMetric(name, metric);
-      }
-    }
-
 }
