@@ -226,7 +226,39 @@ public class TBuildType {
     @Config(title = "The baseline depends on the coordinates",message = "Such as: com.taobao.android:taobao-android-release:6.3.0-SNAPSHOT@ap ", order = 1, group = "atlas_patch")
     private String baseApDependency;
 
+    public boolean isRealign() {
+        return realign;
+    }
+
+    public void setRealign(boolean realign) {
+        this.realign = realign;
+    }
+
+    private boolean realign;
+
+    public boolean isDebuggable() {
+        return debuggable;
+    }
+
+    public void setDebuggable(boolean debuggable) {
+        this.debuggable = debuggable;
+    }
+
+    private boolean debuggable;
+
     private PatchConfig patchConfig;
+
+    private DefaultChannelConfig channelConfig;
+
+    public EnhanceConfig getEnhanceConfig() {
+        return enhanceConfig;
+    }
+
+    public void setEnhanceConfig(EnhanceConfig enhanceConfig) {
+        this.enhanceConfig = enhanceConfig;
+    }
+
+    private EnhanceConfig enhanceConfig;
 
     public DexConfig getDexConfig() {
         return dexConfig;
@@ -241,6 +273,16 @@ public class TBuildType {
     private MultiDexConfig multiDexConfig;
 
     private DefaultSigningConfig signingConfig;
+
+    public DefaultChannelConfig getAtlasChannelConfig() {
+        return atlasChannelConfig;
+    }
+
+    public void setAtlasChannelConfig(DefaultChannelConfig atlasChannelConfig) {
+        this.atlasChannelConfig = atlasChannelConfig;
+    }
+
+    private DefaultChannelConfig atlasChannelConfig;
 
     public TBuildType(String name) {
         this.name = name;
@@ -293,4 +335,7 @@ public class TBuildType {
     public void setMultiDexConfig(MultiDexConfig multiDexConfig) {
         this.multiDexConfig = multiDexConfig;
     }
+
+
+
 }

@@ -274,9 +274,10 @@ public class PostProcessManifestAction implements Action<Task> {
                 bundleBaseLineInfo,
                 atlasExtension.manifestOptions,
                 isMultiDexEnabled(),
-                false,
+                variantScope.getInstantRunBuildContext().isInInstantRunMode(),
+                appVariantContext.getBuildType().isDebuggable(),
                 atlasExtension.getTBuildConfig()
-                    .getOutOfApkBundles(),atlasExtension.getTBuildConfig().getInsideOfApkBundles());
+                    .getOutOfApkBundles(),atlasExtension.getTBuildConfig().getInsideOfApkBundles(),atlasExtension.getTBuildConfig().isPushInstall());
 
             File proxySrcDir = appVariantContext.getAtlasProxySourceDir();
             if (AtlasProxy.genProxyJavaSource(proxySrcDir, result)) {
@@ -298,8 +299,9 @@ public class PostProcessManifestAction implements Action<Task> {
                     atlasExtension.manifestOptions,
                     isMultiDexEnabled(),
                     true,
-                    atlasExtension.getTBuildConfig()
-                        .getOutOfApkBundles(),atlasExtension.getTBuildConfig().getInsideOfApkBundles());
+                        appVariantContext.getBuildType().isDebuggable(),
+                        atlasExtension.getTBuildConfig()
+                        .getOutOfApkBundles(),atlasExtension.getTBuildConfig().getInsideOfApkBundles(),atlasExtension.getTBuildConfig().isPushInstall());
             }
 
             // manifest list check
