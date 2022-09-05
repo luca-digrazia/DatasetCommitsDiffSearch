@@ -24,7 +24,7 @@ import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.License.LicenseParsingException;
-import com.google.devtools.build.lib.packages.Package.Builder.GeneratedLabelConflict;
+import com.google.devtools.build.lib.packages.Package.AbstractBuilder.GeneratedLabelConflict;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.RuleClass.ParsedAttributeValue;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build;
@@ -159,8 +159,8 @@ public class PackageDeserializer {
           location.hasStartOffset() && location.hasEndOffset() ? location.getStartOffset() : 0,
           location.hasStartOffset() && location.hasEndOffset() ? location.getEndOffset() : 0);
       this.path = path.asFragment();
-      if (location.hasStartLine() && location.hasStartColumn()
-          && location.hasEndLine() && location.hasEndColumn()) {
+      if (location.hasStartLine() && location.hasStartColumn() &&
+          location.hasEndLine() && location.hasEndColumn()) {
         this.startLine = location.getStartLine();
         this.startColumn = location.getStartColumn();
         this.endLine = location.getEndLine();
@@ -282,8 +282,8 @@ public class PackageDeserializer {
       List<Label> files =
           filesetPb.getFilesPresent() ? deserializeLabels(filesetPb.getFileList()) : null;
       List<String> excludes =
-          filesetPb.getExcludeList().isEmpty()
-              ? null : ImmutableList.copyOf(filesetPb.getExcludeList());
+          filesetPb.getExcludeList().isEmpty() ?
+              null : ImmutableList.copyOf(filesetPb.getExcludeList());
       String destDir = filesetPb.getDestinationDirectory();
       FilesetEntry.SymlinkBehavior symlinkBehavior =
           pbToSymlinkBehavior(filesetPb.getSymlinkBehavior());
@@ -316,6 +316,9 @@ public class PackageDeserializer {
     // It's important to do this after setting the default visibility, since that implicitly sets
     // this bit to true
     builder.setDefaultVisibilitySet(packagePb.getDefaultVisibilitySet());
+    if (packagePb.hasDefaultObsolete()) {
+      builder.setDefaultObsolete(packagePb.getDefaultObsolete());
+    }
     if (packagePb.hasDefaultTestonly()) {
       builder.setDefaultTestonly(packagePb.getDefaultTestonly());
     }
@@ -442,12 +445,10 @@ public class PackageDeserializer {
       throws PackageDeserializationException {
     switch (attrPb.getType()) {
       case INTEGER:
-        return attrPb.hasIntValue() ? new Integer(attrPb.getIntValue()) : null;
+        return new Integer(attrPb.getIntValue());
 
       case STRING:
-        if (!attrPb.hasStringValue()) {
-          return null;
-        } else if (expectedType == Type.NODEP_LABEL) {
+        if (expectedType == Type.NODEP_LABEL) {
           return deserializeLabel(attrPb.getStringValue());
         } else {
           return attrPb.getStringValue();
@@ -455,7 +456,7 @@ public class PackageDeserializer {
 
       case LABEL:
       case OUTPUT:
-        return attrPb.hasStringValue() ? deserializeLabel(attrPb.getStringValue()) : null;
+        return deserializeLabel(attrPb.getStringValue());
 
       case STRING_LIST:
         if (expectedType == Type.NODEP_LABEL_LIST) {
@@ -472,7 +473,7 @@ public class PackageDeserializer {
         return deserializeDistribs(attrPb.getStringListValueList());
 
       case LICENSE:
-        return attrPb.hasLicense() ? deserializeLicense(attrPb.getLicense()) : null;
+        return deserializeLicense(attrPb.getLicense());
 
       case STRING_DICT: {
         ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
@@ -510,10 +511,10 @@ public class PackageDeserializer {
       }
 
       case BOOLEAN:
-        return attrPb.hasBooleanValue() ? attrPb.getBooleanValue() : null;
+        return attrPb.getBooleanValue();
 
       case TRISTATE:
-        return attrPb.hasStringValue() ? deserializeTriStateValue(attrPb.getStringValue()) : null;
+        return deserializeTriStateValue(attrPb.getStringValue());
 
       default:
           throw new PackageDeserializationException("Invalid discriminator: " + attrPb.getType());

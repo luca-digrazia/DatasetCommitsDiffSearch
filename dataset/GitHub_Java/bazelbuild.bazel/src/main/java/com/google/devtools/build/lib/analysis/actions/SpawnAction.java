@@ -313,10 +313,7 @@ public class SpawnAction extends AbstractAction {
 
   @Override
   protected String getRawProgressMessage() {
-    if (progressMessage != null) {
-      return progressMessage;
-    }
-    return super.getRawProgressMessage();
+    return progressMessage;
   }
 
   @Override

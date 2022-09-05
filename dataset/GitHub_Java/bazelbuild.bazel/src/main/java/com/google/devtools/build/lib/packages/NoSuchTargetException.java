@@ -28,6 +28,7 @@ public class NoSuchTargetException extends NoSuchThingException {
   // TODO(bazel-team): rename/refactor this class and NoSuchPackageException since it's confusing
   // that they embed Target/Package instances.
   @Nullable private final Target target;
+  private final boolean packageLoadedSuccessfully;
 
   public NoSuchTargetException(String message) {
     this(null, message);
@@ -47,6 +48,7 @@ public class NoSuchTargetException extends NoSuchThingException {
     super(message, nspe);
     this.label = label;
     this.target = target;
+    this.packageLoadedSuccessfully = nspe == null;
   }
 
   @Nullable
@@ -60,5 +62,9 @@ public class NoSuchTargetException extends NoSuchThingException {
   @Nullable
   public Target getTarget() {
     return target;
+  }
+
+  public boolean getPackageLoadedSuccessfully() {
+    return packageLoadedSuccessfully;
   }
 }

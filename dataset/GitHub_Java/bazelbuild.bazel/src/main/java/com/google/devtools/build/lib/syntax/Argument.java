@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.common.base.Preconditions;
 
 import java.util.List;
 
@@ -70,7 +70,7 @@ public abstract class Argument extends ASTNode {
   }
 
   /** positional argument: Expression */
-  public static final class Positional extends Passed {
+  public static class Positional extends Passed {
 
     public Positional(Expression value) {
       super(value);
@@ -86,7 +86,7 @@ public abstract class Argument extends ASTNode {
   }
 
   /** keyword argument: K = Expression */
-  public static final class Keyword extends Passed {
+  public static class Keyword extends Passed {
 
     final String name;
 
@@ -108,7 +108,7 @@ public abstract class Argument extends ASTNode {
   }
 
   /** positional rest (starred) argument: *Expression */
-  public static final class Star extends Passed {
+  public static class Star extends Passed {
 
     public Star(Expression value) {
       super(value);
@@ -124,7 +124,7 @@ public abstract class Argument extends ASTNode {
   }
 
   /** keyword rest (star_starred) parameter: **Expression */
-  public static final class StarStar extends Passed {
+  public static class StarStar extends Passed {
 
     public StarStar(Expression value) {
       super(value);

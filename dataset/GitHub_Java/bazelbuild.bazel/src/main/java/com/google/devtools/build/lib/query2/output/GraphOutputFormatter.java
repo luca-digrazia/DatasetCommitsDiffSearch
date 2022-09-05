@@ -42,8 +42,7 @@ class GraphOutputFormatter extends OutputFormatter {
   }
 
   @Override
-  public void output(QueryOptions options, Digraph<Target> result, PrintStream out,
-      AspectResolver aspectProvider) {
+  public void output(QueryOptions options, Digraph<Target> result, PrintStream out) {
     this.graphNodeStringLimit = options.graphNodeStringLimit;
     this.graphFactored = options.graphFactored;
 

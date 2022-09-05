@@ -116,9 +116,8 @@ public class RunfilesSupport {
     this.runfilesManifest = createRunfilesAction(ruleContext, runfiles);
     this.runfilesMiddleman = createRunfilesMiddleman(ruleContext, runfiles.getAllArtifacts());
     sourcesManifest = createSourceManifest(ruleContext, runfiles);
-
     args = ImmutableList.<String>builder()
-        .addAll(ruleContext.getTokenizedStringListAttr("args", ruleContext))
+        .addAll(ruleContext.getTokenizedStringListAttr("args"))
         .addAll(appendingArgs)
         .build();
   }
@@ -156,11 +155,6 @@ public class RunfilesSupport {
     PathFragment executablePath = owningExecutable.getExecPath();
     return executablePath.getParentDirectory().getChild(
         executablePath.getBaseName() + RUNFILES_DIR_EXT);
-  }
-
-  /** @return whether or not runfiles symlinks should be created */
-  public boolean getCreateSymlinks() {
-    return createSymlinks;
   }
 
   public Runfiles getRunfiles() {

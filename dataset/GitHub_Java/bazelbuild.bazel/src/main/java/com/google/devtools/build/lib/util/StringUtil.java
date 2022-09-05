@@ -87,7 +87,7 @@ public class StringUtil {
       // many concurrent submissions that touch the same files,
       // attempt to use a single reference for equal strings via the
       // deduplicator.
-      result.add(StringCanonicalizer.intern(val));
+      result.add(StringCanonicalizer.intern(new String(val)));
     }
     return result;
   }

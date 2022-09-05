@@ -846,7 +846,8 @@ public final class Command {
         }
       }
     } finally {
-      // Read this for detailed explanation: http://www.ibm.com/developerworks/library/j-jtp05236/
+      // Read this for detailed explanation:
+      // http://www-128.ibm.com/developerworks/java/library/j-jtp05236.html
       if (wasInterrupted) {
         Thread.currentThread().interrupt(); // preserve interrupted status
       }

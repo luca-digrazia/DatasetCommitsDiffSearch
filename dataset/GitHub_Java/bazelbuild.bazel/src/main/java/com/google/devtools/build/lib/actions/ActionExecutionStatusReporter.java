@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
@@ -22,7 +23,6 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -117,13 +117,20 @@ public final class ActionExecutionStatusReporter {
   }
 
   public void setRunningFromBuildData(ActionMetadata action) {
-    updateStatus(ActionStatusMessage.runningStrategy(action, "unknown"));
+    updateStatus(ActionStatusMessage.runningStrategy(action));
   }
 
   @Subscribe
   public void updateStatus(ActionStatusMessage statusMsg) {
     String message = statusMsg.getMessage();
     ActionMetadata action = statusMsg.getActionMetadata();
+    if (statusMsg.needsStrategy()) {
+      String strategy = action.describeStrategy(executor);
+      if (strategy == null) {
+        return;
+      }
+      message = String.format(message, strategy);
+    }
     setStatus(action, message);
   }
 

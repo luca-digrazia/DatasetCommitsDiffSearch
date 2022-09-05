@@ -46,6 +46,7 @@ public final class StringLiteral extends Literal<String> {
   }
 
   @Override
-  void validate(ValidationEnvironment env) throws EvalException {
+  SkylarkType validate(ValidationEnvironment env) throws EvalException {
+    return SkylarkType.STRING;
   }
 }

@@ -121,9 +121,14 @@ public final class ListLiteral extends Expression {
   }
 
   @Override
-  void validate(ValidationEnvironment env) throws EvalException {
-    for (Expression expr : exprs) {
-      expr.validate(env);
+  SkylarkType validate(ValidationEnvironment env) throws EvalException {
+    SkylarkType type = SkylarkType.UNKNOWN;
+    if (!isTuple()) {
+      for (Expression expr : exprs) {
+        SkylarkType nextType = expr.validate(env);
+        type = type.infer(nextType, "list literal", expr.getLocation(), getLocation());
+      }
     }
+    return SkylarkType.of(SkylarkType.LIST, type);
   }
 }

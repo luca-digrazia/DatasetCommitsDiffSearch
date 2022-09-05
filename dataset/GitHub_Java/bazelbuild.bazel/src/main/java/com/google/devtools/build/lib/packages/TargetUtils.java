@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,8 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Label;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -120,6 +119,18 @@ public final class TargetUtils {
     return hasConstraint(rule, "external");
   }
 
+  /**
+   * Returns true, iff the given target is a rule and it has the attribute
+   * <code>obsolete<code/> set to one.
+   */
+  public static boolean isObsolete(Target target) {
+    if (!(target instanceof Rule)) {
+      return false;
+    }
+    Rule rule = (Rule) target;
+    return (rule.isAttrDefined("obsolete", Type.BOOLEAN))
+        && NonconfigurableAttributeMapper.of(rule).get("obsolete", Type.BOOLEAN);
+  }
 
   /**
    * If the given target is a rule, returns its <code>deprecation<code/> value, or null if unset.
@@ -235,23 +246,18 @@ public final class TargetUtils {
     // instanceof returns false if target is null (which is exploited here)
     if (target instanceof Rule) {
       Rule rule = (Rule) target;
-      if (isExplicitDependency(rule, label)) {
-        return String.format("%s and referenced by '%s'", e.getMessage(), target.getLabel());
-      } else {
-        // N.B. If you see this error message in one of our integration tests during development of
-        // a change that adds a new implicit dependency when running Blaze, maybe you forgot to add
-        // a new mock target to the integration test's setup.
-        return String.format("every rule of type %s implicitly depends upon the target '%s', but "
-            + "this target could not be found because of: %s", rule.getRuleClass(), label,
-            e.getMessage());
-      }
+      return !isExplicitDependency(rule, label)
+          ? ("every rule of type " + rule.getRuleClass() + " implicitly depends upon the target '"
+              + label + "',  but this target could not be found. "
+              + "If this is an integration test, maybe you forgot to add a mock for your new tool?")
+              : e.getMessage() + " and referenced by '" + target.getLabel() + "'";
     } else if (target instanceof InputFile) {
       return e.getMessage() + " (this is usually caused by a missing package group in the"
           + " package-level visibility declaration)";
     } else {
       if (target != null) {
-        return String.format("in target '%s', no such label '%s': %s", target.getLabel(), label,
-            e.getMessage());
+        return "in target '" + target.getLabel() + "', no such label '" + label + "': "
+            + e.getMessage();
       }
       return e.getMessage();
     }

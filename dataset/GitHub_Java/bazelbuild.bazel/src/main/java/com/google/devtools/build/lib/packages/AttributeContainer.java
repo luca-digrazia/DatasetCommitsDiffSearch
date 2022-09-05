@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,14 +47,10 @@ public class AttributeContainer {
    * Create a container for a rule of the given rule class.
    */
   AttributeContainer(RuleClass ruleClass) {
-   this(ruleClass, new Location[ruleClass.getAttributeCount()]);
-  }
-  
-  AttributeContainer(RuleClass ruleClass, Location[] locations) {
     this.ruleClass = ruleClass;
     this.attributeValues = new Object[ruleClass.getAttributeCount()];
     this.attributeValueExplicitlySpecified = new BitSet(ruleClass.getAttributeCount());
-    this.attributeLocations = locations;
+    this.attributeLocations = new Location[ruleClass.getAttributeCount()];
   }
 
   /**

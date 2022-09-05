@@ -139,6 +139,10 @@ public abstract class SkylarkType {
     return intersection(this, other).equals(other);
   }
 
+  public boolean includes(Class<?> other) {
+    return includes(Simple.of(other));
+  }
+
   public SkylarkType getArgType() {
     return TOP;
   }
@@ -148,18 +152,18 @@ public abstract class SkylarkType {
   // Notable types
 
   /** A singleton for the TOP type, that at analysis time means that any type is possible. */
-  public static final Simple TOP = new Top();
+  public static final Top TOP = new Top();
 
   /** UNKNOWN, an alias for the TOP type, for backward compatibility */
-  public static final Simple UNKNOWN = TOP;
+  public static final Top UNKNOWN = TOP;
 
   /** A singleton for the ANY type, that at run time means that any object is possible. */
   // NB: right now, it has the same representation as TOP or UNKNOWN,
   // but means something subtly different.
-  public static final Simple ANY = TOP;
+  public static final SkylarkType ANY = Simple.of(Object.class);
 
   /** A singleton for the BOTTOM type, that contains no element */
-  public static final Simple BOTTOM = new Bottom();
+  public static final Bottom BOTTOM = new Bottom();
 
   /** NONE, the Unit type, isomorphic to Void, except its unique element prints as None */
   // Note that we currently consider at validation time that None is in every type,
@@ -185,7 +189,7 @@ public abstract class SkylarkType {
   public static final Simple BOOL = Simple.of(Boolean.class);
 
   /** The STRUCT type, for all Struct's */
-  public static final Simple STRUCT = Simple.of(ClassObject.SkylarkClassObject.class);
+  public static final Simple STRUCT = Simple.of(ClassObject.class);
 
   /** The FUNCTION type, that contains all functions, otherwise dynamically typed at call-time */
   public static final SkylarkFunctionType FUNCTION = new SkylarkFunctionType("unknown", TOP);
@@ -292,15 +296,10 @@ public abstract class SkylarkType {
         // i.e. None like null in Java is in every type.
         // TODO(bazel-team): Should we have .contains also always return true for NONE?
         simple = TOP;
+      } else if (ClassObject.class != type && ClassObject.class.isAssignableFrom(type)) {
+        simple = of(ClassObject.class);
       } else {
-        // Consider all classes that have the same EvalUtils.getSkylarkType() as equivalent,
-        // as a substitute to handling inheritance.
-        Class<?> skylarkType = EvalUtils.getSkylarkType(type);
-        if (skylarkType != type) {
-          simple = Simple.of(skylarkType);
-        } else {
-          simple = new Simple(type);
-        }
+        simple = new Simple(type);
       }
       simpleCache.put(type, simple);
       return simple;
@@ -617,6 +616,8 @@ public abstract class SkylarkType {
       return of(LIST, ((SkylarkList) value).getContentType());
     } else if (value instanceof SkylarkNestedSet) {
       return of(SET, ((SkylarkNestedSet) value).getContentType());
+    } else if (value instanceof ClassObject) {
+      return STRUCT;
     } else {
       return Simple.of(value.getClass());
     }

@@ -540,7 +540,7 @@ public class BuildView {
   }
 
   private void prepareToBuild(PackageRootResolver resolver) throws ViewCreationFailedException {
-    for (BuildConfiguration config : configurations.getAllConfigurations()) {
+    for (BuildConfiguration config : configurations.getTargetConfigurations()) {
       config.prepareToBuild(directories.getExecRoot(), getArtifactFactory(), resolver);
     }
   }

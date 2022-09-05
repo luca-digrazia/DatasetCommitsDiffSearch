@@ -56,7 +56,6 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
 
   private boolean xmlLineNumbers;
   private boolean showDefaultValues;
-  private boolean relativeLocations;
   private BinaryPredicate<Rule, Attribute> dependencyFilter;
 
   @Override
@@ -68,7 +67,6 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
   public void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out) {
     this.xmlLineNumbers = options.xmlLineNumbers;
     this.showDefaultValues = options.xmlShowDefaultValues;
-    this.relativeLocations = options.relativeLocations;
     this.dependencyFilter = OutputFormatter.getDependencyFilter(options);
 
     Document doc;
@@ -184,7 +182,7 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
     }
 
     elem.setAttribute("name", target.getLabel().toString());
-    String location = getLocation(target, relativeLocations);
+    String location = target.getLocation().print();
     if (!xmlLineNumbers) {
       int firstColon = location.indexOf(':');
       if (firstColon != -1) {

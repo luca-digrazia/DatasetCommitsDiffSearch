@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@
 package com.google.devtools.build.lib.vfs;
 
 import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
-import com.google.protobuf.CodedInputStream;
-import com.google.protobuf.CodedOutputStream;
-import java.io.IOException;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -53,21 +49,7 @@ public class RootedPath implements Serializable {
    * Returns a rooted path representing {@code relativePath} relative to {@code root}.
    */
   public static RootedPath toRootedPath(Path root, PathFragment relativePath) {
-    if (relativePath.isAbsolute()) {
-      if (root.isRootDirectory()) {
-        return new RootedPath(
-            root.getRelative(relativePath.windowsVolume()), relativePath.toRelative());
-      } else {
-        Preconditions.checkArgument(
-            relativePath.startsWith(root.asFragment()),
-            "relativePath '%s' is absolute, but it's not under root '%s'",
-            relativePath,
-            root);
-        return new RootedPath(root, relativePath.relativeTo(root.asFragment()));
-      }
-    } else {
-      return new RootedPath(root, relativePath);
-    }
+    return new RootedPath(root, relativePath);
   }
 
   /**
@@ -75,7 +57,7 @@ public class RootedPath implements Serializable {
    */
   public static RootedPath toRootedPath(Path root, Path path) {
     Preconditions.checkState(path.startsWith(root), "path: %s root: %s", path, root);
-    return toRootedPath(root, path.asFragment());
+    return new RootedPath(root, path.relativeTo(root));
   }
 
   /**
@@ -130,36 +112,5 @@ public class RootedPath implements Serializable {
   @Override
   public String toString() {
     return "[" + root + "]/[" + relativePath + "]";
-  }
-
-  /** Custom serialization for {@link RootedPath}s. */
-  public static class RootedPathCodec implements ObjectCodec<RootedPath> {
-
-    private final PathCodec pathCodec;
-
-    /** Create an instance which will deserialize RootedPaths on {@code fileSystem}. */
-    public RootedPathCodec(FileSystem fileSystem) {
-      this.pathCodec = new PathCodec(fileSystem);
-    }
-
-    @Override
-    public Class<RootedPath> getEncodedClass() {
-      return RootedPath.class;
-    }
-
-    @Override
-    public void serialize(RootedPath rootedPath, CodedOutputStream codedOut)
-        throws IOException, SerializationException {
-      pathCodec.serialize(rootedPath.getRoot(), codedOut);
-      PathFragment.CODEC.serialize(rootedPath.getRelativePath(), codedOut);
-    }
-
-    @Override
-    public RootedPath deserialize(CodedInputStream codedIn)
-        throws IOException, SerializationException {
-      Path root = pathCodec.deserialize(codedIn);
-      PathFragment relativePath = PathFragment.CODEC.deserialize(codedIn);
-      return toRootedPath(root, relativePath);
-    }
   }
 }

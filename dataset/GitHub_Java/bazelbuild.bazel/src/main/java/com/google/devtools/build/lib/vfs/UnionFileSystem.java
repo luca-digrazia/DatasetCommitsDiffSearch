@@ -368,9 +368,9 @@ public class UnionFileSystem extends FileSystem {
   }
 
   @Override
-  protected byte[] getxattr(Path path, String name) throws IOException {
+  protected byte[] getxattr(Path path, String name, boolean followSymlinks) throws IOException {
     FileSystem delegate = getDelegate(path);
-    return delegate.getxattr(adjustPath(path, delegate), name);
+    return delegate.getxattr(adjustPath(path, delegate), name, followSymlinks);
   }
 
   @Override

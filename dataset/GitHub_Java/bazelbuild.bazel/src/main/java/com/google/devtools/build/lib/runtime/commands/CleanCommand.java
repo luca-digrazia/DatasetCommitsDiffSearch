@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.ShutdownBlazeServerException;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.util.CommandBuilder;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -84,16 +83,15 @@ public final class CleanCommand implements BlazeCommand {
   private static Logger LOG = Logger.getLogger(CleanCommand.class.getName());
 
   @Override
-  public ExitCode exec(CommandEnvironment env, OptionsProvider options)
+  public ExitCode exec(BlazeRuntime runtime, OptionsProvider options)
       throws ShutdownBlazeServerException {
-    BlazeRuntime runtime = env.getRuntime();
     Options cleanOptions = options.getOptions(Options.class);
     cleanOptions.expunge_async = cleanOptions.cleanStyle.equals("expunge_async");
     cleanOptions.expunge = cleanOptions.cleanStyle.equals("expunge");
 
     if (!cleanOptions.expunge && !cleanOptions.expunge_async
         && !cleanOptions.cleanStyle.isEmpty()) {
-      env.getReporter().handle(Event.error(
+      runtime.getReporter().handle(Event.error(
           null, "Invalid clean_style value '" + cleanOptions.cleanStyle + "'"));
       return ExitCode.COMMAND_LINE_ERROR;
     }
@@ -103,28 +101,27 @@ public final class CleanCommand implements BlazeCommand {
         "Starting clean (this may take a while). " +
             "Consider using --expunge_async if the clean takes more than several minutes.";
 
-    env.getReporter().handle(Event.info(null/*location*/, cleanBanner));
+    runtime.getReporter().handle(Event.info(null/*location*/, cleanBanner));
     try {
       String symlinkPrefix =
           options.getOptions(BuildRequest.BuildRequestOptions.class).symlinkPrefix;
-      actuallyClean(env, runtime.getOutputBase(), cleanOptions, symlinkPrefix);
+      actuallyClean(runtime, runtime.getOutputBase(), cleanOptions, symlinkPrefix);
       return ExitCode.SUCCESS;
     } catch (IOException e) {
-      env.getReporter().handle(Event.error(e.getMessage()));
+      runtime.getReporter().handle(Event.error(e.getMessage()));
       return ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
     } catch (CommandException | ExecException e) {
-      env.getReporter().handle(Event.error(e.getMessage()));
+      runtime.getReporter().handle(Event.error(e.getMessage()));
       return ExitCode.RUN_FAILURE;
     } catch (InterruptedException e) {
-      env.getReporter().handle(Event.error("clean interrupted"));
+      runtime.getReporter().handle(Event.error("clean interrupted"));
       return ExitCode.INTERRUPTED;
     }
   }
 
-  private void actuallyClean(CommandEnvironment env,
+  private void actuallyClean(BlazeRuntime runtime,
       Path outputBase, Options cleanOptions, String symlinkPrefix) throws IOException,
       ShutdownBlazeServerException, CommandException, ExecException, InterruptedException {
-    BlazeRuntime runtime = env.getRuntime();
     if (runtime.getOutputService() != null) {
       runtime.getOutputService().clean();
     }
@@ -145,7 +142,7 @@ public final class CleanCommand implements BlazeCommand {
       // same file system, and therefore the mv will be atomic and fast.
       Path tempOutputBase = outputBase.getParentDirectory().getChild(tempBaseName);
       outputBase.renameTo(tempOutputBase);
-      env.getReporter().handle(Event.info(
+      runtime.getReporter().handle(Event.info(
           null, "Output base moved to " + tempOutputBase + " for deletion"));
 
       // Daemonize the shell and use the double-fork idiom to ensure that the shell
@@ -181,5 +178,5 @@ public final class CleanCommand implements BlazeCommand {
   }
 
   @Override
-  public void editOptions(CommandEnvironment env, OptionsParser optionsParser) {}
+  public void editOptions(BlazeRuntime runtime, OptionsParser optionsParser) {}
 }

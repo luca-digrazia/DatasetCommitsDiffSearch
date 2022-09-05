@@ -69,7 +69,6 @@ import java.util.Map;
          shortDescription = "Analyzes build profile data.",
          help = "resource:analyze-profile.txt",
          allowResidue = true,
-         completion = "path",
          mustRunInWorkspace = false)
 public final class ProfileCommand implements BlazeCommand {
 

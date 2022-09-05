@@ -54,6 +54,12 @@ class PackageLookupFunction implements SkyFunction {
       return computeExternalPackageLookupValue(skyKey, env);
     }
     PathFragment pkg = packageKey.getPackageFragment();
+
+    // This represents a package lookup at the package root.
+    if (pkg.equals(PathFragment.EMPTY_FRAGMENT)) {
+      return PackageLookupValue.invalidPackageName("The empty package name is invalid");
+    }
+
     String pkgName = pkg.getPathString();
     String packageNameErrorMsg = LabelValidator.validatePackageName(pkgName);
     if (packageNameErrorMsg != null) {
@@ -87,10 +93,8 @@ class PackageLookupFunction implements SkyFunction {
   private PackageLookupValue getPackageLookupValue(Environment env, Path packagePathEntry,
       PathFragment pkgFragment) throws PackageLookupFunctionException {
     PathFragment buildFileFragment;
-    boolean isWorkspace = false;
     if (pkgFragment.getPathString().equals(PackageFunction.EXTERNAL_PACKAGE_NAME)) {
       buildFileFragment = new PathFragment("WORKSPACE");
-      isWorkspace = true;
     } else {
       buildFileFragment = pkgFragment.getChild("BUILD");
     }
@@ -123,7 +127,7 @@ class PackageLookupFunction implements SkyFunction {
     if (fileValue == null) {
       return null;
     }
-    if (fileValue.isFile() || isWorkspace) {
+    if (fileValue.isFile()) {
       return PackageLookupValue.success(buildFileRootedPath.getRoot());
     }
     return PackageLookupValue.noBuildFile();

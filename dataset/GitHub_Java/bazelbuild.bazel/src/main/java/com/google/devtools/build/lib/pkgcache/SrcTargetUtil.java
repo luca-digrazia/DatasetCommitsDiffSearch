@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.pkgcache;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
@@ -68,7 +69,7 @@ public final class SrcTargetUtil {
 
   // Attributes referring to "headers".
   private static final ImmutableSet<String> HEADER_ATTRIBUTES =
-      ImmutableSet.of("hdrs", "textual_hdrs");
+      ImmutableSet.of("hdrs");
   
   // The attribute to search in filegroups.
   private static final ImmutableSet<String> FILEGROUP_ATTRIBUTES =
@@ -106,13 +107,11 @@ public final class SrcTargetUtil {
       Set<Rule> visitedRules,
       TargetProvider targetProvider)
       throws NoSuchTargetException, NoSuchPackageException, InterruptedException {
+    Preconditions.checkState(!rule.hasConfigurableAttributes()); // Not currently supported.
     List<Label> srcLabels = Lists.newArrayList();
     AttributeMap attributeMap = RawAttributeMapper.of(rule);
     for (String attrName : attributes) {
-      if (rule.isConfigurableAttribute(attrName)) {
-        // We don't know which path to follow for configurable attributes. So skip them.
-        continue;
-      } else if (rule.isAttrDefined(attrName, Type.LABEL_LIST)) {
+      if (rule.isAttrDefined(attrName, Type.LABEL_LIST)) {
         srcLabels.addAll(attributeMap.get(attrName, Type.LABEL_LIST));
       } else if (rule.isAttrDefined(attrName, Type.LABEL)) {
         Label srcLabel = attributeMap.get(attrName, Type.LABEL);

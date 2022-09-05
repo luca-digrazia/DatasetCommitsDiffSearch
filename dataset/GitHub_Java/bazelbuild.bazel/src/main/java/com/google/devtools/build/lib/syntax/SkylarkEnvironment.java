@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.util.Fingerprint;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -34,7 +33,7 @@ import javax.annotation.Nullable;
 /**
  * The environment for Skylark.
  */
-public class SkylarkEnvironment extends Environment implements Serializable {
+public class SkylarkEnvironment extends Environment {
 
   /**
    * This set contains the variable names of all the successful lookups from the global

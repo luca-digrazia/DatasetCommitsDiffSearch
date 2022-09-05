@@ -14,20 +14,23 @@
 
 package com.google.devtools.build.lib.actions;
 
-import static com.google.devtools.build.lib.profiler.AutoProfiler.profiled;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.profiler.AutoProfiler;
+import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
+import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Pair;
 
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.CountDownLatch;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Used to keep track of resources consumed by the Blaze action execution threads and throttle them
@@ -49,6 +52,10 @@ import java.util.concurrent.CountDownLatch;
  *     amount of the total available memory and will limit itself to the number of effective cores
  *     and 2/3 of the available memory. For details, please look at the {@link
  *     LocalHostCapacity#getLocalHostCapacity} method.
+ * <li>Blaze will periodically (every 3 seconds) poll {@code /proc/meminfo} and {@code /proc/stat}
+ *     information to obtain how much RAM and CPU resources are currently idle at that moment. For
+ *     calculation details, please look at the {@link LocalHostCapacity#getFreeResources}
+ *     implementation.
  * </ol>
  *
  * <p>The resource manager also allows a slight overallocation of the resources to account for the
@@ -59,6 +66,9 @@ import java.util.concurrent.CountDownLatch;
  */
 @ThreadSafe
 public class ResourceManager {
+
+  private static final Logger LOG = Logger.getLogger(ResourceManager.class.getName());
+  private final boolean FINE;
 
   private EventBus eventBus;
 
@@ -104,6 +114,7 @@ public class ResourceManager {
   private ResourceSet staticResources = null;
 
   private ResourceSet availableResources = null;
+  private LocalHostCapacity.FreeResources freeReading = null;
 
   // Used amount of CPU capacity (where 1.0 corresponds to the one fully
   // occupied CPU core. Corresponds to the CPU resource definition in the
@@ -125,7 +136,11 @@ public class ResourceManager {
   public static final int DEFAULT_RAM_UTILIZATION_PERCENTAGE = 67;
   private int ramUtilizationPercentage = DEFAULT_RAM_UTILIZATION_PERCENTAGE;
 
+  // Timer responsible for the periodic polling of the current system load.
+  private Timer timer = null;
+
   private ResourceManager() {
+    FINE = LOG.isLoggable(Level.FINE);
     requestList = new LinkedList<>();
   }
 
@@ -135,8 +150,8 @@ public class ResourceManager {
 
   /**
    * Resets resource manager state and releases all thread locks.
-   * Note - it does not reset available resources. Use
-   * separate call to setAvailableResoures().
+   * Note - it does not reset auto-sensing or available resources. Use
+   * separate call to setAvailableResoures() or to setAutoSensing().
    */
   public synchronized void resetResourceUsage() {
     usedCpu = 0;
@@ -153,16 +168,17 @@ public class ResourceManager {
   /**
    * Sets available resources using given resource set. Must be called
    * at least once before using resource manager.
+   * <p>
+   * Method will also disable auto-sensing if it was enabled.
    */
   public synchronized void setAvailableResources(ResourceSet resources) {
     Preconditions.checkNotNull(resources);
     staticResources = resources;
-    availableResources = ResourceSet.create(
-        staticResources.getMemoryMb() * this.ramUtilizationPercentage / 100.0,
-        staticResources.getCpuUsage(),
-        staticResources.getIoUsage(),
-        staticResources.getLocalTestCount());
-    processWaitingThreads();
+    setAutoSensing(false);
+  }
+
+  public synchronized boolean isAutoSensingEnabled() {
+    return timer != null;
   }
 
   /**
@@ -174,13 +190,42 @@ public class ResourceManager {
   }
 
   /**
+   * Enables or disables secondary resource allocation algorithm that will
+   * periodically (when needed but at most once per 3 seconds) checks real
+   * amount of available memory (based on /proc/meminfo) and current CPU load
+   * (based on 1 second difference of /proc/stat) and allows additional resource
+   * acquisition if previous requests were overly pessimistic.
+   */
+  public synchronized void setAutoSensing(boolean enable) {
+    // Create new Timer instance only if it does not exist already.
+    if (enable && !isAutoSensingEnabled()) {
+      Profiler.instance().logEvent(ProfilerTask.INFO, "Enable auto sensing");
+      if(refreshFreeResources()) {
+        timer = new Timer("AutoSenseTimer", true);
+        timer.schedule(new TimerTask() {
+          @Override public void run() { refreshFreeResources(); }
+        }, 3000, 3000);
+      }
+    } else if (!enable) {
+      if (isAutoSensingEnabled()) {
+        Profiler.instance().logEvent(ProfilerTask.INFO, "Disable auto sensing");
+        timer.cancel();
+        timer = null;
+      }
+      if (staticResources != null) {
+        updateAvailableResources(false);
+      }
+    }
+  }
+
+  /**
    * Acquires requested resource set. Will block if resource is not available.
    * NB! This method must be thread-safe!
    */
   public void acquireResources(ActionMetadata owner, ResourceSet resources)
       throws InterruptedException {
     Preconditions.checkNotNull(resources);
-    AutoProfiler p = profiled(owner, ProfilerTask.ACTION_LOCK);
+    long startTime = Profiler.nanoTimeMaybe();
     CountDownLatch latch = null;
     try {
       waiting(owner);
@@ -195,7 +240,7 @@ public class ResourceManager {
 
       // Profile acquisition only if it waited for resource to become available.
       if (latch != null) {
-        p.complete();
+        Profiler.instance().logSimpleTask(startTime, ProfilerTask.ACTION_LOCK, owner);
       }
     }
   }
@@ -270,13 +315,13 @@ public class ResourceManager {
   }
 
   /**
-   * Releases previously requested resource =.
+   * Releases previously requested resource set.
    *
    * <p>NB! This method must be thread-safe!
    */
   public void releaseResources(ActionMetadata owner, ResourceSet resources) {
     boolean isConflict = false;
-    AutoProfiler p = profiled(owner, ProfilerTask.ACTION_RELEASE);
+    long startTime = Profiler.nanoTimeMaybe();
     try {
       isConflict = release(resources);
     } finally {
@@ -284,7 +329,7 @@ public class ResourceManager {
 
       // Profile resource release only if it resolved at least one allocation request.
       if (isConflict) {
-        p.complete();
+        Profiler.instance().logSimpleTask(startTime, ProfilerTask.ACTION_RELEASE, owner);
       }
     }
   }
@@ -297,6 +342,17 @@ public class ResourceManager {
     Pair<ResourceSet, CountDownLatch> request =
       new Pair<>(resources, new CountDownLatch(1));
     requestList.add(request);
+
+    // If we use auto sensing and there has not been an update within last
+    // 30 seconds, something has gone really wrong - disable it.
+    if (isAutoSensingEnabled() && freeReading.getReadingAge() > 30000) {
+      LoggingUtil.logToRemote(Level.WARNING, "Free resource readings were " +
+          "not updated for 30 seconds - auto-sensing is disabled",
+          new IllegalStateException());
+      LOG.warning("Free resource readings were not updated for 30 seconds - "
+          + "auto-sensing is disabled");
+      setAutoSensing(false);
+    }
     return request.second;
   }
 
@@ -379,6 +435,46 @@ public class ResourceManager {
     return cpuIsAvailable && ramIsAvailable && ioIsAvailable && localTestCountIsAvailable;
   }
 
+  private synchronized void updateAvailableResources(boolean useFreeReading) {
+    Preconditions.checkNotNull(staticResources);
+    if (useFreeReading && isAutoSensingEnabled()) {
+      availableResources = ResourceSet.create(
+          usedRam + freeReading.getFreeMb(),
+          usedCpu + freeReading.getAvgFreeCpu(),
+          staticResources.getIoUsage(),
+          staticResources.getLocalTestCount());
+      if(FINE) {
+        LOG.fine("Free resources: " + Math.round(freeReading.getFreeMb()) + " MB,"
+            + Math.round(freeReading.getAvgFreeCpu() * 100) + "% CPU");
+      }
+      processWaitingThreads();
+    } else {
+      availableResources = ResourceSet.create(
+          staticResources.getMemoryMb() * this.ramUtilizationPercentage / 100.0,
+          staticResources.getCpuUsage(),
+          staticResources.getIoUsage(),
+          staticResources.getLocalTestCount());
+      processWaitingThreads();
+    }
+  }
+
+  /**
+   * Called by the timer thread to update system load information.
+   *
+   * @return true if update was successful and false if error was detected and
+   *         autosensing was disabled.
+   */
+  private boolean refreshFreeResources() {
+    freeReading = LocalHostCapacity.getFreeResources(freeReading);
+    if (freeReading == null) { // Unable to read or parse /proc/* information.
+      LOG.warning("Unable to obtain system load - autosensing is disabled");
+      setAutoSensing(false);
+      return false;
+    }
+    updateAvailableResources(
+        freeReading.getInterval() >= 1000 && freeReading.getInterval() <= 10000);
+    return true;
+  }
 
   @VisibleForTesting
   synchronized int getWaitCount() {

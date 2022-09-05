@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,13 @@
 
 package com.google.devtools.build.lib.util;
 
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.OptionsParser.UnparsedOptionValueDescription;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.OptionsProvider;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -71,44 +71,6 @@ public final class OptionsUtils {
   }
 
   /**
-   * Return a representation of the non-hidden specified options, as a list of string. No escaping
-   * is done.
-   */
-  public static List<String> asArgumentList(Iterable<UnparsedOptionValueDescription> optionsList) {
-    ImmutableList.Builder<String> builder = ImmutableList.builder();
-    for (UnparsedOptionValueDescription option : optionsList) {
-      if (option.isHidden()) {
-        continue;
-      }
-      String value = option.getUnparsedValue();
-      if (option.isBooleanOption()) {
-        boolean isEnabled = false;
-        try {
-          isEnabled = new Converters.BooleanConverter().convert(value);
-        } catch (OptionsParsingException e) {
-          throw new RuntimeException("Unexpected parsing exception", e);
-        }
-        builder.add((isEnabled ? "--" : "--no") + option.getName());
-      } else {
-        String optionString = "--" + option.getName();
-        if (value != null) { // Can be null for Void options.
-          optionString += "=" + value;
-        }
-        builder.add(optionString);
-      }
-    }
-    return builder.build();
-  }
-
-  /**
-   * Return a representation of the non-hidden specified options, as a list of string. No escaping
-   * is done.
-   */
-  public static List<String> asArgumentList(OptionsProvider options) {
-    return asArgumentList(options.asListOfUnparsedOptions());
-  }
-
-  /**
    * Returns a string representation of the non-hidden explicitly or implicitly
    * specified options, filtering out any sensitive options; option values are
    * shell-escaped.
@@ -141,6 +103,29 @@ public final class OptionsUtils {
     @Override
     public String getTypeDescription() {
       return "a path";
+    }
+  }
+
+  /**
+   * Converter from String to PathFragment.
+   *
+   * <p>Complains if the path is not absolute.
+   */
+  public static class AbsolutePathFragmentConverter
+      implements Converter<PathFragment> {
+
+    @Override
+    public PathFragment convert(String input) throws OptionsParsingException {
+      PathFragment pathFragment = new PathFragment(input);
+      if (!pathFragment.isAbsolute()) {
+        throw new OptionsParsingException("Expected absolute path, found " + input);
+      }
+      return pathFragment;
+    }
+
+    @Override
+    public String getTypeDescription() {
+      return "an absolute path";
     }
   }
 

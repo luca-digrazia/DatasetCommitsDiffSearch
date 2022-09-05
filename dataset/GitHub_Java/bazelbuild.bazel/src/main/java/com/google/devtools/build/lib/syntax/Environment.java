@@ -37,15 +37,14 @@ import javax.annotation.Nullable;
  */
 public class Environment {
 
-  @SkylarkSignature(name = "True", returnType = Boolean.class,
-      doc = "Literal for the boolean true.")
+  @SkylarkBuiltin(name = "True", returnType = Boolean.class, doc = "Literal for the boolean true.")
   private static final Boolean TRUE = true;
 
-  @SkylarkSignature(name = "False", returnType = Boolean.class,
+  @SkylarkBuiltin(name = "False", returnType = Boolean.class,
       doc = "Literal for the boolean false.")
   private static final Boolean FALSE = false;
 
-  @SkylarkSignature(name = "PACKAGE_NAME", returnType = String.class,
+  @SkylarkBuiltin(name = "PACKAGE_NAME", returnType = String.class,
       doc = "The name of the package the rule or build extension is called from. "
           + "This variable is special, because its value comes from outside of the extension "
           + "module (it comes from the BUILD file), so it can only be accessed in functions "
@@ -66,7 +65,7 @@ public class Environment {
     private NoneType() {}
   }
 
-  @SkylarkSignature(name = "None", returnType = NoneType.class, doc = "Literal for the None value.")
+  @SkylarkBuiltin(name = "None", returnType = NoneType.class, doc = "Literal for the None value.")
   public static final NoneType NONE = new NoneType();
 
   protected final Map<String, Object> env = new HashMap<>();
@@ -136,18 +135,14 @@ public class Environment {
     this.eventHandler = Preconditions.checkNotNull(eventHandler);
   }
 
-  public EventHandler getEventHandler() {
-    return eventHandler;
-  }
-
   // Sets up the global environment
   private void setupGlobal() {
     // In Python 2.x, True and False are global values and can be redefined by the user.
     // In Python 3.x, they are keywords. We implement them as values, for the sake of
     // simplicity. We define them as Boolean objects.
-    update("False", FALSE);
-    update("True", TRUE);
-    update("None", NONE);
+    env.put("False", FALSE);
+    env.put("True", TRUE);
+    env.put("None", NONE);
   }
 
   public boolean isSkylarkEnabled() {

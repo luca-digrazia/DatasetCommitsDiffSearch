@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,15 +21,16 @@ import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoCollection;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.rules.java.WriteBuildInfoPropertiesAction.TimestampFormatter;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.ArrayList;
-import java.util.List;
+
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Java build info creation - generates properties file that contain the corresponding build-info
@@ -59,31 +60,28 @@ public abstract class JavaBuildInfoFactory implements BuildInfoFactory {
 
   @Override
   public final BuildInfoCollection create(BuildInfoContext context, BuildConfiguration config,
-      Artifact stableStatus, Artifact volatileStatus, RepositoryName repositoryName) {
+      Artifact stableStatus, Artifact volatileStatus) {
     WriteBuildInfoPropertiesAction redactedInfo = getHeader(context,
         config,
         BUILD_INFO_REDACTED_PROPERTIES_NAME,
         Artifact.NO_ARTIFACTS,
         createRedactedTranslator(),
         true,
-        true,
-        repositoryName);
+        true);
     WriteBuildInfoPropertiesAction nonvolatileInfo = getHeader(context,
         config,
         BUILD_INFO_NONVOLATILE_PROPERTIES_NAME,
         ImmutableList.of(stableStatus),
         createNonVolatileTranslator(),
         false,
-        true,
-        repositoryName);
+        true);
     WriteBuildInfoPropertiesAction volatileInfo = getHeader(context,
         config,
         BUILD_INFO_VOLATILE_PROPERTIES_NAME,
         ImmutableList.of(volatileStatus),
         createVolatileTranslator(),
         true,
-        false,
-        repositoryName);
+        false);
     List<Action> actions = new ArrayList<>(3);
     actions.add(redactedInfo);
     actions.add(nonvolatileInfo);
@@ -122,9 +120,8 @@ public abstract class JavaBuildInfoFactory implements BuildInfoFactory {
       ImmutableList<Artifact> inputs,
       BuildInfoPropertiesTranslator translator,
       boolean includeVolatile,
-      boolean includeNonVolatile,
-      RepositoryName repositoryName) {
-    Root outputPath = config.getIncludeDirectory(repositoryName);
+      boolean includeNonVolatile) {
+    Root outputPath = config.getIncludeDirectory();
     final Artifact output = context.getBuildInfoArtifact(propertyFileName, outputPath,
         includeVolatile && !inputs.isEmpty() ? BuildInfoType.NO_REBUILD
             : BuildInfoType.FORCE_REBUILD_IF_CHANGED);

@@ -38,12 +38,6 @@ public abstract class AbstractConfiguredTarget
 
   private final NestedSet<PackageSpecification> visibility;
 
-  // Accessors for Skylark
-  private static final String DATA_RUNFILES_FIELD = "data_runfiles";
-  private static final String DEFAULT_RUNFILES_FIELD = "default_runfiles";
-  private static final String LABEL_FIELD = "label";
-  private static final String FILES_FIELD = "files";
-
   AbstractConfiguredTarget(Target target,
                            BuildConfiguration configuration) {
     this.target = target;
@@ -94,22 +88,15 @@ public abstract class AbstractConfiguredTarget
 
   @Override
   public Object getValue(String name) {
-    switch (name) {
-      case LABEL_FIELD:
-        return getLabel();
-      case FILES_FIELD:
-        // A shortcut for files to build in Skylark. FileConfiguredTarget and RunleConfiguredTarget
-        // always has FileProvider and Error- and PackageGroupConfiguredTarget-s shouldn't be
-        // accessible in Skylark.
-        return SkylarkNestedSet.of(
-            Artifact.class, getProvider(FileProvider.class).getFilesToBuild());
-      case DEFAULT_RUNFILES_FIELD:
-        return RunfilesProvider.DEFAULT_RUNFILES.apply(this);
-      case DATA_RUNFILES_FIELD:
-        return RunfilesProvider.DATA_RUNFILES.apply(this);
-      default:
-        return get(name);
+    if (name.equals("label")) {
+      return getLabel();
+    } else if (name.equals("files")) {
+      // A shortcut for files to build in Skylark. FileConfiguredTarget and RunleConfiguredTarget
+      // always has FileProvider and Error- and PackageGroupConfiguredTarget-s shouldn't be
+      // accessible in Skylark.
+      return SkylarkNestedSet.of(Artifact.class, getProvider(FileProvider.class).getFilesToBuild());
     }
+    return get(name);
   }
 
   @Override
@@ -119,6 +106,6 @@ public abstract class AbstractConfiguredTarget
 
   @Override
   public ImmutableCollection<String> getKeys() {
-    return ImmutableList.of("data_runfiles", "default_runfiles", "label", "files");
+    return ImmutableList.of("label", "files");
   }
 }

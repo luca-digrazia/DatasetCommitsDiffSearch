@@ -23,7 +23,6 @@ import com.google.common.collect.Sets;
 import com.google.common.io.ByteSink;
 import com.google.common.io.ByteSource;
 import com.google.common.io.ByteStreams;
-import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ConditionallyThreadSafe;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 
@@ -157,10 +156,7 @@ public class FileSystemUtils {
    * filename string. If the basename contains no '.', the filename is returned
    * unchanged.
    *
-   * <p>e.g. "foo/bar.x" -> "foo/bar"
-   *
-   * <p>Note that if the filename is composed entirely of ".", this method will return the string
-   * with one fewer ".", which may have surprising effects.
+   * e.g. "foo/bar.x" -> "foo/bar"
    */
   @ThreadSafe
   public static String removeExtension(String filename) {
@@ -179,9 +175,6 @@ public class FileSystemUtils {
    * unchanged.
    *
    * <p>e.g. "foo/bar.x" -> "foo/bar"
-   *
-   * <p>Note that if the base filename is composed entirely of ".", this method will return the
-   * filename with one fewer "." in the base filename, which may have surprising effects.
    */
   @ThreadSafe
   public static PathFragment removeExtension(PathFragment path) {
@@ -194,9 +187,6 @@ public class FileSystemUtils {
    * unchanged.
    *
    * <p>e.g. "foo/bar.x" -> "foo/bar"
-   *
-   * <p>Note that if the base filename is composed entirely of ".", this method will return the
-   * filename with one fewer "." in the base filename, which may have surprising effects.
    */
   @ThreadSafe
   public static Path removeExtension(Path path) {
@@ -689,8 +679,6 @@ public class FileSystemUtils {
    */
   public static void plantLinkForest(ImmutableMap<PathFragment, Path> packageRootMap, Path linkRoot)
       throws IOException {
-    Path emptyPackagePath = null;
-
     // Create a sorted map of all dirs (packages and their ancestors) to sets of their roots.
     // Packages come from exactly one root, but their shared ancestors may come from more.
     // The map is maintained sorted lexicographically, so parents are before their children.
@@ -698,9 +686,6 @@ public class FileSystemUtils {
     for (Map.Entry<PathFragment, Path> entry : packageRootMap.entrySet()) {
       PathFragment pkgDir = entry.getKey();
       Path pkgRoot = entry.getValue();
-      if (pkgDir.segmentCount() == 0) {
-        emptyPackagePath = entry.getValue();
-      }
       for (int i = 1; i <= pkgDir.segmentCount(); i++) {
         PathFragment dir = pkgDir.subFragment(0, i);
         Set<Path> roots = dirRootsMap.get(dir);
@@ -776,19 +761,6 @@ public class FileSystemUtils {
             e.printStackTrace();
           }
           // Otherwise its just an otherwise empty common parent dir.
-        }
-      }
-    }
-
-    if (emptyPackagePath != null) {
-      // For the top-level directory, generate symlinks to everything in the directory instead of
-      // the directory itself.
-      for (Path target : emptyPackagePath.getDirectoryEntries()) {
-        String baseName = target.getBaseName();
-        // Create any links that don't exist yet and don't start with bazel-.
-        if (!baseName.startsWith(Constants.PRODUCT_NAME + "-")
-            && !linkRoot.getRelative(baseName).exists()) {
-          linkRoot.getRelative(baseName).createSymbolicLink(target);
         }
       }
     }
