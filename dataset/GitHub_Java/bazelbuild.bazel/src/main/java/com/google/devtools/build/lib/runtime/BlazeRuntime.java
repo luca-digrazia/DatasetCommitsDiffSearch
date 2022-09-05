@@ -30,7 +30,6 @@ import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.SubscriberExceptionContext;
 import com.google.common.eventbus.SubscriberExceptionHandler;
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
@@ -90,7 +89,6 @@ import com.google.devtools.build.lib.server.signal.InterruptSignalHandler;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutorFactory;
-import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutorFactory;
 import com.google.devtools.build.lib.syntax.Label;
@@ -126,6 +124,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryMXBean;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -139,12 +139,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Handler;
 import java.util.logging.Level;
-import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
@@ -157,6 +154,22 @@ import javax.annotation.Nullable;
  * and will be passed around as needed.
  */
 public final class BlazeRuntime {
+  /**
+   * The threshold for memory reserved by a 32-bit JVM before trouble may be expected.
+   *
+   * <p>After the JVM starts, it reserves memory for heap (controlled by -Xmx) and non-heap
+   * (code, PermGen, etc.). Furthermore, as Blaze spawns threads, each thread reserves memory
+   * for the stack (controlled by -Xss). Thus even if Blaze starts fine, with high memory settings
+   * it will die from a stack allocation failure in the middle of a build. We prefer failing
+   * upfront by setting a safe threshold.
+   *
+   * <p>This does not apply to 64-bit VMs.
+   */
+  private static final long MAX_BLAZE32_RESERVED_MEMORY = 3400 * 1048576L;
+
+  // Less than this indicates tampering with -Xmx settings.
+  private static final long MIN_BLAZE32_HEAP_SIZE = 3000 * 1000000L;
+
   public static final String DO_NOT_BUILD_FILE_NAME = "DO_NOT_BUILD_HERE";
 
   private static final Pattern suppressFromLog = Pattern.compile(".*(auth|pass|cookie).*",
@@ -1264,6 +1277,11 @@ public final class BlazeRuntime {
     LOG.info("Running Blaze in batch mode with startup args "
         + commandLineOptions.getStartupArgs());
 
+    String memoryWarning = validateJvmMemorySettings();
+    if (memoryWarning != null) {
+      OutErr.SYSTEM_OUT_ERR.printErrLn(memoryWarning);
+    }
+
     BlazeRuntime runtime;
     try {
       runtime = newRuntime(modules, parseOptions(modules, commandLineOptions.getStartupArgs()));
@@ -1326,6 +1344,7 @@ public final class BlazeRuntime {
     final BlazeRuntime runtime = newRuntime(modules, options);
     final BlazeCommandDispatcher dispatcher =
         new BlazeCommandDispatcher(runtime, getBuiltinCommandList());
+    final String memoryWarning = validateJvmMemorySettings();
 
     final ServerCommand blazeCommand;
 
@@ -1336,6 +1355,9 @@ public final class BlazeRuntime {
       @Override
       public int exec(List<String> args, OutErr outErr, long firstContactTime) {
         LOG.info(getRequestLogString(args));
+        if (memoryWarning != null) {
+          outErr.printErrLn(memoryWarning);
+        }
 
         try {
           return dispatcher.exec(args, outErr, firstContactTime);
@@ -1493,11 +1515,6 @@ public final class BlazeRuntime {
                 ? new BlazeRuntime.BugReportingExceptionHandler()
                 : new BlazeRuntime.RemoteExceptionHandler());
 
-    if (System.getenv("TEST_TMPDIR") != null
-        && System.getenv("NO_CRASH_ON_LOGGING_IN_TEST") == null) {
-      LoggingUtil.installRemoteLogger(getTestCrashLogger());
-    }
-
     for (BlazeModule blazeModule : blazeModules) {
       runtimeBuilder.addBlazeModule(blazeModule);
     }
@@ -1508,37 +1525,35 @@ public final class BlazeRuntime {
   }
 
   /**
-   * Returns a logger that crashes as soon as it's written to, since tests should not cause events
-   * that would be logged.
+   * Returns null if JVM memory settings are considered safe, and an error string otherwise.
    */
-  @VisibleForTesting
-  public static Future<Logger> getTestCrashLogger() {
-    Logger crashLogger = Logger.getAnonymousLogger();
-    crashLogger.addHandler(
-        new Handler() {
-          @Override
-          public void publish(LogRecord record) {
-            throw new IllegalStateException(
-                record.getSourceClassName()
-                    + "#"
-                    + record.getSourceMethodName()
-                    + ": "
-                    + record.getMessage()
-                    + "\n"
-                    + record.getThrown());
-          }
+  private static String validateJvmMemorySettings() {
+    boolean is64BitVM = "64".equals(System.getProperty("sun.arch.data.model"));
+    if (is64BitVM) {
+      return null;
+    }
+    MemoryMXBean mem = ManagementFactory.getMemoryMXBean();
+    long heapSize = mem.getHeapMemoryUsage().getMax();
+    long nonHeapSize = mem.getNonHeapMemoryUsage().getMax();
+    if (heapSize == -1 || nonHeapSize == -1) {
+      return null;
+    }
 
-          @Override
-          public void flush() {
-            throw new IllegalStateException();
-          }
-
-          @Override
-          public void close() {
-            throw new IllegalStateException();
-          }
-        });
-    return Futures.immediateFuture(crashLogger);
+    if (heapSize + nonHeapSize > MAX_BLAZE32_RESERVED_MEMORY) {
+      return String.format(
+          "WARNING: JVM reserved %d MB of virtual memory (above threshold of %d MB). "
+          + "This may result in OOMs at runtime. Use lower values of MaxPermSize "
+          + "or switch to blaze64.",
+          (heapSize + nonHeapSize) >> 20, MAX_BLAZE32_RESERVED_MEMORY >> 20);
+    } else if (heapSize < MIN_BLAZE32_HEAP_SIZE) {
+      return String.format(
+          "WARNING: JVM heap size is %d MB. You probably have a custom -Xmx setting in your "
+          + "local Blaze configuration. This may result in OOMs. Removing overrides of -Xmx "
+          + "settings is advised.",
+          heapSize >> 20);
+    } else {
+      return null;
+    }
   }
 
   /**
@@ -1717,29 +1732,13 @@ public final class BlazeRuntime {
         precomputedValues.addAll(module.getPrecomputedSkyframeValues());
       }
 
-      ImmutableList.Builder<SkyValueDirtinessChecker> customDirtinessCheckers =
-          ImmutableList.builder();
-      for (BlazeModule module : blazeModules) {
-        customDirtinessCheckers.addAll(module.getCustomDirtinessCheckers());
-      }
-
       final PackageFactory pkgFactory =
           new PackageFactory(ruleClassProvider, platformRegexps, extensions);
-      SkyframeExecutor skyframeExecutor =
-          skyframeExecutorFactory.create(
-              reporter,
-              pkgFactory,
-              timestampMonitor,
-              directories,
-              workspaceStatusActionFactory,
-              ruleClassProvider.getBuildInfoFactories(),
-              immutableDirectories,
-              diffAwarenessFactories,
-              allowedMissingInputs,
-              preprocessorFactorySupplier,
-              skyFunctions.build(),
-              precomputedValues.build(),
-              customDirtinessCheckers.build());
+      SkyframeExecutor skyframeExecutor = skyframeExecutorFactory.create(reporter, pkgFactory,
+          timestampMonitor, directories, workspaceStatusActionFactory,
+          ruleClassProvider.getBuildInfoFactories(), immutableDirectories, diffAwarenessFactories,
+          allowedMissingInputs, preprocessorFactorySupplier, skyFunctions.build(),
+          precomputedValues.build());
 
       if (configurationFactory == null) {
         configurationFactory = new ConfigurationFactory(
