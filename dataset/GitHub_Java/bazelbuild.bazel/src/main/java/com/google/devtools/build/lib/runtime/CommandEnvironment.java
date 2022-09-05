@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.runtime;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
@@ -37,10 +36,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsProvider;
 
 import java.io.IOException;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -53,7 +48,6 @@ public final class CommandEnvironment {
   private final Reporter reporter;
   private final EventBus eventBus;
   private final BlazeModule.ModuleEnvironment blazeModuleEnvironment;
-  private final Map<String, String> clientEnv = new HashMap<>();
 
   private AbruptExitException pendingException;
 
@@ -104,23 +98,8 @@ public final class CommandEnvironment {
     return blazeModuleEnvironment;
   }
 
-  /**
-   * Return an unmodifiable view of the blaze client's environment when it invoked the current
-   * command.
-   */
   public Map<String, String> getClientEnv() {
-    return Collections.unmodifiableMap(clientEnv);
-  }
-
-  @VisibleForTesting
-  void updateClientEnv(List<Map.Entry<String, String>> clientEnvList, boolean ignoreClientEnv) {
-    Preconditions.checkState(clientEnv.isEmpty());
-
-    Collection<Map.Entry<String, String>> env =
-        ignoreClientEnv ? System.getenv().entrySet() : clientEnvList;
-    for (Map.Entry<String, String> entry : env) {
-      clientEnv.put(entry.getKey(), entry.getValue());
-    }
+    return runtime.getClientEnv();
   }
 
   public PackageManager getPackageManager() {
