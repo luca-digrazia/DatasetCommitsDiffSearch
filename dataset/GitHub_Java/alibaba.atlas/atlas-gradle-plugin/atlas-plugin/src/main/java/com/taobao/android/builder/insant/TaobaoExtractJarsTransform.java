@@ -97,9 +97,29 @@ public class TaobaoExtractJarsTransform extends Transform {
         if (!isIncremental) {
             outputProvider.deleteAll();
         }
+
         try {
             WaitableExecutor executor = WaitableExecutor.useGlobalSharedThreadPool();
 
+//                for (File dir : AtlasBuildContext.atlasMainDexHelperMap.get(variantContext.getVariantName()).getInputDirs()) {
+//
+//                    DirectoryInput dirInput = makeDirInput();
+//                    File dirOutput =
+//                            outputProvider.getContentLocation(
+//                                    dirInput.getName(),
+//                                    dirInput.getContentTypes(),
+//                                    dirInput.getScopes(),
+//                                    Format.DIRECTORY);
+//                    // since we do a full copy, we have to delete the output first.
+//                    // FIXME make this incremental!
+//                    if (dirOutput.isDirectory()) {
+//                        FileUtils.deleteDirectoryContents(dirOutput);
+//                    }
+//                    if (dirInput.getFile().exists()) {
+//                        org.apache.commons.io.FileUtils.copyDirectory(
+//                                dirInput.getFile(), dirOutput);
+//                    }
+//                }
             AtlasBuildContext.atlasMainDexHelperMap.get(variantContext.getVariantName()).getInputDirs().clear();
 
                 for (File jarFile : AtlasBuildContext.atlasMainDexHelperMap.get(variantContext.getVariantName()).getAllMainDexJars()) {
@@ -225,9 +245,6 @@ public class TaobaoExtractJarsTransform extends Transform {
             @NonNull File outJarFolder,
             @NonNull File jarFile,
             boolean extractCode) throws IOException {
-        if (!jarFile.exists()){
-            return;
-        }
         mkdirs(outJarFolder);
         HashSet<String> lowerCaseNames = new HashSet<>();
         boolean foundCaseInsensitiveIssue = false;

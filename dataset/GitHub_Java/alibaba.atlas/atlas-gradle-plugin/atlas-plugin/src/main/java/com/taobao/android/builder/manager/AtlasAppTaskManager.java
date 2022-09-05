@@ -247,7 +247,6 @@ import com.taobao.android.builder.AtlasMainDexHelper;
 import com.taobao.android.builder.dependency.AtlasDependencyTree;
 import com.taobao.android.builder.dependency.model.AwbBundle;
 import com.taobao.android.builder.extension.AtlasExtension;
-import com.taobao.android.builder.insant.DelegateMultiDexListTransform;
 import com.taobao.android.builder.insant.DelegateProguardTransform;
 import com.taobao.android.builder.tasks.PrepareAPTask;
 import com.taobao.android.builder.tasks.app.*;
@@ -497,8 +496,6 @@ public class AtlasAppTaskManager extends AtlasBaseTaskManager {
                                                                           new MtlTransformContext(DelegateProguardTransform.class, ExtractJarsTransform.class,
                                                                                   InstantRunTransform.class));
                                                               }
-
-
                                                               if (!mtlTransformContextList.isEmpty()) {
                                                                   new MtlTransformInjector(appVariantContext).injectTasks(mtlTransformContextList);
                                                               }
