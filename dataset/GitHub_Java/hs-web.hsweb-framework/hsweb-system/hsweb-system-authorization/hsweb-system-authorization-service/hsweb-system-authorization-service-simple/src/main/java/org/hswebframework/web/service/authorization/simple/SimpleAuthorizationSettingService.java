@@ -39,7 +39,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -54,9 +53,7 @@ import static org.hswebframework.web.commons.entity.DataStatus.STATUS_ENABLED;
 import static org.hswebframework.web.entity.authorization.AuthorizationSettingDetailEntity.*;
 import static org.hswebframework.web.entity.authorization.AuthorizationSettingEntity.settingFor;
 import static org.hswebframework.web.entity.authorization.AuthorizationSettingEntity.type;
-import static org.hswebframework.web.service.authorization.simple.CacheConstants.MENU_CACHE_NAME;
 import static org.hswebframework.web.service.authorization.simple.CacheConstants.USER_AUTH_CACHE_NAME;
-import static org.hswebframework.web.service.authorization.simple.CacheConstants.USER_MENU_CACHE_NAME;
 
 /**
  * 默认的服务实现
@@ -105,12 +102,7 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
     }
 
     @Override
-    @Caching(
-            evict = {
-                    @CacheEvict(allEntries = true),
-                    @CacheEvict(cacheNames = USER_MENU_CACHE_NAME,allEntries = true)
-            }
-    )
+    @CacheEvict(allEntries = true)
     public String saveOrUpdate(AuthorizationSettingEntity entity) {
         AuthorizationSettingEntity old = select(entity.getType(), entity.getSettingFor());
         if (old != null) {
@@ -121,12 +113,7 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
     }
 
     @Override
-    @Caching(
-            evict = {
-                    @CacheEvict(allEntries = true),
-                    @CacheEvict(cacheNames = USER_MENU_CACHE_NAME,allEntries = true)
-            }
-    )
+    @CacheEvict(allEntries = true)
     public String insert(AuthorizationSettingEntity entity) {
         tryValidateProperty(select(entity.getType(), entity.getSettingFor()) == null, AuthorizationSettingEntity.settingFor, "存在相同的配置!");
         entity.setStatus(STATUS_ENABLED);
@@ -151,12 +138,7 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
     }
 
     @Override
-    @Caching(
-            evict = {
-                    @CacheEvict(allEntries = true),
-                    @CacheEvict(cacheNames = USER_MENU_CACHE_NAME,allEntries = true)
-            }
-    )
+    @CacheEvict(allEntries = true)
     public int updateByPk(String id, AuthorizationSettingEntity entity) {
         int size = super.updateByPk(id, entity);
         if (entity.getMenus() != null) {
@@ -184,12 +166,7 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
     }
 
     @Override
-    @Caching(
-            evict = {
-                    @CacheEvict(allEntries = true),
-                    @CacheEvict(cacheNames = USER_MENU_CACHE_NAME,allEntries = true)
-            }
-    )
+    @CacheEvict(allEntries = true)
     public int deleteByPk(String id) {
         Objects.requireNonNull(id, "id can not be null");
         authorizationSettingMenuService.deleteBySettingId(id);
@@ -207,7 +184,7 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
         Stream<Map.Entry<String, List<SettingInfo>>> settingInfoStream = settingInfo.entrySet().stream();
         //大于1 使用并行处理
         if (settingInfo.size() > 1) {
-            settingInfoStream = settingInfoStream.parallel();
+            settingInfoStream.parallel();
         }
         return settingInfoStream
                 .map(entry ->
@@ -222,14 +199,14 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
     }
 
     @Override
-    @Cacheable(cacheNames = USER_MENU_CACHE_NAME, key = "'user-menu-list:'+#userId")
+    @Cacheable(key = "'user-menu-list:'+#userId")
     public List<UserMenuEntity> getUserMenuAsList(String userId) {
         if (null == userId) {
-            return Collections.emptyList();
+            return null;
         }
         UserEntity userEntity = userService.selectByPk(userId);
         if (userEntity == null) {
-            return Collections.emptyList();
+            return null;
         }
         List<AuthorizationSettingEntity> entities = getUserSetting(userId);
         if (entities.isEmpty()) {
@@ -285,7 +262,7 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
     }
 
     @Override
-    @Cacheable(cacheNames = USER_MENU_CACHE_NAME, key = "'menu-tree:'+#userId")
+    @Cacheable(key = "'menu-tree:'+#userId")
     public List<UserMenuEntity> getUserMenuAsTree(String userId) {
         return TreeSupportEntity.list2tree(getUserMenuAsList(userId), UserMenuEntity::setChildren,
                 (Predicate<UserMenuEntity>) menuEntity ->
@@ -352,7 +329,6 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
             List<String> allActions = entity.getActions().stream().map(ActionEntity::getAction).collect(Collectors.toList());
 
             if (isNotEmpty(entity.getActions()) && isNotEmpty(detail.getActions())) {
-
                 detail.setActions(detail.getActions().stream().filter(allActions::contains).collect(Collectors.toSet()));
             }
             if (isEmpty(entity.getSupportDataAccessTypes())) {
