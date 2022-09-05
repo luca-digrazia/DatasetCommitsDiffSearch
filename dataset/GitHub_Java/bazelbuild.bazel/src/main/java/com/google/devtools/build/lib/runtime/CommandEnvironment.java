@@ -515,6 +515,9 @@ public final class CommandEnvironment {
         throw new IllegalStateException(e);
       }
     }
+    for (BlazeModule module : runtime.getBlazeModules()) {
+      module.handleOptions(optionsParser);
+    }
 
     eventBus.post(new CommandStartEvent(
         command.name(), getCommandId(), getClientEnv(), workingDirectory, getDirectories(),
