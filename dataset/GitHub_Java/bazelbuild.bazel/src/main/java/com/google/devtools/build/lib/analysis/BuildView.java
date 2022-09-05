@@ -80,6 +80,7 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -90,6 +91,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
+
 import javax.annotation.Nullable;
 
 /**
@@ -281,8 +283,7 @@ public class BuildView {
             ImmutableList.<ConfiguredTarget>of(),
             ImmutableList.<ConfiguredTarget>of(),
             null,
-            ImmutableMap.<PackageIdentifier, Path>of(),
-            "");
+            ImmutableMap.<PackageIdentifier, Path>of());
 
     private final ImmutableList<ConfiguredTarget> targetsToBuild;
     @Nullable private final ImmutableList<ConfiguredTarget> targetsToTest;
@@ -294,7 +295,6 @@ public class BuildView {
     @Nullable private final TopLevelArtifactContext topLevelContext;
     private final ImmutableList<AspectValue> aspects;
     private final ImmutableMap<PackageIdentifier, Path> packageRoots;
-    private final String workspaceName;
 
     private AnalysisResult(
         Collection<ConfiguredTarget> targetsToBuild,
@@ -306,8 +306,7 @@ public class BuildView {
         Collection<ConfiguredTarget> parallelTests,
         Collection<ConfiguredTarget> exclusiveTests,
         TopLevelArtifactContext topLevelContext,
-        ImmutableMap<PackageIdentifier, Path> packageRoots,
-        String workspaceName) {
+        ImmutableMap<PackageIdentifier, Path> packageRoots) {
       this.targetsToBuild = ImmutableList.copyOf(targetsToBuild);
       this.aspects = ImmutableList.copyOf(aspects);
       this.targetsToTest = targetsToTest == null ? null : ImmutableList.copyOf(targetsToTest);
@@ -318,7 +317,6 @@ public class BuildView {
       this.exclusiveTests = ImmutableSet.copyOf(exclusiveTests);
       this.topLevelContext = topLevelContext;
       this.packageRoots = packageRoots;
-      this.workspaceName = workspaceName;
     }
 
     /**
@@ -387,10 +385,6 @@ public class BuildView {
 
     public TopLevelArtifactContext getTopLevelContext() {
       return topLevelContext;
-    }
-
-    public String getWorkspaceName() {
-      return workspaceName;
     }
   }
 
@@ -608,8 +602,7 @@ public class BuildView {
         parallelTests,
         exclusiveTests,
         topLevelOptions,
-        skyframeAnalysisResult.getPackageRoots(),
-        loadingResult.getWorkspaceName());
+        skyframeAnalysisResult.getPackageRoots());
   }
 
   private static NestedSet<Artifact> getBaselineCoverageArtifacts(
@@ -968,20 +961,15 @@ public class BuildView {
           throws EvalException, InterruptedException {
     BuildConfiguration targetConfig = target.getConfiguration();
     return new RuleContext.Builder(
-            env,
-            (Rule) target.getTarget(),
-            null,
-            targetConfig,
-            configurations.getHostConfiguration(),
-            ruleClassProvider.getPrerequisiteValidator(),
-            ((Rule) target.getTarget()).getRuleClassObject().getConfigurationFragmentPolicy())
-        .setVisibility(
-            NestedSetBuilder.<PackageSpecification>create(
-                Order.STABLE_ORDER, PackageSpecification.everything()))
-        .setPrerequisites(getPrerequisiteMapForTesting(eventHandler, target, configurations))
-        .setConfigConditions(ImmutableMap.<Label, ConfigMatchingProvider>of())
-        .setUniversalFragment(ruleClassProvider.getUniversalFragment())
-        .build();
+        env, (Rule) target.getTarget(), null, targetConfig, configurations.getHostConfiguration(),
+        ruleClassProvider.getPrerequisiteValidator(),
+        ((Rule) target.getTarget()).getRuleClassObject().getConfigurationFragmentPolicy())
+            .setVisibility(NestedSetBuilder.<PackageSpecification>create(
+                Order.STABLE_ORDER, PackageSpecification.EVERYTHING))
+            .setPrerequisites(getPrerequisiteMapForTesting(eventHandler, target, configurations))
+            .setConfigConditions(ImmutableMap.<Label, ConfigMatchingProvider>of())
+            .setUniversalFragment(ruleClassProvider.getUniversalFragment())
+            .build();
   }
 
   /**
