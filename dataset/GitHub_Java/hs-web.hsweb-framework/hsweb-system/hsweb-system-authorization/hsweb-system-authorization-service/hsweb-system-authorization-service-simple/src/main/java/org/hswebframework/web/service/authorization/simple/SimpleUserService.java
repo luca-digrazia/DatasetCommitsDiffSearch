@@ -66,11 +66,6 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     }
 
     @Override
-    public UserEntity createEntity() {
-        return entityFactory.newInstance(BindRoleUserEntity.class);
-    }
-
-    @Override
     @Transactional(readOnly = true)
     public UserEntity selectByUsername(String username) {
         tryValidateProperty(StringUtils.hasLength(username), UserEntity.username, "id:{not_be_null}");
