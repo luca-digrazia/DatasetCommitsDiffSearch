@@ -195,10 +195,7 @@ class Parser {
         statement.validate(validationEnvironment);
       }
     } catch (EvalException e) {
-      // Do not report errors caused by a previous parsing error, as it has already been reported.
-      if (!e.isDueToIncompleteAST()) {
-        eventHandler.handle(Event.error(e.getLocation(), e.getMessage()));
-      }
+      eventHandler.handle(Event.error(e.getLocation(), e.getMessage()));
       hasSemanticalErrors = true;
     }
     return new ParseResult(statements, parser.comments,
