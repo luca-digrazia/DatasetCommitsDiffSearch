@@ -1508,8 +1508,7 @@ public final class RuleClass {
    * individual rule instance, derived from the 'output_to_bindir' attribute;
    * see Rule.hasBinaryOutput().
    */
-  @VisibleForTesting
-  public boolean hasBinaryOutput() {
+  boolean hasBinaryOutput() {
     return binaryOutput;
   }
 

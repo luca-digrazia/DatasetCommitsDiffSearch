@@ -192,7 +192,9 @@ public class SkyframeBuilder implements Builder {
         // error map may be empty in the case of a catastrophe.
         throw new BuildFailedException();
       } else {
-        BuilderUtils.rethrow(Preconditions.checkNotNull(result.getError().getException()));
+        // Need to wrap exception for rethrowCause.
+        BuilderUtils.rethrowCause(
+          new Exception(Preconditions.checkNotNull(result.getError().getException())));
       }
     }
     return true;

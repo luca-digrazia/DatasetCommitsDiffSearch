@@ -43,14 +43,18 @@ public interface EvaluationProgressReceiver {
   }
 
   /**
-   * Notifies that the node named by {@code key} has been invalidated.
+   * Notifies that {@code value} has been invalidated.
    *
    * <p>{@code state} indicates the new state of the value.
    *
-   * <p>May be called concurrently from multiple threads, possibly with the same {@code key}.
+   * <p>This method is not called on invalidation of values which do not have a value (usually
+   * because they are in error).
+   *
+   * <p>May be called concurrently from multiple threads, possibly with the same {@code value}
+   * object.
    */
   @ThreadSafety.ThreadSafe
-  void invalidated(SkyKey skyKey, InvalidationState state);
+  void invalidated(SkyValue value, InvalidationState state);
 
   /**
    * Notifies that {@code skyKey} is about to get queued for evaluation.
