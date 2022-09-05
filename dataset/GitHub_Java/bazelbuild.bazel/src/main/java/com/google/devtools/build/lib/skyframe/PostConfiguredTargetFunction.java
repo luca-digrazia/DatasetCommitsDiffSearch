@@ -19,7 +19,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Dependency;
-import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.LabelAndConfiguration;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -112,8 +111,11 @@ public class PostConfiguredTargetFunction implements SkyFunction {
         deps = ConfiguredTargetFunction.getDynamicConfigurations(env, ctgValue, deps,
             hostConfiguration, ruleClassProvider);
       }
-    } catch (EvalException | ConfiguredTargetFunction.DependencyEvaluationException
-        | InvalidConfigurationException | InconsistentAspectOrderException e) {
+    } catch (EvalException e) {
+      throw new PostConfiguredTargetFunctionException(e);
+    } catch (ConfiguredTargetFunction.DependencyEvaluationException e) {
+      throw new PostConfiguredTargetFunctionException(e);
+    } catch (InvalidConfigurationException e) {
       throw new PostConfiguredTargetFunctionException(e);
     }
 

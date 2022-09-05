@@ -1429,7 +1429,7 @@ public final class BuildConfiguration {
   }
 
   private String buildMnemonic() {
-    // See explanation at declaration for outputRoots.
+    // See explanation at getShortName().
     String platformSuffix = (options.platformSuffix != null) ? options.platformSuffix : "";
     ArrayList<String> nameParts = new ArrayList<>();
     for (Fragment fragment : fragments.values()) {
@@ -2051,8 +2051,8 @@ public final class BuildConfiguration {
   }
 
   /**
-   * Returns the configuration-dependent string for this configuration. This is also the name of the
-   * configuration's base output directory unless {@link Options#outputDirectoryName} overrides it.
+   * Like getShortName(), but always returns a configuration-dependent string even for
+   * the host configuration.
    */
   public String getMnemonic() {
     return mnemonic;

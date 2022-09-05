@@ -175,12 +175,11 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             getPrecomputedValues(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
             analysisMock.getProductName());
-    PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
-    packageCacheOptions.showLoadingProgress = true;
-    packageCacheOptions.globbingThreads = 3;
     skyframeExecutor.preparePackageLoading(
         pkgLocator,
-        packageCacheOptions,
+        Options.getDefaults(PackageCacheOptions.class).defaultVisibility,
+        true,
+        3,
         ruleClassProvider.getDefaultsPackageContent(
             analysisMock.getInvocationPolicyEnforcer().getInvocationPolicy()),
         UUID.randomUUID(),
@@ -280,11 +279,11 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
     PathPackageLocator pathPackageLocator = PathPackageLocator.create(
         outputBase, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
-    packageCacheOptions.showLoadingProgress = true;
-    packageCacheOptions.globbingThreads = 7;
     skyframeExecutor.preparePackageLoading(
         pathPackageLocator,
-        packageCacheOptions,
+        packageCacheOptions.defaultVisibility,
+        true,
+        7,
         ruleClassProvider.getDefaultsPackageContent(
             analysisMock.getInvocationPolicyEnforcer().getInvocationPolicy()),
         UUID.randomUUID(),

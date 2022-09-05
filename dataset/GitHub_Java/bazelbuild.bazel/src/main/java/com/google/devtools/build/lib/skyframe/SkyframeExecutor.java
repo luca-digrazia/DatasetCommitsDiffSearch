@@ -899,7 +899,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   @VisibleForTesting // productionVisibility = Visibility.PRIVATE
   public void preparePackageLoading(
       PathPackageLocator pkgLocator,
-      PackageCacheOptions packageCacheOptions,
+      RuleVisibility defaultVisibility,
+      boolean showLoadingProgress,
+      int globbingThreads,
       String defaultsPackageContents,
       UUID commandId,
       Map<String, String> clientEnv,
@@ -913,13 +915,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     setCommandId(commandId);
     setPrecomputedClientEnv(clientEnv);
     setBlacklistedPackagePrefixesFile(getBlacklistedPackagePrefixesFile());
-    setShowLoadingProgress(packageCacheOptions.showLoadingProgress);
-    setDefaultVisibility(packageCacheOptions.defaultVisibility);
+    setShowLoadingProgress(showLoadingProgress);
+    setDefaultVisibility(defaultVisibility);
     setupDefaultPackage(defaultsPackageContents);
     setPackageLocator(pkgLocator);
 
-    syscalls.set(newPerBuildSyscallCache(packageCacheOptions.globbingThreads));
-    this.pkgFactory.setGlobbingThreads(packageCacheOptions.globbingThreads);
+    syscalls.set(newPerBuildSyscallCache(globbingThreads));
+    this.pkgFactory.setGlobbingThreads(globbingThreads);
     checkPreprocessorFactory();
     emittedEventState.clear();
 
@@ -1688,7 +1690,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             outputBase,
             directories.getWorkspace(),
             workingDirectory),
-        packageCacheOptions,
+        packageCacheOptions.defaultVisibility,
+        packageCacheOptions.showLoadingProgress,
+        packageCacheOptions.globbingThreads,
         defaultsPackageContents,
         commandId,
         clientEnv,

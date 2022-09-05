@@ -128,7 +128,7 @@ public class BuildViewTest extends BuildViewTestBase {
 
     Collection<ConfiguredTarget> targets =
         new LinkedHashSet<>(ImmutableList.of(test1, test2, suite));
-    targets = Lists.<ConfiguredTarget>newArrayList(
+    targets = Lists.newArrayList(
         BuildView.filterTestsByTargets(targets,
             Sets.newHashSet(test1.getTarget(), suite.getTarget())));
     assertThat(targets).containsExactlyElementsIn(Sets.newHashSet(test1, suite));
@@ -345,15 +345,20 @@ public class BuildViewTest extends BuildViewTestBase {
               Label.parseAbsolute("//package:inner"),
               Attribute.ConfigurationTransition.NONE,
               ImmutableSet.<AspectDescriptor>of());
+      fileDependency =
+          Dependency.withTransitionAndAspects(
+              Label.parseAbsolute("//package:file"),
+              Attribute.ConfigurationTransition.NULL,
+              ImmutableSet.<AspectDescriptor>of());
     } else {
       innerDependency =
           Dependency.withConfiguration(
               Label.parseAbsolute("//package:inner"),
               getTargetConfiguration());
+      fileDependency =
+          Dependency.withNullConfiguration(
+              Label.parseAbsolute("//package:file"));
     }
-    fileDependency =
-        Dependency.withNullConfiguration(
-            Label.parseAbsolute("//package:file"));
 
     assertThat(targets).containsExactly(innerDependency, fileDependency);
   }
@@ -880,7 +885,7 @@ public class BuildViewTest extends BuildViewTestBase {
         "cc_binary(name = 'cpp', data = [':java'])");
     // Everything is fine - the dependency graph is acyclic.
     update("//foo:java", "//foo:cpp");
-    if (getTargetConfiguration().trimConfigurations()) {
+    if (getTargetConfiguration().useDynamicConfigurations()) {
       fail(ExpectedDynamicConfigurationErrors.LATE_BOUND_ATTRIBUTES_UNSUPPORTED);
     }
     // Now there will be an analysis-phase cycle because the java_binary now has an implicit dep on
