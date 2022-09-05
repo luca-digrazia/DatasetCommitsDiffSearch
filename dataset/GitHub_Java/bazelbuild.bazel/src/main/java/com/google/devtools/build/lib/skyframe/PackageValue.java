@@ -13,12 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.NotComparableSkyValue;
 import com.google.devtools.build.skyframe.SkyKey;
 
@@ -65,4 +66,10 @@ public class PackageValue implements NotComparableSkyValue {
     return keys;
   }
 
+  /**
+   * Returns a SkyKey to find the WORKSPACE file at the given path.
+   */
+  public static SkyKey workspaceKey(RootedPath workspacePath) {
+    return new SkyKey(SkyFunctions.WORKSPACE_FILE, workspacePath);
+  }
 }

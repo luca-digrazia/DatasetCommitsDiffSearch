@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 package com.google.devtools.build.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.Objects;
 
@@ -229,12 +229,6 @@ public abstract class ValueWithMetadata implements SkyValue {
       return ((ValueWithMetadata) value).getErrorInfo();
     }
     return null;
-  }
 
-  static NestedSet<TaggedEvents> getEvents(SkyValue value) {
-    if (value instanceof ValueWithMetadata) {
-      return ((ValueWithMetadata) value).getTransitiveEvents();
-    }
-    return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
   }
 }
