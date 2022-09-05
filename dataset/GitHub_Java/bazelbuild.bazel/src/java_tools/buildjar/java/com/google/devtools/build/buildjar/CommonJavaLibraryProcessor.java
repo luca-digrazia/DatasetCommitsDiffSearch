@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.buildjar;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,7 +44,7 @@ public abstract class CommonJavaLibraryProcessor {
     // Add an empty source path to prevent javac from sucking in source files
     // from .jar files on the classpath.
     args.add("-sourcepath");
-    args.add(File.pathSeparator);
+    args.add(":");
 
     if (build.getExtdir() != null) {
       args.add("-extdirs");
