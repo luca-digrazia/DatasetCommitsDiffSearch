@@ -143,16 +143,11 @@ public class AarGeneratorAction {
       resourcesOut.toFile().deleteOnExit();
       Path assetsOut = Files.createTempDirectory("tmp-assets");
       assetsOut.toFile().deleteOnExit();
-      Path expandedOut = Files.createTempDirectory("tmp-expanded");
-      expandedOut.toFile().deleteOnExit();
-      Path deduplicatedOut = Files.createTempDirectory("tmp-deduplicated");
-      deduplicatedOut.toFile().deleteOnExit();
-
       logger.fine(String.format("Setup finished at %dms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       ImmutableList<DirectoryModifier> modifiers = ImmutableList.of(
-          new PackedResourceTarExpander(expandedOut, working),
-          new FileDeDuplicator(Hashing.murmur3_128(), deduplicatedOut, working));
+          new PackedResourceTarExpander(working.resolve("expanded"), working),
+          new FileDeDuplicator(Hashing.murmur3_128(), working.resolve("deduplicated"), working));
       MergedAndroidData mergedData = resourceProcessor.mergeData(options.mainData,
           options.dependencyData,
           resourcesOut,
