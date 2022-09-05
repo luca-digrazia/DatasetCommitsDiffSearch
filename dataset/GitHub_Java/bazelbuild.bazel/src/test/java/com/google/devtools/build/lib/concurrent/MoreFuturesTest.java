@@ -14,12 +14,22 @@
 package com.google.devtools.build.lib.concurrent;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.util.concurrent.AbstractFuture;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.testutil.TestUtils;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -28,11 +38,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Tests for MoreFutures
@@ -67,9 +72,9 @@ public class MoreFuturesTest {
     List<Object> result = list.get();
     assertThat(result).hasSize(futureList.size());
     for (DelayedFuture delayedFuture : futureList) {
-      assertThat(delayedFuture.wasCanceled).isFalse();
-      assertThat(delayedFuture.wasInterrupted).isFalse();
-      assertThat(delayedFuture.get()).isNotNull();
+      assertFalse(delayedFuture.wasCanceled);
+      assertFalse(delayedFuture.wasInterrupted);
+      assertNotNull(delayedFuture.get());
       assertThat(result).contains(delayedFuture.get());
     }
   }
@@ -95,8 +100,8 @@ public class MoreFuturesTest {
     }
     Thread.sleep(100);
     for (DelayedFuture delayedFuture : futureList) {
-      assertThat(delayedFuture.wasCanceled || delayedFuture == toFail).isTrue();
-      assertThat(delayedFuture.wasInterrupted).isFalse();
+      assertTrue(delayedFuture.wasCanceled || delayedFuture == toFail);
+      assertFalse(delayedFuture.wasInterrupted);
     }
   }
 
@@ -110,9 +115,9 @@ public class MoreFuturesTest {
     }
     MoreFutures.waitForAllInterruptiblyFailFast(futureList);
     for (DelayedFuture delayedFuture : futureList) {
-      assertThat(delayedFuture.wasCanceled).isFalse();
-      assertThat(delayedFuture.wasInterrupted).isFalse();
-      assertThat(delayedFuture.get()).isNotNull();
+      assertFalse(delayedFuture.wasCanceled);
+      assertFalse(delayedFuture.wasInterrupted);
+      assertNotNull(delayedFuture.get());
     }
   }
 
@@ -156,7 +161,7 @@ public class MoreFuturesTest {
       }
     } finally {
       // The @After-annotated shutdownExecutor method blocks on completion of all tasks. Since we
-      // submitted a bunch of tasks that never complete, we need to explicitly cancel them.
+      // submitted a bunch of tasks that never complete, we need to explictly cancel them.
       for (DelayedFuture delayedFuture : futureList) {
         delayedFuture.cancel(/*mayInterruptIfRunning=*/ true);
       }
@@ -183,7 +188,7 @@ public class MoreFuturesTest {
       MoreFutures.waitForAllInterruptiblyFailFast(futureList);
       fail();
     } catch (ExecutionException ee) {
-      assertThat(ee).hasCauseThat().hasMessageThat().isEqualTo("I like to fail!!");
+      assertThat(ee.getCause()).hasMessage("I like to fail!!");
     }
   }
 
