@@ -275,11 +275,6 @@ final class ConfiguredTargetFunction implements SkyFunction {
 
     for (Dependency dep : deps) {
       SkyKey depKey = TO_KEYS.apply(dep);
-      // If the same target was declared in different attributes of rule, we should not process it
-      // twice.
-      if (result.containsKey(depKey)) {
-        continue;
-      }
       ConfiguredTarget depConfiguredTarget = configuredTargetMap.get(depKey);
       for (Class<? extends ConfiguredAspectFactory> depAspect : dep.getAspects()) {
         if (!aspectMatchesConfiguredTarget(depConfiguredTarget, depAspect)) {
@@ -469,12 +464,15 @@ final class ConfiguredTargetFunction implements SkyFunction {
       Set<ConfigMatchingProvider> configConditions)
       throws ConfiguredTargetFunctionException,
       InterruptedException {
+    boolean extendedSanityChecks = configuration != null && configuration.extendedSanityChecks();
+
     StoredEventHandler events = new StoredEventHandler();
     BuildConfiguration ownerConfig = (configuration == null)
         ? null : configuration.getArtifactOwnerConfiguration();
+    boolean allowRegisteringActions = configuration == null || configuration.isActionsEnabled();
     CachingAnalysisEnvironment analysisEnvironment = view.createAnalysisEnvironment(
         new ConfiguredTargetKey(target.getLabel(), ownerConfig), false,
-        events, env, configuration);
+        extendedSanityChecks, events, env, allowRegisteringActions);
     if (env.valuesMissing()) {
       return null;
     }
