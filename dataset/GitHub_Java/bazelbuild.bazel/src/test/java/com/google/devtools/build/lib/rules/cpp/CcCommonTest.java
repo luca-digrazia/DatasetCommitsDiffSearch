@@ -48,12 +48,14 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
-import java.util.Arrays;
-import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.Arrays;
+import java.util.List;
 
 /** A test for {@link CcCommon}. */
 @RunWith(JUnit4.class)
@@ -758,7 +760,7 @@ public class CcCommonTest extends BuildViewTestCase {
         CcLinkingOutputs.builder()
             .addStaticLibraries(
                 ImmutableList.copyOf(
-                    LinkerInputs.opaqueLibrariesToLink(ArtifactCategory.STATIC_LIBRARY,
+                    LinkerInputs.opaqueLibrariesToLink(
                         Arrays.asList(
                             getSourceArtifact("liba.a"),
                             getSourceArtifact("libb.a"),
@@ -766,7 +768,7 @@ public class CcCommonTest extends BuildViewTestCase {
                             getSourceArtifact("libd.a")))))
             .addPicStaticLibraries(
                 ImmutableList.copyOf(
-                    LinkerInputs.opaqueLibrariesToLink(ArtifactCategory.STATIC_LIBRARY,
+                    LinkerInputs.opaqueLibrariesToLink(
                         Arrays.asList(
                             getSourceArtifact("liba.pic.a"),
                             getSourceArtifact("libb.pic.a"),
@@ -774,7 +776,7 @@ public class CcCommonTest extends BuildViewTestCase {
                             getSourceArtifact("libf.pic.a")))))
             .addDynamicLibraries(
                 ImmutableList.copyOf(
-                    LinkerInputs.opaqueLibrariesToLink(ArtifactCategory.DYNAMIC_LIBRARY,
+                    LinkerInputs.opaqueLibrariesToLink(
                         Arrays.asList(
                             getSourceArtifact("liba.so"),
                             getSourceArtifact("libc.so"),

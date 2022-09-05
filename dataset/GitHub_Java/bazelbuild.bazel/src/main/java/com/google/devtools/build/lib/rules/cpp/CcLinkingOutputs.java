@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
@@ -70,25 +69,19 @@ public class CcLinkingOutputs {
   }
 
   /**
-   * Returns a map from library identifiers to sets of LibraryToLink from this CcLinkingOutputs
-   * which share that library identifier.
+   * Returns all libraries in this CcLinkingOutputs with the same library identifier - i.e., those
+   * which would be considered different forms of the same library by getPreferredLibrary.
    */
-  public ImmutableSetMultimap<String, LibraryToLink> getLibrariesByIdentifier() {
-    return getLibrariesByIdentifier(
+  public List<LibraryToLink> getLibrariesWithSameIdentifierAs(LibraryToLink input) {
+    Iterable<LibraryToLink> allLibraries =
         Iterables.concat(
-            staticLibraries, picStaticLibraries, dynamicLibraries, executionDynamicLibraries));
-  }
-
-  /**
-   * Gathers up a map from library identifiers to sets of LibraryToLink which share that library
-   * identifier.
-   */
-  public static ImmutableSetMultimap<String, LibraryToLink> getLibrariesByIdentifier(
-      Iterable<LibraryToLink> inputs) {
-    ImmutableSetMultimap.Builder<String, LibraryToLink> result =
-        new ImmutableSetMultimap.Builder<>();
-    for (LibraryToLink library : inputs) {
-      result.put(libraryIdentifierOf(library.getOriginalLibraryArtifact()), library);
+            staticLibraries, picStaticLibraries, dynamicLibraries, executionDynamicLibraries);
+    ImmutableList.Builder<LibraryToLink> result = new ImmutableList.Builder<>();
+    for (LibraryToLink library : allLibraries) {
+      if (libraryIdentifierOf(library.getOriginalLibraryArtifact())
+          .equals(libraryIdentifierOf(input.getOriginalLibraryArtifact()))) {
+        result.add(library);
+      }
     }
     return result.build();
   }
