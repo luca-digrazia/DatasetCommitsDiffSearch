@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,15 +20,16 @@ import com.google.devtools.build.skyframe.SkyKey;
 /**
  * A value for ensuring that a file symlink cycle is reported exactly once. This is achieved by
  * forcing the same value key for two logically equivalent cycles (e.g. ['a' -> 'b' -> 'c' -> 'a']
- * and ['b' -> 'c' -> 'a' -> 'b']), and letting Skyframe do its magic.
+ * and ['b' -> 'c' -> 'a' -> 'b']), and letting Skyframe do its magic. 
  */
-class FileSymlinkCycleUniquenessValue extends AbstractChainUniquenessValue {
+class FileSymlinkCycleUniquenessValue extends AbstractFileSymlinkExceptionUniquenessValue {
   static final FileSymlinkCycleUniquenessValue INSTANCE = new FileSymlinkCycleUniquenessValue();
 
   private FileSymlinkCycleUniquenessValue() {
   }
 
   static SkyKey key(ImmutableList<RootedPath> cycle) {
-    return AbstractChainUniquenessValue.key(SkyFunctions.FILE_SYMLINK_CYCLE_UNIQUENESS, cycle);
+    return AbstractFileSymlinkExceptionUniquenessValue.key(
+        SkyFunctions.FILE_SYMLINK_CYCLE_UNIQUENESS, cycle);
   }
 }

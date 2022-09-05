@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,10 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import java.io.IOException;
-
 /** Exception indicating a problem with symlinks. */
-public abstract class FileSymlinkException extends IOException {
+public abstract class FileSymlinkException extends Exception {
   protected FileSymlinkException(String message) {
     super(message);
   }

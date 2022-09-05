@@ -16,10 +16,10 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.ExternalPackage;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.vfs.Path;
@@ -51,10 +51,9 @@ public class PackageLookupFunction implements SkyFunction {
   public SkyValue compute(SkyKey skyKey, Environment env) throws PackageLookupFunctionException {
     PathPackageLocator pkgLocator = PrecomputedValue.PATH_PACKAGE_LOCATOR.get(env);
     PackageIdentifier packageKey = (PackageIdentifier) skyKey.argument();
-    if (!packageKey.getRepository().equals(PackageIdentifier.MAIN_REPOSITORY_NAME)
-        && !packageKey.getRepository().isDefault()) {
+    if (!packageKey.getRepository().isDefault()) {
       return computeExternalPackageLookupValue(skyKey, env, packageKey);
-    } else if (packageKey.equals(ExternalPackage.PACKAGE_IDENTIFIER)) {
+    } else if (packageKey.getPackageFragment().equals(new PathFragment(ExternalPackage.NAME))) {
       return computeWorkspaceLookupValue(env, packageKey);
     }
 

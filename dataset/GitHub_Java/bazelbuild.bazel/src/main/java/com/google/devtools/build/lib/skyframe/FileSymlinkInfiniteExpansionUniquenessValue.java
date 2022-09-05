@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ class FileSymlinkInfiniteExpansionUniquenessValue implements SkyValue {
   }
 
   static SkyKey key(ImmutableList<RootedPath> cycle) {
-    return AbstractChainUniquenessValue.key(
+    return AbstractFileSymlinkExceptionUniquenessValue.key(
         SkyFunctions.FILE_SYMLINK_INFINITE_EXPANSION_UNIQUENESS, cycle);
   }
 }
