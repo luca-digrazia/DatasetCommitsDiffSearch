@@ -358,7 +358,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     this.lipoContextCollector = cppOptions.lipoCollector;
 
 
-    this.crosstoolTopPathFragment = crosstoolTop.getPackageIdentifier().getPathUnderExecRoot();
+    this.crosstoolTopPathFragment = crosstoolTop.getPackageIdentifier().getSourceRoot();
 
     try {
       this.staticRuntimeLibsLabel =
