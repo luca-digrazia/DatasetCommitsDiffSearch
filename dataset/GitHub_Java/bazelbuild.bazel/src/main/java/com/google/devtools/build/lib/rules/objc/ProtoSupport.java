@@ -445,8 +445,10 @@ final class ProtoSupport {
     }
 
     segments.add(currentSegment.toString());
+    ruleContext.ruleWarning(segments.toString());
 
     StringBuilder casedSegments = new StringBuilder();
+
     for (String segment : segments) {
       if (UPPERCASE_SEGMENTS.contains(segment)) {
         casedSegments.append(segment.toUpperCase());
