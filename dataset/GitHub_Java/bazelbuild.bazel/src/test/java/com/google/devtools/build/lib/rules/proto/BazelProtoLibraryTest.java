@@ -119,8 +119,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
 
   @Test
   public void testDescriptorSetOutput_strictDeps_disabled() throws Exception {
-    useConfiguration("--strict_proto_deps=off");
-    scratch.file("x/BUILD", "proto_library(name='foo', srcs=['foo.proto'])");
+    scratch.file("x/BUILD", "proto_library(name='foo', srcs=['foo.proto'], strict_proto_deps=0)");
 
     for (String arg :
         getGeneratingSpawnAction(getDescriptorOutput("//x:foo")).getRemainingArguments()) {
