@@ -95,14 +95,7 @@ public class ToString {
          *
          * @since 3.0.0-RC
          */
-        jsonFormat,
-
-        /**
-         * 是否写出类名
-         *
-         * @since 3.0.0-RC
-         */
-        writeClassname;
+        jsonFormat;
 
 
         public long getMask() {

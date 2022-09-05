@@ -18,6 +18,8 @@
 
 package org.hswebframework.web.commons.entity;
 
+import org.hswebframework.web.bean.ToString;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -36,9 +38,17 @@ public interface GenericEntity<PK> extends CloneableEntity {
 
     void setId(PK id);
 
-    Map<String, Object> getProperties();
+    default String toString(String... ignoreProperty) {
+        return ToString.toString(this, ignoreProperty);
+    }
 
-    void setProperties(Map<String, Object> properties);
+    default Map<String, Object> getProperties() {
+        return null;
+    }
+
+    default void setProperties(Map<String, Object> properties) {
+
+    }
 
     @SuppressWarnings("unchecked")
     default <T> T getProperty(String propertyName, T defaultValue) {

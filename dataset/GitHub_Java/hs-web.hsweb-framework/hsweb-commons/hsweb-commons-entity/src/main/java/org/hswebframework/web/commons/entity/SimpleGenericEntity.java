@@ -18,6 +18,8 @@
 
 package org.hswebframework.web.commons.entity;
 
+import lombok.SneakyThrows;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -27,9 +29,16 @@ import java.util.Map;
  */
 public abstract class SimpleGenericEntity<PK> implements GenericEntity<PK> {
 
+    private static final long serialVersionUID = 4546315942526096290L;
+
     private PK id;
 
     private Map<String, Object> properties;
+
+    @Override
+    public String toString() {
+        return toString((String[]) null);
+    }
 
     @Override
     public PK getId() {
@@ -54,7 +63,9 @@ public abstract class SimpleGenericEntity<PK> implements GenericEntity<PK> {
     @Override
     @SuppressWarnings("unchecked")
     public <T> T getProperty(String propertyName, T defaultValue) {
-        if (null == properties) return defaultValue;
+        if (null == properties) {
+            return defaultValue;
+        }
         return (T) properties.getOrDefault(propertyName, defaultValue);
     }
 
@@ -65,10 +76,16 @@ public abstract class SimpleGenericEntity<PK> implements GenericEntity<PK> {
 
     @Override
     public void setProperty(String propertyName, Object value) {
-        if (null == properties) properties = new LinkedHashMap<>();
+        if (null == properties) {
+            properties = new LinkedHashMap<>();
+        }
         properties.put(propertyName, value);
     }
 
     @Override
-    public abstract CloneableEntity clone();
+    @SuppressWarnings("unchecked")
+    @SneakyThrows
+    public SimpleGenericEntity<PK> clone() {
+        return (SimpleGenericEntity) super.clone();
+    }
 }

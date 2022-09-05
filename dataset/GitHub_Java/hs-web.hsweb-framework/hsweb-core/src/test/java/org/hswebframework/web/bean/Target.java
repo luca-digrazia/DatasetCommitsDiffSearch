@@ -64,8 +64,6 @@ public class Target {
 
     private Integer[] arr4;
 
-    private Color[] colors;
-
 
     @Override
     public String toString() {
