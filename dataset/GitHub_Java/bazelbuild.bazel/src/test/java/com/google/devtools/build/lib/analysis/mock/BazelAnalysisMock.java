@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.bazel.repository.RepositoryFunction;
 import com.google.devtools.build.lib.bazel.rules.BazelConfiguration;
 import com.google.devtools.build.lib.bazel.rules.BazelConfigurationCollection;
 import com.google.devtools.build.lib.bazel.rules.BazelRuleClassProvider;
+import com.google.devtools.build.lib.bazel.rules.android.AndroidRepositoryRules;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPythonConfiguration;
 import com.google.devtools.build.lib.bazel.rules.workspace.LocalRepositoryRule;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -77,6 +78,11 @@ public class BazelAnalysisMock extends AnalysisMock {
                 "  actual = '//objcproto:ProtocolBuffersCPP_lib',",
                 ")",
                 "bind(name = 'android/sdk', actual='//tools/android:sdk')"));
+    ImmutableList<String> tools = AndroidRepositoryRules.toolsForTesting();
+    for (String tool : tools) {
+      workspaceContents.add(
+          "bind(name = 'android/" + tool + "', actual = '//tools/android:" + tool + "')");
+    }
 
     config.overwrite("WORKSPACE", workspaceContents.toArray(new String[workspaceContents.size()]));
     config.create("tools/jdk/BUILD",
@@ -122,8 +128,7 @@ public class BazelAnalysisMock extends AnalysisMock {
         "    linker_files = ':empty',",
         "    objcopy_files = ':empty', static_runtime_libs = [':empty'], strip_files = ':empty',",
         ")");
-    config.create(
-        "tools/cpp/CROSSTOOL", readFromResources("com/google/devtools/build/lib/MOCK_CROSSTOOL"));
+    config.create("tools/cpp/CROSSTOOL", readFromResources("MOCK_CROSSTOOL"));
 
     ImmutableList<String> androidBuildContents = createAndroidBuildContents();
     config.create(
@@ -137,10 +142,8 @@ public class BazelAnalysisMock extends AnalysisMock {
         "package(default_visibility=['//visibility:public'])",
         "licenses(['notice'])",
         "java_binary(name = 'jarjar_bin',",
-        "            runtime_deps = [ ':jarjar_import' ],",
-        "            main_class = 'com.tonicsystems.jarjar.Main')",
-        "java_import(name = 'jarjar_import',",
-        "            jars = [ 'jarjar.jar' ])");
+        "            srcs = [ 'jarjar.jar' ],",
+        "            main_class = 'com.tonicsystems.jarjar.Main')");
 
     config.create("tools/test/BUILD", "filegroup(name = 'runtime')");
   }
@@ -196,10 +199,8 @@ public class BazelAnalysisMock extends AnalysisMock {
     }
     androidBuildContents
         .add("java_binary(name = 'IdlClass',")
-        .add("            runtime_deps = [ ':idlclass_import' ],")
-        .add("            main_class = 'com.google.devtools.build.android.idlclass.IdlClass')")
-        .add("java_import(name = 'idlclass_import',")
-        .add("            jars = [ 'idlclass.jar' ])");
+        .add("            srcs = [ 'idlclass.jar' ],")
+        .add("            main_class = 'com.google.devtools.build.android.idlclass.IdlClass')");
 
     return androidBuildContents.build();
   }

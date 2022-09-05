@@ -52,7 +52,6 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -846,7 +845,7 @@ public class PackageFunction implements SkyFunction {
    *
    * <p>May return null if the computation has to be restarted.
    *
-   * <p>Exactly one of {@code replacementContents} and {@code buildFileValue} will be
+   * <p>Exactly one of {@code replacementContents} and {@link buildFileValue} will be
    * non-{@code null}. The former indicates that we have a faux BUILD file with the given contents
    * and the latter indicates that we have a legitimate BUILD file and should actually do
    * preprocessing.
@@ -867,21 +866,22 @@ public class PackageFunction implements SkyFunction {
     if (pkgBuilder == null) {
       profiler.startTask(ProfilerTask.CREATE_PACKAGE, packageId.toString());
       try {
+        Globber globber = packageFactory.createLegacyGlobber(buildFilePath.getParentDirectory(),
+            packageId, packageLocator);
         AstAfterPreprocessing astAfterPreprocessing = astCache.getIfPresent(packageId);
         if (astAfterPreprocessing == null) {
           if (showLoadingProgress.get()) {
             env.getListener().handle(Event.progress("Loading package: " + packageId));
           }
-          Globber globber = packageFactory.createLegacyGlobber(buildFilePath.getParentDirectory(),
-              packageId, packageLocator);
           Preprocessor.Result preprocessingResult;
           if (replacementContents == null) {
-            Preconditions.checkNotNull(buildFileValue, packageId);
-            byte[] buildFileBytes;
+            long buildFileSize = Preconditions.checkNotNull(buildFileValue, packageId).getSize();
+            // Even though we only open and read the file on a cache miss, note that the BUILD is
+            // still parsed two times. Also, the preprocessor may suboptimally open and read it
+            // again anyway.
+            ParserInputSource inputSource;
             try {
-              buildFileBytes = buildFileValue.isSpecialFile()
-                  ? FileSystemUtils.readContent(buildFilePath)
-                  : FileSystemUtils.readWithKnownFileSize(buildFilePath, buildFileValue.getSize());
+              inputSource = ParserInputSource.create(buildFilePath, buildFileSize);
             } catch (IOException e) {
               env.getListener().handle(Event.error(Location.fromFile(buildFilePath),
                   e.getMessage()));
@@ -891,8 +891,7 @@ public class PackageFunction implements SkyFunction {
                   packageId, e.getMessage()), Transience.TRANSIENT);
             }
             try {
-              preprocessingResult = packageFactory.preprocess(buildFilePath, packageId,
-                  buildFileBytes, globber);
+              preprocessingResult = packageFactory.preprocess(packageId, inputSource, globber);
             } catch (IOException e) {
               env.getListener().handle(Event.error(
                   Location.fromFile(buildFilePath),
@@ -909,12 +908,8 @@ public class PackageFunction implements SkyFunction {
           StoredEventHandler astParsingEventHandler = new StoredEventHandler();
           BuildFileAST ast = PackageFactory.parseBuildFile(packageId, preprocessingResult.result,
               preludeStatements, astParsingEventHandler);
-          // If no globs were fetched during preprocessing, then there's no need to reuse *this
-          // globber instance* during BUILD file evaluation; the correctness and performance
-          // arguments below do not apply.
-          Globber globberToStore = globber.getGlobPatterns().isEmpty() ? null : globber;
           astAfterPreprocessing = new AstAfterPreprocessing(preprocessingResult, ast,
-              astParsingEventHandler, globberToStore);
+              astParsingEventHandler);
           astCache.put(packageId, astAfterPreprocessing);
         }
         SkylarkImportResult importResult;
@@ -933,14 +928,6 @@ public class PackageFunction implements SkyFunction {
           return null;
         }
         astCache.invalidate(packageId);
-        // If the globber was used to evaluate globs during preprocessing, it's important that we
-        // reuse that globber during BUILD file evaluation for two reasons: (i) correctness, since
-        // Skyframe deps are added after the fact (ii) performance, in the case that globs were
-        // fetched lazily during preprocessing.
-        Globber globber = astAfterPreprocessing.globber != null
-            ? astAfterPreprocessing.globber
-            : packageFactory.createLegacyGlobber(buildFilePath.getParentDirectory(),
-                packageId, packageLocator);
         pkgBuilder = packageFactory.createPackageFromPreprocessingAst(externalPkg, packageId,
             buildFilePath, astAfterPreprocessing, importResult.importMap,
             importResult.fileDependencies, defaultVisibility, globber);
