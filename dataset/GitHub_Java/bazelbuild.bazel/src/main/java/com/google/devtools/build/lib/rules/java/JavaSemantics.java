@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fromTemplates;
 
 import com.google.common.collect.ImmutableList;
@@ -154,14 +153,8 @@ public interface JavaSemantics {
   LateBoundLabel<BuildConfiguration> JAVA_LAUNCHER =
       new LateBoundLabel<BuildConfiguration>(JavaConfiguration.class) {
         @Override
-        public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
-          // don't read --java_launcher if this target overrides via a launcher attribute
-          if (attributes != null && attributes.has("launcher", LABEL)) {
-            Label launcher = attributes.get("launcher", LABEL);
-            if (launcher != null) {
-              return launcher;
-            }
-          }
+        public Label resolve(Rule rule, AttributeMap attributes,
+            BuildConfiguration configuration) {
           return configuration.getFragment(JavaConfiguration.class).getJavaLauncherLabel();
         }
       };

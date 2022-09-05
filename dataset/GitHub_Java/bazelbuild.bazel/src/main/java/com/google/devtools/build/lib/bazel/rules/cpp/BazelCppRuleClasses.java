@@ -96,7 +96,6 @@ public class BazelCppRuleClasses {
       new String[] {
         "cc_inc_library",
         "cc_library",
-        "objc_library",
       };
 
   /**

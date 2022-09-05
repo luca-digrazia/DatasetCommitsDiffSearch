@@ -45,11 +45,15 @@ public class AspectDefinitionTest {
    * A dummy aspect factory. Is there to demonstrate how to define aspects and so that we can test
    * {@code attributeAspect}.
    */
-  public static final class TestAspectClass extends NativeAspectClass
-    implements ConfiguredAspectFactory {
-    private AspectDefinition definition;
+  public static final class TestAspectFactory implements ConfiguredNativeAspectFactory {
+    private final AspectDefinition definition;
 
-    public void setAspectDefinition(AspectDefinition definition) {
+    /**
+     * Normal aspects will have an argumentless constructor and their definition will be hard-wired
+     * as a static member. This one is different so that we can create the definition in a test
+     * method.
+     */
+    private TestAspectFactory(AspectDefinition definition) {
       this.definition = definition;
     }
 
@@ -64,8 +68,6 @@ public class AspectDefinitionTest {
       return definition;
     }
   }
-
-  public static final TestAspectClass TEST_ASPECT_CLASS = new TestAspectClass();
 
   @Test
   public void testAspectWithImplicitOrLateboundAttribute_AddsToAttributeMap() throws Exception {
@@ -118,11 +120,13 @@ public class AspectDefinitionTest {
   @Test
   public void testAttributeAspect_WrapsAndAddsToMap() throws Exception {
     AspectDefinition withAspects = new AspectDefinition.Builder("attribute_aspect")
-        .attributeAspect("srcs", TEST_ASPECT_CLASS)
-        .attributeAspect("deps", TEST_ASPECT_CLASS)
+        .attributeAspect("srcs", TestAspectFactory.class)
+        .attributeAspect("deps", new NativeAspectClass<TestAspectFactory>(TestAspectFactory.class))
         .build();
-    assertThat(withAspects.getAttributeAspects()).containsEntry("srcs", TEST_ASPECT_CLASS);
-    assertThat(withAspects.getAttributeAspects()).containsEntry("deps", TEST_ASPECT_CLASS);
+    assertThat(withAspects.getAttributeAspects())
+        .containsEntry("srcs", new NativeAspectClass<TestAspectFactory>(TestAspectFactory.class));
+    assertThat(withAspects.getAttributeAspects())
+        .containsEntry("deps", new NativeAspectClass<TestAspectFactory>(TestAspectFactory.class));
   }
 
   @Test
@@ -138,10 +142,10 @@ public class AspectDefinitionTest {
   }
 
   @Test
-  public void testNoConfigurationFragmentPolicySetup_HasNonNullPolicy() throws Exception {
+  public void testNoConfigurationFragmentPolicySetup_ReturnsNull() throws Exception {
     AspectDefinition noPolicy = new AspectDefinition.Builder("no_policy")
         .build();
-    assertThat(noPolicy.getConfigurationFragmentPolicy()).isNotNull();
+    assertThat(noPolicy.getConfigurationFragmentPolicy()).isNull();
   }
 
   @Test
@@ -205,12 +209,12 @@ public class AspectDefinitionTest {
   }
 
   @Test
-  public void testEmptySkylarkConfigurationFragmentPolicySetup_HasNonNullPolicy() throws Exception {
+  public void testEmptySkylarkConfigurationFragmentPolicySetup_ReturnsNull() throws Exception {
     AspectDefinition noPolicy = new AspectDefinition.Builder("no_policy")
         .requiresConfigurationFragmentsBySkylarkModuleName(ImmutableList.<String>of())
         .requiresHostConfigurationFragmentsBySkylarkModuleName(ImmutableList.<String>of())
         .build();
-    assertThat(noPolicy.getConfigurationFragmentPolicy()).isNotNull();
+    assertThat(noPolicy.getConfigurationFragmentPolicy()).isNull();
   }
 
   @SkylarkModule(name = "test_fragment", doc = "test fragment")

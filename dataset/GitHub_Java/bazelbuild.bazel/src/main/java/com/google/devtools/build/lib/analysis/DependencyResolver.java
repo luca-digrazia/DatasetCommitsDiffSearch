@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
+import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.EnvironmentGroup;
@@ -355,13 +356,13 @@ public abstract class DependencyResolver {
       }
 
       List<BuildConfiguration> actualConfigurations = ImmutableList.of(configuration);
-      if (attribute.hasSplitConfigurationTransition()) {
+      if (attribute.getConfigurationTransition() instanceof SplitTransition<?>) {
         Preconditions.checkState(attribute.getConfigurator() == null);
         // TODO(bazel-team): This ends up applying the split transition twice, both here and in the
         // visitRule method below - this is not currently a problem, because the configuration graph
         // never contains nested split transitions, so the second application is idempotent.
-        actualConfigurations =
-            configuration.getSplitConfigurations(attribute.getSplitTransition(rule));
+        actualConfigurations = configuration.getSplitConfigurations(
+            (SplitTransition<?>) attribute.getConfigurationTransition());
       }
 
       for (BuildConfiguration actualConfig : actualConfigurations) {
