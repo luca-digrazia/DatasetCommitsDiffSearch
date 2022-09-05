@@ -77,6 +77,11 @@ public class BazelAndroidSemantics implements AndroidSemantics {
   }
 
   @Override
+  public ImmutableList<String> getDxJvmArguments() {
+    return ImmutableList.of();
+  }
+
+  @Override
   public void addMainDexListActionArguments(RuleContext ruleContext, SpawnAction.Builder builder) {
   }
 
