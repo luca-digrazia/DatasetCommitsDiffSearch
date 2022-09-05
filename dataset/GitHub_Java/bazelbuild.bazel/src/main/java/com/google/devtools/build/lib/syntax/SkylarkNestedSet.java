@@ -20,8 +20,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.ArrayList;
@@ -183,7 +181,7 @@ public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue {
   private static SkylarkType checkType(SkylarkType builderType, SkylarkType itemType, Location loc)
       throws EvalException {
     if (SkylarkType.intersection(
-        SkylarkType.Union.of(SkylarkType.DICT, SkylarkType.LIST, SkylarkType.STRUCT),
+        SkylarkType.Union.of(SkylarkType.MAP, SkylarkType.LIST, SkylarkType.STRUCT),
         itemType) != SkylarkType.BOTTOM) {
       throw new EvalException(
           loc, String.format("sets cannot contain items of type '%s'", itemType));
