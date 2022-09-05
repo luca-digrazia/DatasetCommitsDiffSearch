@@ -18,6 +18,10 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
     private static final Logger LOGGER = LoggerFactory.getLogger(JmxReporter.class);
 
+    private final Map<MetricName, ObjectName> registeredBeans;
+    private final MBeanServer server;
+    private final MetricDispatcher dispatcher;
+
     // CHECKSTYLE:OFF
     @SuppressWarnings("UnusedDeclaration")
     public interface MetricMBean {
@@ -374,11 +378,6 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
         }
     }
 
-    private final Map<MetricName, ObjectName> registeredBeans;
-    private final String registryName;
-    private final MBeanServer server;
-    private final MetricDispatcher dispatcher;
-
     /**
      * Creates a new {@link JmxReporter} for the given registry.
      *
@@ -386,7 +385,6 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
      */
     public JmxReporter(MetricsRegistry registry) {
         super(registry);
-        this.registryName = registry.getName();
         this.registeredBeans = new ConcurrentHashMap<MetricName, ObjectName>(100);
         this.server = ManagementFactory.getPlatformMBeanServer();
         this.dispatcher = new MetricDispatcher();
@@ -415,10 +413,6 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
         if (!name.getName().isEmpty()) {
             nameBuilder.append(",name=");
             nameBuilder.append(name.getName());
-        }
-        if (registryName != null) {
-            nameBuilder.append(",registry=");
-            nameBuilder.append(registryName);
         }
         return new ObjectName(nameBuilder.toString());
     }
