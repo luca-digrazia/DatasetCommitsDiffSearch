@@ -321,7 +321,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         fake);
 
     Map<Artifact, IncludeScannable> scannableMap = new LinkedHashMap<>();
-    Map<PathFragment, Artifact> sourceFileMap = new LinkedHashMap<>();
     if (cppConfiguration.isLipoContextCollector()) {
       for (IncludeScannable scannable : transitiveLipoInfo.getTransitiveIncludeScannables()) {
         // These should all be CppCompileActions, which should have only one source file.
@@ -329,7 +328,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         Artifact source =
             Iterables.getOnlyElement(scannable.getIncludeScannerSources());
         scannableMap.put(source, scannable);
-        sourceFileMap.put(source.getExecPath(), source);
       }
     }
 
@@ -341,8 +339,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
                 ruleContext.getLabel(), strippedFile, executable, explicitDwpFile))
         .setRunfilesSupport(runfilesSupport, executable)
         .addProvider(LipoContextProvider.class, new LipoContextProvider(
-            cppCompilationContext, ImmutableMap.copyOf(scannableMap),
-            ImmutableMap.copyOf(sourceFileMap)))
+            cppCompilationContext, ImmutableMap.copyOf(scannableMap)))
         .addProvider(CppLinkAction.Context.class, linkContext)
         .addSkylarkTransitiveInfo(CcSkylarkApiProvider.NAME, new CcSkylarkApiProvider())
         .build();

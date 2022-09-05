@@ -387,7 +387,9 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Artifact aObjectArtifact = getBinArtifact("_objs/a/module/a.pic.o", "//module:a");
     CppCompileAction aObjectAction = (CppCompileAction) getGeneratingAction(aObjectArtifact);
     assertThat(aObjectAction.getIncludeScannerSources()).containsExactly(
-        getSourceArtifact("module/a.cc"));
+        getSourceArtifact("module/a.cc"),
+        getSourceArtifact("module/b.h"),
+        getSourceArtifact("module/t.h"));
     assertThat(aObjectAction.getInputs()).contains(
         getBinArtifact("_objs/b/module/b.pic.pcm", "//module:b"));
     assertThat(aObjectAction.getInputs()).contains(
@@ -469,7 +471,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         .setupCrosstool(mockToolsConfig, MockCcSupport.HEADER_MODULES_FEATURE_CONFIGURATION);
     useConfiguration();
     setupPackagesForModuleTests(/*useHeaderModules=*/false);
-
+    
     // The //nomodule:f target only depends on non-module targets, thus it should be module-free.
     getConfiguredTarget("//nomodule:f");
     assertThat(getGeneratingAction(getBinArtifact("_objs/f/nomodule/f.pic.pcm", "//nomodule:f")))
@@ -500,11 +502,12 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     // All headers of transitive dependencies that are built as modules are needed as entry points
     // for include scanning.
     assertThat(cObjectAction.getIncludeScannerSources()).containsExactly(
-        getSourceArtifact("nomodule/c.cc"));
+        getSourceArtifact("nomodule/c.cc"),
+        getSourceArtifact("module/b.h"));
     assertThat(cObjectAction.getMainIncludeScannerSource()).isEqualTo(
         getSourceArtifact("nomodule/c.cc"));
     assertThat(getHeaderModuleFlags(cObjectAction.getCompilerOptions())).isEmpty();
-
+     
     // The //nomodule:d target depends on //module:b via one indirection (//nomodule:c).
     getConfiguredTarget("//nomodule:d");
     assertThat(getGeneratingAction(getBinArtifact("_objs/d/nomodule/d.pic.pcm", "//nomodule:d")))
@@ -517,7 +520,10 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         getGenfilesArtifact("d.cppmap", "//nomodule:d"));
     assertThat(getHeaderModules(dObjectAction.getInputs())).containsExactly(
         getBinArtifact("_objs/b/module/b.pic.pcm", "//module:b"));
+    // All headers of transitive dependencies that are built as modules are needed as entry points
+    // for include scanning.
     assertThat(dObjectAction.getIncludeScannerSources()).containsExactly(
+        getSourceArtifact("module/b.h"),
         getSourceArtifact("nomodule/d.cc"));
     assertThat(getHeaderModuleFlags(dObjectAction.getCompilerOptions())).isEmpty();
 
@@ -530,7 +536,9 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         getBinArtifact("_objs/b/module/b.pic.pcm", "//module:b"),
         getBinArtifact("_objs/g/module/g.pic.pcm", "//module:g"));
     assertThat(jObjectAction.getIncludeScannerSources()).containsExactly(
-        getSourceArtifact("module/j.cc"));
+        getSourceArtifact("module/j.cc"),
+        getSourceArtifact("module/b.h"),
+        getSourceArtifact("module/g.h"));
     assertThat(jObjectAction.getMainIncludeScannerSource()).isEqualTo(
         getSourceArtifact("module/j.cc"));
     assertThat(getHeaderModuleFlags(jObjectAction.getCompilerOptions()))
