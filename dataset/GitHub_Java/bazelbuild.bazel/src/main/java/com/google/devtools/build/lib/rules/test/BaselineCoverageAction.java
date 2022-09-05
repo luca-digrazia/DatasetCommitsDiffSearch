@@ -18,6 +18,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
@@ -68,8 +69,15 @@ public final class BaselineCoverageAction extends AbstractFileWriteAction
   private Iterable<String> getInstrumentedFilePathStrings() {
     List<String> result = new ArrayList<>();
     for (Artifact instrumentedFile : instrumentedFiles) {
-      result.add(instrumentedFile.getExecPathString());
+      String pathString = instrumentedFile.getExecPathString();
+      for (String suffix : Constants.BASELINE_COVERAGE_OFFLINE_INSTRUMENTATION_SUFFIXES) {
+        if (pathString.endsWith(suffix)) {
+          result.add(pathString);
+          break;
+        }
+      }
     }
+
     return result;
   }
 
