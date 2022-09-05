@@ -424,7 +424,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     assertNotNull(tic1.getProvider(JavaSourceJarsProvider.class));
     // Check an unimplemented provider too
     assertNull(tic1.getProvider(SkylarkProviders.class)
-        .getValue(PyCommon.PYTHON_SKYLARK_PROVIDER_NAME));
+            .getValue(PyCommon.PYTHON_SKYLARK_PROVIDER_NAME));
   }
 
   @Test
@@ -772,51 +772,23 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         "BUILD", "filegroup(name='dep')", "load('/my_rule', 'my_rule')", "my_rule(name='r')");
 
     invalidatePackages();
-    SkylarkRuleContext context = createRuleContext("//:r");
+    SkylarkRuleContext context = createRuleContext("@//:r");
     Label explicitDepLabel =
         (Label) evalRuleContextCode(context, "ruleContext.attr.explicit_dep.label");
-    assertThat(explicitDepLabel).isEqualTo(Label.parseAbsolute("//:dep"));
+    assertThat(explicitDepLabel).isEqualTo(Label.parseAbsolute("@//:dep"));
     Label implicitDepLabel =
         (Label) evalRuleContextCode(context, "ruleContext.attr._implicit_dep.label");
-    assertThat(implicitDepLabel).isEqualTo(Label.parseAbsolute("//:dep"));
+    assertThat(implicitDepLabel).isEqualTo(Label.parseAbsolute("@//:dep"));
     Label explicitDepListLabel =
         (Label) evalRuleContextCode(context, "ruleContext.attr.explicit_dep_list[0].label");
-    assertThat(explicitDepListLabel).isEqualTo(Label.parseAbsolute("//:dep"));
+    assertThat(explicitDepListLabel).isEqualTo(Label.parseAbsolute("@//:dep"));
     Label implicitDepListLabel =
         (Label) evalRuleContextCode(context, "ruleContext.attr._implicit_dep_list[0].label");
-    assertThat(implicitDepListLabel).isEqualTo(Label.parseAbsolute("//:dep"));
+    assertThat(implicitDepListLabel).isEqualTo(Label.parseAbsolute("@//:dep"));
   }
 
   @Test
   public void testRelativeLabelInExternalRepository() throws Exception {
-    scratch.file("external_rule.bzl",
-        "def _impl(ctx):",
-        "  return",
-        "external_rule = rule(",
-        "  implementation = _impl,",
-        "  attrs = {",
-        "    'internal_dep': attr.label(default = Label('//:dep'))",
-        "  }",
-        ")");
-
-    scratch.file("BUILD",
-        "filegroup(name='dep')");
-
-    scratch.file("/r/a/BUILD",
-        "load('/external_rule', 'external_rule')",
-        "external_rule(name='r')");
-
-    scratch.overwriteFile("WORKSPACE",
-        "local_repository(name='r', path='/r')");
-
-    invalidatePackages();
-    SkylarkRuleContext context = createRuleContext("@r//a:r");
-    Label depLabel = (Label) evalRuleContextCode(context, "ruleContext.attr.internal_dep.label");
-    assertThat(depLabel).isEqualTo(Label.parseAbsolute("//:dep"));
-  }
-
-  @Test
-  public void testCallerRelativeLabelInExternalRepository() throws Exception {
     scratch.file("BUILD");
     scratch.file("external_rule.bzl",
         "def _impl(ctx):",
@@ -824,9 +796,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         "external_rule = rule(",
         "  implementation = _impl,",
         "  attrs = {",
-        "    'internal_dep': attr.label(",
-        "        default = Label('//:dep', relative_to_caller_repository = True)",
-        "    )",
+        "    'internal_dep': attr.label(default = Label('//:dep'))",
         "  }",
         ")");
 
@@ -920,51 +890,5 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
           "ERROR /workspace/WORKSPACE:3:1: Cannot redefine repository after any load statement "
               + "in the WORKSPACE file (for repository 'foo')");
     }
-  }
-
-  @Test
-  public void testAccessingRunfiles() throws Exception {
-    scratch.file("test/a.py");
-    scratch.file("test/b.py");
-    scratch.file("test/__init__.py");
-    scratch.file(
-        "test/rule.bzl",
-        "def _impl(ctx):",
-        "  return",
-        "skylark_rule = rule(",
-        "  implementation = _impl,",
-        "  attrs = {",
-        "    'dep': attr.label(),",
-        "  },",
-        ")");
-    scratch.file(
-        "test/BUILD",
-        "load('/test/rule', 'skylark_rule')",
-        "py_library(name = 'lib', srcs = ['a.py', 'b.py'])",
-        "skylark_rule(name = 'foo', dep = ':lib')",
-        "py_library(name = 'lib_with_init', srcs = ['a.py', 'b.py', '__init__.py'])",
-        "skylark_rule(name = 'foo_with_init', dep = ':lib_with_init')");
-
-    SkylarkRuleContext ruleContext = createRuleContext("//test:foo");
-    Object filenames =
-        evalRuleContextCode(
-            ruleContext, "[f.short_path for f in ruleContext.attr.dep.default_runfiles.files]");
-    assertThat(filenames).isInstanceOf(SkylarkList.class);
-    SkylarkList filenamesList = (SkylarkList) filenames;
-    assertThat(filenamesList).containsExactly("test/a.py", "test/b.py").inOrder();
-    Object emptyFilenames =
-        evalRuleContextCode(
-            ruleContext, "list(ruleContext.attr.dep.default_runfiles.empty_filenames)");
-    assertThat(emptyFilenames).isInstanceOf(SkylarkList.class);
-    SkylarkList emptyFilenamesList = (SkylarkList) emptyFilenames;
-    assertThat(emptyFilenamesList).containsExactly("test/__init__.py").inOrder();
-
-    SkylarkRuleContext ruleWithInitContext = createRuleContext("//test:foo_with_init");
-    Object noEmptyFilenames =
-        evalRuleContextCode(
-            ruleWithInitContext, "list(ruleContext.attr.dep.default_runfiles.empty_filenames)");
-    assertThat(noEmptyFilenames).isInstanceOf(SkylarkList.class);
-    SkylarkList noEmptyFilenamesList = (SkylarkList) noEmptyFilenames;
-    assertThat(noEmptyFilenamesList).containsExactly().inOrder();
   }
 }
