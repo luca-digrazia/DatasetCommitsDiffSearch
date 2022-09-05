@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.analysis.config;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Verify;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ClassToInstanceMap;
@@ -29,7 +30,6 @@ import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MutableClassToInstanceMap;
-import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.Root;
@@ -55,12 +55,12 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.test.TestActionBuilder;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.syntax.SkylarkCallable;
+import com.google.devtools.build.lib.syntax.SkylarkModule;
+import com.google.devtools.build.lib.syntax.SkylarkModuleNameResolver;
 import com.google.devtools.build.lib.util.CPU;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.OS;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -837,20 +837,19 @@ public final class BuildConfiguration {
     public List<Label> targetEnvironments;
 
     @Option(name = "objc_gcov_binary",
-        converter = ToolsLabelConverter.class,
-        defaultValue = "//third_party/gcov:gcov_for_xcode_osx",
+        converter = LabelConverter.class,
+        defaultValue = "//third_party/gcov:gcov_for_xcode",
         category = "undocumented")
     public Label objcGcovBinary;
 
-    /** Converter for labels in the @bazel_tools repository. The @Options' defaultValues can't
-     * prepend TOOLS_REPOSITORY, unfortunately, because then the compiler thinks they're not
-     * constant. */
-    public static class ToolsLabelConverter extends LabelConverter {
-      @Override
-      public Label convert(String input) throws OptionsParsingException {
-        return convertLabel(Constants.TOOLS_REPOSITORY + input);
-      }
-    }
+    // This performs the same function as objc_gcov_binary but applies to experminental_ios_test
+    // rather than ios_test.
+    // TODO(bazel-team): Remove this once experimental_ios_test replaces to ios_test.
+    @Option(name = "experimental_objc_gcov_binary",
+            converter = LabelConverter.class,
+            defaultValue = "//third_party/gcov:gcov_for_xcode_osx",
+            category = "undocumented")
+    public Label experimentalObjcGcovBinary;
 
     @Option(name = "experimental_dynamic_configs",
         defaultValue = "false",
@@ -915,6 +914,7 @@ public final class BuildConfiguration {
       }
       if (collectCodeCoverage) {
         labelMap.put("objc_gcov", objcGcovBinary);
+        labelMap.put("experimental_objc_gcov", experimentalObjcGcovBinary);
       }
     }
   }
@@ -1194,7 +1194,7 @@ public final class BuildConfiguration {
     this.actionsEnabled = !actionsDisabled;
     this.fragments = ImmutableSortedMap.copyOf(fragmentsMap, lexicalFragmentSorter);
 
-    this.skylarkVisibleFragments = buildIndexOfSkylarkVisibleFragments();
+    this.skylarkVisibleFragments = buildIndexOfVisibleFragments();
     
     this.buildOptions = buildOptions;
     this.options = buildOptions.get(Options.class);
@@ -1306,11 +1306,12 @@ public final class BuildConfiguration {
 
 
 
-  private ImmutableMap<String, Class<? extends Fragment>> buildIndexOfSkylarkVisibleFragments() {
+  private ImmutableMap<String, Class<? extends Fragment>> buildIndexOfVisibleFragments() {
     ImmutableMap.Builder<String, Class<? extends Fragment>> builder = ImmutableMap.builder();
+    SkylarkModuleNameResolver resolver = new SkylarkModuleNameResolver();
 
     for (Class<? extends Fragment> fragmentClass : fragments.keySet()) {
-      String name = SkylarkModule.Resolver.resolveName(fragmentClass);
+      String name = resolver.resolveName(fragmentClass);
       if (name != null) {
         builder.put(name, fragmentClass);
       }
