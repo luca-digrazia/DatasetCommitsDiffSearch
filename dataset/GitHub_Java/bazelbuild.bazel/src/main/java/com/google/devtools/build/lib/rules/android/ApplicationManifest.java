@@ -32,8 +32,8 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidManifestMerger;
-import com.google.devtools.build.lib.rules.android.ResourceContainer.Builder.JavaPackageSource;
-import com.google.devtools.build.lib.rules.android.ResourceContainer.ResourceType;
+import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
+import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceType;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -305,12 +305,11 @@ public final class ApplicationManifest {
         true, /* crunchPng */
         ImmutableList.<String>of(), /* densities */
         incremental,
-        ResourceContainer.builderFromRule(ruleContext)
-            .setAssetsAndResourcesFrom(data)
-            .setManifest(getManifest())
-            .setRTxt(rTxt)
-            .setApk(resourceApk)
-            .build(),
+        new AndroidResourceContainerBuilder()
+            .withData(data)
+            .withManifest(getManifest())
+            .withROutput(rTxt)
+            .buildFromRule(ruleContext, resourceApk),
         data,
         proguardCfg,
         null, /* Artifact mainDexProguardCfg */
@@ -325,22 +324,12 @@ public final class ApplicationManifest {
       LocalResourceContainer data,
       ResourceDependencies resourceDeps,
       Artifact rTxt,
-      Artifact symbols,
+      Artifact symbolsTxt,
       Artifact manifestOut,
       Artifact mergedResources,
       boolean alwaysExportManifest) throws InterruptedException {
     if (ruleContext.hasErrors()) {
       return null;
-    }
-    ResourceContainer.Builder resourceContainer =
-        ResourceContainer.builderFromRule(ruleContext)
-            .setAssetsAndResourcesFrom(data)
-            .setManifest(getManifest())
-            .setRTxt(rTxt)
-            .setSymbols(symbols)
-            .setJavaPackageFrom(JavaPackageSource.MANIFEST);
-    if (alwaysExportManifest) {
-      resourceContainer.setManifestExported(true);
     }
     return createApk(
         ruleContext,
@@ -351,7 +340,13 @@ public final class ApplicationManifest {
         false, /* crunchPng */
         ImmutableList.<String>of(), /* List<String> densities */
         false, /* incremental */
-        resourceContainer.build(),
+        new AndroidResourceContainerBuilder()
+            .withData(data)
+            .withManifest(getManifest())
+            .withROutput(rTxt)
+            .withSymbolsFile(symbolsTxt)
+            .useJavaPackageFromManifest(true)
+            .buildFromRule(ruleContext, null, alwaysExportManifest),
         data,
         null, /* Artifact proguardCfg */
         null, /* Artifact mainDexProguardCfg */
@@ -367,7 +362,7 @@ public final class ApplicationManifest {
       boolean isLibrary,
       ResourceDependencies resourceDeps,
       Artifact rTxt,
-      Artifact symbols,
+      Artifact symbolsTxt,
       List<String> configurationFilters,
       List<String> uncompressedExtensions,
       boolean crunchPng,
@@ -403,13 +398,12 @@ public final class ApplicationManifest {
         crunchPng,
         densities,
         incremental,
-        ResourceContainer.builderFromRule(ruleContext)
-            .setAssetsAndResourcesFrom(data)
-            .setManifest(getManifest())
-            .setRTxt(rTxt)
-            .setSymbols(symbols)
-            .setApk(resourceApk)
-            .build(),
+        new AndroidResourceContainerBuilder()
+            .withData(data)
+            .withManifest(getManifest())
+            .withROutput(rTxt)
+            .withSymbolsFile(symbolsTxt)
+            .buildFromRule(ruleContext, resourceApk),
         data,
         proguardCfg,
         mainDexProguardCfg,
@@ -451,10 +445,10 @@ public final class ApplicationManifest {
       Artifact rJavaClassJar = ruleContext.getImplicitOutputArtifact(
           AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR);
 
-      if (resourceContainer.getSymbols() != null) {
+      if (resourceContainer.getSymbolsTxt() != null) {
         new AndroidResourceParsingActionBuilder(ruleContext)
             .setParse(data)
-            .setOutput(resourceContainer.getSymbols())
+            .setOutput(resourceContainer.getSymbolsTxt())
             .build(ruleContext);
       }
 
@@ -502,7 +496,7 @@ public final class ApplicationManifest {
       if (!incremental) {
         builder
             .setRTxtOut(resourceContainer.getRTxt())
-            .setSymbols(resourceContainer.getSymbols())
+            .setSymbolsTxt(resourceContainer.getSymbolsTxt())
             .setSourceJarOut(resourceContainer.getJavaSourceJar());
       }
       processed = builder.build(ruleContext);
@@ -624,14 +618,21 @@ public final class ApplicationManifest {
     aaptActionHelper.createGenerateApkAction(resourceApk,
         resourceContainer.getRenameManifestPackage(), additionalAaptOpts.build(), densities);
 
-    ResourceContainer updatedResources = resourceContainer.toBuilder()
-        .setLabel(ruleContext.getLabel())
-        .setApk(resourceApk)
-        .setManifest(getManifest())
-        .setJavaSourceJar(javaSourcesJar)
-        .setJavaClassJar(null)
-        .setSymbols(null)
-        .build();
+    ResourceContainer updatedResources = ResourceContainer.create(
+        ruleContext.getLabel(),
+        resourceContainer.getJavaPackage(),
+        resourceContainer.getRenameManifestPackage(),
+        resourceContainer.getConstantsInlined(),
+        resourceApk,
+        getManifest(),
+        javaSourcesJar,
+        null, /* javaClassJar */
+        resourceContainer.getArtifacts(ResourceType.ASSETS),
+        resourceContainer.getArtifacts(ResourceType.RESOURCES),
+        resourceContainer.getRoots(ResourceType.ASSETS),
+        resourceContainer.getRoots(ResourceType.RESOURCES),
+        resourceContainer.isManifestExported(),
+        resourceContainer.getRTxt(), null);
 
     aaptActionHelper.createGenerateProguardAction(proguardCfg, mainDexProguardCfg);
 

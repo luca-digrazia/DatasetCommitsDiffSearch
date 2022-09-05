@@ -122,8 +122,9 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         .addSourceJar(srcJar)
         .addAllTransitiveSourceJars(common.collectTransitiveSourceJars(srcJar));
     Artifact classJar = ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_CLASS_JAR);
-    JavaRuleOutputJarsProvider.Builder ruleOutputJarsProviderBuilder =
-        JavaRuleOutputJarsProvider.builder().addOutputJar(classJar, null /* iJar */, srcJar);
+    JavaRuleOutputJarsProvider.Builder javaRuleOutputJarsProviderBuilder =
+        JavaRuleOutputJarsProvider.builder()
+            .addOutputJar(classJar, null /* iJar */, srcJar);
 
     CppConfiguration cppConfiguration = ruleContext.getConfiguration().getFragment(
         CppConfiguration.class);
@@ -192,10 +193,10 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
             common,
             filesBuilder,
             javaArtifactsBuilder,
-            ruleOutputJarsProviderBuilder,
+            javaRuleOutputJarsProviderBuilder,
             javaSourceJarsProviderBuilder);
     Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
-    ruleOutputJarsProviderBuilder.setJdeps(outputDepsProto);
+    javaRuleOutputJarsProviderBuilder.setJdeps(outputDepsProto);
 
     JavaCompilationArtifacts javaArtifacts = javaArtifactsBuilder.build();
     common.setJavaCompilationArtifacts(javaArtifacts);
@@ -249,8 +250,8 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
       }
     }
 
-    JavaSourceJarsProvider sourceJarsProvider = javaSourceJarsProviderBuilder.build();
-    NestedSet<Artifact> transitiveSourceJars = sourceJarsProvider.getTransitiveSourceJars();
+    JavaSourceJarsProvider javaSourceJarsProvider = javaSourceJarsProviderBuilder.build();
+    NestedSet<Artifact> transitiveSourceJars = javaSourceJarsProvider.getTransitiveSourceJars();
 
     // TODO(bazel-team): if (getOptions().sourceJars) then make this a dummy prerequisite for the
     // DeployArchiveAction ? Needs a few changes there as we can't pass inputs
@@ -369,19 +370,12 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
           FileWriteAction.create(ruleContext, unstrippedDeployJar, "", false));
     }
 
-    JavaRuleOutputJarsProvider ruleOutputJarsProvider = ruleOutputJarsProviderBuilder.build();
-    JavaSkylarkApiProvider.Builder skylarkApiProvider =
-        JavaSkylarkApiProvider.builder()
-            .setRuleOutputJarsProvider(ruleOutputJarsProvider)
-            .setSourceJarsProvider(sourceJarsProvider);
-
-    common.addTransitiveInfoProviders(builder, skylarkApiProvider, filesToBuild, classJar);
-    common.addGenJarsProvider(builder, skylarkApiProvider, genClassJar, genSourceJar);
+    common.addTransitiveInfoProviders(builder, filesToBuild, classJar);
+    common.addGenJarsProvider(builder, genClassJar, genSourceJar);
 
     return builder
         .setFilesToBuild(filesToBuild)
-        .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, skylarkApiProvider.build())
-        .add(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
+        .add(JavaRuleOutputJarsProvider.class, javaRuleOutputJarsProviderBuilder.build())
         .add(RunfilesProvider.class, runfilesProvider)
         // The executable to run (below) may be different from the executable for runfiles (the one
         // we create the runfiles support object with). On Linux they are the same (it's the same
@@ -394,7 +388,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         .add(
             JavaSourceInfoProvider.class,
             JavaSourceInfoProvider.fromJavaTargetAttributes(attributes, semantics))
-        .add(JavaSourceJarsProvider.class, sourceJarsProvider)
+        .add(JavaSourceJarsProvider.class, javaSourceJarsProviderBuilder.build())
         .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars)
         .build();
   }

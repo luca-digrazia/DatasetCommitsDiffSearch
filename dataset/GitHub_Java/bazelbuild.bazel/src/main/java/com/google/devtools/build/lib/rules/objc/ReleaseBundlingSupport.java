@@ -47,6 +47,7 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -177,10 +178,7 @@ public final class ReleaseBundlingSupport {
     this.intermediateArtifacts = releaseBundling.getIntermediateArtifacts();
     this.bundling = bundling(ruleContext, objcProvider, bundleDirFormat, bundleName,
         bundleMinimumOsVersion);
-    // TODO(cparsons): Take the rule configuration as a param instead of inferring.
-    bundleSupport = new BundleSupport(ruleContext,
-        ruleContext.getFragment(AppleConfiguration.class), platform,
-        bundling, extraActoolArgs());
+    bundleSupport = new BundleSupport(ruleContext, bundling, extraActoolArgs());
   }
 
   /**
@@ -380,7 +378,7 @@ public final class ReleaseBundlingSupport {
             platform.getLowerCaseNameInPlist(),
             configuration.getSdkVersionForPlatform(platform));
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnAppleEnvActionBuilder(configuration, platform)
+        ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext)
             .setMnemonic("EnvironmentPlist")
             .setExecutable(attributes.environmentPlist())
             .addArguments("--platform", platformWithVersion)
@@ -1085,7 +1083,7 @@ public final class ReleaseBundlingSupport {
         .addExecPath("--scan-executable", combinedArchBinary);
 
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnAppleEnvActionBuilder(appleConfiguration, platform)
+        ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext, platform)
             .setMnemonic("SwiftStdlibCopy")
             .setExecutable(attributes.swiftStdlibToolWrapper())
             .setCommandLine(commandLine.build())
@@ -1117,7 +1115,7 @@ public final class ReleaseBundlingSupport {
         .addExecPath("--scan-executable", combinedArchBinary);
 
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnAppleEnvActionBuilder(configuration, platform)
+        ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext, platform)
             .setMnemonic("SwiftCopySwiftSupport")
             .setExecutable(attributes.swiftStdlibToolWrapper())
             .setCommandLine(commandLine.build())
@@ -1346,7 +1344,7 @@ public final class ReleaseBundlingSupport {
       ImmutableList.Builder<BuildOptions> splitBuildOptions = ImmutableList.builder();
       for (String iosCpu : iosMultiCpus) {
         BuildOptions splitOptions = buildOptions.clone();
-        setArchitectureOptions(splitOptions, buildOptions, iosCpu);
+        setArchitectureOptions(splitOptions, iosCpu);
         setAdditionalOptions(splitOptions, buildOptions);
         splitOptions.get(AppleCommandLineOptions.class).configurationDistinguisher =
             getConfigurationDistinguisher();
@@ -1374,19 +1372,17 @@ public final class ReleaseBundlingSupport {
      */
     protected void setAdditionalOptions(BuildOptions splitOptions, BuildOptions originalOptions) {}
 
-    private static void setArchitectureOptions(BuildOptions splitOptions, 
-        BuildOptions originalOptions, String iosCpu) {
+    private void setArchitectureOptions(BuildOptions splitOptions, String iosCpu) {
       splitOptions.get(AppleCommandLineOptions.class).applePlatformType = PlatformType.IOS;
       splitOptions.get(AppleCommandLineOptions.class).appleSplitCpu = iosCpu;
       splitOptions.get(AppleCommandLineOptions.class).iosCpu = iosCpu;
-     if (splitOptions.get(ObjcCommandLineOptions.class).enableCcDeps) {
+      if (splitOptions.get(ObjcCommandLineOptions.class).enableCcDeps) {
         // Only set the (CC-compilation) CPU for dependencies if explicitly required by the user.
         // This helps users of the iOS rules who do not depend on CC rules as these CPU values
         // require additional flags to work (e.g. a custom crosstool) which now only need to be set
         // if this feature is explicitly requested.
-        AppleCrosstoolTransition.setAppleCrosstoolTransitionConfiguration(originalOptions,
-            splitOptions, "ios_" + iosCpu);
-     }
+        splitOptions.get(BuildConfiguration.Options.class).cpu = "ios_" + iosCpu;
+      }
     }
 
     @Override

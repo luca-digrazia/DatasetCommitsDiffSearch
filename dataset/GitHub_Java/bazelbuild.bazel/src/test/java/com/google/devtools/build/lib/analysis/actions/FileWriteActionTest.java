@@ -33,7 +33,7 @@ public class FileWriteActionTest extends FileWriteActionTestCase {
   protected FileWriteAction createAction(
       ActionOwner actionOwner, Artifact outputArtifact, String data, boolean makeExecutable) {
     return FileWriteAction.create(
-        actionOwner, outputArtifact, data, makeExecutable, Compression.DISALLOW);
+        actionOwner, outputArtifact, data, makeExecutable, FileWriteAction.Compression.DISALLOW);
   }
 
   @Test
@@ -71,7 +71,7 @@ public class FileWriteActionTest extends FileWriteActionTestCase {
             outputArtifact,
             contents,
             /*makeExecutable=*/ false,
-            Compression.DISALLOW);
+            FileWriteAction.Compression.DISALLOW);
     assertThat(action.getFileContents()).isEqualTo(contents);
   }
 
@@ -92,7 +92,7 @@ public class FileWriteActionTest extends FileWriteActionTestCase {
             outputArtifact,
             contents,
             /*makeExecutable=*/ false,
-            Compression.DISALLOW);
+            FileWriteAction.Compression.DISALLOW);
     assertThat(action.getFileContents()).isEqualTo(backingString);
   }
 
@@ -120,7 +120,7 @@ public class FileWriteActionTest extends FileWriteActionTestCase {
             outputArtifact,
             contents,
             /*makeExecutable=*/ false,
-            Compression.ALLOW);
+            FileWriteAction.Compression.ALLOW);
     assertThat(action.getFileContents()).isEqualTo(contents);
   }
 
@@ -145,7 +145,7 @@ public class FileWriteActionTest extends FileWriteActionTestCase {
             outputArtifact,
             contents,
             /*makeExecutable=*/ false,
-            Compression.ALLOW);
+            FileWriteAction.Compression.ALLOW);
 
     // The string should only be forced once we actually read it, not when the action is
     // constructed.
