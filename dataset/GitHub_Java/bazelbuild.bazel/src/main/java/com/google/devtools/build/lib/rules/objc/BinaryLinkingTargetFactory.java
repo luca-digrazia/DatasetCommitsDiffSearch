@@ -211,7 +211,7 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
                 ruleContext.getPrerequisites("deps", Mode.TARGET, ObjcProvider.class))
             .addDepCcHeaderProviders(
                 ruleContext.getPrerequisites("deps", Mode.TARGET, CppCompilationContext.class))
-            .addDepCcLinkProviders(ruleContext.getPrerequisites("deps", Mode.TARGET))
+            .addDepCcLinkProviders(ruleContext)
             .addDepObjcProviders(
                 ruleContext.getPrerequisites("bundles", Mode.TARGET, ObjcProvider.class))
             .addNonPropagatedDepObjcProviders(

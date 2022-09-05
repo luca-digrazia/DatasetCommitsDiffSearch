@@ -24,10 +24,11 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
-import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
+import com.google.devtools.build.lib.analysis.ConfiguredNativeAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -41,7 +42,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
@@ -57,15 +57,8 @@ import java.util.List;
 /**
  * J2ObjC transpilation aspect for Java rules.
  */
-public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectFactory {
+public class J2ObjcAspect implements ConfiguredNativeAspectFactory {
   public static final String NAME = "J2ObjcAspect";
-  private final String toolsRepository;
-  private final BazelJ2ObjcProtoAspect bazelJ2ObjcProtoAspect;
-
-  public J2ObjcAspect(String toolsRepository, BazelJ2ObjcProtoAspect bazelJ2ObjcProtoAspect) {
-    this.toolsRepository = toolsRepository;
-    this.bazelJ2ObjcProtoAspect = bazelJ2ObjcProtoAspect;
-  }
 
   private static final Iterable<Attribute> DEPENDENT_ATTRIBUTES = ImmutableList.of(
       new Attribute("$jre_emul_lib", Mode.TARGET),
@@ -78,9 +71,9 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
    */
   protected AspectDefinition.Builder addAdditionalAttributes(
       AspectDefinition.Builder builder) {
-    return builder.attributeAspect("deps", this, bazelJ2ObjcProtoAspect)
-        .attributeAspect("exports", this, bazelJ2ObjcProtoAspect)
-        .attributeAspect("runtime_deps", this, bazelJ2ObjcProtoAspect);
+    return builder.attributeAspect("deps", J2ObjcAspect.class, BazelJ2ObjcProtoAspect.class)
+        .attributeAspect("exports", J2ObjcAspect.class, BazelJ2ObjcProtoAspect.class)
+        .attributeAspect("runtime_deps", J2ObjcAspect.class, BazelJ2ObjcProtoAspect.class);
   }
 
   @Override
@@ -94,28 +87,28 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
             ObjcConfiguration.class)
         .add(attr("$j2objc", LABEL).cfg(HOST).exec()
             .value(Label.parseAbsoluteUnchecked(
-                toolsRepository + "//tools/j2objc:j2objc_deploy.jar")))
+                Constants.TOOLS_REPOSITORY + "//tools/j2objc:j2objc_deploy.jar")))
         .add(attr("$j2objc_wrapper", LABEL)
             .allowedFileTypes(FileType.of(".py"))
             .cfg(HOST)
             .exec()
             .singleArtifact()
             .value(Label.parseAbsoluteUnchecked(
-                toolsRepository + "//tools/j2objc:j2objc_wrapper")))
+                Constants.TOOLS_REPOSITORY + "//tools/j2objc:j2objc_wrapper")))
         .add(attr("$jre_emul_jar", LABEL).cfg(HOST)
             .value(Label.parseAbsoluteUnchecked(
-                toolsRepository + "//third_party/java/j2objc:jre_emul.jar")))
+                Constants.TOOLS_REPOSITORY + "//third_party/java/j2objc:jre_emul.jar")))
         .add(attr("$jre_emul_lib", LABEL)
             .value(Label.parseAbsoluteUnchecked("//third_party/java/j2objc:jre_emul_lib")))
         .add(attr("$xcrunwrapper", LABEL).cfg(HOST).exec()
             .value(Label.parseAbsoluteUnchecked(
-                toolsRepository + "//tools/objc:xcrunwrapper")))
+                Constants.TOOLS_REPOSITORY + "//tools/objc:xcrunwrapper")))
         .add(attr(":xcode_config", LABEL)
             .allowedRuleClasses("xcode_config")
             .checkConstraints()
             .direct_compile_time_input()
             .cfg(HOST)
-            .value(new AppleToolchain.XcodeConfigLabel(toolsRepository)))
+            .value(AppleToolchain.RequiresXcodeConfigRule.XCODE_CONFIG_LABEL))
         .build();
   }
 
