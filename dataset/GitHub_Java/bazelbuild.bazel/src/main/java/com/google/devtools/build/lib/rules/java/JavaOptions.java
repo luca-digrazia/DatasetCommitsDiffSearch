@@ -41,6 +41,7 @@ import java.util.Set;
  * Command-line options for building Java targets
  */
 public class JavaOptions extends FragmentOptions {
+  public static final String DEFAULT_LANGTOOLS = "//tools/jdk:langtools";
 
   /**
    * Converter for the --javawarn option.
@@ -111,15 +112,6 @@ public class JavaOptions extends FragmentOptions {
       converter = LabelConverter.class,
       help = "The name of the toolchain rule for Java.")
   public Label javaToolchain;
-
-  @Option(
-    name = "host_java_toolchain",
-    defaultValue = "@bazel_tools//tools/jdk:toolchain",
-    category = "version",
-    converter = LabelConverter.class,
-    help = "The Java toolchain used to build tools that are executed during a build."
-  )
-  public Label hostJavaToolchain;
 
   @Option(name = "host_javabase",
       defaultValue = "@bazel_tools//tools/jdk:jdk",
@@ -222,70 +214,54 @@ public class JavaOptions extends FragmentOptions {
           + "targets as dependencies.")
   public StrictDepsMode strictJavaDeps;
 
-  @Option(
-    name = "javabuilder_top",
-    defaultValue = "null",
-    category = "undocumented",
-    help = "No-op. Kept here for backwards compatibility."
-  )
-  public String javaBuilderTop;
+  @Option(name = "javabuilder_top",
+      defaultValue = "@bazel_tools//tools/jdk:JavaBuilder_deploy.jar",
+      category = "version",
+      converter = LabelConverter.class,
+      help = "Label of the filegroup that contains the JavaBuilder jar.")
+  public Label javaBuilderTop;
 
-  @Option(
-    name = "singlejar_top",
-    defaultValue = "null",
-    category = "undocumented",
-    help = "No-op. Kept here for backwards compatibility."
-  )
-  public String singleJarTop;
+  @Option(name = "singlejar_top",
+      defaultValue = "@bazel_tools//tools/jdk:SingleJar_deploy.jar",
+      category = "version",
+      converter = LabelConverter.class,
+      help = "Label of the filegroup that contains the SingleJar jar.")
+  public Label singleJarTop;
 
-  @Option(
-    name = "genclass_top",
-    defaultValue = "null",
-    category = "undocumented",
-    help = "No-op. Kept here for backwards compatibility."
-  )
-  public String genClassTop;
+  @Option(name = "genclass_top",
+      defaultValue = "@bazel_tools//tools/jdk:GenClass_deploy.jar",
+      category = "version",
+      converter = LabelConverter.class,
+      help = "Label of the filegroup that contains the GenClass jar.")
+  public Label genClassTop;
 
-  @Option(
-    name = "ijar_top",
-    defaultValue = "null",
-    category = "undocumented",
-    help = "No-op. Kept here for backwards compatibility."
-  )
-  public String iJarTop;
+  @Option(name = "ijar_top",
+      defaultValue = "@bazel_tools//tools/jdk:ijar",
+      category = "version",
+      converter = LabelConverter.class,
+      help = "Label of the filegroup that contains the ijar binary.")
+  public Label iJarTop;
 
-  @Option(
-    name = "java_langtools",
-    defaultValue = "null",
-    category = "undocumented",
-    help = "No-op. Kept here for backwards compatibility."
-  )
-  public String javaLangtoolsJar;
+  @Option(name = "java_langtools",
+      defaultValue = "@bazel_tools" + DEFAULT_LANGTOOLS,
+      category = "version",
+      converter = LabelConverter.class,
+      help = "Label of the rule that produces the Java langtools jar.")
+  public Label javaLangtoolsJar;
 
-  @Option(
-    name = "javac_bootclasspath",
-    defaultValue = "null",
-    category = "undocumented",
-    help = "No-op. Kept here for backwards compatibility."
-  )
-  public String javacBootclasspath;
+  @Option(name = "javac_bootclasspath",
+      defaultValue = "@bazel_tools//tools/jdk:bootclasspath",
+      category = "version",
+      converter = LabelConverter.class,
+      help = "Label of the rule that produces the bootclasspath jars for javac to use.")
+  public Label javacBootclasspath;
 
-  @Option(
-    name = "javac_extdir",
-    defaultValue = "null",
-    category = "undocumented",
-    help = "No-op. Kept here for backwards compatibility."
-  )
-  public String javacExtdir;
-
-  @Option(
-    name = "host_java_launcher",
-    defaultValue = "null",
-    converter = LabelConverter.class,
-    category = "semantics",
-    help = "The Java launcher used by tools that are executed during a build."
-  )
-  public Label hostJavaLauncher;
+  @Option(name = "javac_extdir",
+      defaultValue = "@bazel_tools//tools/jdk:extdir",
+      category = "version",
+      converter = LabelConverter.class,
+      help = "Label of the rule that produces the extdir for javac to use.")
+  public Label javacExtdir;
 
   @Option(name = "java_launcher",
       defaultValue = "null",
@@ -360,9 +336,15 @@ public class JavaOptions extends FragmentOptions {
     host.jvmOpts = ImmutableList.of("-client", "-XX:ErrorFile=/dev/stderr");
 
     host.javacOpts = javacOpts;
-    host.javaToolchain = hostJavaToolchain;
-
-    host.javaLauncher = hostJavaLauncher;
+    host.javaLangtoolsJar = javaLangtoolsJar;
+    host.javacExtdir = javacExtdir;
+    host.headerCompilation = headerCompilation;
+    host.javaBuilderTop = javaBuilderTop;
+    host.javaToolchain = javaToolchain;
+    host.singleJarTop = singleJarTop;
+    host.genClassTop = genClassTop;
+    host.iJarTop = iJarTop;
+    host.javacBootclasspath = javacBootclasspath;
 
     // Java builds often contain complicated code generators for which
     // incremental build performance is important.
@@ -381,6 +363,10 @@ public class JavaOptions extends FragmentOptions {
     if (javaLauncher != null) {
       labelMap.put("java_launcher", javaLauncher);
     }
+    labelMap.put("javabuilder", javaBuilderTop);
+    labelMap.put("singlejar", singleJarTop);
+    labelMap.put("genclass", genClassTop);
+    labelMap.put("ijar", iJarTop);
     labelMap.put("java_toolchain", javaToolchain);
     labelMap.putAll("translation", getTranslationLabels());
   }
@@ -392,6 +378,13 @@ public class JavaOptions extends FragmentOptions {
     DefaultsPackage.parseAndAdd(jdkLabels, hostJavaBase);
     Map<String, Set<Label>> result = new HashMap<>();
     result.put("JDK", jdkLabels);
+    result.put("JAVA_LANGTOOLS", ImmutableSet.of(javaLangtoolsJar));
+    result.put("JAVAC_BOOTCLASSPATH", ImmutableSet.of(javacBootclasspath));
+    result.put("JAVAC_EXTDIR", ImmutableSet.of(javacExtdir));
+    result.put("JAVABUILDER", ImmutableSet.of(javaBuilderTop));
+    result.put("SINGLEJAR", ImmutableSet.of(singleJarTop));
+    result.put("GENCLASS", ImmutableSet.of(genClassTop));
+    result.put("IJAR", ImmutableSet.of(iJarTop));
     result.put("JAVA_TOOLCHAIN", ImmutableSet.of(javaToolchain));
 
     return result;
