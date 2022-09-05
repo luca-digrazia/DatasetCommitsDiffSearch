@@ -28,24 +28,24 @@ public class LocalFileService implements FileService {
     /**
      * 静态文件存储目录,不能以/结尾
      */
-    private String staticFilePath = "./static/upload";
+    private String staticFilePath = "./static";
 
     /**
      * 静态文件访问地址,上传静态文件后,将返回此地址+文件相对地址,以/结尾
      */
-    private String staticLocation = "/upload";
+    private String staticLocation = "/";
 
     /**
      * 文件上传目录
      */
-    private String filePath = "./upload/file";
+    private String filePath = "./upload";
 
-    @Value("${hsweb.web.upload.static-file-path:./static/upload}")
+    @Value("${hsweb.web.upload.static-file-path:./static}")
     public void setStaticFilePath(String staticFilePath) {
         this.staticFilePath = staticFilePath;
     }
 
-    @Value("${hsweb.web.upload.static-location:/upload}")
+    @Value("${hsweb.web.upload.static-location:/upload/static}")
     public void setStaticLocation(String staticLocation) {
         this.staticLocation = staticLocation;
     }
@@ -79,7 +79,7 @@ public class LocalFileService implements FileService {
             throw new NotFoundException("file not found or disabled");
         }
         //配置中的文件上传根路径
-        String filePath = getFilePath() + "/" + fileInfo.getLocation();
+        String filePath =getFilePath()+"/"+ fileInfo.getLocation();
         File file = new File(filePath);
         if (!file.exists()) {
             throw new NotFoundException("file not found");
@@ -102,7 +102,7 @@ public class LocalFileService implements FileService {
         String filePath = DateFormatter.toString(new Date(), "yyyyMMdd");
 
         //创建目录
-        new File(getStaticFilePath() + "/" + filePath).mkdirs();
+        new File(getStaticFilePath()+"/"+filePath).mkdirs();
 
         // 存储的文件名
         String realFileName = System.nanoTime() + suffix;
