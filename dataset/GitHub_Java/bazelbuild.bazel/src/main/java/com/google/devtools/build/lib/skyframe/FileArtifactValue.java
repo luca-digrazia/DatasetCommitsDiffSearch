@@ -13,8 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.MoreObjects;
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
@@ -35,13 +34,7 @@ public class FileArtifactValue extends ArtifactValue {
   /** Data for Middleman artifacts that did not have data specified. */
   static final FileArtifactValue DEFAULT_MIDDLEMAN = new FileArtifactValue(null, 0, 0);
   /** Data that marks that a file is not present on the filesystem. */
-  @VisibleForTesting
-  public static final FileArtifactValue MISSING_FILE_MARKER = new FileArtifactValue(null, 1, 0) {
-    @Override
-    public boolean exists() {
-      return false;
-    }
-  };
+  static final FileArtifactValue MISSING_FILE_MARKER = new FileArtifactValue(null, 1, 0);
 
   /**
    * Represents an omitted file- we are aware of it but it doesn't exist. All access methods
@@ -77,8 +70,7 @@ public class FileArtifactValue extends ArtifactValue {
     this.mtime = mtime;
   }
 
-  @VisibleForTesting
-  public static FileArtifactValue create(Artifact artifact) throws IOException {
+  static FileArtifactValue create(Artifact artifact) throws IOException {
     Path path = artifact.getPath();
     FileStatus stat = path.stat();
     boolean isFile = stat.isFile();
@@ -117,7 +109,7 @@ public class FileArtifactValue extends ArtifactValue {
   }
 
   @Nullable
-  public byte[] getDigest() {
+  byte[] getDigest() {
     return digest;
   }
 
@@ -127,7 +119,7 @@ public class FileArtifactValue extends ArtifactValue {
   }
 
   /** Gets the size of the file. Directories have size 0. */
-  public long getSize() {
+  long getSize() {
     return size;
   }
 
@@ -139,10 +131,6 @@ public class FileArtifactValue extends ArtifactValue {
   long getModifiedTime() {
     Preconditions.checkState(size == 0, "%s %s %s", digest, mtime, size);
     return mtime;
-  }
-
-  public boolean exists() {
-    return true;
   }
 
   @Override
@@ -171,7 +159,7 @@ public class FileArtifactValue extends ArtifactValue {
 
   @Override
   public String toString() {
-    return MoreObjects.toStringHelper(FileArtifactValue.class)
+    return Objects.toStringHelper(FileArtifactValue.class)
         .add("digest", digest)
         .add("mtime", mtime)
         .add("size", size).toString();

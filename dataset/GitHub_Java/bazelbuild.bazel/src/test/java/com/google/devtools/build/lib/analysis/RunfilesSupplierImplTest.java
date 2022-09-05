@@ -18,12 +18,9 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
-import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.testutil.Scratch;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import org.junit.Before;
@@ -39,15 +36,11 @@ import java.util.List;
 public class RunfilesSupplierImplTest {
 
   private Root rootDir;
-  private Root middlemanRoot;
 
   @Before
   public void setup() throws IOException {
     Scratch scratch = new Scratch();
     rootDir = Root.asDerivedRoot(scratch.dir("/fake/root/dont/matter"));
-
-    Path middlemanExecPath = scratch.dir("/still/fake/root/dont/matter");
-    middlemanRoot = Root.middlemanRoot(middlemanExecPath, middlemanExecPath.getChild("subdir"));
   }
 
   @Test
@@ -73,19 +66,7 @@ public class RunfilesSupplierImplTest {
         mkArtifacts(rootDir, "thing_1", "thing_2", "thing_3", "thing_4", "duplicated"));
   }
 
-  @Test
-  public void testGetArtifactsFilterMiddlemen() {
-    List<Artifact> artifacts = mkArtifacts(rootDir, "thing1", "thing2");
-    Artifact middleman = new Artifact(new PathFragment("middleman"), middlemanRoot);
-    Runfiles runfiles = mkRunfiles(Iterables.concat(artifacts, ImmutableList.of(middleman)));
-
-    RunfilesSupplier underTest = new RunfilesSupplierImpl(
-        ImmutableMap.of(new PathFragment("notimportant"), runfiles));
-
-    assertThat(underTest.getArtifacts()).containsExactlyElementsIn(artifacts);
-  }
-
-  private static Runfiles mkRunfiles(Iterable<Artifact> artifacts) {
+  private static Runfiles mkRunfiles(List<Artifact> artifacts) {
     return new Runfiles.Builder().addArtifacts(artifacts).build();
   }
 

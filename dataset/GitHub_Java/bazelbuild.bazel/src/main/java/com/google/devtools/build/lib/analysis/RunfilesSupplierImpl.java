@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.analysis;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -52,8 +51,9 @@ public class RunfilesSupplierImpl implements RunfilesSupplier {
   public Iterable<Artifact> getArtifacts() {
     ImmutableSet.Builder<Artifact> builder = ImmutableSet.builder();
     for (Entry<PathFragment, Runfiles> entry : inputRunfiles.entrySet()) {
-      builder.addAll(
-          Iterables.filter(entry.getValue().getAllArtifacts(), Artifact.MIDDLEMAN_FILTER));
+      // TODO(bazel-team): We can likely do without middlemen here, but we should filter that at
+      // the Runfiles level.
+      builder.addAll(entry.getValue().getAllArtifacts());
     }
     return builder.build();
   }

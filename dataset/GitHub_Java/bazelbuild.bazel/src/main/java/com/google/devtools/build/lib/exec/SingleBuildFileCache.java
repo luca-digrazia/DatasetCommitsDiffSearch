@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.exec;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
+import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -24,7 +25,6 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.DigestOfDirectoryException;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.protobuf.ByteString;
@@ -70,12 +70,13 @@ public class SingleBuildFileCache implements ActionInputFileCache {
           Path path = null;
           try {
             path = fs.getPath(fullPath(input));
-            byte[] digest = path.getMD5Digest();
             BaseEncoding hex = BaseEncoding.base16().lowerCase();
-            ByteString hexDigest = ByteString.copyFrom(hex.encode(digest).getBytes(US_ASCII));
+            ByteString digest = ByteString.copyFrom(
+                hex.encode(path.getMD5Digest())
+                   .getBytes(US_ASCII));
             // Inject reverse mapping. Doing this unconditionally in getDigest() showed up
             // as a hotspot in CPU profiling.
-            digestToPath.put(hexDigest, input);
+            digestToPath.put(digest, input);
             return new ActionInputMetadata(digest, path.getFileSize());
           } catch (IOException e) {
             if (path != null && path.isDirectory()) {
@@ -109,7 +110,7 @@ public class SingleBuildFileCache implements ActionInputFileCache {
   }
 
   @Override
-  public byte[] getDigest(ActionInput input) throws IOException {
+  public ByteString getDigest(ActionInput input) throws IOException {
     return pathToMetadata.getUnchecked(input).getDigest();
   }
 
@@ -136,12 +137,12 @@ public class SingleBuildFileCache implements ActionInputFileCache {
 
   /** Container class for caching I/O around ActionInputs. */
   private static class ActionInputMetadata {
-    private final byte[] digest;
+    private final ByteString digest;
     private final long size;
     private final IOException exceptionOnAccess;
 
     /** Constructor for a successful lookup. */
-    ActionInputMetadata(byte[] digest, long size) {
+    ActionInputMetadata(ByteString digest, long size) {
       this.digest = digest;
       this.size = size;
       this.exceptionOnAccess = null;
@@ -155,7 +156,7 @@ public class SingleBuildFileCache implements ActionInputFileCache {
     }
 
     /** Returns digest or throws the exception encountered calculating it/ */
-    byte[] getDigest() throws IOException {
+    ByteString getDigest() throws IOException {
       maybeRaiseException();
       return digest;
     }

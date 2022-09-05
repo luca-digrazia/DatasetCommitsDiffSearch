@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,8 +34,6 @@ public interface ActionInputFileCache {
    * then t >= p. Aside from these properties, t can be any value and may vary arbitrarily across
    * calls.
    *
-   * The return value is owned by the cache and must not be modified.
-   *
    * @param input the input to retrieve the digest for
    * @return the artifact's digest or null if digest cannot be obtained (due to artifact
    *         non-existence, lookup errors, or any other reason)
@@ -45,7 +43,7 @@ public interface ActionInputFileCache {
    *
    */
   @Nullable
-  byte[] getDigest(ActionInput input) throws IOException;
+  ByteString getDigest(ActionInput input) throws IOException;
 
   /**
    * Retrieves whether or not the input Artifact is a file or symlink to an existing file.
@@ -70,7 +68,7 @@ public interface ActionInputFileCache {
    * Checks if the file is available locally, based on the assumption that previous operations on
    * the ActionInputFileCache would have created a cache entry for it.
    *
-   * @param digest the digest to lookup (as lowercase hex).
+   * @param digest the digest to lookup.
    * @return true if the specified digest is backed by a locally-readable file, false otherwise
    */
   boolean contentsAvailableLocally(ByteString digest);
@@ -79,11 +77,11 @@ public interface ActionInputFileCache {
    * Concrete subclasses must implement this to provide a mapping from digest to file path,
    * based on files previously seen as inputs.
    *
-   * @param digest the digest (as lowercase hex).
+   * @param digest the digest.
    * @return an ActionInput corresponding to the given digest.
    */
   @Nullable
-  ActionInput getInputFromDigest(ByteString digest);
+  ActionInput getInputFromDigest(ByteString digest) throws IOException;
 
   /**
    * The absolute path that this input is located at. The usual {@link ActionInput} implementation

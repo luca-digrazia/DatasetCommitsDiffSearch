@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ public interface ActionMetadata {
    * message should be reported.
    */
   @Nullable
-  String getProgressMessage();
+  public String getProgressMessage();
 
   /**
    * Returns the owner of this executable if this executable can supply verbose information. This is
@@ -44,7 +44,7 @@ public interface ActionMetadata {
    * <p>If this executable does not supply verbose information, this function may throw an
    * IllegalStateException.
    */
-  ActionOwner getOwner();
+  public ActionOwner getOwner();
 
   /**
    * Returns a mnemonic (string constant) for this kind of action; written into
@@ -71,7 +71,7 @@ public interface ActionMetadata {
    *   executor parameter of the top-level call to
    *   Builder.buildArtifacts().
    */
-  String describeStrategy(Executor executor);
+  public String describeStrategy(Executor executor);
 
   /**
    * Returns true iff the getInputs set is known to be complete.
@@ -124,7 +124,7 @@ public interface ActionMetadata {
    * orphaned (not consumed by any downstream {@link Action}s and potentially
    * discarded during the build process.
    */
-  ImmutableSet<Artifact> getMandatoryOutputs();
+  public ImmutableSet<Artifact> getMandatoryOutputs();
 
   /**
    * Returns the "primary" input of this action, if applicable.

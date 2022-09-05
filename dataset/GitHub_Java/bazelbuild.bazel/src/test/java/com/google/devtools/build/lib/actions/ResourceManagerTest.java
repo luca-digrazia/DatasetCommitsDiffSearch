@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ public class ResourceManagerTest {
   CyclicBarrier sync2;
 
   @Before
-  public final void configureResourceManager() throws Exception  {
+  public void setUp() throws Exception {
     rm.setRamUtilizationPercentage(100);
     rm.setAvailableResources(
         ResourceSet.create(/*memoryMb=*/1000.0, /*cpuUsage=*/1.0, /*ioUsage=*/1.0,
@@ -358,11 +358,6 @@ public class ResourceManagerTest {
 
     @Override
     public boolean discoversInputs() {
-      throw new IllegalStateException();
-    }
-
-    @Override
-    public Iterable<Artifact> getTools() {
       throw new IllegalStateException();
     }
 
