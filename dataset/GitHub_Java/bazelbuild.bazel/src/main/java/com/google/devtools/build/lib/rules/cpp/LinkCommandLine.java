@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.syntax.Label;
@@ -59,9 +58,6 @@ public final class LinkCommandLine extends CommandLine {
   private final BuildConfiguration configuration;
   private final CppConfiguration cppConfiguration;
   private final ActionOwner owner;
-  private final CcToolchainFeatures.Variables variables;
-  // The feature config can be null for tests.
-  @Nullable private final FeatureConfiguration featureConfiguration;
   @Nullable private final Artifact output;
   @Nullable private final Artifact interfaceOutput;
   @Nullable private final Artifact symbolCountsOutput;
@@ -80,12 +76,6 @@ public final class LinkCommandLine extends CommandLine {
   private final boolean needWholeArchive;
   @Nullable private final Artifact paramFile;
   @Nullable private final Artifact interfaceSoBuilder;
-
-  /**
-   * A string constant for the c++ link action, used to access the feature
-   * configuration.
-   */
-  public static final String CPP_LINK = "c++-link";
 
   private LinkCommandLine(
       BuildConfiguration configuration,
@@ -107,9 +97,7 @@ public final class LinkCommandLine extends CommandLine {
       boolean useTestOnlyFlags,
       boolean needWholeArchive,
       @Nullable Artifact paramFile,
-      Artifact interfaceSoBuilder,
-      CcToolchainFeatures.Variables variables,
-      @Nullable FeatureConfiguration featureConfiguration) {
+      Artifact interfaceSoBuilder) {
     Preconditions.checkArgument(linkTargetType != LinkTargetType.INTERFACE_DYNAMIC_LIBRARY,
         "you can't link an interface dynamic library directly");
     if (linkTargetType != LinkTargetType.DYNAMIC_LIBRARY) {
@@ -135,8 +123,6 @@ public final class LinkCommandLine extends CommandLine {
 
     this.configuration = Preconditions.checkNotNull(configuration);
     this.cppConfiguration = configuration.getFragment(CppConfiguration.class);
-    this.variables = variables;
-    this.featureConfiguration = featureConfiguration;
     this.owner = Preconditions.checkNotNull(owner);
     this.output = output;
     this.interfaceOutput = interfaceOutput;
@@ -672,10 +658,7 @@ public final class LinkCommandLine extends CommandLine {
     }
 
     argv.addAll(cppConfiguration.getLinkOptions());
-    // The feature config can be null for tests.
-    if (featureConfiguration != null) {
-      argv.addAll(featureConfiguration.getCommandLine(CPP_LINK, variables));
-    }
+    argv.addAll(cppConfiguration.getFdoSupport().getLinkOptions());
   }
 
   private static boolean isDynamicLibrary(LinkerInput linkInput) {
@@ -950,7 +933,6 @@ public final class LinkCommandLine extends CommandLine {
 
     private final BuildConfiguration configuration;
     private final ActionOwner owner;
-    @Nullable private final RuleContext ruleContext;
 
     @Nullable private Artifact output;
     @Nullable private Artifact interfaceOutput;
@@ -971,18 +953,13 @@ public final class LinkCommandLine extends CommandLine {
     @Nullable private Artifact paramFile;
     @Nullable private Artifact interfaceSoBuilder;
 
-    // This interface is needed to support tests that don't create a
-    // ruleContext, in which case the configuration and action owner
-    // cannot be accessed off of the give ruleContext.
-    public Builder(BuildConfiguration configuration, ActionOwner owner,
-        @Nullable RuleContext ruleContext) {
+    public Builder(BuildConfiguration configuration, ActionOwner owner) {
       this.configuration = configuration;
       this.owner = owner;
-      this.ruleContext = ruleContext;
     }
 
     public Builder(RuleContext ruleContext) {
-      this(ruleContext.getConfiguration(), ruleContext.getActionOwner(), ruleContext);
+      this(ruleContext.getConfiguration(), ruleContext.getActionOwner());
     }
 
     public LinkCommandLine build() {
@@ -992,17 +969,6 @@ public final class LinkCommandLine extends CommandLine {
       } else {
         actualLinkstampCompileOptions = ImmutableList.copyOf(
             Iterables.concat(DEFAULT_LINKSTAMP_OPTIONS, linkstampCompileOptions));
-      }
-      CcToolchainFeatures.Variables variables = null;
-      FeatureConfiguration featureConfiguration = null;
-      // The ruleContext can be null for some tests.
-      if (ruleContext != null) {
-        featureConfiguration = CcCommon.configureFeatures(ruleContext);
-        CcToolchainFeatures.Variables.Builder buildVariables =
-            new CcToolchainFeatures.Variables.Builder();
-        CppConfiguration cppConfiguration = configuration.getFragment(CppConfiguration.class);
-        cppConfiguration.getFdoSupport().getLinkOptions(featureConfiguration, buildVariables);
-        variables = buildVariables.build();
       }
       return new LinkCommandLine(
           configuration,
@@ -1024,9 +990,7 @@ public final class LinkCommandLine extends CommandLine {
           useTestOnlyFlags,
           needWholeArchive,
           paramFile,
-          interfaceSoBuilder,
-          variables,
-          featureConfiguration);
+          interfaceSoBuilder);
     }
 
     /**
