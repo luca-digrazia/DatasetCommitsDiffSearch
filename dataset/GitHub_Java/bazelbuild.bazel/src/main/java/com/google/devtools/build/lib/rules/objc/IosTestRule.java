@@ -159,7 +159,6 @@ public class IosTestRule implements RuleDefinition {
                         return mcov;
                       }
                     }))
-        .cfg(AppleCrosstoolTransition.APPLE_CROSSTOOL_TRANSITION)
         .build();
   }
 
