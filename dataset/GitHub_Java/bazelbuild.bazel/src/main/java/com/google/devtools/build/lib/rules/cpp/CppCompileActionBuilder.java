@@ -189,7 +189,7 @@ public class CppCompileActionBuilder {
    * Returns the .dwo output file that matches the specified .o output file. If Fission mode
    * isn't enabled for this build, this is null (we don't produce .dwo files in that case).
    */
-  private static Artifact getDwoFile(RuleContext ruleContext, Artifact outputFile,
+  private static Artifact getDwoFile(Artifact outputFile, AnalysisEnvironment artifactFactory,
       CppConfiguration cppConfiguration) {
 
     // Only create .dwo's for .o compilations (i.e. not .ii or .S).
@@ -198,7 +198,9 @@ public class CppCompileActionBuilder {
 
     // Note configurations can be null for tests.
     if (cppConfiguration != null && cppConfiguration.useFission() && isObjectOutput) {
-      return ruleContext.getRelatedArtifact(outputFile.getRootRelativePath(), ".dwo");
+      return artifactFactory.getDerivedArtifact(
+          FileSystemUtils.replaceExtension(outputFile.getRootRelativePath(), ".dwo"),
+          outputFile.getRoot());
     } else {
       return null;
     }
@@ -269,7 +271,7 @@ public class CppCompileActionBuilder {
 
       return new CppCompileAction(owner, ImmutableList.copyOf(features), featureConfiguration,
           variables, sourceFile, sourceLabel, realMandatoryInputs, outputFile, dotdFile,
-          gcnoFile, getDwoFile(ruleContext, outputFile, cppConfiguration),
+          gcnoFile, getDwoFile(outputFile, analysisEnvironment, cppConfiguration),
           optionalSourceFile, configuration, cppConfiguration, context,
           actionContext, ImmutableList.copyOf(copts),
           ImmutableList.copyOf(pluginOpts),

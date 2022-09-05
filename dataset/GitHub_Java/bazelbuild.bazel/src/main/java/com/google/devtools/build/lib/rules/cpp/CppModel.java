@@ -76,7 +76,7 @@ public final class CppModel {
   private boolean neverLink;
   private boolean allowInterfaceSharedObjects;
   private boolean createDynamicLibrary = true;
-  private Artifact soImplArtifact;
+  private PathFragment soImplFilename;
   private FeatureConfiguration featureConfiguration;
 
   public CppModel(RuleContext ruleContext, CppSemantics semantics) {
@@ -206,8 +206,8 @@ public final class CppModel {
     return this;
   }
 
-  public CppModel setDynamicLibrary(Artifact soImplFilename) {
-    this.soImplArtifact = soImplFilename;
+  public CppModel setDynamicLibraryPath(PathFragment soImplFilename) {
+    this.soImplFilename = soImplFilename;
     return this;
   }
   
@@ -568,8 +568,8 @@ public final class CppModel {
     //
     // Presumably, it is done this way because the .a file is an implicit output of every cc_library
     // rule, so we can't use ".pic.a" that in the always-PIC case.
-    Artifact linkedArtifact = CppHelper.getLinkedArtifact(ruleContext, linkType);
-    CppLinkAction maybePicAction = newLinkActionBuilder(linkedArtifact)
+    PathFragment linkedFileName = CppHelper.getLinkedFilename(ruleContext, linkType);
+    CppLinkAction maybePicAction = newLinkActionBuilder(linkedFileName)
         .addNonLibraryInputs(ccOutputs.getObjectFiles(usePicForBinaries))
         .addNonLibraryInputs(ccOutputs.getHeaderTokenFiles())
         .setLinkType(linkType)
@@ -586,8 +586,8 @@ public final class CppModel {
           ? LinkTargetType.ALWAYS_LINK_PIC_STATIC_LIBRARY
           : LinkTargetType.PIC_STATIC_LIBRARY;
 
-      Artifact picArtifact = CppHelper.getLinkedArtifact(ruleContext, picLinkType);
-      CppLinkAction picAction = newLinkActionBuilder(picArtifact)
+      PathFragment picFileName = CppHelper.getLinkedFilename(ruleContext, picLinkType);
+      CppLinkAction picAction = newLinkActionBuilder(picFileName)
           .addNonLibraryInputs(ccOutputs.getObjectFiles(true))
           .addNonLibraryInputs(ccOutputs.getHeaderTokenFiles())
           .setLinkType(picLinkType)
@@ -602,26 +602,24 @@ public final class CppModel {
     }
 
     // Create dynamic library.
-    Artifact soImpl;
-    if (soImplArtifact == null) {
-      soImpl = CppHelper.getLinkedArtifact(ruleContext, LinkTargetType.DYNAMIC_LIBRARY);
-    } else {
-      soImpl = soImplArtifact;
+    if (soImplFilename == null) {
+      soImplFilename = CppHelper.getLinkedFilename(ruleContext, LinkTargetType.DYNAMIC_LIBRARY);
     }
-
     List<String> sonameLinkopts = ImmutableList.of();
-    Artifact soInterface = null;
+    PathFragment soInterfaceFilename = null;
     if (cppConfiguration.useInterfaceSharedObjects() && allowInterfaceSharedObjects) {
-      soInterface =
-          CppHelper.getLinkedArtifact(ruleContext, LinkTargetType.INTERFACE_DYNAMIC_LIBRARY);
+      soInterfaceFilename =
+          CppHelper.getLinkedFilename(ruleContext, LinkTargetType.INTERFACE_DYNAMIC_LIBRARY);
+      Artifact dynamicLibrary = env.getDerivedArtifact(
+          soImplFilename, configuration.getBinDirectory());
       sonameLinkopts = ImmutableList.of("-Wl,-soname=" +
-          SolibSymlinkAction.getDynamicLibrarySoname(soImpl.getRootRelativePath(), false));
+          SolibSymlinkAction.getDynamicLibrarySoname(dynamicLibrary.getRootRelativePath(), false));
     }
 
     // Should we also link in any libraries that this library depends on?
     // That is required on some systems...
-    CppLinkAction action = newLinkActionBuilder(soImpl)
-        .setInterfaceOutput(soInterface)
+    CppLinkAction action = newLinkActionBuilder(soImplFilename)
+        .setInterfaceOutputPath(soInterfaceFilename)
         .addNonLibraryInputs(ccOutputs.getObjectFiles(usePicForSharedLibs))
         .addNonLibraryInputs(ccOutputs.getHeaderTokenFiles())
         .setLinkType(LinkTargetType.DYNAMIC_LIBRARY)
@@ -659,8 +657,8 @@ public final class CppModel {
     return result.build();
   }
 
-  private CppLinkAction.Builder newLinkActionBuilder(Artifact outputArtifact) {
-    return new CppLinkAction.Builder(ruleContext, outputArtifact)
+  private CppLinkAction.Builder newLinkActionBuilder(PathFragment outputPath) {
+    return new CppLinkAction.Builder(ruleContext, outputPath)
         .setCrosstoolInputs(CppHelper.getToolchain(ruleContext).getLink())
         .addNonLibraryInputs(context.getCompilationPrerequisites());
   }
