@@ -17,6 +17,7 @@
 package org.hsweb.web.controller.file;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
 import org.hsweb.commons.StringUtils;
 import org.hsweb.expands.compress.Compress;
 import org.hsweb.expands.compress.zip.ZIPWriter;
@@ -47,9 +48,6 @@ import java.util.regex.Pattern;
 
 /**
  * 文件管理控制器，用于上传和下载资源文件
- *
- * @author zhouhao
- * @since 1.0
  */
 @RestController
 @RequestMapping(value = "/file")
@@ -85,7 +83,7 @@ public class FileController {
     }
 
     /**
-     * 构建并下载excel
+     * 构建并下载excel,
      *
      * @param name       excel文件名
      * @param headerJson 表头配置JSON 格式:{@link Header}
@@ -191,6 +189,11 @@ public class FileController {
         } else {
             if (!"file".equals(resources.getType()))
                 throw new NotFoundException("文件不存在");
+            String fileBasePath = fileService.getFileBasePath();
+            File file = new File(fileBasePath.concat(resources.getPath().concat("/".concat(resources.getMd5()))));
+            if (!file.canRead()) {
+                throw new NotFoundException("文件不存在");
+            }
             //获取contentType，默认application/octet-stream
             String contentType = mediaTypeMapper.get(resources.getSuffix().toLowerCase());
             if (contentType == null)
@@ -204,7 +207,7 @@ public class FileController {
             //关键字剔除
             name = fileNameKeyWordPattern.matcher(name).replaceAll("");
             int skip = 0;
-            long fSize = resources.getSize();
+            long fSize = file.length();
             //尝试判断是否为断点下载
             try {
                 //获取要继续下载的位置
@@ -216,7 +219,7 @@ public class FileController {
             response.setContentType(contentType);
             response.setHeader("Content-disposition", "attachment;filename=" + URLEncoder.encode(name, "utf-8"));
             //try with resource
-            try (BufferedInputStream inputStream = new BufferedInputStream(fileService.readResources(resources));
+            try (BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(file));
                  BufferedOutputStream stream = new BufferedOutputStream(response.getOutputStream())) {
                 //断点下载
                 if (skip > 0) {
