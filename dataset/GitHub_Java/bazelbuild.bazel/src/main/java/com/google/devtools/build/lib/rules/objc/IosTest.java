@@ -14,9 +14,6 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STORYBOARD;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCDATAMODEL;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
@@ -81,8 +78,9 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
     }
 
     XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
-    NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
-    addResourceFilesToBuild(ruleContext, common.getObjcProvider(), filesToBuild);
+    NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.<Artifact>stableOrder()
+        .addTransitive(common.getStoryboards().getOutputZips())
+        .addAll(Xcdatamodel.outputZips(common.getDatamodels()));
 
     XcodeProductType productType;
     ExtraLinkArgs extraLinkArgs;
@@ -135,10 +133,10 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
         .registerActions()
         .addXcodeSettings(xcodeProviderBuilder)
         .addFilesToBuild(filesToBuild)
-        .validateResources()
         .validateAttributes();
 
     new ResourceSupport(ruleContext)
+        .registerActions(common.getStoryboards())
         .validateAttributes()
         .addXcodeSettings(xcodeProviderBuilder);
 
@@ -146,26 +144,11 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
         .addXcodeSettings(xcodeProviderBuilder, common.getObjcProvider(), productType)
         .addDependencies(xcodeProviderBuilder, new Attribute("bundles", Mode.TARGET))
         .addDependencies(xcodeProviderBuilder, new Attribute("deps", Mode.TARGET))
-        .addNonPropagatedDependencies(
-            xcodeProviderBuilder, new Attribute("non_propagated_deps", Mode.TARGET))
+        .addDependencies(xcodeProviderBuilder, new Attribute("non_propagated_deps", Mode.TARGET))
         .addFilesToBuild(filesToBuild)
         .registerActions(xcodeProviderBuilder.build());
 
     return create(ruleContext, common, xcodeProviderBuilder.build(), filesToBuild.build());
-  }
-
-  private void addResourceFilesToBuild(
-      RuleContext ruleContext, ObjcProvider objcProvider, NestedSetBuilder<Artifact> filesToBuild) {
-    IntermediateArtifacts intermediateArtifacts =
-        ObjcRuleClasses.intermediateArtifacts(ruleContext);
-
-    Iterable<Xcdatamodel> xcdatamodels =
-        Xcdatamodels.xcdatamodels(intermediateArtifacts, objcProvider.get(XCDATAMODEL));
-    filesToBuild.addAll(Xcdatamodel.outputZips(xcdatamodels));
-
-    for (Artifact storyboard : objcProvider.get(STORYBOARD)) {
-      filesToBuild.add(intermediateArtifacts.compiledStoryboardZip(storyboard));
-    }
   }
 
   protected static boolean isXcTest(RuleContext ruleContext) {
