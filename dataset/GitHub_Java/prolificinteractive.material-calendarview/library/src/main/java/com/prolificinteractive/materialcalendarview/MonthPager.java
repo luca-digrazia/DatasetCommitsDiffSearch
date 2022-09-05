@@ -2,17 +2,22 @@ package com.prolificinteractive.materialcalendarview;
 
 import android.content.Context;
 import android.support.v4.view.ViewPager;
+import android.util.AttributeSet;
 import android.view.MotionEvent;
 
 /**
- * Custom ViewPager that allows swiping to be disabled.
+ * @author <a href="http://www.lusfold.com" target="_blank">Lusfold</a>
  */
-class MonthPager extends ViewPager {
+public class MonthPager extends ViewPager {
 
     private boolean pagingEnabled = true;
 
     public MonthPager(Context context) {
         super(context);
+    }
+
+    public MonthPager(Context context, AttributeSet attrs) {
+        super(context, attrs);
     }
 
     @Override
