@@ -865,7 +865,7 @@ public final class Attribute implements Comparable<Attribute> {
      * configuration. Note that configurations transitions are applied after the late-bound
      * attribute was evaluated.
      */
-    Object getDefault(Rule rule, T o) throws EvalException, InterruptedException;
+    Object getDefault(Rule rule, T o) throws EvalException;
   }
 
   /**
@@ -982,7 +982,7 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     @Override
-    public Object getDefault(Rule rule, Object o) throws EvalException, InterruptedException {
+    public Object getDefault(Rule rule, Object o) throws EvalException {
       Map<String, Object> attrValues = new HashMap<>();
       // TODO(bazel-team): support configurable attributes here. RawAttributeMapper will throw
       // an exception on any instance of configurable attributes.

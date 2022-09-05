@@ -1082,8 +1082,7 @@ public final class RuleContext extends TargetContext
    * Returns the implicit output artifact for a given template function. If multiple or no artifacts
    * can be found as a result of the template, an exception is thrown.
    */
-  public Artifact getImplicitOutputArtifact(ImplicitOutputsFunction function)
-      throws InterruptedException {
+  public Artifact getImplicitOutputArtifact(ImplicitOutputsFunction function) {
     Iterable<String> result;
     try {
       result = function.getImplicitOutputs(RawAttributeMapper.of(rule));
