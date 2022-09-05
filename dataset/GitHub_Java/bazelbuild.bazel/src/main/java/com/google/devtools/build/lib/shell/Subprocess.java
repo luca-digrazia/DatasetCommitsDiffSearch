@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.shell;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -22,17 +21,12 @@ import java.io.OutputStream;
 /**
  * A process started by Bazel.
  */
-public interface Subprocess extends Closeable {
+public interface Subprocess {
 
   /**
    * Something that can create subprocesses.
    */
   interface Factory {
-    /**
-     * Whether the factory supports timeouts natively; if it returns false, Command implements
-     * timeouts outside of the factory.
-     */
-    boolean supportsTimeout();
 
     /**
      * Create a subprocess according to the specified parameters.
@@ -48,24 +42,14 @@ public interface Subprocess extends Closeable {
   /**
    * Returns the exit value of the process.
    *
-   * <p>Throws {@code IOException} if the process has not terminated yet.
+   * <p>Throws {@code IllegalThreadStateException} if the process has not terminated yet.
    */
   int exitValue();
 
   /**
-   * Returns the if the process has finished.
-   */
-  boolean finished();
-
-  /**
-   * Returns if the process timed out.
-   */
-  boolean timedout();
-
-  /**
    * Waits for the process to finish.
    */
-  void waitFor() throws InterruptedException;
+  int waitFor() throws InterruptedException;
 
   /**
    * Returns a stream into which data can be written that the process will get on its stdin.
@@ -81,11 +65,4 @@ public interface Subprocess extends Closeable {
    * Returns a stream from which the stderr of the process can be read.
    */
   InputStream getErrorStream();
-
-  /*
-   * Terminates the process as thoroughly as the underlying implementation allows and releases
-   * native data structures associated with the process.
-   */
-  @Override
-  void close();
 }

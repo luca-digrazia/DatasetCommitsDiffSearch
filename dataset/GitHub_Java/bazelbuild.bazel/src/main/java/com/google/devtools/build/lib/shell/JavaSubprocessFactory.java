@@ -49,25 +49,8 @@ public class JavaSubprocessFactory implements Subprocess.Factory {
     }
 
     @Override
-    public boolean finished() {
-      try {
-        // this seems to be the only non-blocking call for checking liveness
-        process.exitValue();
-        return true;
-      } catch (IllegalThreadStateException e) {
-        return false;
-      }
-    }
-
-    @Override
-    public boolean timedout() {
-      // Not supported.
-      return false;
-    }
-
-    @Override
-    public void waitFor() throws InterruptedException {
-      process.waitFor();
+    public int waitFor() throws InterruptedException {
+      return process.waitFor();
     }
 
     @Override
@@ -84,11 +67,6 @@ public class JavaSubprocessFactory implements Subprocess.Factory {
     public InputStream getInputStream() {
       return process.getInputStream();
     }
-
-    @Override
-    public void close() {
-      // java.lang.Process doesn't give us a way to clean things up other than #destroy()
-    }
   }
 
   public static final JavaSubprocessFactory INSTANCE = new JavaSubprocessFactory();
@@ -99,9 +77,6 @@ public class JavaSubprocessFactory implements Subprocess.Factory {
 
   @Override
   public Subprocess create(SubprocessBuilder params) throws IOException {
-    if (params.getTimeoutMillis() >= 0) {
-      throw new UnsupportedOperationException("Timeouts are not supported");
-    }
     ProcessBuilder builder = new ProcessBuilder();
     builder.command(params.getArgv());
     if (params.getEnv() != null) {
@@ -120,7 +95,7 @@ public class JavaSubprocessFactory implements Subprocess.Factory {
    * Returns a {@link ProcessBuilder.Redirect} appropriate for the parameters. If a file redirected
    * to exists, deletes the file before redirecting to it.
    */
-  private Redirect getRedirect(StreamAction action, File file) {
+  private Redirect getRedirect(StreamAction action, File file) throws IOException {
     switch (action) {
       case DISCARD:
         return Redirect.to(new File("/dev/null"));

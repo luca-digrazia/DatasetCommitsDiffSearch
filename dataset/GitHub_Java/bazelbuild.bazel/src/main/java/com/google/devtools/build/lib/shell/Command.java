@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.shell;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.shell.SubprocessBuilder.StreamAction;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -162,16 +163,6 @@ public final class Command {
   }
 
   /**
-   * Just like {@link Command(String, Map<String, String>, File, long), but without a timeout.
-   */
-  public Command(
-      String[] commandLineElements,
-      Map<String, String> environmentVariables,
-      File workingDirectory) {
-    this(commandLineElements, environmentVariables, workingDirectory, -1);
-  }
-
-  /**
    * Creates a new {@link Command} for the given command line elements. The
    * command line is executed without a shell.
    *
@@ -189,17 +180,15 @@ public final class Command {
    *
    * @param commandLineElements elements of raw command line to execute
    * @param environmentVariables environment variables to replace JVM's
-   *    environment variables; may be null
+   *  environment variables; may be null
    * @param workingDirectory working directory for execution; if null, current
-   *    working directory is used
-   * @param timeoutMillis timeout in milliseconds. Only supported on Windows.
+   * working directory is used
    * @throws IllegalArgumentException if commandLine is null or empty
    */
   public Command(
       String[] commandLineElements,
-      Map<String, String> environmentVariables,
-      File workingDirectory,
-      long timeoutMillis) {
+      final Map<String, String> environmentVariables,
+      final File workingDirectory) {
     if (commandLineElements == null || commandLineElements.length == 0) {
       throw new IllegalArgumentException("command line is null or empty");
     }
@@ -214,7 +203,6 @@ public final class Command {
     subprocessBuilder.setArgv(ImmutableList.copyOf(commandLineElements));
     subprocessBuilder.setEnv(environmentVariables);
     subprocessBuilder.setWorkingDirectory(workingDirectory);
-    subprocessBuilder.setTimeoutMillis(timeoutMillis);
   }
 
   /**
@@ -422,12 +410,10 @@ public final class Command {
   }
 
   /**
-   * Execute this command with given input to stdin; this stream is closed when the process
-   * terminates, and exceptions raised when closing this stream are ignored. This call blocks until
-   * the process completes or an error occurs. The caller provides {@link OutputStream} instances
-   * into which the process writes its stdout/stderr output; these streams are <em>not</em> closed
-   * when the process terminates. The given {@link KillableObserver} may also terminate the process
-   * early while running.
+   * Like {@link #execute(byte[], KillableObserver, OutputStream, OutputStream, boolean)} but allows
+   * using files to redirect stdOut and stdErr. This gives better performance as the data doesn't
+   * flow through the JVM but instead is written directly to the corresponding file descriptors by
+   * the process.
    *
    * <p>If stdOut or stdErr is {@code null}, it will be redirected to /dev/null.
    */
@@ -644,7 +630,6 @@ public final class Command {
    *  E.g., you could pass {@link System#out} as <code>stdOut</code>.
    * @param stdErr the process will write its standard error into this stream.
    *  E.g., you could pass {@link System#err} as <code>stdErr</code>.
-   * @param killSubprocessOnInterrupt whether or not to kill the created process on interrupt
    * @param closeOutput whether to close stdout / stderr when the process closes its output streams.
    * @return An object that can be used to check if the process terminated and
    *  obtain the process results.
@@ -656,7 +641,6 @@ public final class Command {
                                     final KillableObserver observer,
                                     final OutputStream stdOut,
                                     final OutputStream stdErr,
-                                    final boolean killSubprocessOnInterrupt,
                                     final boolean closeOutput)
       throws CommandException {
     // supporting "null" here for backwards compatibility
@@ -666,22 +650,14 @@ public final class Command {
     return doExecute(new InputStreamInputSource(stdinInput),
         theObserver,
         Consumers.createStreamingConsumers(stdOut, stdErr),
-        killSubprocessOnInterrupt,
-        closeOutput);
+        /*killSubprocess=*/false, closeOutput);
   }
-
   public FutureCommandResult executeAsynchronously(final InputStream stdinInput,
       final KillableObserver observer,
       final OutputStream stdOut,
       final OutputStream stdErr)
       throws CommandException {
-    return executeAsynchronously(
-        stdinInput,
-        observer,
-        stdOut,
-        stdErr,
-        /*killSubprocess=*/ false,
-        /*closeOutput=*/ false);
+    return executeAsynchronously(stdinInput, observer, stdOut, stdErr, /*closeOutput=*/false);
   }
 
   // End of public API -------------------------------------------------------
@@ -698,16 +674,18 @@ public final class Command {
       final Consumers.OutErrConsumers outErrConsumers,
       final boolean killSubprocessOnInterrupt,
       final boolean closeOutputStreams)
-      throws CommandException {
+    throws CommandException {
 
     logCommand();
 
     final Subprocess process = startProcess();
 
-    outErrConsumers.logConsumptionStrategy();
+    if (outErrConsumers != null) {
+      outErrConsumers.logConsumptionStrategy();
 
-    outErrConsumers.registerInputs(
-        process.getInputStream(), process.getErrorStream(), closeOutputStreams);
+      outErrConsumers.registerInputs(
+          process.getInputStream(), process.getErrorStream(), closeOutputStreams);
+    }
 
     processInput(stdinInput, process);
 
@@ -727,7 +705,14 @@ public final class Command {
 
       @Override
       public boolean isDone() {
-        return process.finished();
+        try {
+          // exitValue seems to be the only non-blocking call for
+          // checking process liveness.
+          process.exitValue();
+          return true;
+        } catch (IllegalThreadStateException e) {
+          return false;
+        }
       }
     };
   }
@@ -839,16 +824,20 @@ public final class Command {
 
     log.finer("Waiting for process...");
 
-    TerminationStatus status = waitForProcess(process, killSubprocessOnInterrupt);
+    TerminationStatus status =
+        waitForProcess(process, killSubprocessOnInterrupt);
+
     observer.stopObserving(processKillable);
 
     log.finer(status.toString());
 
     try {
-      if (Thread.currentThread().isInterrupted()) {
-        outErr.cancel();
-      } else {
-        outErr.waitForCompletion();
+      if (outErr != null) {
+        if (Thread.currentThread().isInterrupted()) {
+          outErr.cancel();
+        } else {
+          outErr.waitForCompletion();
+        }
       }
     } catch (IOException ioe) {
       CommandResult noOutputResult =
@@ -868,15 +857,13 @@ public final class Command {
           : new AbnormalTerminationException(this,
               noOutputResult, message, ioe);
       }
-    } finally {
-      // #close() must be called after the #stopObserving() so that a badly-timed timeout does not
-      // try to destroy a process that is already closed, and after outErr is completed,
-      // so that it has a chance to read the entire output is captured.
-      process.close();
     }
 
     CommandResult result =
-        new CommandResult(outErr.getAccumulatedOut(), outErr.getAccumulatedErr(), status);
+        new CommandResult(
+            outErr != null ? outErr.getAccumulatedOut() : CommandResult.NO_OUTPUT_COLLECTED,
+            outErr != null ? outErr.getAccumulatedErr() : CommandResult.NO_OUTPUT_COLLECTED,
+            status);
     result.logThis();
     if (status.success()) {
       return result;
@@ -893,8 +880,7 @@ public final class Command {
     try {
       while (true) {
         try {
-          process.waitFor();
-          return new TerminationStatus(process.exitValue(), process.timedout());
+          return new TerminationStatus(process.waitFor());
         } catch (InterruptedException ie) {
           wasInterrupted = true;
           if (killSubprocessOnInterrupt) {
