@@ -282,12 +282,15 @@ public class JavaOptions extends FragmentOptions {
   )
   public Label hostJavaLauncher;
 
-  @Option(name = "java_launcher",
-      defaultValue = "null",
-      converter = LabelConverter.class,
-      category = "semantics",
-      help = "If enabled, a specific Java launcher is used. "
-          + "The \"launcher\" attribute overrides this flag. ")
+  @Option(
+    name = "java_launcher",
+    defaultValue = "null",
+    converter = LabelConverter.class,
+    category = "semantics",
+    help =
+        "The Java launcher to use when building Java binaries. "
+            + "The \"launcher\" attribute overrides this flag. "
+  )
   public Label javaLauncher;
 
   @Option(name = "proguard_top",
@@ -348,17 +351,17 @@ public class JavaOptions extends FragmentOptions {
   public boolean legacyBazelJavaTest;
 
   @Option(
-    name = "strict_deps_java_protos",
-    defaultValue = "true",
+    name = "java_proto_library_deps_are_strict",
+    defaultValue = "false",
     category = "undocumented",
     help =
-        "When 'strict-deps' is on, .java files that depend on classes not declared in their rule's "
-            + "'deps' fail to build. In other words, it's forbidden to depend on classes obtained "
-            + "transitively. This flag controls the behavior of Java proto rules when their "
-            + "'strict_deps' attribute is unspecified, and its containing package doesn't specify "
-            + "'default_strict_deps_java_protos'."
+        "This only applies to java_proto_library. "
+            + "If true: (1) if a Java file uses proto Foo, it must depend on a  "
+            + "java_{lite,...}_proto_library that directly depends on a proto_library that has Foo "
+            + "in its srcs. (2) strict-deps violations are reported for the proto_library rules "
+            + "themselves."
   )
-  public boolean strictDepsJavaProtos;
+  public boolean javaProtoLibraryDepsAreStrict;
 
   @Override
   public FragmentOptions getHost(boolean fallback) {
