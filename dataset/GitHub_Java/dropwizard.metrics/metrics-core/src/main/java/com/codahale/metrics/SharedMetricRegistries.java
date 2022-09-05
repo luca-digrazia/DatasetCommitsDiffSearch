@@ -10,9 +10,9 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class SharedMetricRegistries {
     private static final ConcurrentMap<String, MetricRegistry> REGISTRIES =
-            new ConcurrentHashMap<>();
+            new ConcurrentHashMap<String, MetricRegistry>();
 
-    private static AtomicReference<String> defaultRegistryName = new AtomicReference<>();
+    private static AtomicReference<String> defaultRegistryName = new AtomicReference<String>();
 
     /* Visible for testing */
     static void setDefaultRegistryName(AtomicReference<String> defaultRegistryName) {
