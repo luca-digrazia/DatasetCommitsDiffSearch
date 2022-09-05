@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.lib.profiler.chart;
 
+import com.google.common.base.Joiner;
+import com.google.common.base.StandardSystemProperty;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimaps;
 import com.google.devtools.build.lib.profiler.ProfileInfo;
@@ -21,6 +23,7 @@ import com.google.devtools.build.lib.profiler.ProfileInfo.Task;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map.Entry;
 
@@ -30,6 +33,10 @@ import java.util.Map.Entry;
  */
 public final class SkylarkStatistics {
 
+  /**
+   * How many characters from the end of the location of a Skylark function to display.
+   */
+  private static final int NUM_LOCATION_CHARS_UNABBREVIATED = 40;
   private final ListMultimap<String, Task> userFunctionTasks;
   private final ListMultimap<String, Task> builtinFunctionTasks;
   private final List<TasksStatistics> userFunctionStats;
@@ -46,14 +53,6 @@ public final class SkylarkStatistics {
     userFunctionStats = new ArrayList<>();
     builtinFunctionStats = new ArrayList<>();
     computeStatistics();
-  }
-
-  /**
-   * @param variable
-   * @return An approximation of whether the argument is valid as a JavaScript variable.
-   */
-  private static boolean isValidJsVariable(String variable) {
-    return variable.matches("^[\\w_].*");
   }
 
   /**
@@ -91,10 +90,10 @@ public final class SkylarkStatistics {
   void printHtmlHead() {
     out.println("<style type=\"text/css\"><!--");
     out.println("div.skylark-histogram {");
-    out.println("  width: 95%; height: 220px; margin: 0 auto; display: none;");
+    out.println("  width: 95%; margin: 0 auto; display: none;");
     out.println("}");
     out.println("div.skylark-chart {");
-    out.println("  width: 95%; height: 200px; margin: 0 auto;");
+    out.println("  width: 100%; height: 200px; margin: 0 auto 2em;");
     out.println("}");
     out.println("div.skylark-table {");
     out.println("  width: 95%; margin: 0 auto;");
@@ -124,10 +123,6 @@ public final class SkylarkStatistics {
     out.println("  document.querySelector('#builtin-close').onclick = function() {");
     out.println("    document.querySelector('#builtin-histogram').style.display = 'none';");
     out.println("  };");
-
-    printDrawTableJs(dataVar, tableVar, "user");
-    printDrawTableJs(dataVar, tableVar, "builtin");
-
     out.println("};");
 
     out.println("var options = {");
@@ -144,10 +139,12 @@ public final class SkylarkStatistics {
     out.printf("    var selection = %s[category].getSelection();\n", tableVar);
     out.println("    if (selection.length < 1) return;");
     out.println("    var item = selection[0];");
-    out.printf("    var func = %s[category].getValue(item.row, 0);\n", dataVar);
-    out.println("    var histData = histogramData[category][func];");
+    out.printf("    var loc = %s[category].getValue(item.row, 0);\n", dataVar);
+    out.printf("    var func = %s[category].getValue(item.row, 1);\n", dataVar);
+    out.println("    var key = loc + '#' + func;");
+    out.println("    var histData = histogramData[category][key];");
     out.println("    var fnOptions = JSON.parse(JSON.stringify(options));");
-    out.println("    fnOptions.title = func;");
+    out.println("    fnOptions.title = loc + ' - ' + func;");
     out.println("    var chartDiv = document.getElementById(category+'-chart');");
     out.println("    var chart = new google.visualization.Histogram(chartDiv);");
     out.println("    var histogramDiv = document.getElementById(category+'-histogram');");
@@ -158,15 +155,6 @@ public final class SkylarkStatistics {
     out.println("</script>");
   }
 
-  private void printDrawTableJs(String dataVar, String tableVar, String category) {
-    out.printf(
-        "  %s.%s.draw(%s.%s, {showRowNumber: true, width: '100%%', height: '100%%'});\n",
-        tableVar,
-        category,
-        dataVar,
-        category);
-  }
-
   private void printHistogramData() {
     out.println("  histogramData = {");
     printHistogramData(builtinFunctionTasks, "builtin");
@@ -175,12 +163,9 @@ public final class SkylarkStatistics {
   }
 
   private void printHistogramData(ListMultimap<String, Task> tasks, String category) {
-    out.printf("    \"%s\": {\n", category);
+    out.printf("    '%s': {\n", category);
     for (String function : tasks.keySet()) {
-      if (!isValidJsVariable(function)) {
-        continue;
-      }
-      out.printf("      \"%s\": google.visualization.arrayToDataTable(\n", function);
+      out.printf("      '%s': google.visualization.arrayToDataTable(\n", function);
       out.print("        [['duration']");
       for (Task task : tasks.get(function)) {
         out.printf(",[%f]", task.duration / 1000000.);
@@ -197,44 +182,62 @@ public final class SkylarkStatistics {
       String tableVar,
       long totalNanos) {
     String tmpVar = category + dataVar;
-    out.printf("  var %s = new google.visualization.DataTable();\n", tmpVar);
-    out.printf("  %s.addColumn('string', 'Function');\n", tmpVar);
-    out.printf("  %s.addColumn('number', 'count');\n", tmpVar);
-    out.printf("  %s.addColumn('number', 'min (ms)');\n", tmpVar);
-    out.printf("  %s.addColumn('number', 'mean (ms)');\n", tmpVar);
-    out.printf("  %s.addColumn('number', 'median (ms)');\n", tmpVar);
-    out.printf("  %s.addColumn('number', 'max (ms)');\n", tmpVar);
-    out.printf("  %s.addColumn('number', 'standard deviation (ms)');\n", tmpVar);
-    out.printf("  %s.addColumn('number', 'total (ms)');\n", tmpVar);
-    out.printf("  %s.addColumn('number', 'relative total (%%)');\n", tmpVar);
-    out.printf("  %s.addRows([\n", tmpVar);
-    for (TasksStatistics stats : statsList) {
-      if (!isValidJsVariable(stats.name)) {
-        continue;
-      }
-      double relativeTotal = (double) stats.totalNanos / totalNanos;
-      out.printf(
-          "    ['%s', %d, %.4f, %.4f, %.4f, %.4f, %.4f, %.4f, {v:%.4f, f:'%.4f %%'}],\n",
-          stats.name,
-          stats.count,
-          stats.minimumMillis(),
-          stats.meanMillis(),
-          stats.medianMillis(),
-          stats.maximumMillis(),
-          stats.standardDeviationMillis,
-          stats.totalMillis(),
-          relativeTotal,
-          relativeTotal * 100);
-    }
-    out.println("  ]);");
-    out.printf("  %s.%s = %s;\n", dataVar, category, tmpVar);
     out.printf("  var statsDiv = document.getElementById('%s_function_stats');\n", category);
-    out.printf("  %s.%s = new google.visualization.Table(statsDiv);\n", tableVar, category);
-    out.printf(
-        "  google.visualization.events.addListener(%s.%s, 'select', selectHandler('%s'));\n",
-        tableVar,
-        category,
-        category);
+    if (statsList.isEmpty()) {
+      out.println("  statsDiv.innerHTML = '<i>No relevant function calls to display. Some minor"
+          + " builtin functions may have been ignored because their names could not be used as"
+          + " variables in JavaScript.</i>'");
+    } else {
+      out.printf("  var %s = new google.visualization.DataTable();\n", tmpVar);
+      out.printf("  %s.addColumn('string', 'Location');\n", tmpVar);
+      out.printf("  %s.addColumn('string', 'Function');\n", tmpVar);
+      out.printf("  %s.addColumn('number', 'count');\n", tmpVar);
+      out.printf("  %s.addColumn('number', 'min (ms)');\n", tmpVar);
+      out.printf("  %s.addColumn('number', 'mean (ms)');\n", tmpVar);
+      out.printf("  %s.addColumn('number', 'median (ms)');\n", tmpVar);
+      out.printf("  %s.addColumn('number', 'max (ms)');\n", tmpVar);
+      out.printf("  %s.addColumn('number', 'std dev (ms)');\n", tmpVar);
+      out.printf("  %s.addColumn('number', 'mean self (ms)');\n", tmpVar);
+      out.printf("  %s.addColumn('number', 'self (ms)');\n", tmpVar);
+      out.printf("  %s.addColumn('number', 'self (%%)');\n", tmpVar);
+      out.printf("  %s.addColumn('number', 'total (ms)');\n", tmpVar);
+      out.printf("  %s.addColumn('number', 'relative (%%)');\n", tmpVar);
+      out.printf("  %s.addRows([\n", tmpVar);
+      for (TasksStatistics stats : statsList) {
+        double relativeTotal = (double) stats.totalNanos / totalNanos;
+        double relativeSelf = (double) stats.selfNanos / stats.totalNanos;
+        String[] split = stats.name.split("#");
+        String location = split[0];
+        String name = split[1];
+        out.printf("    [{v:'%s', f:'%s'}, ", location, abbreviatePath(location));
+        out.printf("'%s', ", name);
+        out.printf("%d, ", stats.count);
+        out.printf("%.3f, ", stats.minimumMillis());
+        out.printf("%.3f, ", stats.meanMillis());
+        out.printf("%.3f, ", stats.medianMillis());
+        out.printf("%.3f, ", stats.maximumMillis());
+        out.printf("%.3f, ", stats.standardDeviationMillis);
+        out.printf("%.3f, ", stats.selfMeanMillis());
+        out.printf("%.3f, ", stats.selfMillis());
+        out.printf("{v:%.4f, f:'%.3f %%'}, ", relativeSelf, relativeSelf * 100);
+        out.printf("%.3f, ", stats.totalMillis());
+        out.printf("{v:%.4f, f:'%.3f %%'}],\n", relativeTotal, relativeTotal * 100);
+      }
+      out.println("  ]);");
+      out.printf("  %s.%s = %s;\n", dataVar, category, tmpVar);
+      out.printf("  %s.%s = new google.visualization.Table(statsDiv);\n", tableVar, category);
+      out.printf(
+          "  google.visualization.events.addListener(%s.%s, 'select', selectHandler('%s'));\n",
+          tableVar,
+          category,
+          category);
+      out.printf(
+          "  %s.%s.draw(%s.%s, {showRowNumber: true, width: '100%%', height: '100%%'});\n",
+          tableVar,
+          category,
+          dataVar,
+          category);
+    }
   }
 
   /**
@@ -257,5 +260,60 @@ public final class SkylarkStatistics {
     out.println("  <button id=\"builtin-close\">Hide histogram</button>");
     out.println("</div>");
     out.println("<div class=\"skylark-table\" id=\"builtin_function_stats\"></div>");
+  }
+
+  /**
+   * Computes a string keeping the structure of the input but reducing the amount of characters on
+   * elements at the front if necessary.
+   *
+   * <p>Reduces the length of function location strings by keeping at least the last element fully
+   * intact and at most {@link SkylarkStatistics#NUM_LOCATION_CHARS_UNABBREVIATED} from other
+   * elements from the end. Elements before are abbreviated with their first two characters.
+   *
+   * <p>Example:
+   * "//source/tree/with/very/descriptive/and/long/hierarchy/of/directories/longfilename.bzl:42"
+   * becomes: "//so/tr/wi/ve/de/an/lo/hierarch/of/directories/longfilename.bzl:42"
+   *
+   * <p>There is no fixed length to the result as the last element is kept and the location may
+   * have many elements.
+   *
+   * @param location Either a sequence of path elements separated by
+   *     {@link StandardSystemProperty#FILE_SEPARATOR} and preceded by some root element
+   *     (e.g. "/", "C:\") or path elements separated by "." and having no root element.
+   */
+  private String abbreviatePath(String location) {
+    String[] elements;
+    int lowestAbbreviateIndex;
+    String root;
+    String separator = StandardSystemProperty.FILE_SEPARATOR.value();
+    if (location.contains(separator)) {
+      elements = location.split(separator);
+      // must take care to preserve file system roots (e.g. "/", "C:\"), keep separate
+      lowestAbbreviateIndex = 1;
+      root = location.substring(0, location.indexOf(separator) + 1);
+    } else {
+      // must be java class name for a builtin function
+      elements = location.split("\\.");
+      lowestAbbreviateIndex = 0;
+      root = "";
+      separator = ".";
+    }
+
+    String last = elements[elements.length - 1];
+    int remaining = NUM_LOCATION_CHARS_UNABBREVIATED - last.length();
+    // start from the next to last element of the location and add until "remaining" many
+    // chars added, abbreviate rest with first 2 characters
+    for (int index = elements.length - 2; index >= lowestAbbreviateIndex; index--) {
+      String element = elements[index];
+      if (remaining > 0) {
+        int length = Math.min(remaining, element.length());
+        element = element.substring(0, length);
+        remaining -= length;
+      } else {
+        element = element.substring(0, Math.min(2, element.length()));
+      }
+      elements[index] = element;
+    }
+    return root + Joiner.on(separator).join(Arrays.asList(elements).subList(1, elements.length));
   }
 }
