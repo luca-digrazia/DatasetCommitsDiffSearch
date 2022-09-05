@@ -181,12 +181,6 @@ public final class CalendarDay implements Parcelable {
         return _calendar;
     }
 
-    void copyToMonthOnly(@NonNull Calendar calendar) {
-        calendar.clear();
-        calendar.set(year, month, 1);
-        calendar.getTimeInMillis();
-    }
-
     /**
      * Copy this day's information to the given calendar instance
      *
@@ -195,7 +189,6 @@ public final class CalendarDay implements Parcelable {
     public void copyTo(@NonNull Calendar calendar) {
         calendar.clear();
         calendar.set(year, month, day);
-        calendar.getTimeInMillis();
     }
 
     /**
