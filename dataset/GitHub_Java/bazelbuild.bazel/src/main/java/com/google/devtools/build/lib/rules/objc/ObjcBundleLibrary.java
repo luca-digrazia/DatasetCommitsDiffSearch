@@ -58,7 +58,7 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
     new XcodeSupport(ruleContext)
         .addFilesToBuild(filesToBuild)
         .addXcodeSettings(xcodeProviderBuilder, common.getObjcProvider(), BUNDLE)
-        .addDependencies(xcodeProviderBuilder, new Attribute("bundles", Mode.TARGET))
+        .addDependencies(xcodeProviderBuilder, "bundles")
         .registerActions(xcodeProviderBuilder.build());
 
     ObjcProvider nestedBundleProvider = new ObjcProvider.Builder()

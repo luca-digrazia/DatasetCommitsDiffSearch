@@ -66,6 +66,8 @@ public final class CppModel {
   private boolean maySaveTemps;
   private boolean onlySingleOutput;
   private CcCompilationOutputs compilationOutputs;
+  private boolean enableLayeringCheck;
+  private boolean compileHeaderModules;
 
   // link model
   private final List<String> linkopts = new ArrayList<>();
@@ -103,6 +105,23 @@ public final class CppModel {
     return this;
   }
 
+  /**
+   * If set, use compiler flags to enable compiler based layering checks.
+   */
+  public CppModel setEnableLayeringCheck(boolean enableLayeringCheck) {
+    this.enableLayeringCheck = enableLayeringCheck;
+    return this;
+  }
+
+  /**
+   * If set, add actions that compile header modules to the build.
+   * See http://clang.llvm.org/docs/Modules.html for more information.
+   */
+  public CppModel setCompileHeaderModules(boolean compileHeaderModules) {
+    this.compileHeaderModules = compileHeaderModules;
+    return this;
+  }
+  
   /**
    * Whether to create actions for temps. This defaults to false.
    */
@@ -260,16 +279,14 @@ public final class CppModel {
    */
   public boolean getGeneratesPicHeaderModule() {
     // TODO(bazel-team): Make sure cc_fake_binary works with header module support. 
-    return featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES) && !fake
-        && getGeneratePicActions();
+    return compileHeaderModules && !fake && getGeneratePicActions();
   }
 
   /**
    * @return whether this target needs to generate a non-pic header module.
    */
   public boolean getGeratesNoPicHeaderModule() {
-    return featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES) && !fake
-        && getGenerateNoPicActions();
+    return compileHeaderModules && !fake && getGenerateNoPicActions();
   }
 
   /**
@@ -283,6 +300,8 @@ public final class CppModel {
       builder.addNocopts(nocopts);
     }
 
+    builder.setEnableLayeringCheck(enableLayeringCheck);
+    builder.setCompileHeaderModules(compileHeaderModules);
     builder.setExtraSystemIncludePrefixes(additionalIncludes);
     builder.setFdoBuildStamp(CppHelper.getFdoBuildStamp(cppConfiguration));
     builder.setFeatureConfiguration(featureConfiguration);
@@ -300,7 +319,7 @@ public final class CppModel {
     AnalysisEnvironment env = ruleContext.getAnalysisEnvironment();
     PathFragment objectDir = CppHelper.getObjDirectory(ruleContext.getLabel());
     
-    if (featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES)) {
+    if (compileHeaderModules) {
       Artifact moduleMapArtifact = context.getCppModuleMap().getArtifact();
       Label moduleMapLabel = Label.parseAbsoluteUnchecked(context.getCppModuleMap().getName());
       PathFragment outputName = getObjectOutputPath(moduleMapArtifact, objectDir);

@@ -56,8 +56,7 @@ public class IosExtensionRule implements RuleDefinition {
             .allowedRuleClasses("ios_extension_binary")
             .allowedFileTypes()
             .mandatory()
-            .direct_compile_time_input()
-            .cfg(ReleaseBundlingSupport.SPLIT_ARCH_TRANSITION))
+            .direct_compile_time_input())
         .build();
   }
 }

@@ -14,12 +14,8 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
-import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
-import static com.google.devtools.build.lib.packages.Type.LABEL;
-
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
@@ -30,6 +26,13 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
  * Rule definition for objc_binary.
  */
 // TODO(bazel-team): Remove bundling functionality (dependency on ApplicationRule, IPA output).
+@BlazeRule(name = "objc_binary",
+    factoryClass = ObjcBinary.class,
+    ancestors = {
+        BaseRuleClasses.BaseRule.class,
+        ObjcRuleClasses.LinkingRule.class,
+        ObjcRuleClasses.XcodegenRule.class,
+        ObjcRuleClasses.ReleaseBundlingRule.class })
 public class ObjcBinaryRule implements RuleDefinition {
 
   @Override
@@ -45,22 +48,6 @@ public class ObjcBinaryRule implements RuleDefinition {
         <!-- #END_BLAZE_RULE.IMPLICIT_OUTPUTS -->*/
         .setImplicitOutputsFunction(
             ImplicitOutputsFunction.fromFunctions(ReleaseBundlingSupport.IPA, XcodeSupport.PBXPROJ))
-        // TODO(bazel-team): Remove these when this rule no longer produces a bundle.
-        .add(attr("$runner_script_template", LABEL).cfg(HOST)
-            .value(env.getLabel("//tools/objc:ios_runner.sh.mac_template")))
-        .add(attr("$is_executable", BOOLEAN).value(true)
-            .nonconfigurable("Called from RunCommand.isExecutable, which takes a Target"))
-        .build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("objc_binary")
-        .factoryClass(ObjcBinary.class)
-        .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.LinkingRule.class,
-            ObjcRuleClasses.XcodegenRule.class, ObjcRuleClasses.ReleaseBundlingRule.class,
-            ObjcRuleClasses.SimulatorRule.class)
         .build();
   }
 }
@@ -69,15 +56,7 @@ public class ObjcBinaryRule implements RuleDefinition {
 
 ${ATTRIBUTE_SIGNATURE}
 
-<p>This rule produces one or more Objective-C libraries for bundling in an
-<code>ios_application</code>.</p>
-
-<p>Any application-related attributes (infoplist, app_icon, ...) on this rule are deprecated and
-you should define them on <code>ios_application</code> instead. They will be removed from
-<code>objc_binary</code> soon.</p>
-
-<p>Until the migration to <code>ios_application</code> is complete, this rule requires at least one
-source file to be defined in either <code>srcs</code> or <code>non_arc_srcs</code></p>.
+<p>This rule produces an application bundle by linking one or more Objective-C libraries.</p>
 
 ${IMPLICIT_OUTPUTS}
 

@@ -52,7 +52,6 @@ import com.google.devtools.build.lib.bazel.rules.workspace.HttpArchiveRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.HttpJarRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.LocalRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenJarRule;
-import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewLocalRepositoryRule;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.PackageGroup;
@@ -62,7 +61,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainRule;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
-import com.google.devtools.build.lib.rules.genquery.GenQueryRule;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.JavaCpuSupplier;
@@ -207,7 +205,6 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(BazelFilegroupRule.class);
     builder.addRuleDefinition(BazelTestSuiteRule.class);
     builder.addRuleDefinition(BazelGenRuleRule.class);
-    builder.addRuleDefinition(GenQueryRule.class);
 
     builder.addRuleDefinition(BazelShRuleClasses.ShRule.class);
     builder.addRuleDefinition(BazelShLibraryRule.class);
@@ -253,7 +250,6 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(ObjcRuleClasses.IosTestBaseRule.class);
     builder.addRuleDefinition(ObjcRuleClasses.BundlingRule.class);
     builder.addRuleDefinition(ObjcRuleClasses.ReleaseBundlingRule.class);
-    builder.addRuleDefinition(ObjcRuleClasses.SimulatorRule.class);
     builder.addRuleDefinition(ObjcRuleClasses.CompilingRule.class);
     builder.addRuleDefinition(ObjcRuleClasses.LinkingRule.class);
     builder.addRuleDefinition(ObjcRuleClasses.ResourcesRule.class);
@@ -275,7 +271,6 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(HttpJarRule.class);
     builder.addRuleDefinition(LocalRepositoryRule.class);
     builder.addRuleDefinition(MavenJarRule.class);
-    builder.addRuleDefinition(NewHttpArchiveRule.class);
     builder.addRuleDefinition(NewLocalRepositoryRule.class);
 
     builder.addConfigurationFragment(new BazelConfiguration.Loader());

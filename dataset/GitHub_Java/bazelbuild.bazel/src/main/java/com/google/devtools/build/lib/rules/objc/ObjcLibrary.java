@@ -38,12 +38,7 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
    * final ObjC application bundle.
    */
   static final class ExtraImportLibraries extends IterableWrapper<Artifact> {
-
     ExtraImportLibraries(Artifact... extraImportLibraries) {
-      super(extraImportLibraries);
-    }
-
-    ExtraImportLibraries(Iterable<Artifact> extraImportLibraries) {
       super(extraImportLibraries);
     }
   }
