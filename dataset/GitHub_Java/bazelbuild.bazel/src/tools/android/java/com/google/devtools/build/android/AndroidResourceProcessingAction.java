@@ -33,18 +33,24 @@ import com.android.builder.core.VariantConfiguration;
 import com.android.ide.common.internal.AaptCruncher;
 import com.android.ide.common.internal.CommandLineRunner;
 import com.android.ide.common.internal.LoggedErrorException;
-import com.android.ide.common.internal.PngCruncher;
 import com.android.ide.common.res2.MergingException;
 import com.android.utils.StdLogger;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
+import java.util.zip.CRC32;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 
 /**
@@ -198,7 +204,7 @@ public class AndroidResourceProcessingAction {
   private static AaptConfigOptions aaptConfigOptions;
   private static Options options;
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     final Stopwatch timer = Stopwatch.createStarted();
     OptionsParser optionsParser = OptionsParser.newOptionsParser(
         Options.class, AaptConfigOptions.class);
@@ -250,7 +256,8 @@ public class AndroidResourceProcessingAction {
           mergedResources,
           mergedAssets,
           modifiers,
-          selectPngCruncher(),
+          useAaptCruncher() ?  new AaptCruncher(aaptConfigOptions.aapt.toString(),
+              new CommandLineRunner(STD_LOGGER)) : null,
           true);
 
       LOGGER.fine(String.format("Merging finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
@@ -286,9 +293,9 @@ public class AndroidResourceProcessingAction {
           options.packagePath,
           options.proguardOutput,
           options.resourcesOutput != null
-              ? processedManifestData.getResourceDir().resolve("values").resolve("public.xml")
+              ? filteredData.getResourceDir().resolve("values").resolve("public.xml")
               : null);
-      LOGGER.fine(String.format("aapt finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
+      LOGGER.fine(String.format("appt finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       if (options.manifestOutput != null) {
         resourceProcessor.copyManifestToOutput(processedManifestData, options.manifestOutput);
@@ -306,27 +313,25 @@ public class AndroidResourceProcessingAction {
             VariantConfiguration.Type.LIBRARY == options.packageType);
       }
       if (options.resourcesOutput != null) {
-        resourceProcessor.createResourcesZip(processedManifestData.getResourceDir(),
-            processedManifestData.getAssetDir(), options.resourcesOutput);
+        createResourcesZip(processedManifestData, options.resourcesOutput);
       }
       LOGGER.fine(String.format("Packaging finished at %sms",
           timer.elapsed(TimeUnit.MILLISECONDS)));
     } catch (MergingException e) {
       LOGGER.log(java.util.logging.Level.SEVERE, "Error during merging resources", e);
-      throw e;
+      System.exit(1);
     } catch (IOException | InterruptedException | LoggedErrorException e) {
       LOGGER.log(java.util.logging.Level.SEVERE, "Error during processing resources", e);
-      throw e;
+      System.exit(2);
     } catch (Exception e) {
       LOGGER.log(java.util.logging.Level.SEVERE, "Unexpected", e);
-      throw e;
-    } finally {
-      resourceProcessor.shutdown();
+      System.exit(3);
     }
     LOGGER.fine(String.format("Resources processed in %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
+    resourceProcessor.shutdown();
   }
 
-  private static boolean usePngCruncher() {
+  private static boolean useAaptCruncher() {
     // If the value was set, use that.
     if (aaptConfigOptions.useAaptCruncher != TriState.AUTO) {
       return aaptConfigOptions.useAaptCruncher == TriState.YES;
@@ -335,16 +340,47 @@ public class AndroidResourceProcessingAction {
     return options.packageType != VariantConfiguration.Type.LIBRARY;
   }
 
-  private static PngCruncher selectPngCruncher() {
-    // Use the full cruncher if asked to do so.
-    if (usePngCruncher()) {
-      return new AaptCruncher(aaptConfigOptions.aapt.toString(), new CommandLineRunner(STD_LOGGER));
+  private static void createResourcesZip(MergedAndroidData data, Path output) throws IOException {
+    try (ZipOutputStream zout = new ZipOutputStream(new FileOutputStream(output.toFile()))) {
+      Path resourcesRoot = data.getResourceDir();
+      Path assetsRoot = data.getAssetDir();
+      Files.walkFileTree(resourcesRoot, new ZipBuilderVisitor(zout, resourcesRoot, "res"));
+      if (Files.exists(assetsRoot)) {
+        Files.walkFileTree(assetsRoot, new ZipBuilderVisitor(zout, assetsRoot, "assets"));
+      }
     }
-    // Otherwise, if this is a binary, we need to at least process nine-patch PNGs.
-    if (options.packageType != VariantConfiguration.Type.LIBRARY) {
-      return new NinePatchOnlyCruncher(
-          aaptConfigOptions.aapt.toString(), new CommandLineRunner(STD_LOGGER));
+  }
+
+  private static final class ZipBuilderVisitor extends SimpleFileVisitor<Path> {
+    // The earliest date representable in a zip file, 1-1-1980.
+    private static final long ZIP_EPOCH = 315561600000L;
+    private final ZipOutputStream zip;
+    private final Path root;
+    private final String directory;
+
+    private ZipBuilderVisitor(ZipOutputStream zip, Path root, String directory) {
+      this.zip = zip;
+      this.root = root;
+      this.directory = directory;
     }
-    return null;
+
+    @Override
+    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+      byte[] content = Files.readAllBytes(file);
+
+      CRC32 crc32 = new CRC32();
+      crc32.update(content);
+
+      ZipEntry entry = new ZipEntry(directory + "/" + root.relativize(file));
+      entry.setMethod(ZipEntry.STORED);
+      entry.setTime(ZIP_EPOCH);
+      entry.setSize(content.length);
+      entry.setCrc(crc32.getValue());
+
+      zip.putNextEntry(entry);
+      zip.write(content);
+      zip.closeEntry();
+      return FileVisitResult.CONTINUE;
+    }
   }
 }

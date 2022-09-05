@@ -56,7 +56,6 @@ import com.android.utils.StdLogger;
 import org.xml.sax.SAXException;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -261,26 +260,6 @@ public class AndroidResourceProcessor {
     }
   }
 
-  /**
-   * Creates a zip file containing the provided android resources and assets.
-   *
-   * @param resourcesRoot The root containing android resources to be written.
-   * @param assetsRoot The root containing android assets to be written.
-   * @param output The path to write the zip file
-   * @throws IOException
-   */
-  public void createResourcesZip(Path resourcesRoot, Path assetsRoot, Path output)
-      throws IOException {
-    try (ZipOutputStream zout = new ZipOutputStream(new FileOutputStream(output.toFile()))) {
-      if (Files.exists(resourcesRoot)) {
-        Files.walkFileTree(resourcesRoot, new ZipBuilderVisitor(zout, resourcesRoot, "res"));
-      }
-      if (Files.exists(assetsRoot)) {
-        Files.walkFileTree(assetsRoot, new ZipBuilderVisitor(zout, assetsRoot, "assets"));
-      }
-    }
-  }
-
   // TODO(bazel-team): Clean up this method call -- 13 params is too many.
   /**
    * Processes resources for generated sources, configs and packaging resources.
@@ -312,9 +291,6 @@ public class AndroidResourceProcessor {
     Path androidManifest = primaryData.getManifest();
     Path resourceDir = primaryData.getResourceDir();
     Path assetsDir = primaryData.getAssetDir();
-    if (publicResourcesOut != null) {
-      prepareOutputPath(publicResourcesOut.getParent());
-    }
 
     AaptCommandBuilder commandBuilder =
         new AaptCommandBuilder(aapt, buildToolsVersion, variantType, "package")
@@ -371,7 +347,7 @@ public class AndroidResourceProcessor {
     if (packageOut != null) {
       Files.setLastModifiedTime(packageOut, FileTime.fromMillis(0L));
     }
-    if (publicResourcesOut != null && Files.exists(publicResourcesOut)) {
+    if (publicResourcesOut != null) {
       Files.setLastModifiedTime(publicResourcesOut, FileTime.fromMillis(0L));
     }
   }
@@ -644,9 +620,9 @@ public class AndroidResourceProcessor {
 
     @Override
     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-      if (file.getFileName().endsWith("R.java") || file.getFileName().endsWith("Manifest.java")) {
+      if (file.getFileName().endsWith("R.java")) {
         byte[] content = Files.readAllBytes(file);
-        if (staticIds && file.getFileName().endsWith("R.java")) {
+        if (staticIds) {
           content = replaceIdsWithStaticIds(UTF_8.decode(
               ByteBuffer.wrap(content)).toString()).getBytes(UTF_8);
         }
@@ -662,39 +638,6 @@ public class AndroidResourceProcessor {
         zip.write(content);
         zip.closeEntry();
       }
-      return FileVisitResult.CONTINUE;
-    }
-  }
-
-  private static final class ZipBuilderVisitor extends SimpleFileVisitor<Path> {
-    // The earliest date representable in a zip file, 1-1-1980.
-    private static final long ZIP_EPOCH = 315561600000L;
-    private final ZipOutputStream zip;
-    private final Path root;
-    private final String directory;
-
-    public ZipBuilderVisitor(ZipOutputStream zip, Path root, String directory) {
-      this.zip = zip;
-      this.root = root;
-      this.directory = directory;
-    }
-
-    @Override
-    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-      byte[] content = Files.readAllBytes(file);
-
-      CRC32 crc32 = new CRC32();
-      crc32.update(content);
-
-      ZipEntry entry = new ZipEntry(directory + "/" + root.relativize(file));
-      entry.setMethod(ZipEntry.STORED);
-      entry.setTime(ZIP_EPOCH);
-      entry.setSize(content.length);
-      entry.setCrc(crc32.getValue());
-
-      zip.putNextEntry(entry);
-      zip.write(content);
-      zip.closeEntry();
       return FileVisitResult.CONTINUE;
     }
   }
