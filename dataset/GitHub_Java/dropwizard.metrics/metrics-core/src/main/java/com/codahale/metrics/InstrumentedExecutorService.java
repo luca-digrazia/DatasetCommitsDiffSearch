@@ -57,7 +57,7 @@ public class InstrumentedExecutorService implements ExecutorService {
      */
     @Override
     public void execute(Runnable runnable) {
-        submitted.inc();
+        System.out.println("executing");
         delegate.execute(new InstrumentedRunnable(runnable));
     }
 
@@ -129,7 +129,7 @@ public class InstrumentedExecutorService implements ExecutorService {
     }
 
     private <T> Collection<? extends Callable<T>> instrument(Collection<? extends Callable<T>> tasks) {
-        final List<InstrumentedCallable<T>> instrumented = new ArrayList<InstrumentedCallable<T>>(tasks.size());
+        List<InstrumentedCallable<T>> instrumented = new ArrayList<InstrumentedCallable<T>>();
         for (Callable<T> task : tasks) {
             instrumented.add(new InstrumentedCallable(task));
         }
@@ -171,7 +171,7 @@ public class InstrumentedExecutorService implements ExecutorService {
         @Override
         public void run() {
             running.inc();
-            final Timer.Context context = duration.time();
+            Timer.Context context = duration.time();
             try {
                 task.run();
             } finally {
@@ -192,7 +192,7 @@ public class InstrumentedExecutorService implements ExecutorService {
         @Override
         public T call() throws Exception {
             running.inc();
-            final Timer.Context context = duration.time();
+            Timer.Context context = duration.time();
             try {
                 return callable.call();
             } finally {

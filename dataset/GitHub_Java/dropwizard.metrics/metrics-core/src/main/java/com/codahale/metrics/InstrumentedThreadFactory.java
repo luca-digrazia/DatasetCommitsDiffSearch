@@ -13,9 +13,9 @@ public class InstrumentedThreadFactory implements ThreadFactory {
     private static final AtomicLong nameCounter = new AtomicLong();
 
     private final ThreadFactory delegate;
-    private final Meter created;
+    private final Counter created;
     private final Counter running;
-    private final Meter terminated;
+    private final Counter finished;
 
     /**
      * Wraps a {@link ThreadFactory}, uses a default auto-generated name.
@@ -36,9 +36,9 @@ public class InstrumentedThreadFactory implements ThreadFactory {
      */
     public InstrumentedThreadFactory(ThreadFactory delegate, MetricRegistry registry, String name) {
         this.delegate = delegate;
-        this.created = registry.meter(MetricRegistry.name(name, "created"));
+        this.created = registry.counter(MetricRegistry.name(name, "created"));
         this.running = registry.counter(MetricRegistry.name(name, "running"));
-        this.terminated = registry.meter(MetricRegistry.name(name, "terminated"));
+        this.finished = registry.counter(MetricRegistry.name(name, "finished"));
     }
 
     /**
@@ -48,7 +48,7 @@ public class InstrumentedThreadFactory implements ThreadFactory {
     public Thread newThread(Runnable runnable) {
         Runnable wrappedRunnable = new InstrumentedRunnable(runnable);
         Thread thread = delegate.newThread(wrappedRunnable);
-        created.mark();
+        created.inc();
         return thread;
     }
 
@@ -66,7 +66,7 @@ public class InstrumentedThreadFactory implements ThreadFactory {
                 task.run();
             } finally {
                 running.dec();
-                terminated.mark();
+                finished.inc();
             }
         }
     }
