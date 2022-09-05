@@ -69,7 +69,6 @@ public final class AndroidResourceContainerBuilder {
             apk,
             manifest,
             rJavaSrcJar,
-            null, /* javaClassJar -- compile from source jar unless generated directly by a tool */
             data.getAssets(),
             data.getResources(),
             data.getAssetRoots(),
