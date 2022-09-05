@@ -54,7 +54,7 @@ import com.google.protobuf.GeneratedMessage.GeneratedExtension;
 
 import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -688,7 +688,9 @@ public class SpawnAction extends AbstractAction {
       this.executableArgs = Lists.newArrayList();
       executableArgs.add("-Xverify:none");
       executableArgs.addAll(jvmArgs);
-      Collections.addAll(executableArgs, launchArgs);
+      for (String arg : launchArgs) {
+        executableArgs.add(arg);
+      }
       inputsBuilder.add(deployJar);
       this.isShellCommand = false;
       return this;
@@ -772,7 +774,7 @@ public class SpawnAction extends AbstractAction {
      */
     public Builder addExecutableArguments(String... arguments) {
       Preconditions.checkState(executableArgs != null);
-      Collections.addAll(executableArgs, arguments);
+      executableArgs.addAll(Arrays.asList(arguments));
       return this;
     }
 

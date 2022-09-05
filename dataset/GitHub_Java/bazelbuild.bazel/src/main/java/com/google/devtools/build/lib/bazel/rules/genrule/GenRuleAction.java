@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ import java.util.List;
 public final class GenRuleAction extends SpawnAction {
 
   private static final ResourceSet GENRULE_RESOURCES =
-      // Not chosen scientifically/carefully.  300MB memory, 100% CPU, no I/O.
+      // Not chosen scientifically/carefully.  300MB memory, 100% CPU, 20% of total I/O.
       ResourceSet.createWithRamCpuIo(300, 1.0, 0.0);
 
   public GenRuleAction(ActionOwner owner,

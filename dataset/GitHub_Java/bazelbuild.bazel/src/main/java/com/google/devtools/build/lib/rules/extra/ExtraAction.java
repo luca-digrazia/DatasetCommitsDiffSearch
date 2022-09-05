@@ -52,8 +52,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import javax.annotation.Nullable;
-
 /**
  * Action used by extra_action rules to create an action that shadows an existing action. Runs a
  * command-line using {@link SpawnActionContext} for executions.
@@ -117,9 +115,8 @@ public final class ExtraAction extends SpawnAction {
     return shadowedAction.discoversInputs();
   }
 
-  @Nullable
   @Override
-  public Collection<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
+  public void discoverInputs(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     Preconditions.checkState(discoversInputs(), this);
     if (getContext(actionExecutionContext.getExecutor()).isRemotable(getMnemonic(),
@@ -127,13 +124,10 @@ public final class ExtraAction extends SpawnAction {
       // If we're running remotely, we need to update our inputs to take account of any additional
       // inputs the shadowed action may need to do its work.
       if (shadowedAction.discoversInputs() && shadowedAction instanceof AbstractAction) {
-        Iterable<Artifact> additionalInputs =
-            ((AbstractAction) shadowedAction).getInputFilesForExtraAction(actionExecutionContext);
-        updateInputs(additionalInputs);
-        return ImmutableSet.copyOf(additionalInputs);
+        updateInputs(
+            ((AbstractAction) shadowedAction).getInputFilesForExtraAction(actionExecutionContext));
       }
     }
-    return null;
   }
 
   @Override
