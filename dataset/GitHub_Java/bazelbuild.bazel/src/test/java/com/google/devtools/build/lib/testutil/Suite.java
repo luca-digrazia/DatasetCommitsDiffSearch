@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.testutil;
 
-import com.google.devtools.build.lib.util.OS;
-
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
@@ -75,13 +73,6 @@ public enum Suite {
    */
   public static boolean isLocalOnly(Class<?> clazz) {
     return getAnnotationElementOrDefault(clazz, "localOnly");
-  }
-
-  /**
-   * Given a class, determine the list of operating systems its tests can run under.
-   */
-  public static OS[] getSupportedOs(Class<?> clazz) {
-    return getAnnotationElementOrDefault(clazz, "supportedOs");
   }
 
   /**
