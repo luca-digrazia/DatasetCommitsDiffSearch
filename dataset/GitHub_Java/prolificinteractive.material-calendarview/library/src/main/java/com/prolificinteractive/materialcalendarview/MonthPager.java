@@ -1,61 +1,43 @@
 package com.prolificinteractive.materialcalendarview;
 
 import android.content.Context;
-import android.support.v4.view.ViewPager;
-import android.util.AttributeSet;
+import android.support.v4.view.BetterViewPager;
 import android.view.MotionEvent;
 
 /**
- * @author <a href="http://www.lusfold.com" target="_blank">Lusfold</a>
+ * Custom ViewPager that allows swiping to be disabled.
  */
-public class MonthPager extends ViewPager {
-    private boolean scrollable = true;
+class MonthPager extends BetterViewPager {
+
+    private boolean pagingEnabled = true;
 
     public MonthPager(Context context) {
         super(context);
     }
 
-    public MonthPager(Context context, AttributeSet attrs) {
-        super(context, attrs);
-    }
-
-    /**
-     * enable disable {@link #setCurrentItem(int)} to scroll
-     *
-     * @param x
-     * @param y
-     */
-    @Override
-    public void scrollTo(int x, int y) {
-        if (scrollable) {
-            super.scrollTo(x, y);
-        }
-    }
-
     /**
      * enable disable viewpager scroll
      *
-     * @param scrollable
+     * @param pagingEnabled false to disable paging, true for paging (default)
      */
-    public void setScrollable(boolean scrollable) {
-        this.scrollable = scrollable;
+    public void setPagingEnabled(boolean pagingEnabled) {
+        this.pagingEnabled = pagingEnabled;
     }
 
     /**
-     * @return is this viewpager scrollable
+     * @return is this viewpager allowed to page
      */
-    public boolean isScrollable() {
-        return scrollable;
+    public boolean isPagingEnabled() {
+        return pagingEnabled;
     }
 
-    /**
-     * enable disable touch to scroll
-     *
-     * @param ev
-     * @return
-     */
     @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
-        return scrollable ? super.onInterceptTouchEvent(ev) : false;
+        return pagingEnabled && super.onInterceptTouchEvent(ev);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent ev) {
+        return pagingEnabled && super.onTouchEvent(ev);
     }
 }
