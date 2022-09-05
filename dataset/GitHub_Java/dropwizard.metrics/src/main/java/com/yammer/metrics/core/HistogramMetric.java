@@ -17,6 +17,38 @@ import static java.lang.Math.sqrt;
  * computing running variance</a>
  */
 public class HistogramMetric implements Metric {
+	/**
+	 * The type of sampling the histogram should be performing.
+	 */
+	public enum SampleType {
+		/**
+		 * Uses a uniform sample of 1028 elements, which offers a 99.9%
+		 * confidence level with a 5% margin of error assuming a normal
+		 * distribution.
+		 */
+		UNIFORM {
+			@Override
+			public Sample newSample() {
+				return new UniformSample(1028);
+			}
+		},
+
+		/**
+		 * Uses an exponentially decaying sample of 1028 elements, which offers
+		 * a 99.9% confidence level with a 5% margin of error assuming a normal
+		 * distribution, and an alpha factor of 0.015, which heavily biases
+		 * the sample to the past 5 minutes of measurements.
+		 */
+		BIASED {
+			@Override
+			public Sample newSample() {
+				return new ExponentiallyDecayingSample(1028, 0.015);
+			}
+		};
+
+		public abstract Sample newSample();
+	}
+
 	private final Sample sample;
 	private final AtomicLong _min = new AtomicLong();
 	private final AtomicLong _max = new AtomicLong();
@@ -28,21 +60,21 @@ public class HistogramMetric implements Metric {
 	private final AtomicLong count = new AtomicLong();
 
 	/**
-	 * Creates a new {@link HistogramMetric} with a default size of 1028, which
-	 * offers a 99.9% confidence level with a 5% margin of error assuming a
-	 * normal distribution.
+	 * Creates a new {@link HistogramMetric} with the given sample type.
+	 *
+	 * @param type the type of sample to use
 	 */
-	public HistogramMetric() {
-		this(1028);
+	public HistogramMetric(SampleType type) {
+		this(type.newSample());
 	}
 
 	/**
-	 * Creates a new {@link HistogramMetric}.
+	 * Creates a new {@link HistogramMetric} with the given sample.
 	 *
-	 * @param sampleSize the {@link Sample} size for distribution calculations
+	 * @param sample the sample to create a histogram from
 	 */
-	public HistogramMetric(int sampleSize) {
-		this.sample = new Sample(sampleSize);
+	public HistogramMetric(Sample sample) {
+		this.sample = sample;
 		clear();
 	}
 
@@ -90,9 +122,9 @@ public class HistogramMetric implements Metric {
 	public long count() { return count.get(); }
 
 	/**
-	 * Returns the longest recorded value.
+	 * Returns the largest recorded value.
 	 *
-	 * @return the longest recorded value
+	 * @return the largest recorded value
 	 */
 	public double max() {
 		if (count() > 0) {
@@ -102,9 +134,9 @@ public class HistogramMetric implements Metric {
 	}
 
 	/**
-	 * Returns the shortest recorded value.
+	 * Returns the smallest recorded value.
 	 *
-	 * @return the shortest recorded value
+	 * @return the smallest recorded value
 	 */
 	public double min() {
 		if (count() > 0) {
@@ -172,6 +204,15 @@ public class HistogramMetric implements Metric {
 		return scores;
 	}
 
+	/**
+	 * Returns a list of all values in the histogram's sample.
+	 *
+	 * @return a list of all values in the histogram's sample
+	 */
+	public List<Long> values() {
+		return sample.values();
+	}
+
 	private double variance() {
 		if (count() <= 1) {
 			return 0.0;
@@ -179,34 +220,34 @@ public class HistogramMetric implements Metric {
 		return longBitsToDouble(varianceS.get()) / (count() - 1);
 	}
 
-	private void setMax(long ns) {
+	private void setMax(long potentialMax) {
 		boolean done = false;
 		while (!done) {
-			long value = _max.get();
-			done = value >= ns || _max.compareAndSet(value, ns);
+			long currentMax = _max.get();
+			done = currentMax >= potentialMax || _max.compareAndSet(currentMax, potentialMax);
 		}
 	}
 
-	private void setMin(long ns) {
+	private void setMin(long potentialMin) {
 		boolean done = false;
 		while (!done) {
-			long value = _min.get();
-			done = value <= ns || _min.compareAndSet(value, ns);
+			long currentMin = _min.get();
+			done = currentMin <= potentialMin || _min.compareAndSet(currentMin, potentialMin);
 		}
 	}
 
-	private void updateVariance(long ns) {
+	private void updateVariance(long value) {
 		// initialize varianceM to the first reading if it's still blank
-		if (!varianceM.compareAndSet(-1, doubleToLongBits(ns))) {
+		if (!varianceM.compareAndSet(-1, doubleToLongBits(value))) {
 			boolean done = false;
 			while (!done) {
 				final long oldMCas = varianceM.get();
 				final double oldM = longBitsToDouble(oldMCas);
-				final double newM = oldM + ((ns - oldM) / count());
+				final double newM = oldM + ((value - oldM) / count());
 
 				final long oldSCas = varianceS.get();
 				final double oldS = longBitsToDouble(oldSCas);
-				final double newS = oldS + ((ns - oldM) * (ns - newM));
+				final double newS = oldS + ((value - oldM) * (value - newM));
 
 				done = varianceM.compareAndSet(oldMCas, doubleToLongBits(newM)) &&
 						varianceS.compareAndSet(oldSCas, doubleToLongBits(newS));
