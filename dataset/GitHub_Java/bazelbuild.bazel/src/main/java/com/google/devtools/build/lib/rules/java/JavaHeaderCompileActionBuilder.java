@@ -326,6 +326,8 @@ public class JavaHeaderCompileActionBuilder {
     }
 
     if (strictJavaDeps != BuildConfiguration.StrictDepsMode.OFF) {
+      result.add("--strict_java_deps");
+      result.add(strictJavaDeps.toString());
       result.add(
           new CustomMultiArgv() {
             @Override
