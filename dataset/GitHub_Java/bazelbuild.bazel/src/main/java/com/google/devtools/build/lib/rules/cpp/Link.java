@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.util.FileTypeSet;
+
 import java.util.Iterator;
 
 /**
@@ -93,50 +94,34 @@ public abstract class Link {
    */
   public enum LinkTargetType {
     /** A normal static archive. */
-    STATIC_LIBRARY(".a", true, "c++-link-static-library", ArtifactCategory.STATIC_LIBRARY),
+    STATIC_LIBRARY(".a", true, "c++-link-static-library"),
 
     /** A static archive with .pic.o object files (compiled with -fPIC). */
-    PIC_STATIC_LIBRARY(
-        ".pic.a", true, "c++-link-pic-static-library", ArtifactCategory.PIC_STATIC_LIBRARY),
+    PIC_STATIC_LIBRARY(".pic.a", true, "c++-link-pic-static-library"),
 
     /** An interface dynamic library. */
-    INTERFACE_DYNAMIC_LIBRARY(
-        ".ifso", false, "c++-link-interface-dynamic-library", ArtifactCategory.INTERFACE_LIBRARY),
+    INTERFACE_DYNAMIC_LIBRARY(".ifso", false, "c++-link-interface-dynamic-library"),
 
     /** A dynamic library. */
-    DYNAMIC_LIBRARY(".so", false, "c++-link-dynamic-library", ArtifactCategory.DYNAMIC_LIBRARY),
+    DYNAMIC_LIBRARY(".so", false, "c++-link-dynamic-library"),
 
     /** A static archive without removal of unused object files. */
-    ALWAYS_LINK_STATIC_LIBRARY(
-        ".lo",
-        true,
-        "c++-link-alwayslink-static-library",
-        ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY),
+    ALWAYS_LINK_STATIC_LIBRARY(".lo", true, "c++-link-alwayslink-static-library"),
 
     /** A PIC static archive without removal of unused object files. */
-    ALWAYS_LINK_PIC_STATIC_LIBRARY(
-        ".pic.lo",
-        true,
-        "c++-link-alwayslink-pic-static-library",
-        ArtifactCategory.ALWAYSLINK_PIC_STATIC_LIBRARY),
+    ALWAYS_LINK_PIC_STATIC_LIBRARY(".pic.lo", true, "c++-link-alwayslink-pic-static-library"),
 
     /** An executable binary. */
-    EXECUTABLE("", false, "c++-link-executable", ArtifactCategory.EXECUTABLE);
+    EXECUTABLE("", false, "c++-link-executable");
 
     private final String extension;
     private final boolean staticLibraryLink;
     private final String actionName;
-    private final ArtifactCategory linkerOutput;
 
-    private LinkTargetType(
-        String extension,
-        boolean staticLibraryLink,
-        String actionName,
-        ArtifactCategory linkerOutput) {
+    private LinkTargetType(String extension, boolean staticLibraryLink, String actionName) {
       this.extension = extension;
       this.staticLibraryLink = staticLibraryLink;
       this.actionName = actionName;
-      this.linkerOutput = linkerOutput;
     }
 
     public String getExtension() {
@@ -145,11 +130,6 @@ public abstract class Link {
 
     public boolean isStaticLibraryLink() {
       return staticLibraryLink;
-    }
-    
-    /** Returns an {@code ArtifactCategory} identifying the artifact type this link action emits. */
-    public ArtifactCategory getLinkerOutput() {
-      return linkerOutput;
     }
     
     /**

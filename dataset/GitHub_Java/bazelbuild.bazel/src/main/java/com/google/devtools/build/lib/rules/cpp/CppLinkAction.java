@@ -668,14 +668,14 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
 
       // This flattens the set of object files, so for M binaries and N .o files,
       // this is O(M*N). If we had a nested set of .o files, we could have O(M + N) instead.
-      Map<PathFragment, Artifact> allBitcode = new HashMap<>();
+      NestedSetBuilder<Artifact> bitcodeBuilder = NestedSetBuilder.stableOrder();
       for (LibraryToLink lib : uniqueLibraries) {
         if (!lib.containsObjectFiles()) {
           continue;
         }
         for (Artifact a : lib.getObjectFiles()) {
           if (compiled.contains(a)) {
-            allBitcode.put(a.getExecPath(), a);
+            bitcodeBuilder.add(a);
           }
         }
       }
@@ -684,14 +684,14 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
         // field for non-library .o files.
         if (CppFileTypes.OBJECT_FILE.matches(input.getArtifact().getExecPath())
             || CppFileTypes.PIC_OBJECT_FILE.matches(input.getArtifact().getExecPath())) {
-          if (this.ltoBitcodeFiles.contains(input.getArtifact())) {
-            allBitcode.put(input.getArtifact().getExecPath(), input.getArtifact());
-          }
+          bitcodeBuilder.add(input.getArtifact());
         }
       }
 
+      NestedSet<Artifact> allBitcode = bitcodeBuilder.build();
+
       ImmutableList.Builder<LTOBackendArtifacts> ltoOutputs = ImmutableList.builder();
-      for (Artifact a : allBitcode.values()) {
+      for (Artifact a : allBitcode) {
         LTOBackendArtifacts ltoArtifacts = new LTOBackendArtifacts(
             ltoOutputRootPrefix, a, allBitcode, ruleContext, linkArtifactFactory);
         ltoOutputs.add(ltoArtifacts);
@@ -830,13 +830,11 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
         // TODO(bazel-team): once the LLVM compiler patches have been finalized, this should
         // be converted to a crosstool feature configuration instead.
         List<String> opts = new ArrayList<>(linkopts);
-        opts.add("-flto=thin");
-        opts.add("-Wl,-plugin-opt,thinlto-index-only");
-        opts.add("-Wl,-plugin-opt,thinlto-emit-imports-files");
+        opts.add("-flto");
         opts.add(
-            "-Wl,-plugin-opt,thinlto-prefix-replace="
+            "-Wl,-plugin-opt,thin-lto="
                 + configuration.getBinDirectory().getExecPathString()
-                + ";"
+                + ":"
                 + configuration
                     .getBinDirectory()
                     .getExecPath()
@@ -857,13 +855,6 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
         dependencyInputsBuilder.addAll(buildInfoHeaderArtifacts);
         dependencyInputsBuilder.addAll(linkstamps);
         dependencyInputsBuilder.addTransitive(compilationInputs.build());
-      }
-
-      // For backwards compatibility, and for tests, we permit the link action to be
-      // instantiated without a feature configuration. In this case, an empty feature
-      // configuration is used.
-      if (featureConfiguration == null) {
-        this.featureConfiguration = new FeatureConfiguration();
       }
 
       Iterable<Artifact> expandedInputs =
@@ -894,14 +885,6 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
           renamedNonLibraryInputs.add(renamed == null ? a : renamed);
         }
         expandedNonLibraryInputs = renamedNonLibraryInputs;
-      } else if (isLTOIndexing && allLTOArtifacts != null) {
-        for (LTOBackendArtifacts a : allLTOArtifacts) {
-          List<String> argv = new ArrayList<>();
-          argv.addAll(cppConfiguration.getLinkOptions());
-          argv.addAll(featureConfiguration.getCommandLine(getActionName(), buildVariables));
-          argv.addAll(cppConfiguration.getCompilerOptions(features));
-          a.setCommandLine(argv);
-        }
       }
 
       // getPrimaryInput returns the first element, and that is a public interface - therefore the
@@ -924,6 +907,13 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
         analysisEnvironment.registerAction(parameterFileWriteAction);
       }
 
+      
+      // For backwards compatibility, and for tests, 
+      // we permit the link action to be instantiated without a feature configuration.  
+      // In this case, an empty feature configuration is used.
+      if (featureConfiguration == null) {
+        this.featureConfiguration = new FeatureConfiguration();
+      }
 
       Map<String, String> toolchainEnv =
           featureConfiguration.getEnvironmentVariables(getActionName(), buildVariables);
