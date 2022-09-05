@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Path;
@@ -115,7 +114,7 @@ public class GlobCache {
           return true;
         }
 
-        PackageIdentifier subPackageId = PackageIdentifier.create(
+        PackageIdentifier subPackageId = new PackageIdentifier(
             packageId.getRepository(),
             packageId.getPackageFragment().getRelative(directory.relativeTo(packageDirectory)));
         UnixGlob.FilesystemCalls syscalls = GlobCache.this.syscalls.get();
