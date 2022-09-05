@@ -6,7 +6,7 @@ import java.util.Map;
 
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
-import org.springframework.core.Ordered;
+import org.springframework.core.PriorityOrdered;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.util.ReflectionUtils.MethodCallback;
 import org.springframework.util.ReflectionUtils.MethodFilter;
@@ -16,7 +16,7 @@ import com.yammer.metrics.core.MetricsRegistry;
 import com.yammer.metrics.core.Timer;
 import com.yammer.metrics.core.TimerContext;
 
-public class TimedMethodInterceptor implements MethodInterceptor, MethodCallback, Ordered {
+public class TimedMethodInterceptor implements MethodInterceptor, MethodCallback, PriorityOrdered {
 
 	private static final MethodFilter filter = new AnnotationMethodFilter(Timed.class);
 
