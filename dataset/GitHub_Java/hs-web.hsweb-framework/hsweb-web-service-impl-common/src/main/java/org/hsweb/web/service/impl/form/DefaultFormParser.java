@@ -3,27 +3,24 @@ package org.hsweb.web.service.impl.form;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import org.hsweb.ezorm.meta.FieldMetaData;
-import org.hsweb.ezorm.meta.TableMetaData;
-import org.hsweb.ezorm.meta.converter.ClobValueConverter;
-import org.hsweb.ezorm.meta.converter.DateTimeConverter;
-import org.hsweb.ezorm.run.simple.trigger.ScriptTraggerSupport;
+import org.hibernate.validator.constraints.Length;
 import org.hsweb.web.bean.po.form.Form;
-import org.hsweb.web.core.Install;
-import org.hsweb.web.service.form.FormParser;
+import org.hsweb.web.core.authorize.ExpressionScopeBean;
+import org.hsweb.web.service.impl.form.trigger.ScriptTrigger;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.Assert;
 import org.springframework.util.ReflectionUtils;
+import org.webbuilder.sql.FieldMetaData;
+import org.webbuilder.sql.TableMetaData;
+import org.webbuilder.sql.trigger.ScriptTriggerSupport;
 import org.webbuilder.utils.common.BeanUtils;
 import org.webbuilder.utils.common.StringUtils;
-import org.webbuilder.utils.script.engine.DynamicScriptEngine;
-import org.webbuilder.utils.script.engine.DynamicScriptEngineFactory;
 
 import java.lang.reflect.Field;
-import java.sql.JDBCType;
 import java.util.*;
 
 /**
@@ -33,116 +30,26 @@ import java.util.*;
 public class DefaultFormParser implements FormParser {
 
     @Autowired(required = false)
-    private List<FormParser.Listener> listeners;
-
-    public void initField(FieldMetaData fieldMetaData) {
-        if (fieldMetaData.getComment() == null)
-            fieldMetaData.setComment("");
-        String db = Install.getDatabaseType();
-        if (fieldMetaData.getDataType() == null) {
-            JDBCType jdbcType = fieldMetaData.getJdbcType();
-            if (jdbcType == null) throw new UnsupportedOperationException("请指定jdbcType或者dataType");
-            switch (jdbcType) {
-                case VARCHAR:
-                    String len = fieldMetaData.getProperty("data-type-len", "256").toString();
-                    if (db.equals("mysql")) {
-                        fieldMetaData.setDataType("varchar(" + len + ")");
-                    } else if (db.equals("oracle") || db.equals("h2")) {
-                        fieldMetaData.setDataType("varchar2(" + len + ")");
-                    }
-                    break;
-                case TINYINT:
-                    if (db.equals("mysql")) {
-                        fieldMetaData.setDataType("tinyint");
-                    } else if (db.equals("oracle") || db.equals("h2")) {
-                        fieldMetaData.setDataType("number(10)");
-                    }
-                case NUMERIC:
-                    len = fieldMetaData.getProperty("data-type-len", "32").toString();
-                    if (db.equals("mysql")) {
-                        fieldMetaData.setDataType((len.contains(",") ? "double" : "int") + "(" + len + ")");
-                    } else if (db.equals("oracle") || db.equals("h2")) {
-                        fieldMetaData.setDataType("number(" + len + ")");
-                    }
-                case DATE:
-                    if (db.equals("mysql")) {
-                        fieldMetaData.setDataType("datetime");
-                    } else if (db.equals("oracle") || db.equals("h2")) {
-                        fieldMetaData.setDataType("date");
-                    }
-                case CLOB:
-                    if (db.equals("mysql")) {
-                        fieldMetaData.setDataType("text");
-                    } else if (db.equals("oracle") || db.equals("h2")) {
-                        fieldMetaData.setDataType("clob");
-                    }
-            }
-        }
-        if (fieldMetaData.getJdbcType() == null) {
-            String dataType = fieldMetaData.getDataType();
-            if (dataType != null) {
-                if (dataType.contains("varchar")) {
-                    fieldMetaData.setJdbcType(JDBCType.VARCHAR);
-                } else if (dataType.contains("date")
-                        || dataType.contains("timestamp")
-                        || dataType.contains("datetime")) {
-                    fieldMetaData.setJdbcType(JDBCType.DATE);
-                    String format = fieldMetaData.getProperty("date-format", "yyyy-MM-dd HH:mm:ss").toString();
-                    fieldMetaData.setValueConverter(new DateTimeConverter(format, fieldMetaData.getJavaType()));
-                } else if (dataType.contains("clob")) {
-                    fieldMetaData.setJdbcType(JDBCType.CLOB);
-                    fieldMetaData.setValueConverter(new ClobValueConverter());
-                } else if (dataType.contains("number") ||
-                        dataType.contains("int") ||
-                        dataType.contains("double") ||
-                        dataType.contains("tinyint")) {
-                    fieldMetaData.setJdbcType(JDBCType.NUMERIC);
-                } else {
-                    fieldMetaData.setJdbcType(JDBCType.VARCHAR);
-                }
-            }
-        }
-    }
+    private Map<String, ExpressionScopeBean> expressionScopeBeanMap;
 
     @Override
     public TableMetaData parse(Form form) {
-        DynamicScriptEngine scriptEngine = DynamicScriptEngineFactory.getEngine("groovy");
         String meta = form.getMeta();
         TableMetaData metaData = new TableMetaData();
         metaData.setName(form.getName());
+        metaData.setLocation(form.getId());
         metaData.setComment(form.getRemark());
         JSONObject object = JSON.parseObject(meta);
         object.forEach((id, field) -> {
             FieldMetaData fieldMeta = new FieldMetaData();
-            fieldMeta.setProperty("field-id", id);
+            fieldMeta.attr("field-id", id);
             JSONArray obj = ((JSONArray) field);
             obj.forEach((defT) -> {
                 JSONObject def = ((JSONObject) defT);
                 String key = def.getString("key");
                 Object value = def.get("value");
                 if ("main".equals(id)) {
-                    if ("alias".equals(key)) {
-                        if (!StringUtils.isNullOrEmpty(value))
-                            metaData.setAlias(String.valueOf(value));
-                    } else if ("trigger".equals(key)) {
-                        List<JSONObject> jsonArray = JSON.parseArray((String) value, JSONObject.class);
-                        jsonArray.forEach(jsonObject -> {
-                            String name = jsonObject.getString("key");
-                            String script = jsonObject.getString("value");
-                            String scriptId = String.valueOf(script.hashCode());
-                            if (!scriptEngine.compiled(scriptId)) {
-                                try {
-                                    scriptEngine.compile(scriptId, script);
-                                } catch (Exception e) {
-                                    throw new RuntimeException("编译脚本异常", e);
-                                }
-                            }
-                            ScriptTraggerSupport scriptTrigger = new ScriptTraggerSupport(scriptEngine, scriptId);
-                            metaData.on(name, scriptTrigger);
-                        });
-                        return;
-                    } else
-                        metaData.setProperty(key, value);
+                    metaData.attr(key, value);
                     return;
                 }
                 if ("validator-list".equals(key)) {
@@ -156,6 +63,21 @@ public class DefaultFormParser implements FormParser {
                         });
                     }
                     fieldMeta.setValidator(validatorList);
+                    return;
+                }
+                if ("trigger".equals(key)) {
+                    List<JSONObject> jsonArray = JSON.parseArray((String) value, JSONObject.class);
+                    jsonArray.forEach(jsonObject -> {
+                        String name = jsonObject.getString("key");
+                        String script = jsonObject.getString("value");
+                        ScriptTrigger scriptTrigger = new ScriptTrigger();
+                        scriptTrigger.setId(String.valueOf(script.hashCode()));
+                        if (expressionScopeBeanMap != null)
+                            scriptTrigger.setDefaultVar(expressionScopeBeanMap);
+                        scriptTrigger.setName(name);
+                        scriptTrigger.setContent(script);
+                        scriptTrigger.setLanguage("groovy");
+                    });
                     return;
                 }
                 Field ftmp = ReflectionUtils.findField(FieldMetaData.class, key);
@@ -175,20 +97,14 @@ public class DefaultFormParser implements FormParser {
                         } catch (Throwable e) {
                         }
                     }
-                    fieldMeta.setProperty(key, value);
+                    fieldMeta.attr(key, value);
                 }
             });
             //name为空的时候 不保持此字段
             if (!"main".equals(id) && !StringUtils.isNullOrEmpty(fieldMeta.getName())) {
-                initField(fieldMeta);
-                if(StringUtils.isNullOrEmpty(fieldMeta.getAlias()))
-                    fieldMeta.setAlias(fieldMeta.getName());
                 metaData.addField(fieldMeta);
             }
         });
-        if (listeners != null) {
-            listeners.forEach(listener -> listener.afterParse(metaData));
-        }
         return metaData;
     }
 
@@ -228,12 +144,12 @@ public class DefaultFormParser implements FormParser {
         TableMetaData metaData = parse(form);
         Element html = Jsoup.parse(form.getHtml());
         metaData.getFields().forEach((field) -> {
-            String field_id = field.getProperty("field-id", "").toString();
+            String field_id = field.attrWrapper("field-id", "").toString();
             if (!"".equals(field_id)) {
                 Elements elements = html.select("[field-id=\"" + field_id + "\"]");
                 Element input = elements.first();
                 if (null != input) {
-                    List<Map> domProperty = field.getProperty("domProperty", "[]").toList();
+                    List<Map> domProperty = field.attrWrapper("domProperty", "[]").toList();
                     domProperty.forEach((property) -> {
                         Object value = property.get("value");
                         Object key = property.get("key");
@@ -242,7 +158,7 @@ public class DefaultFormParser implements FormParser {
                     });
                     input.attr("name", field.getName());
                     input.attr("id", field.getName());
-                    input.attr("class", field.getProperty("class").toString());
+                    input.attr("class", field.attrWrapper("class").toString());
                 }
             }
         });
