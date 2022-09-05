@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.analysis.AnalysisPhaseCompleteEvent;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
-import com.google.devtools.build.lib.bazel.repository.downloader.DownloadProgressEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionProgressReceiverAvailableEvent;
@@ -343,12 +342,6 @@ public class ExperimentalEventHandler implements EventHandler {
       buildComplete = true;
     }
     stopUpdateThread();
-  }
-
-  @Subscribe
-  public void downloadProgress(DownloadProgressEvent event) {
-    stateTracker.downloadProgress(event);
-    refresh();
   }
 
   @Subscribe
