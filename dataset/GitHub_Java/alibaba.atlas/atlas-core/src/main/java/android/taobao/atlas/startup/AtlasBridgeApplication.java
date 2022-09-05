@@ -289,7 +289,7 @@ public class AtlasBridgeApplication extends Application{
             }
             KernalVersionManager.instance().init();
             if(!KernalBundle.checkLoadKernalDebugPatch(this)){
-                if(KernalBundle.hasKernalPatch()&& Build.VERSION.SDK_INT < 28) {
+                if(KernalBundle.hasKernalPatch()) {
                     //has patch ? true -> must load successed
                     hasKernalPatched = KernalBundle.checkloadKernalBundle(this, KernalConstants.PROCESS);
                     if (!hasKernalPatched) {
