@@ -79,7 +79,7 @@ public class TestSupport {
     String runMemleaks =
         ruleContext.getFragment(ObjcConfiguration.class).runMemleaks() ? "true" : "false";
 
-    ImmutableMap<String, String> testEnv = ruleContext.getConfiguration().getTestEnv();
+    Map<String, String> testEnv = ruleContext.getConfiguration().getTestEnv();
 
     // The substitutions below are common for simulator and lab device.
     ImmutableList.Builder<Substitution> substitutions =
@@ -127,15 +127,15 @@ public class TestSupport {
    */
   private ImmutableList<Substitution> substitutionsForSimulator() {
     ImmutableList.Builder<Substitution> substitutions = new ImmutableList.Builder<Substitution>()
-        .add(Substitution.of("%(iossim_path)s", iossim().getRunfilesPathString()))
+        .add(Substitution.of("%(iossim_path)s", iossim().getRootRelativePath().getPathString()))
         .add(Substitution.of("%(std_redirect_dylib_path)s",
-            stdRedirectDylib().getRunfilesPathString()))
+            stdRedirectDylib().getRootRelativePath().getPathString()))
         .addAll(deviceSubstitutions().getSubstitutionsForTestRunnerScript());
 
     Optional<Artifact> testRunner = testRunner();
     if (testRunner.isPresent()) {
       substitutions.add(
-          Substitution.of("%(testrunner_binary)s", testRunner.get().getRunfilesPathString()));
+          Substitution.of("%(testrunner_binary)s", testRunner.get().getRootRelativePathString()));
     }
     return substitutions.build();
   }
