@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -25,10 +26,10 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.CycleInfo;
 import com.google.devtools.build.skyframe.CyclesReporter;
 import com.google.devtools.build.skyframe.SkyKey;
+
 import java.util.concurrent.Callable;
 
 /** Reports cycles between skyframe values whose keys contains {@link Label}s. */
@@ -104,22 +105,19 @@ abstract class AbstractLabelCycleReporter implements CyclesReporter.SingleCycleR
         ? Iterables.concat(cycle, ImmutableList.of(cycle.get(0))) : cycle;
     SkyKey cycleValue = null;
     for (SkyKey value : valuesToPrint) {
-      if (cycleValue == null) { // first item
+      if (cycleValue == null) {
         cycleValue = value;
-        cycleMessage.append("\n.-> ");
+      }
+      if (value == cycleValue) {
+        cycleMessage.append("\n  * ");
       } else {
-        if (value == cycleValue) { // last item of the cycle
-          cycleMessage.append("\n`-- ");
-        } else {
-          cycleMessage.append("\n|   ");
-        }
+        cycleMessage.append("\n    ");
       }
       cycleMessage.append(printFunction.apply(value));
     }
 
     if (cycle.size() == 1) {
       cycleMessage.append(" [self-edge]");
-      cycleMessage.append("\n`--");
     }
 
     return cycleValue;

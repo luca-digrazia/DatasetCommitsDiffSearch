@@ -18,12 +18,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
 import com.google.devtools.build.skyframe.CycleInfo;
 import com.google.devtools.build.skyframe.SkyKey;
+
 import java.util.List;
 
 /**
@@ -58,7 +59,7 @@ class TransitiveTargetCycleReporter extends AbstractLabelCycleReporter {
 
   @Override
   protected String getAdditionalMessageAboutCycle(
-      ExtendedEventHandler eventHandler, SkyKey topLevelKey, CycleInfo cycleInfo) {
+      EventHandler eventHandler, SkyKey topLevelKey, CycleInfo cycleInfo) {
     Target currentTarget = getTargetForLabel(eventHandler, getLabel(topLevelKey));
     List<SkyKey> keys = Lists.newArrayList();
     if (!cycleInfo.getPathToCycle().isEmpty()) {
