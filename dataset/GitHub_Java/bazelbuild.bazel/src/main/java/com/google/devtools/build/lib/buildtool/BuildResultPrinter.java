@@ -224,7 +224,7 @@ class BuildResultPrinter {
         // files), OR when a user explicitly requests an output file but not
         // its rule.
         TransitiveInfoCollection generatingRule =
-            ((OutputFileConfiguredTarget) target).getGeneratingRule();
+            env.getView().getGeneratingRule((OutputFileConfiguredTarget) target);
         if (CollectionUtils.containsAll(
             generatingRule.getProvider(FileProvider.class).getFilesToBuild(),
             target.getProvider(FileProvider.class).getFilesToBuild())
