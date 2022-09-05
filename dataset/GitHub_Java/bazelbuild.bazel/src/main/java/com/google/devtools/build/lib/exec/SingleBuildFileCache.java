@@ -27,11 +27,12 @@ import com.google.devtools.build.lib.actions.DigestOfDirectoryException;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.protobuf.ByteString;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -69,7 +70,7 @@ public class SingleBuildFileCache implements ActionInputFileCache {
           Path path = null;
           try {
             path = fs.getPath(fullPath(input));
-            byte[] digest = path.getDigest();
+            byte[] digest = path.getMD5Digest();
             BaseEncoding hex = BaseEncoding.base16().lowerCase();
             ByteString hexDigest = ByteString.copyFrom(hex.encode(digest).getBytes(US_ASCII));
             // Inject reverse mapping. Doing this unconditionally in getDigest() showed up
@@ -130,7 +131,7 @@ public class SingleBuildFileCache implements ActionInputFileCache {
    */
   private String fullPath(ActionInput input) {
     String relPath = input.getExecPathString();
-    return new PathFragment(relPath).isAbsolute() ? relPath : new File(cwd, relPath).getPath();
+    return relPath.startsWith("/") ? relPath : new File(cwd, relPath).getPath();
   }
 
   /** Container class for caching I/O around ActionInputs. */
