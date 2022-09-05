@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,7 +38,6 @@ public class Constants {
   public static final ImmutableList<String> ANDROID_DEFAULT_FAT_APK_CPUS =
       ImmutableList.<String>of("armeabi-v7a");
   public static final String ANDROID_DEP_PREFIX = "//external:android/".toString();
-  public static final String TOOLS_REPOSITORY = "".toString();
 
   /**
    * Whether C++ include scanning should be disabled no matter what the --cc_include_scanning flag

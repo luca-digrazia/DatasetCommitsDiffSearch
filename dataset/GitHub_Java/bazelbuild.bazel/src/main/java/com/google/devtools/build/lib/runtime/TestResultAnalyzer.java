@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,12 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.packages.TestSize;
@@ -26,7 +26,7 @@ import com.google.devtools.build.lib.packages.TestTimeout;
 import com.google.devtools.build.lib.rules.test.TestProvider;
 import com.google.devtools.build.lib.rules.test.TestResult;
 import com.google.devtools.build.lib.runtime.TerminalTestResultNotifier.TestSummaryOptions;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
@@ -217,7 +217,7 @@ public class TestResultAnalyzer {
         int passes = 0;
         for (BlazeTestStatus runStatusForShard : singleShardStatuses) {
           shardStatus = aggregateStatus(shardStatus, runStatusForShard);
-          if (TestResult.isBlazeTestStatusPassed(runStatusForShard)) {
+          if (TestResult.isBlazeTestStatusPassed(shardStatus)) {
             passes++;
           }
         }
@@ -279,17 +279,11 @@ public class TestResultAnalyzer {
     return summaryBuilder.setStatus(status);
   }
 
-  TestSummary.Builder markUnbuilt(
-      TestSummary.Builder summary, boolean blazeHalted, boolean stopOnFirstFailure) {
-    // stopOnFirstFailure = true means that at least on of the options keep_going and
-    // test_keep_going is set to false.
-    // Consequently, we mark all unbuilt targets with NO_STATUS instead of FAILED_TO_BUILD in 
-    // order to indicate that Blaze has skipped these targets.
-    BlazeTestStatus runStatus =
-        blazeHalted 
-            ? BlazeTestStatus.BLAZE_HALTED_BEFORE_TESTING : (
-                executionOptions.testCheckUpToDate || stopOnFirstFailure
-                    ? BlazeTestStatus.NO_STATUS : BlazeTestStatus.FAILED_TO_BUILD);
+  TestSummary.Builder markUnbuilt(TestSummary.Builder summary, boolean blazeHalted) {
+    BlazeTestStatus runStatus = blazeHalted ? BlazeTestStatus.BLAZE_HALTED_BEFORE_TESTING
+        : (executionOptions.testCheckUpToDate
+            ? BlazeTestStatus.NO_STATUS
+            : BlazeTestStatus.FAILED_TO_BUILD);
 
     return summary.setStatus(runStatus);
   }
