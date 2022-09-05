@@ -201,7 +201,7 @@ public class SkylarkImportTest {
 
   @Test
   public void tesInvalidAbsolutePathBzlExtImplicit() throws Exception {
-    invalidImportTest("/some/skylark/file.bzl", SkylarkImports.INVALID_PATH_SYNTAX);
+    invalidImportTest("/some/skylark/file.bzl", SkylarkImports.BZL_EXT_IMPLICIT_MSG);
   }
 
   @Test
@@ -216,12 +216,12 @@ public class SkylarkImportTest {
 
   @Test
   public void testInvalidRelativePathBzlExtImplicit() throws Exception {
-    invalidImportTest("file.bzl", SkylarkImports.INVALID_PATH_SYNTAX);
+    invalidImportTest("file.bzl", SkylarkImports.BZL_EXT_IMPLICIT_MSG);
   }
 
   @Test
   public void testInvalidRelativePathNoSubdirs() throws Exception {
-    invalidImportTest("path/to/file", SkylarkImports.INVALID_PATH_SYNTAX);
+    invalidImportTest("path/to/file", SkylarkImports.RELATIVE_PATH_NO_SUBDIRS_MSG);
   }
 
   @Test
@@ -230,3 +230,4 @@ public class SkylarkImportTest {
     invalidImportTest("\tfile", SkylarkImports.INVALID_FILENAME_PREFIX);
   }
 }
+
