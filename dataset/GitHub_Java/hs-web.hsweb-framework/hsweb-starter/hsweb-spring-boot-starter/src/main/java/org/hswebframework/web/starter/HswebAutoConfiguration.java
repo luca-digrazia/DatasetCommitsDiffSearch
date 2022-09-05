@@ -105,8 +105,6 @@ public class HswebAutoConfiguration {
                     if (classType.isEnum()) {
                         return super.getDeserializer(type);
                     }
-                    checkAutoType(type.getTypeName(), ((Class) type));
-
                     if (Modifier.isAbstract(classType.getModifiers()) || Modifier.isInterface(classType.getModifiers())) {
                         if (entityFactory != null && (Entity.class.isAssignableFrom(classType) || Model.class.isAssignableFrom(classType))) {
                             return new JavaBeanDeserializer(this, entityFactory.getInstanceType(classType), type);
@@ -120,8 +118,9 @@ public class HswebAutoConfiguration {
         };
 
         //fastjson.parser.autoTypeAccept
-        ParserConfig.global.addAccept("org.hswebframework.web.entity.");
-        ParserConfig.global.addDeny("org.hsweb.ezorm.core.param.SqlTerm");
+        ParserConfig.getGlobalInstance().addAccept("org.hswebframework.web.entity.");
+        ParserConfig.getGlobalInstance().addAccept("org.hsweb.");
+        ParserConfig.getGlobalInstance().addDeny("org.hsweb.ezorm.core.param.SqlTerm");
         return converter;
     }
 
