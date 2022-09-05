@@ -372,12 +372,9 @@ public final class IntermediateArtifacts {
             suffix));
   }
 
-  /** Bitcode symbol map generated for a linked binary, for a specific architecture. */
-  public Artifact bitcodeSymbolMap() {
-    return appendExtension(".bcsymbolmap");
-  }
-
-  /** Representation for a specific architecture. */
+  /**
+   * Representation for a specific architecture.
+   */
   private Artifact architectureRepresentation(String arch, String suffix) {
     return appendExtension(String.format("_%s%s", arch, suffix));
   }
@@ -435,7 +432,7 @@ public final class IntermediateArtifacts {
     return ruleContext.getUniqueDirectoryArtifact(
         "_j2objc_pruned",
         prunedSourceArtifactPath,
-        buildConfiguration.getBinDirectory(ruleContext.getRule().getRepository()));
+        ruleContext.getBinOrGenfilesDirectory());
   }
 
   /**
