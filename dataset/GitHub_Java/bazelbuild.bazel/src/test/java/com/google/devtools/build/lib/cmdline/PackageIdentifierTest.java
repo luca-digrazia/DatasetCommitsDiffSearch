@@ -17,7 +17,9 @@ package com.google.devtools.build.lib.cmdline;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.fail;
 
+import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import org.junit.Test;
@@ -50,6 +52,41 @@ public class PackageIdentifierTest {
 
     PackageIdentifier mainA = PackageIdentifier.parse("@//a");
     assertThat(mainA.getRepository()).isEqualTo(PackageIdentifier.MAIN_REPOSITORY_NAME);
+  }
+
+  public void assertNotValid(String name, String expectedMessage) {
+    try {
+      RepositoryName.create(name);
+      fail();
+    } catch (LabelSyntaxException expected) {
+      assertThat(expected.getMessage()).contains(expectedMessage);
+    }
+  }
+
+  @Test
+  public void testValidateRepositoryName() throws Exception {
+    assertEquals("@foo", RepositoryName.create("@foo").toString());
+    assertThat(RepositoryName.create("").toString()).isEmpty();
+    assertEquals("@foo/bar", RepositoryName.create("@foo/bar").toString());
+    assertEquals("@foo.bar", RepositoryName.create("@foo.bar").toString());
+    assertEquals("@..foo", RepositoryName.create("@..foo").toString());
+    assertEquals("@foo..", RepositoryName.create("@foo..").toString());
+    assertEquals("@.foo", RepositoryName.create("@.foo").toString());
+
+    assertNotValid("@/", "workspace names are not allowed to start with '@/'");
+    assertNotValid("@.", "workspace names are not allowed to be '@.'");
+    assertNotValid("@./", "workspace names are not allowed to start with '@./'");
+    assertNotValid("@../", "workspace names are not allowed to start with '@..'");
+    assertNotValid("@x/./x", "workspace names are not allowed to contain '/./'");
+    assertNotValid("@x/../x", "workspace names are not allowed to contain '/../'");
+    assertNotValid("@abc/", "workspace names are not allowed to end with '/'");
+    assertNotValid("@/abc", "workspace names are not allowed to start with '@/'");
+    assertNotValid("@a//////b", "workspace names are not allowed to contain '//'");
+    assertNotValid("@foo@",
+        "workspace names may contain only A-Z, a-z, 0-9, '-', '_', '.', and '/'");
+    assertNotValid("@foo\0",
+        "workspace names may contain only A-Z, a-z, 0-9, '-', '_', '.', and '/'");
+    assertNotValid("x", "workspace names must start with '@'");
   }
 
   @Test

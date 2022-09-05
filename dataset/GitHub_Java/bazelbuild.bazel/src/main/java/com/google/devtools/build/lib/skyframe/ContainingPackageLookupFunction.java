@@ -41,7 +41,7 @@ public class ContainingPackageLookupFunction implements SkyFunction {
 
     PathFragment parentDir = dir.getPackageFragment().getParentDirectory();
     if (parentDir == null) {
-      return ContainingPackageLookupValue.NONE;
+      return ContainingPackageLookupValue.noContainingPackage();
     }
     PackageIdentifier parentId = PackageIdentifier.create(dir.getRepository(), parentDir);
     return env.getValue(ContainingPackageLookupValue.key(parentId));
