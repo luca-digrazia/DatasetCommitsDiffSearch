@@ -217,28 +217,18 @@ public class ObjcRuleClasses {
   }
 
   /**
-   * Returns {@code true} if the given rule context has a launch storyboard set and the given
-   * {@code iosMinimumOs} supports launch storyboards.
+   * Returns {@code true} if the given rule context has a launch storyboard set and its
+   * configuration (--ios_minimum_os) supports launch storyboards.
    */
-  static boolean useLaunchStoryboard(RuleContext ruleContext, DottedVersion iosMinimumOs) {
+  static boolean useLaunchStoryboard(RuleContext ruleContext) {
     if (!ruleContext.attributes().has("launch_storyboard", LABEL)) {
       return false;
     }
     Artifact launchStoryboard =
         ruleContext.getPrerequisiteArtifact("launch_storyboard", Mode.TARGET);
+    DottedVersion flagMinimumOs = objcConfiguration(ruleContext).getMinimumOs();
     return launchStoryboard != null
-        && iosMinimumOs.compareTo(MIN_LAUNCH_STORYBOARD_OS_VERSION) >= 0;
-  }
-
-  /**
-   * Returns {@code true} if the given rule context has a launch storyboard set and its
-   * configuration (--ios_minimum_os) supports launch storyboards.
-   */
-  static boolean useLaunchStoryboard(RuleContext ruleContext) {
-    // We check launch_storyboard before retrieving the minimum os from the configuration,
-    // allowing this to be invoked even in contexts which do not depend on ObjcConfiguration.
-    return (ruleContext.attributes().has("launch_storyboard", LABEL)
-        && useLaunchStoryboard(ruleContext, objcConfiguration(ruleContext).getMinimumOs()));
+        && flagMinimumOs.compareTo(MIN_LAUNCH_STORYBOARD_OS_VERSION) >= 0;
   }
 
   /**
