@@ -115,12 +115,12 @@ public class DefaultUserTokenManager implements UserTokenManager {
     @Override
     public List<UserToken> getByUserId(String userId) {
         if (userId == null) {
-            return new ArrayList();
+            return Collections.emptyList();
         }
         Set<String> tokens = getUserToken(userId);
         if (tokens.isEmpty()) {
             userStorage.remove(userId);
-            return new ArrayList();
+            return Collections.emptyList();
         }
         return tokens
                 .stream()
