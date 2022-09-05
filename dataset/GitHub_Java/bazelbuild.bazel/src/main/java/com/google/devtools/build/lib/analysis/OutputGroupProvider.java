@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedSet;
-import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -137,42 +135,5 @@ public final class OutputGroupProvider implements TransitiveInfoProvider {
       }
     }
     return new OutputGroupProvider(resultBuilder.build());
-  }
-
-  public static ImmutableSortedSet<String> determineOutputGroups(List<String> outputGroups) {
-    return determineOutputGroups(DEFAULT_GROUPS, outputGroups);
-  }
-
-  public static ImmutableSortedSet<String> determineOutputGroups(
-      Set<String> defaultOutputGroups, List<String> outputGroups) {
-
-    Set<String> current = Sets.newHashSet();
-
-    // If all of the requested output groups start with "+" or "-", then these are added or
-    // subtracted to the set of default output groups.
-    // If any of them don't start with "+" or "-", then the list of requested output groups
-    // overrides the default set of output groups.
-    boolean addDefaultOutputGroups = true;
-    for (String outputGroup : outputGroups) {
-      if (!(outputGroup.startsWith("+") || outputGroup.startsWith("-"))) {
-        addDefaultOutputGroups = false;
-        break;
-      }
-    }
-    if (addDefaultOutputGroups) {
-      current.addAll(defaultOutputGroups);
-    }
-
-    for (String outputGroup : outputGroups) {
-      if (outputGroup.startsWith("+")) {
-        current.add(outputGroup.substring(1));
-      } else if (outputGroup.startsWith("-")) {
-        current.remove(outputGroup.substring(1));
-      } else {
-        current.add(outputGroup);
-      }
-    }
-
-    return ImmutableSortedSet.copyOf(current);
   }
 }

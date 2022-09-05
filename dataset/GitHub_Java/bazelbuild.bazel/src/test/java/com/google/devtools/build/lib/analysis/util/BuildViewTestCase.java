@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
+import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.MapBasedActionGraph;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.actions.MutableActionGraph;
@@ -130,6 +131,8 @@ import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
+
+import org.mockito.Mockito;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -1475,22 +1478,27 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected Iterable<String> baselineCoverageArtifactBasenames(ConfiguredTarget target)
       throws Exception {
-    ImmutableList.Builder<String> basenames = ImmutableList.builder();
-    for (Artifact baselineCoverage : target
+    Artifact baselineCoverage = Iterables.getOnlyElement(target
         .getProvider(InstrumentedFilesProvider.class)
-        .getBaselineCoverageArtifacts()) {
-      BaselineCoverageAction baselineAction =
-          (BaselineCoverageAction) getGeneratingAction(baselineCoverage);
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-      baselineAction.newDeterministicWriter(null, null).writeOutputFile(bytes);
+        .getBaselineCoverageArtifacts());
+    BaselineCoverageAction baselineAction =
+        (BaselineCoverageAction) getGeneratingAction(baselineCoverage);
 
-      for (String line : new String(bytes.toByteArray(), StandardCharsets.UTF_8).split("\n")) {
-        if (line.startsWith("SF:")) {
-          String basename = line.substring(line.lastIndexOf('/') + 1);
-          basenames.add(basename);
-        }
+    EventBus eventBus = new EventBus();
+    Executor mockExecutor = Mockito.mock(Executor.class);
+    Mockito.when(mockExecutor.getEventBus()).thenReturn(eventBus);
+
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    baselineAction.newDeterministicWriter(reporter, mockExecutor).writeOutputFile(bytes);
+
+    ImmutableList.Builder<String> basenames = ImmutableList.builder();
+    for (String line : new String(bytes.toByteArray(), StandardCharsets.UTF_8).split("\n")) {
+      if (line.startsWith("SF:")) {
+        String basename = line.substring(line.lastIndexOf('/') + 1);
+        basenames.add(basename);
       }
     }
+
     return basenames.build();
   }
 
