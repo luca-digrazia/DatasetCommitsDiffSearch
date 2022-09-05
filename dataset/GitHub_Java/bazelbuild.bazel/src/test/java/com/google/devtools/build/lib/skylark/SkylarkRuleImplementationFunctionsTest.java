@@ -310,7 +310,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testCreateSpawnActionBadGenericArg() throws Exception {
     checkErrorContains(
         createRuleContext("//foo:foo"),
-        "Illegal argument: expected type File for 'outputs' element but got type string instead",
+        "Illegal argument in call to action: list element \"a\" is not of type File",
         "l = ['a', 'b']",
         "ruleContext.action(",
         "  outputs = l,",
@@ -552,7 +552,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   public void testRunfilesBadListGenericType() throws Exception {
     checkErrorContains(
-        "Illegal argument: expected type File for 'files' element but got type string instead",
+        "Illegal argument in call to runfiles: list element \"some string\" is not of type File",
         "ruleContext.runfiles(files = ['some string'])");
   }
 
