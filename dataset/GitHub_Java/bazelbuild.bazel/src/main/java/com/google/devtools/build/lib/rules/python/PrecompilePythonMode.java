@@ -17,10 +17,9 @@ package com.google.devtools.build.lib.rules.python;
 /**
  * Enumerates the different modes of Python precompilation.
  *
- * <p>NONE denotes that no precompilation should take place, and PROTO causes
- * only the generated _pb/_pb2.py files to be precompiled. ALL compiles all
- * Python files.
+ * NONE denotes that no precompilation should take place, and PROTO causes
+ * only the generated _pb/_pb2.py files to be precompiled.
  */
 public enum PrecompilePythonMode {
-  NONE, PROTO, ALL;
+  NONE, PROTO; // TODO(scottgw) add 'ALL' element.
 }

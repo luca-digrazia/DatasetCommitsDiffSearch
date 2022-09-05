@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,18 +17,16 @@ package com.google.devtools.common.options;
 import com.google.devtools.common.options.Converters.BooleanConverter;
 
 /**
- * Converter that can convert both the standard set of boolean string values and enumerations. If
- * there is an overlap in values, those from the underlying enumeration will be taken.
+ * Converter that can also convert from booleans and enumerations.
  *
- * <p>Note that for the flag to take one of its enum values on the command line, it must be of the
- * form "--flag=value". That is, "--flag value" and "-f value" (if the flag has a short-form of "f")
- * will result in "value" being left as residue on the command line. This maintains compatibility
- * with boolean flags where "--flag true" and "-f true" also leave "true" as residue on the command
- * line.
+ * <p> This is able to additionally convert from the standard set of
+ * boolean string values. If there is an overlap in values, those from
+ * the underlying enumeration will be taken.
  */
-public abstract class BoolOrEnumConverter<T extends Enum<T>> extends EnumConverter<T> {
-  private final T falseValue;
-  private final T trueValue;
+public abstract class BoolOrEnumConverter<T extends Enum<T>> extends EnumConverter<T>{
+
+  private T falseValue;
+  private T trueValue;
 
   /**
    * You *must* implement a zero-argument constructor that delegates
@@ -48,7 +46,6 @@ public abstract class BoolOrEnumConverter<T extends Enum<T>> extends EnumConvert
     this.falseValue = falseValue;
   }
 
-  @Override
   public T convert(String input) throws OptionsParsingException {
     try {
       return super.convert(input);
@@ -58,8 +55,6 @@ public abstract class BoolOrEnumConverter<T extends Enum<T>> extends EnumConvert
         boolean value = booleanConverter.convert(input);
         return value ? trueValue : falseValue;
       } catch (OptionsParsingException eBoolean) {
-        // TODO(b/111883901): Rethrowing the exception from the enum converter does not report the
-        // allowable boolean values.
         throw eEnum;
       }
     }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,14 +55,15 @@ public class BoolOrEnumConverterTest {
   @Test
   public void converterFromEnum() throws Exception {
     CompilationModeConverter converter = new CompilationModeConverter();
-    assertEquals(CompilationMode.DBG, converter.convert("dbg"));
-    assertEquals(CompilationMode.OPT, converter.convert("opt"));
+    assertEquals(converter.convert("dbg"), CompilationMode.DBG);
+    assertEquals(converter.convert("opt"), CompilationMode.OPT);
 
     try {
       converter.convert("none");
       fail();
     } catch (OptionsParsingException e) {
-      assertEquals("Not a valid compilation mode: 'none' (should be dbg or opt)", e.getMessage());
+      assertEquals(e.getMessage(),
+                   "Not a valid compilation mode: 'none' (should be dbg or opt)");
     }
     assertEquals("dbg or opt", converter.getTypeDescription());
   }

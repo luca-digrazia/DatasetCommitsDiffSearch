@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ import java.util.Arrays;
 /**
  * A converter superclass for converters that parse enums.
  *
- * <p>Just subclass this class, creating a zero argument constructor that
+ * <p>Just subclass this class, creating a zero aro argument constructor that
  * calls {@link #EnumConverter(Class, String)}.
  *
  * <p>This class compares the input string to the string returned by the toString()
