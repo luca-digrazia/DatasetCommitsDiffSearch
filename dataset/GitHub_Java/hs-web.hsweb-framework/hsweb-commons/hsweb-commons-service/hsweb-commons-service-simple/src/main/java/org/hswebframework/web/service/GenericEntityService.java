@@ -22,12 +22,9 @@ import org.hswebframework.web.commons.entity.GenericEntity;
 import org.hswebframework.web.commons.entity.RecordCreationEntity;
 import org.hswebframework.web.dao.CrudDao;
 import org.hswebframework.web.id.IDGenerator;
-import org.hswebframework.utils.ClassUtils;
-import org.hswebframework.web.validator.group.CreateGroup;
-import org.hswebframework.web.validator.group.UpdateGroup;
+import org.hswebframwork.utils.ClassUtils;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -66,7 +63,7 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
     @Override
     public int updateByPk(PK pk, E entity) {
         entity.setId(pk);
-        tryValidate(entity, UpdateGroup.class);
+        tryValidate(entity);
         return createUpdate(entity)
                 //如果是RecordCreationEntity则不修改creator_id和creator_time
                 .when(ClassUtils.instanceOf(getEntityType(), RecordCreationEntity.class),
@@ -99,14 +96,8 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
 
     @Override
     public PK insert(E entity) {
-        if (entity.getId() != null) {
-            if ((entity.getId() instanceof String)) {
-                tryValidateProperty(entity.getId().toString().matches("[a-zA-Z0-9_\\-]+"), "id", "只能由数字,字母,下划线,和-组成");
-            }
-            tryValidateProperty(selectByPk(entity.getId()) == null, "id", entity.getId() + "已存在");
-        }
         if (entity.getId() == null) entity.setId(getIDGenerator().generate());
-        tryValidate(entity, CreateGroup.class);
+        tryValidate(entity);
         getDao().insert(entity);
         return entity.getId();
     }
@@ -118,9 +109,4 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
         return createQuery().where(GenericEntity.id, pk).single();
     }
 
-    @Override
-    public List<E> selectByPk(List<PK> id) {
-        if (id == null || id.isEmpty()) return new ArrayList<>();
-        return createQuery().where().in(GenericEntity.id, id).listNoPaging();
-    }
 }
