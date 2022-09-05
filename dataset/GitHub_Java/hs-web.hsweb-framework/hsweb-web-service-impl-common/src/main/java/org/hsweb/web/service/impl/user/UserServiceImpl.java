@@ -51,18 +51,18 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
     public String insert(User data) throws Exception {
         tryValidPo(data);
         Assert.isNull(selectByUserName(data.getUsername()), "用户已存在!");
-        data.setId(RandomUtil.randomChar(6));
-        data.setCreateDate(new Date());
-        data.setUpdateDate(new Date());
+        data.setU_id(RandomUtil.randomChar(6));
+        data.setCreate_date(new Date());
+        data.setUpdate_date(new Date());
         data.setPassword(MD5.encode(data.getPassword()));
         data.setStatus(1);
         userMapper.insert(new InsertParam<>(data));
-        String id = data.getId();
+        String id = data.getU_id();
         //添加角色关联
         if (data.getUserRoles().size() != 0) {
             for (UserRole userRole : data.getUserRoles()) {
-                userRole.setId(RandomUtil.randomChar());
-                userRole.setUserId(data.getId());
+                userRole.setU_id(RandomUtil.randomChar());
+                userRole.setUser_id(data.getU_id());
                 userRoleMapper.insert(new InsertParam<>(userRole));
             }
         }
@@ -70,29 +70,24 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
     }
 
     @Override
-    public List<String> batchInsert(List<User> data, boolean skipFail) throws Exception {
-        throw new UnsupportedOperationException("不支持此操作");
-    }
-
-    @Override
     public int update(User data) throws Exception {
         tryValidPo(data);
         User old = this.selectByUserName(data.getUsername());
-        if (old != null && !old.getId().equals(data.getId())) {
+        if (old != null && !old.getU_id().equals(data.getU_id())) {
             throw new BusinessException("用户名已存在!");
         }
-        data.setUpdateDate(new Date());
+        data.setUpdate_date(new Date());
         if (!"$default".equals(data.getPassword())) {
             data.setPassword(MD5.encode(data.getPassword()));
             userMapper.updatePassword(data);
         }
-        int i = userMapper.update(new UpdateParam<>(data).excludes("status", "password", "createDate"));
+        int i = userMapper.update(new UpdateParam<>(data).excludes("status","password","create_date"));
         if (data.getUserRoles().size() != 0) {
             //删除所有
-            userRoleMapper.deleteByUserId(data.getId());
+            userRoleMapper.deleteByUserId(data.getU_id());
             for (UserRole userRole : data.getUserRoles()) {
-                userRole.setId(RandomUtil.randomChar());
-                userRole.setUserId(data.getId());
+                userRole.setU_id(RandomUtil.randomChar());
+                userRole.setUser_id(data.getU_id());
                 userRoleMapper.insert(new InsertParam<>(userRole));
             }
         }
@@ -101,19 +96,19 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
 
     @Override
     public void initAdminUser(User user) throws Exception {
-        QueryParam queryParam = new QueryParam().noPaging();
-        queryParam.orderBy("sortIndex");
+        QueryParam queryParam = new QueryParam();
+        queryParam.orderBy("sort_index");
         List<Module> modules = moduleService.select(queryParam);
         Map<Module, Set<String>> roleInfo = new LinkedHashMap<>();
         for (Module module : modules) {
-            roleInfo.put(module, new LinkedHashSet<>(module.getOptionalMap().keySet()));
+            roleInfo.put(module, new LinkedHashSet<>(module.getM_optionMap().keySet()));
         }
         user.setRoleInfo(roleInfo);
     }
 
     @Override
     public void initGuestUser(User user) throws Exception {
-        List<UserRole> userRoles = userRoleMapper.select(new QueryParam().where("roleId", "guest").noPaging());
+        List<UserRole> userRoles = userRoleMapper.select(new QueryParam().where("role_id", "guest"));
         user.setUserRoles(userRoles);
         user.initRoleInfo();
     }
@@ -123,7 +118,7 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
         User user = selectByPk(id);
         if (user == null) throw new NotFoundException("用户不存在!");
         user.setStatus(1);
-        getMapper().update(new UpdateParam<>(user).includes("status").where("id", id));
+        getMapper().update(new UpdateParam<>(user).includes("status").where("u_id", id));
     }
 
     @Override
@@ -131,7 +126,7 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
         User user = selectByPk(id);
         if (user == null) throw new NotFoundException("用户不存在!");
         user.setStatus(-1);
-        getMapper().update(new UpdateParam<>(user).includes("status").where("id", id));
+        getMapper().update(new UpdateParam<>(user).includes("status").where("u_id", id));
     }
 
     @Override

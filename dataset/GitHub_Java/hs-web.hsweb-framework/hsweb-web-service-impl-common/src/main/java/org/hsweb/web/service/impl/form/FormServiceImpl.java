@@ -67,7 +67,6 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
         old.setCreate_date(new Date());
         old.setUpdate_date(null);
         old.setRevision(1);
-        old.setRelease(0);
         old.setUsing(false);
         getMapper().insert(new InsertParam<>(old));
         return old.getU_id();
