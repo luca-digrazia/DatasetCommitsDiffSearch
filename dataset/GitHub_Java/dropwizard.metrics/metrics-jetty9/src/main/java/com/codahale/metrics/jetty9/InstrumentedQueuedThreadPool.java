@@ -11,61 +11,53 @@ import java.util.concurrent.BlockingQueue;
 import static com.codahale.metrics.MetricRegistry.name;
 
 public class InstrumentedQueuedThreadPool extends QueuedThreadPool {
-    private final MetricRegistry metricRegistry;
-
-    public InstrumentedQueuedThreadPool(@Name("registry") MetricRegistry registry) {
-        this(registry, 200);
+    public InstrumentedQueuedThreadPool(@Name("registry") MetricRegistry registry,
+                                        @Name("name") String name) {
+        this(registry, name, 200);
     }
 
     public InstrumentedQueuedThreadPool(@Name("registry") MetricRegistry registry,
+                                        @Name("name") String name,
                                         @Name("maxThreads") int maxThreads) {
-        this(registry, maxThreads, 8);
+        this(registry, name, maxThreads, 8);
     }
 
     public InstrumentedQueuedThreadPool(@Name("registry") MetricRegistry registry,
+                                        @Name("name") String name,
                                         @Name("maxThreads") int maxThreads,
                                         @Name("minThreads") int minThreads) {
-        this(registry, maxThreads, minThreads, 60000);
+        this(registry, name, maxThreads, minThreads, 60000);
     }
 
     public InstrumentedQueuedThreadPool(@Name("registry") MetricRegistry registry,
+                                        @Name("name") String name,
                                         @Name("maxThreads") int maxThreads,
                                         @Name("minThreads") int minThreads,
                                         @Name("idleTimeout") int idleTimeout) {
-        this(registry, maxThreads, minThreads, idleTimeout, null);
+        this(registry, name, maxThreads, minThreads, idleTimeout, null);
     }
 
     public InstrumentedQueuedThreadPool(@Name("registry") MetricRegistry registry,
+                                        @Name("name") String name,
                                         @Name("maxThreads") int maxThreads,
                                         @Name("minThreads") int minThreads,
                                         @Name("idleTimeout") int idleTimeout,
                                         @Name("queue") BlockingQueue<Runnable> queue) {
         super(maxThreads, minThreads, idleTimeout, queue);
-        this.metricRegistry = registry;
-    }
 
-    @Override
-    protected void doStart() throws Exception {
-        super.doStart();
-        metricRegistry.register(name(QueuedThreadPool.class, getName(), "utilization"), new RatioGauge() {
+        registry.register(name(QueuedThreadPool.class, name, "utilization"), new RatioGauge() {
             @Override
             protected Ratio getRatio() {
                 return Ratio.of(getThreads() - getIdleThreads(), getThreads());
             }
         });
-        metricRegistry.register(name(QueuedThreadPool.class, getName(), "utilization-max"), new RatioGauge() {
-            @Override
-            protected Ratio getRatio() {
-                return Ratio.of(getThreads() - getIdleThreads(), getMaxThreads());
-            }
-        });
-        metricRegistry.register(name(QueuedThreadPool.class, getName(), "size"), new Gauge<Integer>() {
+        registry.register(name(QueuedThreadPool.class, name, "size"), new Gauge<Integer>() {
             @Override
             public Integer getValue() {
                 return getThreads();
             }
         });
-        metricRegistry.register(name(QueuedThreadPool.class, getName(), "jobs"), new Gauge<Integer>() {
+        registry.register(name(QueuedThreadPool.class, name, "jobs"), new Gauge<Integer>() {
             @Override
             public Integer getValue() {
                 // This assumes the QueuedThreadPool is using a BlockingArrayQueue or
@@ -73,5 +65,7 @@ public class InstrumentedQueuedThreadPool extends QueuedThreadPool {
                 return getQueue().size();
             }
         });
+
+        setName(name);
     }
 }
