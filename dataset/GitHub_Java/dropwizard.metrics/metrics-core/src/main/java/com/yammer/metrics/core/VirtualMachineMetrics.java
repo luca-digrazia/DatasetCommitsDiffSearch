@@ -45,7 +45,6 @@ public class VirtualMachineMetrics {
         return getMemoryMXBean().getHeapMemoryUsage().getInit() +
                 getMemoryMXBean().getNonHeapMemoryUsage().getInit();
     }
-
     /**
      * Returns the total memory currently used by the current JVM.
      *
@@ -54,8 +53,7 @@ public class VirtualMachineMetrics {
     public double totalUsed() {
         return getMemoryMXBean().getHeapMemoryUsage().getUsed() +
                 getMemoryMXBean().getNonHeapMemoryUsage().getUsed();
-    }
-
+  	}
     /**
      * Returns the total memory currently used by the current JVM.
      *
