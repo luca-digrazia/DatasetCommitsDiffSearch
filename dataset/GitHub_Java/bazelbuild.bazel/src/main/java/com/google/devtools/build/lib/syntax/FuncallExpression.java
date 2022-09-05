@@ -279,14 +279,15 @@ public final class FuncallExpression extends Expression {
   }
 
   /**
-   * Returns the list of Skylark callable Methods of objClass with the given name and argument
-   * number.
+   * Returns the list of Skylark callable Methods of objClass with the given name
+   * and argument number.
    */
-  public static List<MethodDescriptor> getMethods(Class<?> objClass, String methodName) {
+  public static List<MethodDescriptor> getMethods(Class<?> objClass, String methodName,
+      Location loc) throws EvalException {
     try {
       return methodCache.get(objClass).get(methodName);
     } catch (ExecutionException e) {
-      throw new IllegalStateException("method invocation failed: " + e);
+      throw new EvalException(loc, "method invocation failed: " + e);
     }
   }
 
@@ -294,12 +295,8 @@ public final class FuncallExpression extends Expression {
    * Returns a set of the Skylark name of all Skylark callable methods for object of type {@code
    * objClass}.
    */
-  public static Set<String> getMethodNames(Class<?> objClass) {
-    try {
-      return methodCache.get(objClass).keySet();
-    } catch (ExecutionException e) {
-      throw new IllegalStateException("method invocation failed: " + e);
-    }
+  public static Set<String> getMethodNames(Class<?> objClass) throws ExecutionException {
+    return methodCache.get(objClass).keySet();
   }
 
   static Object callMethod(MethodDescriptor methodDescriptor, String methodName, Object obj,
@@ -360,7 +357,7 @@ public final class FuncallExpression extends Expression {
       Class<?> objClass, String methodName, List<Object> args, Map<String, Object> kwargs)
       throws EvalException {
     Pair<MethodDescriptor, List<Object>> matchingMethod = null;
-    List<MethodDescriptor> methods = getMethods(objClass, methodName);
+    List<MethodDescriptor> methods = getMethods(objClass, methodName, getLocation());
     ArgumentListConversionResult argumentListConversionResult = null;
     if (methods != null) {
       for (MethodDescriptor method : methods) {

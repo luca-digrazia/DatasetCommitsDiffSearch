@@ -555,19 +555,8 @@ public class ParserTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testTupleWithTrailingComma() throws Exception {
-    setFailFast(false);
-
-    // Unlike Python, we require parens here.
-    parseExpression("0, 1, 2, 3,");
-    assertContainsError("Trailing comma");
-    clearEvents();
-
-    parseExpression("1 + 2,");
-    assertContainsError("Trailing comma");
-    clearEvents();
-
-    ListLiteral tuple = (ListLiteral) parseExpression("(0, 1, 2, 3,)");
+  public void testTupleWithoutParensWithTrailingComma() throws Exception {
+    ListLiteral tuple = (ListLiteral) parseExpression("0, 1, 2, 3,");
     assertTrue(tuple.isTuple());
     assertThat(tuple.getElements()).hasSize(4);
     assertTrue(tuple.isTuple());

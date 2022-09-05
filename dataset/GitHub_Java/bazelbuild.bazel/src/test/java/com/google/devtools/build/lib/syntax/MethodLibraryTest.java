@@ -15,7 +15,9 @@
 package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
@@ -42,7 +44,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
   public void testMinWithInvalidArgs() throws Exception {
     new SkylarkTest()
         .testIfExactError("type 'int' is not iterable", "min(1)")
-        .testIfExactError("expected at least one item", "min([])");
+        .testIfExactError("expected at least one argument", "min([])");
   }
 
   @Test
@@ -98,7 +100,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
   public void testMaxWithInvalidArgs() throws Exception {
     new BothModesTest()
         .testIfExactError("type 'int' is not iterable", "max(1)")
-        .testIfExactError("expected at least one item", "max([])");
+        .testIfExactError("expected at least one argument", "max([])");
   }
 
   @Test
@@ -440,8 +442,9 @@ public class MethodLibraryTest extends EvaluationTestCase {
   public void testBuiltinFunctionErrorMessage() throws Exception {
     new BothModesTest()
         .testIfErrorContains(
-            "substring \"z\" not found in \"abc\"",
-            "'abc'.index('z')")
+            "method depset.union(new_elements: Iterable) is not applicable for arguments (string): "
+                + "'new_elements' is 'string', but should be 'Iterable'",
+            "depset([]).union('a')")
         .testIfErrorContains(
             "method string.startswith(sub: string, start: int, end: int or NoneType) is not "
                 + "applicable for arguments (int, int, NoneType): 'sub' is 'int', "
@@ -1407,6 +1410,56 @@ public class MethodLibraryTest extends EvaluationTestCase {
   }
 
   @Test
+  public void testSetUnionWithList() throws Exception {
+    evaluateSet("depset([]).union(['a', 'b', 'c'])", "a", "b", "c");
+    evaluateSet("depset(['a']).union(['b', 'c'])", "a", "b", "c");
+    evaluateSet("depset(['a', 'b']).union(['c'])", "a", "b", "c");
+    evaluateSet("depset(['a', 'b', 'c']).union([])", "a", "b", "c");
+  }
+
+  @Test
+  public void testSetUnionWithSet() throws Exception {
+    evaluateSet("depset([]).union(depset(['a', 'b', 'c']))", "a", "b", "c");
+    evaluateSet("depset(['a']).union(depset(['b', 'c']))", "a", "b", "c");
+    evaluateSet("depset(['a', 'b']).union(depset(['c']))", "a", "b", "c");
+    evaluateSet("depset(['a', 'b', 'c']).union(depset([]))", "a", "b", "c");
+  }
+
+  @Test
+  public void testSetUnionDuplicates() throws Exception {
+    evaluateSet("depset(['a', 'b', 'c']).union(['a', 'b', 'c'])", "a", "b", "c");
+    evaluateSet("depset(['a', 'a', 'a']).union(['a', 'a'])", "a");
+
+    evaluateSet("depset(['a', 'b', 'c']).union(depset(['a', 'b', 'c']))", "a", "b", "c");
+    evaluateSet("depset(['a', 'a', 'a']).union(depset(['a', 'a']))", "a");
+  }
+
+  @Test
+  public void testSetUnionError() throws Exception {
+    new BothModesTest()
+        .testIfErrorContains("insufficient arguments received by union", "depset(['a']).union()")
+        .testIfErrorContains(
+            "method depset.union(new_elements: Iterable) is not applicable for arguments (string): "
+                + "'new_elements' is 'string', but should be 'Iterable'",
+            "depset(['a']).union('b')");
+  }
+
+  @Test
+  public void testSetUnionSideEffects() throws Exception {
+    eval(
+        "def func():",
+        "  n1 = depset(['a'])",
+        "  n2 = n1.union(['b'])",
+        "  return n1",
+        "n = func()");
+    assertEquals(ImmutableList.of("a"), ((SkylarkNestedSet) lookup("n")).toCollection());
+  }
+
+  private void evaluateSet(String statement, Object... expectedElements) throws Exception {
+    new BothModesTest().testCollection(statement, expectedElements);
+  }
+
+  @Test
   public void testListIndexMethod() throws Exception {
     new BothModesTest()
         .testStatement("['a', 'b', 'c'].index('a')", 0)
@@ -1700,8 +1753,6 @@ public class MethodLibraryTest extends EvaluationTestCase {
         .testStatement("type(str)", "function");
   }
 
-  // TODO(bazel-team): Move this into a new BazelLibraryTest.java file, or at least out of
-  // MethodLibraryTest.java.
   @Test
   public void testSelectFunction() throws Exception {
     enableSkylarkMode();
@@ -1759,53 +1810,42 @@ public class MethodLibraryTest extends EvaluationTestCase {
         .testStatement("'AbZ'.isalpha()", true);
   }
 
-  /**
-   * Assert that lstrip(), rstrip(), and strip() produce the expected result for a given input
-   * string and chars argument. If chars is null no argument is passed.
-   */
-  private void checkStrip(
-      String input, Object chars,
-      String expLeft, String expRight, String expBoth) throws Exception {
-    if (chars == null) {
-      new BothModesTest()
-          .update("s", input)
-          .testStatement("s.lstrip()", expLeft)
-          .testStatement("s.rstrip()", expRight)
-          .testStatement("s.strip()", expBoth);
-    } else {
-      new BothModesTest()
-          .update("s", input)
-          .update("chars", chars)
-          .testStatement("s.lstrip(chars)", expLeft)
-          .testStatement("s.rstrip(chars)", expRight)
-          .testStatement("s.strip(chars)", expBoth);
-    }
+  @Test
+  public void testLStrip() throws Exception {
+    new BothModesTest()
+        .testStatement("'a b c'.lstrip('')", "a b c")
+        .testStatement("'abcba'.lstrip('ba')", "cba")
+        .testStatement("'abc'.lstrip('xyz')", "abc")
+        .testStatement("'  a b c  '.lstrip()", "a b c  ")
+        // the "\\"s are because Java absorbs one level of "\"s
+        .testStatement("' \\t\\na b c '.lstrip()", "a b c ")
+        .testStatement("' a b c '.lstrip('')", " a b c ");
+  }
+
+  @Test
+  public void testRStrip() throws Exception {
+    new BothModesTest()
+        .testStatement("'a b c'.rstrip('')", "a b c")
+        .testStatement("'abcba'.rstrip('ba')", "abc")
+        .testStatement("'abc'.rstrip('xyz')", "abc")
+        .testStatement("'  a b c  '.rstrip()", "  a b c")
+        // the "\\"s are because Java absorbs one level of "\"s
+        .testStatement("' a b c \\t \\n'.rstrip()", " a b c")
+        .testStatement("' a b c '.rstrip('')", " a b c ");
   }
 
   @Test
   public void testStrip() throws Exception {
-    // Strip nothing.
-    checkStrip("a b c", "", "a b c", "a b c", "a b c");
-    checkStrip(" a b c ", "", " a b c ", " a b c ", " a b c ");
-    // Normal case, found and not found.
-    checkStrip("abcba", "ba", "cba", "abc", "c");
-    checkStrip("abc", "xyz", "abc", "abc", "abc");
-    // Default whitespace.
-    checkStrip(" a b c ", null, "a b c ", " a b c", "a b c");
-    checkStrip(" a b c ", Runtime.NONE, "a b c ", " a b c", "a b c");
-    // Default whitespace with full range of Latin-1 whitespace chars.
-    String whitespace = "\u0009\n\u000B\u000C\r\u001C\u001D\u001E\u001F\u0020\u0085\u00A0";
-    checkStrip(
-        whitespace + "a" + whitespace, null,
-        "a" + whitespace, whitespace + "a", "a");
-    checkStrip(
-        whitespace + "a" + whitespace, Runtime.NONE,
-        "a" + whitespace, whitespace + "a", "a");
-    // Empty cases.
-    checkStrip("", "", "", "", "");
-    checkStrip("abc", "abc", "", "", "");
-    checkStrip("", "xyz", "", "", "");
-    checkStrip("", null, "", "", "");
+    new BothModesTest()
+        .testStatement("'a b c'.strip('')", "a b c")
+        .testStatement("'abcba'.strip('ba')", "c")
+        .testStatement("'abc'.strip('xyz')", "abc")
+        .testStatement("'  a b c  '.strip()", "a b c")
+        .testStatement("' a b c\\t'.strip()", "a b c")
+        .testStatement("'a b c'.strip('.')", "a b c")
+        // the "\\"s are because Java absorbs one level of "\"s
+        .testStatement("' \\t\\n\\ra b c \\t\\n\\r'.strip()", "a b c")
+        .testStatement("' a b c '.strip('')", " a b c ");
   }
 
   @Test

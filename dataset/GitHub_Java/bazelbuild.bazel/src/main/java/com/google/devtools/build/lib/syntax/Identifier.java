@@ -95,7 +95,14 @@ public final class Identifier extends Expression {
     if (name.equals("$error$")) {
       return new EvalException(getLocation(), "contains syntax error(s)", true);
     }
-    String suggestion = SpellChecker.didYouMean(name, symbols);
+
+    String suggestion = SpellChecker.suggest(name, symbols);
+    if (suggestion == null) {
+      suggestion = "";
+    } else {
+      suggestion = " (did you mean '" + suggestion + "'?)";
+    }
+
     return new EvalException(getLocation(), "name '" + name + "' is not defined" + suggestion);
   }
 
