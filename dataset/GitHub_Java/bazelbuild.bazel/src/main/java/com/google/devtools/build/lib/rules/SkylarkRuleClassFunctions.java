@@ -264,12 +264,11 @@ public class SkylarkRuleClassFunctions {
           Attribute.Builder<?> attrBuilder = (Attribute.Builder<?>) attr.getValue();
           String attrName =
               attributeToNative(attr.getKey(), ast.getLocation(), attrBuilder.hasLateBoundValue());
-          addAttribute(builder, attrBuilder.build(attrName));
+          builder.addOrOverrideAttribute(attrBuilder.build(attrName));
         }
       }
       if (executable || test) {
-        addAttribute(
-            builder,
+        builder.addOrOverrideAttribute(
             attr("$is_executable", BOOLEAN)
                 .value(true)
                 .nonconfigurable("Called from RunCommand.isExecutable, which takes a Target")
@@ -298,17 +297,10 @@ public class SkylarkRuleClassFunctions {
       }
 
       registerRequiredFragments(fragments, hostFragments, builder);
+
       builder.setConfiguredTargetFunction(implementation);
       builder.setRuleDefinitionEnvironment(funcallEnv);
       return new RuleFunction(builder, type);
-    }
-
-    private void addAttribute(RuleClass.Builder builder, Attribute attribute) throws EvalException {
-      try {
-        builder.addOrOverrideAttribute(attribute);
-      } catch (IllegalArgumentException ex) {
-        throw new EvalException(location, ex);
-      }
     }
 
     private void registerRequiredFragments(
