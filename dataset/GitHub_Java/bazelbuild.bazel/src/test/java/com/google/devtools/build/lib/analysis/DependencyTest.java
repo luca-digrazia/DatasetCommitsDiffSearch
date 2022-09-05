@@ -23,9 +23,8 @@ import com.google.common.testing.NullPointerTester;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
 import com.google.devtools.build.lib.analysis.util.TestAspects;
-import com.google.devtools.build.lib.analysis.util.TestAspects.AttributeAspect;
-import com.google.devtools.build.lib.analysis.util.TestAspects.SimpleAspect;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 
@@ -84,11 +83,11 @@ public class DependencyTest extends AnalysisTestCase {
   @Test
   public void withConfigurationAndAspects_BasicAccessors() throws Exception {
     update();
-    AspectDescriptor simpleAspect = new AspectDescriptor(
-        new NativeAspectClass<SimpleAspect>(SimpleAspect.class));
-    AspectDescriptor attributeAspect = new AspectDescriptor(
-        new NativeAspectClass<AttributeAspect>(AttributeAspect.class));
-    ImmutableSet<AspectDescriptor> twoAspects = ImmutableSet.of(simpleAspect, attributeAspect);
+    Aspect simpleAspect = new Aspect(
+        new NativeAspectClass<TestAspects.SimpleAspect>(TestAspects.SimpleAspect.class));
+    Aspect attributeAspect = new Aspect(
+        new NativeAspectClass<TestAspects.AttributeAspect>(TestAspects.AttributeAspect.class));
+    ImmutableSet<Aspect> twoAspects = ImmutableSet.of(simpleAspect, attributeAspect);
     Dependency targetDep =
         Dependency.withConfigurationAndAspects(
             Label.parseAbsolute("//a"), getTargetConfiguration(), twoAspects);
@@ -114,7 +113,7 @@ public class DependencyTest extends AnalysisTestCase {
   @Test
   public void withConfigurationAndAspects_RejectsNullAspectsWithNPE() throws Exception {
     update();
-    Set<AspectDescriptor> nullSet = new LinkedHashSet<>();
+    Set<Aspect> nullSet = new LinkedHashSet<>();
     nullSet.add(null);
 
     try {
@@ -130,11 +129,11 @@ public class DependencyTest extends AnalysisTestCase {
   public void withConfigurationAndAspects_RejectsNullConfigWithNPE() throws Exception {
     // Although the NullPointerTester should check this, this test invokes a different code path,
     // because it includes aspects (which the NPT test will not).
-    AspectDescriptor simpleAspect = new AspectDescriptor(
-        new NativeAspectClass<SimpleAspect>(SimpleAspect.class));
-    AspectDescriptor attributeAspect = new AspectDescriptor(
-        new NativeAspectClass<AttributeAspect>(AttributeAspect.class));
-    ImmutableSet<AspectDescriptor> twoAspects = ImmutableSet.of(simpleAspect, attributeAspect);
+    Aspect simpleAspect = new Aspect(
+        new NativeAspectClass<TestAspects.SimpleAspect>(TestAspects.SimpleAspect.class));
+    Aspect attributeAspect = new Aspect(
+        new NativeAspectClass<TestAspects.AttributeAspect>(TestAspects.AttributeAspect.class));
+    ImmutableSet<Aspect> twoAspects = ImmutableSet.of(simpleAspect, attributeAspect);
 
     try {
       Dependency.withConfigurationAndAspects(Label.parseAbsolute("//a"), null, twoAspects);
@@ -149,9 +148,7 @@ public class DependencyTest extends AnalysisTestCase {
     update();
     Dependency dep =
         Dependency.withConfigurationAndAspects(
-            Label.parseAbsolute("//a"),
-            getTargetConfiguration(),
-            ImmutableSet.<AspectDescriptor>of());
+            Label.parseAbsolute("//a"), getTargetConfiguration(), ImmutableSet.<Aspect>of());
     // Here we're also checking that this doesn't throw an exception. No boom? OK. Good.
     assertThat(dep.getAspects()).isEmpty();
     assertThat(dep.getAspectConfigurations()).isEmpty();
@@ -160,11 +157,11 @@ public class DependencyTest extends AnalysisTestCase {
   @Test
   public void withConfiguredAspects_BasicAccessors() throws Exception {
     update();
-    AspectDescriptor simpleAspect = new AspectDescriptor(
+    Aspect simpleAspect = new Aspect(
         new NativeAspectClass<TestAspects.SimpleAspect>(TestAspects.SimpleAspect.class));
-    AspectDescriptor attributeAspect = new AspectDescriptor(
-        new NativeAspectClass<AttributeAspect>(AttributeAspect.class));
-    ImmutableMap<AspectDescriptor, BuildConfiguration> twoAspectMap = ImmutableMap.of(
+    Aspect attributeAspect = new Aspect(
+        new NativeAspectClass<TestAspects.AttributeAspect>(TestAspects.AttributeAspect.class));
+    ImmutableMap<Aspect, BuildConfiguration> twoAspectMap = ImmutableMap.of(
         simpleAspect, getTargetConfiguration(), attributeAspect, getHostConfiguration());
     Dependency targetDep =
         Dependency.withConfiguredAspects(
@@ -192,7 +189,7 @@ public class DependencyTest extends AnalysisTestCase {
     Dependency dep =
         Dependency.withConfiguredAspects(
             Label.parseAbsolute("//a"), getTargetConfiguration(),
-            ImmutableMap.<AspectDescriptor, BuildConfiguration>of());
+            ImmutableMap.<Aspect, BuildConfiguration>of());
     // Here we're also checking that this doesn't throw an exception. No boom? OK. Good.
     assertThat(dep.getAspects()).isEmpty();
     assertThat(dep.getAspectConfigurations()).isEmpty();
@@ -200,11 +197,11 @@ public class DependencyTest extends AnalysisTestCase {
 
   @Test
   public void withTransitionAndAspects_BasicAccessors() throws Exception {
-    AspectDescriptor simpleAspect = new AspectDescriptor(
-        new NativeAspectClass<>(SimpleAspect.class));
-    AspectDescriptor attributeAspect = new AspectDescriptor(
-        new NativeAspectClass<>(AttributeAspect.class));
-    ImmutableSet<AspectDescriptor> twoAspects = ImmutableSet.of(simpleAspect, attributeAspect);
+    Aspect simpleAspect = new Aspect(
+        new NativeAspectClass<TestAspects.SimpleAspect>(TestAspects.SimpleAspect.class));
+    Aspect attributeAspect = new Aspect(
+        new NativeAspectClass<TestAspects.AttributeAspect>(TestAspects.AttributeAspect.class));
+    ImmutableSet<Aspect> twoAspects = ImmutableSet.of(simpleAspect, attributeAspect);
     Dependency hostDep =
         Dependency.withTransitionAndAspects(
             Label.parseAbsolute("//a"), ConfigurationTransition.HOST, twoAspects);
@@ -235,8 +232,7 @@ public class DependencyTest extends AnalysisTestCase {
     update();
     Dependency dep =
         Dependency.withTransitionAndAspects(
-            Label.parseAbsolute("//a"), ConfigurationTransition.HOST,
-            ImmutableSet.<AspectDescriptor>of());
+            Label.parseAbsolute("//a"), ConfigurationTransition.HOST, ImmutableSet.<Aspect>of());
     // Here we're also checking that this doesn't throw an exception. No boom? OK. Good.
     assertThat(dep.getAspects()).isEmpty();
   }
@@ -262,28 +258,28 @@ public class DependencyTest extends AnalysisTestCase {
     BuildConfiguration host = getHostConfiguration();
     BuildConfiguration target = getTargetConfiguration();
 
-    AspectDescriptor simpleAspect = new AspectDescriptor(
-        new NativeAspectClass<>(TestAspects.SimpleAspect.class));
-    AspectDescriptor attributeAspect = new AspectDescriptor(
-        new NativeAspectClass<>(TestAspects.AttributeAspect.class));
-    AspectDescriptor errorAspect = new AspectDescriptor(
-        new NativeAspectClass<>(TestAspects.ErrorAspect.class));
+    Aspect simpleAspect = new Aspect(
+        new NativeAspectClass<TestAspects.SimpleAspect>(TestAspects.SimpleAspect.class));
+    Aspect attributeAspect = new Aspect(
+        new NativeAspectClass<TestAspects.AttributeAspect>(TestAspects.AttributeAspect.class));
+    Aspect errorAspect = new Aspect(
+        new NativeAspectClass<TestAspects.ErrorAspect>(TestAspects.ErrorAspect.class));
 
-    ImmutableSet<AspectDescriptor> twoAspects = ImmutableSet.of(simpleAspect, attributeAspect);
-    ImmutableSet<AspectDescriptor> inverseAspects = ImmutableSet.of(attributeAspect, simpleAspect);
-    ImmutableSet<AspectDescriptor> differentAspects = ImmutableSet.of(attributeAspect, errorAspect);
-    ImmutableSet<AspectDescriptor> noAspects = ImmutableSet.<AspectDescriptor>of();
+    ImmutableSet<Aspect> twoAspects = ImmutableSet.of(simpleAspect, attributeAspect);
+    ImmutableSet<Aspect> inverseAspects = ImmutableSet.of(attributeAspect, simpleAspect);
+    ImmutableSet<Aspect> differentAspects = ImmutableSet.of(attributeAspect, errorAspect);
+    ImmutableSet<Aspect> noAspects = ImmutableSet.<Aspect>of();
 
-    ImmutableMap<AspectDescriptor, BuildConfiguration> twoAspectsHostMap =
+    ImmutableMap<Aspect, BuildConfiguration> twoAspectsHostMap =
         ImmutableMap.of(simpleAspect, host, attributeAspect, host);
-    ImmutableMap<AspectDescriptor, BuildConfiguration> twoAspectsTargetMap =
+    ImmutableMap<Aspect, BuildConfiguration> twoAspectsTargetMap =
         ImmutableMap.of(simpleAspect, target, attributeAspect, target);
-    ImmutableMap<AspectDescriptor, BuildConfiguration> differentAspectsHostMap =
+    ImmutableMap<Aspect, BuildConfiguration> differentAspectsHostMap =
         ImmutableMap.of(attributeAspect, host, errorAspect, host);
-    ImmutableMap<AspectDescriptor, BuildConfiguration> differentAspectsTargetMap =
+    ImmutableMap<Aspect, BuildConfiguration> differentAspectsTargetMap =
         ImmutableMap.of(attributeAspect, target, errorAspect, target);
-    ImmutableMap<AspectDescriptor, BuildConfiguration> noAspectsMap =
-        ImmutableMap.<AspectDescriptor, BuildConfiguration>of();
+    ImmutableMap<Aspect, BuildConfiguration> noAspectsMap =
+        ImmutableMap.<Aspect, BuildConfiguration>of();
 
     new EqualsTester()
         .addEqualityGroup(

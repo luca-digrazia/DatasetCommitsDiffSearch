@@ -121,10 +121,6 @@ public final class BuildConfiguration {
 
   /**
    * An interface for language-specific configurations.
-   *
-   * <p>All implementations must be immutable and communicate this as clearly as possible
-   * (e.g. declare {@link ImmutableList} signatures on their interfaces vs. {@link List}).
-   * This is because fragment instances may be shared across configurations.
    */
   public abstract static class Fragment {
     /**
@@ -159,12 +155,11 @@ public final class BuildConfiguration {
      * analysis. During the analysis phase disk I/O operations are disallowed.
      *
      * <p>This hook is called for all configurations after the loading phase is complete.
-     *
-     * <p>Do not use this method to change your fragment's state.
      */
     @SuppressWarnings("unused")
     public void prepareHook(Path execPath, ArtifactFactory artifactFactory,
-        PackageRootResolver resolver) throws ViewCreationFailedException {
+        PathFragment genfilesPath, PackageRootResolver resolver)
+        throws ViewCreationFailedException {
     }
 
     /**
@@ -449,12 +444,6 @@ public final class BuildConfiguration {
             return "darwin";
           case FREEBSD:
             return "freebsd";
-          case WINDOWS:
-            switch (CPU.getCurrent()) {
-              case X86_64:
-                return "x64_windows";
-            }
-            break; // We only support x64 Windows for now.
           case LINUX:
             switch (CPU.getCurrent()) {
               case X86_32:
@@ -847,6 +836,12 @@ public final class BuildConfiguration {
     )
     public List<Label> targetEnvironments;
 
+    @Option(name = "objc_gcov_binary",
+        converter = ToolsLabelConverter.class,
+        defaultValue = "//third_party/gcov:gcov_for_xcode_osx",
+        category = "undocumented")
+    public Label objcGcovBinary;
+
     /** Converter for labels in the @bazel_tools repository. The @Options' defaultValues can't
      * prepend TOOLS_REPOSITORY, unfortunately, because then the compiler thinks they're not
      * constant. */
@@ -917,6 +912,9 @@ public final class BuildConfiguration {
       labelMap.putAll("plugins", pluginList);
       if ((runUnder != null) && (runUnder.getLabel() != null)) {
         labelMap.put("RunUnder", runUnder.getLabel());
+      }
+      if (collectCodeCoverage) {
+        labelMap.put("objc_gcov", objcGcovBinary);
       }
     }
   }
@@ -2344,7 +2342,7 @@ public final class BuildConfiguration {
   public void prepareToBuild(Path execRoot, ArtifactFactory artifactFactory,
       PackageRootResolver resolver) throws ViewCreationFailedException {
     for (Fragment fragment : fragments.values()) {
-      fragment.prepareHook(execRoot, artifactFactory, resolver);
+      fragment.prepareHook(execRoot, artifactFactory, getGenfilesFragment(), resolver);
     }
   }
 

@@ -316,8 +316,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       Root buildDataDirectory,
       PackageFactory pkgFactory,
       Predicate<PathFragment> allowedMissingInputs) {
-    ConfiguredRuleClassProvider ruleClassProvider =
-        (ConfiguredRuleClassProvider) pkgFactory.getRuleClassProvider();
+    RuleClassProvider ruleClassProvider = pkgFactory.getRuleClassProvider();
     // We use an immutable map builder for the nice side effect that it throws if a duplicate key
     // is inserted.
     ImmutableMap.Builder<SkyFunctionName, SkyFunction> map = ImmutableMap.builder();
@@ -1633,10 +1632,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return new CyclesReporter(
         new TransitiveTargetCycleReporter(packageManager),
         new ActionArtifactCycleReporter(packageManager),
-        // TODO(ulfjack): The SkylarkModuleCycleReporter swallows previously reported cycles
-        // unconditionally! Is that intentional?
-        new ConfiguredTargetCycleReporter(packageManager),
-        new SkylarkModuleCycleReporter());
+        new SkylarkModuleCycleReporter(),
+        new ConfiguredTargetCycleReporter(packageManager));
   }
 
   CyclesReporter getCyclesReporter() {

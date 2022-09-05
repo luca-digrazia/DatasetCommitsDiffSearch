@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.util.Preconditions;
 
@@ -64,7 +65,7 @@ public abstract class Dependency {
    */
   public static Dependency withConfiguration(Label label, BuildConfiguration configuration) {
     return new StaticConfigurationDependency(
-        label, configuration, ImmutableMap.<AspectDescriptor, BuildConfiguration>of());
+        label, configuration, ImmutableMap.<Aspect, BuildConfiguration>of());
   }
 
   /**
@@ -74,10 +75,9 @@ public abstract class Dependency {
    * <p>The configuration and aspects must not be {@code null}.
    */
   public static Dependency withConfigurationAndAspects(
-      Label label, BuildConfiguration configuration, Set<AspectDescriptor> aspects) {
-    ImmutableMap.Builder<AspectDescriptor, BuildConfiguration> aspectBuilder =
-        new ImmutableMap.Builder<>();
-    for (AspectDescriptor aspect : aspects) {
+      Label label, BuildConfiguration configuration, Set<Aspect> aspects) {
+    ImmutableMap.Builder<Aspect, BuildConfiguration> aspectBuilder = new ImmutableMap.Builder<>();
+    for (Aspect aspect : aspects) {
       aspectBuilder.put(aspect, configuration);
     }
     return new StaticConfigurationDependency(label, configuration, aspectBuilder.build());
@@ -92,7 +92,7 @@ public abstract class Dependency {
    */
   public static Dependency withConfiguredAspects(
       Label label, BuildConfiguration configuration,
-      Map<AspectDescriptor, BuildConfiguration> aspectConfigurations) {
+      Map<Aspect, BuildConfiguration> aspectConfigurations) {
     return new StaticConfigurationDependency(
         label, configuration, ImmutableMap.copyOf(aspectConfigurations));
   }
@@ -102,7 +102,7 @@ public abstract class Dependency {
    * configuration builds.
    */
   public static Dependency withTransitionAndAspects(
-      Label label, Attribute.Transition transition, Set<AspectDescriptor> aspects) {
+      Label label, Attribute.Transition transition, Set<Aspect> aspects) {
     return new DynamicConfigurationDependency(label, transition, ImmutableSet.copyOf(aspects));
   }
 
@@ -148,7 +148,7 @@ public abstract class Dependency {
    *
    * @see #getAspectConfigurations()
    */
-  public abstract ImmutableSet<AspectDescriptor> getAspects();
+  public abstract ImmutableSet<Aspect> getAspects();
 
   /**
    * Returns the mapping from aspects to the static configurations they should be evaluated with.
@@ -157,7 +157,7 @@ public abstract class Dependency {
    *
    * @throws IllegalStateException if {@link #hasStaticConfiguration()} returns false.
    */
-  public abstract ImmutableMap<AspectDescriptor, BuildConfiguration> getAspectConfigurations();
+  public abstract ImmutableMap<Aspect, BuildConfiguration> getAspectConfigurations();
 
   /**
    * Implementation of a dependency with no configuration, suitable for static configuration
@@ -186,12 +186,12 @@ public abstract class Dependency {
     }
 
     @Override
-    public ImmutableSet<AspectDescriptor> getAspects() {
+    public ImmutableSet<Aspect> getAspects() {
       return ImmutableSet.of();
     }
 
     @Override
-    public ImmutableMap<AspectDescriptor, BuildConfiguration> getAspectConfigurations() {
+    public ImmutableMap<Aspect, BuildConfiguration> getAspectConfigurations() {
       return ImmutableMap.of();
     }
 
@@ -221,11 +221,11 @@ public abstract class Dependency {
    */
   private static final class StaticConfigurationDependency extends Dependency {
     private final BuildConfiguration configuration;
-    private final ImmutableMap<AspectDescriptor, BuildConfiguration> aspectConfigurations;
+    private final ImmutableMap<Aspect, BuildConfiguration> aspectConfigurations;
 
     public StaticConfigurationDependency(
         Label label, BuildConfiguration configuration,
-        ImmutableMap<AspectDescriptor, BuildConfiguration> aspects) {
+        ImmutableMap<Aspect, BuildConfiguration> aspects) {
       super(label);
       this.configuration = Preconditions.checkNotNull(configuration);
       this.aspectConfigurations = Preconditions.checkNotNull(aspects);
@@ -248,12 +248,12 @@ public abstract class Dependency {
     }
 
     @Override
-    public ImmutableSet<AspectDescriptor> getAspects() {
+    public ImmutableSet<Aspect> getAspects() {
       return aspectConfigurations.keySet();
     }
 
     @Override
-    public ImmutableMap<AspectDescriptor, BuildConfiguration> getAspectConfigurations() {
+    public ImmutableMap<Aspect, BuildConfiguration> getAspectConfigurations() {
       return aspectConfigurations;
     }
 
@@ -287,10 +287,10 @@ public abstract class Dependency {
    */
   private static final class DynamicConfigurationDependency extends Dependency {
     private final Attribute.Transition transition;
-    private final ImmutableSet<AspectDescriptor> aspects;
+    private final ImmutableSet<Aspect> aspects;
 
     public DynamicConfigurationDependency(
-        Label label, Attribute.Transition transition, ImmutableSet<AspectDescriptor> aspects) {
+        Label label, Attribute.Transition transition, ImmutableSet<Aspect> aspects) {
       super(label);
       this.transition = Preconditions.checkNotNull(transition);
       this.aspects = Preconditions.checkNotNull(aspects);
@@ -313,12 +313,12 @@ public abstract class Dependency {
     }
 
     @Override
-    public ImmutableSet<AspectDescriptor> getAspects() {
+    public ImmutableSet<Aspect> getAspects() {
       return aspects;
     }
 
     @Override
-    public ImmutableMap<AspectDescriptor, BuildConfiguration> getAspectConfigurations() {
+    public ImmutableMap<Aspect, BuildConfiguration> getAspectConfigurations() {
       throw new IllegalStateException(
           "A dependency with a dynamic configuration transition does not have aspect "
           + "configurations.");
