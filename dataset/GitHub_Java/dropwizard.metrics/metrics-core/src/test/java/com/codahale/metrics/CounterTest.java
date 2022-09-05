@@ -8,13 +8,13 @@ public class CounterTest {
     private final Counter counter = new Counter();
 
     @Test
-    public void startsAtZero() {
+    public void startsAtZero() throws Exception {
         assertThat(counter.getCount())
                 .isZero();
     }
 
     @Test
-    public void incrementsByOne() {
+    public void incrementsByOne() throws Exception {
         counter.inc();
 
         assertThat(counter.getCount())
@@ -22,7 +22,7 @@ public class CounterTest {
     }
 
     @Test
-    public void incrementsByAnArbitraryDelta() {
+    public void incrementsByAnArbitraryDelta() throws Exception {
         counter.inc(12);
 
         assertThat(counter.getCount())
@@ -30,7 +30,7 @@ public class CounterTest {
     }
 
     @Test
-    public void decrementsByOne() {
+    public void decrementsByOne() throws Exception {
         counter.dec();
 
         assertThat(counter.getCount())
@@ -38,7 +38,7 @@ public class CounterTest {
     }
 
     @Test
-    public void decrementsByAnArbitraryDelta() {
+    public void decrementsByAnArbitraryDelta() throws Exception {
         counter.dec(12);
 
         assertThat(counter.getCount())
@@ -46,7 +46,7 @@ public class CounterTest {
     }
 
     @Test
-    public void incrementByNegativeDelta() {
+    public void incrementByNegativeDelta() throws Exception {
         counter.inc(-12);
 
         assertThat(counter.getCount())
@@ -54,7 +54,7 @@ public class CounterTest {
     }
 
     @Test
-    public void decrementByNegativeDelta() {
+    public void decrementByNegativeDelta() throws Exception {
         counter.dec(-12);
 
         assertThat(counter.getCount())
