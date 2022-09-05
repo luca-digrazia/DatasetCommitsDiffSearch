@@ -14,23 +14,69 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import com.google.common.collect.ImmutableSet;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MERGE_ZIP;
+
+import com.google.common.base.Optional;
+import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.LinkedBinary;
 
 /**
  * Implementation for {@code ios_extension}.
  */
-public class IosExtension extends ReleaseBundlingTargetFactory {
+public class IosExtension implements RuleConfiguredTargetFactory {
 
-  public IosExtension() {
-    super(ReleaseBundlingSupport.EXTENSION_BUNDLE_DIR_FORMAT, XcodeProductType.EXTENSION,
-        ExposeAsNestedBundle.YES, ImmutableSet.of(new Attribute("binary", Mode.SPLIT)));
+  @Override
+  public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
+    ObjcCommon common = common(ruleContext);
+
+    XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
+    NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
+
+    ReleaseBundlingSupport releaseBundlingSupport = new ReleaseBundlingSupport(
+        ruleContext, common.getObjcProvider(), optionsProvider(ruleContext),
+        LinkedBinary.DEPENDENCIES_ONLY, "PlugIns/%s.appex");
+    releaseBundlingSupport
+        .registerActions()
+        .addXcodeSettings(xcodeProviderBuilder)
+        .addFilesToBuild(filesToBuild)
+        .validateAttributes();
+
+    new XcodeSupport(ruleContext)
+        .addFilesToBuild(filesToBuild)
+        .addXcodeSettings(
+            xcodeProviderBuilder, common.getObjcProvider(), XcodeProductType.EXTENSION)
+        .addDummySource(xcodeProviderBuilder)
+        .addDependencies(xcodeProviderBuilder, "binary")
+        .registerActions(xcodeProviderBuilder.build());
+
+    ObjcProvider nestedBundleProvider = new ObjcProvider.Builder()
+        .add(MERGE_ZIP, ruleContext.getImplicitOutputArtifact(ReleaseBundlingSupport.IPA))
+        .build();
+
+    return common.configuredTarget(
+        filesToBuild.build(),
+        Optional.of(xcodeProviderBuilder.build()),
+        Optional.of(nestedBundleProvider),
+        Optional.<XcTestAppProvider>absent(),
+        Optional.<J2ObjcSrcsProvider>absent());
   }
 
-  protected OptionsProvider optionsProvider(RuleContext ruleContext) {
+  private OptionsProvider optionsProvider(RuleContext ruleContext) {
     return new OptionsProvider.Builder()
         .addInfoplists(ruleContext.getPrerequisiteArtifacts("infoplist", Mode.TARGET).list())
+        .build();
+  }
+
+  private ObjcCommon common(RuleContext ruleContext) {
+    return new ObjcCommon.Builder(ruleContext)
+        .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
+        .addDepObjcProviders(
+            ruleContext.getPrerequisites("binary", Mode.TARGET, ObjcProvider.class))
         .build();
   }
 }

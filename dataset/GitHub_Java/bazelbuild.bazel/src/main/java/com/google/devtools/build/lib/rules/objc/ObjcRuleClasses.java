@@ -91,25 +91,6 @@ public class ObjcRuleClasses {
   }
 
   /**
-   * Returns an {@link Iterable} of {@link Artifact}s containing all the j2objc archives from the
-   * transitive closure of the rule through the "deps" attribute. This is useful for ensuring that
-   * the j2objc archives are present for linking. 
-   * 
-   * @param ruleContext the {@link RuleContext} of the current rule
-   * @return an {@link Iterable} of j2objc library archive artifacts.
-   */
-  static Iterable<Artifact> j2ObjcLibraries(RuleContext ruleContext) {
-    ImmutableList.Builder<Artifact> j2objcLibraries = new ImmutableList.Builder<>();
-
-    // TODO(bazel-team): Refactor the code to stop flattening the nested set here.
-    for (J2ObjcSource j2ObjcSource : j2ObjcSrcsProvider(ruleContext).getSrcs()) {
-      j2objcLibraries.add(j2objcIntermediateArtifacts(ruleContext, j2ObjcSource).archive());
-    }
-
-    return j2objcLibraries.build();
-  }
-
-  /**
    * Returns a {@link J2ObjcSrcsProvider} with J2ObjC-generated ObjC file information from the
    * current rule, and from rules that can be reached transitively through the "deps" attribute.
    *
@@ -471,6 +452,11 @@ public class ObjcRuleClasses {
     private static final Iterable<String> ALLOWED_DEPS_RULE_CLASSES = ImmutableSet.of(
         "objc_library",
         "objc_import",
+        
+        // TODO(bazel-team): Remove bundles from this list as they're now in the "bundles" attribute
+        "objc_bundle",
+        "objc_bundle_library",
+        
         "objc_framework",
         "objc_proto_library",
         "j2objc_library");

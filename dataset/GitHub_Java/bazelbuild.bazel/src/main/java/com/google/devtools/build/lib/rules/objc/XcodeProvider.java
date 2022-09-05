@@ -78,7 +78,6 @@ public final class XcodeProvider implements TransitiveInfoProvider {
     private Optional<XcodeProvider> testHost = Optional.absent();
     private final NestedSetBuilder<Artifact> inputsToXcodegen = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<Artifact> additionalSources = NestedSetBuilder.stableOrder();
-    private final ImmutableList.Builder<XcodeProvider> extensions = new ImmutableList.Builder<>();
 
     /**
      * Sets the label of the build target which corresponds to this Xcode target.
@@ -131,17 +130,9 @@ public final class XcodeProvider implements TransitiveInfoProvider {
      */
     public Builder addDependencies(Iterable<XcodeProvider> dependencies) {
       for (XcodeProvider dependency : dependencies) {
-        // TODO(bazel-team): This is messy. Maybe we should make XcodeProvider be able to specify
-        // how to depend on it rather than require this method to choose based on the dependency's
-        // type.
-        if (dependency.productType == XcodeProductType.EXTENSION) {
-          this.extensions.add(dependency);
-          this.inputsToXcodegen.addTransitive(dependency.inputsToXcodegen);
-        } else {
-          this.dependencies.add(dependency);
-          this.dependencies.addTransitive(dependency.dependencies);
-          this.addTransitiveSets(dependency);
-        }
+        this.dependencies.add(dependency);
+        this.dependencies.addTransitive(dependency.dependencies);
+        this.addTransitiveSets(dependency);
       }
       return this;
     }
@@ -285,7 +276,7 @@ public final class XcodeProvider implements TransitiveInfoProvider {
       // Collect all the dependencies of all the providers, filtering out duplicates.
       Set<XcodeProvider> providerSet = new LinkedHashSet<>();
       for (XcodeProvider target : topLevelTargets) {
-        target.collectProviders(providerSet);
+        Iterables.addAll(providerSet, target.providers());
       }
 
       ImmutableList.Builder<TargetControl> controls = new ImmutableList.Builder<>();
@@ -311,7 +302,6 @@ public final class XcodeProvider implements TransitiveInfoProvider {
   private final Optional<XcodeProvider> testHost;
   private final NestedSet<Artifact> inputsToXcodegen;
   private final NestedSet<Artifact> additionalSources;
-  private final ImmutableList<XcodeProvider> extensions;
 
   private XcodeProvider(Builder builder) {
     this.label = Preconditions.checkNotNull(builder.label);
@@ -329,7 +319,6 @@ public final class XcodeProvider implements TransitiveInfoProvider {
     this.testHost = Preconditions.checkNotNull(builder.testHost);
     this.inputsToXcodegen = builder.inputsToXcodegen.build();
     this.additionalSources = builder.additionalSources.build();
-    this.extensions = builder.extensions.build();
   }
 
   /**
@@ -350,22 +339,21 @@ public final class XcodeProvider implements TransitiveInfoProvider {
     builder.objcProvider = objcProvider;
     builder.testHost = testHost;
     builder.inputsToXcodegen.addTransitive(inputsToXcodegen);
-    builder.extensions.addAll(extensions);
     return builder;
   }
 
-  private void collectProviders(Set<XcodeProvider> allProviders) {
-    if (allProviders.add(this)) {
-      for (XcodeProvider dependency : dependencies) {
-        dependency.collectProviders(allProviders);
-      }
-      for (XcodeProvider justTestHost : testHost.asSet()) {
-        justTestHost.collectProviders(allProviders);
-      }
-      for (XcodeProvider extension : extensions) {
-        extension.collectProviders(allProviders);
-      }
+  /**
+   * Returns a list of this provider and all its transitive dependencies.
+   */
+  private Iterable<XcodeProvider> providers() {
+    Set<XcodeProvider> providers = new LinkedHashSet<>();
+    providers.add(this);
+    Iterables.addAll(providers, dependencies);
+    for (XcodeProvider justTestHost : testHost.asSet()) {
+      providers.add(justTestHost);
+      Iterables.addAll(providers, justTestHost.dependencies);
     }
+    return ImmutableList.copyOf(providers);
   }
 
   private static final EnumSet<XcodeProductType> CAN_LINK_PRODUCT_TYPES = EnumSet.of(
@@ -410,12 +398,9 @@ public final class XcodeProvider implements TransitiveInfoProvider {
         // such a target is present in the control file, it is only to get Xcodegen to put headers
         // and resources not used by the final binary in the Project Navigator.
         //
-        // The exceptions to this rule are objc_bundle_library and ios_extension targets. Bundles
-        // are generally used for resources and can lack a PBXSourceFilesBuildPhase in the project
-        // file and still be considered valid by Xcode.
-        //
-        // ios_extension targets are an exception because they have no CompilationArtifact object
-        // but do have a dummy source file to make Xcode happy.
+        // The exception to this rule is the objc_bundle_library target. Bundles are generally used
+        // for resources and can lack a PBXSourceFilesBuildPhase in the project file and still be
+        // considered valid by Xcode.
         boolean hasSources = dependency.compilationArtifacts.isPresent()
             && dependency.compilationArtifacts.get().getArchive().isPresent();
         if (hasSources || (dependency.productType == XcodeProductType.BUNDLE)) {
@@ -424,17 +409,12 @@ public final class XcodeProvider implements TransitiveInfoProvider {
                 .build());
         }
       }
-    }
-    for (XcodeProvider justTestHost : testHost.asSet()) {
-      targetControl.addDependency(DependencyControl.newBuilder()
-          .setTargetLabel(justTestHost.label.toString())
-          .setTestHost(true)
-          .build());
-    }
-    for (XcodeProvider extension : extensions) {
-      targetControl.addDependency(DependencyControl.newBuilder()
-          .setTargetLabel(extension.label.toString())
-          .build());
+      for (XcodeProvider justTestHost : testHost.asSet()) {
+        targetControl.addDependency(DependencyControl.newBuilder()
+            .setTargetLabel(justTestHost.label.toString())
+            .setTestHost(true)
+            .build());
+      }
     }
 
     for (InfoplistMerging merging : infoplistMerging.asSet()) {

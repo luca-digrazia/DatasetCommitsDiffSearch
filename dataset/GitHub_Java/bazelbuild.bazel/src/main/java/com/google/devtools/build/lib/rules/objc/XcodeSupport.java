@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
-import com.google.devtools.build.lib.rules.objc.XcodeProvider.Builder;
 
 /**
  * Support for Objc rule types that export an Xcode provider or generate xcode project files.
@@ -105,10 +104,9 @@ public final class XcodeSupport {
    *
    * @return this xcode support
    */
-  XcodeSupport addDependencies(Builder xcodeProviderBuilder, Attribute attribute) {
-    xcodeProviderBuilder.addDependencies(
-        ruleContext.getPrerequisites(
-            attribute.getName(), attribute.getAccessMode(), XcodeProvider.class));
+  XcodeSupport addDependencies(XcodeProvider.Builder xcodeProviderBuilder, String attribute) {
+    xcodeProviderBuilder
+        .addDependencies(ruleContext.getPrerequisites(attribute, Mode.TARGET, XcodeProvider.class));
     return this;
   }
 }
