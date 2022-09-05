@@ -23,7 +23,6 @@ import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.ASSEMBLER_WIT
 import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.CPP_HEADER;
 import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.CPP_SOURCE;
 import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.C_SOURCE;
-import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.INTERFACE_SHARED_LIBRARY;
 import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.OBJECT_FILE;
 import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.PIC_ARCHIVE;
 import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.PIC_OBJECT_FILE;
@@ -101,7 +100,6 @@ public class CppRuleClasses {
       ALWAYS_LINK_LIBRARY,
       ALWAYS_LINK_PIC_LIBRARY,
       SHARED_LIBRARY,
-      INTERFACE_SHARED_LIBRARY,
       VERSIONED_SHARED_LIBRARY,
       OBJECT_FILE,
       PIC_OBJECT_FILE);
