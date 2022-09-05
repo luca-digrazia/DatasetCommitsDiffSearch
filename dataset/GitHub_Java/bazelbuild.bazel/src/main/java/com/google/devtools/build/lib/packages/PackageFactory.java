@@ -939,7 +939,6 @@ public final class PackageFactory {
       public Environment.NoneType invoke(Map<String, Object> kwargs,
           FuncallExpression ast, Environment env)
           throws EvalException {
-        env.checkLoadingPhase(ruleClass, ast.getLocation());
         try {
           addRule(ruleFactory, ruleClass, getContext(env, ast), kwargs, ast);
         } catch (RuleFactory.InvalidRuleException | Package.NameConflictException e) {
@@ -1234,7 +1233,6 @@ public final class PackageFactory {
     // Important: Environment should be unreachable by the end of this method!
     StoredEventHandler eventHandler = new StoredEventHandler();
     Environment pkgEnv = new Environment(globalEnv, eventHandler);
-    pkgEnv.setLoadingPhase();
 
     Package.LegacyBuilder pkgBuilder = new Package.LegacyBuilder(packageId);
 
@@ -1304,7 +1302,6 @@ public final class PackageFactory {
     }
     // Important: Environment should be unreachable by the end of this method!
     Environment pkgEnv = new Environment();
-    pkgEnv.setLoadingPhase();
 
     Package.LegacyBuilder pkgBuilder = new Package.LegacyBuilder(packageId);
 
