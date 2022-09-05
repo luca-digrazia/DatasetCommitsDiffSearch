@@ -20,6 +20,7 @@ import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
 import com.google.errorprone.ErrorProneAnalyzer;
 import com.google.errorprone.ErrorProneError;
 import com.google.errorprone.ErrorProneOptions;
+import com.google.errorprone.ErrorPronePlugins;
 import com.google.errorprone.InvalidCommandLineOptionException;
 import com.google.errorprone.scanner.BuiltInCheckerSuppliers;
 import com.google.errorprone.scanner.ScannerSupplier;
@@ -28,6 +29,7 @@ import com.sun.source.util.TaskEvent.Kind;
 import com.sun.tools.javac.comp.AttrContext;
 import com.sun.tools.javac.comp.Env;
 import com.sun.tools.javac.main.JavaCompiler;
+import com.sun.tools.javac.main.Main.Result;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.JavacMessages;
 import com.sun.tools.javac.util.Log;
@@ -88,10 +90,20 @@ public final class ErrorPronePlugin extends BlazeJavaCompilerPlugin {
 
     setupMessageBundle(context);
 
-    if (epOptions == null) {
+    // load Error Prone plugins from the annotation processor classpath
+    ScannerSupplier result = ErrorPronePlugins.loadPlugins(scannerSupplier, context);
+
+    if (epOptions != null) {
+      try {
+        result = result.applyOverrides(epOptions);
+      } catch (InvalidCommandLineOptionException e) {
+        throwError(Result.CMDERR, e.getMessage());
+      }
+    } else {
       epOptions = ErrorProneOptions.empty();
     }
-    errorProneAnalyzer = new ErrorProneAnalyzer(scannerSupplier, epOptions, context);
+
+    errorProneAnalyzer = ErrorProneAnalyzer.create(result.get()).init(context, epOptions);
   }
 
   /** Run Error Prone analysis after performing dataflow checks. */
