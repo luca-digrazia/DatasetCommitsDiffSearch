@@ -20,6 +20,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.android.Converters.DependencyAndroidDataListConverter;
 import com.google.devtools.build.android.Converters.ExistingPathConverter;
 import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.build.android.Converters.UnvalidatedAndroidDataConverter;
@@ -49,10 +50,13 @@ import java.util.zip.ZipOutputStream;
  * <pre>
  * Example Usage:
  *   java/com/google/build/android/AarGeneratorAction\
- *      --mainData path/to/resources:path/to/assets:path/to/manifest\
+ *      --primaryData path/to/resources:path/to/assets:path/to/manifest\
+ *      --data p/t/res1:p/t/assets1:p/t/1/AndroidManifest.xml:p/t/1/R.txt,\
+ *             p/t/res2:p/t/assets2:p/t/2/AndroidManifest.xml:p/t/2/R.txt\
  *      --manifest path/to/manifest\
  *      --rtxt path/to/rtxt\
  *      --classes path/to/classes.jar\
+ *      --strictMerge\
  *      --aarOutput path/to/write/archive.aar
  * </pre>
  */
@@ -71,6 +75,16 @@ public class AarGeneratorAction {
             + "The contents will override the contents of any other resource directories during "
             + "merging. The expected format is resources[#resources]:assets[#assets]:manifest")
     public UnvalidatedAndroidData mainData;
+
+    @Option(name = "dependencyData",
+        defaultValue = "",
+        converter = DependencyAndroidDataListConverter.class,
+        category = "input",
+        help = "Additional Data dependencies. These values will be used if not defined in "
+            + "the primary resources. The expected format is "
+            + "resources[#resources]:assets[#assets]:manifest:r.txt"
+            + "[,resources[#resources]:assets[#assets]:manifest:r.txt]")
+    public List<DependencyAndroidData> dependencyData;
 
     @Option(name = "manifest",
         defaultValue = "null",
@@ -100,7 +114,6 @@ public class AarGeneratorAction {
         help = "Path to write the archive.")
     public Path aarOutput;
 
-    // TODO: remove once blaze stops sending "--nostrictMerge" (since this is unused).
     @Option(name = "strictMerge",
         defaultValue = "true",
         category = "option",
@@ -126,12 +139,10 @@ public class AarGeneratorAction {
       Path assetsOut = tmp.resolve("merged_assets");
       Files.createDirectories(assetsOut);
       logger.fine(String.format("Setup finished at %dms", timer.elapsed(TimeUnit.MILLISECONDS)));
-      // There aren't any dependencies, but we merge to combine primary resources from different
-      // res/assets directories into a single res and single assets directory.
       MergedAndroidData mergedData =
           resourceProcessor.mergeData(
               options.mainData,
-              ImmutableList.<DependencyAndroidData>of(),
+              options.dependencyData,
               ImmutableList.<DependencyAndroidData>of(),
               resourcesOut,
               assetsOut,

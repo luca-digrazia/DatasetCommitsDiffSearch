@@ -13,12 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.android.builder.core.VariantType;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+import com.android.builder.core.VariantConfiguration;
+import com.android.builder.core.VariantConfiguration.Type;
 import com.android.ide.common.internal.AaptCruncher;
+import com.android.ide.common.internal.CommandLineRunner;
 import com.android.ide.common.internal.LoggedErrorException;
 import com.android.ide.common.internal.PngCruncher;
-import com.android.ide.common.process.DefaultProcessExecutor;
-import com.android.ide.common.process.LoggedProcessOutputHandler;
 import com.android.ide.common.res2.MergingException;
 import com.android.utils.StdLogger;
 import com.google.common.base.Stopwatch;
@@ -28,7 +30,7 @@ import com.google.devtools.build.android.AndroidResourceProcessor.FlagAaptOption
 import com.google.devtools.build.android.Converters.DependencyAndroidDataListConverter;
 import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.build.android.Converters.UnvalidatedAndroidDataConverter;
-import com.google.devtools.build.android.Converters.VariantTypeConverter;
+import com.google.devtools.build.android.Converters.VariantConfigurationTypeConverter;
 import com.google.devtools.build.android.SplitConfigurationFilter.UnrecognizedSplitsException;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.Option;
@@ -36,6 +38,7 @@ import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.TriState;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -53,11 +56,11 @@ import java.util.logging.Logger;
  *      --adb path/to/sdk/adb\
  *      --zipAlign path/to/sdk/zipAlign\
  *      --androidJar path/to/sdk/androidJar\
- *      --manifestOutput path/to/manifest\
- *      --primaryData path/to/resources:path/to/assets:path/to/manifest\
- *      --data p/t/res1:p/t/assets1:p/t/1/AndroidManifest.xml:p/t/1/R.txt:symbols,\
- *             p/t/res2:p/t/assets2:p/t/2/AndroidManifest.xml:p/t/2/R.txt:symbols\
- *      --packagePath path/to/write/archive.ap_\
+ *      --manifest path/to/manifest\
+ *      --primaryData path/to/resources:path/to/assets:path/to/manifest:path/to/R.txt
+ *      --data p/t/res1:p/t/assets1:p/t/1/AndroidManifest.xml:p/t/1/R.txt,\
+ *             p/t/res2:p/t/assets2:p/t/2/AndroidManifest.xml:p/t/2/R.txt
+ *      --packagePath path/to/write/archive.ap_
  *      --srcJarOutput path/to/write/archive.srcjar
  * </pre>
  */
@@ -77,7 +80,7 @@ public class AndroidResourceProcessingAction {
         category = "input",
         help = "The directory containing the primary resource directory. The contents will override"
             + " the contents of any other resource directories during merging. The expected format"
-            + " is " + UnvalidatedAndroidData.EXPECTED_FORMAT)
+            + " is resources[|resources]:assets[|assets]:manifest")
     public UnvalidatedAndroidData primaryData;
 
     @Option(name = "data",
@@ -86,8 +89,8 @@ public class AndroidResourceProcessingAction {
         category = "input",
         help = "Transitive Data dependencies. These values will be used if not defined in the "
             + "primary resources. The expected format is "
-            + DependencyAndroidData.EXPECTED_FORMAT
-            + "[,...]")
+            + "resources[#resources]:assets[#assets]:manifest:r.txt:symbols.bin"
+            + "[,resources[#resources]:assets[#assets]:manifest:r.txt:symbols.bin]")
     public List<DependencyAndroidData> transitiveData;
 
     @Option(name = "directData",
@@ -96,8 +99,8 @@ public class AndroidResourceProcessingAction {
         category = "input",
         help = "Direct Data dependencies. These values will be used if not defined in the "
             + "primary resources. The expected format is "
-            + DependencyAndroidData.EXPECTED_FORMAT
-            + "[,...]")
+            + "resources[#resources]:assets[#assets]:manifest:r.txt:symbols.bin"
+            + "[,resources[#resources]:assets[#assets]:manifest:r.txt:symbols.bin]")
     public List<DependencyAndroidData> directData;
 
     @Option(name = "rOutput",
@@ -107,20 +110,12 @@ public class AndroidResourceProcessingAction {
         help = "Path to where the R.txt should be written.")
     public Path rOutput;
 
-    @Option(name = "symbolsOut",
-        oldName = "symbolsTxtOut",
+    @Option(name = "symbolsTxtOut",
         defaultValue = "null",
         converter = PathConverter.class,
         category = "output",
-        help = "Path to where the symbols should be written.")
-    public Path symbolsOut;
-
-    @Option(name = "dataBindingInfoOut",
-        defaultValue = "null",
-        converter = PathConverter.class,
-        category = "output",
-        help = "Path to where data binding's layout info output should be written.")
-    public Path dataBindingInfoOut;
+        help = "Path to where the symbolsTxt should be written.")
+    public Path symbolsTxtOut;
 
     @Option(name = "packagePath",
         defaultValue = "null",
@@ -166,11 +161,11 @@ public class AndroidResourceProcessingAction {
 
     @Option(name = "packageType",
         defaultValue = "DEFAULT",
-        converter = VariantTypeConverter.class,
+        converter = VariantConfigurationTypeConverter.class,
         category = "config",
         help = "Variant configuration type for packaging the resources."
-            + " Acceptible values DEFAULT, LIBRARY, ANDROID_TEST, UNIT_TEST")
-    public VariantType packageType;
+            + " Acceptible values DEFAULT, LIBRARY, TEST")
+    public VariantConfiguration.Type packageType;
 
     @Option(name = "densities",
         defaultValue = "",
@@ -229,7 +224,7 @@ public class AndroidResourceProcessingAction {
       Path generatedSources = null;
       if (options.srcJarOutput != null
           || options.rOutput != null
-          || options.symbolsOut != null) {
+          || options.symbolsTxtOut != null) {
         generatedSources = tmp.resolve("generated_resources");
       }
 
@@ -251,7 +246,7 @@ public class AndroidResourceProcessingAction {
               mergedAssets,
               selectPngCruncher(),
               options.packageType,
-              options.symbolsOut);
+              options.symbolsTxtOut);
 
       logger.fine(String.format("Merging finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
@@ -280,8 +275,13 @@ public class AndroidResourceProcessingAction {
         resourceProcessor.copyManifestToOutput(processedData, options.manifestOutput);
       }
 
-      if (options.packageType == VariantType.LIBRARY) {
-        resourceProcessor.writeDummyManifestForAapt(dummyManifest, options.packageForR);
+      if (options.packageType == Type.LIBRARY) {
+        Files.createDirectories(dummyManifest.getParent());
+        Files.write(dummyManifest, String.format(
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            + "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\""
+            + " package=\"%s\">"
+            + "</manifest>", options.packageForR).getBytes(UTF_8));
         processedData = new MergedAndroidData(
             processedData.getResourceDir(),
             processedData.getAssetDir(),
@@ -306,28 +306,26 @@ public class AndroidResourceProcessingAction {
           options.mainDexProguardOutput,
           options.resourcesOutput != null
               ? processedData.getResourceDir().resolve("values").resolve("public.xml")
-              : null,
-          options.dataBindingInfoOut);
+              : null);
       logger.fine(String.format("aapt finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       if (options.srcJarOutput != null) {
         resourceProcessor.createSrcJar(
             generatedSources,
             options.srcJarOutput,
-            VariantType.LIBRARY == options.packageType);
+            VariantConfiguration.Type.LIBRARY == options.packageType);
       }
       if (options.rOutput != null) {
         resourceProcessor.copyRToOutput(
             generatedSources,
             options.rOutput,
-            VariantType.LIBRARY == options.packageType);
+            VariantConfiguration.Type.LIBRARY == options.packageType);
       }
       if (options.resourcesOutput != null) {
         resourceProcessor.createResourcesZip(
             processedData.getResourceDir(),
             processedData.getAssetDir(),
-            options.resourcesOutput,
-            false /* compress */);
+            options.resourcesOutput);
       }
       logger.fine(
           String.format("Packaging finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
@@ -355,23 +353,18 @@ public class AndroidResourceProcessingAction {
       return aaptConfigOptions.useAaptCruncher == TriState.YES;
     }
     // By default png cruncher shouldn't be invoked on a library -- the work is just thrown away.
-    return options.packageType != VariantType.LIBRARY;
+    return options.packageType != VariantConfiguration.Type.LIBRARY;
   }
 
   private static PngCruncher selectPngCruncher() {
     // Use the full cruncher if asked to do so.
     if (usePngCruncher()) {
-      return new AaptCruncher(
-          aaptConfigOptions.aapt.toString(),
-          new DefaultProcessExecutor(STD_LOGGER),
-          new LoggedProcessOutputHandler(STD_LOGGER));
+      return new AaptCruncher(aaptConfigOptions.aapt.toString(), new CommandLineRunner(STD_LOGGER));
     }
     // Otherwise, if this is a binary, we need to at least process nine-patch PNGs.
-    if (options.packageType != VariantType.LIBRARY) {
+    if (options.packageType != VariantConfiguration.Type.LIBRARY) {
       return new NinePatchOnlyCruncher(
-          aaptConfigOptions.aapt.toString(),
-          new DefaultProcessExecutor(STD_LOGGER),
-          new LoggedProcessOutputHandler(STD_LOGGER));
+          aaptConfigOptions.aapt.toString(), new CommandLineRunner(STD_LOGGER));
     }
     return null;
   }
