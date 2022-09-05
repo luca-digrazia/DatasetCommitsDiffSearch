@@ -372,7 +372,7 @@ public class SkylarkRuleImplementationFunctions {
 
     for (AbstractConfiguredTarget current : knownLabels) {
       builder.put(
-          AliasProvider.getDependencyLabel(current),
+          current.getLabel(),
           ImmutableList.copyOf(current.getProvider(FileProvider.class).getFilesToBuild()));
     }
 
@@ -383,7 +383,7 @@ public class SkylarkRuleImplementationFunctions {
   @SkylarkSignature(name = "file_action",
       doc = "Creates a file write action.",
       objectType = SkylarkRuleContext.class,
-      returnType = Runtime.NoneType.class,
+      returnType = FileWriteAction.class,
       mandatoryPositionals = {
         @Param(name = "self", type = SkylarkRuleContext.class, doc = "this context"),
         @Param(name = "output", type = Artifact.class, doc = "the output file"),
@@ -393,13 +393,13 @@ public class SkylarkRuleImplementationFunctions {
             doc = "whether the output file should be executable (default is False)")})
   private static final BuiltinFunction createFileWriteAction =
       new BuiltinFunction("file_action") {
-        public Runtime.NoneType invoke(SkylarkRuleContext ctx,
+        public FileWriteAction invoke(SkylarkRuleContext ctx,
             Artifact output, String content, Boolean executable)
             throws EvalException, ConversionException {
           FileWriteAction action = new FileWriteAction(
               ctx.getRuleContext().getActionOwner(), output, content, executable);
           ctx.getRuleContext().registerAction(action);
-          return Runtime.NONE;
+          return action;
         }
       };
 

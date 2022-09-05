@@ -18,8 +18,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fromTemplates;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_SWIFT;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.ReleaseBundlingRule.APP_ICON_ATTR;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.ReleaseBundlingRule.DEBUG_ENTITLEMENTS_ATTR;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.ReleaseBundlingRule.EXTRA_ENTITLEMENTS_ATTR;
 import static com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.UI_DEVICE_FAMILY_VALUES;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -45,7 +43,6 @@ import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -535,38 +532,24 @@ public final class ReleaseBundlingSupport {
     }
 
     Artifact substitutedEntitlements = intermediateArtifacts.entitlements();
-    if (attributes.extraEntitlements() != null || includeDebugEntitlements()) {
+    if (releaseBundling.getExtraEntitlements() != null) {
       substitutedEntitlements =
           intermediateArtifacts.appendExtensionForEntitlementArtifact(".substituted");
-
-      NestedSetBuilder<Artifact> entitlements =
-          NestedSetBuilder.<Artifact>stableOrder().add(substitutedEntitlements);
-      if (attributes.extraEntitlements() != null) {
-        entitlements.add(attributes.extraEntitlements());
-      }
-      if (includeDebugEntitlements()) {
-        entitlements.add(attributes.deviceDebugEntitlements());
-      }
-
-      registerMergeEntitlementsAction(entitlements.build());
+      registerMergeEntitlementsAction(substitutedEntitlements,
+          releaseBundling.getExtraEntitlements());
     }
 
     registerEntitlementsVariableSubstitutionAction(
         entitlementsNeedingSubstitution, teamPrefixFile, substitutedEntitlements);
   }
 
-  private boolean includeDebugEntitlements() {
-    return attributes.deviceDebugEntitlements() != null
-        && ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT
-        && ObjcRuleClasses.objcConfiguration(ruleContext).useDeviceDebugEntitlements();
-  }
+  private void registerMergeEntitlementsAction(
+      Artifact substitutedEntitlements, Artifact extraEntitlements) {
 
-  private void registerMergeEntitlementsAction(NestedSet<Artifact> entitlements) {
     PlMergeControlBytes controlBytes =
         PlMergeControlBytes.fromPlists(
-            entitlements,
-            intermediateArtifacts.entitlements(),
-            PlMergeControlBytes.OutputFormat.XML);
+            NestedSetBuilder.create(Order.STABLE_ORDER, substitutedEntitlements, extraEntitlements),
+            intermediateArtifacts.entitlements());
 
     Artifact plMergeControlArtifact = ObjcRuleClasses.artifactByAppendingToBaseName(ruleContext,
         artifactName(".merge-entitlements-control"));
@@ -584,7 +567,8 @@ public final class ReleaseBundlingSupport {
             .setExecutable(attributes.plmerge())
             .addArgument("--control")
             .addInputArgument(plMergeControlArtifact)
-            .addTransitiveInputs(entitlements)
+            .addInput(substitutedEntitlements)
+            .addInput(extraEntitlements)
             .addOutput(intermediateArtifacts.entitlements())
             .build(ruleContext));
   }
@@ -783,10 +767,19 @@ public final class ReleaseBundlingSupport {
     }
 
     Artifact resultingLinkedBinary = intermediateArtifacts.combinedArchitectureBinary();
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+    NestedSet<Artifact> linkedBinaries = linkedBinaries();
 
-    new LipoSupport(ruleContext).registerCombineArchitecturesAction(linkedBinaries(),
-        resultingLinkedBinary, appleConfiguration.getIosCpuPlatform());
+    ruleContext.registerAction(ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext)
+        .setMnemonic("ObjcCombiningArchitectures")
+        .addTransitiveInputs(linkedBinaries)
+        .addOutput(resultingLinkedBinary)
+        .setExecutable(CompilationSupport.xcrunwrapper(ruleContext))
+        .setCommandLine(CustomCommandLine.builder()
+            .add(ObjcRuleClasses.LIPO)
+            .addExecPaths("-create", linkedBinaries)
+            .addExecPath("-o", resultingLinkedBinary)
+            .build())
+        .build(ruleContext));
   }
 
   private NestedSet<Artifact> linkedBinaries() {
@@ -1227,30 +1220,8 @@ public final class ReleaseBundlingSupport {
     /**
      * Returns the location of the environment_plist.
      */
-    FilesToRunProvider environmentPlist() {
+    public FilesToRunProvider environmentPlist() {
       return ruleContext.getExecutablePrerequisite("$environment_plist", Mode.HOST);
-    }
-
-    /**
-     * Returns a plist specified by the user via {@code --extra_entitlements} or {@code null}.
-     */
-    @Nullable
-    Artifact extraEntitlements() {
-      if (ruleContext.attributes().getAttributeDefinition(EXTRA_ENTITLEMENTS_ATTR) == null) {
-        return null;
-      }
-      return ruleContext.getPrerequisiteArtifact(EXTRA_ENTITLEMENTS_ATTR, Mode.HOST);
-    }
-
-    /**
-     * Returns a plist containing entitlements that allow the signed IPA to be debugged.
-     */
-    @Nullable
-    Artifact deviceDebugEntitlements() {
-      if (ruleContext.attributes().getAttributeDefinition(DEBUG_ENTITLEMENTS_ATTR) == null) {
-        return null;
-      }
-      return ruleContext.getPrerequisiteArtifact(DEBUG_ENTITLEMENTS_ATTR, Mode.HOST);
     }
 
     ImmutableMap<String, Artifact> cpuSpecificBreakpadFiles() {

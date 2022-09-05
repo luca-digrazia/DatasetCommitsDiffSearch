@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -32,12 +31,10 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
-import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -50,6 +47,7 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+
 import javax.annotation.Nullable;
 
 /**
@@ -62,11 +60,7 @@ import javax.annotation.Nullable;
  * manifests" (see {@link PruningManifest}).
  */
 @Immutable
-@SkylarkModule(
-  name = "runfiles",
-  category = SkylarkModuleCategory.NONE,
-  doc = "An interface for a set of runfiles."
-)
+@SkylarkModule(name = "runfiles", doc = "An interface for a set of runfiles.")
 public final class Runfiles {
   private static final Function<SymlinkEntry, Artifact> TO_ARTIFACT =
       new Function<SymlinkEntry, Artifact>() {
@@ -104,7 +98,7 @@ public final class Runfiles {
    * An entry in the runfiles map.
    *
    * <p>build-runfiles.cc enforces the following constraints: The PathFragment must not be an
-   * absolute path, nor contain "..". Overlapping runfiles links are also refused. This is the case
+   * absolute path, nor contain "..".  Overlapping runfiles links are also refused. This is the case
    * where you ask to create a link to "foo" and also "foo/bar.txt". I.e. you're asking it to make
    * "foo" both a file (symlink) and a directory.
    *
@@ -129,7 +123,7 @@ public final class Runfiles {
   // equals to the third one if they are not the same instance (which they almost never are)
   //
   // Goodnight, prince(ss)?, and sweet dreams.
-  private static final class SymlinkEntry implements SkylarkValue {
+  private static final class SymlinkEntry {
     private final PathFragment path;
     private final Artifact artifact;
 
@@ -144,18 +138,6 @@ public final class Runfiles {
 
     public Artifact getArtifact() {
       return artifact;
-    }
-
-    public boolean isImmutable() {
-      return true;
-    }
-
-    public void write(Appendable buffer, char quotationMark) {
-      Printer.append(buffer, "SymlinkEntry(path = ");
-      Printer.write(buffer, getPath().toString(), quotationMark);
-      Printer.append(buffer, ", artifact = ");
-      getArtifact().write(buffer, quotationMark);
-      Printer.append(buffer, ")");
     }
   }
 
@@ -476,99 +458,23 @@ public final class Runfiles {
     // Copy manifest map to another manifest map, prepending the workspace name to every path.
     // E.g. for workspace "myworkspace", the runfile entry "mylib.so"->"/path/to/mylib.so" becomes
     // "myworkspace/mylib.so"->"/path/to/mylib.so".
-    ManifestBuilder builder = new ManifestBuilder(suffix, legacyExternalRunfiles);
-    builder.addUnderWorkspace(manifest, checker);
+    Map<PathFragment, Artifact> rootManifest = new HashMap<>();
+    for (Map.Entry<PathFragment, Artifact> entry : manifest.entrySet()) {
+      checker.put(rootManifest, suffix.getRelative(entry.getKey()), entry.getValue());
+    }
 
     // Finally add symlinks relative to the root of the runfiles tree, on top of everything else.
     // This operation is always checked for conflicts, to match historical behavior.
     if (conflictPolicy == ConflictPolicy.IGNORE) {
       checker = new ConflictChecker(ConflictPolicy.WARN, eventHandler, location);
     }
-    builder.add(getRootSymlinksAsMap(checker), checker);
-    return builder.build();
-  }
-
-  /**
-   * Helper class to handle munging the paths of external artifacts.
-   */
-  @VisibleForTesting
-  static final class ManifestBuilder {
-    // Manifest of paths to artifacts. Path fragments are relative to the .runfiles directory.
-    private final Map<PathFragment, Artifact> manifest;
-    private final PathFragment workspaceName;
-    private final boolean legacyExternalRunfiles;
-    // Whether we saw the local workspace name in the runfiles. If legacyExternalRunfiles is true,
-    // then this is true, as anything under external/ will also have a runfile under the local
-    // workspace.
-    private boolean sawWorkspaceName;
-
-    public ManifestBuilder(
-        PathFragment workspaceName, boolean legacyExternalRunfiles) {
-      this.manifest = new HashMap<>();
-      this.workspaceName = workspaceName;
-      this.legacyExternalRunfiles = legacyExternalRunfiles;
-      this.sawWorkspaceName = legacyExternalRunfiles;
+    for (Map.Entry<PathFragment, Artifact> entry : getRootSymlinksAsMap(checker).entrySet()) {
+      PathFragment mappedPath = entry.getKey();
+      Artifact mappedArtifact = entry.getValue();
+      checker.put(rootManifest, mappedPath, mappedArtifact);
     }
 
-    /**
-     * Adds a map under the workspaceName.
-     */
-    public void addUnderWorkspace(
-        Map<PathFragment, Artifact> inputManifest, ConflictChecker checker) {
-      for (Map.Entry<PathFragment, Artifact> entry : inputManifest.entrySet()) {
-        PathFragment path = entry.getKey();
-        if (isUnderWorkspace(path)) {
-          sawWorkspaceName = true;
-          checker.put(manifest, workspaceName.getRelative(path), entry.getValue());
-        } else {
-          if (legacyExternalRunfiles) {
-            checker.put(manifest, workspaceName.getRelative(path), entry.getValue());
-          }
-          // Always add the non-legacy .runfiles/repo/whatever path.
-          checker.put(manifest, getExternalPath(path), entry.getValue());
-        }
-      }
-    }
-
-    /**
-     * Adds a map to the root directory.
-     */
-    public void add(Map<PathFragment, Artifact> inputManifest, ConflictChecker checker) {
-      for (Map.Entry<PathFragment, Artifact> entry : inputManifest.entrySet()) {
-        checker.put(manifest, checkForWorkspace(entry.getKey()), entry.getValue());
-      }
-    }
-
-    /**
-     * Returns the manifest, adding the workspaceName directory if it is not already present.
-     */
-    public Map<PathFragment, Artifact> build() {
-      if (!sawWorkspaceName) {
-        // If we haven't seen it and we have seen other files, add the workspace name directory.
-        // It might not be there if all of the runfiles are from other repos (and then running from
-        // x.runfiles/ws will fail, because ws won't exist). We can't tell Runfiles to create a
-        // directory, so instead this creates a hidden file inside the desired directory.
-        manifest.put(workspaceName.getRelative(".runfile"), null);
-      }
-      return manifest;
-    }
-
-    private PathFragment getExternalPath(PathFragment path) {
-      return checkForWorkspace(path.relativeTo(Label.EXTERNAL_PACKAGE_NAME));
-    }
-
-    private PathFragment checkForWorkspace(PathFragment path) {
-      sawWorkspaceName = sawWorkspaceName || path.getSegment(0).equals(workspaceName);
-      return path;
-    }
-
-    private static boolean isUnderWorkspace(PathFragment path) {
-      return !path.startsWith(Label.EXTERNAL_PACKAGE_NAME);
-    }
-  }
-
-  boolean getLegacyExternalRunfiles() {
-    return legacyExternalRunfiles;
+    return rootManifest;
   }
 
   /**

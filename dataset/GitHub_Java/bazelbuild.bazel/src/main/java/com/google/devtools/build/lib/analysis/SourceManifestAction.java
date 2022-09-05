@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -36,6 +37,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -107,11 +109,6 @@ public final class SourceManifestAction extends AbstractFileWriteAction {
     this.runfiles = runfiles;
   }
 
-  /** The {@link Runfiles} for which this action creates the symlink tree. */
-  public Runfiles getGeneratedRunfiles() {
-    return runfiles;
-  }
-
   @VisibleForTesting
   public void writeOutputFile(OutputStream out, EventHandler eventHandler)
       throws IOException {
@@ -122,7 +119,7 @@ public final class SourceManifestAction extends AbstractFileWriteAction {
   public DeterministicWriter newDeterministicWriter(ActionExecutionContext ctx)
       throws IOException {
     final Map<PathFragment, Artifact> runfilesInputs =
-        runfiles.getRunfilesInputs(ctx.getEventHandler(), getOwner().getLocation());
+        runfiles.getRunfilesInputs(ctx.getExecutor().getEventHandler(), getOwner().getLocation());
     return new DeterministicWriter() {
       @Override
       public void writeOutputFile(OutputStream out) throws IOException {
@@ -195,8 +192,6 @@ public final class SourceManifestAction extends AbstractFileWriteAction {
   protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addString(GUID);
-    f.addBoolean(runfiles.getLegacyExternalRunfiles());
-    f.addPath(runfiles.getSuffix());
     Map<PathFragment, Artifact> symlinks = runfiles.getSymlinksAsMap(null);
     f.addInt(symlinks.size());
     for (Map.Entry<PathFragment, Artifact> symlink : symlinks.entrySet()) {
@@ -228,8 +223,7 @@ public final class SourceManifestAction extends AbstractFileWriteAction {
      * [rootRelativePath] [resolvingSymlink]
      *
      * <p>This strategy is suitable for creating an input manifest to a source view tree. Its
-     * output is a valid input to
-     * {@link com.google.devtools.build.lib.analysis.actions.SymlinkTreeAction}.
+     * output is a valid input to {@link com.google.devtools.build.lib.analysis.SymlinkTreeAction}.
      */
     SOURCE_SYMLINKS {
       @Override

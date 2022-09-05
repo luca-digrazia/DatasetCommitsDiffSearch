@@ -59,7 +59,6 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
 import com.google.devtools.build.lib.rules.java.JavaNativeLibraryProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeJarProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
@@ -245,7 +244,6 @@ public class AndroidCommon {
       RuleContext ruleContext,
       AndroidSemantics semantics,
       AndroidIdlHelper idlHelper,
-      OutputJar resourceJar,
       ResourceApk resourceApk,
       Artifact zipAlignedApk,
       Iterable<Artifact> apksUnderTest) {
@@ -253,7 +251,6 @@ public class AndroidCommon {
         new AndroidIdeInfoProvider.Builder()
             .setIdlClassJar(idlHelper.getIdlClassJar())
             .setIdlSourceJar(idlHelper.getIdlSourceJar())
-            .setResourceJar(resourceJar)
             .addIdlParcelables(idlHelper.getIdlParcelables())
             .addIdlSrcs(idlHelper.getIdlSources())
             .addIdlGeneratedJavaFiles(idlHelper.getIdlGeneratedJavaSources())
@@ -478,13 +475,10 @@ public class AndroidCommon {
     classJar = ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_CLASS_JAR);
     idlHelper = new AndroidIdlHelper(ruleContext, classJar);
 
-    JavaTargetAttributes.Builder attributes =
-        javaCommon
-            .initCommon(
-                idlHelper.getIdlGeneratedJavaSources(),
-                androidSemantics.getJavacArguments(ruleContext))
-            .setBootClassPath(
-                ImmutableList.of(AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar()));
+    JavaTargetAttributes.Builder attributes = javaCommon
+        .initCommon(idlHelper.getIdlGeneratedJavaSources(), androidSemantics.getJavacArguments())
+        .setBootClassPath(ImmutableList.of(
+            AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar()));
 
     JavaCompilationArtifacts.Builder artifactsBuilder = new JavaCompilationArtifacts.Builder();
     ImmutableList.Builder<Artifact> jarsProducedForRuntime = ImmutableList.builder();
@@ -666,10 +660,8 @@ public class AndroidCommon {
     JavaRuleOutputJarsProvider.Builder outputJarsBuilder = JavaRuleOutputJarsProvider.builder()
         .addOutputJar(classJar, iJar, srcJar)
         .setJdeps(outputDepsProto);
-    OutputJar resourceJar = null;
     if (resourceClassJar != null && resourceIJar != null && resourceSourceJar != null) {
-      resourceJar = new OutputJar(resourceClassJar, resourceIJar, resourceSourceJar);
-      outputJarsBuilder.addOutputJar(resourceJar);
+      outputJarsBuilder.addOutputJar(resourceClassJar, resourceIJar, resourceSourceJar);
     }
 
     return builder
@@ -686,7 +678,6 @@ public class AndroidCommon {
                 ruleContext,
                 androidSemantics,
                 idlHelper,
-                resourceJar,
                 resourceApk,
                 zipAlignedApk,
                 apksUnderTest))

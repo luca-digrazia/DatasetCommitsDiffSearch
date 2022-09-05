@@ -668,10 +668,7 @@ public class ObjcRuleClasses {
    * Common attributes for {@code objc_*} rules that contain compilable content.
    */
   public static class CompilingRule implements RuleDefinition {
-    /**
-     * Rule class names which are allowed as targets of the 'deps' attribute of this rule.
-     */
-    static final Iterable<String> ALLOWED_DEPS_RULE_CLASSES =
+    private static final Iterable<String> ALLOWED_DEPS_RULE_CLASSES =
         ImmutableSet.of(
             "objc_library",
             "objc_import",
@@ -925,7 +922,6 @@ public class ObjcRuleClasses {
     static final String DEFAULT_PROVISIONING_PROFILE_ATTR = ":default_provisioning_profile";
     static final String ENTITLEMENTS_ATTR = "entitlements";
     static final String EXTRA_ENTITLEMENTS_ATTR = ":extra_entitlements";
-    static final String DEBUG_ENTITLEMENTS_ATTR = "$device_debug_entitlements";
     static final String LAUNCH_IMAGE_ATTR = "launch_image";
     static final String LAUNCH_STORYBOARD_ATTR = "launch_storyboard";
     static final String PROVISIONING_PROFILE_ATTR = "provisioning_profile";
@@ -945,11 +941,11 @@ public class ObjcRuleClasses {
           <a href="https://developer.apple.com/library/ios/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html">their definitions in Apple's documentation</a>:
           $(AppIdentifierPrefix) and $(CFBundleIdentifier).
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-          .add(attr(ENTITLEMENTS_ATTR, LABEL).allowedFileTypes(ENTITLEMENTS_TYPE))
+          .add(attr(ENTITLEMENTS_ATTR, LABEL)
+              .allowedFileTypes(ENTITLEMENTS_TYPE))
           .add(
               attr(EXTRA_ENTITLEMENTS_ATTR, LABEL)
                   .singleArtifact()
-                  .cfg(HOST)
                   .value(
                       new LateBoundLabel<BuildConfiguration>(ObjcConfiguration.class) {
                         @Override
@@ -960,12 +956,7 @@ public class ObjcRuleClasses {
                               .getExtraEntitlements();
                         }
                       })
-                  .allowedFileTypes(ENTITLEMENTS_TYPE))
-          .add(
-              attr(DEBUG_ENTITLEMENTS_ATTR, LABEL)
-                  .singleArtifact()
-                  .cfg(HOST)
-                  .value(env.getToolsLabel("//tools/objc:device_debug_entitlements.plist")))
+              .allowedFileTypes(ENTITLEMENTS_TYPE))
           /* <!-- #BLAZE_RULE($objc_release_bundling_rule).ATTRIBUTE(provisioning_profile) -->
           The provisioning profile (.mobileprovision file) to use when bundling
           the application.
@@ -984,8 +975,8 @@ public class ObjcRuleClasses {
                   .value(
                       new LateBoundLabel<BuildConfiguration>(ObjcConfiguration.class) {
                         @Override
-                        public Label resolve(
-                            Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
+                        public Label resolve(Rule rule, AttributeMap attributes,
+                            BuildConfiguration configuration) {
                           AppleConfiguration appleConfiguration =
                               configuration.getFragment(AppleConfiguration.class);
                           if (appleConfiguration.getBundlingPlatform() != Platform.IOS_DEVICE) {

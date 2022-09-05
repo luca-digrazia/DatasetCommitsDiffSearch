@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.SourceManifestAction.ManifestType;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
-import com.google.devtools.build.lib.analysis.actions.SymlinkTreeAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -29,6 +28,7 @@ import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -101,7 +101,7 @@ public final class RunfilesSupport {
           ruleContext.getPrerequisite(":run_under", Mode.DATA);
       runfiles = new Runfiles.Builder(
           ruleContext.getWorkspaceName(), ruleContext.getConfiguration().legacyExternalRunfiles())
-          .merge(getRunfiles(runUnderTarget, ruleContext.getWorkspaceName()))
+          .merge(getRunfiles(runUnderTarget))
           .merge(runfiles)
           .build();
     }
@@ -176,7 +176,7 @@ public final class RunfilesSupport {
     String basename = relativePath.getBaseName();
     PathFragment inputManifestPath = relativePath.replaceName(basename + ".runfiles_manifest");
     return context.getDerivedArtifact(inputManifestPath,
-        context.getConfiguration().getBinDirectory(context.getRule().getRepository()));
+        context.getConfiguration().getBinDirectory());
   }
 
   /**
@@ -236,13 +236,6 @@ public final class RunfilesSupport {
   }
 
   /**
-   * Returns the name of the workspace that the build is occurring in.
-   */
-  public PathFragment getWorkspaceName() {
-    return runfiles.getSuffix();
-  }
-
-  /**
    * Returns the middleman artifact that depends on getExecutable(),
    * getRunfilesManifest(), and getRunfilesSymlinkTargets(). Anything which
    * needs to actually run the executable should depend on this.
@@ -262,8 +255,7 @@ public final class RunfilesSupport {
       Iterable<Artifact> allRunfilesArtifacts) {
     return context.getAnalysisEnvironment().getMiddlemanFactory().createRunfilesMiddleman(
         context.getActionOwner(), owningExecutable, allRunfilesArtifacts,
-        context.getConfiguration().getMiddlemanDirectory(context.getRule().getRepository()),
-        "runfiles_artifacts");
+        context.getConfiguration().getMiddlemanDirectory(), "runfiles_artifacts");
   }
 
   private Artifact createRunfilesMiddleman(ActionConstructionContext context,
@@ -271,8 +263,7 @@ public final class RunfilesSupport {
     return context.getAnalysisEnvironment().getMiddlemanFactory().createRunfilesMiddleman(
         context.getActionOwner(), owningExecutable,
         ImmutableList.of(artifactsMiddleman, outputManifest),
-        context.getConfiguration().getMiddlemanDirectory(context.getRule().getRepository()),
-        "runfiles");
+        context.getConfiguration().getMiddlemanDirectory(), "runfiles");
   }
 
   /**
@@ -303,7 +294,7 @@ public final class RunfilesSupport {
 
     BuildConfiguration config = context.getConfiguration();
     Artifact outputManifest = context.getDerivedArtifact(
-        outputManifestPath, config.getBinDirectory(context.getRule().getRepository()));
+        outputManifestPath, config.getBinDirectory());
     context
         .getAnalysisEnvironment()
         .registerAction(
@@ -313,8 +304,8 @@ public final class RunfilesSupport {
                 artifactsMiddleman,
                 outputManifest,
                 /*filesetTree=*/ false,
-                config.getLocalShellEnvironment(),
-                config.runfilesEnabled()));
+                config.getShExecutable(),
+                config.getLocalShellEnvironment()));
     return outputManifest;
   }
 
@@ -331,8 +322,7 @@ public final class RunfilesSupport {
     PathFragment sourcesManifestPath = executablePath.getParentDirectory().getChild(
         executablePath.getBaseName() + ".runfiles.SOURCES");
     Artifact sourceOnlyManifest = context.getDerivedArtifact(
-        sourcesManifestPath,
-        context.getConfiguration().getBinDirectory(context.getRule().getRepository()));
+        sourcesManifestPath, context.getConfiguration().getBinDirectory());
     context.getAnalysisEnvironment().registerAction(SourceManifestAction.forRunfiles(
         ManifestType.SOURCES_ONLY, context.getActionOwner(), sourceOnlyManifest, runfiles));
     return sourceOnlyManifest;
@@ -345,14 +335,12 @@ public final class RunfilesSupport {
    *
    * @return the Runfiles object
    */
-  private static Runfiles getRunfiles(TransitiveInfoCollection target, String workspaceName) {
+  private static Runfiles getRunfiles(TransitiveInfoCollection target) {
     RunfilesProvider runfilesProvider = target.getProvider(RunfilesProvider.class);
     if (runfilesProvider != null) {
       return runfilesProvider.getDefaultRunfiles();
     } else {
-      return new Runfiles.Builder(workspaceName)
-          .addArtifacts(target.getProvider(FilesToRunProvider.class).getFilesToRun())
-          .build();
+      return Runfiles.EMPTY;
     }
   }
 
