@@ -205,13 +205,14 @@ public class AtlasHotPatchManager implements BundleListener{
     }
 
     private void patchMainDex(){
-        if(hotpatchBundles.containsKey("com.taobao.maindex")) {
-            final long version = hotpatchBundles.get("com.taobao.maindex");
-            File maindexPatchFile = new File(sCurrentVersionPatchDir, "com.taobao.maindex/" + version + HOTFIX_NAME_POSTFIX);
-            if (maindexPatchFile.exists()) {
-                purgeOldPatchsOfBundle(maindexPatchFile, version);
-                activePatch("com.taobao.maindex", new Patch(maindexPatchFile, RuntimeVariables.androidApplication.getClassLoader()));
-            }
+        Long version  = hotpatchBundles.get("com.taobao.maindex");
+        if (null == version){
+            return;
+        }
+        File maindexPatchFile = new File(sCurrentVersionPatchDir,"com.taobao.maindex/"+version+HOTFIX_NAME_POSTFIX);
+        if(maindexPatchFile.exists()){
+            purgeOldPatchsOfBundle(maindexPatchFile,version);
+            activePatch("com.taobao.maindex",new Patch(maindexPatchFile,RuntimeVariables.androidApplication.getClassLoader()));
         }
     }
 
