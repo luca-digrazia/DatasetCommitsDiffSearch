@@ -6,9 +6,6 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
 
-/**
- * Encapsulates logic for creating and sending a Ganglia message
- */
 public class GangliaMessage
 {
 
@@ -17,7 +14,7 @@ public class GangliaMessage
     private final DatagramSocket datagramSocket;
     private final InetSocketAddress inetSocketAddress;
 
-    GangliaMessage(InetSocketAddress inetSocketAddress, byte[] buffer, DatagramSocket datagramSocket)
+    public GangliaMessage(InetSocketAddress inetSocketAddress, byte[] buffer, DatagramSocket datagramSocket)
     {
         this.inetSocketAddress = inetSocketAddress;
         this.buffer = buffer;
@@ -33,7 +30,6 @@ public class GangliaMessage
     {
         this.datagramSocket.send(new DatagramPacket(this.buffer, this.offset, this.inetSocketAddress));
     }
-    
     /**
      * Puts an integer into the buffer as 4 bytes, big-endian.
      *
@@ -76,10 +72,5 @@ public class GangliaMessage
         while (this.offset < newOffset) {
             this.buffer[this.offset++] = 0;
         }
-    }
-    
-    int getOffset()
-    {
-        return this.offset;
     }
 }
