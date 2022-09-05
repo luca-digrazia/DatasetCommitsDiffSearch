@@ -228,11 +228,9 @@ public final class ActionsTestUtil {
     }
 
     @Override protected String computeKey() { return "action"; }
-
     @Override public ResourceSet estimateResourceConsumption(Executor executor) {
       return ResourceSet.ZERO;
     }
-
     @Override
     public String getMnemonic() {
       return "Null";

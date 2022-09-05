@@ -47,8 +47,7 @@ import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
 import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
-import com.google.devtools.build.lib.query2.BlazeQueryEnvironment;
-import com.google.devtools.build.lib.query2.QueryEnvironmentFactory;
+import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.DigraphQueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
@@ -94,10 +93,8 @@ import javax.annotation.Nullable;
  * An implementation of the 'genquery' rule.
  */
 public class GenQuery implements RuleConfiguredTargetFactory {
-  private static final QueryEnvironmentFactory QUERY_ENVIRONMENT_FACTORY =
-      new QueryEnvironmentFactory();
   public static final Precomputed<ImmutableList<OutputFormatter>> QUERY_OUTPUT_FORMATTERS =
-      new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "query_output_formatters"));
+      new Precomputed<>(new SkyKey(SkyFunctions.PRECOMPUTED, "query_output_formatters"));
 
   @Override
   @Nullable
@@ -257,7 +254,6 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     return doQuery(queryOptions, packageProvider, labelFilter, evaluator, query, ruleContext);
   }
 
-  @SuppressWarnings("unchecked")
   @Nullable
   private byte[] doQuery(QueryOptions queryOptions, PackageProvider packageProvider,
                          Predicate<Label> labelFilter, TargetPatternEvaluator evaluator,
@@ -288,8 +284,8 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       // All the packages are already loaded at this point, so there is no need
       // to start up many threads. 4 are started up to make good use of multiple
       // cores.
-      BlazeQueryEnvironment queryEnvironment = (BlazeQueryEnvironment) QUERY_ENVIRONMENT_FACTORY
-          .create(
+      queryResult = (DigraphQueryEvalResult<Target>) AbstractBlazeQueryEnvironment
+          .newQueryEnvironment(
               /*transitivePackageLoader=*/null, /*graph=*/null, packageProvider,
               evaluator,
               /*keepGoing=*/false,
@@ -301,8 +297,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
               getEventHandler(ruleContext),
               settings,
               ImmutableList.<QueryFunction>of(),
-              /*packagePath=*/null);
-      queryResult = (DigraphQueryEvalResult<Target>) queryEnvironment.evaluateQuery(query, targets);
+              /*packagePath=*/null).evaluateQuery(query, targets);
     } catch (SkyframeRestartQueryException e) {
       // Do not emit errors for skyframe restarts. They make output of the ConfiguredTargetFunction
       // inconsistent from run to run, and make detecting legitimate errors more difficult.

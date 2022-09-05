@@ -23,7 +23,9 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
+import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.cmdline.Label;
+
 import java.io.IOException;
 import java.io.OutputStream;
 
@@ -74,13 +76,26 @@ public abstract class AbstractFileWriteAction extends AbstractAction {
    */
   public abstract DeterministicWriter newDeterministicWriter(ActionExecutionContext ctx)
       throws IOException, InterruptedException, ExecException;
-  
+
   /**
    * This hook is called after the File has been successfully written to disk.
    *
    * @param executor the Executor.
    */
   protected void afterWrite(Executor executor) {
+  }
+
+  // We're mainly doing I/O, so estimate very low CPU usage, e.g. 1%. Just a guess.
+  private static final ResourceSet DEFAULT_FILEWRITE_LOCAL_ACTION_RESOURCE_SET =
+      ResourceSet.createWithRamCpuIo(/*memoryMb=*/0.0, /*cpuUsage=*/0.01, /*ioUsage=*/0.2);
+
+  @Override
+  public ResourceSet estimateResourceConsumption(Executor executor) {
+    return executor.getContext(FileWriteActionContext.class).estimateResourceConsumption(this);
+  }
+
+  public ResourceSet estimateResourceConsumptionLocal() {
+    return DEFAULT_FILEWRITE_LOCAL_ACTION_RESOURCE_SET;
   }
 
   @Override

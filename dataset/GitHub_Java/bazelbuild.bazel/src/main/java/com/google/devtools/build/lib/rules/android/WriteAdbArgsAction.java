@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
@@ -34,8 +33,7 @@ import java.util.List;
  * An action that writes the a parameter file to {@code incremental_install.py} based on the command
  * line arguments to {@code blaze mobile-install}.
  */
-@Immutable // note that it accesses data non-hermetically during the execution phase
-public final class WriteAdbArgsAction extends AbstractFileWriteAction {
+public class WriteAdbArgsAction extends AbstractFileWriteAction {
   private static final String GUID = "16720416-3c01-4b0a-a543-ead7e563a1ca";
 
   /**
@@ -83,13 +81,6 @@ public final class WriteAdbArgsAction extends AbstractFileWriteAction {
         help = "Whether to start the app after installing it.",
         expansion = {"--start=COLD"})
     public Void startApp;
-
-    @Option(name = "debug_app",
-        category = "mobile-install",
-        defaultValue = "null",
-        help = "Whether to wait for the debugger before starting the app.",
-        expansion = {"--start=DEBUG"})
-    public Void debugApp;
   }
 
   public WriteAdbArgsAction(ActionOwner owner, Artifact outputFile) {
@@ -170,9 +161,7 @@ public final class WriteAdbArgsAction extends AbstractFileWriteAction {
      * The app will save its state before installing, and be restored from that state after
      * installing.
      */
-    WARM,
-    /** The app will wait for debugger to attach before restarting from clean state after install */
-    DEBUG
+    WARM
   }
 
   /** Converter for the --start option. */

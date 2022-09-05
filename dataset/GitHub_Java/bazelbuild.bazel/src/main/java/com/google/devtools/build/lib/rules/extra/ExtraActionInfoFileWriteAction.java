@@ -21,9 +21,9 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.io.IOException;
 import java.io.OutputStream;
 
@@ -32,11 +32,10 @@ import java.io.OutputStream;
  * .xa file for use by an extra action. This can only be done at execution time because actions may
  * store information only known at execution time into the protocol buffer.
  */
-@Immutable // if shadowedAction is immutable
-public final class ExtraActionInfoFileWriteAction extends AbstractFileWriteAction {
-  private static final String UUID = "1759f81d-e72e-477d-b182-c4532bdbaeeb";
-
+public class ExtraActionInfoFileWriteAction extends AbstractFileWriteAction {
   private final Action shadowedAction;
+
+  private static final String UUID = "1759f81d-e72e-477d-b182-c4532bdbaeeb";
 
   ExtraActionInfoFileWriteAction(ActionOwner owner, Artifact extraActionInfoFile,
       Action shadowedAction) {
@@ -67,7 +66,6 @@ public final class ExtraActionInfoFileWriteAction extends AbstractFileWriteActio
     Fingerprint f = new Fingerprint();
     f.addString(UUID);
     f.addString(shadowedAction.getKey());
-    f.addBytes(shadowedAction.getExtraActionInfo().build().toByteArray());
     return f.hexDigestAndReset();
   }
 }

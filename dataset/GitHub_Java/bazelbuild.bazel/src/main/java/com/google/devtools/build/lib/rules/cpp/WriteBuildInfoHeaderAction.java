@@ -19,11 +19,10 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.BuildInfoHelper;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Preconditions;
 
@@ -39,9 +38,8 @@ import java.util.Map;
  * An action that creates a C++ header containing the build information in the
  * form of #define directives.
  */
-@Immutable
 public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
-  private static final String GUID = "62be38ad-1243-46b9-9948-9bdfa81f8918";
+  private static final String GUID = "b0798174-1352-4a54-854a-9785aaea491b";
 
   private final ImmutableList<Artifact> valueArtifacts;
 
@@ -66,7 +64,8 @@ public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
    */
   public WriteBuildInfoHeaderAction(Collection<Artifact> inputs,
       Artifact output, boolean writeVolatileInfo, boolean writeStableInfo) {
-    super(ActionOwner.SYSTEM_ACTION_OWNER, inputs, output, /*makeExecutable=*/ false);
+    super(BuildInfoHelper.BUILD_INFO_ACTION_OWNER,
+        inputs, output, /*makeExecutable=*/false);
     valueArtifacts = ImmutableList.copyOf(inputs);
     if (!inputs.isEmpty()) {
       // With non-empty inputs we should not generate both volatile and non-volatile data

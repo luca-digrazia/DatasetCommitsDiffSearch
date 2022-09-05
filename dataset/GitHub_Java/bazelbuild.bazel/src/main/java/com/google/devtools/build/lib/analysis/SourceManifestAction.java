@@ -70,12 +70,12 @@ public class SourceManifestAction extends AbstractFileWriteAction {
         @Nullable Artifact symlink) throws IOException;
 
     /**
-     * Fulfills {@link com.google.devtools.build.lib.actions.AbstractAction#getMnemonic()}
+     * Fulfills {@link #ActionMetadata.getMnemonic()}
      */
     String getMnemonic();
 
     /**
-     * Fulfills {@link com.google.devtools.build.lib.actions.AbstractAction#getRawProgressMessage()}
+     * Fulfills {@link #AbstractAction.getRawProgressMessage()}
      */
     String getRawProgressMessage();
   }
@@ -189,13 +189,13 @@ public class SourceManifestAction extends AbstractFileWriteAction {
   protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addString(GUID);
-    Map<PathFragment, Artifact> symlinks = runfiles.getSymlinksAsMap(null);
+    Map<PathFragment, Artifact> symlinks = runfiles.getSymlinksAsMap();
     f.addInt(symlinks.size());
     for (Map.Entry<PathFragment, Artifact> symlink : symlinks.entrySet()) {
       f.addPath(symlink.getKey());
       f.addPath(symlink.getValue().getPath());
     }
-    Map<PathFragment, Artifact> rootSymlinks = runfiles.getRootSymlinksAsMap(null);
+    Map<PathFragment, Artifact> rootSymlinks = runfiles.getRootSymlinksAsMap();
     f.addInt(rootSymlinks.size());
     for (Map.Entry<PathFragment, Artifact> rootSymlink : rootSymlinks.entrySet()) {
       f.addPath(rootSymlink.getKey());
