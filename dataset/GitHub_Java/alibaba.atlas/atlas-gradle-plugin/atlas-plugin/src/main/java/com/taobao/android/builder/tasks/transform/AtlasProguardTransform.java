@@ -283,6 +283,7 @@ public class AtlasProguardTransform extends ProGuardTransform {
     public AtlasProguardTransform(AppVariantContext appVariantContext) {
         super(appVariantContext.getScope());
         this.appVariantContext = appVariantContext;
+
         this.buildConfig = appVariantContext.getAtlasExtension().getTBuildConfig();
     }
 
@@ -294,6 +295,7 @@ public class AtlasProguardTransform extends ProGuardTransform {
 
     @Override
     public void transform(TransformInvocation invocation) throws TransformException {
+
         firstTime = true;
         ConfigurableFileCollection oldConfigurableFileCollection = (ConfigurableFileCollection) ReflectUtils.getField(ProguardConfigurable.class, oldTransform,
                 "configurationFiles");
