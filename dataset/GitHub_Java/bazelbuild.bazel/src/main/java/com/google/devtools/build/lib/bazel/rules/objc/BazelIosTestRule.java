@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -33,7 +32,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
-import com.google.devtools.build.lib.rules.objc.ExperimentalIosTest;
 import com.google.devtools.build.lib.rules.objc.IosTest;
 import com.google.devtools.build.lib.rules.objc.ObjcConfiguration;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses;
@@ -65,8 +63,7 @@ public final class BazelIosTestRule implements RuleDefinition {
             attr(IosTest.TARGET_DEVICE, LABEL)
                 .allowedFileTypes()
                 .allowedRuleClasses("ios_device")
-                .value(env.getLabel(
-                    Constants.TOOLS_REPOSITORY + "//tools/objc/sim_devices:default")))
+                .value(env.getLabel("//tools/objc/sim_devices:default")))
         /* <!-- #BLAZE_RULE(ios_test).ATTRIBUTE(ios_test_target_device) -->
          The device against how to run the test. If this attribute is defined, the test will run on
          the lab device. Otherwise, the test will run on simulator.
@@ -89,10 +86,8 @@ public final class BazelIosTestRule implements RuleDefinition {
          <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("plugins", LABEL_LIST).allowedFileTypes(FileType.of("_deploy.jar")))
         .add(attr("$test_template", LABEL)
-            .value(env.getLabel(
-                Constants.TOOLS_REPOSITORY + "//tools/objc:ios_test.sh.bazel_template")))
-        .add(attr("$test_runner", LABEL)
-            .value(env.getLabel(Constants.TOOLS_REPOSITORY + "//tools/objc:testrunner")))
+            .value(env.getLabel("//tools/objc:ios_test.sh.bazel_template")))
+        .add(attr("$test_runner", LABEL).value(env.getLabel("//tools/objc:testrunner")))
         .override(attr(":gcov", LABEL_LIST).cfg(HOST)
             .value(new LateBoundLabelList<BuildConfiguration>() {
               @Override
@@ -114,7 +109,7 @@ public final class BazelIosTestRule implements RuleDefinition {
         .type(RuleClassType.TEST)
         .ancestors(BaseRuleClasses.BaseRule.class, BaseRuleClasses.TestBaseRule.class,
             ObjcRuleClasses.IosTestBaseRule.class, ObjcRuleClasses.SimulatorRule.class)
-        .factoryClass(ExperimentalIosTest.class)
+        .factoryClass(BazelIosTest.class)
         .build();
   }
 }

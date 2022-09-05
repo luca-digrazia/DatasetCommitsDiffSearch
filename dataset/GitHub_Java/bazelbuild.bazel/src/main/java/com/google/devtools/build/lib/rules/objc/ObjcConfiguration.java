@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,7 +49,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
           "-Os", "-DNDEBUG=1", "-Wno-unused-variable", "-Winit-self", "-Wno-extra");
 
   private static final String XCODE_VERSION_ENV_NAME = "XCODE_VERSION_OVERRIDE";
-  private static final String IOS_SDK_VERSION_ENV_NAME = "IOS_SDK_VERSION_OVERRIDE";
 
   private final String iosSdkVersion;
   private final String iosMinimumOs;
@@ -116,7 +115,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     if (xcodeVersionOverride.isPresent()) {
       builder.put(XCODE_VERSION_ENV_NAME, xcodeVersionOverride.get());
     }
-    builder.put(IOS_SDK_VERSION_ENV_NAME, iosSdkVersion);
     return builder.build();
   }
 
