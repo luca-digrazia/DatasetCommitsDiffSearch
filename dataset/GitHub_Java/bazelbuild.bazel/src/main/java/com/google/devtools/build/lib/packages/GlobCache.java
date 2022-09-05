@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Iterables;
@@ -22,9 +23,7 @@ import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
-import com.google.devtools.build.lib.packages.Globber.BadGlobException;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.UnixGlob;
 
@@ -48,6 +47,12 @@ import java.util.concurrent.atomic.AtomicReference;
   // Used outside of Bazel!
 @ThreadSafety.ThreadCompatible
 public class GlobCache {
+  public static class BadGlobException extends Exception {
+    BadGlobException(String message) {
+      super(message);
+    }
+  }
+
   /**
    * A mapping from glob expressions (e.g. "*.java") to the list of files it
    * matched (in the order returned by VFS) at the time the package was
