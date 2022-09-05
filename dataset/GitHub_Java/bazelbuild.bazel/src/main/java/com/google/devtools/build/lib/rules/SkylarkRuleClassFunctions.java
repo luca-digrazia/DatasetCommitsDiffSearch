@@ -365,8 +365,7 @@ public class SkylarkRuleClassFunctions {
 
 
   @SkylarkSignature(name = "aspect", doc =
-    "Creates a new aspect. The result of this function must be stored in a global value. "
-      + "Please see the <a href=\"../aspects.md\">introduction to Aspects</a> for more details.",
+    "Creates a new aspect. The result of this function must be stored in a global value.",
     returnType = SkylarkAspect.class,
     parameters = {
         @Param(name = "implementation", type = BaseFunction.class,
