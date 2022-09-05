@@ -62,8 +62,7 @@ public final class ShellEscaper extends Escaper {
       CharMatcher.anyOf("@%-_+:,./")
           .or(CharMatcher.inRange('0', '9')) // We can't use CharMatcher.javaLetterOrDigit(),
           .or(CharMatcher.inRange('a', 'z')) // that would also accept non-ASCII digits and
-          .or(CharMatcher.inRange('A', 'Z')) // letters.
-          .precomputed();
+          .or(CharMatcher.inRange('A', 'Z')); // letters.
 
   /**
    * Escapes a string by adding strong (single) quotes around it if necessary.
