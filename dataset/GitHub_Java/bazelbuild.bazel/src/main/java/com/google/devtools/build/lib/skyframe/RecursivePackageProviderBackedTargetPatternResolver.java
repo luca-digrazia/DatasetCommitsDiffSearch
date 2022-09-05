@@ -14,8 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPatternResolver;
@@ -24,6 +22,7 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
@@ -88,7 +87,7 @@ public class RecursivePackageProviderBackedTargetPatternResolver
         return null;
       }
       return recursivePackageProvider.getTarget(eventHandler, label);
-    } catch (LabelSyntaxException | NoSuchThingException e) {
+    } catch (Label.SyntaxException | NoSuchThingException e) {
       return null;
     }
   }
@@ -133,10 +132,7 @@ public class RecursivePackageProviderBackedTargetPatternResolver
 
   @Override
   public boolean isPackage(String packageName) {
-    // TODO(bazel-team): this should get the whole PackageIdentifier. Using only the package name
-    // makes it impossible to use the //... wildcard to refer to targets in remote repositories.
-    return recursivePackageProvider.isPackage(
-        eventHandler, PackageIdentifier.createInDefaultRepo(packageName));
+    return recursivePackageProvider.isPackage(eventHandler, packageName);
   }
 
   @Override

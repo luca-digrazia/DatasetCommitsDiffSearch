@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
@@ -33,12 +32,12 @@ public final class TargetPatternResolverUtil {
     // Utility class.
   }
 
-  // Parse 'label' as a Label, mapping LabelSyntaxException into
+  // Parse 'label' as a Label, mapping Label.SyntaxException into
   // TargetParsingException.
   public static Label label(String label) throws TargetParsingException {
     try {
       return Label.parseAbsolute(label);
-    } catch (LabelSyntaxException e) {
+    } catch (Label.SyntaxException e) {
       throw invalidTarget(label, e.getMessage());
     }
   }
