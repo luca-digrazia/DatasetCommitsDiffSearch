@@ -55,7 +55,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
@@ -255,7 +254,8 @@ public final class CompilationSupport {
    * @param common common information about this rule and its dependencies
    * @return this compilation support
    */
-  CompilationSupport registerCompileAndArchiveActions(ObjcCommon common) {
+  CompilationSupport registerCompileAndArchiveActions(ObjcCommon common)
+      throws InterruptedException {
     if (common.getCompilationArtifacts().isPresent()) {
       registerGenerateModuleMapAction(common.getCompilationArtifacts());
       Optional<CppModuleMap> moduleMap;
@@ -268,7 +268,8 @@ public final class CompilationSupport {
           common.getCompilationArtifacts().get(),
           common.getObjcProvider(),
           moduleMap,
-          buildConfiguration.isCodeCoverageEnabled());
+          buildConfiguration.isCodeCoverageEnabled(),
+          true);
     }
     return this;
   }
@@ -281,7 +282,8 @@ public final class CompilationSupport {
       CompilationArtifacts compilationArtifacts,
       ObjcProvider objcProvider,
       Optional<CppModuleMap> moduleMap,
-      boolean isCodeCoverageEnabled) {
+      boolean isCodeCoverageEnabled,
+      boolean isFullyLinkEnabled) throws InterruptedException {
     ImmutableList.Builder<Artifact> objFiles = new ImmutableList.Builder<>();
     for (Artifact sourceFile : compilationArtifacts.getSrcs()) {
       Artifact objFile = intermediateArtifacts.objFile(sourceFile);
@@ -320,6 +322,10 @@ public final class CompilationSupport {
 
     for (Artifact archive : compilationArtifacts.getArchive().asSet()) {
       registerArchiveActions(objFiles, archive);
+    }
+
+    if (isFullyLinkEnabled) {
+      registerFullyLinkAction(objcProvider);
     }
   }
 
@@ -676,16 +682,9 @@ public final class CompilationSupport {
     return actions.build();
   }
 
-  /**
-   * Registers an action to create an archive artifact by fully (statically) linking all
-   * transitive dependencies of this rule.
-   *
-   * @param objcProvider provides all compiling and linking information to create this artifact
-   */
-  public CompilationSupport registerFullyLinkAction(ObjcProvider objcProvider)
-      throws InterruptedException {
-    Artifact outputArchive =
-        ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB);
+  private void registerFullyLinkAction(ObjcProvider objcProvider) throws InterruptedException {
+    Artifact archive = ruleContext.getImplicitOutputArtifact(FULLY_LINKED_LIB);
+
     ImmutableList<Artifact> ccLibraries = ccLibraries(objcProvider);
     ruleContext.registerAction(ObjcRuleClasses.spawnAppleEnvActionBuilder(
             ruleContext, appleConfiguration.getIosCpuPlatform())
@@ -696,7 +695,7 @@ public final class CompilationSupport {
             .add("-static")
             .add("-arch_only").add(appleConfiguration.getIosCpu())
             .add("-syslibroot").add(AppleToolchain.sdkDir())
-            .add("-o").add(outputArchive.getExecPathString())
+            .add("-o").add(archive.getExecPathString())
             .addExecPaths(objcProvider.get(LIBRARY))
             .addExecPaths(objcProvider.get(IMPORTED_LIBRARY))
             .addExecPaths(ccLibraries)
@@ -704,9 +703,8 @@ public final class CompilationSupport {
         .addInputs(ccLibraries)
         .addTransitiveInputs(objcProvider.get(LIBRARY))
         .addTransitiveInputs(objcProvider.get(IMPORTED_LIBRARY))
-        .addOutput(outputArchive)
+        .addOutput(archive)
         .build(ruleContext));
-    return this;
   }
 
   /**
@@ -1356,7 +1354,7 @@ public final class CompilationSupport {
         AnalysisEnvironment analysisEnvironment,
         NestedSetBuilder<Artifact> metadataFilesBuilder) {
       for (Artifact artifact : artifacts) {
-        ActionAnalysisMetadata action = analysisEnvironment.getLocalGeneratingAction(artifact);
+        Action action = analysisEnvironment.getLocalGeneratingAction(artifact);
         if (action.getMnemonic().equals("ObjcCompile")) {
           addOutputs(metadataFilesBuilder, action, ObjcRuleClasses.COVERAGE_NOTES);
         }
