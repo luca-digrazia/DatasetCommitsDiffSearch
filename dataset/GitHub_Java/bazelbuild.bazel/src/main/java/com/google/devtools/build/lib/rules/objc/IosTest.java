@@ -173,7 +173,7 @@ public final class IosTest implements RuleConfiguredTargetFactory {
             appleConfiguration.getMultiArchPlatform(PlatformType.IOS))
         .registerActions(DsymOutputType.TEST)
         .addXcodeSettings(xcodeProviderBuilder)
-        .addFilesToBuild(filesToBuild, Optional.of(DsymOutputType.TEST))
+        .addFilesToBuild(filesToBuild, DsymOutputType.TEST)
         .validateResources()
         .validateAttributes();
 

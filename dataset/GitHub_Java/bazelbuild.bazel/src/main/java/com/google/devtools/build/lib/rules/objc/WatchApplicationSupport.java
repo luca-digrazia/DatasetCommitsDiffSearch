@@ -108,10 +108,13 @@ final class WatchApplicationSupport {
    * @param innerBundleZips any zip files to be unzipped and merged into the application bundle
    * @param filesToBuild files to build for the rule; the watchOS application .ipa is added to this
    *     set
+   * @param exposedObjcProviderBuilder provider builder which watch application bundle outputs are
+   *     added to (for later consumption by depending rules)
    */
   void createBundle(
       Iterable<Artifact> innerBundleZips,
-      NestedSetBuilder<Artifact> filesToBuild)
+      NestedSetBuilder<Artifact> filesToBuild,
+      ObjcProvider.Builder exposedObjcProviderBuilder)
       throws InterruptedException {
 
     ObjcProvider objcProvider = objcProvider(innerBundleZips);
@@ -119,7 +122,8 @@ final class WatchApplicationSupport {
     createBundle(
         Optional.<XcodeProvider.Builder>absent(),
         objcProvider,
-        filesToBuild);
+        filesToBuild,
+        exposedObjcProviderBuilder);
   }
 
   /**
@@ -130,16 +134,19 @@ final class WatchApplicationSupport {
    * @param innerBundleZips any zip files to be unzipped and merged into the application bundle
    * @param filesToBuild files to build for the rule; the watchOS application .ipa is added to this
    *     set
+   * @param exposedObjcProviderBuilder provider builder which watch application bundle outputs are
+   *     added to (for later consumption by depending rules)
    */
   void createBundleAndXcodeproj(
       XcodeProvider.Builder xcodeProviderBuilder,
       Iterable<Artifact> innerBundleZips,
-      NestedSetBuilder<Artifact> filesToBuild)
+      NestedSetBuilder<Artifact> filesToBuild,
+      ObjcProvider.Builder exposedObjcProviderBuilder)
       throws InterruptedException {
     ObjcProvider objcProvider = objcProvider(innerBundleZips);
 
     createBundle(
-        Optional.of(xcodeProviderBuilder), objcProvider, filesToBuild);
+        Optional.of(xcodeProviderBuilder), objcProvider, filesToBuild, exposedObjcProviderBuilder);
 
     // Add common watch settings.
     WatchUtils.addXcodeSettings(ruleContext, xcodeProviderBuilder);
@@ -164,7 +171,8 @@ final class WatchApplicationSupport {
   private void createBundle(
       Optional<XcodeProvider.Builder> xcodeProviderBuilder,
       ObjcProvider depsObjcProvider,
-      NestedSetBuilder<Artifact> filesToBuild)
+      NestedSetBuilder<Artifact> filesToBuild,
+      ObjcProvider.Builder exposedObjcProviderBuilder)
       throws InterruptedException {
     registerActions();
 
@@ -208,9 +216,10 @@ final class WatchApplicationSupport {
     }
 
     releaseBundlingSupport
-        .addFilesToBuild(filesToBuild, Optional.<DsymOutputType>absent())
+        .addFilesToBuild(filesToBuild, DsymOutputType.APP)
         .validateResources()
-        .validateAttributes();
+        .validateAttributes()
+        .addExportedDebugArtifacts(exposedObjcProviderBuilder, DsymOutputType.APP);
   }
 
   /**

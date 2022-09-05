@@ -175,7 +175,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     CompilationArtifacts compilationArtifacts =
         CompilationSupport.compilationArtifacts(ruleContext, intermediateArtifacts);
 
-    ObjcCommon.Builder commonBuilder = new ObjcCommon.Builder(ruleContext, buildConfiguration)
+    return new ObjcCommon.Builder(ruleContext, buildConfiguration)
         .setCompilationAttributes(
             CompilationAttributes.Builder.fromRuleContext(ruleContext).build())
         .setCompilationArtifacts(compilationArtifacts)
@@ -189,12 +189,8 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         .setIntermediateArtifacts(intermediateArtifacts)
         .setAlwayslink(false)
         // TODO(b/29152500): Enable module map generation.
-        .setLinkedBinary(intermediateArtifacts.strippedSingleArchitectureBinary());
-        
-    if (ObjcRuleClasses.objcConfiguration(ruleContext).generateDsym()) {
-      commonBuilder.addDebugArtifacts(DsymOutputType.APP);
-    }
-    return commonBuilder.build();
+        .setLinkedBinary(intermediateArtifacts.strippedSingleArchitectureBinary())
+        .build();
   }
 
   private <T> List<T> nullToEmptyList(List<T> inputList) {
