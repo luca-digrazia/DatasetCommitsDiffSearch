@@ -1,7 +1,6 @@
 package com.codahale.metrics.graphite;
 
 import javax.net.SocketFactory;
-
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -24,7 +23,7 @@ public class Graphite implements GraphiteSender {
     private Socket socket;
     private Writer writer;
     private int failures;
-
+    
     /**
      * Creates a new client which connects to the given address using the default
      * {@link SocketFactory}.
@@ -35,7 +34,7 @@ public class Graphite implements GraphiteSender {
     public Graphite(String hostname, int port) {
         this(new InetSocketAddress(hostname, port));
     }
-
+    
     /**
      * Creates a new client which connects to the given address and socket factory.
      *
@@ -95,11 +94,6 @@ public class Graphite implements GraphiteSender {
     }
 
     @Override
-    public boolean isConnected() {
-    		return socket != null && socket.isConnected() && !socket.isClosed();
-    }
-
-    @Override
     public void send(String name, String value, long timestamp) throws IOException {
         try {
             writer.write(sanitize(name));
@@ -121,15 +115,10 @@ public class Graphite implements GraphiteSender {
     }
 
     @Override
-    public void flush() throws IOException {
+    public void close() throws IOException {
         if (writer != null) {
             writer.flush();
         }
-    }
-
-    @Override
-    public void close() throws IOException {
-    	  flush();
         if (socket != null) {
             socket.close();
         }
