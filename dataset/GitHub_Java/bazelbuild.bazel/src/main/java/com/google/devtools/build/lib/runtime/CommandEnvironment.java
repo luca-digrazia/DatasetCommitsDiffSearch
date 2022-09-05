@@ -20,6 +20,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
+import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
@@ -28,10 +29,10 @@ import com.google.devtools.build.lib.analysis.SkyframePackageRootResolver;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.exec.ActionInputPrefetcher;
 import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Target;
@@ -81,7 +82,6 @@ public final class CommandEnvironment {
   private final BlazeModule.ModuleEnvironment blazeModuleEnvironment;
   private final Map<String, String> clientEnv = new TreeMap<>();
   private final Set<String> visibleClientEnv = new TreeSet<>();
-  private final Map<String, String> actionClientEnv = new TreeMap<>();
   private final TimestampGranularityMonitor timestampGranularityMonitor;
   private final Thread commandThread;
 
@@ -90,6 +90,7 @@ public final class CommandEnvironment {
   private PathFragment relativeWorkingDirectory = PathFragment.EMPTY_FRAGMENT;
   private long commandStartTime;
   private OutputService outputService;
+  private ActionInputPrefetcher actionInputPrefetcher;
   private Path workingDirectory;
 
   private String commandName;
@@ -343,6 +344,10 @@ public final class CommandEnvironment {
     return outputService;
   }
 
+  public ActionInputPrefetcher getActionInputPrefetcher() {
+    return actionInputPrefetcher == null ? ActionInputPrefetcher.NONE : actionInputPrefetcher;
+  }
+
   public ActionCache getPersistentActionCache() throws IOException {
     return workspace.getPersistentActionCache(reporter);
   }
@@ -528,6 +533,7 @@ public final class CommandEnvironment {
 
     outputService = null;
     BlazeModule outputModule = null;
+    ImmutableList.Builder<ActionInputPrefetcher> prefetchersBuilder = ImmutableList.builder();
     if (command.builds()) {
       for (BlazeModule module : runtime.getBlazeModules()) {
         OutputService moduleService = module.getOutputService();
@@ -541,8 +547,23 @@ public final class CommandEnvironment {
           outputService = moduleService;
           outputModule = module;
         }
+
+        ActionInputPrefetcher actionInputPrefetcher = module.getPrefetcher();
+        if (actionInputPrefetcher != null) {
+          prefetchersBuilder.add(actionInputPrefetcher);
+        }
       }
     }
+    final ImmutableList<ActionInputPrefetcher> actionInputPrefetchers = prefetchersBuilder.build();
+    actionInputPrefetcher =
+        new ActionInputPrefetcher() {
+          @Override
+          public void prefetchFile(ActionInput input) {
+            for (ActionInputPrefetcher prefetcher : actionInputPrefetchers) {
+              prefetcher.prefetchFile(input);
+            }
+          }
+        };
 
     SkyframeExecutor skyframeExecutor = getSkyframeExecutor();
     skyframeExecutor.setOutputService(outputService);
@@ -571,11 +592,6 @@ public final class CommandEnvironment {
     // Start the performance and memory profilers.
     runtime.beforeCommand(this, options, execStartTimeNanos);
 
-    // actionClientEnv contains the environment where values from actionEnvironment are
-    // overridden.
-    actionClientEnv.clear();
-    actionClientEnv.putAll(clientEnv);
-
     if (command.builds()) {
       Map<String, String> testEnv = new TreeMap<>();
       for (Map.Entry<String, String> entry :
@@ -591,7 +607,6 @@ public final class CommandEnvironment {
           visibleClientEnv.add(entry.getKey());
         } else {
           visibleClientEnv.remove(entry.getKey());
-          actionClientEnv.put(entry.getKey(), entry.getValue());
         }
       }
 
@@ -628,13 +643,5 @@ public final class CommandEnvironment {
       }
     }
     return workspace.getOutputBaseFilesystemTypeName();
-  }
-
-  /**
-   * Returns the client environment for which value specified in the command line with the flag
-   * --action_env have been enforced.
-   */
-  public Map<String, String> getActionClientEnv() {
-    return Collections.unmodifiableMap(actionClientEnv);
   }
 }
