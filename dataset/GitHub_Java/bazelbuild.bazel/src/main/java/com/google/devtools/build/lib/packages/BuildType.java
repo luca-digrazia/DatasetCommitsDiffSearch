@@ -97,13 +97,8 @@ public final class BuildType {
     }
 
     @Override
-    protected boolean containsLabels() {
-      return false;
-    }
-
-    @Override
-    public Collection<Object> extractLabels(Object value) {
-      return NO_LABELS;
+    public Collection<Object> flatten(Object value) {
+      return NOT_COMPOSITE_TYPE;
     }
 
     @Override
@@ -196,12 +191,7 @@ public final class BuildType {
     }
 
     @Override
-    protected boolean containsLabels() {
-      return true;
-    }
-
-    @Override
-    public Collection<? extends Object> extractLabels(Object value) {
+    public Collection<? extends Object> flatten(Object value) {
       return cast(value).getLabels();
     }
   }
@@ -218,12 +208,7 @@ public final class BuildType {
     }
 
     @Override
-    protected boolean containsLabels() {
-      return true;
-    }
-
-    @Override
-    public Iterable<Label> extractLabels(Object value) {
+    public Collection<Label> flatten(Object value) {
       return ImmutableList.of(cast(value));
     }
 
@@ -274,13 +259,8 @@ public final class BuildType {
     }
 
     @Override
-    protected boolean containsLabels() {
-      return false;
-    }
-
-    @Override
-    public Collection<Object> extractLabels(Object value) {
-      return NO_LABELS;
+    public Collection<Object> flatten(Object value) {
+      return NOT_COMPOSITE_TYPE;
     }
 
     @Override
@@ -319,13 +299,8 @@ public final class BuildType {
     }
 
     @Override
-    protected boolean containsLabels() {
-      return false;
-    }
-
-    @Override
-    public Collection<Object> extractLabels(Object what) {
-      return NO_LABELS;
+    public Collection<Object> flatten(Object what) {
+      return NOT_COMPOSITE_TYPE;
     }
 
     @Override
@@ -351,12 +326,7 @@ public final class BuildType {
     }
 
     @Override
-    protected boolean containsLabels() {
-      return true;
-    }
-
-    @Override
-    public Collection<Label> extractLabels(Object value) {
+    public Collection<Label> flatten(Object value) {
       return ImmutableList.of(cast(value));
     }
 
@@ -415,7 +385,7 @@ public final class BuildType {
               context, originalType, ((SelectorValue) elem).getNoMatchError()));
         } else {
           T directValue = originalType.convert(elem, what, context);
-          builder.add(new Selector<>(ImmutableMap.of(Selector.DEFAULT_CONDITION_KEY, directValue),
+          builder.add(new Selector<T>(ImmutableMap.of(Selector.DEFAULT_CONDITION_KEY, directValue),
               what, context, originalType));
         }
       }
@@ -473,8 +443,7 @@ public final class BuildType {
         Label.parseAbsoluteUnchecked(DEFAULT_CONDITION_KEY);
 
     private final Type<T> originalType;
-    // Can hold null values, underlying implementation should be ordered.
-    private final Map<Label, T> map;
+    private final Map<Label, T> map; // Can hold null values.
     private final Set<Label> conditionsWithDefaultValues;
     private final String noMatchError;
     private final boolean hasDefaultCondition;
@@ -482,9 +451,11 @@ public final class BuildType {
     /**
      * Creates a new Selector using the default error message when no conditions match.
      */
+    @VisibleForTesting
     Selector(ImmutableMap<?, ?> x, String what, @Nullable Label context, Type<T> originalType)
         throws ConversionException {
       this(x, what, context, originalType, "");
+
     }
 
     /**
@@ -493,7 +464,7 @@ public final class BuildType {
     Selector(ImmutableMap<?, ?> x, String what, @Nullable Label context, Type<T> originalType,
         String noMatchError) throws ConversionException {
       this.originalType = originalType;
-      LinkedHashMap<Label, T> result = new LinkedHashMap<>();
+      Map<Label, T> result = new LinkedHashMap<>();
       ImmutableSet.Builder<Label> defaultValuesBuilder = ImmutableSet.builder();
       boolean foundDefaultCondition = false;
       for (Entry<?, ?> entry : x.entrySet()) {
@@ -509,27 +480,10 @@ public final class BuildType {
           result.put(key, originalType.convert(entry.getValue(), what, context));
         }
       }
-      this.map = Collections.unmodifiableMap(result);
+      map = Collections.unmodifiableMap(result);
       this.noMatchError = noMatchError;
-      this.conditionsWithDefaultValues = defaultValuesBuilder.build();
-      this.hasDefaultCondition = foundDefaultCondition;
-    }
-
-    /**
-     * Create a new Selector from raw values. A defensive copy of the supplied map is <i>not</i>
-     * made, so it imperative that it is not modified following construction.
-     */
-    Selector(
-        LinkedHashMap<Label, T> map,
-        Type<T> originalType,
-        String noMatchError,
-        ImmutableSet<Label> conditionsWithDefaultValues,
-        boolean hasDefaultCondition) {
-      this.originalType = originalType;
-      this.map = Collections.unmodifiableMap(map);
-      this.noMatchError = noMatchError;
-      this.conditionsWithDefaultValues = conditionsWithDefaultValues;
-      this.hasDefaultCondition = hasDefaultCondition;
+      conditionsWithDefaultValues = defaultValuesBuilder.build();
+      hasDefaultCondition = foundDefaultCondition;
     }
 
     /**
@@ -617,13 +571,8 @@ public final class BuildType {
     }
 
     @Override
-    protected boolean containsLabels() {
-      return false;
-    }
-
-    @Override
-    public Collection<Object> extractLabels(Object value) {
-      return NO_LABELS;
+    public Collection<Object> flatten(Object value) {
+      return NOT_COMPOSITE_TYPE;
     }
 
     @Override
