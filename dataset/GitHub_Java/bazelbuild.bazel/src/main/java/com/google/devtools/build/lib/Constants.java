@@ -30,23 +30,22 @@ public class Constants {
   public static final ImmutableList<String> IGNORED_TEST_WARNING_PREFIXES = ImmutableList.of();
   public static final String DEFAULT_RUNFILES_PREFIX = "";
 
-  public static final String NATIVE_DEPS_LIB_SUFFIX = "_nativedeps";
-
   public static final ImmutableList<String> WATCHFS_BLACKLIST = ImmutableList.of();
 
   public static final String PRELUDE_FILE_DEPOT_RELATIVE_PATH = "tools/build_rules/prelude_bazel";
-
+ 
   /**
-   * List of common attributes documentation, relative to {@link com.google.devtools.build.docgen}.
+   * List of common attributes documentation, relative to {@link com.google.devtools.build.docgen}. 
    */
   public static final ImmutableList<String> COMMON_ATTRIBUTES_DOCFILES = ImmutableList.of(
-      "templates/attributes/common/data.html",
-      "templates/attributes/common/deprecation.html",
       "templates/attributes/common/deps.html",
-      "templates/attributes/common/distribs.html",
+      "templates/attributes/common/data.html",
       "templates/attributes/common/licenses.html",
-      "templates/attributes/common/tags.html",
-      "templates/attributes/common/testonly.html",
+      "templates/attributes/common/distribs.html",
+      "templates/attributes/common/deprecation.html", 
+      "templates/attributes/common/obsolete.html",
+      "templates/attributes/common/testonly.html", 
+      "templates/attributes/common/tags.html", 
       "templates/attributes/common/visibility.html");
 
   /**
@@ -54,7 +53,7 @@ public class Constants {
    * {@link com.google.devtools.build.docgen}.
    */
   public static final ImmutableList<String> BINARY_ATTRIBUTES_DOCFILES = ImmutableList.of(
-      "templates/attributes/binary/args.html",
+      "templates/attributes/binary/args.html", 
       "templates/attributes/binary/output_licenses.html");
 
   /**
