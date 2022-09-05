@@ -55,6 +55,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -477,7 +478,8 @@ public final class RuleClass {
     private PredicateWithMessage<Rule> validityPredicate =
         PredicatesWithMessage.<Rule>alwaysTrue();
     private Predicate<String> preferredDependencyPredicate = Predicates.alwaysFalse();
-    private AdvertisedProviderSet.Builder advertisedProviders = AdvertisedProviderSet.builder();
+    private List<Class<?>> advertisedProviders = new ArrayList<>();
+    private boolean canHaveAnyProvider = false;
     private BaseFunction configuredTargetFunction = null;
     private Function<? super Rule, Map<String, Label>> externalBindingsFunction =
         NO_EXTERNAL_BINDINGS;
@@ -529,7 +531,7 @@ public final class RuleClass {
           attributes.put(attrName, attribute);
         }
 
-        advertisedProviders.addParent(parent.getAdvertisedProviders());
+        advertisedProviders.addAll(parent.getAdvertisedProviders());
       }
       // TODO(bazel-team): move this testonly attribute setting to somewhere else
       // preferably to some base RuleClass implementation.
@@ -589,7 +591,8 @@ public final class RuleClass {
           configuredTargetFactory,
           validityPredicate,
           preferredDependencyPredicate,
-          advertisedProviders.build(),
+          ImmutableSet.copyOf(advertisedProviders),
+          canHaveAnyProvider,
           configuredTargetFunction,
           externalBindingsFunction,
           ruleDefinitionEnvironment,
@@ -755,9 +758,8 @@ public final class RuleClass {
      * not be evaluated for the rule.
      */
     public Builder advertiseProvider(Class<?>... providers) {
-      for (Class<?> provider : providers) {
-        advertisedProviders.addNative(provider);
-      }
+      Preconditions.checkState(!canHaveAnyProvider);
+      Collections.addAll(advertisedProviders, providers);
       return this;
     }
 
@@ -766,7 +768,8 @@ public final class RuleClass {
      * <code>bind</code> .
      */
     public Builder canHaveAnyProvider() {
-      advertisedProviders.canHaveAnyProvider();
+      Preconditions.checkState(advertisedProviders.isEmpty());
+      canHaveAnyProvider = true;
       return this;
     }
 
@@ -1000,7 +1003,9 @@ public final class RuleClass {
   /**
    * The list of transitive info providers this class advertises to aspects.
    */
-  private final AdvertisedProviderSet advertisedProviders;
+  private final ImmutableSet<Class<?>> advertisedProviders;
+
+  private final boolean canHaveAnyProvider;
 
   /**
    * The Skylark rule implementation of this RuleClass. Null for non Skylark executable RuleClasses.
@@ -1068,7 +1073,8 @@ public final class RuleClass {
       ConfiguredTargetFactory<?, ?> configuredTargetFactory,
       PredicateWithMessage<Rule> validityPredicate,
       Predicate<String> preferredDependencyPredicate,
-      AdvertisedProviderSet advertisedProviders,
+      ImmutableSet<Class<?>> advertisedProviders,
+      boolean canHaveAnyProvider,
       @Nullable BaseFunction configuredTargetFunction,
       Function<? super Rule, Map<String, Label>> externalBindingsFunction,
       @Nullable Environment ruleDefinitionEnvironment,
@@ -1090,6 +1096,7 @@ public final class RuleClass {
     this.validityPredicate = validityPredicate;
     this.preferredDependencyPredicate = preferredDependencyPredicate;
     this.advertisedProviders = advertisedProviders;
+    this.canHaveAnyProvider = canHaveAnyProvider;
     this.configuredTargetFunction = configuredTargetFunction;
     this.externalBindingsFunction = externalBindingsFunction;
     this.ruleDefinitionEnvironment = ruleDefinitionEnvironment;
@@ -1259,10 +1266,23 @@ public final class RuleClass {
    *
    * <p>This is here so that we can do the loading phase overestimation required for "blaze query",
    * which does not have the configured targets available.
-   **/
-  public AdvertisedProviderSet getAdvertisedProviders() {
+   *
+   * <p>This should in theory only contain subclasses of
+   * {@link com.google.devtools.build.lib.analysis.TransitiveInfoProvider}, but
+   * our current dependency structure does not allow a reference to that class here.
+   */
+  public ImmutableSet<Class<?>> getAdvertisedProviders() {
     return advertisedProviders;
   }
+
+  /**
+   * Returns true if this rule, when analyzed, can provide any provider. Used for "alias" rules,
+   * e.g. <code>bind()</code>.
+   */
+  public boolean canHaveAnyProvider() {
+    return canHaveAnyProvider;
+  }
+
   /**
    * For --compile_one_dependency: if multiple rules consume the specified target,
    * should we choose this one over the "unpreferred" options?

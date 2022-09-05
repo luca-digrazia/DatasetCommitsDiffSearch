@@ -132,6 +132,7 @@ public class BaseRuleClasses {
               env.getToolsLabel("//tools/test:runtime"))))
           // Input files for test actions collecting code coverage
           .add(attr("$coverage_support", LABEL)
+              .cfg(HOST)
               .value(env.getLabel("//tools/defaults:coverage_support")))
           // Used in the one-per-build coverage report generation action.
           .add(attr("$coverage_report_generator", LABEL)
@@ -151,7 +152,6 @@ public class BaseRuleClasses {
       return RuleDefinition.Metadata.builder()
           .name("$test_base_rule")
           .type(RuleClassType.ABSTRACT)
-          .ancestors(RootRule.class)
           .build();
     }
   }
@@ -161,6 +161,8 @@ public class BaseRuleClasses {
    */
   public static RuleClass.Builder commonCoreAndSkylarkAttributes(RuleClass.Builder builder) {
     return builder
+        .add(attr("name", STRING)
+            .nonconfigurable("Rule name"))
         // The visibility attribute is special: it is a nodep label, and loading the
         // necessary package groups is handled by {@link LabelVisitor#visitTargetVisibility}.
         // Package groups always have the null configuration so that they are not duplicated
@@ -197,38 +199,15 @@ public class BaseRuleClasses {
         );
   }
 
-  public static RuleClass.Builder nameAttribute(RuleClass.Builder builder) {
-    return builder.add(attr("name", STRING).nonconfigurable("Rule name"));
-  }
-
   /**
-   * Ancestor of every rule.
-   *
-   * <p>Adds the name attribute to every rule.
-   */
-  public static final class RootRule implements RuleDefinition {
-
-    @Override
-    public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
-        return nameAttribute(builder).build();
-    }
-
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$root_rule")
-          .type(RuleClassType.ABSTRACT)
-          .build();
-    }
-  }
-
-  /**
-   * Common parts of some rules.
+   * Common parts of rules.
    */
   public static final class BaseRule implements RuleDefinition {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
       return commonCoreAndSkylarkAttributes(builder)
+          // The name attribute is handled specially, so it does not appear here.
+          //
           // Aggregates the labels of all {@link ConfigRuleClasses} rules this rule uses (e.g.
           // keys for configurable attributes). This is specially populated in
           // {@RuleClass#populateRuleAttributeValues}.
@@ -255,13 +234,12 @@ public class BaseRuleClasses {
       return RuleDefinition.Metadata.builder()
           .name("$base_rule")
           .type(RuleClassType.ABSTRACT)
-          .ancestors(RootRule.class)
           .build();
     }
   }
 
   /**
-   * Common ancestor class for some rules.
+   * Common ancestor class for all rules.
    */
   public static final class RuleBase implements RuleDefinition {
     @Override
@@ -306,7 +284,6 @@ public class BaseRuleClasses {
       return RuleDefinition.Metadata.builder()
           .name("$binary_base_rule")
           .type(RuleClassType.ABSTRACT)
-          .ancestors(RootRule.class)
           .build();
     }
   }
