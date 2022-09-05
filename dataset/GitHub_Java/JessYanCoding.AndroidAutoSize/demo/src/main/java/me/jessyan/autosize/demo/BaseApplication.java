@@ -28,7 +28,7 @@ import me.jessyan.autosize.external.ExternalAdaptInfo;
 import me.jessyan.autosize.external.ExternalAdaptManager;
 import me.jessyan.autosize.internal.CustomAdapt;
 import me.jessyan.autosize.onAdaptListener;
-import me.jessyan.autosize.utils.AutoSizeLog;
+import me.jessyan.autosize.utils.LogUtils;
 
 /**
  * ================================================
@@ -69,10 +69,6 @@ public class BaseApplication extends Application {
                 //如果为 false, 则会跟随系统设置中字体大小的改变, 默认为 false
 //                .setExcludeFontScale(true)
 
-                //区别于系统字体大小的放大比例, AndroidAutoSize 允许 APP 内部可以独立于系统字体大小之外，独自拥有全局调节 APP 字体大小的能力
-                //当然, 在 APP 内您必须使用 sp 来作为字体的单位, 否则此功能无效, 不设置或将此值设为 0 则取消此功能
-//                .setPrivateFontScale(0.8f)
-
                 //屏幕适配监听器
                 .setOnAdaptListener(new onAdaptListener() {
                     @Override
@@ -82,12 +78,12 @@ public class BaseApplication extends Application {
                         //系统会重绘当前的页面, 经测试在某些机型, 某些情况下系统不会重绘当前页面, ScreenUtils.getScreenSize(activity) 的参数一定要不要传 Application!!!
 //                        AutoSizeConfig.getInstance().setScreenWidth(ScreenUtils.getScreenSize(activity)[0]);
 //                        AutoSizeConfig.getInstance().setScreenHeight(ScreenUtils.getScreenSize(activity)[1]);
-                        AutoSizeLog.d(String.format(Locale.ENGLISH, "%s onAdaptBefore!", target.getClass().getName()));
+                        LogUtils.d(String.format(Locale.ENGLISH, "%s onAdaptBefore!", target.getClass().getName()));
                     }
 
                     @Override
                     public void onAdaptAfter(Object target, Activity activity) {
-                        AutoSizeLog.d(String.format(Locale.ENGLISH, "%s onAdaptAfter!", target.getClass().getName()));
+                        LogUtils.d(String.format(Locale.ENGLISH, "%s onAdaptAfter!", target.getClass().getName()));
                     }
                 })
 
