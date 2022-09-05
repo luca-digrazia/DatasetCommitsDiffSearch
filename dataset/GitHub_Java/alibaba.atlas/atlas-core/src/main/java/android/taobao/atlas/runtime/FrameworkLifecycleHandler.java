@@ -209,7 +209,12 @@
 package android.taobao.atlas.runtime;
 
 import android.content.ComponentCallbacks;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.res.Configuration;
+import android.os.Looper;
+import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
+import android.taobao.atlas.bundleInfo.BundleListing;
 import android.taobao.atlas.framework.Atlas;
 import android.taobao.atlas.framework.BundleImpl;
 import android.taobao.atlas.framework.BundleInstaller;
@@ -223,7 +228,14 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.taobao.atlas.framework.Framework;
+import android.taobao.atlas.runtime.newcomponent.AdditionalPackageManager;
+import android.taobao.atlas.startup.patch.KernalConstants;
 import android.taobao.atlas.util.StringUtils;
+import android.taobao.atlas.util.log.impl.AtlasMonitor;
+import android.taobao.atlas.versionInfo.BaselineInfoManager;
+
+import java.util.List;
+
 
 public class FrameworkLifecycleHandler implements FrameworkListener {
 
@@ -231,10 +243,6 @@ public class FrameworkLifecycleHandler implements FrameworkListener {
     public void frameworkEvent(FrameworkEvent event) {
         switch (event.getType()) {
             case 0:/* STARTING */
-                //TODO bundle 可配置
-//                if(Framework.getCurProcessName().equals(RuntimeVariables.androidApplication.getPackageName())) {
-//                    BundleInstallerFetcher.obtainInstaller().installTransitivelySync(new String[]{"com.taobao.taobao.home"});
-//                }
                 starting();
                 break;
             case FrameworkEvent.STARTED:
@@ -250,6 +258,10 @@ public class FrameworkLifecycleHandler implements FrameworkListener {
     private void starting() {
         if(RuntimeVariables.safeMode){
             return;
+        }
+
+        if(BaselineInfoManager.instance().isUpdated("com.taobao.maindex")){
+            AdditionalPackageManager.getInstance();
         }
         
         long time = System.currentTimeMillis();
@@ -274,7 +286,6 @@ public class FrameworkLifecycleHandler implements FrameworkListener {
                         Application app = BundleLifecycleHandler.newApplication(appClassName,
                                                                                 Framework.getSystemClassLoader());
                         app.onCreate();
-//                        DelegateComponent.apkApplications.put("system:" + appClassName, app);
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
@@ -301,37 +312,70 @@ public class FrameworkLifecycleHandler implements FrameworkListener {
             }
         });
 
+        List<BundleListing.BundleInfo> allMbundleInfos = AtlasBundleInfoManager.instance().getAllMBundleInfo();
+
+        for (BundleListing.BundleInfo bundleInfo:allMbundleInfos){
+            try {
+                Application app = BundleLifecycleHandler.newApplication(bundleInfo.applicationName,
+                        Framework.getSystemClassLoader());
+                app.onCreate();
+            }catch (Exception e){
+                e.printStackTrace();
+            }
+
+        }
+
+//        try {
+//            if (RuntimeVariables.androidApplication.getPackageName().equals(RuntimeVariables.getProcessName(RuntimeVariables.androidApplication))) {
+//                SharedPreferences sharedPreferences = RuntimeVariables.androidApplication.getSharedPreferences(KernalConstants.ATLAS_MONITOR, Context.MODE_PRIVATE);
+//                String errMsg = sharedPreferences.getString(KernalConstants.DD_BASELINEINFO_FAIL, " ");
+//                AtlasMonitor.getInstance().trace(KernalConstants.DD_BASELINEINFO_FAIL, false, "0", errMsg, "");
+//
+//                errMsg = sharedPreferences.getString(KernalConstants.DD_INSTALL_DEXOPT_FAIL, "");
+//                AtlasMonitor.getInstance().trace(KernalConstants.DD_INSTALL_DEXOPT_FAIL, false, "0", errMsg, "");
+//
+//                errMsg = sharedPreferences.getString(KernalConstants.DD_INSTALL_NATIVE_SO_UZIP_FAIL, "");
+//                AtlasMonitor.getInstance().trace(KernalConstants.DD_INSTALL_NATIVE_SO_UZIP_FAIL, false, "0", errMsg, "");
+//                sharedPreferences.edit().clear();
+//            }
+//        } catch (Throwable e) {}
+
         if(RuntimeVariables.getProcessName(RuntimeVariables.androidApplication).equals(RuntimeVariables.androidApplication.getPackageName())) {
-            String autoStartBundle = (String) RuntimeVariables.getFrameworkProperty("autoStartBundles");
+            final String autoStartBundle = (String) RuntimeVariables.getFrameworkProperty("autoStartBundles");
             if (autoStartBundle != null) {
-                String[] bundles = autoStartBundle.split(",");
-                if (bundles.length > 0) {
-                    for (int x = 0; x < bundles.length; x++) {
-                        final String bundleName = bundles[0];
-                        BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(bundleName);
-                        if (impl == null) {
-                            BundleInstaller.startDelayInstall(bundleName, new BundleInstaller.InstallListener() {
-                                @Override
-                                public void onFinished() {
-                                    BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(bundleName);
-                                    if (impl != null) {
-                                        try {
-                                            impl.start();
-                                        } catch (BundleException e) {
-                                            e.printStackTrace();
+                new android.os.Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        String[] bundles = autoStartBundle.split(",");
+                        if (bundles.length > 0) {
+                            for (int x = 0; x < bundles.length; x++) {
+                                final String bundleName = bundles[x];
+                                BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(bundleName);
+                                if (impl == null) {
+                                    BundleInstaller.startDelayInstall(bundleName, new BundleInstaller.InstallListener() {
+                                        @Override
+                                        public void onFinished() {
+                                            BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(bundleName);
+                                            if (impl != null) {
+                                                try {
+                                                    impl.start();
+                                                } catch (BundleException e) {
+                                                    e.printStackTrace();
+                                                }
+                                            }
                                         }
+                                    });
+                                } else {
+                                    try {
+                                        impl.start();
+                                    } catch (BundleException e) {
+                                        e.printStackTrace();
                                     }
                                 }
-                            });
-                        } else {
-                            try {
-                                impl.start();
-                            } catch (BundleException e) {
-                                e.printStackTrace();
                             }
                         }
                     }
-                }
+                },4000);
             }
         }
     }

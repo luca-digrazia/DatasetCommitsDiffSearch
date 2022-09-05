@@ -220,33 +220,10 @@ import java.util.*;
  */
 public class BundleListing implements Serializable{
 
-    private LinkedHashMap<String,BundleInfo> bundles = new LinkedHashMap<String,BundleInfo>();
-
-    public static BundleListing clone(BundleListing source){
-        BundleListing listing = new BundleListing();
-        if(source.getBundles()==null){
-            return listing;
-        }
-        LinkedHashMap<String,BundleInfo> infos = new LinkedHashMap<String,BundleInfo>();
-
-        Iterator<Map.Entry<String, BundleInfo>> iterator = source.getBundles().entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<String, BundleInfo> entry = iterator.next();
-            BundleInfo newInfo = BundleInfo.cloneWithoutUrl(entry.getValue());
-            infos.put(entry.getKey(),newInfo);
-        }
-        listing.setBundles(infos);
-        return listing;
-    }
+    public LinkedHashMap<String,BundleInfo> bundles = new LinkedHashMap<String,BundleInfo>();
 
     public LinkedHashMap<String,BundleInfo> getBundles() {
         return bundles;
-    }
-
-    public void insertBundle(BundleInfo bundle){
-        if(bundle!=null){
-            bundles.put(bundle.getPkgName(),bundle);
-        }
     }
 
     public void setBundles(LinkedHashMap<String,BundleInfo> bundles) {
@@ -255,128 +232,77 @@ public class BundleListing implements Serializable{
 
 
     public static class BundleInfo{
-        private String name;
-        private String pkgName;
-		private String applicationName;
-        private long size;
-        private String version;
-        private String desc;
-        private String url;
-        private String md5;
-        private String host;
-        private boolean isInternal = true;
-        private List<String> dependency;
-        private List<String> totalDependency;
-        private HashMap<String,Boolean> activities;
-        private HashMap<String,Boolean> services;
-        private HashMap<String,Boolean> receivers;
-        private HashMap<String,Boolean> contentProviders;
-        private boolean hasSO;
+        public String name;
+        public String pkgName;
+        public String applicationName;
+        public String version;
+        public String desc;
+        public String url;
+        public String md5;
+        public boolean isInternal = true;
+        public boolean isMBundle = false;
+        public List<String> dependency;
+        public List<String> totalDependency;
+        public HashMap<String,Boolean> activities;
+        public HashMap<String,Boolean> services;
+        public HashMap<String,Boolean> receivers;
+        public HashMap<String,Boolean> contentProviders;
+        public HashMap<String,String>  remoteFragments;
+        public HashMap<String,String>  remoteViews;
+        public HashMap<String,String>  remoteTransactors;
+        public String unique_tag;
+        public long size;
+
+        public long getSize() {
+            return size;
+        }
+
+        public boolean isMBundle() {
+            return isMBundle;
+        }
 
         public boolean isInternal() {
             return isInternal;
         }
 
-        public void setIsInternal(boolean isInternal) {
-            this.isInternal = isInternal;
-        }
-
-        public String getHost() {
-            return host;
-        }
-
-        public void setHost(String host) {
-            this.host = host;
-        }
-        
         public String getApplicationName() {
 			return applicationName;
 		}
 
-		public void setApplicationName(String applicationName) {
-			this.applicationName = applicationName;
-		}
-		
         public HashMap<String,Boolean> getReceivers() {
             return receivers;
-        }
-
-        public void setReceivers(HashMap<String,Boolean> receivers) {
-            this.receivers = receivers;
         }
 
         public HashMap<String,Boolean> getContentProviders() {
             return contentProviders;
         }
 
-        public void setContentProviders(HashMap<String,Boolean> contentProviders) {
-            this.contentProviders = contentProviders;
-        }
-
-        public boolean isHasSO() {
-            return hasSO;
-        }
-
-        public void setHasSO(boolean hasSO) {
-            this.hasSO = hasSO;
+        public String getUnique_tag() {
+            return unique_tag;
         }
 
         public String getMd5() {
             return md5;
         }
 
-        public void setMd5(String md5) {
-            this.md5 = md5;
-        }
-
         public String getUrl() {
             return url;
-        }
-
-        public void setUrl(String url) {
-
-            Log.d("BundleListing","url = "+url);
-            this.url = url;
         }
 
         public String getDesc() {
             return desc;
         }
 
-        public void setDesc(String desc) {
-            this.desc = desc;
-        }
-
         public String getName() {
             return name;
-        }
-
-        public void setName(String name) {
-            this.name = name;
         }
 
         public String getPkgName() {
             return pkgName;
         }
 
-        public void setPkgName(String pkgName) {
-            this.pkgName = pkgName;
-        }
-
-        public long getSize() {
-            return size;
-        }
-
-        public void setSize(long size) {
-            this.size = size;
-        }
-
         public String getVersion() {
             return version;
-        }
-
-        public void setVersion(String version) {
-            this.version = version;
         }
 
         public List<String> getDependency() {
@@ -400,16 +326,8 @@ public class BundleListing implements Serializable{
             return activities;
         }
 
-        public void setActivities(HashMap<String,Boolean> activities) {
-            this.activities = activities;
-        }
-
         public HashMap<String,Boolean> getServices() {
             return services;
-        }
-
-        public void setServices(HashMap<String,Boolean> services) {
-            this.services = services;
         }
 
         public HashMap<String,Boolean> getComponents(){
@@ -449,58 +367,30 @@ public class BundleListing implements Serializable{
         }
 
         private void findBundleTransitively(String location,List<String> bundlesListForInstall){
-            //打断循环依赖
-            if(bundlesListForInstall.contains(location)){
+//            //打断循环依赖
+            findBundleTransitivelyInternal(location,bundlesListForInstall,location);
+        }
+
+        private void findBundleTransitivelyInternal(String location,List<String> bundlesListForInstall,final String root){
+//            //打断循环依赖
+            if(!bundlesListForInstall.contains(location)) {
+                bundlesListForInstall.add(0,location);
+            }else{
+                if(!location.equals(root)) {
+                    bundlesListForInstall.remove(location);
+                    bundlesListForInstall.add(0, location);
+                }
                 return;
             }
+
             List<String> singleLevelDependencies = AtlasBundleInfoManager.instance().getDependencyForBundle(location);
             if(singleLevelDependencies!=null){
                 for(String dependepcy : singleLevelDependencies){
                     if(dependepcy!=null){
-                        findBundleTransitively(dependepcy,bundlesListForInstall);
+                        findBundleTransitivelyInternal(dependepcy,bundlesListForInstall,root);
                     }
                 }
             }
-            if(!bundlesListForInstall.contains(location)) {
-                bundlesListForInstall.add(location);
-            }
-        }
-
-
-
-        public static BundleInfo cloneWithoutUrl(BundleInfo source){
-            BundleInfo info = new BundleInfo();
-            info.setName(source.getName());
-            info.setPkgName(source.getPkgName());
-            info.setSize(source.getSize());
-            info.setApplicationName(source.getApplicationName());
-            info.setVersion(source.getVersion());
-            info.setDesc(source.getDesc());
-            info.setMd5(source.getMd5());
-            info.setHost(source.getHost());
-            info.setIsInternal(source.isInternal());
-            info.setHasSO(source.isHasSO());
-            if(source.getDependency()!=null) {
-                ArrayList dependency = new ArrayList<String>(source.getDependency());
-                info.setDependency(dependency);
-            }
-            if(source.getActivities()!=null) {
-                HashMap<String,Boolean> activies = new HashMap<String,Boolean>(source.getActivities());
-                info.setActivities(activies);
-            }
-            if(source.getServices()!=null) {
-                HashMap<String,Boolean> services = new HashMap<String,Boolean>(source.getServices());
-                info.setServices(services);
-            }
-            if(source.getReceivers()!=null) {
-                HashMap<String,Boolean> receivers = new HashMap<String,Boolean>(source.getReceivers());
-                info.setReceivers(receivers);
-            }
-            if(source.getContentProviders()!=null) {
-                HashMap<String,Boolean> providers = new HashMap<String,Boolean>(source.getContentProviders());
-                info.setContentProviders(providers);
-            }
-            return info;
         }
     }
 }

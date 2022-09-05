@@ -218,7 +218,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -312,7 +311,7 @@ public class ApkInjectInfoCreator {
                 basicBundleInfo.setContentProviders(bundleInfo.getContentProviders());
             }
             if (!bundleInfo.getDependency().isEmpty()) {
-                basicBundleInfo.setDependency(bundleInfo.getDependency());
+                basicBundleInfo.setDependency(newDependency(bundleInfo.getDependency(),appVariantContext));
             }
             if (!bundleInfo.getReceivers().isEmpty()) {
                 basicBundleInfo.setReceivers(bundleInfo.getReceivers());
@@ -334,17 +333,7 @@ public class ApkInjectInfoCreator {
             basicBundleInfoMap.put(bundleInfo.getPkgName(), basicBundleInfo);
         }
 
-        Collections.sort(basicBundleInfos, (o1, o2) -> {
-            if (o1.getDependency().contains(o2.getPkgName())){
-                return -1;
-            }else {
-                return 1;
-            }
-        });
-
-//        basicBundleInfos.forEach(basicBundleInfo -> basicBundleInfo.setDependency(newDependency(basicBundleInfo.getDependency(),appVariantContext)));
-
-                injectParam.bundleInfo = JSON.toJSONString(basicBundleInfos);
+        injectParam.bundleInfo = JSON.toJSONString(basicBundleInfos);
 
         //FIXME MOVE TO MTL-PLUGIN
         //List<String> autoStartBundles = new ArrayList<String>(appVariantContext.getAtlasExtension().getTBuildConfig
