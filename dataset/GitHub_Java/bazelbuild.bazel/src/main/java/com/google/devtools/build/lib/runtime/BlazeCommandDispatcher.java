@@ -239,7 +239,7 @@ public class BlazeCommandDispatcher {
     // the command's execution - that's why we do this separately,
     // rather than in runtime.beforeCommand().
     runtime.getTimestampGranularityMonitor().setCommandStartTime();
-    CommandEnvironment env = runtime.initCommand();
+    runtime.initEventBus();
 
     if (args.isEmpty()) { // Default to help command if no arguments specified.
       args = HELP_COMMAND;
@@ -262,7 +262,7 @@ public class BlazeCommandDispatcher {
     AbruptExitException exitCausingException = null;
     for (BlazeModule module : runtime.getBlazeModules()) {
       try {
-        module.beforeCommand(runtime, commandAnnotation, env);
+        module.beforeCommand(runtime, commandAnnotation);
       } catch (AbruptExitException e) {
         // Don't let one module's complaints prevent the other modules from doing necessary
         // setup. We promised to call beforeCommand exactly once per-module before each command
@@ -340,7 +340,7 @@ public class BlazeCommandDispatcher {
     PrintStream savedErr = System.err;
 
     EventHandler handler = createEventHandler(outErr, eventHandlerOptions);
-    Reporter reporter = env.getReporter();
+    Reporter reporter = runtime.getReporter();
     reporter.addHandler(handler);
 
     // We register an ANSI-allowing handler associated with {@code handler} so that ANSI control
@@ -372,10 +372,9 @@ public class BlazeCommandDispatcher {
 
       try {
         // Notify the BlazeRuntime, so it can do some initial setup.
-        runtime.beforeCommand(commandAnnotation, env, optionsParser, commonOptions,
-            execStartTimeNanos);
+        runtime.beforeCommand(commandAnnotation, optionsParser, commonOptions, execStartTimeNanos);
         // Allow the command to edit options after parsing:
-        command.editOptions(env, optionsParser);
+        command.editOptions(runtime, optionsParser);
       } catch (AbruptExitException e) {
         reporter.handle(Event.error(e.getMessage()));
         return e.getExitCode().getNumericExitCode();
@@ -386,8 +385,8 @@ public class BlazeCommandDispatcher {
         reporter.handle(Event.warn(warning));
       }
 
-      ExitCode outcome = command.exec(env, optionsParser);
-      outcome = runtime.precompleteCommand(env, outcome);
+      ExitCode outcome = command.exec(runtime, optionsParser);
+      outcome = runtime.precompleteCommand(outcome);
       numericExitCode = outcome.getNumericExitCode();
       return numericExitCode;
     } catch (ShutdownBlazeServerException e) {
@@ -401,7 +400,7 @@ public class BlazeCommandDispatcher {
           : ExitCode.BLAZE_INTERNAL_ERROR.getNumericExitCode();
       throw new ShutdownBlazeServerException(numericExitCode, e);
     } finally {
-      runtime.afterCommand(env, numericExitCode);
+      runtime.afterCommand(numericExitCode);
       // Swallow IOException, as we are already in a finally clause
       Flushables.flushQuietly(outErr.getOutputStream());
       Flushables.flushQuietly(outErr.getErrorStream());
