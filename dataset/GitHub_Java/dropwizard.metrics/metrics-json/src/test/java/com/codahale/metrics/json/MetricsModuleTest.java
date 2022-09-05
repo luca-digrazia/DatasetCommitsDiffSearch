@@ -16,7 +16,12 @@ public class MetricsModuleTest {
 
     @Test
     public void serializesGauges() throws Exception {
-        final Gauge<Integer> gauge = () -> 100;
+        final Gauge<Integer> gauge = new Gauge<Integer>() {
+            @Override
+            public Integer getValue() {
+                return 100;
+            }
+        };
 
         assertThat(mapper.writeValueAsString(gauge))
                 .isEqualTo("{\"value\":100}");
@@ -24,8 +29,11 @@ public class MetricsModuleTest {
 
     @Test
     public void serializesGaugesThatThrowExceptions() throws Exception {
-        final Gauge<Integer> gauge = () -> {
-            throw new IllegalArgumentException("poops");
+        final Gauge<Integer> gauge = new Gauge<Integer>() {
+            @Override
+            public Integer getValue() {
+                throw new IllegalArgumentException("poops");
+            }
         };
 
         assertThat(mapper.writeValueAsString(gauge))
