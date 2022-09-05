@@ -57,8 +57,7 @@ public class ObjcXcodeprojRule implements RuleDefinition {
                 "ios_test",
                 "objc_bundle_library",
                 "objc_import",
-                "objc_library",
-                "experimental_objc_library")
+                "objc_library")
             .allowedFileTypes())
         .override(attr("testonly", BOOLEAN)
             .nonconfigurable("Must support test deps.")
