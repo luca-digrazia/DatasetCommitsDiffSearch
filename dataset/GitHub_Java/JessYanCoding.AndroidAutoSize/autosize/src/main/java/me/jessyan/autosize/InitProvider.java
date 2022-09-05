@@ -32,13 +32,9 @@ import android.net.Uri;
 public class InitProvider extends ContentProvider {
     @Override
     public boolean onCreate() {
-        Context application = getContext().getApplicationContext();
-        if (application == null) {
-            application = AutoSizeUtils.getApplicationByReflect();
-        }
         AutoSizeConfig.getInstance()
                 .setLog(true)
-                .init((Application) application)
+                .init((Application) getContext().getApplicationContext())
                 .setUseDeviceSize(false);
         return true;
     }
