@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,13 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.bazel;
 
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.runtime.BlazeModule;
-import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.common.options.OptionsProvider;
 
-import java.util.UUID;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
 
@@ -27,12 +23,10 @@ import java.util.logging.Logger;
  * Shutdown log output when Bazel runs in batch mode
  */
 public class BazelShutdownLoggerModule extends BlazeModule {
-
   private Logger globalLogger;
 
   @Override
-  public void blazeStartup(OptionsProvider startupOptions, BlazeVersionInfo versionInfo,
-      UUID instanceId, BlazeDirectories directories, Clock clock) {
+  public void globalInit(OptionsProvider startupOptions) {
     LogManager.getLogManager().reset();
     globalLogger = Logger.getGlobal();
     globalLogger.setLevel(java.util.logging.Level.OFF);
