@@ -699,7 +699,12 @@ public final class Environment implements Freezable {
   }
 
   private boolean hasVariable(String varname) {
-    return lookup(varname) != null;
+    try {
+      lookup(varname);
+      return true;
+    } catch (NoSuchVariableException e) {
+      return false;
+    }
   }
 
   /**
@@ -732,9 +737,10 @@ public final class Environment implements Freezable {
   }
 
   /**
-   * @return the value from the environment whose name is "varname" if it exists, otherwise null.
+   * @return the value from the environment whose name is "varname".
+   * @throws NoSuchVariableException if the variable is not defined in the Environment.
    */
-  public Object lookup(String varname) {
+  public Object lookup(String varname) throws NoSuchVariableException {
     // Which Frame to lookup first doesn't matter because update prevents clashes.
     if (lexicalFrame != null) {
       Object lexicalValue = lexicalFrame.get(varname);
@@ -745,7 +751,7 @@ public final class Environment implements Freezable {
     Object globalValue = globalFrame.get(varname);
     Object dynamicValue = dynamicFrame.get(varname);
     if (globalValue == null && dynamicValue == null) {
-      return null;
+      throw new NoSuchVariableException(varname);
     }
     if (knownGlobalVariables != null) {
       knownGlobalVariables.add(varname);
@@ -762,11 +768,11 @@ public final class Environment implements Freezable {
    */
   public Object lookup(String varname, Object defaultValue) {
     Preconditions.checkState(!isSkylark);
-    Object value = lookup(varname);
-    if (value != null) {
-      return value;
+    try {
+      return lookup(varname);
+    } catch (NoSuchVariableException e) {
+      return defaultValue;
     }
-    return defaultValue;
   }
 
   /**
@@ -812,6 +818,23 @@ public final class Environment implements Freezable {
   }
 
   /**
+   * An Exception thrown when an attempt is made to lookup a non-existent
+   * variable in the Environment.
+   */
+  public static class NoSuchVariableException extends Exception {
+    private final String variable;
+    NoSuchVariableException(String variable) {
+      super(null, null, false, false /* don't fillInStackTrace() */);
+      this.variable = variable;
+    }
+
+    @Override
+    public String getMessage() {
+      return "no such variable: " + variable;
+    }
+  }
+
+  /**
    * An Exception thrown when an attempt is made to import a symbol from a file
    * that was not properly loaded.
    */
@@ -819,16 +842,12 @@ public final class Environment implements Freezable {
     LoadFailedException(String importString) {
       super(String.format("file '%s' was not correctly loaded. "
               + "Make sure the 'load' statement appears in the global scope in your file",
-          importString));
-    }
-
-    LoadFailedException(String importString, String symbolString) {
-      super(String.format("file '%s' does not contain symbol '%s'", importString, symbolString));
+              importString));
     }
   }
 
   void importSymbol(String importString, Identifier symbol, String nameInLoadedFile)
-      throws LoadFailedException {
+      throws NoSuchVariableException, LoadFailedException {
     Preconditions.checkState(isGlobal()); // loading is only allowed at global scope.
 
     if (!importedExtensions.containsKey(importString)) {
@@ -837,8 +856,10 @@ public final class Environment implements Freezable {
 
     Extension ext = importedExtensions.get(importString);
 
+    // TODO(bazel-team): Throw a LoadFailedException instead, with an appropriate message.
+    // Throwing a NoSuchVariableException is backward compatible, but backward.
     if (!ext.containsKey(nameInLoadedFile)) {
-      throw new LoadFailedException(importString, nameInLoadedFile);
+      throw new NoSuchVariableException(nameInLoadedFile);
     }
 
     Object value = ext.get(nameInLoadedFile);
