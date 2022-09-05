@@ -1105,8 +1105,8 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     }
 
     @Override
-    public byte[] getDigest(ActionInput actionInput) throws IOException {
-      byte[] digest = perActionCache.getDigest(actionInput);
+    public ByteString getDigest(ActionInput actionInput) throws IOException {
+      ByteString digest = perActionCache.getDigest(actionInput);
       return digest != null ? digest : perBuildFileCache.getDigest(actionInput);
     }
 
@@ -1130,7 +1130,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
 
     @Nullable
     @Override
-    public ActionInput getInputFromDigest(ByteString digest) {
+    public ActionInput getInputFromDigest(ByteString digest) throws IOException {
       ActionInput file = perActionCache.getInputFromDigest(digest);
       return file != null ? file : perBuildFileCache.getInputFromDigest(digest);
     }
