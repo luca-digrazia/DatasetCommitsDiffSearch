@@ -240,10 +240,10 @@ public class MetricRegistry implements MetricSet {
      * @param supplier a MetricSupplier that can be used to manufacture a Gauge
      * @return a new or pre-existing {@link Gauge}
      */
-    public <T> Gauge<T> gauge(String name, final MetricSupplier<Gauge<T>> supplier) {
-        return getOrAdd(name, new MetricBuilder<Gauge<T>>() {
+    public Gauge gauge(String name, final MetricSupplier<Gauge> supplier) {
+        return getOrAdd(name, new MetricBuilder<Gauge>() {
             @Override
-            public Gauge<T> newMetric() {
+            public Gauge newMetric() {
                 return supplier.newMetric();
             }
             @Override
@@ -321,7 +321,6 @@ public class MetricRegistry implements MetricSet {
      *
      * @return all the gauges in the registry
      */
-    @SuppressWarnings("rawtypes")
     public SortedMap<String, Gauge> getGauges() {
         return getGauges(MetricFilter.ALL);
     }
@@ -332,7 +331,6 @@ public class MetricRegistry implements MetricSet {
      * @param filter    the metric filter to match
      * @return all the gauges in the registry
      */
-    @SuppressWarnings("rawtypes")
     public SortedMap<String, Gauge> getGauges(MetricFilter filter) {
         return getMetrics(Gauge.class, filter);
     }
