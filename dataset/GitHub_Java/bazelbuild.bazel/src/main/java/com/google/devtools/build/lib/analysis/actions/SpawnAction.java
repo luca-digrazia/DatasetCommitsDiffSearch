@@ -561,7 +561,7 @@ public class SpawnAction extends AbstractAction {
       Preconditions.checkNotNull(executableArgs);
 
       if (useDefaultShellEnvironment) {
-        this.environment = configuration.getLocalShellEnvironment();
+        this.environment = configuration.getDefaultShellEnvironment();
       }
 
       ImmutableList<String> argv = ImmutableList.<String>builder()
@@ -705,7 +705,7 @@ public class SpawnAction extends AbstractAction {
 
     /**
      * Sets the environment to the configurations default shell environment,
-     * see {@link BuildConfiguration#getLocalShellEnvironment}.
+     * see {@link BuildConfiguration#getDefaultShellEnvironment}.
      */
     public Builder useDefaultShellEnvironment() {
       this.environment = null;

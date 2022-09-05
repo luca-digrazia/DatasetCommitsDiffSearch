@@ -27,6 +27,8 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.DelegateSpawn;
+import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.PackageRootResolutionException;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.Spawn;
@@ -97,7 +99,8 @@ public final class ExtraAction extends SpawnAction {
         getManifests(shadowedAction),
         mnemonic,
         false,
-        null);
+        null,
+        false);
     this.shadowedAction = shadowedAction;
     this.runfilesManifests = ImmutableMap.copyOf(runfilesManifests);
     this.createDummyOutput = createDummyOutput;
@@ -130,13 +133,16 @@ public final class ExtraAction extends SpawnAction {
   public Collection<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     Preconditions.checkState(discoversInputs(), this);
-    // We need to update our inputs to take account of any additional
-    // inputs the shadowed action may need to do its work.
-    if (shadowedAction.discoversInputs() && shadowedAction instanceof AbstractAction) {
-      Iterable<Artifact> additionalInputs =
-          ((AbstractAction) shadowedAction).getInputFilesForExtraAction(actionExecutionContext);
-      updateInputs(createInputs(additionalInputs, extraActionInputs));
-      return ImmutableSet.copyOf(additionalInputs);
+    if (getContext(actionExecutionContext.getExecutor()).isRemotable(getMnemonic(),
+        isRemotable())) {
+      // If we're running remotely, we need to update our inputs to take account of any additional
+      // inputs the shadowed action may need to do its work.
+      if (shadowedAction.discoversInputs() && shadowedAction instanceof AbstractAction) {
+        Iterable<Artifact> additionalInputs =
+            ((AbstractAction) shadowedAction).getInputFilesForExtraAction(actionExecutionContext);
+        updateInputs(createInputs(additionalInputs, extraActionInputs));
+        return ImmutableSet.copyOf(additionalInputs);
+      }
     }
     return null;
   }
@@ -186,9 +192,19 @@ public final class ExtraAction extends SpawnAction {
   @Override
   public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
+    Executor executor = actionExecutionContext.getExecutor();
+
     // PHASE 2: execution of extra_action.
 
-    super.execute(actionExecutionContext);
+    if (getContext(executor).isRemotable(getMnemonic(), isRemotable())) {
+      try {
+        getContext(executor).exec(getExtraActionSpawn(), actionExecutionContext);
+      } catch (ExecException e) {
+        throw e.toActionExecutionException(this);
+      }
+    } else {
+      super.execute(actionExecutionContext);
+    }
 
     // PHASE 3: create dummy output.
     // If the user didn't specify output, we need to create dummy output
@@ -215,8 +231,7 @@ public final class ExtraAction extends SpawnAction {
    * before the SpawnAction so should not be listed as one of its outputs.
    */
   // TODO(bazel-team): Add more tests that execute this code path!
-  @Override
-  public Spawn getSpawn() {
+  private Spawn getExtraActionSpawn() {
     final Spawn base = super.getSpawn();
     return new DelegateSpawn(base) {
       @Override public ImmutableMap<PathFragment, Artifact> getRunfilesManifests() {
