@@ -116,9 +116,6 @@ public class GrpcServerImpl implements RPCServer {
       thread = Thread.currentThread();
       id = UUID.randomUUID().toString();
       synchronized (runningCommands) {
-        if (runningCommands.isEmpty()) {
-          busy();
-        }
         runningCommands.put(id, this);
         runningCommands.notify();
       }
@@ -130,9 +127,6 @@ public class GrpcServerImpl implements RPCServer {
     public void close() {
       synchronized (runningCommands) {
         runningCommands.remove(id);
-        if (runningCommands.isEmpty()) {
-          idle();
-        }
         runningCommands.notify();
       }
 
@@ -148,9 +142,8 @@ public class GrpcServerImpl implements RPCServer {
   public static class Factory implements RPCServer.Factory {
     @Override
     public RPCServer create(CommandExecutor commandExecutor, Clock clock, int port,
-      Path workspace, Path serverDirectory, int maxIdleSeconds) throws IOException {
-      return new GrpcServerImpl(
-          commandExecutor, clock, port, workspace, serverDirectory, maxIdleSeconds);
+      Path serverDirectory, int maxIdleSeconds) throws IOException {
+      return new GrpcServerImpl(commandExecutor, clock, port, serverDirectory, maxIdleSeconds);
     }
   }
 
@@ -506,7 +499,6 @@ public class GrpcServerImpl implements RPCServer {
   private final ExecutorService commandExecutorPool;
   private final Clock clock;
   private final Path serverDirectory;
-  private final Path workspace;
   private final String requestCookie;
   private final String responseCookie;
   private final AtomicLong interruptCounter = new AtomicLong(0);
@@ -516,12 +508,11 @@ public class GrpcServerImpl implements RPCServer {
   private final String pidInFile;
 
   private Server server;
-  private IdleServerTasks idleServerTasks;
   private final int port;
   boolean serving;
 
   public GrpcServerImpl(CommandExecutor commandExecutor, Clock clock, int port,
-      Path workspace, Path serverDirectory, int maxIdleSeconds) throws IOException {
+      Path serverDirectory, int maxIdleSeconds) throws IOException {
     // server.pid was written in the C++ launcher after fork() but before exec() .
     // The client only accesses the pid file after connecting to the socket
     // which ensures that it gets the correct pid value.
@@ -532,7 +523,6 @@ public class GrpcServerImpl implements RPCServer {
     this.commandExecutor = commandExecutor;
     this.clock = clock;
     this.serverDirectory = serverDirectory;
-    this.workspace = workspace;
     this.port = port;
     this.maxIdleSeconds = maxIdleSeconds;
     this.serving = false;
@@ -551,20 +541,6 @@ public class GrpcServerImpl implements RPCServer {
 
     pidFileWatcherThread = new PidFileWatcherThread();
     pidFileWatcherThread.start();
-    idleServerTasks = new IdleServerTasks(workspace);
-    idleServerTasks.idle();
-  }
-
-  private void idle() {
-    Preconditions.checkState(idleServerTasks == null);
-    idleServerTasks = new IdleServerTasks(workspace);
-    idleServerTasks.idle();
-  }
-
-  private void busy() {
-    Preconditions.checkState(idleServerTasks != null);
-    idleServerTasks.busy();
-    idleServerTasks = null;
   }
 
   private static String generateCookie(SecureRandom random, int byteCount) {
