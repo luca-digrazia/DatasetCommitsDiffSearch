@@ -224,7 +224,6 @@ import com.android.build.gradle.internal.pipeline.OriginalStream;
 import com.android.build.gradle.internal.pipeline.TransformTask;
 import com.android.build.gradle.internal.scope.GlobalScope;
 import com.android.build.gradle.internal.scope.VariantScope;
-import com.android.build.gradle.internal.tasks.ExtractProguardFiles;
 import com.android.build.gradle.internal.transforms.DexTransform;
 import com.android.build.gradle.internal.transforms.MultiDexTransform;
 import com.android.build.gradle.internal.transforms.ProGuardTransform;
@@ -413,6 +412,7 @@ public class AtlasAppTaskManager extends AtlasBaseTaskManager {
                                                               if (appVariantContext.getAtlasExtension().isInstantAppEnabled()){
 
                                                                   mtlTaskContextList.add(new MtlTaskContext(AtlasBundleInstantApp.ConfigAction.class,null));
+
                                                               }
 
                                                               mtlTaskContextList.add(new MtlTaskContext(ApBuildTask.ConfigAction.class, null));
