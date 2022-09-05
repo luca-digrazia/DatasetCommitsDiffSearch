@@ -174,7 +174,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
   }
 
   private Set<Label> getAllowedDeps(Rule rule) {
-    Set<Label> allowedLabels = new HashSet<>(rule.getTransitions(dependencyFilter).values());
+    Set<Label> allowedLabels = new HashSet<>(rule.getLabels(dependencyFilter));
     allowedLabels.addAll(rule.getVisibility().getDependencyLabels());
     // We should add deps from aspects, otherwise they are going to be filtered out.
     allowedLabels.addAll(rule.getAspectLabelsSuperset(dependencyFilter));
@@ -366,16 +366,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
     }
   }
 
-  private Set<Target> filterTargetsNotInGraph(Set<Target> targets) {
-    Map<Target, SkyKey> map = Maps.toMap(targets, TARGET_TO_SKY_KEY);
-    Set<SkyKey> present = graph.getDoneValues(map.values()).keySet();
-    if (present.size() == targets.size()) {
-      // Optimize for case of all targets being in graph.
-      return targets;
-    }
-    return Maps.filterValues(map, Predicates.in(present)).keySet();
-  }
-
   @Override
   protected Map<String, Set<Target>> preloadOrThrow(
       QueryExpression caller, Collection<String> patterns)
@@ -416,7 +406,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
                 targetPatternKey.getPolicy(), pkgPath);
         TargetPattern parsedPattern = targetPatternKey.getParsedPattern();
         try {
-          result.put(pattern, filterTargetsNotInGraph(parsedPattern.eval(resolver).getTargets()));
+          result.put(pattern, parsedPattern.eval(resolver).getTargets());
         } catch (TargetParsingException e) {
           targetParsingException = e;
         } catch (InterruptedException e) {
@@ -491,16 +481,13 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
     return result.build();
   }
 
-  private static final Function<Target, SkyKey> TARGET_TO_SKY_KEY =
-      new Function<Target, SkyKey>() {
-        @Override
-        public SkyKey apply(Target target) {
-          return TransitiveTraversalValue.key(target.getLabel());
-        }
-      };
-
   private Iterable<SkyKey> makeKeys(Iterable<Target> targets) {
-    return Iterables.transform(targets, TARGET_TO_SKY_KEY);
+    return Iterables.transform(targets, new Function<Target, SkyKey>() {
+      @Override
+      public SkyKey apply(Target target) {
+        return TransitiveTraversalValue.key(target.getLabel());
+      }
+    });
   }
 
   @Override
