@@ -1,7 +1,8 @@
 package com.yammer.metrics.httpclient;
 
-import com.yammer.metrics.MetricRegistry;
-import com.yammer.metrics.Timer;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Timer;
+import com.yammer.metrics.core.TimerContext;
 import org.apache.commons.logging.Log;
 import org.apache.http.*;
 import org.apache.http.client.*;
@@ -16,28 +17,26 @@ import org.apache.http.protocol.HttpRequestExecutor;
 
 import java.io.IOException;
 
-import static com.yammer.metrics.MetricRegistry.name;
-
 class InstrumentedRequestDirector extends DefaultRequestDirector {
     private final static String GET = "GET", POST = "POST", HEAD = "HEAD", PUT = "PUT",
             OPTIONS = "OPTIONS", DELETE = "DELETE", TRACE = "TRACE",
             CONNECT = "CONNECT", MOVE = "MOVE", PATCH = "PATCH";
 
-    private final Timer getTimer;
-    private final Timer postTimer;
-    private final Timer headTimer;
-    private final Timer putTimer;
-    private final Timer deleteTimer;
-    private final Timer optionsTimer;
-    private final Timer traceTimer;
-    private final Timer connectTimer;
-    private final Timer moveTimer;
-    private final Timer patchTimer;
-    private final Timer otherTimer;
+    private static final Timer GET_TIMER = Metrics.newTimer(HttpClient.class, "get-requests");
+    private static final Timer POST_TIMER = Metrics.newTimer(HttpClient.class, "post-requests");
+    private static final Timer HEAD_TIMER = Metrics.newTimer(HttpClient.class, "head-requests");
+    private static final Timer PUT_TIMER = Metrics.newTimer(HttpClient.class, "put-requests");
+    private static final Timer DELETE_TIMER = Metrics.newTimer(HttpClient.class, "delete-requests");
+    private static final Timer OPTIONS_TIMER = Metrics.newTimer(HttpClient.class,
+                                                                "options-requests");
+    private static final Timer TRACE_TIMER = Metrics.newTimer(HttpClient.class, "trace-requests");
+    private static final Timer CONNECT_TIMER = Metrics.newTimer(HttpClient.class,
+                                                                "connect-requests");
+    private static final Timer MOVE_TIMER = Metrics.newTimer(HttpClient.class, "move-requests");
+    private static final Timer PATCH_TIMER = Metrics.newTimer(HttpClient.class, "patch-requests");
+    private static final Timer OTHER_TIMER = Metrics.newTimer(HttpClient.class, "other-requests");
 
-    InstrumentedRequestDirector(MetricRegistry registry,
-                                String name,
-                                Log log,
+    InstrumentedRequestDirector(Log log,
                                 HttpRequestExecutor requestExec,
                                 ClientConnectionManager conman,
                                 ConnectionReuseStrategy reustrat,
@@ -46,8 +45,8 @@ class InstrumentedRequestDirector extends DefaultRequestDirector {
                                 HttpProcessor httpProcessor,
                                 HttpRequestRetryHandler retryHandler,
                                 RedirectStrategy redirectStrategy,
-                                AuthenticationStrategy targetAuthStrategy,
-                                AuthenticationStrategy proxyAuthStrategy,
+                                AuthenticationHandler targetAuthHandler,
+                                AuthenticationHandler proxyAuthHandler,
                                 UserTokenHandler userTokenHandler,
                                 HttpParams params) {
         super(log,
@@ -59,26 +58,15 @@ class InstrumentedRequestDirector extends DefaultRequestDirector {
               httpProcessor,
               retryHandler,
               redirectStrategy,
-              targetAuthStrategy,
-              proxyAuthStrategy,
+              targetAuthHandler,
+              proxyAuthHandler,
               userTokenHandler,
               params);
-        getTimer = registry.timer(name(HttpClient.class, name, "get-requests"));
-        postTimer = registry.timer(name(HttpClient.class, name, "post-requests"));
-        headTimer = registry.timer(name(HttpClient.class, name, "head-requests"));
-        putTimer = registry.timer(name(HttpClient.class, name, "put-requests"));
-        deleteTimer = registry.timer(name(HttpClient.class, name, "delete-requests"));
-        optionsTimer = registry.timer(name(HttpClient.class, name, "options-requests"));
-        traceTimer = registry.timer(name(HttpClient.class, name, "trace-requests"));
-        connectTimer = registry.timer(name(HttpClient.class, name, "connect-requests"));
-        moveTimer = registry.timer(name(HttpClient.class, name, "move-requests"));
-        patchTimer = registry.timer(name(HttpClient.class, name, "patch-requests"));
-        otherTimer = registry.timer(name(HttpClient.class, name, "other-requests"));
     }
 
     @Override
     public HttpResponse execute(HttpHost target, HttpRequest request, HttpContext context) throws HttpException, IOException {
-        final Timer.Context timerContext = timer(request).time();
+        final TimerContext timerContext = timer(request).time();
         try {
             return super.execute(target, request, context);
         } finally {
@@ -89,26 +77,26 @@ class InstrumentedRequestDirector extends DefaultRequestDirector {
     private Timer timer(HttpRequest request) {
         final String method = request.getRequestLine().getMethod();
         if (GET.equalsIgnoreCase(method)) {
-            return getTimer;
+            return GET_TIMER;
         } else if (POST.equalsIgnoreCase(method)) {
-            return postTimer;
+            return POST_TIMER;
         } else if (PUT.equalsIgnoreCase(method)) {
-            return putTimer;
+            return PUT_TIMER;
         } else if (HEAD.equalsIgnoreCase(method)) {
-            return headTimer;
+            return HEAD_TIMER;
         } else if (DELETE.equalsIgnoreCase(method)) {
-            return deleteTimer;
+            return DELETE_TIMER;
         } else if (OPTIONS.equalsIgnoreCase(method)) {
-            return optionsTimer;
+            return OPTIONS_TIMER;
         } else if (TRACE.equalsIgnoreCase(method)) {
-            return traceTimer;
+            return TRACE_TIMER;
         } else if (CONNECT.equalsIgnoreCase(method)) {
-            return connectTimer;
+            return CONNECT_TIMER;
         } else if (PATCH.equalsIgnoreCase(method)) {
-            return patchTimer;
+            return PATCH_TIMER;
         } else if (MOVE.equalsIgnoreCase(method)) {
-            return moveTimer;
+            return MOVE_TIMER;
         }
-        return otherTimer;
+        return OTHER_TIMER;
     }
 }

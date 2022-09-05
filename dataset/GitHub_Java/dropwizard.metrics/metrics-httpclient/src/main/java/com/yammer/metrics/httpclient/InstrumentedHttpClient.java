@@ -1,6 +1,5 @@
 package com.yammer.metrics.httpclient;
 
-import com.yammer.metrics.MetricRegistry;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.http.ConnectionReuseStrategy;
@@ -16,25 +15,16 @@ import org.apache.http.protocol.HttpRequestExecutor;
 public class InstrumentedHttpClient extends DefaultHttpClient {
     private final Log log = LogFactory.getLog(getClass());
 
-    private final MetricRegistry registry;
-    private final String name;
-
-    public InstrumentedHttpClient(MetricRegistry registry,
-                                  InstrumentedClientConnManager manager,
-                                  HttpParams params,
-                                  String name) {
+    public InstrumentedHttpClient(InstrumentedClientConnManager manager, HttpParams params) {
         super(manager, params);
-        this.registry = registry;
-        this.name = name;
     }
 
-    public InstrumentedHttpClient(MetricRegistry registry,
-                                  HttpParams params) {
-        this(registry, new InstrumentedClientConnManager(registry), params, null);
+    public InstrumentedHttpClient(HttpParams params) {
+        super(new InstrumentedClientConnManager(), params);
     }
 
-    public InstrumentedHttpClient(MetricRegistry registry) {
-        this(registry, new InstrumentedClientConnManager(registry), null, null);
+    public InstrumentedHttpClient() {
+        super(new InstrumentedClientConnManager());
     }
 
     @Override
@@ -46,13 +36,11 @@ public class InstrumentedHttpClient extends DefaultHttpClient {
                                                           HttpProcessor httpProcessor,
                                                           HttpRequestRetryHandler retryHandler,
                                                           RedirectStrategy redirectStrategy,
-                                                          AuthenticationStrategy targetAuthStrategy,
-                                                          AuthenticationStrategy proxyAuthStrategy,
-                                                          UserTokenHandler userTokenHandler,
+                                                          AuthenticationHandler targetAuthHandler,
+                                                          AuthenticationHandler proxyAuthHandler,
+                                                          UserTokenHandler stateHandler,
                                                           HttpParams params) {
         return new InstrumentedRequestDirector(
-                registry,
-                name,
                 log,
                 requestExec,
                 conman,
@@ -62,9 +50,9 @@ public class InstrumentedHttpClient extends DefaultHttpClient {
                 httpProcessor,
                 retryHandler,
                 redirectStrategy,
-                targetAuthStrategy,
-                proxyAuthStrategy,
-                userTokenHandler,
+                targetAuthHandler,
+                proxyAuthHandler,
+                stateHandler,
                 params);
     }
 }
