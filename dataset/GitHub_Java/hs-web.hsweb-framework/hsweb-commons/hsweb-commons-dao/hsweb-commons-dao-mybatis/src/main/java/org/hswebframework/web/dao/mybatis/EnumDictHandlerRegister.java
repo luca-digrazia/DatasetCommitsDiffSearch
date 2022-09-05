@@ -21,10 +21,7 @@ import org.springframework.util.ClassUtils;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
-import java.sql.CallableStatement;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.List;
 
 import static org.springframework.util.StringUtils.tokenizeToStringArray;
@@ -58,7 +55,7 @@ public class EnumDictHandlerRegister {
                 for (Resource resource : resources) {
                     try {
                         MetadataReader reader = metadataReaderFactory.getMetadataReader(resource);
-                        Class enumType = ClassUtils.forName(reader.getClassMetadata().getClassName(), null);
+                        Class enumType = Class.forName(reader.getClassMetadata().getClassName());
                         if (enumType.isEnum() && EnumDict.class.isAssignableFrom(enumType)) {
                             log.debug("register enum dict:{}", enumType);
                             DefaultDictDefineRepository.registerDefine(DefaultDictDefineRepository.parseEnumDict(enumType));
@@ -68,8 +65,8 @@ public class EnumDictHandlerRegister {
                             //注册枚举数组类型
                             typeHandlerRegistry.register(Array.newInstance(enumType, 0).getClass(), new EnumDictArrayHandler(enumType));
                         }
-                    } catch (Exception | Error e) {
-                        log.warn("register enum dict error", e.getMessage());
+                    } catch (Exception | Error ignore) {
+
                     }
                 }
             } catch (IOException e) {
