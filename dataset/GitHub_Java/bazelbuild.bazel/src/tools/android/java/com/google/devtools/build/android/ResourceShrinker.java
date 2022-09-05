@@ -397,6 +397,7 @@ public class ResourceShrinker {
           Node child = children.item(i);
           element.removeChild(child);
         }
+        return;
       }
     }
     NodeList children = element.getChildNodes();
