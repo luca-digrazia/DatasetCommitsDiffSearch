@@ -223,12 +223,7 @@ final class ProtobufSupport {
       actionId++;
     }
 
-    if (isLinkingTarget()) {
-      commonBuilder.addUserHeaderSearchPaths(userHeaderSearchPaths);
-    } else {
-      commonBuilder.addDirectDependencyHeaderSearchPaths(userHeaderSearchPaths);
-    }
-
+    commonBuilder.addDirectDependencyHeaderSearchPaths(userHeaderSearchPaths);
     return Optional.of(commonBuilder.build().getObjcProvider());
   }
 
