@@ -420,10 +420,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     return splitLogsPath;
   }
 
-  public PathFragment getUndeclaredOutputsDir() {
-    return undeclaredOutputsDir;
-  }
-
   /**
    * @return path to the optional zip file of undeclared test outputs.
    */
@@ -436,10 +432,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
    */
   public PathFragment getUndeclaredOutputsManifestPath() {
     return undeclaredOutputsManifestPath;
-  }
-
-  public PathFragment getUndeclaredOutputsAnnotationsDir() {
-    return undeclaredOutputsAnnotationsDir;
   }
 
   /**
