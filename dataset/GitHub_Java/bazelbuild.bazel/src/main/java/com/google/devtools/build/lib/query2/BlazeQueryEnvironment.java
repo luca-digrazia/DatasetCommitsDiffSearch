@@ -13,12 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2;
 
-import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -114,7 +112,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     // We can safely ignore the boolean error flag. The evaluateQuery() method above wraps the
     // entire query computation in an error sensor.
 
-    Set<Target> targets = new LinkedHashSet<>(resolvedTargetPatterns.get(pattern));
+    Set<Target> targets = new LinkedHashSet<>(resolvedTargetPatterns.get(pattern).getTargets());
 
     // Sets.filter would be more convenient here, but can't deal with exceptions.
     Iterator<Target> targetIterator = targets.iterator();
@@ -347,22 +345,13 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     return dependentFiles;
   }
 
-  private static final Function<ResolvedTargets<Target>, Set<Target>> RESOLVED_TARGETS_TO_TARGETS =
-      new Function<ResolvedTargets<Target>, Set<Target>>() {
-        @Override
-        public Set<Target> apply(ResolvedTargets<Target> resolvedTargets) {
-          return resolvedTargets.getTargets();
-        }
-      };
-
-  protected Map<String, Set<Target>> preloadOrThrow(
-      QueryExpression caller, Collection<String> patterns) throws TargetParsingException {
+  protected Map<String, ResolvedTargets<Target>> preloadOrThrow(QueryExpression caller,
+      Collection<String> patterns) throws TargetParsingException {
     try {
       // Note that this may throw a RuntimeException if deps are missing in Skyframe and this is
       // being called from within a SkyFunction.
-      return Maps.transformValues(
-          targetPatternEvaluator.preloadTargetPatterns(eventHandler, patterns, keepGoing),
-          RESOLVED_TARGETS_TO_TARGETS);
+      return targetPatternEvaluator.preloadTargetPatterns(
+          eventHandler, patterns, keepGoing);
     } catch (InterruptedException e) {
       // TODO(bazel-team): Propagate the InterruptedException from here [skyframe-loading].
       throw new TargetParsingException("interrupted");

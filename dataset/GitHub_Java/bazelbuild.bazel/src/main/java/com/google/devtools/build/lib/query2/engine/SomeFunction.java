@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,13 +15,12 @@ package com.google.devtools.build.lib.query2.engine;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Argument;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ArgumentType;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Set;
 
 /**
  * A some(x) filter expression, which returns an arbitrary node in set x, or
@@ -49,22 +48,12 @@ class SomeFunction implements QueryFunction {
   }
 
   @Override
-  public <T> void eval(QueryEnvironment<T> env, QueryExpression expression,
-      List<Argument> args, final Callback<T> callback)
+  public <T> Set<T> eval(QueryEnvironment<T> env, QueryExpression expression, List<Argument> args)
       throws QueryException, InterruptedException {
-    final AtomicBoolean someFound = new AtomicBoolean(false);
-    env.eval(args.get(0).getExpression(), new Callback<T>() {
-      @Override
-      public void process(Iterable<T> partialResult) throws QueryException, InterruptedException {
-        if (someFound.get() || Iterables.isEmpty(partialResult)) {
-          return;
-        }
-        callback.process(ImmutableSet.of(partialResult.iterator().next()));
-        someFound.set(true);
-      }
-    });
-    if (!someFound.get()) {
+    Set<T> argumentValue = args.get(0).getExpression().eval(env);
+    if (argumentValue.isEmpty()) {
       throw new QueryException(expression, "argument set is empty");
     }
+    return ImmutableSet.of(argumentValue.iterator().next());
   }
 }

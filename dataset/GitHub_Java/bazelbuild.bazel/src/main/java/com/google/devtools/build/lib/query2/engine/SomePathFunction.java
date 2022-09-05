@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Argument;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ArgumentType;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -50,11 +51,10 @@ class SomePathFunction implements QueryFunction {
   }
 
   @Override
-  public <T> void eval(QueryEnvironment<T> env, QueryExpression expression,
-      List<Argument> args, final Callback<T> callback)
+  public <T> Set<T> eval(QueryEnvironment<T> env, QueryExpression expression, List<Argument> args)
       throws QueryException, InterruptedException {
-    Set<T> fromValue = QueryUtil.evalAll(env, args.get(0).getExpression());
-    Set<T> toValue = QueryUtil.evalAll(env, args.get(1).getExpression());
+    Set<T> fromValue = args.get(0).getExpression().eval(env);
+    Set<T> toValue = args.get(1).getExpression().eval(env);
 
     // Implementation strategy: for each x in "from", compute its forward
     // transitive closure.  If it intersects "to", then do a path search from x
@@ -64,9 +64,12 @@ class SomePathFunction implements QueryFunction {
     env.buildTransitiveClosure(expression, fromValue, Integer.MAX_VALUE);
 
     // This set contains all nodes whose TC does not intersect "toValue".
-    Uniquifier<T> uniquifier = env.createUniquifier();
+    Set<T> done = new HashSet<>();
 
-    for (T x : uniquifier.unique(fromValue)) {
+    for (T x : fromValue) {
+      if (done.contains(x)) {
+        continue;
+      }
       Set<T> xtc = env.getTransitiveClosure(ImmutableSet.of(x));
       SetView<T> result;
       if (xtc.size() > toValue.size()) {
@@ -75,11 +78,10 @@ class SomePathFunction implements QueryFunction {
         result = Sets.intersection(xtc, toValue);
       }
       if (!result.isEmpty()) {
-        callback.process(env.getNodesOnPath(x, result.iterator().next()));
-        return;
+        return env.getNodesOnPath(x, result.iterator().next());
       }
-      uniquifier.unique(xtc);
+      done.addAll(xtc);
     }
-    callback.process(ImmutableSet.<T>of());
+    return ImmutableSet.of();
   }
 }
