@@ -22,8 +22,6 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.CheckedTextView;
 
-import com.prolificinteractive.materialcalendarview.format.DayFormatter;
-
 import java.util.List;
 
 /**
@@ -38,7 +36,6 @@ class DayView extends CheckedTextView {
     private final int fadeTime;
     private Drawable customBackground = null;
     private Drawable selectionDrawable;
-    private DayFormatter formatter = DayFormatter.DEFAULT;
 
     public DayView(Context context, CalendarDay day) {
         super(context);
@@ -61,24 +58,8 @@ class DayView extends CheckedTextView {
         setText(getLabel());
     }
 
-    public void setDayFormatter(DayFormatter formatter) {
-        this.formatter = formatter == null ? DayFormatter.DEFAULT : formatter;
-        CharSequence currentLabel = getText();
-        Object[] spans = null;
-        if(currentLabel instanceof Spanned) {
-            spans = ((Spanned) currentLabel).getSpans(0, currentLabel.length(), Object.class);
-        }
-        SpannableString newLabel = new SpannableString(getLabel());
-        if(spans != null) {
-            for(Object span : spans) {
-                newLabel.setSpan(span, 0, newLabel.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            }
-        }
-        setText(newLabel);
-    }
-
     public @NonNull String getLabel() {
-        return formatter.format(date);
+        return String.valueOf(date.getDay());
     }
 
     public void setSelectionColor(int color) {
