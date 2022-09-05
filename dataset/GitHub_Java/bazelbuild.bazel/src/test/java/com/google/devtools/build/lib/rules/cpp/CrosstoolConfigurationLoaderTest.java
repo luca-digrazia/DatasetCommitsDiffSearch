@@ -209,16 +209,16 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
 
     assertEquals(Arrays.<String>asList(), toolchain.getLinkOptions());
     assertEquals(
-        Arrays.asList("linker", "linker-fastbuild", "fully static"),
+        Arrays.asList("linker", "-Wl,-S", "linker-fastbuild", "fully static"),
         toolchain.getFullyStaticLinkOptions(NO_FEATURES, false));
     assertEquals(
-        Arrays.asList("linker", "linker-fastbuild", "dynamic"),
+        Arrays.asList("linker", "-Wl,-S", "linker-fastbuild", "dynamic"),
         toolchain.getDynamicLinkOptions(NO_FEATURES, false));
     assertEquals(
-        Arrays.asList("linker", "linker-fastbuild", "mostly static", "solinker"),
+        Arrays.asList("linker", "-Wl,-S", "linker-fastbuild", "mostly static", "solinker"),
         toolchain.getFullyStaticLinkOptions(NO_FEATURES, true));
     assertEquals(
-        Arrays.asList("linker", "linker-fastbuild", "dynamic", "solinker"),
+        Arrays.asList("linker", "-Wl,-S", "linker-fastbuild", "dynamic", "solinker"),
         toolchain.getDynamicLinkOptions(NO_FEATURES, true));
 
     assertEquals(Arrays.asList("objcopy"), toolchain.getObjCopyOptionsForEmbedding());
@@ -342,7 +342,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
                 + "  builtin_sysroot: \"builtin-sysroot-A\"\n"
                 + "  default_python_top: \"python-top-A\"\n"
                 + "  default_python_version: \"python-version-A\"\n"
-                + "  default_grte_top: \"//some\""
+                + "  default_grte_top: \"//some:labelA\""
                 + "  debian_extra_requires: \"a\""
                 + "  debian_extra_requires: \"b\""
                 + "}\n"
@@ -446,7 +446,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
                 + "  builtin_sysroot: \"builtin-sysroot-B\"\n"
                 + "  default_python_top: \"python-top-B\"\n"
                 + "  default_python_version: \"python-version-B\"\n"
-                + "  default_grte_top: \"//some\"\n"
+                + "  default_grte_top: \"//some:labelB\"\n"
                 + "  debian_extra_requires: \"c\""
                 + "  debian_extra_requires: \"d\""
                 + "}\n"
@@ -475,12 +475,6 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
                 + "  tool_path { name: \"strip\" path: \"path/to/strip-C\" }"
                 + "  tool_path { name: \"dwp\" path: \"path/to/dwp\" }\n"
                 + "}");
-
-    mockToolsConfig.create(
-        "some/BUILD",
-        "package(default_visibility=['//visibility:public'])",
-        "licenses(['unencumbered'])",
-        "filegroup(name = 'everything')");
 
     CppConfiguration toolchainA = create(loader, "--cpu=piii");
     assertEquals("toolchain-identifier-A", toolchainA.getToolchainIdentifier());
@@ -520,6 +514,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
         Arrays.asList(
             "linker-flag-A-1",
             "linker-flag-A-2",
+            "-Wl,-S",
             "linker-fastbuild-flag-A-1",
             "linker-fastbuild-flag-A-2",
             "solinker-flag-A-1",
@@ -532,6 +527,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
         Arrays.asList(
             "linker-flag-A-1",
             "linker-flag-A-2",
+            "-Wl,-S",
             "linker-fastbuild-flag-A-1",
             "linker-fastbuild-flag-A-2",
             "fully-static-flag-A-1",
@@ -545,6 +541,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
         Arrays.asList(
             "linker-flag-A-1",
             "linker-flag-A-2",
+            "-Wl,-S",
             "linker-dbg-flag-A-1",
             "linker-dbg-flag-A-2"),
         toolchainA.configureLinkerOptions(
@@ -556,6 +553,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
         Arrays.asList(
             "linker-flag-A-1",
             "linker-flag-A-2",
+            "-Wl,-S",
             "fully-static-flag-A-1",
             "fully-static-flag-A-2"),
         toolchainA.configureLinkerOptions(
@@ -568,6 +566,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
         Arrays.asList(
             "linker-flag-A-1",
             "linker-flag-A-2",
+            "-Wl,-S",
             "fully-static-flag-A-1",
             "fully-static-flag-A-2"),
         toolchainA.configureLinkerOptions(
@@ -629,23 +628,23 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     assertThat(toolchainC.getCOptions()).isEmpty();
     assertThat(toolchainC.getCxxOptions(NO_FEATURES)).isEmpty();
     assertThat(toolchainC.getUnfilteredCompilerOptions(NO_FEATURES)).isEmpty();
-    assertEquals(Collections.EMPTY_LIST, toolchainC.getDynamicLinkOptions(NO_FEATURES, true));
+    assertEquals(Arrays.asList("-Wl,-S"), toolchainC.getDynamicLinkOptions(NO_FEATURES, true));
     assertEquals(
-        Collections.EMPTY_LIST,
+        Arrays.asList("-Wl,-S"),
         toolchainC.configureLinkerOptions(
             CompilationMode.FASTBUILD,
             LipoMode.OFF,
             LinkingMode.FULLY_STATIC,
             new PathFragment("hello-world/ld")));
     assertEquals(
-        Collections.EMPTY_LIST,
+        Arrays.asList("-Wl,-S"),
         toolchainC.configureLinkerOptions(
             CompilationMode.DBG,
             LipoMode.OFF,
             LinkingMode.DYNAMIC,
             new PathFragment("hello-world/ld")));
     assertEquals(
-        Collections.EMPTY_LIST,
+        Arrays.asList("-Wl,-S"),
         toolchainC.configureLinkerOptions(
             CompilationMode.OPT,
             LipoMode.OFF,
@@ -683,6 +682,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
         Arrays.asList(
             "linker-flag-B-1",
             "linker-flag-B-2",
+            "-Wl,-S",
             "linker-dbg-flag-B-1",
             "linker-dbg-flag-B-2",
             "linker-lipo_" + lipoSuffix),
