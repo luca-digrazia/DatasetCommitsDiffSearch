@@ -163,8 +163,6 @@ public class DefaultFormParser implements FormParser {
                     try {
                         if ("javaType".equals(key)) value = mapperJavaType(value.toString());
                         BeanUtils.setProperty(fieldMeta, key, value);
-                    } catch (RuntimeException e) {
-                        throw e;
                     } catch (Exception e) {
                     }
                 } else {
@@ -183,7 +181,7 @@ public class DefaultFormParser implements FormParser {
             //name为空的时候 不保持此字段
             if (!"main".equals(id) && !StringUtils.isNullOrEmpty(fieldMeta.getName())) {
                 initField(fieldMeta);
-                if (StringUtils.isNullOrEmpty(fieldMeta.getAlias()))
+                if(StringUtils.isNullOrEmpty(fieldMeta.getAlias()))
                     fieldMeta.setAlias(fieldMeta.getName());
                 metaData.addField(fieldMeta);
             }
@@ -244,8 +242,8 @@ public class DefaultFormParser implements FormParser {
                         if (StringUtils.isNullOrEmpty(value) || StringUtils.isNullOrEmpty(key)) return;
                         input.attr(String.valueOf(property.get("key")), String.valueOf(value));
                     });
-                    input.attr("name", field.getAlias());
-                    input.attr("id", field.getAlias());
+                    input.attr("name", field.getName());
+                    input.attr("id", field.getName());
                     input.attr("class", field.getProperty("class").toString());
                 }
             }
