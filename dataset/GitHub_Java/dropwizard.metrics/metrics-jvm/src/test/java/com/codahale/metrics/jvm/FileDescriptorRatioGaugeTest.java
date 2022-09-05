@@ -1,6 +1,5 @@
 package com.codahale.metrics.jvm;
 
-import com.sun.management.UnixOperatingSystemMXBean;
 import org.junit.Test;
 
 import javax.management.ObjectName;
@@ -13,7 +12,7 @@ import static org.mockito.Mockito.mock;
 
 @SuppressWarnings("UnusedDeclaration")
 public class FileDescriptorRatioGaugeTest {
-    private final OperatingSystemMXBean os = new UnixOperatingSystemMXBean() {
+    private final OperatingSystemMXBean os = new OperatingSystemMXBean() {
         @Override
         public String getName() {
             return null;
@@ -39,54 +38,14 @@ public class FileDescriptorRatioGaugeTest {
             return 0;
         }
 
-        @Override
-        public long getOpenFileDescriptorCount() {
+        // these duplicate methods from UnixOperatingSystem
+
+        private long getOpenFileDescriptorCount() {
             return 10;
         }
 
-        @Override
-        public long getMaxFileDescriptorCount() {
+        private long getMaxFileDescriptorCount() {
             return 100;
-        }
-
-        @Override
-        public long getCommittedVirtualMemorySize() {
-            return 0;
-        }
-
-        @Override
-        public long getTotalSwapSpaceSize() {
-            return 0;
-        }
-
-        @Override
-        public long getFreeSwapSpaceSize() {
-            return 0;
-        }
-
-        @Override
-        public long getProcessCpuTime() {
-            return 0;
-        }
-
-        @Override
-        public long getFreePhysicalMemorySize() {
-            return 0;
-        }
-
-        @Override
-        public long getTotalPhysicalMemorySize() {
-            return 0;
-        }
-
-        @Override
-        public double getSystemCpuLoad() {
-            return 0;
-        }
-
-        @Override
-        public double getProcessCpuLoad() {
-            return 0;
         }
 
         // overridden on Java 1.7; random crap on Java 1.6
@@ -108,7 +67,7 @@ public class FileDescriptorRatioGaugeTest {
     public void validateFileDescriptorRatioPresenceOnNixPlatforms() throws Exception {
         OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
         assumeTrue(osBean instanceof com.sun.management.UnixOperatingSystemMXBean);
-
+        
         assertThat(new FileDescriptorRatioGauge().getValue())
                 .isGreaterThanOrEqualTo(0.0)
                 .isLessThanOrEqualTo(1.0);
