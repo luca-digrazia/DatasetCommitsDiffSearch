@@ -18,15 +18,19 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.Type.LABEL;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses.BaseRule;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.util.FileTypeSet;
 
 /**
  * Binds an existing target to a target in the virtual //external package.
  */
+@BlazeRule(name = "bind",
+  type = RuleClassType.WORKSPACE,
+  ancestors = {BaseRule.class},
+  factoryClass = Bind.class)
 public final class BindRule implements RuleDefinition {
 
   @Override
@@ -37,29 +41,13 @@ public final class BindRule implements RuleDefinition {
         ${SYNOPSIS}
 
         <p>This target must exist, but can be any type of rule (including bind).</p>
-
-        <p>If this attribute is omitted, rules referring to this target in <code>//external</code>
-        will simply not see this dependency edge. Note that this is different from omitting the
-        <code>bind</code> rule completely: it is an error if an <code>//external</code> dependency
-        does not have an associated <code>bind</code> rule.
-        </p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("actual", LABEL).allowedFileTypes(FileTypeSet.ANY_FILE))
+        .add(attr("actual", LABEL).allowedFileTypes())
         .setWorkspaceOnly()
         .build();
   }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("bind")
-        .type(RuleClassType.WORKSPACE)
-        .ancestors(BaseRule.class)
-        .factoryClass(Bind.class)
-        .build();
-  }
 }
-/*<!-- #BLAZE_RULE (NAME = bind, TYPE = OTHER, FAMILY = Workspace)[GENERIC_RULE] -->
+/*<!-- #BLAZE_RULE (NAME = bind, TYPE = OTHER, FAMILY = General)[GENERIC_RULE] -->
 
 ${ATTRIBUTE_SIGNATURE}
 
@@ -72,10 +60,9 @@ ${ATTRIBUTE_DEFINITION}
 
 <h4 id="bind_examples">Examples</h4>
 
-<p>To give a target an alias, <code>bind</code> it in the <i>WORKSPACE</i> file.  For example,
-  suppose there is a <code>java_library</code> target called
-  <code>//third_party/javacc-v2</code>.  This can be aliased by adding the following to the
-  <i>WORKSPACE</i> file:</p>
+<p>To give a target an alias, bind it in the <i>WORKSPACE</i> file.  For example, suppose there is
+  a <code>java_library</code> target called <code>//third_party/javacc-v2</code>.  This could be
+  aliased by adding the following to the <i>WORKSPACE</i> file:</p>
 
 <pre class="code">
 bind(
@@ -85,14 +72,14 @@ bind(
 </pre>
 
 <p>Now targets can depend on <code>//external:javacc-latest</code> instead of
-  <code>//third_party/javacc-v2</code>. If javacc-v3 is released, the <code>bind</code> rule can be
-  updated and all of the BUILD files depending on <code>//external:javacc-latest</code> will now
-  depend on javacc-v3 without needing to be edited.</p>
+  <code>//third_party/javacc-v2</code>. If javacc-v3 is released, the binding can be updated and
+  all of the BUILD files depending on <code>//external:javacc-latest</code> will now depend on
+  javacc-v3 without needing to be edited.</p>
 
-<p>Bind can also be used to make targets in external repositories available to your workspace.
-  For example, if there is a remote repository named <code>@my-ssl</code> imported in the
-  <i>WORKSPACE</i> file and it has a cc_library target <code>//src:openssl-lib</code>, you can
-  create an alias for this target using <code>bind</code>:</p>
+<p>Bind can also be used to refer to external repositories' targets. For example, if there is a
+  remote repository named <code>@my-ssl</code> imported in the WORKSPACE file. If the
+  <code>@my-ssl</code> repository has a cc_library target <code>//src:openssl-lib</code>, you
+  could make this target accessible for your program to depend on by using <code>bind</code>:</p>
 
 <pre class="code">
 bind(
@@ -101,7 +88,12 @@ bind(
 )
 </pre>
 
-<p>Then, in a BUILD file in your workspace, the bound target can be used as follows:</p>
+<p>BUILD files cannot use labels that include a repository name
+  ("@repository-name//package-name:target-name"), so the only way to depend on a target from
+  another repository is to <code>bind</code> it in the WORKSPACE file and then refer to it by its
+  aliased name in <code>//external</code> from a BUILD file.</p>
+
+<p>For example, in a BUILD file, the bound target could be used as follows:</p>
 
 <pre class="code">
 cc_library(
@@ -113,7 +105,7 @@ cc_library(
 </pre>
 
 <p>Within <code>sign_in.cc</code> and <code>sign_in.h</code>, the header files exposed by
-  <code>//external:openssl</code> can be referred to using their path relative to their repository
+  <code>//external:openssl</code> can be referred to by their path relative to their repository
   root.  For example, if the rule definition for <code>@my-ssl//src:openssl-lib</code> looks like
   this:</p>
 
@@ -125,7 +117,7 @@ cc_library(
 )
 </pre>
 
-<p>Then <code>sign_in.cc</code>'s includes might look like this:</p>
+<p>Then <code>sign_in.cc</code>'s first lines might look like this:</p>
 
 <pre class="code">
 #include "sign_in.h"
