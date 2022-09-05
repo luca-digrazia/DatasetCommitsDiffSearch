@@ -23,12 +23,13 @@ import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.NativeAspectClass.NativeAspectFactory;
 import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -147,17 +148,16 @@ public final class AspectDefinition {
     }
     RuleClass ruleClass = ((Rule) to).getRuleClassObject();
     ImmutableSet<Class<?>> providers = ruleClass.getAdvertisedProviders();
-    return visitAspectsIfRequired((Rule) from, attribute, ruleClass.canHaveAnyProvider(),
-        toStringSet(providers), dependencyFilter);
+    return visitAspectsIfRequired((Rule) from, attribute, toStringSet(providers), dependencyFilter);
   }
 
   /**
    * Returns the attribute -&gt; set of labels that are provided by aspects of attribute.
    */
   public static ImmutableMultimap<Attribute, Label> visitAspectsIfRequired(
-      Rule from, Attribute attribute, boolean canHaveAnyProvider, Set<String> advertisedProviders,
+      Rule from, Attribute attribute, Set<String> advertisedProviders,
       DependencyFilter dependencyFilter) {
-    if (advertisedProviders.isEmpty() && !canHaveAnyProvider) {
+    if (advertisedProviders.isEmpty()) {
       return ImmutableMultimap.of();
     }
 
@@ -165,7 +165,7 @@ public final class AspectDefinition {
     for (Aspect candidateClass : attribute.getAspects(from)) {
       // Check if target satisfies condition for this aspect (has to provide all required
       // TransitiveInfoProviders)
-      if (!canHaveAnyProvider && !advertisedProviders.containsAll(
+      if (!advertisedProviders.containsAll(
           candidateClass.getDefinition().getRequiredProviderNames())) {
         continue;
       }
@@ -196,15 +196,13 @@ public final class AspectDefinition {
         continue;
       }
       if (aspectAttribute.getType() == BuildType.LABEL) {
-        Label label = from.getLabel().resolveRepositoryRelative(
-            BuildType.LABEL.cast(aspectAttribute.getDefaultValue(from)));
+        Label label = BuildType.LABEL.cast(aspectAttribute.getDefaultValue(from));
         if (label != null) {
           labelBuilder.put(aspectAttribute, label);
         }
       } else if (aspectAttribute.getType() == BuildType.LABEL_LIST) {
-        for (Label label : BuildType.LABEL_LIST.cast(aspectAttribute.getDefaultValue(from))) {
-          labelBuilder.put(aspectAttribute, from.getLabel().resolveRepositoryRelative(label));
-        }
+        List<Label> labelList = BuildType.LABEL_LIST.cast(aspectAttribute.getDefaultValue(from));
+        labelBuilder.putAll(aspectAttribute, labelList);
       }
     }
   }
@@ -249,10 +247,13 @@ public final class AspectDefinition {
      * but we cannot reference that interface here.
      */
     @SafeVarargs
-    public final Builder attributeAspect(String attribute, NativeAspectClass... aspectClasses) {
+    public final Builder attributeAspect(
+        String attribute, Class<? extends NativeAspectFactory>... aspectFactories) {
       Preconditions.checkNotNull(attribute);
-      for (NativeAspectClass aspectClass : aspectClasses) {
-        this.attributeAspect(attribute, Preconditions.checkNotNull(aspectClass));
+      for (Class<? extends NativeAspectFactory> aspectFactory : aspectFactories) {
+        this
+            .attributeAspect(
+                attribute, new NativeAspectClass<>(Preconditions.checkNotNull(aspectFactory)));
       }
       return this;
     }
@@ -290,9 +291,7 @@ public final class AspectDefinition {
      * configuration is available, starting with ':')
      */
     public Builder add(Attribute attribute) {
-      Preconditions.checkArgument(attribute.isImplicit() || attribute.isLateBound()
-          || (attribute.getType() == Type.STRING && attribute.checkAllowedValues()),
-          "Invalid attribute '%s' (%s)", attribute.getName(), attribute.getType());
+      Preconditions.checkArgument(attribute.isImplicit() || attribute.isLateBound());
       Preconditions.checkArgument(!attributes.containsKey(attribute.getName()),
           "An attribute with the name '%s' already exists.", attribute.getName());
       attributes.put(attribute.getName(), attribute);

@@ -22,9 +22,9 @@ import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.DependencyFilter;
-import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
+
 import java.util.Set;
 
 /**
@@ -34,8 +34,9 @@ import java.util.Set;
  */
 public class ConservativeAspectResolver implements AspectResolver {
   @Override
-  public ImmutableMultimap<Attribute, Label> computeAspectDependencies(
-      Target target, DependencyFilter dependencyFilter) {
+  public ImmutableMultimap<Attribute, Label> computeAspectDependencies(Target target,
+      DependencyFilter dependencyFilter)
+      throws InterruptedException {
     if (!(target instanceof Rule)) {
       return ImmutableMultimap.of();
     }
@@ -53,8 +54,9 @@ public class ConservativeAspectResolver implements AspectResolver {
   }
 
   @Override
-  public Set<Label> computeBuildFileDependencies(Package pkg) {
+  public Set<Label> computeBuildFileDependencies(com.google.devtools.build.lib.packages.Package pkg,
+      BuildFileDependencyMode mode) throws InterruptedException {
     // We do a conservative estimate precisely so that we don't depend on any other BUILD files.
-    return ImmutableSet.copyOf(pkg.getSkylarkFileDependencies());
+    return ImmutableSet.copyOf(mode.getDependencies(pkg));
   }
 }

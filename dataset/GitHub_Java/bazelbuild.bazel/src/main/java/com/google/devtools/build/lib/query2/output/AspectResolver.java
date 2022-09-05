@@ -15,12 +15,13 @@ package com.google.devtools.build.lib.query2.output;
 
 import com.google.common.collect.ImmutableMultimap;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
+
 import java.util.Collection;
 import java.util.Set;
 
@@ -34,8 +35,7 @@ public interface AspectResolver {
     // Do not report aspect dependencies
     OFF {
       @Override
-      public AspectResolver createResolver(
-          PackageProvider provider, ExtendedEventHandler eventHandler) {
+      public AspectResolver createResolver(PackageProvider provider, EventHandler eventHandler) {
         return new NullAspectResolver();
       }
     },
@@ -44,8 +44,7 @@ public interface AspectResolver {
     // triggered
     CONSERVATIVE {
       @Override
-      public AspectResolver createResolver(
-          PackageProvider provider, ExtendedEventHandler eventHandler) {
+      public AspectResolver createResolver(PackageProvider provider, EventHandler eventHandler) {
         return new ConservativeAspectResolver();
       }
     },
@@ -53,14 +52,13 @@ public interface AspectResolver {
     // Load direct dependencies and report aspects that can be triggered based on their types.
     PRECISE {
       @Override
-      public AspectResolver createResolver(
-          PackageProvider provider, ExtendedEventHandler eventHandler) {
+      public AspectResolver createResolver(PackageProvider provider, EventHandler eventHandler) {
         return new PreciseAspectResolver(provider, eventHandler);
       }
     };
 
     public abstract AspectResolver createResolver(
-        PackageProvider provider, ExtendedEventHandler eventHandler);
+        PackageProvider provider, EventHandler eventHandler);
   }
 
   /** The way aspect dependencies for a BUILD file are calculated. */
