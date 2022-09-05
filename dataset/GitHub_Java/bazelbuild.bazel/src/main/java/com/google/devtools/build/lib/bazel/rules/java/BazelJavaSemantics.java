@@ -208,7 +208,7 @@ public class BazelJavaSemantics implements JavaSemantics {
         buffer.append(delimiter);
       }
       buffer.append("${RUNPATH}");
-      buffer.append(artifact.getRunfilesPath().getPathString());
+      buffer.append(artifact.getRootRelativePath().getPathString());
     }
   }
 
@@ -383,6 +383,11 @@ public class BazelJavaSemantics implements JavaSemantics {
 
   @Override
   public void addDependenciesForRunfiles(RuleContext ruleContext, Runfiles.Builder builder) {
+  }
+
+  @Override
+  public boolean forceUseJavaLauncherTarget(RuleContext ruleContext) {
+    return false;
   }
 
   @Override

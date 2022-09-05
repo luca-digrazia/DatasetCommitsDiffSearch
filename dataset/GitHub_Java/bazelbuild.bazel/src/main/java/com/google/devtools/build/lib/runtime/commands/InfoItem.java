@@ -20,6 +20,7 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -148,9 +149,9 @@ public abstract class InfoItem {
    * Info item for the output_base directory.
    */
   public static final class OutputBaseInfoItem extends InfoItem {
-    public OutputBaseInfoItem(String productName) {
+    public OutputBaseInfoItem() {
       super("output_base",
-          "A directory for shared " + productName
+          "A directory for shared " + Constants.PRODUCT_NAME
           + " state as well as tool and strategy specific subdirectories.",
           false);
     }
