@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -54,6 +53,7 @@ public class BazelJavaRuleClasses {
   public static final ImplicitOutputsFunction JAVA_BINARY_IMPLICIT_OUTPUTS =
       fromFunctions(
           JavaSemantics.JAVA_BINARY_CLASS_JAR,
+          JavaSemantics.JAVA_BINARY_GEN_JAR,
           JavaSemantics.JAVA_BINARY_SOURCE_JAR,
           JavaSemantics.JAVA_BINARY_DEPLOY_JAR,
           JavaSemantics.JAVA_BINARY_DEPLOY_SOURCE_JAR);
@@ -61,6 +61,7 @@ public class BazelJavaRuleClasses {
   static final ImplicitOutputsFunction JAVA_LIBRARY_IMPLICIT_OUTPUTS =
       fromFunctions(
           JavaSemantics.JAVA_LIBRARY_CLASS_JAR,
+          JavaSemantics.JAVA_LIBRARY_GEN_JAR,
           JavaSemantics.JAVA_LIBRARY_SOURCE_JAR);
 
   /**
@@ -70,8 +71,7 @@ public class BazelJavaRuleClasses {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          .add(attr("$ijar", LABEL).cfg(HOST).exec().value(env.getLabel(
-              Constants.TOOLS_REPOSITORY + "//tools/defaults:ijar")))
+          .add(attr("$ijar", LABEL).cfg(HOST).exec().value(env.getLabel("//tools/defaults:ijar")))
           .setPreferredDependencyPredicate(JavaSemantics.JAVA_SOURCE)
           .build();
     }
@@ -99,7 +99,7 @@ public class BazelJavaRuleClasses {
           .add(attr("$javac_extdir", LABEL).cfg(HOST)
               .value(env.getLabel(JavaSemantics.JAVAC_EXTDIR_LABEL)))
           .add(attr("$java_langtools", LABEL).cfg(HOST)
-              .value(env.getLabel(Constants.TOOLS_REPOSITORY + "//tools/defaults:java_langtools")))
+              .value(env.getLabel("//tools/defaults:java_langtools")))
           .add(attr("$javac_bootclasspath", LABEL).cfg(HOST)
               .value(env.getLabel(JavaSemantics.JAVAC_BOOTCLASSPATH_LABEL)))
           .add(attr("$javabuilder", LABEL).cfg(HOST)

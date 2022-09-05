@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -118,17 +118,14 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     filesBuilder.add(classJar);
 
-    Artifact manifestProtoOutput = helper.createManifestProtoOutput(classJar);
-
     // The gensrc jar is created only if the target uses annotation processing.
     // Otherwise, it is null, and the source jar action will not depend on the compile action.
-    Artifact genSourceJar = null;
-    Artifact genClassJar = null;
-    if (helper.usesAnnotationProcessing()) {
-      genClassJar = helper.createGenJar(classJar);
-      genSourceJar = helper.createGensrcJar(classJar);
-      helper.createGenJarAction(classJar, manifestProtoOutput, genClassJar);
-    }
+    Artifact genSourceJar = helper.createGensrcJar(classJar);
+    Artifact manifestProtoOutput = helper.createManifestProtoOutput(classJar);
+
+    Artifact genClassJar = ruleContext.getImplicitOutputArtifact(
+        JavaSemantics.JAVA_LIBRARY_GEN_JAR);
+    helper.createGenJarAction(classJar, manifestProtoOutput, genClassJar);
 
     Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
 
@@ -136,9 +133,8 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
         outputDepsProto, javaArtifactsBuilder);
     helper.createSourceJarAction(srcJar, genSourceJar);
 
-    Artifact iJar = null;
     if ((attributes.hasSourceFiles() || attributes.hasSourceJars()) && jar != null) {
-      iJar = helper.createCompileTimeJarAction(jar, outputDepsProto,
+      helper.createCompileTimeJarAction(jar, outputDepsProto,
           javaArtifactsBuilder);
     }
 
@@ -226,8 +222,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     common.addGenJarsProvider(builder, genClassJar, genSourceJar);
 
     builder
-        .add(JavaRuleOutputJarsProvider.class, new JavaRuleOutputJarsProvider(
-            classJar, iJar, srcJar))
+        .add(JavaRuleOutputJarsProvider.class, new JavaRuleOutputJarsProvider(classJar, srcJar))
         .add(JavaRuntimeJarProvider.class,
             new JavaRuntimeJarProvider(common.getJavaCompilationArtifacts().getRuntimeJars()))
         .add(RunfilesProvider.class, RunfilesProvider.simple(runfiles))

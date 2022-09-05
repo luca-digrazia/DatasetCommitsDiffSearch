@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -165,21 +165,17 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
 
     common.setJavaCompilationArtifacts(javaArtifactsBuilder.build());
 
-    Artifact manifestProtoOutput = helper.createManifestProtoOutput(classJar);
-
     // The gensrc jar is created only if the target uses annotation processing. Otherwise,
     // it is null, and the source jar action will not depend on the compile action.
-    Artifact genSourceJar = null;
-    Artifact genClassJar = null;
-    if (helper.usesAnnotationProcessing()) {
-      genClassJar = helper.createGenJar(classJar);
-      genSourceJar = helper.createGensrcJar(classJar);
-      helper.createGenJarAction(classJar, manifestProtoOutput, genClassJar);
-    }
+    Artifact genSourceJar = helper.createGensrcJar(classJar);
+    Artifact manifestProtoOutput = helper.createManifestProtoOutput(classJar);
 
     helper.createCompileAction(
         classJar, manifestProtoOutput, genSourceJar, outputDepsProto, instrumentationMetadata);
     helper.createSourceJarAction(srcJar, genSourceJar);
+
+    Artifact genClassJar = ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_GEN_JAR);
+    helper.createGenJarAction(classJar, manifestProtoOutput, genClassJar);
 
     common.setClassPathFragment(new ClasspathConfiguredFragment(
         common.getJavaCompilationArtifacts(), attributes, false));
@@ -281,8 +277,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
 
     return builder
         .setFilesToBuild(filesToBuild)
-        .add(JavaRuleOutputJarsProvider.class, new JavaRuleOutputJarsProvider(
-            classJar, null /* iJar */, srcJar))
+        .add(JavaRuleOutputJarsProvider.class, new JavaRuleOutputJarsProvider(classJar, srcJar))
         .add(RunfilesProvider.class, runfilesProvider)
         .setRunfilesSupport(runfilesSupport, executable)
         .add(
