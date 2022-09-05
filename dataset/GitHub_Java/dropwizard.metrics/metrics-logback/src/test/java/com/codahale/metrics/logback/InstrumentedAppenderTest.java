@@ -22,17 +22,17 @@ public class InstrumentedAppenderTest {
     private final ILoggingEvent event = mock(ILoggingEvent.class);
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         appender.start();
     }
 
     @After
-    public void tearDown() {
+    public void tearDown() throws Exception {
         SharedMetricRegistries.clear();
     }
 
     @Test
-    public void metersTraceEvents() {
+    public void metersTraceEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.TRACE);
 
         appender.doAppend(event);
@@ -45,7 +45,7 @@ public class InstrumentedAppenderTest {
     }
 
     @Test
-    public void metersDebugEvents() {
+    public void metersDebugEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.DEBUG);
 
         appender.doAppend(event);
@@ -58,7 +58,7 @@ public class InstrumentedAppenderTest {
     }
 
     @Test
-    public void metersInfoEvents() {
+    public void metersInfoEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.INFO);
 
         appender.doAppend(event);
@@ -71,7 +71,7 @@ public class InstrumentedAppenderTest {
     }
 
     @Test
-    public void metersWarnEvents() {
+    public void metersWarnEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.WARN);
 
         appender.doAppend(event);
@@ -84,7 +84,7 @@ public class InstrumentedAppenderTest {
     }
 
     @Test
-    public void metersErrorEvents() {
+    public void metersErrorEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.ERROR);
 
         appender.doAppend(event);
@@ -97,7 +97,7 @@ public class InstrumentedAppenderTest {
     }
 
     @Test
-    public void usesSharedRegistries() {
+    public void usesSharedRegistries() throws Exception {
 
         String registryName = "registry";
 
@@ -114,30 +114,30 @@ public class InstrumentedAppenderTest {
     }
 
     @Test
-    public void usesDefaultRegistry() {
-        SharedMetricRegistries.add(InstrumentedAppender.DEFAULT_REGISTRY, registry);
-        final InstrumentedAppender shared = new InstrumentedAppender();
-        shared.start();
-        when(event.getLevel()).thenReturn(Level.INFO);
-        shared.doAppend(event);
+    public void usesDefaultRegistry() throws Exception {
+      SharedMetricRegistries.add(InstrumentedAppender.DEFAULT_REGISTRY, registry);
+      final InstrumentedAppender shared = new InstrumentedAppender();
+      shared.start();
+      when(event.getLevel()).thenReturn(Level.INFO);
+      shared.doAppend(event);
 
-        assertThat(SharedMetricRegistries.names()).contains(InstrumentedAppender.DEFAULT_REGISTRY);
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".info").getCount())
-                .isEqualTo(1);
+      assertThat(SharedMetricRegistries.names()).contains(InstrumentedAppender.DEFAULT_REGISTRY);
+      assertThat(registry.meter(METRIC_NAME_PREFIX + ".info").getCount())
+              .isEqualTo(1);
     }
 
     @Test
-    public void usesRegistryFromProperty() {
-        SharedMetricRegistries.add("something_else", registry);
-        System.setProperty(InstrumentedAppender.REGISTRY_PROPERTY_NAME, "something_else");
-        final InstrumentedAppender shared = new InstrumentedAppender();
-        shared.start();
-        when(event.getLevel()).thenReturn(Level.INFO);
-        shared.doAppend(event);
+    public void usesRegistryFromProperty() throws Exception {
+      SharedMetricRegistries.add("something_else", registry);
+      System.setProperty(InstrumentedAppender.REGISTRY_PROPERTY_NAME, "something_else");
+      final InstrumentedAppender shared = new InstrumentedAppender();
+      shared.start();
+      when(event.getLevel()).thenReturn(Level.INFO);
+      shared.doAppend(event);
 
-        assertThat(SharedMetricRegistries.names()).contains("something_else");
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".info").getCount())
-                .isEqualTo(1);
+      assertThat(SharedMetricRegistries.names()).contains("something_else");
+      assertThat(registry.meter(METRIC_NAME_PREFIX + ".info").getCount())
+              .isEqualTo(1);
     }
 
 }
