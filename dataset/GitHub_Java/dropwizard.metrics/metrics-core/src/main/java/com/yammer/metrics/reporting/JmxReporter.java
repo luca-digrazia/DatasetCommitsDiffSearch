@@ -178,7 +178,7 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public double get50thPercentile() {
-            return metric.getSnapshot().getMedian();
+            return metric.quantiles(0.5)[0];
         }
 
         @Override
@@ -208,27 +208,27 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public double get75thPercentile() {
-            return metric.getSnapshot().get75thPercentile();
+            return metric.quantiles(0.75)[0];
         }
 
         @Override
         public double get95thPercentile() {
-            return metric.getSnapshot().get95thPercentile();
+            return metric.quantiles(0.95)[0];
         }
 
         @Override
         public double get98thPercentile() {
-            return metric.getSnapshot().get98thPercentile();
+            return metric.quantiles(0.98)[0];
         }
 
         @Override
         public double get99thPercentile() {
-            return metric.getSnapshot().get99thPercentile();
+            return metric.quantiles(0.99)[0];
         }
 
         @Override
         public double get999thPercentile() {
-            return metric.getSnapshot().get999thPercentile();
+            return metric.quantiles(0.999)[0];
         }
 
         @Override
@@ -252,7 +252,7 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public double get50thPercentile() {
-            return metric.getSnapshot().getMedian();
+            return metric.quantiles(0.5)[0];
         }
 
         @Override
@@ -282,27 +282,27 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public double get75thPercentile() {
-            return metric.getSnapshot().get75thPercentile();
+            return metric.quantiles(0.75)[0];
         }
 
         @Override
         public double get95thPercentile() {
-            return metric.getSnapshot().get95thPercentile();
+            return metric.quantiles(0.95)[0];
         }
 
         @Override
         public double get98thPercentile() {
-            return metric.getSnapshot().get98thPercentile();
+            return metric.quantiles(0.98)[0];
         }
 
         @Override
         public double get99thPercentile() {
-            return metric.getSnapshot().get99thPercentile();
+            return metric.quantiles(0.99)[0];
         }
 
         @Override
         public double get999thPercentile() {
-            return metric.getSnapshot().get999thPercentile();
+            return metric.quantiles(0.999)[0];
         }
 
         @Override
@@ -325,20 +325,12 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
     }
 
     public static final class Context {
-        private final MetricName metricName;
-        private final ObjectName objectName;
+        final MetricName metricName;
+        final ObjectName objectName;
 
         public Context(final MetricName metricName, final ObjectName objectName) {
             this.metricName = metricName;
             this.objectName = objectName;
-        }
-
-        MetricName getMetricName() {
-            return metricName;
-        }
-
-        ObjectName getObjectName() {
-            return objectName;
         }
     }
 
@@ -362,34 +354,31 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
     @Override
     public void processMeter(MetricName name, Metered meter, Context context) throws Exception {
-        registerBean(context.getMetricName(), new Meter(meter, context.getObjectName()),
-                     context.getObjectName());
+        registerBean(context.metricName, new Meter(meter, context.objectName), context.objectName);
     }
 
     @Override
     public void processCounter(MetricName name, com.yammer.metrics.core.Counter counter, Context context) throws Exception {
-        registerBean(context.getMetricName(),
-                     new Counter(counter, context.getObjectName()),
-                     context.getObjectName());
+        registerBean(context.metricName,
+                     new Counter(counter, context.objectName),
+                     context.objectName);
     }
 
     @Override
     public void processHistogram(MetricName name, com.yammer.metrics.core.Histogram histogram, Context context) throws Exception {
-        registerBean(context.getMetricName(),
-                     new Histogram(histogram, context.getObjectName()),
-                     context.getObjectName());
+        registerBean(context.metricName,
+                     new Histogram(histogram, context.objectName),
+                     context.objectName);
     }
 
     @Override
     public void processTimer(MetricName name, com.yammer.metrics.core.Timer timer, Context context) throws Exception {
-        registerBean(context.getMetricName(), new Timer(timer, context.getObjectName()),
-                     context.getObjectName());
+        registerBean(context.metricName, new Timer(timer, context.objectName), context.objectName);
     }
 
     @Override
     public void processGauge(MetricName name, com.yammer.metrics.core.Gauge<?> gauge, Context context) throws Exception {
-        registerBean(context.getMetricName(), new Gauge(gauge, context.getObjectName()),
-                     context.getObjectName());
+        registerBean(context.metricName, new Gauge(gauge, context.objectName), context.objectName);
     }
 
     @Override
