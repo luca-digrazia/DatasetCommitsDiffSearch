@@ -60,7 +60,7 @@ public class AutoDDLProcessor implements InitializingBean {
                                 .createOrAlter(meta)
                                 .commit()
                                 .reactive())
-                        .doOnError((err) -> log.error(err.getMessage(), err))
+                        .onErrorContinue((err, a) -> log.warn(err.getMessage(), err))
                         .then()
                         .block();
             } else {
