@@ -636,7 +636,6 @@ public class AndroidCommon {
         // sources
         .addJavaSources(attributes.getSourceFiles())
         .addSourceJars(attributes.getSourceJars())
-        .addCompiledJars(attributes.getDirectJars().toCollection())
         .addResources(attributes.getResources())
         .addProcessorNames(attributes.getProcessorNames())
         .addProcessorClasspathJars(attributes.getProcessorPath())
