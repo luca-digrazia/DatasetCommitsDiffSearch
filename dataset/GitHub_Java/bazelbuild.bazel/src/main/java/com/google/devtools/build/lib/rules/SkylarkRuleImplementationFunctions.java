@@ -349,13 +349,9 @@ public class SkylarkRuleImplementationFunctions {
 
   @SkylarkSignature(name = "expand_location",
       doc =
-      "Expands all <code>$(location ...)</code> templates in the given string by replacing "
-      + "<code>$(location //x)</code> with the path of the output file of target //x. "
-      + "Expansion only works for labels that point to direct dependencies of this rule or that "
-      + "are explicitly listed in the optional argument <code>targets</code>.<br/>"
-      + "<code>$(location ...)</code> will cause an error if the referenced target has multiple "
-      + "outputs. In this case, please use <code>$(locations ...)</code> since it produces a space-"
-      + "separated list of output paths. It can be safely used for a single output file, too.",
+      "Expands the given string so that all labels are replaced with the location "
+      + "of their target file(s). Currently, the algorithm uses output, srcs, deps, "
+      + "tools and data attributes for looking up mappings from label to locations.",
       objectType = SkylarkRuleContext.class, returnType = String.class,
       parameters = {
           @Param(name = "self", type = SkylarkRuleContext.class, doc = "this context"),
@@ -653,8 +649,7 @@ public class SkylarkRuleImplementationFunctions {
         defaultValue = "False",
         named = true,
         positional = false,
-        doc = "shall we expand $(location) variables? " 
-            + "See <a href=\"#expand_location\">ctx.expand_location()</a> for more details."
+        doc = "shall we expand $(location) variables?"
       ),
       @Param(
         name = "make_variables",
