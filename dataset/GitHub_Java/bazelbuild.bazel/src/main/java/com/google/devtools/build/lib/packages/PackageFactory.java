@@ -1335,8 +1335,7 @@ public final class PackageFactory {
   public Preprocessor.Result preprocess(
       PackageIdentifier packageId, Path buildFile, CachingPackageLocator locator)
       throws InterruptedException, IOException {
-    byte[] buildFileBytes = FileSystemUtils.readWithKnownFileSize(
-        buildFile, buildFile.getFileSize());
+    byte[] buildFileBytes = FileSystemUtils.readWithKnownFileSize(buildFile, buildFile.getFileSize());
     Globber globber = createLegacyGlobber(buildFile.getParentDirectory(), packageId, locator);
     try {
       return preprocess(buildFile, packageId, buildFileBytes, globber);

@@ -50,8 +50,8 @@ public class SkylarkNativeModule {
             + "<li>Matches at least one pattern in <code>include</code>.</li>\n"
             + "<li>Does not match any of the patterns in <code>exclude</code> "
             + "(default <code>[]</code>).</li></ul>\n"
-            + "If the <code>exclude_directories</code> argument is enabled (set to <code>1</code>),"
-            + " files of type directory will be omitted from the results (default <code>1</code>).",
+            + "If the <code>exclude_directories</code> argument is enabled (set to <code>1</code>), "
+            + "files of type directory will be omitted from the results (default <code>1</code>).",
     mandatoryPositionals = {
       @Param(
         name = "include",
