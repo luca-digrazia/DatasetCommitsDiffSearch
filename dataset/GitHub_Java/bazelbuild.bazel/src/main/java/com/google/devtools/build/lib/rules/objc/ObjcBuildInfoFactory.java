@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoCollection;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 
 /**
  * Objc build info creation - passes on BuildInfo output file for consumption from Objc rules.
@@ -34,7 +33,7 @@ public class ObjcBuildInfoFactory implements BuildInfoFactory {
    */
   @Override
   public BuildInfoCollection create(BuildInfoContext context, BuildConfiguration config,
-      Artifact buildInfo, Artifact buildChangelist, RepositoryName repositoryName) {
+      Artifact buildInfo, Artifact buildChangelist) {
     return new BuildInfoCollection(
         ImmutableList.<Action>of(),
         ImmutableList.of(buildInfo),
