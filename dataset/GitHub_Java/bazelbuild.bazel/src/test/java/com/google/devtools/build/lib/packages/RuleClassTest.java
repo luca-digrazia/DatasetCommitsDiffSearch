@@ -650,7 +650,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
   }
 
   private Rule createRule(RuleClass ruleClass, String name, Map<String, Object> attributeValues,
-      Location location) throws SyntaxException, InterruptedException {
+      Location location) throws SyntaxException {
     Package.Builder pkgBuilder = createDummyPackageBuilder();
     Label ruleLabel;
     try {

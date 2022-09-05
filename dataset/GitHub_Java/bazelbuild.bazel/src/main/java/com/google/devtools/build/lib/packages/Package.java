@@ -240,7 +240,7 @@ public class Package implements Serializable {
     }
   }
 
-  private void readObject(ObjectInputStream in) throws IOException, InterruptedException {
+  private void readObject(ObjectInputStream in) throws IOException {
     try {
       deserializedPkg = new PackageDeserializer().deserialize(in);
     } catch (PackageDeserializationException e) {
