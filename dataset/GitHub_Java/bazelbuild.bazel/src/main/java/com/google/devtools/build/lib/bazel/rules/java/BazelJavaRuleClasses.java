@@ -16,13 +16,13 @@ package com.google.devtools.build.lib.bazel.rules.java;
 
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.BuildType.TRISTATE;
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fromFunctions;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.LABEL;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
+import static com.google.devtools.build.lib.packages.Type.TRISTATE;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.packages.RuleClass.PackageNameConstraint;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.util.FileTypeSet;
+import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.Set;
 
@@ -51,18 +52,11 @@ public class BazelJavaRuleClasses {
       PackageNameConstraint.ANY_SEGMENT, "java", "javatests");
 
   public static final ImplicitOutputsFunction JAVA_BINARY_IMPLICIT_OUTPUTS =
-      fromFunctions(
-          JavaSemantics.JAVA_BINARY_CLASS_JAR,
-          JavaSemantics.JAVA_BINARY_GEN_JAR,
-          JavaSemantics.JAVA_BINARY_SOURCE_JAR,
-          JavaSemantics.JAVA_BINARY_DEPLOY_JAR,
-          JavaSemantics.JAVA_BINARY_DEPLOY_SOURCE_JAR);
+      fromFunctions(JavaSemantics.JAVA_BINARY_CLASS_JAR, JavaSemantics.JAVA_BINARY_SOURCE_JAR,
+          JavaSemantics.JAVA_BINARY_DEPLOY_JAR, JavaSemantics.JAVA_BINARY_DEPLOY_SOURCE_JAR);
 
   static final ImplicitOutputsFunction JAVA_LIBRARY_IMPLICIT_OUTPUTS =
-      fromFunctions(
-          JavaSemantics.JAVA_LIBRARY_CLASS_JAR,
-          JavaSemantics.JAVA_LIBRARY_GEN_JAR,
-          JavaSemantics.JAVA_LIBRARY_SOURCE_JAR);
+      fromFunctions(JavaSemantics.JAVA_LIBRARY_CLASS_JAR, JavaSemantics.JAVA_LIBRARY_SOURCE_JAR);
 
   /**
    * Common attributes for rules that depend on ijar.
@@ -106,8 +100,6 @@ public class BazelJavaRuleClasses {
               .value(env.getLabel(JavaSemantics.JAVABUILDER_LABEL)))
           .add(attr("$singlejar", LABEL).cfg(HOST)
               .value(env.getLabel(JavaSemantics.SINGLEJAR_LABEL)))
-          .add(attr("$genclass", LABEL).cfg(HOST)
-              .value(env.getLabel(JavaSemantics.GENCLASS_LABEL)))
           .build();
     }
 
@@ -353,5 +345,13 @@ public class BazelJavaRuleClasses {
               BazelCppRuleClasses.CcLinkingRule.class)
           .build();
     }
+  }
+
+  /**
+   * Returns the relative path to the WORKSPACE file describing the external dependencies necessary
+   * for the Java rules.
+   */
+  public static PathFragment getDefaultWorkspace() {
+    return new PathFragment("jdk.WORKSPACE");
   }
 }

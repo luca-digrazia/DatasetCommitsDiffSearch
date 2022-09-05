@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.syntax.Label;
 
@@ -31,6 +30,12 @@ import com.google.devtools.build.lib.syntax.Label;
  * command-line options.
  */
 public class JavaConfigurationLoader implements ConfigurationFragmentFactory {
+  private final JavaCpuSupplier cpuSupplier;
+
+  public JavaConfigurationLoader(JavaCpuSupplier cpuSupplier) {
+    this.cpuSupplier = cpuSupplier;
+  }
+
   @Override
   public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
     return ImmutableSet.<Class<? extends FragmentOptions>>of(JavaOptions.class);
@@ -40,16 +45,11 @@ public class JavaConfigurationLoader implements ConfigurationFragmentFactory {
   @Override
   public JavaConfiguration create(ConfigurationEnvironment env, BuildOptions buildOptions)
       throws InvalidConfigurationException {
-    CppConfiguration cppConfiguration = env.getFragment(buildOptions, CppConfiguration.class);
-    if (cppConfiguration == null) {
-      return null;
-    }
-
     JavaOptions javaOptions = buildOptions.get(JavaOptions.class);
 
     Label javaToolchain = RedirectChaser.followRedirects(env, javaOptions.javaToolchain,
         "java_toolchain");
-    return create(javaOptions, javaToolchain, cppConfiguration.getTargetCpu());
+    return create(javaOptions, javaToolchain, cpuSupplier.getJavaCpu(buildOptions, env));
   }
 
   @Override

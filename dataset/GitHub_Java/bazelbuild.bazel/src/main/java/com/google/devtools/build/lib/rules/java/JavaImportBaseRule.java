@@ -71,7 +71,6 @@ public class JavaImportBaseRule implements RuleDefinition {
         .add(attr("constraints", STRING_LIST)
             .orderIndependent()
             .nonconfigurable("used in Attribute.validityPredicate implementations (loading time)"))
-        .advertiseProvider(JavaCompilationArgsProvider.class)
         .build();
   }
 

@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaRuleClasses.JavaRule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 
 /**
  * Common attributes for Java rules.
@@ -143,7 +142,6 @@ public final class BazelJavaLibraryRule implements RuleDefinition {
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("exported_plugins", LABEL_LIST).cfg(HOST).allowedRuleClasses("java_plugin")
             .legacyAllowAnyFileType())
-        .advertiseProvider(JavaSourceInfoProvider.class)
         .build();
   }
 

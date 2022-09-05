@@ -18,6 +18,7 @@ import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fro
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.LanguageDependentFragment.LibraryLanguage;
@@ -54,18 +55,12 @@ public interface JavaSemantics {
 
   public static final SafeImplicitOutputsFunction JAVA_LIBRARY_CLASS_JAR =
       fromTemplates("lib%{name}.jar");
-  public static final SafeImplicitOutputsFunction JAVA_LIBRARY_GEN_JAR =
-      fromTemplates("lib%{name}-gen.jar");
   public static final SafeImplicitOutputsFunction JAVA_LIBRARY_SOURCE_JAR =
       fromTemplates("lib%{name}-src.jar");
-
   public static final SafeImplicitOutputsFunction JAVA_BINARY_CLASS_JAR =
       fromTemplates("%{name}.jar");
-  public static final SafeImplicitOutputsFunction JAVA_BINARY_GEN_JAR =
-      fromTemplates("%{name}-gen.jar");
   public static final SafeImplicitOutputsFunction JAVA_BINARY_SOURCE_JAR =
       fromTemplates("%{name}-src.jar");
-
   public static final SafeImplicitOutputsFunction JAVA_BINARY_DEPLOY_JAR =
       fromTemplates("%{name}_deploy.jar");
   public static final SafeImplicitOutputsFunction JAVA_BINARY_DEPLOY_SOURCE_JAR =
@@ -98,13 +93,6 @@ public interface JavaSemantics {
       OutputGroupProvider.HIDDEN_OUTPUT_GROUP_PREFIX + "source_jars";
 
   /**
-   * Name of the output group used for gen jars (the jars containing the class files for sources
-   * generated from annotation processors).
-   */
-  public static final String GENERATED_JARS_OUTPUT_GROUP = 
-      OutputGroupProvider.HIDDEN_OUTPUT_GROUP_PREFIX + "gen_jars";
-
-  /**
    * Label of a pseudo-filegroup that contains all jdk files for all
    * configurations, as specified on the command-line.
    */
@@ -129,12 +117,6 @@ public interface JavaSemantics {
    * Label of the SingleJar JAR used for creating deploy jars.
    */
   public static final String SINGLEJAR_LABEL = "//tools/defaults:singlejar";
-
-  /**
-   * Label of the GenClass JAR used for creating the jar for classes from sources generated from
-   * annotation processors.
-   */
-  public static final String GENCLASS_LABEL = "//tools/defaults:genclass";
 
   /**
    * Label of pseudo-cc_binary that tells Blaze a java target's JAVABIN is never to be replaced by
@@ -297,7 +279,6 @@ public interface JavaSemantics {
       List<String> jvmFlags,
       Artifact classJar,
       Artifact srcJar,
-      Artifact genJar,
       Artifact gensrcJar,
       ImmutableMap<Artifact, Artifact> compilationToRuntimeJarMap,
       JavaCompilationHelper helper,
@@ -357,6 +338,12 @@ public interface JavaSemantics {
    */
   void commonDependencyProcessing(RuleContext ruleContext, JavaTargetAttributes.Builder attributes,
       Collection<? extends TransitiveInfoCollection> deps);
+
+  /**
+   * Returns an list of {@link ActionInput} that the {@link JavaCompileAction} generates and
+   * that should be cached.
+   */
+  Collection<ActionInput> getExtraJavaCompileOutputs(PathFragment classDirectory);
 
   /**
    * Takes the path of a Java resource and tries to determine the Java

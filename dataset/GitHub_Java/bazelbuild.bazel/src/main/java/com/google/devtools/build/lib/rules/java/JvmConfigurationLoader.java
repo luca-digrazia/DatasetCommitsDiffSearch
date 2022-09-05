@@ -66,10 +66,6 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
   public Jvm create(ConfigurationEnvironment env, BuildOptions buildOptions)
       throws InvalidConfigurationException {
     JavaOptions javaOptions = buildOptions.get(JavaOptions.class);
-    if (javaOptions.disableJvm) {
-      // TODO(bazel-team): Instead of returning null here, add another method to the interface.
-      return null;
-    }
     String javaHome = javaOptions.javaBase;
     String cpu = cpuSupplier.getJavaCpu(buildOptions, env);
     if (cpu == null) {
@@ -116,12 +112,6 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
         List<Label> labels = javaHomeAttributes.get("srcs", Type.LABEL_LIST);
         for (Label jvmLabel : labels) {
           if (jvmLabel.getName().endsWith("-" + cpu)) {
-            jvmLabel = RedirectChaser.followRedirects(
-                lookup, jvmLabel, "Architecture-specific JDK");
-            if (jvmLabel == null) {
-              return null;
-            }
-
             Target jvmTarget = lookup.getTarget(jvmLabel);
             if (jvmTarget == null) {
               return null;

@@ -184,6 +184,12 @@ public class JavaOptions extends FragmentOptions {
       help = "Enables reduced classpaths for Java compilations.")
   public JavaClasspathMode experimentalJavaClasspath;
 
+  @Option(name = "java_cpu",
+      defaultValue = "null",
+      category = "semantics",
+      help = "The Java target CPU. Default is k8.")
+  public String javaCpu;
+
   @Option(name = "java_debug",
       defaultValue = "null",
       category = "testing",
