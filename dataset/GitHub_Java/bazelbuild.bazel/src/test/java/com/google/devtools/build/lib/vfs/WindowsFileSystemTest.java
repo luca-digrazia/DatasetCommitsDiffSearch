@@ -15,17 +15,23 @@
 package com.google.devtools.build.lib.vfs;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertSame;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.windows.util.WindowsTestUtil;
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -133,31 +139,36 @@ public class WindowsFileSystemTest {
 
     testUtil.createJunctions(junctions);
 
-    assertThat(WindowsFileSystem.isJunction(new File(root, "shrtpath/a").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "shrtpath/b").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "shrtpath/c").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "longlinkpath/a").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "longlinkpath/b").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "longlinkpath/c").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "longli~1/a").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "longli~1/b").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "longli~1/c").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "abbreviated/a").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "abbreviated/b").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "abbreviated/c").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "abbrev~1/a").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "abbrev~1/b").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "abbrev~1/c").toPath())).isTrue();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "control/a").toPath())).isFalse();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "control/b").toPath())).isFalse();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "control/c").toPath())).isFalse();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "shrttrgt/file1.txt").toPath()))
+    assertThat(WindowsFileSystem.isJunction(new File(root, "shrtpath/a"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "shrtpath/b"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "shrtpath/c"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "longlinkpath/a"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "longlinkpath/b"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "longlinkpath/c"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "longli~1/a"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "longli~1/b"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "longli~1/c"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "abbreviated/a"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "abbreviated/b"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "abbreviated/c"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "abbrev~1/a"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "abbrev~1/b"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "abbrev~1/c"))).isTrue();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "control/a"))).isFalse();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "control/b"))).isFalse();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "control/c"))).isFalse();
+    assertThat(WindowsFileSystem.isJunction(new File(root, "shrttrgt/file1.txt")))
         .isFalse();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "longtargetpath/file2.txt").toPath()))
+    assertThat(WindowsFileSystem.isJunction(new File(root, "longtargetpath/file2.txt")))
         .isFalse();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "longta~1/file2.txt").toPath()))
+    assertThat(WindowsFileSystem.isJunction(new File(root, "longta~1/file2.txt")))
         .isFalse();
-    assertThat(WindowsFileSystem.isJunction(new File(root, "non-existent").toPath())).isFalse();
+    try {
+      WindowsFileSystem.isJunction(new File(root, "non-existent"));
+      Assert.fail("expected failure");
+    } catch (IOException e) {
+      assertThat(e.getMessage()).contains("cannot find");
+    }
 
     assertThat(Arrays.asList(new File(root + "/shrtpath/a").list())).containsExactly("file1.txt");
     assertThat(Arrays.asList(new File(root + "/shrtpath/b").list())).containsExactly("file2.txt");
@@ -183,14 +194,14 @@ public class WindowsFileSystemTest {
 
     File linkPath = new File(helloPath.getParent().getParent().toFile(), "link");
     assertThat(Arrays.asList(linkPath.list())).containsExactly("hello.txt");
-    assertThat(WindowsFileSystem.isJunction(linkPath.toPath())).isTrue();
+    assertThat(WindowsFileSystem.isJunction(linkPath)).isTrue();
 
     assertThat(helloPath.toFile().delete()).isTrue();
     assertThat(helloPath.getParent().toFile().delete()).isTrue();
     assertThat(helloPath.getParent().toFile().exists()).isFalse();
     assertThat(Arrays.asList(linkPath.getParentFile().list())).containsExactly("link");
 
-    assertThat(WindowsFileSystem.isJunction(linkPath.toPath())).isTrue();
+    assertThat(WindowsFileSystem.isJunction(linkPath)).isTrue();
     assertThat(
             Files.exists(
                 linkPath.toPath(), WindowsFileSystem.symlinkOpts(/* followSymlinks */ false)))
@@ -199,5 +210,114 @@ public class WindowsFileSystemTest {
             Files.exists(
                 linkPath.toPath(), WindowsFileSystem.symlinkOpts(/* followSymlinks */ true)))
         .isFalse();
+  }
+
+  @Test
+  public void testIsJunctionHandlesFilesystemChangesCorrectly() throws Exception {
+    File longPath =
+        testUtil.scratchFile("target\\helloworld.txt", "hello").toAbsolutePath().toFile();
+    File shortPath = new File(longPath.getParentFile(), "hellow~1.txt");
+    assertThat(WindowsFileSystem.isJunction(longPath)).isFalse();
+    assertThat(WindowsFileSystem.isJunction(shortPath)).isFalse();
+
+    assertThat(longPath.delete()).isTrue();
+    testUtil.createJunctions(ImmutableMap.of("target\\helloworld.txt", "target"));
+    assertThat(WindowsFileSystem.isJunction(longPath)).isTrue();
+    assertThat(WindowsFileSystem.isJunction(shortPath)).isTrue();
+
+    assertThat(longPath.delete()).isTrue();
+    assertThat(longPath.mkdir()).isTrue();
+    assertThat(WindowsFileSystem.isJunction(longPath)).isFalse();
+    assertThat(WindowsFileSystem.isJunction(shortPath)).isFalse();
+  }
+
+  @Test
+  public void testShortPathResolution() throws Exception {
+    String shortPath = "shortp~1.res/foo/withsp~1/bar/~witht~1/hello.txt";
+    String longPath = "shortpath.resolution/foo/with spaces/bar/~with tilde/hello.txt";
+    testUtil.scratchFile(longPath, "hello");
+    Path p = fs.getPath(scratchRoot).getRelative(shortPath);
+    assertThat(p.getPathString()).endsWith(longPath);
+    assertThat(p).isEqualTo(fs.getPath(scratchRoot).getRelative(shortPath));
+    assertThat(p).isEqualTo(fs.getPath(scratchRoot).getRelative(longPath));
+    assertSame(p, fs.getPath(scratchRoot).getRelative(shortPath));
+    assertSame(p, fs.getPath(scratchRoot).getRelative(longPath));
+  }
+
+  @Test
+  public void testUnresolvableShortPathWhichIsThenCreated() throws Exception {
+    String shortPath = "unreso~1.sho/foo/will~1.exi/bar/hello.txt";
+    String longPrefix = "unresolvable.shortpath/foo/";
+    String longPath = longPrefix + "will.exist/bar/hello.txt";
+    testUtil.scratchDir(longPrefix);
+    final Path foo = fs.getPath(scratchRoot).getRelative(longPrefix);
+
+    // Assert that we can create an unresolvable path.
+    Path p = fs.getPath(scratchRoot).getRelative(shortPath);
+    assertThat(p.getPathString()).endsWith(longPrefix + "will~1.exi/bar/hello.txt");
+    // Assert that said path is not cached in its parent's `children` cache.
+    final List<String> children = new ArrayList<>();
+    Predicate<Path> collector =
+        new Predicate<Path>() {
+          @Override
+          public boolean apply(Path child) {
+            children.add(child.relativeTo(foo).getPathString());
+            return true;
+          }
+        };
+    foo.applyToChildren(collector);
+    assertThat(children).isEmpty();
+    // Assert that we can then create the whole path, and can now resolve the short form.
+    testUtil.scratchFile(longPath, "hello");
+    Path q = fs.getPath(scratchRoot).getRelative(shortPath);
+    assertThat(q.getPathString()).endsWith(longPath);
+    // Assert however that the unresolved and resolved Path objects are different, and only the
+    // resolved one is cached.
+    assertThat(p).isNotEqualTo(q);
+    foo.applyToChildren(collector);
+    assertThat(children).containsExactly("will.exist");
+  }
+
+  /**
+   * Test the scenario when a short path resolves to different long ones over time.
+   *
+   * <p>This can happen if the user deletes a directory during the bazel server's lifetime, then
+   * recreates it with the same name prefix such that the resulting directory's 8dot3 name is the
+   * same as the old one's.
+   */
+  @Test
+  public void testShortPathResolvesToDifferentPathsOverTime() throws Exception {
+    Path p1 = fs.getPath(scratchRoot).getRelative("longpa~1");
+    Path p2 = fs.getPath(scratchRoot).getRelative("longpa~1");
+    assertThat(p1.exists()).isFalse();
+    assertThat(p1).isEqualTo(p2);
+    assertThat(p1).isNotSameAs(p2);
+
+    testUtil.scratchDir("longpathnow");
+    Path q1 = fs.getPath(scratchRoot).getRelative("longpa~1");
+    Path q2 = fs.getPath(scratchRoot).getRelative("longpa~1");
+    assertThat(q1.exists()).isTrue();
+    assertThat(q1).isEqualTo(q2);
+    // Assert q1 == q2, because we could successfully resolve the short path to a long name and we
+    // cache them by the long name, so it's irrelevant they were created from a 8dot3 name, or what
+    // that name resolves to later in time.
+    assertThat(q1).isSameAs(q2);
+    assertThat(q1).isSameAs(fs.getPath(scratchRoot).getRelative("longpathnow"));
+
+    // Delete the original resolution of "longpa~1" ("longpathnow").
+    assertThat(q1.delete()).isTrue();
+    assertThat(q1.exists()).isFalse();
+
+    // Create a directory whose 8dot3 name is also "longpa~1" but its long name is different.
+    testUtil.scratchDir("longpaththen");
+    Path r1 = fs.getPath(scratchRoot).getRelative("longpa~1");
+    Path r2 = fs.getPath(scratchRoot).getRelative("longpa~1");
+    assertThat(r1.exists()).isTrue();
+    assertThat(r1).isEqualTo(r2);
+    assertThat(r1).isSameAs(r2);
+    assertThat(r1).isSameAs(fs.getPath(scratchRoot).getRelative("longpaththen"));
+    // r1 == r2 and q1 == q2, but r1 != q1, because the resolution of "longpa~1" changed over time.
+    assertThat(r1).isNotEqualTo(q1);
+    assertThat(r1).isNotSameAs(q1);
   }
 }
