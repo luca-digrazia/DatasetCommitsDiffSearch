@@ -33,7 +33,7 @@ import me.jessyan.autosize.external.ExternalAdaptInfo;
 import me.jessyan.autosize.external.ExternalAdaptManager;
 import me.jessyan.autosize.internal.CancelAdapt;
 import me.jessyan.autosize.internal.CustomAdapt;
-import me.jessyan.autosize.utils.AutoSizeLog;
+import me.jessyan.autosize.utils.LogUtils;
 import me.jessyan.autosize.utils.Preconditions;
 
 /**
@@ -55,32 +55,6 @@ public final class AutoSize {
 
     private AutoSize() {
         throw new IllegalStateException("you can't instantiate me!");
-    }
-
-    /**
-     * 检查 AndroidAutoSize 是否已经初始化
-     *
-     * @return {@code false} 表示 AndroidAutoSize 还未初始化, {@code true} 表示 AndroidAutoSize 已经初始化
-     */
-    public static boolean checkInit() {
-        return AutoSizeConfig.getInstance().getInitDensity() != -1;
-    }
-
-    /**
-     * 由于 AndroidAutoSize 会通过 {@link InitProvider} 的实例化而自动完成初始化, 并且 {@link AutoSizeConfig#init(Application)}
-     * 只允许被调用一次, 否则会报错, 所以 {@link AutoSizeConfig#init(Application)} 的调用权限并没有设为 public, 不允许外部使用者调用
-     * 但由于某些 issues 反应, 可能会在某些特殊情况下出现 {@link InitProvider} 未能正常实例化的情况, 导致 AndroidAutoSize 未能完成初始化
-     * 所以提供此静态方法用于让外部使用者在异常情况下也可以初始化 AndroidAutoSize, 在 {@link Application#onCreate()} 中调用即可
-     *
-     * @param application {@link Application}
-     */
-    public static void checkAndInit(Application application) {
-        if (!checkInit()) {
-            AutoSizeConfig.getInstance()
-                    .setLog(true)
-                    .init(application)
-                    .setUseDeviceSize(false);
-        }
     }
 
     /**
@@ -226,7 +200,7 @@ public final class AutoSize {
         setDensity(activity, targetDensity, targetDensityDpi, targetScaledDensity, targetXdpi);
         setScreenSizeDp(activity, targetScreenWidthDp, targetScreenHeightDp);
 
-        AutoSizeLog.d(String.format(Locale.ENGLISH, "The %s has been adapted! \n%s Info: isBaseOnWidth = %s, %s = %f, %s = %f, targetDensity = %f, targetScaledDensity = %f, targetDensityDpi = %d, targetXdpi = %f, targetScreenWidthDp = %d, targetScreenHeightDp = %d"
+        LogUtils.d(String.format(Locale.ENGLISH, "The %s has been adapted! \n%s Info: isBaseOnWidth = %s, %s = %f, %s = %f, targetDensity = %f, targetScaledDensity = %f, targetDensityDpi = %d, targetXdpi = %f, targetScreenWidthDp = %d, targetScreenHeightDp = %d"
                 , activity.getClass().getName(), activity.getClass().getSimpleName(), isBaseOnWidth, isBaseOnWidth ? "designWidthInDp"
                         : "designHeightInDp", sizeInDp, isBaseOnWidth ? "designWidthInSubunits" : "designHeightInSubunits", subunitsDesignSize
                 , targetDensity, targetScaledDensity, targetDensityDpi, targetXdpi, targetScreenWidthDp, targetScreenHeightDp));
@@ -277,20 +251,22 @@ public final class AutoSize {
      * @param xdpi          {@link DisplayMetrics#xdpi}
      */
     private static void setDensity(Activity activity, float density, int densityDpi, float scaledDensity, float xdpi) {
-        DisplayMetrics activityDisplayMetrics = activity.getResources().getDisplayMetrics();
-        setDensity(activityDisplayMetrics, density, densityDpi, scaledDensity, xdpi);
-        DisplayMetrics appDisplayMetrics = AutoSizeConfig.getInstance().getApplication().getResources().getDisplayMetrics();
-        setDensity(appDisplayMetrics, density, densityDpi, scaledDensity, xdpi);
-
         //兼容 MIUI
         DisplayMetrics activityDisplayMetricsOnMIUI = getMetricsOnMiui(activity.getResources());
         DisplayMetrics appDisplayMetricsOnMIUI = getMetricsOnMiui(AutoSizeConfig.getInstance().getApplication().getResources());
 
         if (activityDisplayMetricsOnMIUI != null) {
             setDensity(activityDisplayMetricsOnMIUI, density, densityDpi, scaledDensity, xdpi);
+        } else {
+            DisplayMetrics activityDisplayMetrics = activity.getResources().getDisplayMetrics();
+            setDensity(activityDisplayMetrics, density, densityDpi, scaledDensity, xdpi);
         }
+
         if (appDisplayMetricsOnMIUI != null) {
             setDensity(appDisplayMetricsOnMIUI, density, densityDpi, scaledDensity, xdpi);
+        } else {
+            DisplayMetrics appDisplayMetrics = AutoSizeConfig.getInstance().getApplication().getResources().getDisplayMetrics();
+            setDensity(appDisplayMetrics, density, densityDpi, scaledDensity, xdpi);
         }
     }
 
