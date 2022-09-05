@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,15 +61,17 @@ public final class Attribute implements Comparable<Attribute> {
   public static final Predicate<RuleClass> NO_RULE = Predicates.alwaysFalse();
 
   private static final class RuleAspect {
-    private final AspectClass aspectFactory;
+    private final Class<? extends AspectFactory<?, ?, ?>> aspectFactory;
     private final Function<Rule, AspectParameters> parametersExtractor;
 
-    RuleAspect(AspectClass aspectFactory, Function<Rule, AspectParameters> parametersExtractor) {
+    RuleAspect(
+        Class<? extends AspectFactory<?, ?, ?>> aspectFactory,
+        Function<Rule, AspectParameters> parametersExtractor) {
       this.aspectFactory = aspectFactory;
       this.parametersExtractor = parametersExtractor;
     }
 
-    AspectClass getAspectFactory() {
+    Class<? extends AspectFactory<?, ?, ?>> getAspectFactory() {
       return aspectFactory;
     }
     
@@ -699,7 +701,7 @@ public final class Attribute implements Comparable<Attribute> {
      */
     public Builder<TYPE> aspect(Class<? extends AspectFactory<?, ?, ?>> aspect,
         Function<Rule, AspectParameters> evaluator) {
-      this.aspects.add(new RuleAspect(new NativeAspectClass(aspect), evaluator));
+      this.aspects.add(new RuleAspect(aspect, evaluator));
       return this;
     }
 
@@ -1310,8 +1312,8 @@ public final class Attribute implements Comparable<Attribute> {
   /**
    * Returns the set of aspects required for dependencies through this attribute.
    */
-  public ImmutableSet<AspectClass> getAspects() {
-    ImmutableSet.Builder<AspectClass> builder = ImmutableSet.builder();
+  public ImmutableSet<Class<? extends AspectFactory<?, ?, ?>>> getAspects() {
+    ImmutableSet.Builder<Class<? extends AspectFactory<?, ?, ?>>> builder = ImmutableSet.builder();
     for (RuleAspect aspect : aspects) {
       builder.add(aspect.getAspectFactory());
     }
@@ -1321,8 +1323,10 @@ public final class Attribute implements Comparable<Attribute> {
   /**
    * Returns set of pairs of aspect factories and corresponding aspect parameters.
    */
-  public ImmutableMap<AspectClass, AspectParameters> getAspectsWithParameters(Rule rule) {
-    ImmutableMap.Builder<AspectClass, AspectParameters> builder = ImmutableMap.builder();
+  public ImmutableMap<Class<? extends AspectFactory<?, ?, ?>>, AspectParameters>
+      getAspectsWithParameters(Rule rule) {
+    ImmutableMap.Builder<Class<? extends AspectFactory<?, ?, ?>>, AspectParameters> builder =
+        ImmutableMap.builder();
     for (RuleAspect aspect : aspects) {
       builder.put(aspect.getAspectFactory(), aspect.getParametersExtractor().apply(rule));
     }

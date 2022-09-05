@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,6 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.common.base.Predicates;
-import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -153,8 +152,7 @@ public class BazelCppRuleClasses {
    * Label of a pseudo-filegroup that contains all crosstool and libcfiles for
    * all configurations, as specified on the command-line.
    */
-  public static final String CROSSTOOL_LABEL =
-      Constants.TOOLS_REPOSITORY + "//tools/defaults:crosstool";
+  public static final String CROSSTOOL_LABEL = "//tools/defaults:crosstool";
 
   public static final LateBoundLabel<BuildConfiguration> CC_TOOLCHAIN =
       new LateBoundLabel<BuildConfiguration>(CROSSTOOL_LABEL) {
@@ -260,8 +258,7 @@ public class BazelCppRuleClasses {
           so be careful about header files included elsewhere.</p>
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("copts", STRING_LIST))
-          .add(attr("$stl", LABEL).value(
-              env.getLabel(Constants.TOOLS_REPOSITORY + "//tools/cpp:stl")))
+          .add(attr("$stl", LABEL).value(env.getLabel("//tools/cpp:stl")))
           .add(attr(":stl", LABEL).value(STL))
           .build();
     }
@@ -568,7 +565,7 @@ public class BazelCppRuleClasses {
               // Every cc_rule depends implicitly on STL to make
               // sure that the correct headers are used for inclusion. The only exception is
               // STL itself to avoid cycles in the dependency graph.
-              Label stl = env.getLabel(Constants.TOOLS_REPOSITORY + "//tools/cpp:stl");
+              Label stl = env.getLabel("//tools/cpp:stl");
               return rule.getLabel().equals(stl) ? null : stl;
             }
           }))
@@ -603,7 +600,7 @@ public class BazelCppRuleClasses {
           </p>
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("malloc", LABEL)
-              .value(env.getLabel(Constants.TOOLS_REPOSITORY + "//tools/cpp:malloc"))
+              .value(env.getLabel("//tools/cpp:malloc"))
               .allowedFileTypes()
               .allowedRuleClasses("cc_library"))
           .add(attr(":default_malloc", LABEL).value(DEFAULT_MALLOC))

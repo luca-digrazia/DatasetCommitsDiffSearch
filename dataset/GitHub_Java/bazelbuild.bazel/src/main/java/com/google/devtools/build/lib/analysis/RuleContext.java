@@ -137,7 +137,6 @@ public final class RuleContext extends TargetContext
   private final ImmutableSet<String> features;
   private final Map<String, Attribute> attributeMap;
   private final BuildConfiguration hostConfiguration;
-  private final ErrorReporter reporter;
 
   private ActionOwner actionOwner;
 
@@ -158,7 +157,6 @@ public final class RuleContext extends TargetContext
     this.features = getEnabledFeatures();
     this.attributeMap = attributeMap;
     this.hostConfiguration = builder.hostConfiguration;
-    reporter = builder.reporter;
   }
 
   private ImmutableSet<String> getEnabledFeatures() {
@@ -393,7 +391,7 @@ public final class RuleContext extends TargetContext
    */
   @Override
   public void ruleError(String message) {
-    reporter.ruleError(message);
+    reportError(rule.getLocation(), prefixRuleMessage(message));
   }
 
   /**
@@ -402,7 +400,7 @@ public final class RuleContext extends TargetContext
    */
   @Override
   public void ruleWarning(String message) {
-    reporter.ruleWarning(message);
+    reportWarning(rule.getLocation(), prefixRuleMessage(message));
   }
 
   /**
@@ -414,7 +412,11 @@ public final class RuleContext extends TargetContext
    */
   @Override
   public void attributeError(String attrName, String message) {
-    reporter.attributeError(attrName, message);
+    reportError(rule.getAttributeLocation(attrName),
+        prefixAttributeMessage(Attribute.isImplicit(attrName)
+                ? "(an implicit dependency)"
+                : attrName,
+            message));
   }
 
   /**
@@ -425,7 +427,30 @@ public final class RuleContext extends TargetContext
    */
   @Override
   public void attributeWarning(String attrName, String message) {
-    reporter.attributeWarning(attrName, message);
+    reportWarning(rule.getAttributeLocation(attrName),
+        prefixAttributeMessage(Attribute.isImplicit(attrName)
+                ? "(an implicit dependency)"
+                : attrName,
+            message));
+  }
+
+  private String prefixAttributeMessage(String attrName, String message) {
+    return "in " + attrName + " attribute of "
+           + rule.getRuleClass() + " rule "
+           + getLabel() + ": " + message;
+  }
+
+  private String prefixRuleMessage(String message) {
+    return "in " + rule.getRuleClass() + " rule "
+           + getLabel() + ": " + message;
+  }
+
+  private void reportError(Location location, String message) {
+    getAnalysisEnvironment().getEventHandler().handle(Event.error(location, message));
+  }
+
+  private void reportWarning(Location location, String message) {
+    getAnalysisEnvironment().getEventHandler().handle(Event.warn(location, message));
   }
 
   /**
@@ -1212,21 +1237,15 @@ public final class RuleContext extends TargetContext
     return features;
   }
 
-  @Override
-  public String toString() {
-    return "RuleContext(" + getLabel() + ", " + getConfiguration() + ")";
-  }
-
   /**
    * Builder class for a RuleContext.
    */
-  public static final class Builder implements RuleErrorConsumer  {
+  public static final class Builder {
     private final AnalysisEnvironment env;
     private final Rule rule;
     private final BuildConfiguration configuration;
     private final BuildConfiguration hostConfiguration;
     private final PrerequisiteValidator prerequisiteValidator;
-    private final ErrorReporter reporter;
     private ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap;
     private Set<ConfigMatchingProvider> configConditions;
     private NestedSet<PackageSpecification> visibility;
@@ -1239,7 +1258,6 @@ public final class RuleContext extends TargetContext
       this.configuration = Preconditions.checkNotNull(configuration);
       this.hostConfiguration = Preconditions.checkNotNull(hostConfiguration);
       this.prerequisiteValidator = prerequisiteValidator;
-      reporter = new ErrorReporter(env, rule);
     }
 
     RuleContext build() {
@@ -1387,32 +1405,41 @@ public final class RuleContext extends TargetContext
       return mapBuilder.build();
     }
 
+    private String prefixRuleMessage(String message) {
+      return String.format("in %s rule %s: %s", rule.getRuleClass(), rule.getLabel(), message);
+    }
+
+    private String maskInternalAttributeNames(String name) {
+      return Attribute.isImplicit(name) ? "(an implicit dependency)" : name;
+    }
+
+    private String prefixAttributeMessage(String attrName, String message) {
+      return String.format("in %s attribute of %s rule %s: %s",
+          maskInternalAttributeNames(attrName), rule.getRuleClass(), rule.getLabel(), message);
+    }
+
     public void reportError(Location location, String message) {
-      reporter.reportError(location, message);
+      env.getEventHandler().handle(Event.error(location, message));
     }
 
-    @Override
     public void ruleError(String message) {
-      reporter.ruleError(message);
+      reportError(rule.getLocation(), prefixRuleMessage(message));
     }
 
-    @Override
     public void attributeError(String attrName, String message) {
-      reporter.attributeError(attrName, message);
+      reportError(rule.getAttributeLocation(attrName), prefixAttributeMessage(attrName, message));
     }
 
     public void reportWarning(Location location, String message) {
-      reporter.reportWarning(location, message);
+      env.getEventHandler().handle(Event.warn(location, message));
     }
 
-    @Override
     public void ruleWarning(String message) {
-      reporter.ruleWarning(message);
+      env.getEventHandler().handle(Event.warn(rule.getLocation(), prefixRuleMessage(message)));
     }
 
-    @Override
     public void attributeWarning(String attrName, String message) {
-      reporter.attributeWarning(attrName, message);
+      reportWarning(rule.getAttributeLocation(attrName), prefixAttributeMessage(attrName, message));
     }
 
     private void reportBadPrerequisite(Attribute attribute, String targetKind,
@@ -1557,92 +1584,8 @@ public final class RuleContext extends TargetContext
     }
   }
 
-  /**
-   * Helper class for reporting errors and warnings.
-   */
-  public static final class ErrorReporter implements RuleErrorConsumer {
-    private final AnalysisEnvironment env;
-    private final Rule rule;
-
-    ErrorReporter(AnalysisEnvironment env, Rule rule) {
-      this.env = env;
-      this.rule = rule;
-    }
-
-    public void reportError(Location location, String message) {
-      env.getEventHandler().handle(Event.error(location, message));
-    }
-
-    @Override
-    public void ruleError(String message) {
-      reportError(rule.getLocation(), prefixRuleMessage(message));
-    }
-
-    @Override
-    public void attributeError(String attrName, String message) {
-      reportError(getAttributeLocation(attrName), completeAttributeMessage(attrName, message));
-    }
-
-    public void reportWarning(Location location, String message) {
-      env.getEventHandler().handle(Event.warn(location, message));
-    }
-
-    @Override
-    public void ruleWarning(String message) {
-      env.getEventHandler().handle(Event.warn(rule.getLocation(), prefixRuleMessage(message)));
-    }
-
-    @Override
-    public void attributeWarning(String attrName, String message) {
-      reportWarning(getAttributeLocation(attrName), completeAttributeMessage(attrName, message));
-    }
-
-    private String prefixRuleMessage(String message) {
-      return String.format("in %s rule %s: %s", rule.getRuleClass(), rule.getLabel(), message);
-    }
-
-    private String maskInternalAttributeNames(String name) {
-      return Attribute.isImplicit(name) ? "(an implicit dependency)" : name;
-    }
-
-    /**
-     * Prefixes the given message with details about the rule and appends details about the macro
-     * that created this rule, if applicable.
-     */
-    private String completeAttributeMessage(String attrName, String message) {
-      // Appends a note to the given message if the offending rule was created by a macro.
-      String macroMessageAppendix =
-          wasCreatedByMacro()
-              ? String.format(
-                  ". Since this rule was created by the macro '%s', the error might have been "
-                  + "caused by the macro implementation in %s",
-                  getGeneratorFunction(), rule.getAttributeLocation(attrName))
-              : "";
-
-      return String.format("in %s attribute of %s rule %s: %s%s",
-          maskInternalAttributeNames(attrName), rule.getRuleClass(), rule.getLabel(), message,
-          macroMessageAppendix);
-    }
-
-    /**
-     * Returns the location of the specified attribute.
-     *
-     * <p>If the rule was created by a macro, we return the location from the BUILD file instead.
-     */
-    private Location getAttributeLocation(String attrName) {
-      // TODO(bazel-team): We assume that macros have set the rule location to the generator
-      // location. It would be better to read the "generator_location" attribute (which is currently
-      // not implemented).
-      return wasCreatedByMacro() ? rule.getLocation() : rule.getAttributeLocation(attrName);
-    }
-
-    private boolean wasCreatedByMacro() {
-      String generator = getGeneratorFunction();
-      return generator != null && !generator.isEmpty();
-    }
-
-    private String getGeneratorFunction() {
-      return (String) rule.getAttributeContainer().getAttr("generator_function");
-    }
+  @Override
+  public String toString() {
+    return "RuleContext(" + getLabel() + ", " + getConfiguration() + ")";
   }
 }
