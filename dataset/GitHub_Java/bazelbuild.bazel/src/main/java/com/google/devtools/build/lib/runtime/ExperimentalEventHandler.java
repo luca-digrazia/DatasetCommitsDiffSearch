@@ -104,19 +104,6 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
     ignoreRefreshLimitOnce();
   }
 
-  private synchronized void flushStdOutStdErrBuffers() {
-    try {
-      outErr.getOutputStream().write(stdoutBuffer);
-      outErr.getOutputStream().flush();
-      stdoutBuffer = new byte[] {};
-      outErr.getErrorStream().write(stderrBuffer);
-      outErr.getErrorStream().flush();
-      stderrBuffer = new byte[] {};
-    } catch (IOException e) {
-      LOG.warning("IO Error writing to output stream: " + e);
-    }
-  }
-
   @Override
   public synchronized void handle(Event event) {
     try {
@@ -175,7 +162,12 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
             if (showProgress && !buildComplete) {
               clearProgressBar();
             }
-            flushStdOutStdErrBuffers();
+            outErr.getOutputStream().write(stdoutBuffer);
+            outErr.getOutputStream().flush();
+            stdoutBuffer = new byte[] {};
+            outErr.getErrorStream().write(stderrBuffer);
+            outErr.getErrorStream().flush();
+            stderrBuffer = new byte[] {};
             crlf();
             setEventKindColor(event.getKind());
             terminal.writeString(event.getKind() + ": ");
@@ -275,14 +267,12 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
     refresh();
     buildComplete = true;
     stopUpdateThread();
-    flushStdOutStdErrBuffers();
   }
 
   @Subscribe
   public void noBuild(NoBuildEvent event) {
     buildComplete = true;
     stopUpdateThread();
-    flushStdOutStdErrBuffers();
   }
 
   @Subscribe
