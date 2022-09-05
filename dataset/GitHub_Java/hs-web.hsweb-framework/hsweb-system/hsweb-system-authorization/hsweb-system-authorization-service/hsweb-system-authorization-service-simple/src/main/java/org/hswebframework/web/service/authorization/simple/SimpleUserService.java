@@ -15,7 +15,7 @@ import org.hswebframework.web.service.AbstractService;
 import org.hswebframework.web.service.DefaultDSLQueryService;
 import org.hswebframework.web.service.DefaultDSLUpdateService;
 import org.hswebframework.web.service.authorization.*;
-import org.hswebframework.web.service.authorization.events.UserModifiedEvent;
+import org.hswebframework.web.service.authorization.events.UserPasswordModifiedEvent;
 import org.hswebframework.web.validate.ValidationException;
 import org.hswebframework.utils.ListUtils;
 import org.hswebframework.web.validator.group.CreateGroup;
@@ -25,13 +25,13 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.hswebframework.web.service.DefaultDSLUpdateService.*;
 import static org.hswebframework.web.service.authorization.simple.CacheConstants.USER_AUTH_CACHE_NAME;
 import static org.hswebframework.web.service.authorization.simple.CacheConstants.USER_CACHE_NAME;
 
@@ -105,12 +105,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         }
         UserEntity userEntity = createQuery().where(UserEntity.id, id).single();
         if (null != userEntity) {
-
-            List<String> roleId = userRoleDao
-                    .selectByUserId(id)
-                    .stream()
-                    .map(UserRoleEntity::getRoleId) //转换为roleId
-                    .collect(Collectors.toList());
+            List<String> roleId = userRoleDao.selectByUserId(id).stream().map(UserRoleEntity::getRoleId).collect(Collectors.toList());
             BindRoleUserEntity roleUserEntity = entityFactory.newInstance(BindRoleUserEntity.class, userEntity);
             roleUserEntity.setRoles(roleId);
             return roleUserEntity;
@@ -177,8 +172,6 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         userEntity.setId(userId);
         UserEntity oldUser = selectByPk(userId);
         assertNotNull(oldUser);
-        boolean roleModified = false;
-        boolean passwordModified = false;
         //判断用户是否存在
         boolean userExists = createQuery().where()
                 .is(UserEntity.username, userEntity.getUsername())
@@ -193,10 +186,10 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
             //密码MD5
             userEntity.setPassword(encodePassword(userEntity.getPassword(), oldUser.getSalt()));
             updateProperties.add(UserEntity.password);
-            passwordModified = true;
+
         }
         //修改数据
-        createUpdate(getDao(), userEntity)
+        DefaultDSLUpdateService.createUpdate(getDao(), userEntity)
                 .includes(updateProperties.toArray(new String[updateProperties.size()]))
                 .where(GenericEntity.id, userEntity.getId())
                 .exec();
@@ -206,16 +199,15 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
             userRoleDao.deleteByUserId(bindRoleUserEntity.getId());
             //同步角色信息
             trySyncUserRole(userEntity.getId(), bindRoleUserEntity.getRoles());
-            roleModified = true;
         }
         if (updateProperties.contains(UserEntity.password)) {
-            publisher.publishEvent(new UserModifiedEvent(userEntity, passwordModified, roleModified));
+            publisher.publishEvent(new UserPasswordModifiedEvent(userId));
         }
     }
 
     @Override
     public boolean enable(String userId) {
-        return createUpdate(getDao())
+        return DefaultDSLUpdateService.createUpdate(getDao())
                 .set(UserEntity.status, DataStatus.STATUS_ENABLED)
                 .where(GenericEntity.id, userId)
                 .exec() > 0;
@@ -223,7 +215,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
 
     @Override
     public boolean disable(String userId) {
-        return createUpdate(getDao())
+        return DefaultDSLUpdateService.createUpdate(getDao())
                 .set(UserEntity.status, DataStatus.STATUS_DISABLED)
                 .where(GenericEntity.id, userId)
                 .exec() > 0;
@@ -240,11 +232,11 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         tryValidateProperty(passwordStrengthValidator, UserEntity.password, newPassword);
 
         newPassword = encodePassword(newPassword, userEntity.getSalt());
-        createUpdate(getDao())
+        DefaultDSLUpdateService.createUpdate(getDao())
                 .set(UserEntity.password, newPassword)
                 .where(GenericEntity.id, userId)
                 .exec();
-        publisher.publishEvent(new UserModifiedEvent(userEntity, true, false));
+        publisher.publishEvent(new UserPasswordModifiedEvent(userId));
     }
 
 
