@@ -388,8 +388,8 @@ public class BuildingState {
    *
    * @see NodeEntry#getTemporaryDirectDeps()
    */
-  GroupedList<SkyKey> getDirectDepsForBuild() {
-    return directDeps;
+  Set<SkyKey> getDirectDepsForBuild() {
+    return directDeps.toSet();
   }
 
   /**
