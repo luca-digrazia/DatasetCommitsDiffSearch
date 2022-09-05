@@ -8,7 +8,7 @@ import java.util.concurrent.ScheduledFuture;
 /**
  * A health check decorator to manage asynchronous executions.
  */
-public class AsyncHealthCheckDecorator extends HealthCheck implements Runnable {
+class AsyncHealthCheckDecorator extends HealthCheck implements Runnable {
     private static final String NO_RESULT_YET_MESSAGE = "Waiting for first asynchronous check result.";
     private final HealthCheck healthCheck;
     private final ScheduledFuture<?> future;
@@ -47,7 +47,7 @@ public class AsyncHealthCheckDecorator extends HealthCheck implements Runnable {
         return future.cancel(true);
     }
 
-    public HealthCheck getHealthCheck() {
+    HealthCheck getHealthCheck() {
         return healthCheck;
     }
 
