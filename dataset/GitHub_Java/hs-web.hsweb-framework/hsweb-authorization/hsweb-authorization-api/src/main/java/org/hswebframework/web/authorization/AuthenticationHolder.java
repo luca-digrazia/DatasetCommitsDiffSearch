@@ -96,7 +96,7 @@ public final class AuthenticationHolder {
         }
     }
 
-    public static void setCurrentUserId(String id) {
+    public static void setCureentUserId(String id) {
         ThreadLocalUtils.put(AuthenticationHolder.CURRENT_USER_ID_KEY, id);
     }
 }
