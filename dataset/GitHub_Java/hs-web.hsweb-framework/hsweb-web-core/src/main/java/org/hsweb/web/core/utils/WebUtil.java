@@ -54,16 +54,6 @@ public class WebUtil {
         return null;
     }
 
-    public static User setCurrentUser(User user) {
-        ThreadLocalUtils.put("current-user", user);
-        return user;
-    }
-
-    public static void removeCurrentUser() {
-        ThreadLocalUtils.remove("current-user");
-    }
-
-
     /**
      * 在HttpServletRequest中获取当前登录的用户
      *
@@ -71,7 +61,7 @@ public class WebUtil {
      * @return 当前登录的用户
      */
     public static User getLoginUser(HttpServletRequest request) {
-        if (request == null) return ThreadLocalUtils.get("current-user");
+        if (request == null) return null;
         HttpSession session = request.getSession(false);
         if (session == null) {
             OAuth2Manager manager = OAuth2ManagerHolder.getManager();
