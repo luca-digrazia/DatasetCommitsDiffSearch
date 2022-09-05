@@ -40,8 +40,8 @@ import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.RuleIdeInfo.Kind;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.android.AndroidSdkProvider;
 import com.google.devtools.build.lib.rules.java.JavaExportsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
@@ -100,7 +100,7 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
     // todo(dslomov,tomlu): following current build info logic, this code enumerates dependencies
     // directly by iterating over deps attribute. The more robust way to do this might be
     // to iterate classpath as provided to build action.
-    if (ruleContext.attributes().has("deps", BuildType.LABEL_LIST)) {
+    if (ruleContext.attributes().has("deps", Type.LABEL_LIST)) {
       Iterable<AndroidStudioInfoFilesProvider> androidStudioInfoFilesProviders =
           ruleContext.getPrerequisites("deps", Mode.TARGET, AndroidStudioInfoFilesProvider.class);
       for (AndroidStudioInfoFilesProvider depProvider : androidStudioInfoFilesProviders) {
@@ -189,10 +189,7 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
     outputBuilder.addAllDependencies(transform(directDependencies, LABEL_TO_STRING));
     outputBuilder.addAllTransitiveDependencies(transform(transitiveDependencies, LABEL_TO_STRING));
 
-    if (ruleKind == Kind.JAVA_LIBRARY
-        || ruleKind == Kind.JAVA_IMPORT
-        || ruleKind == Kind.JAVA_TEST
-        || ruleKind == Kind.JAVA_BINARY) {
+    if (ruleKind == Kind.JAVA_LIBRARY || ruleKind == Kind.JAVA_IMPORT) {
       outputBuilder.setJavaRuleIdeInfo(makeJavaRuleIdeInfo(base));
     } else if (ruleKind == Kind.ANDROID_SDK) {
       outputBuilder.setAndroidSdkRuleInfo(
@@ -326,15 +323,10 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
 
   private RuleIdeInfo.Kind getRuleKind(Rule rule, ConfiguredTarget base) {
     RuleIdeInfo.Kind kind;
-    String ruleClassName = rule.getRuleClassObject().getName();
-    if ("java_library".equals(ruleClassName)) {
+    if ("java_library".equals(rule.getRuleClassObject().getName())) {
       kind = RuleIdeInfo.Kind.JAVA_LIBRARY;
-    } else if ("java_import".equals(ruleClassName)) {
+    } else if ("java_import".equals(rule.getRuleClassObject().getName())) {
       kind = Kind.JAVA_IMPORT;
-    } else if ("java_test".equals(ruleClassName)) {
-      kind = Kind.JAVA_TEST;
-    } else if ("java_binary".equals(ruleClassName)) {
-      kind = Kind.JAVA_BINARY;
     } else if (base.getProvider(AndroidSdkProvider.class) != null) {
       kind = RuleIdeInfo.Kind.ANDROID_SDK;
     } else {
