@@ -8,8 +8,8 @@ import java.util.List;
 
 import com.codahale.metrics.WeightedSnapshot.WeightedSample;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.offset;
+import static org.fest.assertions.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.offset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
@@ -41,21 +41,6 @@ public class WeightedSnapshotTest {
     public void bigQuantilesAreTheLastValue() throws Exception {
         assertThat(snapshot.getValue(1.0))
                 .isEqualTo(5.0, offset(0.1));
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void disallowsNotANumberQuantile() {
-        snapshot.getValue( Double.NaN );
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void disallowsNegativeQuantile() {
-        snapshot.getValue( -0.5 );
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void disallowsQuantileOverOne() {
-        snapshot.getValue( 1.5 );
     }
 
     @Test
