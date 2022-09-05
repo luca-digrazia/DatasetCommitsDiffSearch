@@ -14,8 +14,8 @@
 
 package com.google.devtools.build.lib.rules.apple;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.Locale;
 import java.util.Set;
@@ -28,11 +28,7 @@ import javax.annotation.Nullable;
 public enum Platform {
   IOS_DEVICE("iPhoneOS"),
   IOS_SIMULATOR("iPhoneSimulator"),
-  MACOS_X("MacOSX"),
-  TVOS_DEVICE("AppleTVOS"),
-  TVOS_SIMULATOR("AppleTVSimulator"),
-  WATCHOS_DEVICE("WatchOS"),
-  WATCHOS_SIMULATOR("WatchSimulator");
+  MACOSX("MacOSX");
 
   private static final Set<String> IOS_SIMULATOR_ARCHS = ImmutableSet.of("i386", "x86_64");
   private static final Set<String> IOS_DEVICE_ARCHS =
@@ -93,7 +89,7 @@ public enum Platform {
     } else if (IOS_DEVICE_TARGET_CPUS.contains(targetCpu)) {
       return IOS_DEVICE;
     } else if (MACOSX_TARGET_CPUS.contains(targetCpu)) {
-      return MACOS_X;
+      return MACOSX;
     } else {
       return null;
     }

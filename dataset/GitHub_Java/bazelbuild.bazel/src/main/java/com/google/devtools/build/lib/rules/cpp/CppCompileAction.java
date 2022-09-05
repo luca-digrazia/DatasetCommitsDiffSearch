@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
@@ -36,7 +37,6 @@ import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.extra.CppCompileInfo;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
@@ -51,9 +51,7 @@ import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.Platform;
-import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionContext.Reply;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
@@ -62,7 +60,6 @@ import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -157,9 +154,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   private final Iterable<IncludeScannable> lipoScannables;
   private final CppCompileCommandLine cppCompileCommandLine;
   private final boolean usePic;
-  // TODO(bazel-team): Needed for lazily evaluating xcode configuration attribute. Remove when
-  // this logic is refactored into crosstool expansion.
-  private final RuleContext ruleContext;
 
   @VisibleForTesting
   final CppConfiguration cppConfiguration;
@@ -274,7 +268,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     this.lipoScannables = lipoScannables;
     this.actionClassId = actionClassId;
     this.usePic = usePic;
-    this.ruleContext = ruleContext;
 
     // We do not need to include the middleman artifact since it is a generated
     // artifact and will definitely exist prior to this action execution.
@@ -600,7 +593,8 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
    * provided to the C++ compiler.
    */
   public ImmutableMap<String, String> getEnvironment() {
-    Map<String, String> environment = new LinkedHashMap<>(configuration.getLocalShellEnvironment());
+    Map<String, String> environment =
+        new LinkedHashMap<>(configuration.getDefaultShellEnvironment());
     if (configuration.isCodeCoverageEnabled()) {
       environment.put("PWD", "/proc/self/cwd");
     }
@@ -610,16 +604,12 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     // evaluation here.
     AppleConfiguration appleConfiguration = configuration.getFragment(AppleConfiguration.class);
     if (CppConfiguration.MAC_SYSTEM_NAME.equals(getHostSystemName())) {
-      XcodeConfigProvider xcodeConfigProvider =
-          ruleContext.getPrerequisite(":xcode_config", Mode.HOST, XcodeConfigProvider.class);
-      environment.putAll(AppleToolchain.appleHostSystemEnv(xcodeConfigProvider));
+      environment.putAll(appleConfiguration.appleHostSystemEnv());
     }
     if (Platform.isApplePlatform(cppConfiguration.getTargetCpu())) {
       environment.putAll(appleConfiguration.appleTargetPlatformEnv(
           Platform.forTargetCpu(cppConfiguration.getTargetCpu())));
     }
-    
-    environment.putAll(cppCompileCommandLine.getEnvironment());
 
     // TODO(bazel-team): Check (crosstool) host system name instead of using OS.getCurrent.
     if (OS.getCurrent() == OS.WINDOWS) {
@@ -1267,13 +1257,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       this.featureConfiguration = featureConfiguration;
       this.variables = variables;
       this.fdoBuildStamp = fdoBuildStamp;
-    }
-
-    /**
-     * Returns the environment variables that should be set for C++ compile actions.
-     */
-    protected Map<String, String> getEnvironment() {
-      return featureConfiguration.getEnvironmentVariables(getActionName(), variables);
     }
 
     protected List<String> getArgv(PathFragment outputFile) {
