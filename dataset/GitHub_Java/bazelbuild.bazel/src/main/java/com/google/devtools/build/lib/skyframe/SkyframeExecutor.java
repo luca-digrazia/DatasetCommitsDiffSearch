@@ -50,9 +50,9 @@ import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.PackageRootResolutionException;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.Root;
+import com.google.devtools.build.lib.analysis.Aspect;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView.Options;
-import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.DependencyResolver.Dependency;
@@ -77,7 +77,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.packages.Aspect;
+import com.google.devtools.build.lib.packages.AspectWithParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -500,10 +500,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     }
   }
 
-  protected ImmutableSet<PathFragment> getBlacklistedPkgPrefixes() {
-    return ImmutableSet.of();
-  }
-
   class BuildViewProvider {
     /**
      * Returns the current {@link SkyframeBuildView} instance.
@@ -872,11 +868,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   @VisibleForTesting  // productionVisibility = Visibility.PRIVATE
   public abstract void setDeletedPackages(Iterable<PackageIdentifier> pkgs);
 
-  @VisibleForTesting
-  public final void setBlacklistedPkgPrefixes(ImmutableSet<PathFragment> blacklist) {
-    PrecomputedValue.BLACKLISTED_PKG_PREFIXES.set(injectable(), blacklist);
-  }
-
   /**
    * Prepares the evaluator for loading.
    *
@@ -891,7 +882,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
     maybeInjectPrecomputedValuesForAnalysis();
     setCommandId(commandId);
-    setBlacklistedPkgPrefixes(getBlacklistedPkgPrefixes());
     setShowLoadingProgress(showLoadingProgress);
     setDefaultVisibility(defaultVisibility);
     setupDefaultPackage(defaultsPackageContents);
@@ -1144,7 +1134,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     final List<SkyKey> skyKeys = new ArrayList<>();
     for (Dependency key : keys) {
       skyKeys.add(ConfiguredTargetValue.key(key.getLabel(), configs.get(key)));
-      for (Aspect aspect : key.getAspects()) {
+      for (AspectWithParameters aspect : key.getAspects()) {
         skyKeys.add(
             ConfiguredTargetFunction.createAspectKey(key.getLabel(), configs.get(key), aspect));
       }
@@ -1163,19 +1153,19 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
       ConfiguredTarget configuredTarget =
           ((ConfiguredTargetValue) result.get(configuredTargetKey)).getConfiguredTarget();
-      List<ConfiguredAspect> configuredAspects = new ArrayList<>();
+      List<Aspect> aspects = new ArrayList<>();
 
-      for (Aspect aspect : key.getAspects()) {
+      for (AspectWithParameters aspect : key.getAspects()) {
         SkyKey aspectKey =
             ConfiguredTargetFunction.createAspectKey(key.getLabel(), configs.get(key), aspect);
         if (result.get(aspectKey) == null) {
           continue DependentNodeLoop;
         }
 
-        configuredAspects.add(((AspectValue) result.get(aspectKey)).getConfiguredAspect());
+        aspects.add(((AspectValue) result.get(aspectKey)).getAspect());
       }
 
-      cts.put(key, RuleConfiguredTarget.mergeAspects(configuredTarget, configuredAspects));
+      cts.put(key, RuleConfiguredTarget.mergeAspects(configuredTarget, aspects));
     }
 
     return cts.build();
