@@ -22,6 +22,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FileConfiguredTarget;
@@ -32,7 +33,6 @@ import com.google.devtools.build.lib.rules.SkylarkRuleContext;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.python.PythonSourcesProvider;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.testutil.TestConstants;
@@ -81,7 +81,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         ")");
   }
 
-  private void setUpAttributeErrorTest() throws Exception {
+  private void setUpAttributeErrorTest() throws Exception   {
     scratch.file("test/BUILD",
         "load('/test/macros', 'macro_native_rule', 'macro_skylark_rule', 'skylark_rule')",
         "macro_native_rule(name = 'm_native',",
@@ -121,7 +121,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
       // about the macro.
       assertContainsEvent(
           "ERROR /workspace/test/BUILD:2:1: in deps attribute of cc_library rule //test:m_native: "
-              + "java_library rule '//test:jlib' is misplaced here (expected ");
+          + "java_library rule '//test:jlib' is misplaced here (expected ");
       // Skip the part of the error message that has details about the allowed deps since the mocks
       // for the mac tests might have different values for them.
       assertContainsEvent(". Since this "
@@ -141,9 +141,9 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
       // about the macro.
       assertContainsEvent(
           "ERROR /workspace/test/BUILD:4:1: in deps attribute of skylark_rule rule "
-              + "//test:m_skylark: '//test:jlib' does not have mandatory provider 'some_provider'. "
-              + "Since this rule was created by the macro 'macro_skylark_rule', the error might "
-              + "have been caused by the macro implementation in /workspace/test/macros.bzl:12:36");
+          + "//test:m_skylark: '//test:jlib' does not have mandatory provider 'some_provider'. "
+          + "Since this rule was created by the macro 'macro_skylark_rule', the error might have "
+          + "been caused by the macro implementation in /workspace/test/macros.bzl:12:36");
     }
   }
 
@@ -216,8 +216,8 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     getConfiguredTarget("//test:skyrule");
     assertContainsEvent(
         "ERROR /workspace/test/BUILD:3:10: Label '//test:sub/my_sub_lib.h' crosses boundary of "
-            + "subpackage 'test/sub' (perhaps you meant to put the colon here: "
-            + "'//test/sub:my_sub_lib.h'?)");
+        + "subpackage 'test/sub' (perhaps you meant to put the colon here: "
+        + "'//test/sub:my_sub_lib.h'?)");
   }
 
   @Test
@@ -559,7 +559,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   public void testSkylarkRuleContextGetDefaultShellEnv() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result = evalRuleContextCode(ruleContext, "ruleContext.configuration.default_shell_env");
-    assertThat(result).isInstanceOf(SkylarkDict.class);
+    assertThat(result).isInstanceOf(ImmutableMap.class);
   }
 
   @Test
@@ -650,11 +650,10 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   @Test
   public void testParamFileSuffix() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
-    Object result =
-        evalRuleContextCode(
-            ruleContext,
-            "ruleContext.new_file(ruleContext.files.tools[0], "
-                + "ruleContext.files.tools[0].basename + '.params')");
+    Object result = evalRuleContextCode(
+        ruleContext,
+        "ruleContext.new_file(ruleContext.files.tools[0], "
+        + "ruleContext.files.tools[0].basename + '.params')");
     PathFragment fragment = ((Artifact) result).getRootRelativePath();
     assertEquals("foo/t.exe.params", fragment.getPathString());
   }
@@ -721,81 +720,5 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     SkylarkRuleContext context = createRuleContext("@r//a:r");
     Label depLabel = (Label) evalRuleContextCode(context, "ruleContext.attr.internal_dep.label");
     assertThat(depLabel).isEqualTo(Label.parseAbsolute("@r//:dep"));
-  }
-
-  @Test
-  public void testExternalWorkspaceLoad() throws Exception {
-    scratch.file(
-        "/r1/BUILD",
-        "filegroup(name = 'test',",
-        " srcs = ['test.txt'],",
-        " visibility = ['//visibility:public'],",
-        ")");
-    scratch.file("/r1/WORKSPACE");
-    scratch.file("/r2/BUILD", "exports_files(['test.bzl'])");
-    scratch.file(
-        "/r2/test.bzl",
-        "def macro(name, path):",
-        "  native.local_repository(name = name, path = path)"
-    );
-    scratch.file(
-        "/r2/other_test.bzl",
-        "def other_macro(name, path):",
-        "  print(name + ': ' + path)"
-    );
-    scratch.file("BUILD");
-    scratch.overwriteFile(
-        "WORKSPACE",
-        "local_repository(name='r2', path='/r2')",
-        "load('@r2//:test.bzl', 'macro')",
-        "macro('r1', '/r1')",
-        "NEXT_NAME = 'r3'",
-        "load('@r2//:other_test.bzl', 'other_macro')",  // We can still refer to r2 in other chunks.
-        "macro(NEXT_NAME, '/r2')"  // and we can still use macro outside of its chunk.
-    );
-    invalidatePackages();
-    assertThat(getConfiguredTarget("@r1//:test")).isNotNull();
-  }
-
-  @Test
-  @SuppressWarnings("unchecked")
-  public void testLoadBlockRepositoryRedefinition() throws Exception {
-    reporter.removeHandler(failFastHandler);
-    scratch.file("/bar/WORKSPACE");
-    scratch.file("/bar/bar.txt");
-    scratch.file("/bar/BUILD", "filegroup(name = 'baz', srcs = ['bar.txt'])");
-    scratch.file("/baz/WORKSPACE");
-    scratch.file("/baz/baz.txt");
-    scratch.file("/baz/BUILD", "filegroup(name = 'baz', srcs = ['baz.txt'])");
-    scratch.overwriteFile(
-        "WORKSPACE",
-        "local_repository(name = 'foo', path = '/bar')",
-        "local_repository(name = 'foo', path = '/baz')");
-    invalidatePackages();
-    assertThat(
-            (List<Label>)
-                getConfiguredTarget("@foo//:baz")
-                    .getTarget()
-                    .getAssociatedRule()
-                    .getAttributeContainer()
-                    .getAttr("srcs"))
-        .contains(Label.parseAbsolute("@foo//:baz.txt"));
-
-    scratch.overwriteFile("BUILD");
-    scratch.overwriteFile("bar.bzl", "dummy = 1");
-    scratch.overwriteFile(
-        "WORKSPACE",
-        "local_repository(name = 'foo', path = '/bar')",
-        "load('//:bar.bzl', 'dummy')",
-        "local_repository(name = 'foo', path = '/baz')");
-    try {
-      invalidatePackages();
-      createRuleContext("@foo//:baz");
-      fail("Should have failed because repository 'foo' is overloading after a load!");
-    } catch (Exception ex) {
-      assertContainsEvent(
-          "ERROR /workspace/WORKSPACE:3:1: Cannot redefine repository after any load statement "
-              + "in the WORKSPACE file (for repository 'foo')");
-    }
   }
 }
