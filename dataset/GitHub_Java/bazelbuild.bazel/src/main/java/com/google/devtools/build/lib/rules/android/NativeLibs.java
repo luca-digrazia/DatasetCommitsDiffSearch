@@ -22,9 +22,9 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.SourceManifestAction;
 import com.google.devtools.build.lib.analysis.SourceManifestAction.ManifestType;
+import com.google.devtools.build.lib.analysis.SymlinkTreeAction;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
-import com.google.devtools.build.lib.analysis.actions.SymlinkTreeAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -97,7 +97,8 @@ public final class NativeLibs {
           "nativedeps_filename", nativeDepsFileName,
           ruleContext.getBinOrGenfilesDirectory());
       ruleContext.registerAction(
-          FileWriteAction.create(ruleContext, nativeDepsName, nativeDepsLibraryBasename, false));
+          new FileWriteAction(
+              ruleContext.getActionOwner(), nativeDepsName, nativeDepsLibraryBasename, false));
 
       return new NativeLibs(ImmutableMap.copyOf(result), nativeDepsName);
     }
