@@ -20,12 +20,14 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.SkylarkMutable.MutableCollection;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.RandomAccess;
+
 import javax.annotation.Nullable;
 
 /** A class to handle lists and tuples in Skylark. */
@@ -229,25 +231,13 @@ public abstract class SkylarkList<E> extends MutableCollection<E> implements Lis
      * @return a MutableList containing the elements
      */
     @SuppressWarnings("unchecked")
-    private MutableList(Iterable<? extends E> contents, Mutability mutability) {
+    MutableList(Iterable<? extends E> contents, Mutability mutability) {
       super();
       addAllUnsafe(contents);
       if (contents instanceof GlobList) {
         globList = (GlobList<E>) contents;
       }
       this.mutability = mutability;
-    }
-
-    /** Specialized constructor for concat. */
-    private MutableList(
-        MutableList<? extends E> lhs,
-        MutableList<? extends E> rhs,
-        @Nullable Environment env) {
-      super();
-      this.contents.ensureCapacity(lhs.size() + rhs.size());
-      this.contents.addAll(lhs);
-      this.contents.addAll(rhs);
-      this.mutability = env == null ? Mutability.IMMUTABLE : env.mutability();
     }
 
     /**
@@ -344,7 +334,7 @@ public abstract class SkylarkList<E> extends MutableCollection<E> implements Lis
         MutableList<? extends E> right,
         Environment env) {
       if (left.getGlobList() == null && right.getGlobList() == null) {
-        return new MutableList<>(left, right, env);
+        return new MutableList(Iterables.concat(left, right), env);
       }
       return new MutableList(GlobList.concat(
           left.getGlobListOrContentsUnsafe(), right.getGlobListOrContentsUnsafe()), env);
