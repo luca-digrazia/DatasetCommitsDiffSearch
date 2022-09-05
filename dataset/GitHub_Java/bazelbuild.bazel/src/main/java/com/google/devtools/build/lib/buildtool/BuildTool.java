@@ -20,6 +20,7 @@ import com.google.common.base.Stopwatch;
 import com.google.common.base.Throwables;
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.TestExecException;
@@ -70,7 +71,7 @@ import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
+import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -98,21 +99,19 @@ import java.util.regex.Pattern;
  *
  * <p>Most of analysis is handled in {@link BuildView}, and execution in {@link ExecutionTool}.
  */
-public final class BuildTool {
+public class BuildTool {
 
   private static final Logger LOG = Logger.getLogger(BuildTool.class.getName());
 
-  private final CommandEnvironment env;
-  private final BlazeRuntime runtime;
+  protected final BlazeRuntime runtime;
 
   /**
    * Constructs a BuildTool.
    *
-   * @param env a reference to the command environment of the currently executing command
+   * @param runtime a reference to the blaze runtime.
    */
-  public BuildTool(CommandEnvironment env) {
-    this.env = env;
-    this.runtime = env.getRuntime();
+  public BuildTool(BlazeRuntime runtime) {
+    this.runtime = runtime;
   }
 
   /**
@@ -152,9 +151,9 @@ public final class BuildTool {
     LoadingResult loadingResult = null;
     BuildConfigurationCollection configurations = null;
     try {
-      env.getEventBus().post(new BuildStartingEvent(runtime.getOutputFileSystem(), request));
+      getEventBus().post(new BuildStartingEvent(runtime.getOutputFileSystem(), request));
       LOG.info("Build identifier: " + request.getId());
-      executionTool = new ExecutionTool(env, request);
+      executionTool = new ExecutionTool(runtime, request);
       if (needsExecutionPhase(request.getBuildOptions())) {
         // Initialize the execution tool early if we need it. This hides the latency of setting up
         // the execution backends.
@@ -176,17 +175,16 @@ public final class BuildTool {
               + "'test' right now!");
         }
       }
-      configurations = runtime.getSkyframeExecutor().createConfigurations(
-            runtime.getConfigurationFactory(), buildOptions, runtime.getDirectories(),
-            request.getMultiCpus(), request.getViewOptions().keepGoing);
+      configurations = getConfigurations(buildOptions, request.getMultiCpus(),
+          request.getViewOptions().keepGoing);
 
-      env.getEventBus().post(new ConfigurationsCreatedEvent(configurations));
+      getEventBus().post(new ConfigurationsCreatedEvent(configurations));
       runtime.throwPendingException();
       if (configurations.getTargetConfigurations().size() == 1) {
         // TODO(bazel-team): This is not optimal - we retain backwards compatibility in the case
         // where there's only a single configuration, but we don't send an event in the multi-config
         // case. Can we do better? [multi-config]
-        env.getEventBus().post(new MakeEnvironmentEvent(
+        getEventBus().post(new MakeEnvironmentEvent(
             configurations.getTargetConfigurations().get(0).getMakeEnvironment()));
       }
       LOG.info("Configurations created");
@@ -204,7 +202,8 @@ public final class BuildTool {
       if (needsExecutionPhase(request.getBuildOptions())) {
         runtime.getSkyframeExecutor().injectTopLevelContext(request.getTopLevelArtifactContext());
         executionTool.executeBuild(request.getId(), analysisResult, result,
-            configurations, transformPackageRoots(loadingResult.getPackageRoots()));
+            runtime.getSkyframeExecutor(), configurations,
+            transformPackageRoots(loadingResult.getPackageRoots()));
       }
 
       String delayedErrorMsg = analysisResult.getError();
@@ -231,7 +230,7 @@ public final class BuildTool {
       // occurs early in the build. Tell a lie so that the event is not missing.
       // If multiple build_info events are sent, only the first is kept, so this does not harm
       // successful runs (which use the workspace status action).
-      env.getEventBus().post(new BuildInfoEvent(
+      getEventBus().post(new BuildInfoEvent(
           runtime.getworkspaceStatusActionFactory().createDummyWorkspaceStatus()));
     }
 
@@ -325,7 +324,7 @@ public final class BuildTool {
    */
   public BuildResult processRequest(BuildRequest request, TargetValidator validator) {
     BuildResult result = new BuildResult(request.getStartTime());
-    env.getEventBus().register(result);
+    runtime.getEventBus().register(result);
     Throwable catastrophe = null;
     ExitCode exitCode = ExitCode.BLAZE_INTERNAL_ERROR;
     try {
@@ -343,8 +342,8 @@ public final class BuildTool {
       exitCode = ExitCode.BUILD_FAILURE;
     } catch (InterruptedException e) {
       exitCode = ExitCode.INTERRUPTED;
-      env.getReporter().handle(Event.error("build interrupted"));
-      env.getEventBus().post(new BuildInterruptedEvent());
+      getReporter().handle(Event.error("build interrupted"));
+      getEventBus().post(new BuildInterruptedEvent());
     } catch (TargetParsingException | LoadingFailedException | ViewCreationFailedException e) {
       exitCode = ExitCode.PARSING_FAILURE;
       reportExceptionError(e);
@@ -368,6 +367,17 @@ public final class BuildTool {
     }
 
     return result;
+  }
+
+  private final BuildConfigurationCollection getConfigurations(BuildOptions buildOptions,
+      Set<String> multiCpu, boolean keepGoing)
+      throws InvalidConfigurationException, InterruptedException {
+    SkyframeExecutor executor = runtime.getSkyframeExecutor();
+    // TODO(bazel-team): consider a possibility of moving ConfigurationFactory construction into
+    // skyframe.
+    return executor.createConfigurations(
+        runtime.getConfigurationFactory(), buildOptions, runtime.getDirectories(), multiCpu,
+        keepGoing);
   }
 
   @VisibleForTesting
@@ -397,7 +407,7 @@ public final class BuildTool {
     };
 
     LoadingResult result = runtime.getLoadingPhaseRunner().execute(getReporter(),
-        env.getEventBus(), request.getTargets(), request.getLoadingOptions(),
+        getEventBus(), request.getTargets(), request.getLoadingOptions(),
         runtime.createBuildOptions(request).getAllLabels(), keepGoing,
         request.shouldRunTests(), callback);
     runtime.throwPendingException();
@@ -440,20 +450,20 @@ public final class BuildTool {
     Profiler.instance().markPhase(ProfilePhase.ANALYZE);
 
     AnalysisResult analysisResult =
-        runtime.getView()
+        getView()
             .update(
                 loadingResult,
                 configurations,
                 request.getAspects(),
                 request.getViewOptions(),
                 request.getTopLevelArtifactContext(),
-                env.getReporter(),
-                env.getEventBus());
+                getReporter(),
+                getEventBus());
 
     // TODO(bazel-team): Merge these into one event.
-    env.getEventBus().post(new AnalysisPhaseCompleteEvent(analysisResult.getTargetsToBuild(),
-        runtime.getView().getTargetsVisited(), timer.stop().elapsed(TimeUnit.MILLISECONDS)));
-    env.getEventBus().post(new TestFilteringCompleteEvent(analysisResult.getTargetsToBuild(),
+    getEventBus().post(new AnalysisPhaseCompleteEvent(analysisResult.getTargetsToBuild(),
+        getView().getTargetsVisited(), timer.stop().elapsed(TimeUnit.MILLISECONDS)));
+    getEventBus().post(new TestFilteringCompleteEvent(analysisResult.getTargetsToBuild(),
         analysisResult.getTargetsToTest()));
 
     // Check licenses.
@@ -491,7 +501,7 @@ public final class BuildTool {
     result.setExitCondition(exitCondition);
     // The stop time has to be captured before we send the BuildCompleteEvent.
     result.setStopTime(runtime.getClock().currentTimeMillis());
-    env.getEventBus().post(new BuildCompleteEvent(request, result));
+    getEventBus().post(new BuildCompleteEvent(request, result));
   }
 
   private void reportTargets(AnalysisResult analysisResult) {
@@ -588,7 +598,15 @@ public final class BuildTool {
     }
   }
 
+  public BuildView getView() {
+    return runtime.getView();
+  }
+
   private Reporter getReporter() {
-    return env.getReporter();
+    return runtime.getReporter();
+  }
+
+  private EventBus getEventBus() {
+    return runtime.getEventBus();
   }
 }
