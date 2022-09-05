@@ -311,9 +311,7 @@ public final class SkylarkRuleConfiguredTargetBuilder {
         SkylarkClassObject declaredProvider = SkylarkType.cast(o, SkylarkClassObject.class, loc,
             "A return value of rule implementation function should be "
                 + "a sequence of declared providers");
-        Location creationLoc = declaredProvider.getCreationLocOrNull();
-        builder.addSkylarkDeclaredProvider(declaredProvider,
-            creationLoc != null ? creationLoc : loc);
+        builder.addSkylarkDeclaredProvider(declaredProvider, declaredProvider.getCreationLoc());
       }
     }
 
