@@ -71,7 +71,6 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
   private final boolean verboseFailures;
   private final String productName;
   private final ImmutableList<Path> confPaths;
-  private final SpawnHelpers spawnHelpers;
 
   private final UUID uuid = UUID.randomUUID();
   private final AtomicInteger execCounter = new AtomicInteger();
@@ -83,8 +82,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
       ExecutorService backgroundWorkers,
       boolean verboseFailures,
       String productName,
-      ImmutableList<Path> confPaths,
-      SpawnHelpers spawnHelpers) {
+      ImmutableList<Path> confPaths) {
     super(blazeDirs, verboseFailures, buildRequest.getOptions(SandboxOptions.class));
     this.buildRequest = buildRequest;
     this.clientEnv = ImmutableMap.copyOf(clientEnv);
@@ -95,7 +93,6 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
     this.verboseFailures = verboseFailures;
     this.productName = productName;
     this.confPaths = confPaths;
-    this.spawnHelpers = spawnHelpers;
   }
 
   public static DarwinSandboxedStrategy create(
@@ -124,8 +121,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
         backgroundWorkers,
         verboseFailures,
         productName,
-        writablePaths.build(),
-        new SpawnHelpers(blazeDirs.getExecRoot()));
+        writablePaths.build());
   }
 
   /**
@@ -254,17 +250,16 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
     return inaccessiblePaths.build();
   }
 
-  @Override
-  public Map<PathFragment, Path> getMounts(Spawn spawn, ActionExecutionContext executionContext)
+  private Map<PathFragment, Path> getMounts(Spawn spawn, ActionExecutionContext executionContext)
       throws ExecException {
     try {
       Map<PathFragment, Path> mounts = new HashMap<>();
-      spawnHelpers.mountInputs(mounts, spawn, executionContext);
+      mountInputs(mounts, spawn, executionContext);
 
       Map<PathFragment, Path> unfinalized = new HashMap<>();
-      spawnHelpers.mountRunfilesFromManifests(unfinalized, spawn);
-      spawnHelpers.mountRunfilesFromSuppliers(unfinalized, spawn);
-      spawnHelpers.mountFilesFromFilesetManifests(unfinalized, spawn, executionContext);
+      mountRunfilesFromManifests(unfinalized, spawn);
+      mountRunfilesFromSuppliers(unfinalized, spawn);
+      mountFilesFromFilesetManifests(unfinalized, spawn, executionContext);
       mounts.putAll(finalizeLinks(unfinalized));
 
       return mounts;
