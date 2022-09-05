@@ -34,16 +34,11 @@ public class DictTermTypeMapper extends AbstractSqlTermCustomer {
     }
 
     private boolean support(RDBColumnMetaData column) {
-        if (column.getJdbcType() == JDBCType.VARCHAR) {
-            return false;
-        }
         Class type = column.getJavaType();
         if (type != null && type.isArray()) {
             type = type.getComponentType();
         }
-        return ((type != null && type.isEnum()
-                && EnumDict.class.isAssignableFrom(type)
-                && column.getJavaType().isArray())
+        return ((type != null && type.isEnum() && EnumDict.class.isAssignableFrom(type))
                 ||
                 (column.getProperty(USE_DICT_MASK_FLAG).isTrue() && column.getOptionConverter() != null));
     }
@@ -96,7 +91,7 @@ public class DictTermTypeMapper extends AbstractSqlTermCustomer {
         Dialect dialect = column.getTableMetaData().getDatabaseMetaData().getDialect();
         String columnName = dialect.buildColumnName(tableAlias, column.getName());
         SqlAppender appender = new SqlAppender();
-        appender.add(columnName, not ? " != " : "=", "#{", wherePrefix, ".value.value}");
+        appender.add(columnName, not ? " != " : "=", "#{", wherePrefix, ".value}");
         return appender;
     }
 }
