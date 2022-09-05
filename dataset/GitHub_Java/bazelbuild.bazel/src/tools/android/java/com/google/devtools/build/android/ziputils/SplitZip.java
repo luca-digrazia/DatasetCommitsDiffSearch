@@ -25,9 +25,7 @@ import static com.google.devtools.build.android.ziputils.LocalFileHeader.LOCTIM;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
-import com.google.common.collect.Sets;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -69,7 +67,6 @@ public class SplitZip implements EntryHandler {
   private final Map<String, ZipOut> assignments = new HashMap<>();
   private final Map<String, CentralDirectory> centralDirectories;
   private final Set<String> classes = new TreeSet<>();
-  private Predicate<String> inputFilter = Predicates.alwaysTrue();
 
   /**
    * Creates an un-configured {@code SplitZip} instance.
@@ -260,16 +257,6 @@ public class SplitZip implements EntryHandler {
   }
 
   /**
-   * Set a predicate to only include files with matching filenames in any of the outputs.  <b>Other
-   * zip entries are dropped</b>, regardless of whether they're classes or resources and regardless
-   * of whether they're listed in {@link #setMainClassListFile}.
-   */
-  public SplitZip setInputFilter(Predicate<String> inputFilter) {
-    this.inputFilter = Preconditions.checkNotNull(inputFilter);
-    return this;
-  }
-
-  /**
    * Executes this {@code SplitZip}, reading content from the configured input locations, creating
    * the specified number of archives, in the configured output directory.
    *
@@ -318,8 +305,7 @@ public class SplitZip implements EntryHandler {
     ZipOut out = assignments.remove(normalizedFilename(header.getFilename()));
     if (out == null) {
       // Skip unassigned file; includes a file with the same name as a previously processed one.
-      // This in particular picks the first .class or .dex file encountered for a given class name
-      // and drops any file not matched by inputFilter.
+      // This in particular picks the first .class or .dex file encountered for a given class name.
       return;
     }
     if (dirEntry == null) {
@@ -405,9 +391,6 @@ public class SplitZip implements EntryHandler {
       CentralDirectory cdir = centralDirectories.get(in.getFilename());
       for (DirectoryEntry entry : cdir.list()) {
         String filename = normalizedFilename(entry.getFilename());
-        if (!inputFilter.apply(filename)) {
-          continue;
-        }
         if (filename.endsWith(".class")) {
           // Only pass classes to the splitter, so that it can do the best job
           // possible distributing them across output files.
@@ -419,15 +402,15 @@ public class SplitZip implements EntryHandler {
         }
       }
     }
-    Splitter splitter = new Splitter(outputs.size(), classes.size());
+    Splitter entryFilter = new Splitter(outputs.size(), classes.size());
     if (filter != null) {
       // Assign files in the filter to the first output file.
-      splitter.assign(Sets.filter(filter, inputFilter));
-      splitter.nextShard(); // minimal initial shard
+      entryFilter.assign(filter);
+      entryFilter.nextShard(); // minimal initial shard
     }
     for (String path : classes) {
       // Use normalized filename so the filter file doesn't have to change
-      int assignment = splitter.assign(path);
+      int assignment = entryFilter.assign(path);
       Preconditions.checkState(assignment >= 0 && assignment < zipOuts.length);
       assignments.put(path, zipOuts[assignment]);
     }
