@@ -16,8 +16,8 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.devtools.build.lib.rules.objc.ObjcCommon.uniqueContainers;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MERGE_ZIP;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAMEWORK_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAMEWORK_FILE;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -31,10 +31,8 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
-import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -74,8 +72,7 @@ public class IosFramework extends ReleaseBundlingTargetFactory {
     // minimum iOS version of less than 8.0 may contain frameworks in their bundle, the framework
     // itself needs to be built with 8.0 or higher. This logic overrides (if necessary) any
     // flag-set minimum iOS version for framework only so that this requirement is not violated.
-    DottedVersion fromFlag = ruleContext.getFragment(AppleConfiguration.class)
-        .getMinimumOsForPlatformType(PlatformType.IOS);
+    DottedVersion fromFlag = ObjcRuleClasses.objcConfiguration(ruleContext).getMinimumOs();
     return Ordering.natural().max(fromFlag, MINIMUM_OS_VERSION);
   }
 
@@ -132,7 +129,7 @@ public class IosFramework extends ReleaseBundlingTargetFactory {
             // linker actions but not added to the final bundle.
             .addAll(STATIC_FRAMEWORK_FILE, frameworkImports)
             .addAll(
-                STATIC_FRAMEWORK_DIR,
+                FRAMEWORK_DIR,
                 uniqueContainers(frameworkImports, ObjcCommon.FRAMEWORK_CONTAINER_TYPE))
             .build();
 

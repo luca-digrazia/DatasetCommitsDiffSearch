@@ -21,7 +21,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_SW
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MERGE_ZIP;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MULTI_ARCH_LINKED_BINARIES;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.NESTED_BUNDLE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.ROOT_MERGE_ZIP;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STORYBOARD;
@@ -46,6 +45,7 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -221,17 +221,6 @@ final class Bundling {
       return mergeZipBuilder.build();
     }
 
-    private NestedSet<Artifact> rootMergeZips() {
-      NestedSetBuilder<Artifact> rootMergeZipsBuilder =
-          NestedSetBuilder.<Artifact>stableOrder().addTransitive(objcProvider.get(ROOT_MERGE_ZIP));
-
-      if (objcProvider.is(USES_SWIFT)) {
-        rootMergeZipsBuilder.add(intermediateArtifacts.swiftSupportZip());
-      }
-
-      return rootMergeZipsBuilder.build();
-    }
-
     private NestedSet<Artifact> bundleInfoplistInputs() {
       if (objcProvider.hasAssetCatalogs()) {
         infoplistInputs.add(intermediateArtifacts.actoolPartialInfoplist());
@@ -250,13 +239,13 @@ final class Bundling {
     }
 
     private Optional<Artifact> combinedArchitectureBinary() {
-      if (!Iterables.isEmpty(objcProvider.get(MULTI_ARCH_LINKED_BINARIES))) {
-        return Optional.of(Iterables.getOnlyElement(objcProvider.get(MULTI_ARCH_LINKED_BINARIES)));
-      } else if (!Iterables.isEmpty(objcProvider.get(LIBRARY))
+      Optional<Artifact> combinedArchitectureBinary = Optional.absent();
+      if (!Iterables.isEmpty(objcProvider.get(LIBRARY))
           || !Iterables.isEmpty(objcProvider.get(IMPORTED_LIBRARY))) {
-        return Optional.of(intermediateArtifacts.combinedArchitectureBinary());
+        combinedArchitectureBinary =
+            Optional.of(intermediateArtifacts.combinedArchitectureBinary());
       }
-      return Optional.absent();
+      return combinedArchitectureBinary;
     }
 
     private Optional<Artifact> actoolzipOutput() {
@@ -339,7 +328,9 @@ final class Bundling {
       NestedSet<BundleableFile> binaryStringsFiles = binaryStringsFiles();
       NestedSet<BundleableFile> dynamicFrameworks = dynamicFrameworkFiles();
       NestedSet<Artifact> mergeZips = mergeZips(actoolzipOutput);
-      NestedSet<Artifact> rootMergeZips = rootMergeZips();
+      NestedSet<Artifact> rootMergeZips =
+          NestedSetBuilder.<Artifact>stableOrder()
+              .addTransitive(objcProvider.get(ROOT_MERGE_ZIP)).build();
 
       bundleFilesBuilder
           .addAll(binaryStringsFiles)
