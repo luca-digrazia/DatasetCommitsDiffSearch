@@ -88,16 +88,27 @@ final class ConfiguredTargetFunction implements SkyFunction {
    * Exception class that signals an error during the evaluation of a dependency.
    */
   public static class DependencyEvaluationException extends Exception {
-    public DependencyEvaluationException(InvalidConfigurationException cause) {
+    private final SkyKey rootCauseSkyKey;
+
+    public DependencyEvaluationException(Exception cause) {
       super(cause);
+      this.rootCauseSkyKey = null;
     }
 
-    public DependencyEvaluationException(ConfiguredValueCreationException cause) {
+    public DependencyEvaluationException(SkyKey rootCauseSkyKey, Exception cause) {
       super(cause);
+      this.rootCauseSkyKey = rootCauseSkyKey;
+    }
+
+    /**
+     * Returns the key of the root cause or null if the problem was with this target.
+     */
+    public SkyKey getRootCauseSkyKey() {
+      return rootCauseSkyKey;
     }
 
     @Override
-    public synchronized Exception getCause() {
+    public Exception getCause() {
       return (Exception) super.getCause();
     }
   }
@@ -182,24 +193,10 @@ final class ConfiguredTargetFunction implements SkyFunction {
           view, env, target, configuration, depValueMap, configConditions, transitivePackages);
       return ans;
     } catch (DependencyEvaluationException e) {
-      if (e.getCause() instanceof ConfiguredValueCreationException) {
-        throw new ConfiguredTargetFunctionException(
-            (ConfiguredValueCreationException) e.getCause());
-      } else {
-        // Cast to InvalidConfigurationException as a consistency check. If you add any
-        // DependencyEvaluationException constructors, you may need to change this code, too.
-        InvalidConfigurationException cause = (InvalidConfigurationException) e.getCause();
-        throw new ConfiguredTargetFunctionException(
-            new ConfiguredValueCreationException(cause.getMessage(), target.getLabel()));
-      }
+      throw new ConfiguredTargetFunctionException(e.getRootCauseSkyKey(), e.getCause());
     } catch (AspectCreationException e) {
-      // getAnalysisRootCause may be null if the analysis of the aspect itself failed.
-      Label rootCause = target.getLabel();
-      if (e.getAnalysisRootCause() != null) {
-        rootCause = e.getAnalysisRootCause();
-      }
       throw new ConfiguredTargetFunctionException(
-          new ConfiguredValueCreationException(e.getMessage(), rootCause));
+          new ConfiguredValueCreationException(e.getMessage()));
     }
   }
 
@@ -237,10 +234,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
       depValueNames =
           resolver.dependentNodeMap(ctgValue, hostConfiguration, aspect, configConditions);
     } catch (EvalException e) {
-      // EvalException can only be thrown by computed Skylark attributes in the current rule.
       env.getListener().handle(Event.error(e.getLocation(), e.getMessage()));
-      throw new DependencyEvaluationException(
-          new ConfiguredValueCreationException(e.print(), ctgValue.getLabel()));
+      throw new DependencyEvaluationException(new ConfiguredValueCreationException(e.print()));
     }
 
     // Trim each dep's configuration so it only includes the fragments needed by its transitive
@@ -688,8 +683,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
         String message =
             entry.getLabel() + " is not a valid configuration key for " + target.getLabel();
         env.getListener().handle(Event.error(TargetUtils.getLocationMaybe(target), message));
-        throw new DependencyEvaluationException(new ConfiguredValueCreationException(
-            message, target.getLabel()));
+        throw new DependencyEvaluationException(new ConfiguredValueCreationException(message));
       }
     }
 
@@ -703,21 +697,13 @@ final class ConfiguredTargetFunction implements SkyFunction {
    */
   @Nullable
   private static Map<SkyKey, ConfiguredTarget> resolveConfiguredTargetDependencies(
-      Environment env, Collection<Dependency> deps, NestedSetBuilder<Package> transitivePackages)
-          throws DependencyEvaluationException {
+      Environment env, Collection<Dependency> deps, NestedSetBuilder<Package> transitivePackages) {
     boolean ok = !env.valuesMissing();
     Iterable<SkyKey> depKeys = Iterables.transform(deps, TO_KEYS);
-    Map<SkyKey, ValueOrException<ConfiguredValueCreationException>> depValues =
-        env.getValuesOrThrow(depKeys, ConfiguredValueCreationException.class);
+    Map<SkyKey, SkyValue> depValues = env.getValues(depKeys);
     Map<SkyKey, ConfiguredTarget> result = Maps.newHashMapWithExpectedSize(depValues.size());
-    for (Map.Entry<SkyKey, ValueOrException<ConfiguredValueCreationException>> entry :
-        depValues.entrySet()) {
-      ConfiguredTargetValue depValue;
-      try {
-        depValue = (ConfiguredTargetValue) entry.getValue().get();
-      } catch (ConfiguredValueCreationException e) {
-        throw new DependencyEvaluationException(e);
-      }
+    for (Map.Entry<SkyKey, SkyValue> entry : depValues.entrySet()) {
+      ConfiguredTargetValue depValue = (ConfiguredTargetValue) entry.getValue();
       if (depValue == null) {
         ok = false;
       } else {
@@ -762,8 +748,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
     if (events.hasErrors()) {
       analysisEnvironment.disable(target);
       throw new ConfiguredTargetFunctionException(new ConfiguredValueCreationException(
-          "Analysis of target '" + target.getLabel() + "' failed; build aborted",
-          target.getLabel()));
+          "Analysis of target '" + target.getLabel() + "' failed; build aborted"));
     }
     Preconditions.checkState(!analysisEnvironment.hasErrors(),
         "Analysis environment hasError() but no errors reported");
@@ -806,16 +791,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
    * a ConfiguredTargetValue.
    */
   public static final class ConfiguredValueCreationException extends Exception {
-    // TODO(ulfjack): Collect all analysis root causes, not just the first one.
-    private final Label analysisRootCause;
-
-    public ConfiguredValueCreationException(String message, Label currentTarget) {
+    public ConfiguredValueCreationException(String message) {
       super(message);
-      this.analysisRootCause = Preconditions.checkNotNull(currentTarget);
-    }
-
-    public Label getAnalysisRootCause() {
-      return analysisRootCause;
     }
   }
 
@@ -828,12 +805,17 @@ final class ConfiguredTargetFunction implements SkyFunction {
       super(e, Transience.PERSISTENT);
     }
 
-    private ConfiguredTargetFunctionException(ConfiguredValueCreationException e) {
-      super(e, Transience.PERSISTENT);
+    private ConfiguredTargetFunctionException(ConfiguredValueCreationException error) {
+      super(error, Transience.PERSISTENT);
     }
 
     private ConfiguredTargetFunctionException(ActionConflictException e) {
       super(e, Transience.PERSISTENT);
+    }
+
+    private ConfiguredTargetFunctionException(
+        @Nullable SkyKey childKey, Exception transitiveError) {
+      super(transitiveError, childKey);
     }
   }
 }
