@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,10 +22,10 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -46,7 +46,7 @@ public class ProtoCommon {
    * @return the direct sources of a proto library.
    */
   // TODO(bazel-team): Proto sources should probably be a NestedSet.
-  public static ImmutableList<Artifact> getCheckDepsProtoSources(
+  public static ImmutableList<Artifact> getDirectProtoSources(
       RuleContext ruleContext, ImmutableList<Artifact> protoSources) {
 
     if (protoSources.isEmpty()) {
@@ -56,7 +56,7 @@ public class ProtoCommon {
           .getPrerequisites("deps", Mode.TARGET)) {
         ProtoSourcesProvider sources = provider.getProvider(ProtoSourcesProvider.class);
         if (sources != null) {
-          builder.addAll(sources.getCheckDepsProtoSources());
+          builder.addAll(sources.getProtoSources());
         }
       }
       return builder.build();
@@ -91,7 +91,7 @@ public class ProtoCommon {
   public static void checkSourceFilesAreInSamePackage(RuleContext ruleContext) {
     // TODO(bazel-team): this does not work with filegroups that contain files
     // that are not in the package
-    for (Label source : ruleContext.attributes().get("srcs", BuildType.LABEL_LIST)) {
+    for (Label source : ruleContext.attributes().get("srcs", Type.LABEL_LIST)) {
       if (!isConfiguredTargetInSamePackage(ruleContext, source)) {
         ruleContext.attributeError(
             "srcs",
@@ -108,9 +108,7 @@ public class ProtoCommon {
       final NestedSet<Artifact> transitiveProtoSources, RuleContext ruleContext) {
     return RunfilesProvider.withData(
         Runfiles.EMPTY,
-        new Runfiles.Builder(
-            ruleContext.getWorkspaceName(),
-            ruleContext.getConfiguration().legacyExternalRunfiles())
+        new Runfiles.Builder(ruleContext.getWorkspaceName())
             // TODO(bazel-team): addArtifacts is deprecated, but addTransitive fails
             // due to nested set ordering restrictions. Figure this out.
             .addArtifacts(transitiveProtoSources)
