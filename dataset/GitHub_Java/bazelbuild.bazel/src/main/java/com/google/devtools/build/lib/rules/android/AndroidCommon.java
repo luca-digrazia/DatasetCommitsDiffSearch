@@ -95,9 +95,8 @@ public class AndroidCommon {
   public static final <T extends TransitiveInfoProvider> Iterable<T> getTransitivePrerequisites(
       RuleContext ruleContext, Mode mode, final Class<T> classType) {
     IterablesChain.Builder<T> builder = IterablesChain.builder();
-    AttributeMap attributes = ruleContext.attributes();
     for (String attr : TRANSITIVE_ATTRIBUTES) {
-      if (ruleContext.attributes().has(attr, BuildType.LABEL_LIST)) {
+      if (ruleContext.getAttribute(attr) != null) {
         builder.add(ruleContext.getPrerequisites(attr, mode, classType));
       }
     }
@@ -108,7 +107,7 @@ public class AndroidCommon {
       RuleContext ruleContext, Mode mode) {
     ImmutableList.Builder<TransitiveInfoCollection> builder = ImmutableList.builder();
     for (String attr : TRANSITIVE_ATTRIBUTES) {
-      if (ruleContext.attributes().has(attr, BuildType.LABEL_LIST)) {
+      if (ruleContext.getAttribute(attr) != null) {
         builder.addAll(ruleContext.getPrerequisites(attr, mode));
       }
     }
