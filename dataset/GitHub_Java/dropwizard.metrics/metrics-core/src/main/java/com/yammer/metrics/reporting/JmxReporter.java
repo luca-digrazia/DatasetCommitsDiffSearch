@@ -1,6 +1,7 @@
 package com.yammer.metrics.reporting;
 
-import com.yammer.metrics.core.MetricsRegistry;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.MetricsRegistry;
 import com.yammer.metrics.core.*;
 
 import javax.management.*;
@@ -11,8 +12,10 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * A reporter which exposes application metric as JMX MBeans.
+ *
+ * @author coda
  */
-public class JmxReporter extends AbstractReporter {
+public class JmxReporter implements Runnable {
     private final ScheduledExecutorService tickThread;
     private final MetricsRegistry metricsRegistry;
     private final Map<MetricName, MetricMBean> beans;

@@ -10,6 +10,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * A set of factory methods for creating centrally registered metric instances.
+ *
+ * @author coda
  */
 public class Metrics {
     private static final MetricsRegistry DEFAULT_REGISTRY = new MetricsRegistry();
@@ -347,36 +349,6 @@ public class Metrics {
                                        TimeUnit durationUnit,
                                        TimeUnit rateUnit) {
         return DEFAULT_REGISTRY.newTimer(metricName, durationUnit, rateUnit);
-    }
-
-    /**
-     * Removes the metric with the given name.
-     *
-     * @param name the name of the metric
-     */
-    public static void removeMetric(MetricName name) {
-        DEFAULT_REGISTRY.removeMetric(name);
-    }
-
-    /**
-     * Removes the metric for the given class with the given name.
-     *
-     * @param klass the klass the metric is associated with
-     * @param name the name of the metric
-     */
-    public static void removeMetric(Class<?> klass, String name) {
-        DEFAULT_REGISTRY.removeMetric(klass, name);
-    }
-
-    /**
-     * Removes the metric for the given class with the given name and scope.
-     *
-     * @param klass the klass the metric is associated with
-     * @param name the name of the metric
-     * @param scope the scope of the metric
-     */
-    public static void removeMetric(Class<?> klass, String name, String scope) {
-        DEFAULT_REGISTRY.removeMetric(klass, name, scope);
     }
 
     /**
