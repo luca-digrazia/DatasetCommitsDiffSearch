@@ -8,18 +8,12 @@ package org.hswebframework.web.commons.entity;
  */
 public interface LogicalDeleteEntity {
 
-    String deleted      = "deleted";
-    String deleteTime   = "deleteTime";
-
     Boolean getDeleted();
 
-    void setDeleted(boolean deleted);
+    void setDeleted(Boolean deleted);
 
     Long getDeleteTime();
 
     void setDeleteTime(Long deleteTime);
-
-    String getDeleteUserId();
-
 
 }
