@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,24 +13,31 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2;
 
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.TRISTATE;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
+import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
+import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.PackageGroupsRuleVisibility;
+import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.TargetAccessor;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.TargetNotFoundException;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.QueryVisibility;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Label;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -63,9 +70,8 @@ final class BlazeTargetAccessor implements TargetAccessor<Target> {
   }
 
   @Override
-  public List<Target> getLabelListAttr(
-      QueryExpression caller, Target target, String attrName, String errorMsgPrefix)
-      throws QueryException, InterruptedException {
+  public List<Target> getLabelListAttr(QueryExpression caller, Target target, String attrName,
+      String errorMsgPrefix) throws QueryException {
     Preconditions.checkArgument(target instanceof Rule);
 
     List<Target> result = new ArrayList<>();
@@ -91,17 +97,53 @@ final class BlazeTargetAccessor implements TargetAccessor<Target> {
 
   @Override
   public List<String> getStringListAttr(Target target, String attrName) {
-    return TargetUtils.getStringListAttr(target, attrName);
+    Preconditions.checkArgument(target instanceof Rule);
+    return NonconfigurableAttributeMapper.of((Rule) target).get(attrName, Type.STRING_LIST);
   }
 
   @Override
   public String getStringAttr(Target target, String attrName) {
-    return TargetUtils.getStringAttr(target, attrName);
+    Preconditions.checkArgument(target instanceof Rule);
+    return NonconfigurableAttributeMapper.of((Rule) target).get(attrName, Type.STRING);
   }
 
   @Override
   public Iterable<String> getAttrAsString(Target target, String attrName) {
-    return TargetUtils.getAttrAsString(target, attrName);
+    Preconditions.checkArgument(target instanceof Rule);
+    List<String> values = new ArrayList<>(); // May hold null values.
+    Attribute attribute = ((Rule) target).getAttributeDefinition(attrName);
+    if (attribute != null) {
+      Type<?> attributeType = attribute.getType();
+      for (Object attrValue : AggregatingAttributeMapper.of((Rule) target).visitAttribute(
+          attribute.getName(), attributeType)) {
+
+        // Ugly hack to maintain backward 'attr' query compatibility for BOOLEAN and TRISTATE
+        // attributes. These are internally stored as actual Boolean or TriState objects but were
+        // historically queried as integers. To maintain compatibility, we inspect their actual
+        // value and return the integer equivalent represented as a String. This code is the
+        // opposite of the code in BooleanType and TriStateType respectively.
+        if (attributeType == BOOLEAN) {
+          values.add(Type.BOOLEAN.cast(attrValue) ? "1" : "0");
+        } else if (attributeType == TRISTATE) {
+            switch (Type.TRISTATE.cast(attrValue)) {
+              case AUTO :
+                values.add("-1");
+                break;
+              case NO :
+                values.add("0");
+                break;
+              case YES :
+                values.add("1");
+                break;
+              default :
+                throw new AssertionError("This can't happen!");
+            }
+        } else {
+          values.add(attrValue == null ? null : attrValue.toString());
+        }
+      }
+    }
+    return values;
   }
 
   @Override
@@ -120,8 +162,7 @@ final class BlazeTargetAccessor implements TargetAccessor<Target> {
   }
 
   @Override
-  public Set<QueryVisibility<Target>> getVisibility(Target target)
-      throws QueryException, InterruptedException {
+  public Set<QueryVisibility<Target>> getVisibility(Target target) throws QueryException {
     ImmutableSet.Builder<QueryVisibility<Target>> result = ImmutableSet.builder();
     result.add(QueryVisibility.samePackage(target, this));
     convertVisibility(result, target);
@@ -130,8 +171,9 @@ final class BlazeTargetAccessor implements TargetAccessor<Target> {
 
   // CAUTION: keep in sync with ConfiguredTargetFactory#convertVisibility()
   private void convertVisibility(
-      ImmutableSet.Builder<QueryVisibility<Target>> packageSpecifications, Target target)
-      throws QueryException, InterruptedException {
+      ImmutableSet.Builder<QueryVisibility<Target>> packageSpecifications,
+      Target target)
+      throws QueryException {
    RuleVisibility ruleVisibility = target.getVisibility();
    if (ruleVisibility instanceof ConstantRuleVisibility) {
      if (((ConstantRuleVisibility) ruleVisibility).isPubliclyVisible()) {
@@ -149,8 +191,9 @@ final class BlazeTargetAccessor implements TargetAccessor<Target> {
          throw new QueryException(e.getMessage());
        }
      }
-      packageSpecifications.add(
-          new BlazeQueryVisibility(packageGroupsVisibility.getDirectPackages()));
+     for (PackageSpecification spec : packageGroupsVisibility.getDirectPackages()) {
+       packageSpecifications.add(new BlazeQueryVisibility(spec));
+     }
      return;
    } else {
      throw new IllegalStateException("unknown visibility: " + ruleVisibility.getClass());
@@ -159,11 +202,13 @@ final class BlazeTargetAccessor implements TargetAccessor<Target> {
 
   private void convertGroupVisibility(
       PackageGroup group, ImmutableSet.Builder<QueryVisibility<Target>> packageSpecifications)
-      throws QueryException, TargetNotFoundException, InterruptedException {
+      throws QueryException, TargetNotFoundException {
     for (Label include : group.getIncludes()) {
       convertGroupVisibility((PackageGroup) queryEnvironment.getTarget(include),
           packageSpecifications);
     }
-    packageSpecifications.add(new BlazeQueryVisibility(group.getPackageSpecifications()));
+    for (PackageSpecification spec : group.getPackageSpecifications()) {
+      packageSpecifications.add(new BlazeQueryVisibility(spec));
+    }
   }
 }

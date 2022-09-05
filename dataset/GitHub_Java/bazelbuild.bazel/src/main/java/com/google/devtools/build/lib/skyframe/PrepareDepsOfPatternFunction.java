@@ -16,9 +16,7 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
@@ -34,6 +32,7 @@ import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.TargetPatternResolverUtil;
 import com.google.devtools.build.lib.skyframe.EnvironmentBackedRecursivePackageProvider.MissingDepException;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -211,21 +210,18 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
     }
 
     @Override
-    public ResolvedTargets<Void> findTargetsBeneathDirectory(RepositoryName repository,
-        String originalPattern, String directory, boolean rulesOnly,
-        ImmutableSet<String> excludedSubdirectories)
+    public ResolvedTargets<Void> findTargetsBeneathDirectory(String originalPattern,
+        String directory, boolean rulesOnly, ImmutableSet<String> excludedSubdirectories)
         throws TargetParsingException, InterruptedException {
       FilteringPolicy policy =
           rulesOnly ? FilteringPolicies.RULES_ONLY : FilteringPolicies.NO_FILTER;
       ImmutableSet<PathFragment> excludedPathFragments =
           TargetPatternResolverUtil.getPathFragments(excludedSubdirectories);
       PathFragment pathFragment = TargetPatternResolverUtil.getPathFragment(directory);
-      // TODO(bazel-team): This is where we need to depend on the RepositoryValue of a remote
-      // repository in order figure out its root and thus support recursive package search in them.
       for (Path root : pkgPath.getPathEntries()) {
         RootedPath rootedPath = RootedPath.toRootedPath(root, pathFragment);
-        SkyValue token = env.getValue(PrepareDepsOfTargetsUnderDirectoryValue.key(
-            repository, rootedPath, excludedPathFragments, policy));
+        SkyValue token = env.getValue(PrepareDepsOfTargetsUnderDirectoryValue.key(rootedPath,
+            excludedPathFragments, policy));
         if (token == null) {
           // A null token value means there is a missing dependency, because RecursivePkgFunction
           // never throws.

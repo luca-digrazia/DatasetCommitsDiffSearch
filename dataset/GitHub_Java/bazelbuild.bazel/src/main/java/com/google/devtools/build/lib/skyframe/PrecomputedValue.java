@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
@@ -29,7 +28,6 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildIn
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ConflictException;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.Injectable;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -76,9 +74,6 @@ public final class PrecomputedValue implements SkyValue {
 
   public static final Precomputed<String> DEFAULTS_PACKAGE_CONTENTS =
       new Precomputed<>(new SkyKey(SkyFunctions.PRECOMPUTED, "default_pkg"));
-
-  public static final Precomputed<ImmutableSet<PathFragment>> BLACKLISTED_PKG_PREFIXES =
-          new Precomputed<>(new SkyKey(SkyFunctions.PRECOMPUTED, "blacklisted_pkg_patterns"));
 
   public static final Precomputed<RuleVisibility> DEFAULT_VISIBILITY =
       new Precomputed<>(new SkyKey(SkyFunctions.PRECOMPUTED, "default_visibility"));

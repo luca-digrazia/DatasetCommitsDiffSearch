@@ -350,21 +350,18 @@ public class BuildView {
     return getConfiguredTarget(packageManager.getLoadedTarget(label), config);
   }
 
-  public Iterable<ConfiguredTarget> getDirectPrerequisites(ConfiguredTarget ct)
-      throws InterruptedException {
+  public Iterable<ConfiguredTarget> getDirectPrerequisites(ConfiguredTarget ct) {
     return getDirectPrerequisites(ct, null);
   }
 
   public Iterable<ConfiguredTarget> getDirectPrerequisites(
-      ConfiguredTarget ct, @Nullable final LoadingCache<Label, Target> targetCache)
-      throws InterruptedException {
+      ConfiguredTarget ct, @Nullable final LoadingCache<Label, Target> targetCache) {
     return skyframeExecutor.getConfiguredTargets(ct.getConfiguration(),
         getDirectPrerequisiteDependencies(ct, targetCache), false);
   }
 
   public Iterable<Dependency> getDirectPrerequisiteDependencies(
-      ConfiguredTarget ct, @Nullable final LoadingCache<Label, Target> targetCache)
-      throws InterruptedException {
+      ConfiguredTarget ct, @Nullable final LoadingCache<Label, Target> targetCache) {
     if (!(ct.getTarget() instanceof Rule)) {
       return ImmutableList.of();
     }
@@ -861,8 +858,7 @@ public class BuildView {
   }
 
   @VisibleForTesting
-  ListMultimap<Attribute, ConfiguredTarget> getPrerequisiteMapForTesting(ConfiguredTarget target)
-      throws InterruptedException {
+  ListMultimap<Attribute, ConfiguredTarget> getPrerequisiteMapForTesting(ConfiguredTarget target) {
     DependencyResolver resolver = new DependencyResolver() {
       @Override
       protected void invalidVisibilityReferenceHook(TargetAndConfiguration node, Label label) {
@@ -958,8 +954,8 @@ public class BuildView {
    * Returns a RuleContext which is the same as the original RuleContext of the target parameter.
    */
   @VisibleForTesting
-  public RuleContext getRuleContextForTesting(
-      ConfiguredTarget target, StoredEventHandler eventHandler) throws InterruptedException {
+  public RuleContext getRuleContextForTesting(ConfiguredTarget target,
+      StoredEventHandler eventHandler) {
     BuildConfiguration config = target.getConfiguration();
     CachingAnalysisEnvironment analysisEnvironment =
         new CachingAnalysisEnvironment(artifactFactory,
@@ -981,8 +977,7 @@ public class BuildView {
    * given configured target.
    */
   @VisibleForTesting
-  public RuleContext getRuleContextForTesting(ConfiguredTarget target, AnalysisEnvironment env)
-      throws InterruptedException {
+  public RuleContext getRuleContextForTesting(ConfiguredTarget target, AnalysisEnvironment env) {
     BuildConfiguration targetConfig = target.getConfiguration();
     return new RuleContext.Builder(
         env, (Rule) target.getTarget(), targetConfig, configurations.getHostConfiguration(),
@@ -1001,8 +996,7 @@ public class BuildView {
    */
   @VisibleForTesting
   public ConfiguredTarget getPrerequisiteConfiguredTargetForTesting(
-      ConfiguredTarget dependentTarget, ConfiguredTarget desiredTarget)
-      throws InterruptedException {
+      ConfiguredTarget dependentTarget, ConfiguredTarget desiredTarget) {
     Collection<ConfiguredTarget> configuredTargets =
         getPrerequisiteMapForTesting(dependentTarget).values();
     for (ConfiguredTarget ct : configuredTargets) {

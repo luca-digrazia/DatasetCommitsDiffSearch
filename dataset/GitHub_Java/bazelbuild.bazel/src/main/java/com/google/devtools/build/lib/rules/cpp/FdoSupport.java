@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
@@ -27,13 +28,12 @@ import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadHostile;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -269,9 +269,9 @@ public class FdoSupport {
    * @throws PackageRootResolutionException
    */
   @ThreadHostile // must be called before starting the build
-  public void prepareToBuild(Path execRoot, ArtifactFactory artifactDeserializer,
-      PackageRootResolver resolver)
-          throws IOException, FdoException, PackageRootResolutionException {
+  public void prepareToBuild(Path execRoot, PathFragment genfilesPath,
+      ArtifactFactory artifactDeserializer, PackageRootResolver resolver)
+      throws IOException, FdoException, PackageRootResolutionException {
     // The execRoot != null case is only there for testing. We cannot provide a real ZIP file in
     // tests because ZipFileSystem does not work with a ZIP on an in-memory file system.
     // IMPORTANT: Keep in sync with #declareSkyframeDependencies to avoid incrementality issues.
@@ -285,7 +285,7 @@ public class FdoSupport {
         Path fdoImports = fdoProfile.getParentDirectory().getRelative(
             fdoProfile.getBaseName() + ".imports");
         if (isLipoEnabled()) {
-          imports = readAutoFdoImports(artifactDeserializer, fdoImports, resolver);
+          imports = readAutoFdoImports(artifactDeserializer, fdoImports, genfilesPath, resolver);
         }
         FileSystemUtils.ensureSymbolicLink(
             execRoot.getRelative(getAutoProfilePath()), fdoProfile);
@@ -392,16 +392,21 @@ public class FdoSupport {
    * @throws PackageRootResolutionException
    */
   private ImmutableMultimap<PathFragment, Artifact> readAutoFdoImports(
-      ArtifactFactory artifactFactory, Path importsFile, PackageRootResolver resolver)
+      ArtifactFactory artifactFactory, Path importsFile, PathFragment genFilePath,
+      PackageRootResolver resolver)
           throws IOException, FdoException, PackageRootResolutionException {
     ImmutableMultimap.Builder<PathFragment, Artifact> importBuilder = ImmutableMultimap.builder();
     for (String line : FileSystemUtils.iterateLinesAsLatin1(importsFile)) {
       if (!line.isEmpty()) {
         PathFragment key = new PathFragment(line.substring(0, line.indexOf(':')));
+        if (key.startsWith(genFilePath)) {
+          key = key.relativeTo(genFilePath);
+        }
         if (key.isAbsolute()) {
           throw new FdoException("Absolute paths not allowed in afdo imports file " + importsFile
               + ": " + key);
         }
+        key = FileSystemUtils.replaceSegments(key, "PROTECTED", "_protected", true);
         for (String auxFile : line.substring(line.indexOf(':') + 1).split(" ")) {
           if (auxFile.length() == 0) {
             continue;
@@ -421,13 +426,13 @@ public class FdoSupport {
   /**
    * Returns the imports from the .afdo.imports file of a source file.
    *
-   * @param sourceExecPath the source file
+   * @param sourceName the source file
    */
-  private Collection<Artifact> getAutoFdoImports(PathFragment sourceExecPath) {
+  private Collection<Artifact> getAutoFdoImports(PathFragment sourceName) {
     Preconditions.checkState(isLipoEnabled());
-    ImmutableCollection<Artifact> afdoImports = imports.get(sourceExecPath);
+    ImmutableCollection<Artifact> afdoImports = imports.get(sourceName);
     Preconditions.checkState(afdoImports != null,
-        "AutoFDO import data missing for %s", sourceExecPath);
+        "AutoFDO import data missing for %s", sourceName);
     return afdoImports;
   }
 
@@ -455,8 +460,7 @@ public class FdoSupport {
   @ThreadSafe
   public void configureCompilation(CppCompileActionBuilder builder,
       CcToolchainFeatures.Variables.Builder buildVariables, RuleContext ruleContext,
-      PathFragment sourceName, PathFragment sourceExecPath, boolean usePic,
-      FeatureConfiguration featureConfiguration) {
+      PathFragment sourceName, boolean usePic, FeatureConfiguration featureConfiguration) {
     // It is a bug if this method is called with useLipo if lipo is disabled. However, it is legal
     // if is is called with !useLipo, even though lipo is enabled.
     LipoContextProvider lipoInputProvider = CppHelper.getLipoContextProvider(ruleContext);
@@ -480,7 +484,7 @@ public class FdoSupport {
         return;
       }
       Iterable<Artifact> auxiliaryInputs = getAuxiliaryInputs(
-          ruleContext, env, sourceName, sourceExecPath, usePic, lipoInputProvider);
+          ruleContext, env, sourceName, usePic, lipoInputProvider);
       builder.addMandatoryInputs(auxiliaryInputs);
       if (!Iterables.isEmpty(auxiliaryInputs)) {
         if (featureConfiguration.isEnabled(CppRuleClasses.AUTOFDO)) {
@@ -505,7 +509,7 @@ public class FdoSupport {
    */
   private Iterable<Artifact> getAuxiliaryInputs(
       RuleContext ruleContext, AnalysisEnvironment env, PathFragment sourceName,
-      PathFragment sourceExecPath, boolean usePic, LipoContextProvider lipoContextProvider) {
+      boolean usePic, LipoContextProvider lipoContextProvider) {
     // If --fdo_optimize was not specified, we don't have any additional inputs.
     if (fdoProfile == null) {
       return ImmutableSet.of();
@@ -520,7 +524,7 @@ public class FdoSupport {
       env.registerAction(new FdoStubAction(ruleContext.getActionOwner(), artifact));
       auxiliaryInputs.add(artifact);
       if (lipoContextProvider != null) {
-        auxiliaryInputs.addAll(getAutoFdoImports(sourceExecPath));
+        auxiliaryInputs.addAll(getAutoFdoImports(sourceName));
       }
       return auxiliaryInputs.build();
     } else {

@@ -25,7 +25,7 @@ import java.util.List;
 /**
  * This class is a common ancestor for every rule object.
  *
- * <p>Implementors are also required to have the {@link BlazeRule} annotation
+ * <p>Implementors are also required to have the {@link Metadata} annotation
  * set.
  */
 public interface RuleDefinition {
@@ -36,7 +36,7 @@ public interface RuleDefinition {
    *
    * @param builder A {@link com.google.devtools.build.lib.packages.RuleClass.Builder} object
    *     already preloaded with the attributes of the ancestors specified in the {@link
-   *     BlazeRule} annotation.
+   *     Metadata} annotation.
    * @param environment The services Blaze provides to rule definitions.
    *
    * @return the {@link RuleClass} representing the rule.
@@ -96,7 +96,8 @@ public interface RuleDefinition {
       public abstract Builder type(RuleClassType type);
       public abstract Builder factoryClass(Class<? extends RuleConfiguredTargetFactory> factory);
       public abstract Builder ancestors(List<Class<? extends RuleDefinition>> ancestors);
-      public Builder ancestors(Class<? extends RuleDefinition>... ancstrs) {
+      @SafeVarargs
+      public final Builder ancestors(Class<? extends RuleDefinition>... ancstrs) {
         return ancestors(Arrays.asList(ancstrs));
       }
       public abstract Metadata build();

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,7 +64,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -518,6 +517,7 @@ public final class CppLinkAction extends AbstractAction {
     private final AnalysisEnvironment analysisEnvironment;
     private final Artifact output;
 
+    @Nullable private PathFragment interfaceOutputPath;
     // can be null for CppLinkAction.createTestBuilder()
     @Nullable private final CcToolchainProvider toolchain;
     private Artifact interfaceOutput;
@@ -539,8 +539,6 @@ public final class CppLinkAction extends AbstractAction {
     private final List<String> linkopts = new ArrayList<>();
     private LinkTargetType linkType = LinkTargetType.STATIC_LIBRARY;
     private LinkStaticness linkStaticness = LinkStaticness.FULLY_STATIC;
-    private List<Artifact> ltoBitcodeFiles = new ArrayList<>();
-
     private boolean fake;
     private boolean isNativeDeps;
     private boolean useTestOnlyFlags;
@@ -633,20 +631,11 @@ public final class CppLinkAction extends AbstractAction {
 
     private Iterable<LTOBackendArtifacts> createLTOArtifacts(
         PathFragment ltoOutputRootPrefix, NestedSet<LibraryToLink> uniqueLibraries) {
-      Set<Artifact> compiled = new LinkedHashSet<>();
-      for (LibraryToLink lib : uniqueLibraries) {
-        Iterables.addAll(compiled, lib.getLTOBitcodeFiles());
-      }
-
       // This flattens the set of object files, so for M binaries and N .o files,
       // this is O(M*N). If we had a nested set of .o files, we could have O(M + N) instead.
       NestedSetBuilder<Artifact> bitcodeBuilder = NestedSetBuilder.stableOrder();
       for (LibraryToLink lib : uniqueLibraries) {
-        for (Artifact a : lib.getObjectFiles()) {
-          if (compiled.contains(a)) {
-            bitcodeBuilder.add(a);
-          }
-        }
+        bitcodeBuilder.addAll(lib.getObjectFiles());
       }
       for (LinkerInput input : nonLibraries) {
         // This relies on file naming conventions. It would be less fragile to have a dedicated
@@ -723,12 +712,11 @@ public final class CppLinkAction extends AbstractAction {
           : ruleContext.getFeatures();
 
       final LibraryToLink outputLibrary =
-          LinkerInputs.newInputLibrary(output, filteredNonLibraryArtifacts, this.ltoBitcodeFiles);
+          LinkerInputs.newInputLibrary(output, filteredNonLibraryArtifacts);
       final LibraryToLink interfaceOutputLibrary =
           (interfaceOutput == null)
               ? null
-              : LinkerInputs.newInputLibrary(
-                  interfaceOutput, filteredNonLibraryArtifacts, this.ltoBitcodeFiles);
+              : LinkerInputs.newInputLibrary(interfaceOutput, filteredNonLibraryArtifacts);
 
       final ImmutableMap<Artifact, Artifact> linkstampMap =
           mapLinkstampsToOutputs(linkstamps, ruleContext, output, linkArtifactFactory);
@@ -827,39 +815,22 @@ public final class CppLinkAction extends AbstractAction {
           LinkerInputs.toLibraryArtifacts(
               Link.mergeInputsDependencies(
                   uniqueLibraries, needWholeArchive, cppConfiguration.archiveType()));
-      Iterable<Artifact> expandedNonLibraryInputs = LinkerInputs.toLibraryArtifacts(nonLibraries);
+
       if (!isLTOIndexing && allLTOArtifacts != null) {
-        // We are doing LTO, and this is the real link, so substitute
-        // the LTO bitcode files with the real object files they were translated into.
-        Map<Artifact, Artifact> ltoMapping = new HashMap<>();
+        // This is the real link, rename the inputs.
+        List<Artifact> renamed = new ArrayList<>();
         for (LTOBackendArtifacts a : allLTOArtifacts) {
-          ltoMapping.put(a.getBitcodeFile(), a.getObjectFile());
+          renamed.add(a.getObjectFile());
         }
-
-        // Handle libraries.
-        List<Artifact> renamedInputs = new ArrayList<>();
-        for (Artifact a : expandedInputs) {
-          Artifact renamed = ltoMapping.get(a);
-          renamedInputs.add(renamed == null ? a : renamed);
-        }
-        expandedInputs = renamedInputs;
-
-        // Handle non-libraries.
-        List<Artifact> renamedNonLibraryInputs = new ArrayList<>();
-        for (Artifact a : expandedNonLibraryInputs) {
-          Artifact renamed = ltoMapping.get(a);
-          renamedNonLibraryInputs.add(renamed == null ? a : renamed);
-        }
-        expandedNonLibraryInputs = renamedNonLibraryInputs;
+        expandedInputs = renamed;
       }
 
       // getPrimaryInput returns the first element, and that is a public interface - therefore the
       // order here is important.
-      IterablesChain.Builder<Artifact> inputsBuilder =
-          IterablesChain.<Artifact>builder()
-              .add(ImmutableList.copyOf(expandedNonLibraryInputs))
-              .add(dependencyInputsBuilder.build())
-              .add(ImmutableIterable.from(expandedInputs));
+      IterablesChain.Builder<Artifact> inputsBuilder = IterablesChain.<Artifact>builder()
+          .add(ImmutableList.copyOf(LinkerInputs.toLibraryArtifacts(nonLibraries)))
+          .add(dependencyInputsBuilder.build())
+          .add(ImmutableIterable.from(expandedInputs));
 
       if (linkCommandLine.getParamFile() != null) {
         inputsBuilder.add(ImmutableList.of(linkCommandLine.getParamFile()));
@@ -1016,13 +987,6 @@ public final class CppLinkAction extends AbstractAction {
           && !Link.SHARED_LIBRARY_FILETYPES.matches(name),
           "'%s' is a library file", input);
       this.nonLibraries.add(input);
-    }
-
-    public Builder addLTOBitcodeFiles(Iterable<Artifact> files) {
-      for (Artifact a : files) {
-        ltoBitcodeFiles.add(a);
-      }
-      return this;
     }
 
     /**

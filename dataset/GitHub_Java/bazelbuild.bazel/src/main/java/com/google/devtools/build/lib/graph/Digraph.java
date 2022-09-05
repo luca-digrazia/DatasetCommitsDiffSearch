@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1060,9 +1060,7 @@ public final class Digraph<T> implements Cloneable {
       return unordered;
     }
     List<Node<T>> result = new ArrayList<>(unordered);
-    // Do not inline this variable: a workaround for Java 7 type inference.
-    Comparator<Node<T>> nodeComparator = makeNodeComparator(comparator);
-    Collections.sort(result, nodeComparator);
+    Collections.sort(result, makeNodeComparator(comparator));
     return result;
   }
 

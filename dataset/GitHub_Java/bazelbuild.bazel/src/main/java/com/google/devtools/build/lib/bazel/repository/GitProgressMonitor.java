@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.bazel.repository;
 
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.events.Reporter;
 
 import org.eclipse.jgit.lib.ProgressMonitor;
 
@@ -24,28 +24,39 @@ import org.eclipse.jgit.lib.ProgressMonitor;
  */
 class GitProgressMonitor implements ProgressMonitor {
   private String message;
-  private EventHandler eventHandler;
+  private Reporter reporter;
+  private int totalTasks;
+  private int currentTask;
 
   private String workTitle;
   private int totalWork;
   private int completedWork;
 
-  GitProgressMonitor(String message, EventHandler eventHandler) {
+  GitProgressMonitor(String message, Reporter reporter) {
     this.message = message;
-    this.eventHandler = eventHandler;
+    this.reporter = reporter;
   }
 
   @Override
-  public void start(int totalTasks) { }
+  public void start(int totalTasks) {
+    this.totalTasks = totalTasks;
+    this.currentTask = 0;
+  }
 
   private void report() {
-    eventHandler.handle(
-        Event.progress(message + ": " + workTitle
-            + " (" + completedWork + " / " + totalWork + ")"));
+    reporter.handle(
+        Event.progress("[" + currentTask + " / " + totalTasks + "] "
+            + message + ": " + workTitle + " ("
+            + completedWork + " / " + totalWork + ")"));
   }
 
   @Override
   public void beginTask(String title, int totalWork) {
+    ++currentTask;
+    // TODO(dzc): Remove this when jgit reports totalTasks correctly in start().
+    if (currentTask > totalTasks) {
+      totalTasks = currentTask;
+    }
     this.totalWork = totalWork;
     this.completedWork = 0;
     this.workTitle = title;

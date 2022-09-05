@@ -308,6 +308,6 @@ public abstract class NativeDepsHelper {
       fp.addStrings(feature);
     }
     return new PathFragment(
-        "_nativedeps/" + fp.hexDigestAndReset() + ".so");
+        Constants.NATIVE_DEPS_LIB_SUFFIX + "/" + fp.hexDigestAndReset() + ".so");
   }
 }

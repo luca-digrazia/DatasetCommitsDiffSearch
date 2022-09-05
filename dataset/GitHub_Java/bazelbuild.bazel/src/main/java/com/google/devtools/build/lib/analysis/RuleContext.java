@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildIn
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.collect.ImmutableSortedKeyListMultimap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -258,59 +257,26 @@ public final class RuleContext extends TargetContext
    * Returns a configuration fragment for this this target.
    */
   @Nullable
-  public <T extends Fragment> T getFragment(Class<T> fragment, ConfigurationTransition config) {
-    return getFragment(fragment, fragment.getSimpleName(), "", config);
-  }
-
-  @Nullable
-  protected <T extends Fragment> T getFragment(Class<T> fragment, String name,
-      String additionalErrorMessage, ConfigurationTransition config) {
+  public <T extends Fragment> T getFragment(Class<T> fragment) {
     // TODO(bazel-team): The fragments can also be accessed directly through BuildConfiguration.
     // Can we lock that down somehow?
-    Preconditions.checkArgument(isLegalFragment(fragment, config),
-        "%s has to declare '%s' as a required fragment "
-        + "in %s configuration in order to access it.%s",
-        rule.getRuleClass(), name, FragmentCollection.getConfigurationName(config),
-        additionalErrorMessage);
+    Preconditions.checkArgument(isLegalFragment(fragment),
+        "%s does not have access to %s", rule.getRuleClass(), fragment);
     return getConfiguration().getFragment(fragment);
   }
 
   @Nullable
-  public <T extends Fragment> T getFragment(Class<T> fragment) {
-    // NONE means target configuration.
-    return getFragment(fragment, ConfigurationTransition.NONE);
-  }
-
-  @Nullable
-  public Fragment getSkylarkFragment(String name, ConfigurationTransition config) {
+  public Fragment getSkylarkFragment(String name) {
     Class<? extends Fragment> fragmentClass = getConfiguration().getSkylarkFragmentByName(name);
-    if (fragmentClass == null) {
-      return null;
-    }
-    return getFragment(fragmentClass, name,
-        String.format(
-            " Please update the '%1$sfragments' argument of the rule definition "
-            + "(for example: %1$sfragments = [\"%2$s\"])",
-            (config == ConfigurationTransition.HOST) ? "host_" : "", name),
-        config);
+    return (fragmentClass == null) ? null : getFragment(fragmentClass);
   }
 
-  public ImmutableCollection<String> getSkylarkFragmentNames(ConfigurationTransition config) {
-    return getConfiguration(config).getSkylarkFragmentNames();
-  }
-
-  public <T extends Fragment> boolean isLegalFragment(
-      Class<T> fragment, ConfigurationTransition config) {
-    return rule.getRuleClassObject().isLegalConfigurationFragment(fragment, config);
+  public ImmutableCollection<String> getSkylarkFragmentNames() {
+    return getConfiguration().getSkylarkFragmentNames();
   }
 
   public <T extends Fragment> boolean isLegalFragment(Class<T> fragment) {
-    // NONE means target configuration.
-    return isLegalFragment(fragment, ConfigurationTransition.NONE);
-  }
-
-  protected BuildConfiguration getConfiguration(ConfigurationTransition config) {
-    return config.equals(ConfigurationTransition.HOST) ? hostConfiguration : getConfiguration();
+    return rule.getRuleClassObject().isLegalConfigurationFragment(fragment);
   }
 
   @Override

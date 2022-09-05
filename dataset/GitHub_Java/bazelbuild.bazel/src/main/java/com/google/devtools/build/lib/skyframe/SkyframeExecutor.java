@@ -245,6 +245,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   private MutableSupplier<ConfigurationFactory> configurationFactory = new MutableSupplier<>();
   private MutableSupplier<ImmutableList<ConfigurationFragmentFactory>> configurationFragments =
       new MutableSupplier<>();
+  private MutableSupplier<Set<Package>> configurationPackages = new MutableSupplier<>();
 
   private static final Logger LOG = Logger.getLogger(SkyframeExecutor.class.getName());
 
@@ -335,9 +336,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(SkyFunctions.BUILD_CONFIGURATION,
         new BuildConfigurationFunction(directories, ruleClassProvider));
     map.put(SkyFunctions.CONFIGURATION_COLLECTION, new ConfigurationCollectionFunction(
-        configurationFactory));
+        configurationFactory, configurationPackages));
     map.put(SkyFunctions.CONFIGURATION_FRAGMENT, new ConfigurationFragmentFunction(
-        configurationFragments));
+        configurationFragments, configurationPackages));
     map.put(
         SkyFunctions.WORKSPACE_FILE,
         new WorkspaceFileFunction(ruleClassProvider, pkgFactory, directories));
@@ -699,6 +700,19 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return skyframeActionExecutor;
   }
 
+  /**
+   * The map from package names to the package root where each package was found; this is used to
+   * set up the symlink tree.
+   */
+  public ImmutableMap<PackageIdentifier, Path> getPackageRoots() {
+    // Make a map of the package names to their root paths.
+    ImmutableMap.Builder<PackageIdentifier, Path> packageRoots = ImmutableMap.builder();
+    for (Package pkg : configurationPackages.get()) {
+      packageRoots.put(pkg.getPackageIdentifier(), pkg.getSourceRoot());
+    }
+    return packageRoots.build();
+  }
+
   @VisibleForTesting
   ImmutableList<Path> getPathEntries() {
     return pkgLocator.get().getPathEntries();
@@ -914,6 +928,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     PrecomputedValue.BLAZE_DIRECTORIES.set(injectable(), directories);
     this.configurationFactory.set(configurationFactory);
     this.configurationFragments.set(ImmutableList.copyOf(configurationFactory.getFactories()));
+    this.configurationPackages.set(Sets.<Package>newConcurrentHashSet());
   }
 
   /**
@@ -924,6 +939,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       ConfigurationFactory configurationFactory, BuildOptions buildOptions,
       BlazeDirectories directories, Set<String> multiCpu, boolean keepGoing)
       throws InvalidConfigurationException, InterruptedException {
+    this.configurationPackages.set(Sets.<Package>newConcurrentHashSet());
     this.configurationFactory.set(configurationFactory);
     this.configurationFragments.set(ImmutableList.copyOf(configurationFactory.getFactories()));
     // TODO(bazel-team): find a way to use only BuildConfigurationKey instead of
@@ -948,6 +964,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         "Result of evaluate() must contain exactly one value %s", result);
     ConfigurationCollectionValue configurationValue =
         Iterables.getOnlyElement(result.values());
+    this.configurationPackages.set(
+        Sets.newConcurrentHashSet(configurationValue.getConfigurationPackages()));
     return configurationValue.getConfigurationCollection();
   }
 

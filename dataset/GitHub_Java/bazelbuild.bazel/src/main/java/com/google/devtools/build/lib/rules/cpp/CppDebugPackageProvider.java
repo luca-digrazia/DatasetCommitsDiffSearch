@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,28 +17,24 @@ package com.google.devtools.build.lib.rules.cpp;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.syntax.Label;
+
 import javax.annotation.Nullable;
 
 /**
- * Provides the binary artifact and its associated .dwp files, if fission is enabled. If Fission
- * ({@url https://gcc.gnu.org/wiki/DebugFission}) is not enabled, the dwp file will be null.
+ * Provides the binary artifact and its associated .dwp files, if fission is enabled.
+ * If Fission ({@url https://gcc.gnu.org/wiki/DebugFission}) is not enabled, the
+ * dwp file will be null.
  */
 @Immutable
-@AutoCodec
 public final class CppDebugPackageProvider implements TransitiveInfoProvider {
-  public static final ObjectCodec<CppDebugPackageProvider> CODEC =
-      new CppDebugPackageProvider_AutoCodec();
 
   private final Label targetLabel;
   private final Artifact strippedArtifact;
   private final Artifact unstrippedArtifact;
   @Nullable private final Artifact dwpArtifact;
 
-  @AutoCodec.Instantiator
   public CppDebugPackageProvider(
       Label targetLabel,
       Artifact strippedArtifact,

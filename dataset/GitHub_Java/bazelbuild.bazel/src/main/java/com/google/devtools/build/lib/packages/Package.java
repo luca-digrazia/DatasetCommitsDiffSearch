@@ -24,6 +24,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.ImmutableSortedKeyMap;
@@ -106,7 +107,7 @@ public class Package implements Serializable {
    * The name of the workspace this package is in. Used as a prefix for the runfiles directory.
    * This can be set in the WORKSPACE file. This must be a valid target name.
    */
-  protected String workspaceName;
+  protected String workspaceName = Constants.DEFAULT_RUNFILES_PREFIX;
 
   /**
    * The root of the source tree in which this package was found. It is an invariant that
@@ -225,9 +226,8 @@ public class Package implements Serializable {
    * @precondition {@code name} must be a suffix of
    * {@code filename.getParentDirectory())}.
    */
-  protected Package(PackageIdentifier packageId, String runfilesPrefix) {
+  protected Package(PackageIdentifier packageId) {
     this.packageIdentifier = packageId;
-    this.workspaceName = runfilesPrefix;
     this.nameFragment = Canonicalizer.fragments().intern(packageId.getPackageFragment());
     this.name = nameFragment.getPathString();
   }
@@ -723,10 +723,11 @@ public class Package implements Serializable {
    * <p>Despite its name, this is the normal builder used when parsing BUILD files.
    */
   public static class LegacyBuilder extends Builder {
+
     private Globber globber = null;
 
-    LegacyBuilder(PackageIdentifier packageId, String runfilesPrefix) {
-      super(packageId, runfilesPrefix);
+    LegacyBuilder(PackageIdentifier packageId) {
+      super(packageId);
     }
 
     /**
@@ -760,8 +761,8 @@ public class Package implements Serializable {
   }
 
   static class Builder {
-    protected static Package newPackage(PackageIdentifier packageId, String runfilesPrefix) {
-      return new Package(packageId, runfilesPrefix);
+    protected static Package newPackage(PackageIdentifier packageId) {
+      return new Package(packageId);
     }
 
     /**
@@ -825,8 +826,8 @@ public class Package implements Serializable {
       }
     }
 
-    Builder(PackageIdentifier id, String runfilesPrefix) {
-      this(newPackage(id, runfilesPrefix));
+    Builder(PackageIdentifier id) {
+      this(newPackage(id));
     }
 
     protected PackageIdentifier getPackageIdentifier() {

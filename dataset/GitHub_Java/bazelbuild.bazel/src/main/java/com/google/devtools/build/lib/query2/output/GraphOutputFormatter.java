@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,8 @@ import com.google.devtools.build.lib.graph.LabelSerializer;
 import com.google.devtools.build.lib.graph.Node;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.query2.output.QueryOptions.OrderOutput;
-import java.io.OutputStream;
+
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -47,7 +48,7 @@ class GraphOutputFormatter extends OutputFormatter {
   }
 
   @Override
-  public void output(QueryOptions options, Digraph<Target> result, OutputStream out,
+  public void output(QueryOptions options, Digraph<Target> result, PrintStream out,
       AspectResolver aspectProvider) {
     this.graphNodeStringLimit = options.graphNodeStringLimit;
 
@@ -55,19 +56,18 @@ class GraphOutputFormatter extends OutputFormatter {
     if (options.graphFactored) {
       outputFactored(result, new PrintWriter(out), sortLabels);
     } else {
-      outputUnfactored(result, new PrintWriter(out), sortLabels, options);
+      outputUnfactored(result, new PrintWriter(out), sortLabels);
     }
   }
 
-  private void outputUnfactored(
-      Digraph<Target> result, PrintWriter out, boolean sortLabels, final QueryOptions options) {
+  private void outputUnfactored(Digraph<Target> result, PrintWriter out, boolean sortLabels) {
     result.visitNodesBeforeEdges(
         new DotOutputVisitor<Target>(out, LABEL_STRINGIFIER) {
           @Override
           public void beginVisit() {
             super.beginVisit();
             // TODO(bazel-team): (2009) make this the default in Digraph.
-            out.printf("  node [shape=box];%s", options.getLineTerminator());
+            out.println("  node [shape=box];");
           }
         },
         sortLabels ? new TargetOrdering() : null);

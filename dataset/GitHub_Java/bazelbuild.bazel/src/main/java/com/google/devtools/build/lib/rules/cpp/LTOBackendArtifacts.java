@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -115,9 +115,6 @@ public final class LTOBackendArtifacts {
     builder.addInput(index);
     builder.addInput(beCommandline);
     builder.addTransitiveInputs(CppHelper.getToolchain(ruleContext).getCompile());
-
-    // The backend compile invokes ld too.
-    builder.addTransitiveInputs(CppHelper.getToolchain(ruleContext).getLink());
     builder.addOutput(objectFile);
 
     builder.setProgressMessage("LTO Backend Compile");
