@@ -15,13 +15,11 @@
 package com.google.testing.junit.runner.model;
 
 import com.google.testing.junit.runner.model.TestResult.Status;
-import com.google.testing.junit.runner.util.TestClock.TestInstant;
-import com.google.testing.junit.runner.util.TestIntegration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
+import org.joda.time.Interval;
 import org.junit.runner.Description;
 
 /**
@@ -29,15 +27,9 @@ import org.junit.runner.Description;
  */
 class TestSuiteNode extends TestNode {
   private final List<TestNode> children = new ArrayList<>();
-  private final Map<String, String> properties;
 
   TestSuiteNode(Description description) {
-    this(description, Collections.emptyMap());
-  }
-
-  TestSuiteNode(Description description, Map<String, String> properties) {
     super(description);
-    this.properties = properties;
   }
 
   // VisibleForTesting
@@ -52,35 +44,35 @@ class TestSuiteNode extends TestNode {
   }
 
   @Override
-  public void testFailure(Throwable throwable, TestInstant now) {
+  public void testFailure(Throwable throwable, long now) {
     for (TestNode child : getChildren()) {
       child.testFailure(throwable, now);
     }
   }
 
   @Override
-  public void dynamicTestFailure(Description test, Throwable throwable, TestInstant now) {
+  public void dynamicTestFailure(Description test, Throwable throwable, long now) {
     for (TestNode child : getChildren()) {
       child.dynamicTestFailure(test, throwable, now);
     }
   }
 
   @Override
-  public void testInterrupted(TestInstant now) {
+  public void testInterrupted(long now) {
     for (TestNode child : getChildren()) {
       child.testInterrupted(now);
     }
   }
 
   @Override
-  public void testSkipped(TestInstant now) {
+  public void testSkipped(long now) {
     for (TestNode child : getChildren()) {
       child.testSkipped(now);
     }
   }
 
   @Override
-  public void testSuppressed(TestInstant now) {
+  public void testSuppressed(long now) {
     for (TestNode child : getChildren()) {
       child.testSuppressed(now);
     }
@@ -96,9 +88,8 @@ class TestSuiteNode extends TestNode {
 
   @Override
   protected TestResult buildResult() {
-    TestInterval runTime = null;
-    int numTests = 0;
-    int numFailures = 0;
+    Interval runTime = null;
+    int numTests = 0, numFailures = 0;
     LinkedList<TestResult> childResults = new LinkedList<>();
 
     for (TestNode child : children) {
@@ -107,23 +98,24 @@ class TestSuiteNode extends TestNode {
       numTests += childResult.getNumTests();
       numFailures += childResult.getNumFailures();
 
-      TestInterval childRunTime = childResult.getRunTimeInterval();
+      Interval childRunTime = childResult.getRunTimeInterval();
       if (childRunTime != null) {
-        runTime = runTime == null ? childRunTime : TestInterval.around(runTime, childRunTime);
+        runTime = runTime == null ? childRunTime
+            : new Interval(Math.min(runTime.getStartMillis(), childRunTime.getStartMillis()),
+                         Math.max(runTime.getEndMillis(), childRunTime.getEndMillis()));
       }
     }
 
     return new TestResult.Builder()
         .name(getDescription().getDisplayName())
         .className("")
-        .properties(properties)
+        .properties(Collections.<String, String>emptyMap())
         .failures(Collections.<Throwable>emptyList())
         .runTimeInterval(runTime)
         .status(Status.SKIPPED)
         .numTests(numTests)
         .numFailures(numFailures)
         .childResults(childResults)
-        .integrations(Collections.<TestIntegration>emptySet())
         .build();
   }
 }

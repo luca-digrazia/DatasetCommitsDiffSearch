@@ -14,19 +14,20 @@
 
 package com.google.testing.junit.runner.model;
 
-import com.google.testing.junit.runner.util.TestIntegration;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import javax.annotation.Nullable;
+import org.joda.time.Interval;
 
-/** Result of executing a test suite or test case. */
-public final class TestResult {
+/**
+ * Result of executing a test suite or test case.
+ */
+final class TestResult {
 
   /**
    * Possible result values to a test.
    */
-  public enum Status {
+  enum Status {
     /**
      * Test case was not run because the test decided that it should not be run
      * (e.g.: due to a failed assumption in a JUnit4-style tests).
@@ -78,15 +79,13 @@ public final class TestResult {
     }
   }
 
-  private final String name;
-  private final String className;
+  private final String name, className;
   private final Map<String, String> properties;
   private final List<Throwable> failures;
-  @Nullable private final TestInterval runTime;
-  private final Set<TestIntegration> integrations;
+  @Nullable
+  private final Interval runTime;
   private final Status status;
-  private final int numTests;
-  private final int numFailures;
+  private final int numTests, numFailures;
   private final List<TestResult> childResults;
 
   private TestResult(Builder builder) {
@@ -99,51 +98,46 @@ public final class TestResult {
     numTests = checkNotNull(builder.numTests, "numTests not set");
     numFailures = checkNotNull(builder.numFailures, "numFailures not set");
     childResults = checkNotNull(builder.childResults, "childResults not set");
-    integrations = checkNotNull(builder.integrations, "integrations not set");
   }
 
-  public String getName() {
+  String getName() {
     return name;
   }
 
-  public String getClassName() {
+  String getClassName() {
     return className;
   }
 
-  public Map<String, String> getProperties() {
+  Map<String, String> getProperties() {
     return properties;
   }
 
-  public List<Throwable> getFailures() {
+  List<Throwable> getFailures() {
     return failures;
   }
 
-  public Set<TestIntegration> getIntegrations() {
-    return integrations;
-  }
-
   @Nullable
-  public TestInterval getRunTimeInterval() {
+  Interval getRunTimeInterval() {
     return runTime;
   }
 
-  public Status getStatus() {
+  Status getStatus() {
     return status;
   }
 
-  public boolean wasRun() {
+  boolean wasRun() {
     return getStatus().wasRun();
   }
 
-  public int getNumTests() {
+  int getNumTests() {
     return numTests;
   }
 
-  public int getNumFailures() {
+  int getNumFailures() {
     return numFailures;
   }
 
-  public List<TestResult> getChildResults() {
+  List<TestResult> getChildResults() {
     return childResults;
   }
 
@@ -154,13 +148,13 @@ public final class TestResult {
     return reference;
   }
 
-  public static final class Builder {
+  static final class Builder {
     private String name = null;
     private String className = null;
     private Map<String, String> properties = null;
     private List<Throwable> failures = null;
-    @Nullable private TestInterval runTime = null;
-    private Set<TestIntegration> integrations = null;
+    @Nullable
+    private Interval runTime = null;
     private Status status = null;
     private Integer numTests = null;
     private Integer numFailures = null;
@@ -183,17 +177,12 @@ public final class TestResult {
       return this;
     }
 
-    Builder integrations(Set<TestIntegration> integrations) {
-      this.integrations = checkNullToNotNull(this.integrations, integrations, "integrations");
-      return this;
-    }
-
     Builder failures(List<Throwable> failures) {
       this.failures = checkNullToNotNull(this.failures, failures, "failures");
       return this;
     }
 
-    Builder runTimeInterval(@Nullable TestInterval runTime) {
+    Builder runTimeInterval(@Nullable Interval runTime) {
       if (this.runTime != null) {
         throw new IllegalStateException("runTime already set");
       }

@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map.Entry;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
+import org.joda.time.Interval;
 
 /**
  * Writes the JUnit test nodes and their results into Ant-JUnit XML. Ant-JUnit XML is not a
@@ -112,9 +113,6 @@ public final class AntXmlResultWriter implements XmlResultWriter {
   private void writeTestCases(XmlWriter writer, TestResult result,
       Iterable<Throwable> parentFailures) throws IOException {
     for (TestResult child : result.getChildResults()) {
-      if (child.getStatus() == TestResult.Status.FILTERED) {
-        continue;
-      }
       if (child.getChildResults().isEmpty()) {
         writeTestCase(writer, child, parentFailures);
       }
@@ -148,13 +146,13 @@ public final class AntXmlResultWriter implements XmlResultWriter {
     writer.writeAttribute(JUNIT_ATTR_TESTSUITE_ID, this.testSuiteId++);
   }
 
-  private static String getFormattedRunTime(@Nullable TestInterval runTimeInterval) {
+  private static String getFormattedRunTime(@Nullable Interval runTimeInterval) {
     return runTimeInterval == null ? "0.0"
         : String.valueOf(runTimeInterval.toDurationMillis() / 1000.0D);
   }
 
-  private static String getFormattedTimestamp(@Nullable TestInterval runTimeInterval) {
-    return runTimeInterval == null ? "" : runTimeInterval.startInstantToString();
+  private static String getFormattedTimestamp(@Nullable Interval runTimeInterval) {
+    return runTimeInterval == null ? "" : runTimeInterval.getStart().toString();
   }
 
   private void writeTestCase(XmlWriter writer, TestResult result,
