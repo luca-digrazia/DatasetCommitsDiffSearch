@@ -256,7 +256,7 @@ public final class LabelValidator {
     if (absName.startsWith("@")) {
       int endOfRepo = absName.indexOf("//");
       if (endOfRepo < 0) {
-        return new PackageAndTarget("", absName.substring(1));
+        throw new BadLabelException("invalid fully-qualified label: " + absName);
       }
       absName = absName.substring(endOfRepo);
     }
