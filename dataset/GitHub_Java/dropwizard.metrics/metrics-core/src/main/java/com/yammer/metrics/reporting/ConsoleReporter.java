@@ -3,13 +3,14 @@ package com.yammer.metrics.reporting;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.*;
 import com.yammer.metrics.util.MetricPredicate;
+import com.yammer.metrics.util.Utils;
 
 import java.io.PrintStream;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Map.Entry;
-import java.util.SortedMap;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -129,7 +130,9 @@ public class ConsoleReporter extends AbstractPollingReporter implements
                 out.print('=');
             }
             out.println();
-            for (Entry<String, SortedMap<MetricName, Metric>> entry : metricsRegistry.groupedMetrics(predicate).entrySet()) {
+            for (Entry<String, Map<MetricName, Metric>> entry : Utils.sortAndFilterMetrics(
+                    metricsRegistry.allMetrics(),
+                    predicate).entrySet()) {
                 out.print(entry.getKey());
                 out.println(':');
                 for (Entry<MetricName, Metric> subEntry : entry.getValue().entrySet()) {
@@ -149,12 +152,12 @@ public class ConsoleReporter extends AbstractPollingReporter implements
     }
 
     @Override
-    public void processGauge(MetricName name, Gauge<?> gauge, PrintStream stream) {
+    public void processGauge(MetricName name, GaugeMetric<?> gauge, PrintStream stream) {
         stream.printf(locale, "    value = %s\n", gauge.value());
     }
 
     @Override
-    public void processCounter(MetricName name, Counter counter, PrintStream stream) {
+    public void processCounter(MetricName name, CounterMetric counter, PrintStream stream) {
         stream.printf(locale, "    count = %d\n", counter.count());
     }
 
@@ -181,7 +184,7 @@ public class ConsoleReporter extends AbstractPollingReporter implements
     }
 
     @Override
-    public void processHistogram(MetricName name, Histogram histogram, PrintStream stream) {
+    public void processHistogram(MetricName name, HistogramMetric histogram, PrintStream stream) {
         final Double[] percentiles = histogram.percentiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
         stream.printf(locale, "               min = %2.2f\n", histogram.min());
         stream.printf(locale, "               max = %2.2f\n", histogram.max());
@@ -196,7 +199,7 @@ public class ConsoleReporter extends AbstractPollingReporter implements
     }
 
     @Override
-    public void processTimer(MetricName name, Timer timer, PrintStream stream) {
+    public void processTimer(MetricName name, TimerMetric timer, PrintStream stream) {
         processMeter(name, timer, stream);
         final String durationUnit = abbrev(timer.durationUnit());
         final Double[] percentiles = timer.percentiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
