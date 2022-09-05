@@ -15,17 +15,17 @@ package com.google.devtools.build.lib.profiler.output;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.StandardSystemProperty;
+import com.google.common.collect.ListMultimap;
+import com.google.devtools.build.lib.profiler.ProfileInfo.Task;
 import com.google.devtools.build.lib.profiler.statistics.SkylarkStatistics;
 import com.google.devtools.build.lib.profiler.statistics.TasksStatistics;
-import com.google.devtools.build.lib.util.LongArrayList;
 
 import java.io.PrintStream;
 import java.util.Arrays;
-import java.util.Map;
-import java.util.Map.Entry;
+import java.util.List;
 
 /**
- * Formats {@link SkylarkStatistics} as HTML tables and histogram charts.
+ * Formats {@link SkylarkStatistics} as a HTML tables and histogram charts.
  */
 public final class SkylarkHtml extends HtmlPrinter {
 
@@ -78,15 +78,9 @@ public final class SkylarkHtml extends HtmlPrinter {
     lnPrint("function drawVisualization() {");
     down();
     printStatsJs(
-        stats.getUserFunctionStatistics(),
-        stats.getUserFunctionSelfStatistics(),
-        "user",
-        dataVar,
-        tableVar,
-        stats.getUserTotalNanos());
+        stats.getUserFunctionStats(), "user", dataVar, tableVar, stats.getUserTotalNanos());
     printStatsJs(
-        stats.getBuiltinFunctionStatistics(),
-        stats.getBuiltinFunctionSelfStatistics(),
+        stats.getBuiltinFunctionStats(),
         "builtin",
         dataVar,
         tableVar,
@@ -147,31 +141,27 @@ public final class SkylarkHtml extends HtmlPrinter {
     lnPrint("}");
     up();
     lnPrint("};");
-
     lnClose(); // script
   }
 
   private void printHistogramData() {
     lnPrint("histogramData = {");
     down();
-    printHistogramData(stats.getBuiltinFunctionDurations(), "builtin");
-    printHistogramData(stats.getUserFunctionDurations(), "user");
+    printHistogramData(stats.getBuiltinFunctionTasks(), "builtin");
+    printHistogramData(stats.getUserFunctionTasks(), "user");
     up();
     lnPrint("}");
   }
 
-  private void printHistogramData(Map<String, LongArrayList> functionDurations, String category) {
+  private void printHistogramData(ListMultimap<String, Task> tasks, String category) {
     lnPrintf("'%s': {", category);
     down();
-    for (Entry<String, LongArrayList> entry : functionDurations.entrySet()) {
-      String function = entry.getKey();
-      LongArrayList durations = entry.getValue();
+    for (String function : tasks.keySet()) {
       lnPrintf("'%s': google.visualization.arrayToDataTable(", function);
       lnPrint("[['duration']");
-      for (int index = 0; index < durations.size(); index++) {
-        printf(",[%f]", durations.get(index) / 1000000.);
+      for (Task task : tasks.get(function)) {
+        printf(",[%f]", task.durationNanos / 1000000.);
       }
-
       lnPrint("], false),");
     }
     up();
@@ -179,15 +169,14 @@ public final class SkylarkHtml extends HtmlPrinter {
   }
 
   private void printStatsJs(
-      Map<String, TasksStatistics> taskStatistics,
-      Map<String, TasksStatistics> taskSelfStatistics,
+      List<TasksStatistics> statsList,
       String category,
       String dataVar,
       String tableVar,
       long totalNanos) {
     String tmpVar = category + dataVar;
     lnPrintf("var statsDiv = document.getElementById('%s_function_stats');", category);
-    if (taskStatistics.isEmpty()) {
+    if (statsList.isEmpty()) {
       lnPrint(
           "statsDiv.innerHTML = '<i>No relevant function calls to display. Some minor"
               + " builtin functions may have been ignored because their names could not be used"
@@ -197,26 +186,21 @@ public final class SkylarkHtml extends HtmlPrinter {
       lnPrintf("%s.addColumn('string', 'Location');", tmpVar);
       lnPrintf("%s.addColumn('string', 'Function');", tmpVar);
       lnPrintf("%s.addColumn('number', 'count');", tmpVar);
-      lnPrintf("%s.addColumn('number', 'min');", tmpVar);
-      lnPrintf("%s.addColumn('number', 'mean');", tmpVar);
-      lnPrintf("%s.addColumn('number', 'mean self');", tmpVar);
-      lnPrintf("%s.addColumn('number', 'median');", tmpVar);
-      lnPrintf("%s.addColumn('number', 'median self');", tmpVar);
-      lnPrintf("%s.addColumn('number', 'max');", tmpVar);
-      lnPrintf("%s.addColumn('number', 'max self');", tmpVar);
-      lnPrintf("%s.addColumn('number', 'std dev');", tmpVar);
-      lnPrintf("%s.addColumn('number', 'self');", tmpVar);
+      lnPrintf("%s.addColumn('number', 'min (ms)');", tmpVar);
+      lnPrintf("%s.addColumn('number', 'mean (ms)');", tmpVar);
+      lnPrintf("%s.addColumn('number', 'median (ms)');", tmpVar);
+      lnPrintf("%s.addColumn('number', 'max (ms)');", tmpVar);
+      lnPrintf("%s.addColumn('number', 'std dev (ms)');", tmpVar);
+      lnPrintf("%s.addColumn('number', 'mean self (ms)');", tmpVar);
+      lnPrintf("%s.addColumn('number', 'self (ms)');", tmpVar);
       lnPrintf("%s.addColumn('number', 'self (%%)');", tmpVar);
-      lnPrintf("%s.addColumn('number', 'total');", tmpVar);
+      lnPrintf("%s.addColumn('number', 'total (ms)');", tmpVar);
       lnPrintf("%s.addColumn('number', 'relative (%%)');", tmpVar);
       lnPrintf("%s.addRows([", tmpVar);
       down();
-      for (Entry<String, TasksStatistics> entry : taskStatistics.entrySet()) {
-        String function = entry.getKey();
-        TasksStatistics stats = entry.getValue();
-        TasksStatistics selfStats = taskSelfStatistics.get(function);
+      for (TasksStatistics stats : statsList) {
         double relativeTotal = (double) stats.totalNanos / totalNanos;
-        double relativeSelf = (double) selfStats.totalNanos / stats.totalNanos;
+        double relativeSelf = (double) stats.selfNanos / stats.totalNanos;
         String[] split = stats.name.split("#");
         String location = split[0];
         String name = split[1];
@@ -225,17 +209,14 @@ public final class SkylarkHtml extends HtmlPrinter {
         printf("%d, ", stats.count);
         printf("%.3f, ", stats.minimumMillis());
         printf("%.3f, ", stats.meanMillis());
-        printf("%.3f, ", selfStats.meanMillis());
         printf("%.3f, ", stats.medianMillis());
-        printf("%.3f, ", selfStats.medianMillis());
         printf("%.3f, ", stats.maximumMillis());
-        printf("%.3f, ", selfStats.maximumMillis());
         printf("%.3f, ", stats.standardDeviationMillis);
-        printf("%.3f, ", selfStats.totalMillis());
+        printf("%.3f, ", stats.selfMeanMillis());
+        printf("%.3f, ", stats.selfMillis());
         printf("{v:%.4f, f:'%.3f %%'}, ", relativeSelf, relativeSelf * 100);
-        printf("%.3f,", stats.totalMillis());
-        printf("{v:%.4f, f:'%.3f %%'},", relativeTotal, relativeTotal * 100);
-        printf("],");
+        printf("%.3f, ", stats.totalMillis());
+        printf("{v:%.4f, f:'%.3f %%'}],", relativeTotal, relativeTotal * 100);
       }
       lnPrint("]);");
       up();
@@ -262,7 +243,6 @@ public final class SkylarkHtml extends HtmlPrinter {
   void printHtmlBody() {
     lnPrint("<a name='skylark_stats'/>");
     lnElement("h3", "Skylark Statistics");
-    lnElement("p", "All duration columns in milliseconds, except where noted otherwise.");
     lnElement("h4", "User-Defined function execution time");
     lnOpen("div", "class", "skylark-histogram", "id", "user-histogram");
     lnElement("div", "class", "skylark-chart", "id", "user-chart");

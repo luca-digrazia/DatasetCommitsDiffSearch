@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.runtime.commands;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Optional;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -223,7 +222,7 @@ public final class ProfileCommand implements BlazeCommand {
                     out,
                     phaseSummaryStatistics,
                     phaseStatistics,
-                    Optional.of(critPathStats),
+                    critPathStats,
                     info.getMissingActionsCount(),
                     opts.vfsStatsLimit)
                 .print();
