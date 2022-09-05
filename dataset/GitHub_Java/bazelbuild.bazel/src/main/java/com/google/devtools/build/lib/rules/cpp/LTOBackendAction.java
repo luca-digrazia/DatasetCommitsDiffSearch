@@ -22,8 +22,10 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.ArtifactResolver;
+import com.google.devtools.build.lib.actions.PackageRootResolutionException;
+import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.ResourceSet;
-import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -75,7 +77,7 @@ public final class LTOBackendAction extends SpawnAction {
       Set<String> clientEnvironmentVariables,
       Map<String, String> executionInfo,
       String progressMessage,
-      RunfilesSupplier runfilesSupplier,
+      ImmutableMap<PathFragment, Artifact> inputManifests,
       String mnemonic) {
     super(
         owner,
@@ -88,7 +90,7 @@ public final class LTOBackendAction extends SpawnAction {
         ImmutableSet.copyOf(clientEnvironmentVariables),
         ImmutableMap.copyOf(executionInfo),
         progressMessage,
-        runfilesSupplier,
+        ImmutableMap.copyOf(inputManifests),
         mnemonic,
         false,
         null);
@@ -172,9 +174,15 @@ public final class LTOBackendAction extends SpawnAction {
     inputsKnown = true;
   }
 
+  @Nullable
   @Override
-  public Iterable<Artifact> getAllowedDerivedInputs() {
-    return bitcodeFiles.values();
+  public Iterable<Artifact> resolveInputsFromCache(
+      ArtifactResolver artifactResolver,
+      PackageRootResolver resolver,
+      Collection<PathFragment> inputPaths)
+      throws PackageRootResolutionException {
+    Set<Artifact> bitcodeInputSet = computeBitcodeInputs(inputPaths);
+    return createInputs(bitcodeInputSet, getMandatoryInputs());
   }
 
   @Override
@@ -193,10 +201,10 @@ public final class LTOBackendAction extends SpawnAction {
     f.addString(GUID);
     f.addStrings(getArguments());
     f.addString(getMnemonic());
-    f.addPaths(getRunfilesSupplier().getRunfilesDirs());
-    ImmutableList<Artifact> runfilesManifests = getRunfilesSupplier().getManifests();
-    for (Artifact runfilesManifest : runfilesManifests) {
-      f.addPath(runfilesManifest.getExecPath());
+    f.addInt(getInputManifests().size());
+    for (Map.Entry<PathFragment, Artifact> input : getInputManifests().entrySet()) {
+      f.addString(input.getKey().getPathString() + "/");
+      f.addPath(input.getValue().getExecPath());
     }
     for (Artifact input : getMandatoryInputs()) {
       f.addPath(input.getExecPath());
@@ -234,7 +242,7 @@ public final class LTOBackendAction extends SpawnAction {
         ImmutableSet<String> clientEnvironmentVariables,
         ImmutableMap<String, String> executionInfo,
         String progressMessage,
-        RunfilesSupplier runfilesSupplier,
+        ImmutableMap<PathFragment, Artifact> inputAndToolManifests,
         String mnemonic) {
       return new LTOBackendAction(
           inputsAndTools.toCollection(),
@@ -247,7 +255,7 @@ public final class LTOBackendAction extends SpawnAction {
           clientEnvironmentVariables,
           executionInfo,
           progressMessage,
-          runfilesSupplier,
+          inputAndToolManifests,
           mnemonic);
     }
   }
