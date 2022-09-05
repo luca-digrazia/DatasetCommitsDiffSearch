@@ -17,7 +17,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Collections2;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -319,6 +318,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     // This may be recreated if we discover inputs.
     PerActionFileCache perActionFileCache = new PerActionFileCache(state.inputArtifactData);
     ActionExecutionContext actionExecutionContext = null;
+    boolean inputsDiscoveredDuringActionExecution = false;
     try {
       if (action.discoversInputs()) {
         if (!state.hasDiscoveredInputs()) {
@@ -328,6 +328,11 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
           } catch (MissingDepException e) {
             Preconditions.checkState(env.valuesMissing(), action);
             return null;
+          }
+          if (state.discoveredInputs == null) {
+            // Action had nothing to tell us about discovered inputs before execution. We'll have to
+            // add them afterwards.
+            inputsDiscoveredDuringActionExecution = true;
           }
         }
         // state.discoveredInputs can be null even after include scanning if action discovers them
@@ -361,34 +366,10 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         }
       }
     }
-    if (action.discoversInputs()) {
+    if (inputsDiscoveredDuringActionExecution) {
       Map<Artifact, FileArtifactValue> metadataFoundDuringActionExecution =
           declareAdditionalDependencies(env, action, state.inputArtifactData.keySet());
-      if (state.discoveredInputs == null) {
-        // Include scanning didn't find anything beforehand -- these are the definitive discovered
-        // inputs.
-        state.discoveredInputs = metadataFoundDuringActionExecution.keySet();
-      } else {
-        // Sadly, even if we discovered inputs, sometimes the action runs and discovers more inputs.
-        // Technically, this means our pre-execution input discovery is buggy, but it turns out this
-        // is impractical to fix.
-        // Any new inputs should already have been built -- this is a check that our input
-        // discovery code is not missing too much. It may have to be removed if further input
-        // discovery quirks are found.
-        Preconditions.checkState(!env.valuesMissing(), "%s %s %s",
-            action, metadataFoundDuringActionExecution, state);
-        Set<FileArtifactValue> knownMetadata =
-            ImmutableSet.copyOf(state.inputArtifactData.values());
-        ImmutableSet.Builder<Artifact> discoveredInputBuilder =
-            ImmutableSet.<Artifact>builder().addAll(state.discoveredInputs);
-        for (Map.Entry<Artifact, FileArtifactValue> entry :
-            metadataFoundDuringActionExecution.entrySet()) {
-          Preconditions.checkState(knownMetadata.contains(entry.getValue()),
-              "%s %s", action, entry);
-          discoveredInputBuilder.add(entry.getKey());
-        }
-        state.discoveredInputs = discoveredInputBuilder.build();
-      }
+      state.discoveredInputs = metadataFoundDuringActionExecution.keySet();
       if (env.valuesMissing()) {
         return null;
       }
