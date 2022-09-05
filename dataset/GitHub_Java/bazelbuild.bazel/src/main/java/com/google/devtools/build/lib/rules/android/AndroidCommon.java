@@ -561,8 +561,8 @@ public class AndroidCommon {
 
     return builder
         .setFilesToBuild(filesToBuild)
-        .add(JavaRuleOutputJarsProvider.class, JavaRuleOutputJarsProvider.builder()
-            .addOutputJar(classJar, iJar, srcJar).build())
+        .add(JavaRuleOutputJarsProvider.class, new JavaRuleOutputJarsProvider(
+            classJar, iJar, srcJar))
         .add(
             JavaRuntimeJarProvider.class,
             new JavaRuntimeJarProvider(javaCommon.getJavaCompilationArtifacts().getRuntimeJars()))

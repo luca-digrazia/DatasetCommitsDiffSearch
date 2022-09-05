@@ -14,11 +14,10 @@
 
 package com.google.devtools.build.lib.rules.java;
 
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 
 /**
@@ -27,21 +26,10 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 @Immutable
 public final class JavaPluginInfoProvider implements TransitiveInfoProvider {
 
-  public static JavaPluginInfoProvider merge(Iterable<JavaPluginInfoProvider> providers) {
-    ImmutableSet.Builder<String> processorClasses = ImmutableSet.builder();
-    NestedSetBuilder<Artifact> processorClasspath = NestedSetBuilder.naiveLinkOrder();
-
-    for (JavaPluginInfoProvider provider : providers) {
-      processorClasses.addAll(provider.getProcessorClasses());
-      processorClasspath.addTransitive(provider.getProcessorClasspath());
-    }
-    return new JavaPluginInfoProvider(processorClasses.build(), processorClasspath.build());
-  }
-
-  private final ImmutableSet<String> processorClasses;
+  private final ImmutableList<String> processorClasses;
   private final NestedSet<Artifact> processorClasspath;
 
-  public JavaPluginInfoProvider(ImmutableSet<String> processorClasses,
+  public JavaPluginInfoProvider(ImmutableList<String> processorClasses,
       NestedSet<Artifact> processorClasspath) {
     this.processorClasses = processorClasses;
     this.processorClasspath = processorClasspath;
@@ -51,7 +39,7 @@ public final class JavaPluginInfoProvider implements TransitiveInfoProvider {
    * Returns the class that should be passed to javac in order
    * to run the annotation processor this class represents.
    */
-  public ImmutableSet<String> getProcessorClasses() {
+  public ImmutableList<String> getProcessorClasses() {
     return processorClasses;
   }
 
