@@ -20,7 +20,6 @@ public class MetricRegistryTest {
     private final MetricRegistryListener listener = mock(MetricRegistryListener.class);
     private final MetricRegistry registry = new MetricRegistry();
     private final Gauge<String> gauge = () -> "";
-    private final SettableGauge<String> settableGauge = new DefaultSettableGauge<>("");
     private final Counter counter = mock(Counter.class);
     private final Histogram histogram = mock(Histogram.class);
     private final Meter meter = mock(Meter.class);
@@ -228,17 +227,6 @@ public class MetricRegistryTest {
         verify(listener).onGaugeAdded("thing", gauge1);
     }
 
-    @Test
-    public void settableGaugeIsTreatedLikeAGauge() {
-        final MetricRegistry.MetricSupplier<SettableGauge<String>> supplier = () -> settableGauge;
-        final SettableGauge<String> gauge1 = registry.gauge("thing", supplier);
-        final SettableGauge<String> gauge2 = registry.gauge("thing", supplier);
-
-        assertThat(gauge1)
-                .isSameAs(gauge2);
-
-        verify(listener).onGaugeAdded("thing", gauge1);
-    }
 
     @Test
     public void addingAListenerWithExistingMetricsCatchesItUp() {
