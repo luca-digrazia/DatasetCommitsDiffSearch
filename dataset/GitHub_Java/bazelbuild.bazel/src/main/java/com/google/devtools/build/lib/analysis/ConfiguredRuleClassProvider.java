@@ -179,18 +179,8 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   }
 
   /**
-   * A coherent set of options, fragments, aspects and rules; each of these may declare a dependency
-   * on other such sets.
+   * Builder for {@link ConfiguredRuleClassProvider}.
    */
-  public static interface RuleSet {
-    /** Add stuff to the configured rule class provider builder. */
-    void init(ConfiguredRuleClassProvider.Builder builder);
-
-    /** List of required modules. */
-    ImmutableList<RuleSet> requires();
-  }
-
-  /** Builder for {@link ConfiguredRuleClassProvider}. */
   public static class Builder implements RuleDefinitionEnvironment {
     private final StringBuilder defaultWorkspaceFilePrefix = new StringBuilder();
     private final StringBuilder defaultWorkspaceFileSuffix = new StringBuilder();
@@ -277,21 +267,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
     public Builder addConfigurationOptions(Class<? extends FragmentOptions> configurationOptions) {
       this.configurationOptions.add(configurationOptions);
-      return this;
-    }
-
-    /**
-     * Adds an options class and a corresponding factory. There's usually a 1:1:1 correspondence
-     * between option classes, factories, and fragments, such that the factory depends only on the
-     * options class and creates the fragment. This method provides a convenient way of adding both
-     * the options class and the factory in a single call.
-     */
-    public Builder addConfig(
-        Class<? extends FragmentOptions> options, ConfigurationFragmentFactory factory) {
-      // Enforce that the factory requires the options.
-      Preconditions.checkState(factory.requiredOptions().contains(options));
-      this.configurationOptions.add(options);
-      this.configurationFragmentFactories.add(factory);
       return this;
     }
 
