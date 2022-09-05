@@ -1018,7 +1018,6 @@ public class MethodLibrary {
     env.registerFunction(String.class, index.getName(), index);
     setupMethodEnvironment(env, String.class, stringFunctions.keySet());
     setupMethodEnvironment(env, List.class, listPureFunctions.keySet());
-    setupMethodEnvironment(env, SkylarkList.class, listPureFunctions.keySet());
     if (env.isSkylarkEnabled()) {
       env.registerFunction(SkylarkList.class, index.getName(), index);
       setupMethodEnvironment(env, skylarkGlobalFunctions.keySet());
@@ -1068,7 +1067,7 @@ public class MethodLibrary {
     builtIn.put(SkylarkType.STRING, string);
 
     Map<String, SkylarkType> list = new HashMap<>();
-    setupValidationEnvironment(listPureFunctions, list);
+    setupValidationEnvironment(listPureFunctions, string);
     builtIn.put(SkylarkType.LIST, list);
   }
 }

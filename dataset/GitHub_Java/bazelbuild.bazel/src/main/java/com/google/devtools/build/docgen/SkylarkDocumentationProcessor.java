@@ -19,7 +19,6 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.common.io.Files;
 import com.google.devtools.build.docgen.SkylarkJavaInterfaceExplorer.SkylarkBuiltinMethod;
 import com.google.devtools.build.docgen.SkylarkJavaInterfaceExplorer.SkylarkJavaMethod;
 import com.google.devtools.build.docgen.SkylarkJavaInterfaceExplorer.SkylarkModuleDoc;
@@ -37,10 +36,10 @@ import com.google.devtools.build.lib.syntax.SkylarkModule;
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -70,9 +69,10 @@ public class SkylarkDocumentationProcessor {
    */
   public void generateDocumentation(String outputPath) throws IOException,
       BuildEncyclopediaDocException {
+    BufferedWriter bw = null;
     File skylarkDocPath = new File(outputPath);
-    try (BufferedWriter bw = new BufferedWriter(
-        Files.newWriter(skylarkDocPath, StandardCharsets.UTF_8))) {
+    try {
+      bw = new BufferedWriter(new FileWriter(skylarkDocPath));
       if (USE_TEMPLATE) {
         bw.write(SourceFileReader.readTemplateContents(DocgenConsts.SKYLARK_BODY_TEMPLATE,
             ImmutableMap.<String, String>of(
@@ -81,6 +81,10 @@ public class SkylarkDocumentationProcessor {
         bw.write(generateAllBuiltinDoc());
       }
       System.out.println("Skylark documentation generated: " + skylarkDocPath.getAbsolutePath());
+    } finally {
+      if (bw != null) {
+        bw.close();
+      }
     }
   }
 
@@ -116,7 +120,7 @@ public class SkylarkDocumentationProcessor {
     SkylarkModuleDoc topLevelModule = modules.remove(getTopLevelModule().name());
     generateModuleDoc(topLevelModule, sb);
     for (SkylarkModuleDoc module : modules.values()) {
-      if (module.getAnnotation().documented()) {
+      if (!module.getAnnotation().hidden()) {
         sb.append("<hr>");
         generateModuleDoc(module, sb);
       }
@@ -132,7 +136,7 @@ public class SkylarkDocumentationProcessor {
       .append(annotation.doc())
       .append("\n");
     sb.append("<ul>");
-    // Sort Java and Skylark builtin methods together. The map key is only used for sorting.
+    // Sort Java and SkylarkBuiltin methods together. The map key is only used for sorting.
     TreeMap<String, Object> methodMap = new TreeMap<>();
     for (SkylarkJavaMethod method : module.getJavaMethods()) {
       methodMap.put(method.name + method.method.getParameterTypes().length, method);
@@ -164,7 +168,7 @@ public class SkylarkDocumentationProcessor {
   private void generateBuiltinItemDoc(
       String moduleId, SkylarkBuiltinMethod method, StringBuilder sb) {
     SkylarkBuiltin annotation = method.annotation;
-    if (!annotation.documented()) {
+    if (annotation.hidden()) {
       return;
     }
     sb.append(String.format("<li><h3 id=\"modules.%s.%s\">%s</h3>\n",
@@ -196,12 +200,8 @@ public class SkylarkDocumentationProcessor {
 
   private void generateDirectJavaMethodDoc(String objectName, String methodName,
       Method method, SkylarkCallable annotation, StringBuilder sb) {
-    if (!annotation.documented()) {
+    if (annotation.hidden()) {
       return;
-    }
-    if (annotation.doc().isEmpty()) {
-      throw new RuntimeException(String.format(
-          "empty SkylarkCallable.doc() for object %s, method %s", objectName, methodName));
     }
 
     sb.append(String.format("<li><h3 id=\"modules.%s.%s\">%s</h3>\n%s\n",
@@ -293,13 +293,13 @@ public class SkylarkDocumentationProcessor {
                 ? " (" + getTypeAnchor(param.type()) + ")"
                 : " (" + getTypeAnchor(param.type(), param.generic1()) + ")");
         sb.append(String.format("\t<li id=\"modules.%s.%s.%s\"><code>%s%s</code>: ",
-                moduleId,
-                methodName,
-                param.name(),
-                param.name(),
-                paramType))
-            .append(param.doc())
-            .append("\n\t</li>\n");
+            moduleId,
+            methodName,
+            param.name(),
+            param.name(),
+            paramType))
+          .append(param.doc())
+          .append("\n\t</li>\n");
       }
       sb.append("</ul>\n");
     }
@@ -331,7 +331,7 @@ public class SkylarkDocumentationProcessor {
     for (SkylarkModuleDoc doc : collectBuiltinModules().values()) {
       if (doc.getAnnotation() == getTopLevelModule()) {
         for (Map.Entry<String, SkylarkBuiltinMethod> entry : doc.getBuiltinMethods().entrySet()) {
-          if (entry.getValue().annotation.documented()) {
+          if (!entry.getValue().annotation.hidden()) {
             modules.put(entry.getKey(),
                 DocgenConsts.toCommandLineFormat(entry.getValue().annotation.doc()));
           }

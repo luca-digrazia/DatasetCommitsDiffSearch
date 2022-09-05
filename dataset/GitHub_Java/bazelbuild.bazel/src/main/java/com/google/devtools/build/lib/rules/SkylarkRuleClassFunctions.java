@@ -85,11 +85,11 @@ public class SkylarkRuleClassFunctions {
 
   //TODO(bazel-team): proper enum support
   @SkylarkBuiltin(name = "DATA_CFG", returnType = ConfigurationTransition.class,
-      doc = "Experimental. Specifies a transition to the data configuration.")
+      doc = "The default runfiles collection state.")
   private static final Object dataTransition = ConfigurationTransition.DATA;
 
   @SkylarkBuiltin(name = "HOST_CFG", returnType = ConfigurationTransition.class,
-      doc = "Specifies a transition to the host configuration.")
+      doc = "The default runfiles collection state.")
   private static final Object hostTransition = ConfigurationTransition.HOST;
 
   private static final LateBoundLabel<BuildConfiguration> RUN_UNDER =
