@@ -304,7 +304,7 @@ public class CSVResultsExtractor {
         }
         else {
             if(doc.containsKey(header)){
-                return String.valueOf(doc.get(header)) + separator;
+                return doc.get(header).toString() + separator;
             }
         }
         return separator;
