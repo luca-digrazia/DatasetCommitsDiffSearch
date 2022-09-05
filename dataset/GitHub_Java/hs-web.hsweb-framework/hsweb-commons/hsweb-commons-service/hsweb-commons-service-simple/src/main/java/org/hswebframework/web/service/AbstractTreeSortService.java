@@ -64,36 +64,25 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
     }
 
     protected void applyPath(E entity) {
-        if (!StringUtils.isEmpty(entity.getParentId())) {
-            return;
-        }
-        if (!StringUtils.isEmpty(entity.getPath())) {
-            return;
-        }
+        if (!StringUtils.isEmpty(entity.getParentId())) return;
+        if (!StringUtils.isEmpty(entity.getPath())) return;
 
         TreeSortSupportEntity<PK> parent = selectByPk(entity.getParentId());
         if (null == parent) {
-            if (entity.getSortIndex() == null)
-                entity.setSortIndex(0L);
             entity.setParentId(createParentIdOnExists());
             entity.setPath(RandomUtil.randomChar(4));
         } else {
-            if (entity.getSortIndex() == null&&parent.getSortIndex()!=null)
-                entity.setSortIndex(parent.getSortIndex() * 10);
             entity.setPath(parent.getPath() + "-" + RandomUtil.randomChar(4));
         }
     }
 
     @Override
     public PK insert(E entity) {
-        if (entity.getId() == null) {
-            entity.setId(getIDGenerator().generate());
-        }
+        if (entity.getId() == null) entity.setId(getIDGenerator().generate());
         applyPath(entity);
         List<E> childrenList = new ArrayList<>();
         TreeSupportEntity.expandTree2List(entity, childrenList, getIDGenerator());
-//        super.insert(entity);
-//        childrenList.remove(entity);
+        super.insert(entity);
         childrenList.forEach(this::saveOrUpdateForSingle);
         return entity.getId();
     }
@@ -105,7 +94,6 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
                 .collect(Collectors.toList());
     }
 
-    @Override
     public int updateBatch(Collection<E> data) {
         assertNotNull(data);
         return data.stream().map(this::updateByPk).reduce(Math::addExact).orElse(0);
@@ -116,8 +104,7 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
         assertNotNull(entity);
         List<E> childrenList = new ArrayList<>();
         TreeSupportEntity.expandTree2List(entity, childrenList, getIDGenerator());
-//        this.saveOrUpdateForSingle(entity);
-//        childrenList.remove(entity);
+        this.saveOrUpdateForSingle(entity);
         childrenList.forEach(this::saveOrUpdateForSingle);
         return childrenList.size() + 1;
     }
@@ -127,9 +114,8 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
         PK id = entity.getId();
         applyPath(entity);
         if (null == id || this.selectByPk(id) == null) {
-            if (null == id) {
+            if (null == id)
                 entity.setId(getIDGenerator().generate());
-            }
             return super.insert(entity);
         }
         super.updateByPk(entity);
