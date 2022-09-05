@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.skyframe.DiffAwareness.View;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
@@ -36,9 +36,12 @@ public final class DiffAwarenessManager {
 
   private final ImmutableSet<? extends DiffAwareness.Factory> diffAwarenessFactories;
   private Map<Path, DiffAwarenessState> currentDiffAwarenessStates = Maps.newHashMap();
+  private final Reporter reporter;
 
-  public DiffAwarenessManager(Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories) {
+  public DiffAwarenessManager(Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
+      Reporter reporter) {
     this.diffAwarenessFactories = ImmutableSet.copyOf(diffAwarenessFactories);
+    this.reporter = reporter;
   }
 
   private static class DiffAwarenessState {
@@ -79,7 +82,7 @@ public final class DiffAwarenessManager {
    * Gets the set of changed files since the last call with this path entry, or
    * {@code ModifiedFileSet.EVERYTHING_MODIFIED} if this is the first such call.
    */
-  public ProcessableModifiedFileSet getDiff(EventHandler eventHandler, Path pathEntry) {
+  public ProcessableModifiedFileSet getDiff(Path pathEntry) {
     DiffAwarenessState diffAwarenessState = maybeGetDiffAwarenessState(pathEntry);
     if (diffAwarenessState == null) {
       return BrokenProcessableModifiedFileSet.INSTANCE;
@@ -89,7 +92,7 @@ public final class DiffAwarenessManager {
     try {
       newView = diffAwareness.getCurrentView();
     } catch (BrokenDiffAwarenessException e) {
-      handleBrokenDiffAwareness(eventHandler, pathEntry, e);
+      handleBrokenDiffAwareness(pathEntry, e);
       return BrokenProcessableModifiedFileSet.INSTANCE;
     }
 
@@ -106,7 +109,7 @@ public final class DiffAwarenessManager {
     try {
       diff = diffAwareness.getDiff(baselineView, newView);
     } catch (BrokenDiffAwarenessException e) {
-      handleBrokenDiffAwareness(eventHandler, pathEntry, e);
+      handleBrokenDiffAwareness(pathEntry, e);
       return BrokenProcessableModifiedFileSet.INSTANCE;
     } catch (IncompatibleViewException e) {
       throw new IllegalStateException(pathEntry + " " + baselineView + " " + newView, e);
@@ -117,11 +120,10 @@ public final class DiffAwarenessManager {
     return result;
   }
 
-  private void handleBrokenDiffAwareness(
-      EventHandler eventHandler, Path pathEntry, BrokenDiffAwarenessException e) {
+  private void handleBrokenDiffAwareness(Path pathEntry, BrokenDiffAwarenessException e) {
     currentDiffAwarenessStates.remove(pathEntry);
     LOG.info("Broken diff awareness for " + pathEntry + ": " + e);
-    eventHandler.handle(Event.warn(e.getMessage() + "... temporarily falling back to manually "
+    reporter.handle(Event.warn(e.getMessage() + "... temporarily falling back to manually "
         + "checking files for changes"));
   }
 
