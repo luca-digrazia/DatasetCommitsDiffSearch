@@ -24,7 +24,6 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.util.DisplayMetrics;
 
-import me.jessyan.autosize.external.ExternalAdaptManager;
 import me.jessyan.autosize.utils.LogUtils;
 import me.jessyan.autosize.utils.Preconditions;
 import me.jessyan.autosize.utils.ScreenUtils;
@@ -43,10 +42,6 @@ public final class AutoSizeConfig {
     private static final String KEY_DESIGN_WIDTH_IN_DP = "design_width_in_dp";
     private static final String KEY_DESIGN_HEIGHT_IN_DP = "design_height_in_dp";
     private Application mApplication;
-    /**
-     * 用来管理外部三方库 {@link Activity} 的适配
-     */
-    private ExternalAdaptManager mExternalAdaptManager = new ExternalAdaptManager();
     /**
      * 最初的 {@link DisplayMetrics#density}
      */
@@ -157,7 +152,7 @@ public final class AutoSizeConfig {
         int[] screenSize = ScreenUtils.getScreenSize(application);
         mScreenWidth = screenSize[0];
         mScreenHeight = screenSize[1];
-        LogUtils.d("designWidthInDp = " + mDesignWidthInDp + ", designHeightInDp = " + mDesignHeightInDp + ", screenWidth = " + mScreenWidth + ", screenHeight = " + mScreenHeight);
+        LogUtils.d("designWidthInDp = " + mDesignWidthInDp + " , designHeightInDp = " + mDesignHeightInDp + " , screenWidth = " + mScreenWidth + " ,screenHeight = " + mScreenHeight);
 
         mInitDensity = displayMetrics.density;
         mInitScaledDensity = displayMetrics.scaledDensity;
@@ -176,7 +171,7 @@ public final class AutoSizeConfig {
 
             }
         });
-        LogUtils.d("initDensity = " + mInitDensity + ", initScaledDensity = " + mInitScaledDensity);
+        LogUtils.d("initDensity = " + mInitDensity + " , initScaledDensity = " + mInitScaledDensity);
         mActivityLifecycleCallbacks = new ActivityLifecycleCallbacksImpl(strategy == null ? new DefaultAutoAdaptStrategy() : strategy);
         application.registerActivityLifecycleCallbacks(mActivityLifecycleCallbacks);
         return this;
@@ -252,15 +247,6 @@ public final class AutoSizeConfig {
     public AutoSizeConfig setLog(boolean log) {
         LogUtils.setDebug(log);
         return this;
-    }
-
-    /**
-     * {@link ExternalAdaptManager} 用来管理外部三方库 {@link Activity} 的适配
-     *
-     * @return {@link ExternalAdaptManager}
-     */
-    public ExternalAdaptManager getExternalAdaptManager() {
-        return mExternalAdaptManager;
     }
 
     /**
