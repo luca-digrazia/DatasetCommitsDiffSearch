@@ -16,24 +16,15 @@
 
 package org.hsweb.web.datasource.dynamic;
 
-import com.atomikos.icatch.config.UserTransactionService;
-import com.atomikos.icatch.config.UserTransactionServiceImp;
 import com.atomikos.icatch.jta.UserTransactionImp;
 import com.atomikos.icatch.jta.UserTransactionManager;
 import com.atomikos.jdbc.AtomikosDataSourceBean;
-import org.aspectj.lang.ProceedingJoinPoint;
-import org.aspectj.lang.annotation.Around;
-import org.aspectj.lang.annotation.Aspect;
-import org.hsweb.commons.StringUtils;
 import org.hsweb.web.core.datasource.DataSourceHolder;
 import org.hsweb.web.core.datasource.DynamicDataSource;
-import org.hsweb.web.core.exception.AuthorizeForbiddenException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.transaction.jta.JtaAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.jta.atomikos.AtomikosProperties;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -43,7 +34,6 @@ import org.springframework.transaction.jta.JtaTransactionManager;
 
 import javax.sql.DataSource;
 import javax.transaction.SystemException;
-import java.util.Properties;
 
 @Configuration
 @ConditionalOnMissingBean(DynamicDataSource.class)
@@ -53,17 +43,6 @@ public class DynamicDataSourceAutoConfiguration {
 
     @Autowired
     private DynamicDataSourceProperties properties;
-
-    @Bean(initMethod = "init", destroyMethod = "shutdownForce")
-    public UserTransactionServiceImp userTransactionService() {
-        AtomikosProperties atomikosProperties = properties.getIcatch();
-        Properties properties = new Properties();
-        properties.putAll(atomikosProperties.asProperties());
-        if (StringUtils.isNullOrEmpty(properties.get("com.atomikos.icatch.service"))) {
-            properties.put("com.atomikos.icatch.service", "com.atomikos.icatch.standalone.UserTransactionServiceFactory");
-        }
-        return new UserTransactionServiceImp(properties);
-    }
 
     /**
      * 默认数据库链接
@@ -85,12 +64,10 @@ public class DynamicDataSourceAutoConfiguration {
         return dynamicXaDataSource;
     }
 
-    @Bean(initMethod = "init", destroyMethod = "close")
-    public UserTransactionManager userTransactionManager(
-            UserTransactionService userTransactionService) {
+    @Bean
+    public UserTransactionManager userTransactionManager() {
         UserTransactionManager transactionManager = new UserTransactionManager();
         transactionManager.setForceShutdown(true);
-        transactionManager.setStartupTransactionService(false);
         return transactionManager;
     }
 
@@ -116,32 +93,4 @@ public class DynamicDataSourceAutoConfiguration {
         return new DynamicDataSourceSqlExecutorService();
     }
 
-    @Bean
-    public AnnotationDataSourceChangeConfiguration annotationDataSourceChangeConfiguration() {
-        return new AnnotationDataSourceChangeConfiguration();
-    }
-
-    @Aspect
-    public static class AnnotationDataSourceChangeConfiguration {
-        @Around(value = "@annotation(dataSource)")
-        public Object useDatasource(ProceedingJoinPoint pjp, UseDataSource dataSource) throws Throwable {
-            try {
-                DynamicDataSource.use(dataSource.value());
-                return pjp.proceed();
-            } finally {
-                DynamicDataSource.useDefault(false);
-            }
-        }
-
-        @Around(value = "@annotation(dataSource)")
-        public Object useDefaultDatasource(ProceedingJoinPoint pjp, UseDefaultDataSource dataSource) throws Throwable {
-            try {
-                DynamicDataSource.useDefault(dataSource.value());
-                return pjp.proceed();
-            } finally {
-                if (dataSource.value())
-                    DynamicDataSource.useLast();
-            }
-        }
-    }
 }
