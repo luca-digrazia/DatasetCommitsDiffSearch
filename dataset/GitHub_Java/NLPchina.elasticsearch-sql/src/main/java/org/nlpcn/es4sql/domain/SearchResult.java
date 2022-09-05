@@ -14,12 +14,10 @@ import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.bucket.filter.InternalFilter;
-import org.elasticsearch.search.aggregations.bucket.terms.InternalTerms;
-import org.elasticsearch.search.aggregations.bucket.terms.LongTerms;
+import org.elasticsearch.search.aggregations.bucket.terms.StringTerms;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms.Bucket;
 import org.elasticsearch.search.aggregations.metrics.InternalNumericMetricsAggregation;
 import org.elasticsearch.search.aggregations.metrics.tophits.InternalTopHits;
-import org.elasticsearch.search.aggregations.metrics.valuecount.InternalValueCount;
 import org.nlpcn.es4sql.exception.SqlParseException;
 
 public class SearchResult {
@@ -54,14 +52,12 @@ public class SearchResult {
 			aggs = inf.getAggregations();
 		}
 		if (aggs.get("group by") != null) {
-			InternalTerms terms = aggs.get("group by");
-			Collection<Bucket> buckets = terms.getBuckets();
+			StringTerms stringTerms = aggs.get("group by");
+			Collection<Bucket> buckets = stringTerms.getBuckets();
 			this.total = buckets.size();
 			results = new ArrayList<>(buckets.size());
 			for (Bucket bucket : buckets) {
-				Map<String, Object> aggsMap = toAggsMap(bucket.getAggregations().getAsMap());
-				aggsMap.put("docCount", bucket.getDocCount());
-				results.add(aggsMap);
+				results.add(toAggsMap(bucket.getAggregations().getAsMap()));
 			}
 		} else {
 			results = new ArrayList<>(1);
@@ -103,21 +99,22 @@ public class SearchResult {
 	 */
 	private Map<String, Object> toAggsMap(Map<String, Aggregation> fields) throws SqlParseException {
 		Map<String, Object> result = new HashMap<>();
+		Aggregation value = null;
 		for (Entry<String, Aggregation> entry : fields.entrySet()) {
-			result.put(entry.getKey(), covenValue(entry.getValue()));
+			value = entry.getValue();
+			double covenValue = (double) covenValue(value);
+			result.put(entry.getKey(), covenValue);
+
 		}
 		return result;
 	}
 
 	private Object covenValue(Aggregation value) throws SqlParseException {
+		System.out.println(value.getClass());
 		if (value instanceof InternalNumericMetricsAggregation.SingleValue) {
 			return ((InternalNumericMetricsAggregation.SingleValue) value).value();
-		} else if (value instanceof InternalValueCount) {
-			return ((InternalValueCount) value).getValue();
 		} else if (value instanceof InternalTopHits) {
-			return (value);
-		} else if (value instanceof LongTerms) {
-			return value;
+			return ((InternalTopHits) value);
 		} else {
 			throw new SqlParseException("unknow this agg type " + value.getClass());
 		}

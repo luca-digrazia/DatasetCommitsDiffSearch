@@ -7,6 +7,7 @@ import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.index.query.BoolFilterBuilder;
 import org.elasticsearch.index.query.BoolQueryBuilder;
+import org.elasticsearch.search.aggregations.AbstractAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.terms.TermsBuilder;
 import org.elasticsearch.search.sort.SortOrder;
 import org.nlpcn.es4sql.domain.Field;
@@ -57,15 +58,13 @@ public class DefaultQuery extends Query {
 		for (Order order : select.getOrderBys()) {
 			request.addSort(order.getName(), SortOrder.valueOf(order.getType()));
 		}
-System.out.println(request);		
+
 		return request;
 	}
 
 	private void explanFields(SearchRequestBuilder request, List<Field> fields, TermsBuilder groupByAgg) throws SqlParseException {
 		for (Field field : fields) {
-			if(field == null){
-				
-			}else if (field instanceof MethodField) {
+			if (field instanceof MethodField) {
 				throw new SqlParseException("it did not support this field method " + field);
 			} else if (field instanceof Field) {
 				request.addField(field.getName());
