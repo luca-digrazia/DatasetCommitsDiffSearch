@@ -295,7 +295,7 @@ public class AtlasDepTreeParser {
         collectArtifacts(bundleClasspath, artifacts);
 
         //依赖分组
-        DependencyGroup dependencyGroup = new DependencyGroup(compileClasspath, bundleClasspath,artifacts);
+        DependencyGroup dependencyGroup = new DependencyGroup(compileClasspath, bundleClasspath);
 
         DependencyResolver dependencyResolver = new DependencyResolver(project, variantDeps, artifacts,
                                                                        dependencyGroup.bundleProvidedMap,
