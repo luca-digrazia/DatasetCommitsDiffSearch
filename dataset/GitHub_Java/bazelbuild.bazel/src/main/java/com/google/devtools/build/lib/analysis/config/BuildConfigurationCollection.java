@@ -185,14 +185,6 @@ public final class BuildConfigurationCollection {
       return transitionTable;
     }
 
-    public List<BuildConfiguration> getSplitConfigurationsNoSelf(SplitTransition<?> transition) {
-      if (splitTransitionTable.containsKey(transition)) {
-        return splitTransitionTable.get(transition);
-      } else {
-        return ImmutableList.of();
-      }
-    }
-
     public List<BuildConfiguration> getSplitConfigurations(SplitTransition<?> transition) {
       if (splitTransitionTable.containsKey(transition)) {
         return splitTransitionTable.get(transition);
