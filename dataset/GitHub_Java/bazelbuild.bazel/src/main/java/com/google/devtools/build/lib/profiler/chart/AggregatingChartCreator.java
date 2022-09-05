@@ -16,9 +16,11 @@ package com.google.devtools.build.lib.profiler.chart;
 
 import com.google.devtools.build.lib.profiler.ProfileInfo;
 import com.google.devtools.build.lib.profiler.ProfileInfo.Task;
+import com.google.devtools.build.lib.profiler.ProfilePhaseStatistics;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -62,6 +64,12 @@ public class AggregatingChartCreator implements ChartCreator {
   /** The data of the profiled build. */
   private final ProfileInfo info;
 
+  /**
+   * Statistics of the profiled build. This is expected to be a formatted
+   * string, ready to be printed out.
+   */
+  private final List<ProfilePhaseStatistics> statistics;
+
   /** If true, VFS related information is added to the chart. */
   private final boolean showVFS;
 
@@ -82,25 +90,31 @@ public class AggregatingChartCreator implements ChartCreator {
    * VFS related data to the generated chart.
    *
    * @param info the data of the profiled build
+   * @param statistics Statistics of the profiled build. This is expected to be
+   *        a formatted string, ready to be printed out.
    */
-  public AggregatingChartCreator(ProfileInfo info) {
-    this(info, false);
+  public AggregatingChartCreator(ProfileInfo info, List<ProfilePhaseStatistics> statistics) {
+    this(info, statistics, false);
   }
 
   /**
    * Creates the chart creator.
    *
    * @param info the data of the profiled build
+   * @param statistics Statistics of the profiled build. This is expected to be
+   *        a formatted string, ready to be printed out.
    * @param showVFS if true, VFS related information is added to the chart
    */
-  public AggregatingChartCreator(ProfileInfo info, boolean showVFS) {
+  public AggregatingChartCreator(ProfileInfo info, List<ProfilePhaseStatistics> statistics,
+      boolean showVFS) {
     this.info = info;
+    this.statistics = statistics;
     this.showVFS = showVFS;
   }
 
   @Override
   public Chart create() {
-    Chart chart = new Chart(info.comment);
+    Chart chart = new Chart(info.comment, statistics);
     CommonChartCreator.createCommonChartItems(chart, info);
     createTypes(chart);
 
