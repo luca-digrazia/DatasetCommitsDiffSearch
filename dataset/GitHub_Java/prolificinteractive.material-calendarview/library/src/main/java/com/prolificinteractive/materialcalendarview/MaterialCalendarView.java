@@ -211,6 +211,7 @@ public class MaterialCalendarView extends ViewGroup {
     private int tileSize = -1;
     @SelectionMode
     private int selectionMode = SELECTION_MODE_SINGLE;
+    private boolean allowClickDaysOutsideCurrentMonth = true;
 
     public MaterialCalendarView(Context context) {
         this(context, null);
@@ -315,6 +316,11 @@ public class MaterialCalendarView extends ViewGroup {
             setShowOtherDates(a.getInteger(
                     R.styleable.MaterialCalendarView_mcv_showOtherDates,
                     SHOW_DEFAULTS
+            ));
+
+            setAllowClickDaysOutsideCurrentMonth(a.getBoolean(
+                    R.styleable.MaterialCalendarView_mcv_allowClickDaysOutsideCurrentMonth,
+                    true
             ));
 
             int firstDayOfWeek = a.getInteger(
@@ -422,6 +428,28 @@ public class MaterialCalendarView extends ViewGroup {
     }
 
     /**
+     * Go to previous month or week without using the button {@link #buttonPast}. Should only go to
+     * previous if {@link #canGoBack()} is true, meaning it's possible to go to the previous month
+     * or week.
+     */
+    public void goToPrevious() {
+        if (canGoBack()) {
+            pager.setCurrentItem(pager.getCurrentItem() - 1, true);
+        }
+    }
+
+    /**
+     * Go to next month or week without using the button {@link #buttonFuture}. Should only go to
+     * next if {@link #canGoForward()} is enabled, meaning it's possible to go to the next month or
+     * week.
+     */
+    public void goToNext() {
+        if (canGoForward()) {
+            pager.setCurrentItem(pager.getCurrentItem() + 1, true);
+        }
+    }
+
+    /**
      * Set calendar display mode. The default mode is Months.
      * When switching between modes will select todays date, or the selected date,
      * if selection mode is single.
@@ -447,10 +475,9 @@ public class MaterialCalendarView extends ViewGroup {
         adapter = adapter.migrateStateAndReturn(newAdapter);
         pager.setAdapter(adapter);
         calendarMode = mode;
-        setCurrentDate(
-                selectionMode == SELECTION_MODE_SINGLE && !adapter.getSelectedDates().isEmpty()
-                        ? adapter.getSelectedDates().get(0)
-                        : CalendarDay.today());
+        setCurrentDate(selectionMode == SELECTION_MODE_SINGLE
+                ? adapter.getSelectedDates().get(0)
+                : CalendarDay.today());
         invalidateDecorators();
         updateUi();
     }
@@ -507,7 +534,7 @@ public class MaterialCalendarView extends ViewGroup {
      *
      * @return true if there is a future month that can be shown
      */
-    private boolean canGoForward() {
+    public boolean canGoForward() {
         return pager.getCurrentItem() < (adapter.getCount() - 1);
     }
 
@@ -527,7 +554,7 @@ public class MaterialCalendarView extends ViewGroup {
      *
      * @return true if there is a previous month that can be shown
      */
-    private boolean canGoBack() {
+    public boolean canGoBack() {
         return pager.getCurrentItem() > 0;
     }
 
@@ -824,6 +851,18 @@ public class MaterialCalendarView extends ViewGroup {
     }
 
     /**
+     * Allow the user to click on dates from other months that are not out of range. Go to next or
+     * previous month if a day outside the current month is clicked. The day still need to be
+     * enabled to be selected.
+     * Default value is true. Should be used with {@link #SHOW_OTHER_MONTHS}.
+     *
+     * @param enabled True to allow the user to click on a day outside current month displayed
+     */
+    public void setAllowClickDaysOutsideCurrentMonth(final boolean enabled) {
+        this.allowClickDaysOutsideCurrentMonth = enabled;
+    }
+
+    /**
      * Set a formatter for weekday labels.
      *
      * @param formatter the new formatter, null for default
@@ -877,6 +916,13 @@ public class MaterialCalendarView extends ViewGroup {
     @ShowOtherDates
     public int getShowOtherDates() {
         return adapter.getShowOtherDates();
+    }
+
+    /**
+     * @return true if allow click on days outside current month displayed
+     */
+    public boolean allowClickDaysOutsideCurrentMonth() {
+        return allowClickDaysOutsideCurrentMonth;
     }
 
     /**
@@ -943,6 +989,7 @@ public class MaterialCalendarView extends ViewGroup {
         ss.dateTextAppearance = adapter.getDateTextAppearance();
         ss.weekDayTextAppearance = adapter.getWeekDayTextAppearance();
         ss.showOtherDates = getShowOtherDates();
+        ss.allowClickDaysOutsideCurrentMonth = allowClickDaysOutsideCurrentMonth();
         ss.minDate = getMinimumDate();
         ss.maxDate = getMaximumDate();
         ss.selectedDates = getSelectedDates();
@@ -961,6 +1008,7 @@ public class MaterialCalendarView extends ViewGroup {
         setDateTextAppearance(ss.dateTextAppearance);
         setWeekDayTextAppearance(ss.weekDayTextAppearance);
         setShowOtherDates(ss.showOtherDates);
+        setAllowClickDaysOutsideCurrentMonth(ss.allowClickDaysOutsideCurrentMonth);
         setRangeDates(ss.minDate, ss.maxDate);
         clearSelection();
         for (CalendarDay calendarDay : ss.selectedDates) {
@@ -989,7 +1037,6 @@ public class MaterialCalendarView extends ViewGroup {
         currentMonth = c;
         int position = adapter.getIndexForDay(c);
         pager.setCurrentItem(position, false);
-        updateUi();
     }
 
     public static class SavedState extends BaseSavedState {
@@ -998,6 +1045,7 @@ public class MaterialCalendarView extends ViewGroup {
         int dateTextAppearance = 0;
         int weekDayTextAppearance = 0;
         int showOtherDates = SHOW_DEFAULTS;
+        boolean allowClickDaysOutsideCurrentMonth = true;
         CalendarDay minDate = null;
         CalendarDay maxDate = null;
         List<CalendarDay> selectedDates = new ArrayList<>();
@@ -1018,6 +1066,7 @@ public class MaterialCalendarView extends ViewGroup {
             out.writeInt(dateTextAppearance);
             out.writeInt(weekDayTextAppearance);
             out.writeInt(showOtherDates);
+            out.writeByte((byte) (allowClickDaysOutsideCurrentMonth ? 1 : 0));
             out.writeParcelable(minDate, 0);
             out.writeParcelable(maxDate, 0);
             out.writeTypedList(selectedDates);
@@ -1045,6 +1094,7 @@ public class MaterialCalendarView extends ViewGroup {
             dateTextAppearance = in.readInt();
             weekDayTextAppearance = in.readInt();
             showOtherDates = in.readInt();
+            allowClickDaysOutsideCurrentMonth = in.readByte() != 0;
             ClassLoader loader = CalendarDay.class.getClassLoader();
             minDate = in.readParcelable(loader);
             maxDate = in.readParcelable(loader);
@@ -1220,7 +1270,8 @@ public class MaterialCalendarView extends ViewGroup {
     }
 
     /**
-     * Call by MonthView to indicate that a day was clicked and we should handle it
+     * Call by {@link CalendarPagerView} to indicate that a day was clicked and we should handle it.
+     * This method will always process the click to the selected date.
      *
      * @param date        date of the day that was clicked
      * @param nowSelected true if the date is now selected, false otherwise
@@ -1239,6 +1290,25 @@ public class MaterialCalendarView extends ViewGroup {
                 dispatchOnDateSelected(date, true);
             }
             break;
+        }
+    }
+
+    /**
+     * Call by {@link CalendarPagerView} to indicate that a day was clicked and we should handle it
+     *
+     * @param dayView
+     */
+    protected void onDateClicked(DayView dayView) {
+        final int currentMonth = getCurrentDate().getMonth();
+        final int selectedMonth = dayView.getDate().getMonth();
+
+        if (allowClickDaysOutsideCurrentMonth || currentMonth == selectedMonth) {
+            if (currentMonth > selectedMonth) {
+                goToPrevious();
+            } else if (currentMonth < selectedMonth) {
+                goToNext();
+            }
+            onDateClicked(dayView.getDate(), !dayView.isChecked());
         }
     }
 
