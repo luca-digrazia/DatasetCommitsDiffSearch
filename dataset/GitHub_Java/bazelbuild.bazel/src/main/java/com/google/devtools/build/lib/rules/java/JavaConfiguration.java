@@ -128,6 +128,13 @@ public final class JavaConfiguration extends Fragment {
   }
 
   /**
+   * Returns the Java cpu.
+   */
+  public String getJavaCpu() {
+    return javaCpu;
+  }
+
+  /**
    * Returns the default javabuilder jar
    */
   public Label getDefaultJavaBuilderJar() {

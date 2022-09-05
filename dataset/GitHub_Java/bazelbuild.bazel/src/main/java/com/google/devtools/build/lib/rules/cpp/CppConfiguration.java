@@ -691,6 +691,121 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
       return toolchain;
     }
     try {
+      if (!features.contains("use_header_modules")) {
+        TextFormat.merge(""
+            + "feature {"
+            + "  name: 'use_header_modules'"
+            + "  implies: 'use_module_maps'"
+            + "  requires { feature: 'layering_check' }"
+            + "  requires { feature: 'header_modules' }"
+            + "  flag_set {"
+            + "    action: 'c-compile'"
+            + "    action: 'c++-compile'"
+            + "    action: 'c++-header-parsing'"
+            + "    action: 'c++-header-preprocessing'"
+            + "    action: 'c++-module-compile'"
+            + "    flag_group {"
+            + "      flag: '-Xclang-only=-fmodules'"
+            + "      flag: '-Xclang-only=-fmodules-decluse'"
+            + "    }"
+            + "    flag_group {"
+            + "      flag: '-Xclang=-fmodule-file=%{module_files}'"
+            + "    }"
+            + "  }"
+            + "}",
+            toolchainBuilder);
+      }
+      if (!features.contains("module_maps")) {
+        TextFormat.merge(""
+            + "feature { name: 'module_maps' }",
+            toolchainBuilder);
+      }
+      if (!features.contains("use_module_maps")) {
+        TextFormat.merge(""
+            + "feature {"
+            + "  name: 'use_module_maps'"
+            + "  requires: { feature: 'module_maps' }"
+            + "  flag_set {"
+            + "    action: 'c-compile'"
+            + "    action: 'c++-compile'"
+            + "    action: 'c++-header-parsing'"
+            + "    action: 'c++-header-preprocessing'"
+            + "    action: 'c++-module-compile'"
+            + "    flag_group {"
+            + "      flag: '-Xclang-only=-fmodule-maps'"
+            + "      flag: '-Xclang-only=-fmodule-name=%{module_name}'"
+            + "      flag: '-Xclang-only=-fmodule-map-file=%{module_map_file}'"
+            + "      flag: '-Xclang=-fno-modules-implicit-maps'"
+            + "    }"
+            + "  }"
+            + "}",
+            toolchainBuilder);
+      }
+      if (!features.contains("header_modules")) {
+        TextFormat.merge(""
+            + "feature {"
+            + "  name: 'header_modules'"
+            + "  implies: 'use_header_modules'"
+            + "  flag_set {"
+            + "    action: 'c++-module-compile'"
+            + "    flag_group {"
+            + "      flag: '-x'"
+            + "      flag: 'c++'"
+            + "      flag: '-Xclang=-emit-module'"
+            + "      flag: '-Xcrosstool-module-compilation'"
+            + "    }"
+            + "  }"
+            + "}",
+            toolchainBuilder);
+      }
+      if (!features.contains("layering_check")) {
+        TextFormat.merge(""
+            + "feature {"
+            + "  name: 'layering_check'"
+            + "  implies: 'use_module_maps'"
+            + "  flag_set {"
+            + "    action: 'c-compile'"
+            + "    action: 'c++-compile'"
+            + "    action: 'c++-header-parsing'"
+            + "    action: 'c++-header-preprocessing'"
+            + "    action: 'c++-module-compile'"
+            + "    flag_group {"
+            + "      flag: '-Xclang-only=-fmodules-strict-decluse'"
+            + "    }"
+            + "  }"
+            + "}",
+            toolchainBuilder);
+      }
+      if (!features.contains("parse_headers")) {
+        TextFormat.merge(""
+            + "feature {"
+            + "  name: 'parse_headers'"
+            + "  flag_set {"
+            + "    action: 'c++-header-parsing'"
+            + "    flag_group {"
+            + "      flag: '-x'"
+            + "      flag: 'c++-header'"
+            + "      flag: '-fsyntax-only'"
+            + "    }"
+            + "  }"
+            + "}",
+            toolchainBuilder);
+      }
+      if (!features.contains("preprocess_headers")) {
+        TextFormat.merge(""
+            + "feature {"
+            + "  name: 'preprocess_headers'"
+            + "  flag_set {"
+            + "    action: 'c++-header-preprocessing'"
+            + "    flag_group {"
+            + "      flag: '-x'"
+            + "      flag: 'c++'"
+            + "      flag: '-E'"
+            + "    }"
+            + "  }"
+            + "}",
+            toolchainBuilder);
+      }
       if (!features.contains("include_paths")) {
         TextFormat.merge(""
             + "feature {"
@@ -726,8 +841,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
             + "    action: 'c++-compile'"
             + "    action: 'c++-link'"
             + "    flag_group {"
-            + "      flag: '-Xgcc-only=-fprofile-generate=%{fdo_instrument_path}'"
-            + "      flag: '-Xclang-only=-fprofile-instr-generate=%{fdo_instrument_path}'"
+            + "      flag: '-fprofile-generate=%{fdo_instrument_path}'"
             + "    }"
             + "    flag_group {"
             + "      flag: '-fno-data-sections'"
@@ -744,10 +858,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
             + "    action: 'c-compile'"
             + "    action: 'c++-compile'"
             + "    flag_group {"
-            + "      flag: '-Xgcc-only=-fprofile-use=%{fdo_profile_path}'"
-            + "      flag: '-Xclang-only=-fprofile-instr-use=%{fdo_profile_path}'"
-            + "      flag: '-Xclang-only=-Wno-profile-instr-unprofiled'"
-            + "      flag: '-Xclang-only=-Wno-profile-instr-out-of-date'"
+            + "      flag: '-fprofile-use=%{fdo_profile_path}'"
             + "      flag: '-fprofile-correction'"
             + "    }"
             + "  }"
@@ -1824,6 +1935,11 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
       lipoSuffix = "";
     }
     return toolchainIdentifier + lipoSuffix;
+  }
+
+  @Override
+  public String getConfigurationNameSuffix() {
+    return isLipoContextCollector() ? "collector" : null;
   }
 
   @Override

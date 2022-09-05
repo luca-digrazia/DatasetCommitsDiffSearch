@@ -30,7 +30,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
  */
 public class BazelConfiguration extends Fragment {
   /**
-   * Loader for Bazel-specific settings.
+   * Loader for Google-specific settings.
    */
   public static class Loader implements ConfigurationFragmentFactory {
     @Override
@@ -63,15 +63,5 @@ public class BazelConfiguration extends Fragment {
       }
     }
     builder.put("sh", new PathFragment("/bin/bash"));
-  }
-
-  @Override
-  public void setupShellEnvironment(ImmutableMap.Builder<String, String> builder) {
-    String path = System.getenv("PATH");
-    builder.put("PATH", path == null ? ":/bin:/usr/bin" : path);
-    String tmpdir = System.getenv("TMPDIR");
-    if (tmpdir != null) {
-      builder.put("TMPDIR", tmpdir);
-    }
   }
 }

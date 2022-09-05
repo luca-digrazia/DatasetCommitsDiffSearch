@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,20 +14,26 @@
 package com.google.devtools.build.lib.rules.python;
 
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 
 /**
  * The configuration fragment containing information about the various pieces of infrastructure
  * needed to run Python compilations.
  */
-@Immutable
 public class PythonConfiguration extends BuildConfiguration.Fragment {
   private final boolean ignorePythonVersionAttribute;
   private final PythonVersion defaultPythonVersion;
 
   PythonConfiguration(PythonVersion pythonVersion, boolean ignorePythonVersionAttribute) {
     this.ignorePythonVersionAttribute = ignorePythonVersionAttribute;
+
     this.defaultPythonVersion = pythonVersion;
+  }
+
+  /**
+   * Returns the Python version (PY2 or PY3) this configuration uses.
+   */
+  public PythonVersion getDefaultPythonVersion() {
+    return defaultPythonVersion;
   }
 
   /**

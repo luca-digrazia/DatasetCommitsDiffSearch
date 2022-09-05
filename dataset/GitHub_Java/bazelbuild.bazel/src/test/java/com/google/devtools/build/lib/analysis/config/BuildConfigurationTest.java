@@ -60,6 +60,8 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     }
 
     BuildConfiguration config = create("--platform_suffix=-test");
+    assertEquals("gcc-4.4.0-glibc-2.3.6-grte-k8-fastbuild-test",
+                 config.getShortName());
     assertEquals(outputBase + "/workspace/blaze-out/gcc-4.4.0-glibc-2.3.6-grte-k8-fastbuild-test",
         config.getOutputDirectory().getPath().toString());
   }
@@ -139,7 +141,8 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
       return;
     }
 
-    BuildConfigurationCollection master = createCollection("--multi_cpu=k8", "--multi_cpu=piii");
+    BuildConfigurationCollection master = createCollection(
+        "--multi_cpu=k8", "--multi_cpu=piii", "--ignore_java_cpu");
     assertThat(master.getTargetConfigurations()).hasSize(2);
     // Note: the cpus are sorted alphabetically.
     assertEquals("k8", master.getTargetConfigurations().get(0).getCpu());
@@ -158,9 +161,11 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     for (int order = 0; order < 2; order++) {
       BuildConfigurationCollection master;
       if (order == 0) {
-        master = createCollection("--multi_cpu=k8", "--multi_cpu=piii");
+        master = createCollection(
+            "--multi_cpu=k8", "--multi_cpu=piii", "--ignore_java_cpu");
       } else {
-        master = createCollection("--multi_cpu=piii", "--multi_cpu=k8");
+        master = createCollection(
+            "--multi_cpu=piii", "--multi_cpu=k8", "--ignore_java_cpu");
       }
       assertThat(master.getTargetConfigurations()).hasSize(2);
       assertEquals("k8", master.getTargetConfigurations().get(0).getCpu());

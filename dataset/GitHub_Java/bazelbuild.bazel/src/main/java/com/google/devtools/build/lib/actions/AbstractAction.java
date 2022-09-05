@@ -28,8 +28,6 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.Label;
-import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.SkylarkValue;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -46,7 +44,7 @@ import javax.annotation.Nullable;
  * immutable.
  */
 @Immutable @ThreadSafe
-public abstract class AbstractAction implements Action, SkylarkValue {
+public abstract class AbstractAction implements Action {
 
   /**
    * An arbitrary default resource set. Currently 250MB of memory, 50% CPU and 0% of total I/O.
@@ -245,16 +243,6 @@ public abstract class AbstractAction implements Action, SkylarkValue {
     return "action '" + describe() + "'";
   }
 
-  @Override
-  public boolean isImmutable() {
-    return false;
-  }
-
-  @Override
-  public void write(Appendable buffer, char quotationMark) {
-    Printer.append(buffer, prettyPrint()); // TODO(bazel-team): implement a readable representation
-  }
-
   /**
    * Deletes all of the action's output files, if they exist. If any of the
    * Artifacts refers to a directory recursively removes the contents of the
@@ -393,6 +381,7 @@ public abstract class AbstractAction implements Action, SkylarkValue {
 
     private final Location location;
     private final Label label;
+    private final String configurationName;
     private final String configurationMnemonic;
     private final String configurationChecksum;
     private final String targetKind;
@@ -401,6 +390,7 @@ public abstract class AbstractAction implements Action, SkylarkValue {
     private ActionOwnerDescription(ActionOwner originalOwner) {
       this.location = originalOwner.getLocation();
       this.label = originalOwner.getLabel();
+      this.configurationName = originalOwner.getConfigurationName();
       this.configurationMnemonic = originalOwner.getConfigurationMnemonic();
       this.configurationChecksum = originalOwner.getConfigurationChecksum();
       this.targetKind = originalOwner.getTargetKind();
@@ -415,6 +405,11 @@ public abstract class AbstractAction implements Action, SkylarkValue {
     @Override
     public Label getLabel() {
       return label;
+    }
+
+    @Override
+    public String getConfigurationName() {
+      return configurationName;
     }
 
     @Override
