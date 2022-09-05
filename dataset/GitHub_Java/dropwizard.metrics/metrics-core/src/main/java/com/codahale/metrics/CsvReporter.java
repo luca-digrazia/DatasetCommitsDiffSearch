@@ -38,7 +38,6 @@ public class CsvReporter extends ScheduledReporter {
         private MetricFilter filter;
         private ScheduledExecutorService executor;
         private boolean shutdownExecutorOnStop;
-        private CsvFileProvider csvFileProvider;
 
         private Builder(MetricRegistry registry) {
             this.registry = registry;
@@ -49,7 +48,6 @@ public class CsvReporter extends ScheduledReporter {
             this.filter = MetricFilter.ALL;
             this.executor = null;
             this.shutdownExecutorOnStop = true;
-            this.csvFileProvider = new FixedNameCsvFileProvider();
         }
 
         /**
@@ -133,11 +131,6 @@ public class CsvReporter extends ScheduledReporter {
             return this;
         }
 
-        public Builder withCsvFileProvider(CsvFileProvider csvFileProvider) {
-            this.csvFileProvider = csvFileProvider;
-            return this;
-        }
-
         /**
          * Builds a {@link CsvReporter} with the given properties, writing {@code .csv} files to the
          * given directory.
@@ -154,8 +147,8 @@ public class CsvReporter extends ScheduledReporter {
                                    clock,
                                    filter,
                                    executor,
-                                   shutdownExecutorOnStop,
-                                   csvFileProvider);
+                                   shutdownExecutorOnStop
+                                   );
         }
     }
 
@@ -165,7 +158,6 @@ public class CsvReporter extends ScheduledReporter {
     private final File directory;
     private final Locale locale;
     private final Clock clock;
-    private final CsvFileProvider csvFileProvider;
 
     private CsvReporter(MetricRegistry registry,
                         File directory,
@@ -175,13 +167,11 @@ public class CsvReporter extends ScheduledReporter {
                         Clock clock,
                         MetricFilter filter,
                         ScheduledExecutorService executor,
-                        boolean shutdownExecutorOnStop,
-                        CsvFileProvider csvFileProvider) {
+                        boolean shutdownExecutorOnStop) {
         super(registry, "csv-reporter", filter, rateUnit, durationUnit, executor, shutdownExecutorOnStop);
         this.directory = directory;
         this.locale = locale;
         this.clock = clock;
-        this.csvFileProvider = csvFileProvider;
     }
 
     @Override
@@ -282,7 +272,7 @@ public class CsvReporter extends ScheduledReporter {
 
     private void report(long timestamp, String name, String header, String line, Object... values) {
         try {
-            final File file = csvFileProvider.getFile(directory, name);
+            final File file = new File(directory, sanitize(name) + ".csv");
             final boolean fileAlreadyExists = file.exists();
             if (fileAlreadyExists || file.createNewFile()) {
                 final PrintWriter out = new PrintWriter(new OutputStreamWriter(new FileOutputStream(file,true), UTF_8));

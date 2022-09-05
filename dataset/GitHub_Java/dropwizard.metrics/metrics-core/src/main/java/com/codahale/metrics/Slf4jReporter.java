@@ -241,10 +241,9 @@ public class Slf4jReporter extends ScheduledReporter {
     private void logTimer(String name, Timer timer) {
         final Snapshot snapshot = timer.getSnapshot();
         loggerProxy.log(marker,
-                "type={}, name={}, count={}, min={}, max={}, mean={}, stddev={}, median={}, " +
+                "type=TIMER, name={}, count={}, min={}, max={}, mean={}, stddev={}, median={}, " +
                         "p75={}, p95={}, p98={}, p99={}, p999={}, mean_rate={}, m1={}, m5={}, " +
                         "m15={}, rate_unit={}, duration_unit={}",
-                "TIMER",
                 prefix(name),
                 timer.getCount(),
                 convertDuration(snapshot.getMin()),
@@ -267,8 +266,7 @@ public class Slf4jReporter extends ScheduledReporter {
 
     private void logMeter(String name, Meter meter) {
         loggerProxy.log(marker,
-                "type={}, name={}, count={}, mean_rate={}, m1={}, m5={}, m15={}, rate_unit={}",
-                "METER",
+                "type=METER, name={}, count={}, mean_rate={}, m1={}, m5={}, m15={}, rate_unit={}",
                 prefix(name),
                 meter.getCount(),
                 convertRate(meter.getMeanRate()),
@@ -281,9 +279,8 @@ public class Slf4jReporter extends ScheduledReporter {
     private void logHistogram(String name, Histogram histogram) {
         final Snapshot snapshot = histogram.getSnapshot();
         loggerProxy.log(marker,
-                "type={}, name={}, count={}, min={}, max={}, mean={}, stddev={}, " +
+                "type=HISTOGRAM, name={}, count={}, min={}, max={}, mean={}, stddev={}, " +
                         "median={}, p75={}, p95={}, p98={}, p99={}, p999={}",
-                "HISTOGRAM",
                 prefix(name),
                 histogram.getCount(),
                 snapshot.getMin(),
@@ -299,11 +296,11 @@ public class Slf4jReporter extends ScheduledReporter {
     }
 
     private void logCounter(String name, Counter counter) {
-        loggerProxy.log(marker, "type={}, name={}, count={}", "COUNTER", prefix(name), counter.getCount());
+        loggerProxy.log(marker, "type=COUNTER, name={}, count={}", prefix(name), counter.getCount());
     }
 
     private void logGauge(String name, Gauge gauge) {
-        loggerProxy.log(marker, "type={}, name={}, value={}", "GAUGE", prefix(name), gauge.getValue());
+        loggerProxy.log(marker, "type=GAUGE, name={}, value={}", prefix(name), gauge.getValue());
     }
 
     @Override
