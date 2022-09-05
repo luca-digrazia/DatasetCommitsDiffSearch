@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.analysis.AnalysisPhaseCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
-import com.google.devtools.build.lib.buildtool.buildevent.ExecutionProgressReceiverAvailableEvent;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseCompleteEvent;
@@ -137,11 +136,6 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
   public void analysisComplete(AnalysisPhaseCompleteEvent event) {
     stateTracker.analysisComplete(event);
     refresh();
-  }
-
-  @Subscribe
-  public void progressReceiverAvailable(ExecutionProgressReceiverAvailableEvent event) {
-    stateTracker.progressReceiverAvailable(event);
   }
 
   @Subscribe
