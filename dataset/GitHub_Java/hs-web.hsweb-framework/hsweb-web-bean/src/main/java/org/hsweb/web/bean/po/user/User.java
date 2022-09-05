@@ -8,7 +8,6 @@ import org.hsweb.web.bean.po.module.Module;
 import org.hsweb.web.bean.po.role.RoleModule;
 import org.hsweb.web.bean.po.role.UserRole;
 import org.webbuilder.utils.common.MapUtils;
-import org.webbuilder.utils.common.StringUtils;
 
 import javax.validation.constraints.NotNull;
 import java.util.*;
@@ -45,10 +44,10 @@ public class User extends GenericPo<String> {
     private int status;
 
     //创建日期
-    private java.util.Date createDate;
+    private java.util.Date create_date;
 
     //修改日期
-    private java.util.Date updateDate;
+    private java.util.Date update_date;
 
     //用户角色绑定
     private List<UserRole> userRoles;
@@ -68,7 +67,6 @@ public class User extends GenericPo<String> {
         Set<String> lv = roleInfo.get(getModule(mId));
         if (lv != null)
             for (String action : actions) {
-                if (StringUtils.isNullOrEmpty(action)) return true;
                 if (lv.contains(action)) return true;
             }
         return false;
@@ -76,7 +74,7 @@ public class User extends GenericPo<String> {
 
     public Module getModule(String mId) {
         for (Module module : getModules()) {
-            if (module.getId().equals(mId)) return module;
+            if (module.getU_id().equals(mId)) return module;
         }
         return null;
     }
@@ -96,34 +94,32 @@ public class User extends GenericPo<String> {
     public Set<Module> getModulesByPid(String pid) {
         Set<Module> modules = getModules()
                 .stream()
-                .filter(module -> pid.equals(module.getParentId()))
+                .filter(module -> pid.equals(module.getP_id()))
                 .collect(Collectors.toCollection(() -> new LinkedHashSet<>()));
         return modules;
     }
 
     public Set<Module> getModulesByPid(String pid, String level) {
         Set<Module> modules = getModules().stream()
-                .filter(module -> module.getParentId().equals(pid) && hasAccessModuleAction(module.getId(), level))
+                .filter(module -> module.getP_id().equals(pid) && hasAccessModuleAction(module.getU_id(), level))
                 .collect(Collectors.toCollection(() -> new LinkedHashSet<>()));
         return modules;
     }
 
     public boolean hasAccessRole(String rId) {
         if (getUserRoles() != null)
-            return getUserRoles().stream().anyMatch(userRole -> userRole.getRoleId().equals(rId));
-//            for (UserRole userRole : getUserRoles()) {
-//                if (rId.equals(userRole.getRoleId())) return true;
-//            }
+            for (UserRole userRole : getUserRoles()) {
+                if (rId.equals(userRole.getRole_id())) return true;
+            }
         return false;
     }
 
     public boolean hasAccessModule(String mId) {
         if (roleInfo == null) initRoleInfo();
-        return roleInfo.keySet().stream().anyMatch(mdl -> mdl.getId().equals(mId));
-//        for (Module module : roleInfo.keySet()) {
-//            if (module.getId().equals(mId)) return true;
-//        }
-//        return false;
+        for (Module module : roleInfo.keySet()) {
+            if (module.getU_id().equals(mId)) return true;
+        }
+        return false;
     }
 
     /**
@@ -263,15 +259,15 @@ public class User extends GenericPo<String> {
      *
      * @return java.util.Date 创建日期
      */
-    public java.util.Date getCreateDate() {
-        return this.createDate;
+    public java.util.Date getCreate_date() {
+        return this.create_date;
     }
 
     /**
      * 设置 创建日期
      */
-    public void setCreateDate(java.util.Date createDate) {
-        this.createDate = createDate;
+    public void setCreate_date(java.util.Date create_date) {
+        this.create_date = create_date;
     }
 
     /**
@@ -279,15 +275,15 @@ public class User extends GenericPo<String> {
      *
      * @return java.util.Date 修改日期
      */
-    public java.util.Date getUpdateDate() {
-        return this.updateDate;
+    public java.util.Date getUpdate_date() {
+        return this.update_date;
     }
 
     /**
      * 设置 修改日期
      */
-    public void setUpdateDate(java.util.Date updateDate) {
-        this.updateDate = updateDate;
+    public void setUpdate_date(java.util.Date update_date) {
+        this.update_date = update_date;
     }
 
     public List<UserRole> getUserRoles() {
