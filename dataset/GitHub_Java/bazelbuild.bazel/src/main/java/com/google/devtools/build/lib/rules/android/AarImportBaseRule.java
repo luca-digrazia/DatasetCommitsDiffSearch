@@ -25,7 +25,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.AndroidBaseRule;
+import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.AndroidAaptBaseRule;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.util.FileType;
 
@@ -78,7 +78,9 @@ public class AarImportBaseRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("$aar_import_base")
         .type(RuleClassType.ABSTRACT)
-        .ancestors(AndroidBaseRule.class)
+        // AndroidAaptBaseRule is needed for $android_manifest_merger which is used by the
+        // ApplicationManifest class.
+        .ancestors(AndroidAaptBaseRule.class)
         .build();
   }
 }
