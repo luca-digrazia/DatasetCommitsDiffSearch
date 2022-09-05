@@ -517,7 +517,7 @@ public class ObjcRuleClasses {
           .add(attr("$xcodegen", LABEL).cfg(HOST).exec()
               .value(env.getToolsLabel("//tools/objc:xcodegen")))
           .add(attr("$dummy_source", LABEL)
-              .value(env.getToolsLabel("//tools/objc:objc_dummy.mm")))
+              .value(env.getToolsLabel("//tools/objc:objc_dummy.m")))
           .build();
     }
     @Override
@@ -827,12 +827,8 @@ public class ObjcRuleClasses {
       return RuleDefinition.Metadata.builder()
           .name("$objc_bundling_rule")
           .type(RuleClassType.ABSTRACT)
-          .ancestors(
-              AppleToolchain.RequiresXcodeConfigRule.class,
-              OptionsRule.class,
-              ResourcesRule.class,
-              ResourceToolsRule.class,
-              XcrunRule.class)
+          .ancestors(OptionsRule.class, ResourceToolsRule.class, XcrunRule.class,
+              AppleToolchain.RequiresXcodeConfigRule.class)
           .build();
     }
   }
@@ -986,7 +982,7 @@ public class ObjcRuleClasses {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          /* <!-- #BLAZE_RULE($objc_ipa_rule).ATTRIBUTE(ipa_post_processor) -->
+          /* <!-- #BLAZE_RULE($objc_signing_rule).ATTRIBUTE(ipa_post_processor) -->
           A tool that edits this target's IPA output after it is assembled but before it is
           (optionally) signed.
           <p>
