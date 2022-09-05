@@ -24,9 +24,9 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Package.Builder;
+import com.google.devtools.build.lib.packages.Package.LegacyBuilder;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
@@ -73,7 +73,7 @@ public class WorkspaceFactory {
           "DEFAULT_SERVER_JAVABASE", // serializable so optional
           PackageFactory.PKG_CONTEXT);
 
-  private final Builder builder;
+  private final LegacyBuilder builder;
 
   private final Path installDir;
   private final Path workspaceDir;
@@ -102,7 +102,7 @@ public class WorkspaceFactory {
    * @param mutability the Mutability for the current evaluation context
    */
   public WorkspaceFactory(
-      Builder builder,
+      LegacyBuilder builder,
       RuleClassProvider ruleClassProvider,
       ImmutableList<EnvironmentExtension> environmentExtensions,
       Mutability mutability) {
@@ -119,7 +119,7 @@ public class WorkspaceFactory {
    * @param workspaceDir the workspace directory
    */
   public WorkspaceFactory(
-      Builder builder,
+      LegacyBuilder builder,
       RuleClassProvider ruleClassProvider,
       ImmutableList<EnvironmentExtension> environmentExtensions,
       Mutability mutability,
@@ -247,7 +247,7 @@ public class WorkspaceFactory {
       Package aPackage,
       ImmutableMap<String, Extension> importMap,
       ImmutableMap<String, Object> bindings)
-      throws NameConflictException, InterruptedException {
+      throws NameConflictException {
     this.parentVariableBindings = bindings;
     this.parentImportMap = importMap;
     builder.setWorkspaceName(aPackage.getWorkspaceName());
@@ -256,24 +256,8 @@ public class WorkspaceFactory {
     if (aPackage.containsErrors()) {
       builder.setContainsErrors();
     }
-    for (Rule rule : aPackage.getTargets(Rule.class)) {
-      try {
-        // The old rule references another Package instance and we wan't to keep the invariant that
-        // every Rule references the Package it is contained within
-        Rule newRule = builder.createRule(
-            rule.getLabel(),
-            rule.getRuleClassObject(),
-            rule.getLocation(),
-            rule.getAttributeContainer());
-        newRule.populateOutputFiles(NullEventHandler.INSTANCE, builder);
-        if (rule.containsErrors()) {
-          newRule.setContainsErrors();
-        }
-        builder.addRule(newRule);
-      } catch (LabelSyntaxException e) {
-        // This rule has already been created once, so it should have worked the second time, too
-        throw new IllegalStateException(e);
-      }
+    for (Target target : aPackage.getTargets(Rule.class)) {
+      builder.addRule((Rule) target);
     }
   }
 
@@ -336,7 +320,7 @@ public class WorkspaceFactory {
         try {
           nameLabel = Label.parseAbsolute("//external:" + name);
           try {
-            Builder builder = PackageFactory.getContext(env, ast).pkgBuilder;
+            LegacyBuilder builder = PackageFactory.getContext(env, ast).pkgBuilder;
             RuleClass ruleClass = ruleFactory.getRuleClass("bind");
             builder
                 .externalPackageData()
@@ -345,11 +329,11 @@ public class WorkspaceFactory {
                     ruleClass,
                     nameLabel,
                     actual == null ? null : Label.parseAbsolute(actual),
-                    ast.getLocation(),
-                    ruleFactory.getAttributeContainer(ruleClass));
-          } catch (RuleFactory.InvalidRuleException
-              | Package.NameConflictException
-              | LabelSyntaxException e) {
+                    ast.getLocation());
+          } catch (
+              RuleFactory.InvalidRuleException | Package.NameConflictException
+                      | LabelSyntaxException
+                  e) {
             throw new EvalException(ast.getLocation(), e.getMessage());
           }
 
@@ -406,8 +390,7 @@ public class WorkspaceFactory {
   private static ImmutableMap<String, BaseFunction> createWorkspaceFunctions(
       RuleClassProvider ruleClassProvider, boolean allowOverride) {
     ImmutableMap.Builder<String, BaseFunction> mapBuilder = ImmutableMap.builder();
-    RuleFactory ruleFactory =
-        new RuleFactory(ruleClassProvider, AttributeContainer.ATTRIBUTE_CONTAINER_FACTORY);
+    RuleFactory ruleFactory = new RuleFactory(ruleClassProvider);
     mapBuilder.put(BIND, newBindFunction(ruleFactory));
     for (String ruleClass : ruleFactory.getRuleClassNames()) {
       if (!ruleClass.equals(BIND)) {
@@ -438,8 +421,7 @@ public class WorkspaceFactory {
       }
       workspaceEnv.setupDynamic(
           PackageFactory.PKG_CONTEXT,
-          new PackageFactory.PackageContext(
-              builder, null, localReporter, AttributeContainer.ATTRIBUTE_CONTAINER_FACTORY));
+          new PackageFactory.PackageContext(builder, null, localReporter));
     } catch (EvalException e) {
       throw new AssertionError(e);
     }

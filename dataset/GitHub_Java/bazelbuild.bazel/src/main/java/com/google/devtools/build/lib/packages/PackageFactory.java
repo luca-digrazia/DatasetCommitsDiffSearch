@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -108,7 +107,7 @@ public final class PackageFactory {
     }
 
     private void convertAndProcess(
-        Package.Builder pkgBuilder, Location location, Object value)
+        Package.LegacyBuilder pkgBuilder, Location location, Object value)
         throws EvalException {
       T typedValue = type.convert(value, "'package' argument", pkgBuilder.getBuildFileLabel());
       process(pkgBuilder, location, typedValue);
@@ -122,7 +121,7 @@ public final class PackageFactory {
      * @param value the value of the argument. Typically passed to {@link Type#convert}
      */
     protected abstract void process(
-        Package.Builder pkgBuilder, Location location, T value)
+        Package.LegacyBuilder pkgBuilder, Location location, T value)
         throws EvalException;
   }
 
@@ -160,7 +159,7 @@ public final class PackageFactory {
     }
 
     @Override
-    protected void process(Package.Builder pkgBuilder, Location location,
+    protected void process(Package.LegacyBuilder pkgBuilder, Location location,
         List<Label> value) {
       pkgBuilder.setDefaultVisibility(getVisibility(pkgBuilder.getBuildFileLabel(), value));
     }
@@ -172,7 +171,7 @@ public final class PackageFactory {
     }
 
     @Override
-    protected void process(Package.Builder pkgBuilder, Location location,
+    protected void process(Package.LegacyBuilder pkgBuilder, Location location,
         Boolean value) {
       pkgBuilder.setDefaultTestonly(value);
     }
@@ -184,7 +183,7 @@ public final class PackageFactory {
     }
 
     @Override
-    protected void process(Package.Builder pkgBuilder, Location location,
+    protected void process(Package.LegacyBuilder pkgBuilder, Location location,
         String value) {
       pkgBuilder.setDefaultDeprecation(value);
     }
@@ -196,7 +195,7 @@ public final class PackageFactory {
     }
 
     @Override
-    protected void process(Package.Builder pkgBuilder, Location location,
+    protected void process(Package.LegacyBuilder pkgBuilder, Location location,
         List<String> value) {
       pkgBuilder.addFeatures(value);
     }
@@ -208,7 +207,7 @@ public final class PackageFactory {
     }
 
     @Override
-    protected void process(Package.Builder pkgBuilder, Location location,
+    protected void process(Package.LegacyBuilder pkgBuilder, Location location,
         License value) {
       pkgBuilder.setDefaultLicense(value);
     }
@@ -220,7 +219,7 @@ public final class PackageFactory {
     }
 
     @Override
-    protected void process(Package.Builder pkgBuilder, Location location,
+    protected void process(Package.LegacyBuilder pkgBuilder, Location location,
         Set<DistributionType> value) {
       pkgBuilder.setDefaultDistribs(value);
     }
@@ -236,7 +235,7 @@ public final class PackageFactory {
     }
 
     @Override
-    protected void process(Package.Builder pkgBuilder, Location location,
+    protected void process(Package.LegacyBuilder pkgBuilder, Location location,
         List<Label> value) {
       pkgBuilder.setDefaultCompatibleWith(value, Package.DEFAULT_COMPATIBLE_WITH_ATTRIBUTE,
           location);
@@ -253,7 +252,7 @@ public final class PackageFactory {
     }
 
     @Override
-    protected void process(Package.Builder pkgBuilder, Location location,
+    protected void process(Package.LegacyBuilder pkgBuilder, Location location,
         List<Label> value) {
       pkgBuilder.setDefaultRestrictedTo(value, Package.DEFAULT_RESTRICTED_TO_ATTRIBUTE, location);
     }
@@ -332,48 +331,31 @@ public final class PackageFactory {
    */
   @VisibleForTesting
   public PackageFactory(RuleClassProvider ruleClassProvider) {
-    this(
-        ruleClassProvider,
-        null,
-        AttributeContainer.ATTRIBUTE_CONTAINER_FACTORY,
-        ImmutableList.<EnvironmentExtension>of(),
-        "test");
+    this(ruleClassProvider, null, ImmutableList.<EnvironmentExtension>of(), "test");
   }
 
   @VisibleForTesting
   public PackageFactory(RuleClassProvider ruleClassProvider,
       EnvironmentExtension environmentExtension) {
-    this(
-        ruleClassProvider,
-        null,
-        AttributeContainer.ATTRIBUTE_CONTAINER_FACTORY,
-        ImmutableList.of(environmentExtension),
-        "test");
+    this(ruleClassProvider, null, ImmutableList.of(environmentExtension), "test");
   }
 
   @VisibleForTesting
   public PackageFactory(RuleClassProvider ruleClassProvider,
       Iterable<EnvironmentExtension> environmentExtensions) {
-    this(
-        ruleClassProvider,
-        null,
-        AttributeContainer.ATTRIBUTE_CONTAINER_FACTORY,
-        environmentExtensions,
-        "test");
+    this(ruleClassProvider, null, environmentExtensions, "test");
   }
 
   /**
    * Constructs a {@code PackageFactory} instance with a specific glob path translator
    * and rule factory.
    */
-  public PackageFactory(
-      RuleClassProvider ruleClassProvider,
+  public PackageFactory(RuleClassProvider ruleClassProvider,
       Map<String, String> platformSetRegexps,
-      Function<RuleClass, AttributeContainer> attributeContainerFactory,
       Iterable<EnvironmentExtension> environmentExtensions,
       String version) {
     this.platformSetRegexps = platformSetRegexps;
-    this.ruleFactory = new RuleFactory(ruleClassProvider, attributeContainerFactory);
+    this.ruleFactory = new RuleFactory(ruleClassProvider);
     this.ruleClassProvider = ruleClassProvider;
     threadPool = new ThreadPoolExecutor(100, 100, 15L, TimeUnit.SECONDS,
         new LinkedBlockingQueue<Runnable>(),
@@ -687,7 +669,7 @@ public final class PackageFactory {
 
   static Runtime.NoneType callExportsFiles(Object srcs, Object visibilityO, Object licensesO,
       FuncallExpression ast, Environment env) throws EvalException, ConversionException {
-    Package.Builder pkgBuilder = getContext(env, ast).pkgBuilder;
+    Package.LegacyBuilder pkgBuilder = getContext(env, ast).pkgBuilder;
     List<String> files = Type.STRING_LIST.convert(srcs, "'exports_files' operand");
 
     RuleVisibility visibility = EvalUtils.isNullOrNone(visibilityO)
@@ -1080,7 +1062,7 @@ public final class PackageFactory {
       public Object call(Object[] arguments, FuncallExpression ast, Environment env)
           throws EvalException {
 
-        Package.Builder pkgBuilder = getContext(env, ast).pkgBuilder;
+        Package.LegacyBuilder pkgBuilder = getContext(env, ast).pkgBuilder;
 
         // Validate parameter list
         if (pkgBuilder.isPackageFunctionUsed()) {
@@ -1120,8 +1102,7 @@ public final class PackageFactory {
       throws RuleFactory.InvalidRuleException, Package.NameConflictException, InterruptedException {
     RuleClass ruleClass = getBuiltInRuleClass(ruleClassName, ruleFactory);
     BuildLangTypedAttributeValuesMap attributeValues = new BuildLangTypedAttributeValuesMap(kwargs);
-    AttributeContainer attributeContainer = ruleFactory.getAttributeContainer(ruleClass);
-    RuleFactory.createAndAddRule(context, ruleClass, attributeValues, ast, env, attributeContainer);
+    RuleFactory.createAndAddRule(context, ruleClass, attributeValues, ast, env);
   }
 
   private static RuleClass getBuiltInRuleClass(String ruleClassName, RuleFactory ruleFactory) {
@@ -1158,7 +1139,7 @@ public final class PackageFactory {
       public Runtime.NoneType invoke(Map<String, Object> kwargs,
           FuncallExpression ast, Environment env)
           throws EvalException, InterruptedException {
-        env.checkLoadingOrWorkspacePhase(ruleClass, ast.getLocation());
+        env.checkLoadingPhase(ruleClass, ast.getLocation());
         try {
           addRule(ruleFactory, ruleClass, getContext(env, ast), kwargs, ast, env);
         } catch (RuleFactory.InvalidRuleException | Package.NameConflictException e) {
@@ -1189,7 +1170,7 @@ public final class PackageFactory {
    * {@code globber.onInterrupt()} on an {@link InterruptedException}.
    */
   // Used outside of bazel!
-  public Package.Builder createPackageFromPreprocessingResult(
+  public Package.LegacyBuilder createPackageFromPreprocessingResult(
       Package externalPkg,
       PackageIdentifier packageId,
       Path buildFile,
@@ -1227,7 +1208,7 @@ public final class PackageFactory {
     return buildFileAST;
   }
 
-  public Package.Builder createPackageFromPreprocessingAst(
+  public Package.LegacyBuilder createPackageFromPreprocessingAst(
       Package externalPkg,
       PackageIdentifier packageId,
       Path buildFile,
@@ -1393,21 +1374,17 @@ public final class PackageFactory {
    * footprint when making changes here!
    */
   public static class PackageContext {
-    final Package.Builder pkgBuilder;
+
+    final Package.LegacyBuilder pkgBuilder;
     final Globber globber;
     final EventHandler eventHandler;
-    private final Function<RuleClass, AttributeContainer> attributeContainerFactory;
 
     @VisibleForTesting
-    public PackageContext(
-        Package.Builder pkgBuilder,
-        Globber globber,
-        EventHandler eventHandler,
-        Function<RuleClass, AttributeContainer> attributeContainerFactory) {
+    public PackageContext(Package.LegacyBuilder pkgBuilder, Globber globber,
+        EventHandler eventHandler) {
       this.pkgBuilder = pkgBuilder;
       this.eventHandler = eventHandler;
       this.globber = globber;
-      this.attributeContainerFactory = attributeContainerFactory;
     }
 
     /**
@@ -1429,10 +1406,6 @@ public final class PackageFactory {
      */
     public Package.Builder getBuilder() {
       return pkgBuilder;
-    }
-
-    public Function<RuleClass, AttributeContainer> getAttributeContainerFactory() {
-      return attributeContainerFactory;
     }
   }
 
@@ -1510,7 +1483,7 @@ public final class PackageFactory {
    * @see PackageFactory#PackageFactory
    */
   @VisibleForTesting // used by PackageFactoryApparatus
-  public Package.Builder evaluateBuildFile(
+  public Package.LegacyBuilder evaluateBuildFile(
       Package externalPkg,
       PackageIdentifier packageId,
       BuildFileAST buildFileAST,
@@ -1523,7 +1496,7 @@ public final class PackageFactory {
       Map<String, Extension> imports,
       ImmutableList<Label> skylarkFileDependencies)
       throws InterruptedException {
-    Package.Builder pkgBuilder = new Package.Builder(
+    Package.LegacyBuilder pkgBuilder = new Package.LegacyBuilder(
         packageId, ruleClassProvider.getRunfilesPrefix());
     StoredEventHandler eventHandler = new StoredEventHandler();
 
@@ -1548,9 +1521,7 @@ public final class PackageFactory {
       Event.replayEventsOn(eventHandler, pastEvents);
 
       // Stuff that closes over the package context:
-      PackageContext context =
-          new PackageContext(
-              pkgBuilder, globber, eventHandler, ruleFactory.getAttributeContainerFactory());
+      PackageContext context = new PackageContext(pkgBuilder, globber, eventHandler);
       buildPkgEnv(pkgEnv, context, ruleFactory);
       pkgEnv.setupDynamic(PKG_CONTEXT, context);
       pkgEnv.setupDynamic(Runtime.PKG_NAME, packageId.getPackageFragment().getPathString());
@@ -1611,7 +1582,7 @@ public final class PackageFactory {
           .setPhase(Phase.LOADING)
           .build();
 
-      Package.Builder pkgBuilder = new Package.Builder(packageId,
+      Package.LegacyBuilder pkgBuilder = new Package.LegacyBuilder(packageId,
           ruleClassProvider.getRunfilesPrefix());
 
       pkgBuilder.setFilename(buildFilePath)
@@ -1622,12 +1593,7 @@ public final class PackageFactory {
           .setDefaultVisibilitySet(false);
 
       // Stuff that closes over the package context:
-      PackageContext context =
-          new PackageContext(
-              pkgBuilder,
-              globber,
-              NullEventHandler.INSTANCE,
-              ruleFactory.getAttributeContainerFactory());
+      PackageContext context = new PackageContext(pkgBuilder, globber, NullEventHandler.INSTANCE);
       buildPkgEnv(pkgEnv, context, ruleFactory);
       try {
         pkgEnv.update("glob", newGlobFunction.apply(context, /*async=*/true));

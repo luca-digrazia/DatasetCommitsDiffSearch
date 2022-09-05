@@ -14,13 +14,11 @@
 
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTemplate.CannotPrecomputeDefaultsException;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
 import com.google.devtools.build.lib.syntax.BaseFunction;
@@ -29,8 +27,10 @@ import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.Map;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -47,15 +47,11 @@ public class RuleFactory {
    * Maps rule class name to the metaclass instance for that rule.
    */
   private final ImmutableMap<String, RuleClass> ruleClassMap;
-  private final Function<RuleClass, AttributeContainer> attributeContainerFactory;
 
   /**
    * Constructs a RuleFactory instance.
    */
-  public RuleFactory(
-      RuleClassProvider provider,
-      Function<RuleClass, AttributeContainer> attributeContainerFactory) {
-    this.attributeContainerFactory = attributeContainerFactory;
+  public RuleFactory(RuleClassProvider provider) {
     this.ruleClassMap = ImmutableMap.copyOf(provider.getRuleClassMap());
   }
 
@@ -73,14 +69,6 @@ public class RuleFactory {
     return ruleClassMap.get(ruleClassName);
   }
 
-  AttributeContainer getAttributeContainer(RuleClass ruleClass) {
-    return attributeContainerFactory.apply(ruleClass);
-  }
-
-  Function<RuleClass, AttributeContainer> getAttributeContainerFactory() {
-    return attributeContainerFactory;
-  }
-
   /**
    * Creates and returns a rule instance.
    *
@@ -94,8 +82,7 @@ public class RuleFactory {
       EventHandler eventHandler,
       @Nullable FuncallExpression ast,
       Location location,
-      @Nullable Environment env,
-      AttributeContainer attributeContainer)
+      @Nullable Environment env)
       throws InvalidRuleException, InterruptedException {
     Preconditions.checkNotNull(ruleClass);
     String ruleClassName = ruleClass.getName();
@@ -133,8 +120,8 @@ public class RuleFactory {
           eventHandler,
           ast,
           generator.location,
-          attributeContainer);
-    } catch (LabelSyntaxException | CannotPrecomputeDefaultsException e) {
+          new AttributeContainer(ruleClass));
+    } catch (LabelSyntaxException e) {
       throw new RuleFactory.InvalidRuleException(ruleClass + " " + e.getMessage());
     }
   }
@@ -154,7 +141,6 @@ public class RuleFactory {
    * @param ast the abstract syntax tree of the rule expression (optional)
    * @param location the location at which this rule was declared
    * @param env the lexical environment of the function call which declared this rule (optional)
-   * @param attributeContainer the {@link AttributeContainer} the rule will contain
    * @throws InvalidRuleException if the rule could not be constructed for any
    *     reason (e.g. no {@code name} attribute is defined)
    * @throws NameConflictException if the rule's name or output files conflict with others in this
@@ -168,19 +154,10 @@ public class RuleFactory {
       EventHandler eventHandler,
       @Nullable FuncallExpression ast,
       Location location,
-      @Nullable Environment env,
-      AttributeContainer attributeContainer)
+      @Nullable Environment env)
       throws InvalidRuleException, NameConflictException, InterruptedException {
-    Rule rule =
-        createRule(
-            pkgBuilder,
-            ruleClass,
-            attributeValues,
-            eventHandler,
-            ast,
-            location,
-            env,
-            attributeContainer);
+    Rule rule = createRule(
+        pkgBuilder, ruleClass, attributeValues, eventHandler, ast, location, env);
     pkgBuilder.addRule(rule);
     return rule;
   }
@@ -198,7 +175,6 @@ public class RuleFactory {
    * @param ast the abstract syntax tree of the rule expression (mandatory because this looks up a
    *     {@link Location} from the {@code ast})
    * @param env the lexical environment of the function call which declared this rule (optional)
-   * @param attributeContainer the {@link AttributeContainer} the rule will contain
    * @throws InvalidRuleException if the rule could not be constructed for any reason (e.g. no
    *     {@code name} attribute is defined)
    * @throws NameConflictException if the rule's name or output files conflict with others in this
@@ -210,8 +186,7 @@ public class RuleFactory {
       RuleClass ruleClass,
       BuildLangTypedAttributeValuesMap attributeValues,
       FuncallExpression ast,
-      @Nullable Environment env,
-      AttributeContainer attributeContainer)
+      @Nullable Environment env)
       throws InvalidRuleException, NameConflictException, InterruptedException {
     return createAndAddRule(
         context.pkgBuilder,
@@ -220,8 +195,7 @@ public class RuleFactory {
         context.eventHandler,
         ast,
         ast.getLocation(),
-        env,
-        attributeContainer);
+        env);
   }
 
   /**

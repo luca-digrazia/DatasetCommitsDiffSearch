@@ -64,7 +64,7 @@ public abstract class SkylarkTestCase extends BuildViewTestCase {
                 PackageFactory.PKG_CONTEXT,
                 // This dummy pkgContext works because no Skylark unit test attempts to actually
                 // create rules. Creating actual rules is tested in SkylarkIntegrationTest.
-                new PackageContext(null, null, getEventHandler(), null));
+                new PackageContext(null, null, getEventHandler()));
       }
     };
   }
@@ -149,7 +149,6 @@ public abstract class SkylarkTestCase extends BuildViewTestCase {
   }
 
   protected void checkErrorContains(String errorMsg, String... lines) throws Exception {
-    ev.setFailFast(false);
     try {
       eval(lines);
       fail("checkErrorContains(String, String...): There was no error");

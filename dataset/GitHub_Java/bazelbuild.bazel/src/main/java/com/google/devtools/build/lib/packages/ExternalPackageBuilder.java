@@ -20,10 +20,10 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.StoredEventHandler;
-import com.google.devtools.build.lib.packages.Package.Builder;
 import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.Map;
 
 /**
@@ -31,7 +31,7 @@ import java.util.Map;
  */
 public class ExternalPackageBuilder {
 
-  public static Rule createAndAddRepositoryRule(
+  public Rule createAndAddRepositoryRule(
       Package.Builder pkg,
       RuleClass ruleClass,
       RuleClass bindRuleClass,
@@ -44,38 +44,19 @@ public class ExternalPackageBuilder {
     BuildLangTypedAttributeValuesMap attributeValues = new BuildLangTypedAttributeValuesMap(kwargs);
     Rule rule =
         RuleFactory.createRule(
-            pkg,
-            ruleClass,
-            attributeValues,
-            eventHandler,
-            ast,
-            ast.getLocation(),
-            /*env=*/ null,
-            new AttributeContainer(ruleClass));
+            pkg, ruleClass, attributeValues, eventHandler, ast, ast.getLocation(), /*env=*/ null);
     pkg.addEvents(eventHandler.getEvents());
-    pkg.addPosts(eventHandler.getPosts());
     overwriteRule(pkg, rule);
     for (Map.Entry<String, Label> entry :
         ruleClass.getExternalBindingsFunction().apply(rule).entrySet()) {
       Label nameLabel = Label.parseAbsolute("//external:" + entry.getKey());
-      addBindRule(
-          pkg,
-          bindRuleClass,
-          nameLabel,
-          entry.getValue(),
-          rule.getLocation(),
-          new AttributeContainer(bindRuleClass));
+      addBindRule(pkg, bindRuleClass, nameLabel, entry.getValue(), rule.getLocation());
     }
     return rule;
   }
 
-  static void addBindRule(
-      Builder pkg,
-      RuleClass bindRuleClass,
-      Label virtual,
-      Label actual,
-      Location location,
-      AttributeContainer attributeContainer)
+  public void addBindRule(
+      Package.Builder pkg, RuleClass bindRuleClass, Label virtual, Label actual, Location location)
       throws RuleFactory.InvalidRuleException, Package.NameConflictException, InterruptedException {
 
     Map<String, Object> attributes = Maps.newHashMap();
@@ -90,20 +71,12 @@ public class ExternalPackageBuilder {
         new BuildLangTypedAttributeValuesMap(attributes);
     Rule rule =
         RuleFactory.createRule(
-            pkg,
-            bindRuleClass,
-            attributeValues,
-            handler,
-            /*ast=*/ null,
-            location,
-            /*env=*/ null,
-            attributeContainer);
+            pkg, bindRuleClass, attributeValues, handler, /*ast=*/ null, location, /*env=*/ null);
     overwriteRule(pkg, rule);
     rule.setVisibility(ConstantRuleVisibility.PUBLIC);
   }
 
-  private static void overwriteRule(Package.Builder pkg, Rule rule)
-      throws Package.NameConflictException, InterruptedException {
+  private void overwriteRule(Package.Builder pkg, Rule rule) throws Package.NameConflictException {
     Preconditions.checkArgument(rule.getOutputFiles().isEmpty());
     Target old = pkg.targets.get(rule.getName());
     if (old != null) {
