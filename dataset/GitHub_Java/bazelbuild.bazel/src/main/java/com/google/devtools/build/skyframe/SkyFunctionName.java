@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,13 +37,6 @@ public final class SkyFunctionName implements Serializable {
                 return new SkyFunctionName(name);
               }
             });
-
-  /**
-   * A well-known key type intended for testing only. The associated SkyKey should have a String
-   * argument.
-   */
-  // Needs to be after the cache is initialized.
-  public static final SkyFunctionName FOR_TESTING = SkyFunctionName.create("FOR_TESTING");
 
   /** Create a SkyFunctionName identified by {@code name}. */
   public static SkyFunctionName create(String name) {
