@@ -28,14 +28,12 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.SkylarkProviders;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgs;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompileAction;
 import com.google.devtools.build.lib.rules.java.JavaProvider;
-import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.runtime.Runfiles;
 import java.io.File;
@@ -190,13 +188,9 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
             "'java_lite_proto_library')",
             "java_lite_proto_library(name = 'lite_pb2', deps = [':null_lib'])",
             "proto_library(name = 'null_lib')");
-    JavaCompilationArgsProvider compilationArgsProvider =
-        getProvider(JavaCompilationArgsProvider.class, target);
-    assertThat(compilationArgsProvider).isNotNull();
-    assertThat(compilationArgsProvider.getJavaCompilationArgs()).isNotNull();
-    JavaSourceJarsProvider sourceJarsProvider = getProvider(JavaSourceJarsProvider.class, target);
-    assertThat(sourceJarsProvider).isNotNull();
-    assertThat(sourceJarsProvider.getSourceJars()).isNotNull();
+    JavaCompilationArgsProvider provider = getJavaCompilationArgsProvider(target);
+    assertThat(provider).isNotNull();
+    assertThat(provider.getJavaCompilationArgs()).isNotNull();
   }
 
   @Test
@@ -225,8 +219,7 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
 
     List<String> directJars =
         prettyJarNames(
-            getProvider(JavaCompilationArgsProvider.class, litepb2)
-                .getJavaCompilationArgs().getRuntimeJars());
+            getJavaCompilationArgsProvider(litepb2).getJavaCompilationArgs().getRuntimeJars());
     assertThat(directJars).containsExactly("cross/libbravo-lite.jar");
   }
 
@@ -243,13 +236,8 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
             "proto_library(name = 'proto_lib',",
             "              srcs = ['input1.proto', 'input2.proto'])");
     JavaCompilationArgs compilationArgs =
-        getProvider(JavaCompilationArgsProvider.class, rule).getJavaCompilationArgs();
+        getJavaCompilationArgsProvider(rule).getJavaCompilationArgs();
     assertThat(compilationArgs.getInstrumentationMetadata()).isEmpty();
-
-    JavaSourceJarsProvider sourceJarsProvider = getProvider(JavaSourceJarsProvider.class, rule);
-    assertThat(sourceJarsProvider).isNotNull();
-    assertThat(prettyJarNames(sourceJarsProvider.getSourceJars()))
-        .containsExactly("x/proto_lib-lite-src.jar");
 
     ImmutableListMultimap<String, Artifact> runtimeJars =
         Multimaps.index(compilationArgs.getRuntimeJars(), ROOT_RELATIVE_PATH_STRING);
@@ -349,34 +337,22 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
 
     {
       JavaCompilationArgsProvider compilationArgsProvider =
-          getProvider(JavaCompilationArgsProvider.class, getConfiguredTarget("//x:foo_lite_pb2"));
+          getJavaCompilationArgsProvider(getConfiguredTarget("//x:foo_lite_pb2"));
 
       Iterable<String> directJars =
           prettyJarNames(compilationArgsProvider.getJavaCompilationArgs().getCompileTimeJars());
 
       assertThat(directJars).containsExactly("x/libfoo-lite-hjar.jar");
-
-      JavaSourceJarsProvider sourceJarsProvider =
-          getProvider(JavaSourceJarsProvider.class, getConfiguredTarget("//x:foo_lite_pb2"));
-      assertThat(sourceJarsProvider).isNotNull();
-      assertThat(prettyJarNames(sourceJarsProvider.getSourceJars()))
-          .containsExactly("x/foo-lite-src.jar");
     }
 
     {
       JavaCompilationArgsProvider compilationArgsProvider =
-          getProvider(JavaCompilationArgsProvider.class, getConfiguredTarget("//x:bar_lite_pb2"));
+          getJavaCompilationArgsProvider(getConfiguredTarget("//x:bar_lite_pb2"));
 
       Iterable<String> directJars =
           prettyJarNames(compilationArgsProvider.getJavaCompilationArgs().getCompileTimeJars());
 
       assertThat(directJars).containsExactly("x/libbar-lite-hjar.jar");
-
-      JavaSourceJarsProvider sourceJarsProvider =
-          getProvider(JavaSourceJarsProvider.class, getConfiguredTarget("//x:bar_lite_pb2"));
-      assertThat(sourceJarsProvider).isNotNull();
-      assertThat(prettyJarNames(sourceJarsProvider.getSourceJars()))
-          .containsExactly("x/bar-lite-src.jar");
     }
   }
 
@@ -409,8 +385,8 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
         "    srcs = [ 'bar.proto' ],",
         ")");
 
-    JavaCompilationArgsProvider compilationArgsProvider = getProvider(
-        JavaCompilationArgsProvider.class, getConfiguredTarget("//x:foo_java_proto_lite"));
+    JavaCompilationArgsProvider compilationArgsProvider =
+        getJavaCompilationArgsProvider(getConfiguredTarget("//x:foo_java_proto_lite"));
 
     Iterable<String> directJars =
         prettyJarNames(compilationArgsProvider.getJavaCompilationArgs().getCompileTimeJars());
@@ -418,11 +394,11 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
     assertThat(directJars).containsExactly("x/libbar_proto-lite-hjar.jar");
   }
 
-  private static <P extends TransitiveInfoProvider> P getProvider(
-      Class<P> providerClass, ConfiguredTarget target) {
+  private static JavaCompilationArgsProvider getJavaCompilationArgsProvider(
+      ConfiguredTarget target) {
     SkylarkProviders skylarkProviders = target.getProvider(SkylarkProviders.class);
     JavaProvider javaProvider =
         (JavaProvider) skylarkProviders.getDeclaredProvider(JavaProvider.JAVA_PROVIDER.getKey());
-    return javaProvider.getProvider(providerClass);
+    return javaProvider.getJavaCompilationArgsProvider();
   }
 }
