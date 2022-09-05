@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.bazel.repository;
 
 import com.google.devtools.build.lib.bazel.rules.workspace.HttpArchiveRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.HttpJarRule;
-import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -42,34 +42,34 @@ import java.nio.charset.Charset;
  */
 public abstract class DecompressorFactory {
 
-
-  public static Decompressor create(Target target, Path archivePath)
+  public static Decompressor create(
+      String targetKind, String targetName, Path archivePath, Path repositoryPath)
       throws DecompressorException {
     String baseName = archivePath.getBaseName();
 
-    if (target.getTargetKind().startsWith(HttpJarRule.NAME + " ")) {
+    if (targetKind.startsWith(HttpJarRule.NAME + " ")) {
       if (baseName.endsWith(".jar")) {
-        return new JarDecompressor(target, archivePath);
+        return new JarDecompressor(targetKind, targetName, archivePath, repositoryPath);
       } else {
         throw new DecompressorException(
-            "Expected " + HttpJarRule.NAME + " " + target.getName()
-                + " to create file with a .jar suffix (got " + archivePath + ")");
+            String.format("Expected %s %s to create file with a .jar suffix (got %s)",
+            HttpJarRule.NAME, targetName, archivePath));
       }
     }
 
-    if (target.getTargetKind().startsWith(HttpArchiveRule.NAME + " ")) {
+    if (targetKind.startsWith(HttpArchiveRule.NAME + " ")
+        || targetKind.startsWith(NewHttpArchiveRule.NAME + " ")) {
       if (baseName.endsWith(".zip") || baseName.endsWith(".jar")) {
         return new ZipDecompressor(archivePath);
       } else {
         throw new DecompressorException(
-            "Expected " + HttpArchiveRule.NAME + " " + target.getName()
-                + " to create file with a .zip or .jar suffix (got " + archivePath + ")");
+            String.format("Expected %s %s to create file with a .zip or .jar suffix (got %s)",
+            HttpArchiveRule.NAME, targetName, archivePath));
       }
     }
 
-    throw new DecompressorException(
-        "No decompressor found for " + target.getTargetKind() + " rule " + target.getName()
-            + " (got " + archivePath + ")");
+    throw new DecompressorException(String.format("No decompressor found for %s rule %s (got %s)",
+        targetKind, targetName, archivePath));
   }
 
   /**
@@ -87,40 +87,51 @@ public abstract class DecompressorFactory {
      * files and directories under the {@link Decompressor#archiveFile}'s parent directory.
      *
      * @return the path to the repository directory. That is, the returned path will be a directory
-     * containing a WORKSPACE file.
+     *         containing a WORKSPACE file.
      */
     public abstract Path decompress() throws DecompressorException;
   }
 
+  /**
+   * Decompressor for jar files.
+   *
+   * <p>This is actually a bit of a misnomer, as .jars aren't decompressed.  This does create a
+   * repository a BUILD file for them, though, making the java_import target @&lt;jar&gt;//jar:jar
+   * available for users to depend on.</p>
+   */
   static class JarDecompressor extends Decompressor {
-    private final Target target;
+    private final String targetKind;
+    private final String targetName;
+    private final Path repositoryDir;
 
-    public JarDecompressor(Target target, Path archiveFile) {
+    public JarDecompressor(
+        String targetKind, String targetName, Path archiveFile, Path repositoryDir) {
       super(archiveFile);
-      this.target = target;
+      this.targetKind = targetKind;
+      this.targetName = targetName;
+      this.repositoryDir = repositoryDir;
     }
 
     /**
      * The .jar can be used compressed, so this just exposes it in a way Bazel can use.
      *
-     * <p>It moves the jar from some-name/foo.jar to some-name/repository/jar/foo.jar and creates a
-     * BUILD file containing one entry: a .jar.
+     * <p>It moves the jar from some-name/x/y/z/foo.jar to some-name/jar/foo.jar and creates a
+     * BUILD file containing one entry: the .jar.
      */
     @Override
     public Path decompress() throws DecompressorException {
-      Path destinationDirectory = archiveFile.getParentDirectory().getRelative("repository");
       // Example: archiveFile is .external-repository/some-name/foo.jar.
       String baseName = archiveFile.getBaseName();
 
       try {
-        FileSystemUtils.createDirectoryAndParents(destinationDirectory);
-        // .external-repository/some-name/repository/WORKSPACE.
-        Path workspaceFile = destinationDirectory.getRelative("WORKSPACE");
-        FileSystemUtils.writeContent(workspaceFile, Charset.forName("UTF-8"),
-            "# DO NOT EDIT: automatically generated WORKSPACE file for " + target.getTargetKind()
-                + " rule " + target.getName());
-        // .external-repository/some-name/repository/jar.
-        Path jarDirectory = destinationDirectory.getRelative("jar");
+        FileSystemUtils.createDirectoryAndParents(repositoryDir);
+        // .external-repository/some-name/WORKSPACE.
+        Path workspaceFile = repositoryDir.getRelative("WORKSPACE");
+        FileSystemUtils.writeContent(workspaceFile, Charset.forName("UTF-8"), String.format(
+            "# DO NOT EDIT: automatically generated WORKSPACE file for %s rule %s\n",
+            targetKind, targetName));
+        // .external-repository/some-name/jar.
+        Path jarDirectory = repositoryDir.getRelative("jar");
         FileSystemUtils.createDirectoryAndParents(jarDirectory);
         // .external-repository/some-name/repository/jar/foo.jar is a symbolic link to the jar in
         // .external-repository/some-name.
@@ -131,20 +142,24 @@ public abstract class DecompressorFactory {
         // .external-repository/some-name/repository/jar/BUILD defines the //jar target.
         Path buildFile = jarDirectory.getRelative("BUILD");
         FileSystemUtils.writeLinesAs(buildFile, Charset.forName("UTF-8"),
-            "# DO NOT EDIT: automatically generated BUILD file for " + target.getTargetKind()
-                + " rule " + target.getName(),
+            "# DO NOT EDIT: automatically generated BUILD file for " + targetKind + " rule "
+                + targetName,
             "java_import(",
             "    name = 'jar',",
             "    jars = ['" + baseName + "'],",
             "    visibility = ['//visibility:public']",
             ")");
       } catch (IOException e) {
-        throw new DecompressorException(e.getMessage());
+        throw new DecompressorException(
+            "Error auto-creating jar repo structure: " + e.getMessage());
       }
-      return destinationDirectory;
+      return repositoryDir;
     }
   }
 
+  /**
+   * Decompressor for zip files.
+   */
   private static class ZipDecompressor extends Decompressor {
     public ZipDecompressor(Path archiveFile) {
       super(archiveFile);
@@ -167,7 +182,7 @@ public abstract class DecompressorFactory {
      */
     @Override
     public Path decompress() throws DecompressorException {
-      Path destinationDirectory = archiveFile.getParentDirectory().getRelative("repository");
+      Path destinationDirectory = archiveFile.getParentDirectory();
       try (InputStream is = new FileInputStream(archiveFile.getPathString())) {
         ArchiveInputStream in = new ArchiveStreamFactory().createArchiveInputStream(
             ArchiveStreamFactory.ZIP, is);
@@ -178,8 +193,8 @@ public abstract class DecompressorFactory {
         }
       } catch (IOException | ArchiveException e) {
         throw new DecompressorException(
-            "Error extracting " + archiveFile + " to " + destinationDirectory + ": "
-                + e.getMessage());
+            String.format("Error extracting %s to %s: %s",
+                archiveFile, destinationDirectory, e.getMessage()));
       }
       return destinationDirectory;
     }
@@ -189,8 +204,8 @@ public abstract class DecompressorFactory {
         throws IOException, DecompressorException {
       PathFragment relativePath = new PathFragment(entry.getName());
       if (relativePath.isAbsolute()) {
-        throw new DecompressorException("Failed to extract " + relativePath
-            + ", zipped paths cannot be absolute");
+        throw new DecompressorException(
+            String.format("Failed to extract %s, zipped paths cannot be absolute", relativePath));
       }
       Path outputPath = destinationDirectory.getRelative(relativePath);
       FileSystemUtils.createDirectoryAndParents(outputPath.getParentDirectory());
@@ -200,8 +215,8 @@ public abstract class DecompressorFactory {
         try (OutputStream out = new FileOutputStream(new File(outputPath.getPathString()))) {
           IOUtils.copy(in, out);
         } catch (IOException e) {
-          throw new DecompressorException("Error writing " + outputPath + " from "
-              + archiveFile);
+          throw new DecompressorException(
+              String.format("Error writing %s from %s", outputPath, archiveFile));
         }
       }
     }
