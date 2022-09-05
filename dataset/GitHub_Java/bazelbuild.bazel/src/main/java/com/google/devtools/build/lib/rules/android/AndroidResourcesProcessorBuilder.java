@@ -22,6 +22,8 @@ import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
+import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceType;
 import com.google.devtools.build.lib.rules.android.ResourceContainerConverter.Builder.SeparatorType;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -80,8 +82,7 @@ public class AndroidResourcesProcessorBuilder {
   private String versionCode;
   private String applicationId;
   private String versionName;
-  private Artifact symbols;
-  private Artifact dataBindingInfoZip;
+  private Artifact symbolsTxt;
 
   private Artifact manifestOut;
   private Artifact mergedResourcesOut;
@@ -103,16 +104,6 @@ public class AndroidResourcesProcessorBuilder {
    */
   public AndroidResourcesProcessorBuilder withPrimary(ResourceContainer primary) {
     this.primary = primary;
-    return this;
-  }
-
-  /**
-   * The output zip for resource-processed data binding expressions (i.e. a zip of .xml files).
-   * If null, data binding processing is skipped (and data binding expressions aren't allowed in
-   * layout resources).
-   */
-  public AndroidResourcesProcessorBuilder setDataBindingInfoZip(Artifact zip) {
-    this.dataBindingInfoZip = zip;
     return this;
   }
 
@@ -162,8 +153,8 @@ public class AndroidResourcesProcessorBuilder {
     return this;
   }
 
-  public AndroidResourcesProcessorBuilder setSymbols(Artifact symbols) {
-    this.symbols = symbols;
+  public AndroidResourcesProcessorBuilder setSymbolsTxt(Artifact symbolsTxt) {
+    this.symbolsTxt = symbolsTxt;
     return this;
   }
 
@@ -233,9 +224,9 @@ public class AndroidResourcesProcessorBuilder {
       outs.add(rTxtOut);
     }
 
-    if (symbols != null) {
-      builder.addExecPath("--symbolsOut", symbols);
-      outs.add(symbols);
+    if (symbolsTxt != null) {
+      builder.addExecPath("--symbolsTxtOut", symbolsTxt);
+      outs.add(symbolsTxt);
     }
     if (sourceJarOut != null) {
       builder.addExecPath("--srcJarOutput", sourceJarOut);
@@ -296,11 +287,6 @@ public class AndroidResourcesProcessorBuilder {
       builder.add("--applicationId").add(applicationId);
     }
 
-    if (dataBindingInfoZip != null) {
-      builder.addExecPath("--dataBindingInfoOut", dataBindingInfoZip);
-      outs.add(dataBindingInfoZip);
-    }
-
     if (!Strings.isNullOrEmpty(customJavaPackage)) {
       // Sets an alternative java package for the generated R.java
       // this allows android rules to generate resources outside of the java{,tests} tree.
@@ -321,21 +307,25 @@ public class AndroidResourcesProcessorBuilder {
             .build(context));
 
     // Return the full set of processed transitive dependencies.
-    ResourceContainer.Builder result = primary.toBuilder()
-        .setJavaSourceJar(sourceJarOut)
-        .setRTxt(rTxtOut)
-        .setSymbols(symbols);
-    // If there is an apk to be generated, use it, else reuse the apk from the primary resources.
-    // All android_binary ResourceContainers have to have an apk, but if a new one is not
-    // requested to be built for this resource processing action (in case of just creating an
-    // R.txt or proguard merging), reuse the primary resource from the dependencies.
-    if (apkOut != null) {
-      result.setApk(apkOut);
-    }
-    if (manifestOut != null) {
-      result.setManifest(manifestOut);
-    }
-    return result.build();
+    return new ResourceContainer(primary.getLabel(),
+        primary.getJavaPackage(),
+        primary.getRenameManifestPackage(),
+        primary.getConstantsInlined(),
+        // If there is no apk to be generated, use the apk from the primary resources.
+        // All android_binary ResourceContainers have to have an apk, but if a new one is not
+        // requested to be built for this resource processing action (in case of just creating an
+        // R.txt or proguard merging), reuse the primary resource from the dependencies.
+        apkOut != null ? apkOut : primary.getApk(),
+        manifestOut != null ? manifestOut : primary.getManifest(),
+        sourceJarOut,
+        primary.getJavaClassJar(),
+        primary.getArtifacts(ResourceType.ASSETS),
+        primary.getArtifacts(ResourceType.RESOURCES),
+        primary.getRoots(ResourceType.ASSETS),
+        primary.getRoots(ResourceType.RESOURCES),
+        primary.isManifestExported(),
+        rTxtOut,
+        symbolsTxt);
   }
 
   public AndroidResourcesProcessorBuilder setJavaPackage(String customJavaPackage) {

@@ -17,13 +17,14 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
+import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceType;
 import com.google.devtools.build.lib.rules.android.ResourceContainerConverter.Builder.SeparatorType;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +36,7 @@ import java.util.List;
  * $android_resource_validator action. For android_binary, see {@link
  * AndroidResourcesProcessorBuilder}.
  */
-public class AndroidResourceMergingActionBuilder {
+class AndroidResourceMergingActionBuilder {
 
   private static final ResourceContainerConverter.ToArtifacts RESOURCE_CONTAINER_TO_ARTIFACTS =
       ResourceContainerConverter.builder()
@@ -61,7 +62,6 @@ public class AndroidResourceMergingActionBuilder {
   private Artifact mergedResourcesOut;
   private Artifact classJarOut;
   private Artifact manifestOut;
-  private Artifact dataBindingInfoZip;
 
   // Flags
   private String customJavaPackage;
@@ -101,16 +101,6 @@ public class AndroidResourceMergingActionBuilder {
     return this;
   }
 
-  /**
-   * The output zip for resource-processed data binding expressions (i.e. a zip of .xml files).
-   * If null, data binding processing is skipped (and data binding expressions aren't allowed in
-   * layout resources).
-   */
-  public AndroidResourceMergingActionBuilder setDataBindingInfoZip(Artifact zip) {
-    this.dataBindingInfoZip = zip;
-    return this;
-  }
-
   public AndroidResourceMergingActionBuilder setJavaPackage(String customJavaPackage) {
     this.customJavaPackage = customJavaPackage;
     return this;
@@ -118,15 +108,12 @@ public class AndroidResourceMergingActionBuilder {
 
   public ResourceContainer build(ActionConstructionContext context) {
     CustomCommandLine.Builder builder = new CustomCommandLine.Builder();
-    
-    // Set the busybox tool.
-    builder.add("--tool").add("MERGE").add("--");
 
     // Use a FluentIterable to avoid flattening the NestedSets
     NestedSetBuilder<Artifact> inputs = NestedSetBuilder.naiveLinkOrder();
     inputs.addAll(
         ruleContext
-            .getExecutablePrerequisite("$android_resources_busybox", Mode.HOST)
+            .getExecutablePrerequisite("$android_resource_merger", Mode.HOST)
             .getRunfilesSupport()
             .getRunfilesArtifactsWithoutMiddlemen());
 
@@ -167,31 +154,35 @@ public class AndroidResourceMergingActionBuilder {
       builder.add("--packageForR").add(customJavaPackage);
     }
 
-    if (dataBindingInfoZip != null) {
-      builder.addExecPath("--dataBindingInfoOut", dataBindingInfoZip);
-      outs.add(dataBindingInfoZip);
-    }
-
     SpawnAction.Builder spawnActionBuilder = new SpawnAction.Builder();
     // Create the spawn action.
     ruleContext.registerAction(
         spawnActionBuilder
-            .useParameterFile(ParameterFileType.UNQUOTED)
             .addTransitiveInputs(inputs.build())
             .addOutputs(ImmutableList.copyOf(outs))
             .setCommandLine(builder.build())
             .setExecutable(
-                ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST))
+                ruleContext.getExecutablePrerequisite("$android_resource_merger", Mode.HOST))
             .setProgressMessage("Merging Android resources for " + ruleContext.getLabel())
             .setMnemonic("AndroidResourceMerger")
             .build(context));
 
     // Return the full set of processed transitive dependencies.
-    ResourceContainer.Builder result = primary.toBuilder()
-        .setJavaClassJar(classJarOut);
-    if (manifestOut != null) {
-      result.setManifest(manifestOut);
-    }
-    return result.build();
+    return new ResourceContainer(
+        primary.getLabel(),
+        primary.getJavaPackage(),
+        primary.getRenameManifestPackage(),
+        primary.getConstantsInlined(),
+        primary.getApk(),
+        manifestOut != null ? manifestOut : primary.getManifest(),
+        primary.getJavaSourceJar(),
+        classJarOut,
+        primary.getArtifacts(ResourceType.ASSETS),
+        primary.getArtifacts(ResourceType.RESOURCES),
+        primary.getRoots(ResourceType.ASSETS),
+        primary.getRoots(ResourceType.RESOURCES),
+        primary.isManifestExported(),
+        primary.getRTxt(),
+        primary.getSymbolsTxt());
   }
 }

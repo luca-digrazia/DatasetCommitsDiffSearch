@@ -23,7 +23,7 @@ import com.google.devtools.build.lib.util.Preconditions;
 import javax.annotation.Nullable;
 
 /**
- * Encapsulates the process of building {@link ResourceContainer}.
+ * Encapsulates the process of building the AndroidResourceContainer.
  */
 public final class AndroidResourceContainerBuilder {
   private LocalResourceContainer data;
@@ -31,7 +31,6 @@ public final class AndroidResourceContainerBuilder {
   private Artifact rOutput;
   private boolean inlineConstants = false;
   private Artifact symbolsFile;
-  private boolean useJavaPackageFromManifest = false;
 
   /** Provides the resources and assets for the ResourceContainer. */
   public AndroidResourceContainerBuilder withData(LocalResourceContainer data) {
@@ -54,13 +53,7 @@ public final class AndroidResourceContainerBuilder {
     return this;
   }
 
-  public AndroidResourceContainerBuilder useJavaPackageFromManifest(
-      boolean useJavaPackageFromManifest) {
-    this.useJavaPackageFromManifest = useJavaPackageFromManifest;
-    return this;
-  }
-
-  /** Creates a {@link ResourceContainer} from a {@link RuleContext}.
+  /** Creates a {@link ResourceContainer} from a {@link RuleContext}. 
    * @throws InterruptedException */
   public ResourceContainer buildFromRule(RuleContext ruleContext, @Nullable Artifact apk)
       throws InterruptedException {
@@ -68,7 +61,7 @@ public final class AndroidResourceContainerBuilder {
     Preconditions.checkNotNull(this.data);
     Artifact rJavaSrcJar = ruleContext.getImplicitOutputArtifact(
         AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR);
-    return AndroidResourcesProvider.ResourceContainer.create(
+    return new AndroidResourcesProvider.ResourceContainer(
             ruleContext.getLabel(),
             getJavaPackage(ruleContext, rJavaSrcJar),
             getRenameManifestPackage(ruleContext),
@@ -87,9 +80,6 @@ public final class AndroidResourceContainerBuilder {
   }
 
   private String getJavaPackage(RuleContext ruleContext, Artifact rJavaSrcJar) {
-    if (useJavaPackageFromManifest) {
-      return null;
-    }
     if (hasCustomPackage(ruleContext)) {
       return ruleContext.attributes().get("custom_package", Type.STRING);
     }
