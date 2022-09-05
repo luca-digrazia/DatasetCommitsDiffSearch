@@ -4,13 +4,15 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.util.concurrent.TimeUnit;
 
 /**
- * An annotation for marking a method of an annotated object as metered.
+ * An annotation for marking a method of a Guice-provided object as metered.
  * <p/>
  * Given a method like this:
  * <pre><code>
- *     \@ExceptionMetered(name = "fancyName", cause=IllegalArgumentException.class)
+ *     \@ExceptionMetered(name = "fancyName", eventType = "namings", rateUnit = TimeUnit.SECONDS,
+ * cause=IllegalArgumentException.class)
  *     public String fancyName(String name) {
  *         return "Sir Captain " + name;
  *     }
@@ -43,7 +45,7 @@ public @interface ExceptionMetered {
     /**
      * The default suffix for meter names.
      */
-    String DEFAULT_NAME_SUFFIX = "exceptions";
+    String DEFAULT_NAME_SUFFIX = "Exceptions";
 
     /**
      * The name of the meter. If not specified, the meter will be given a name based on the method
@@ -52,10 +54,15 @@ public @interface ExceptionMetered {
     String name() default "";
 
     /**
-     * If {@code true}, use the given name an as absolute name. If {@code false}, use the given name
-     * relative to the annotated class.
+     * The name of the type of events the meter is measuring. The event type defaults to
+     * "exceptions".
      */
-    boolean absolute() default false;
+    String eventType() default "exceptions";
+
+    /**
+     * The time unit of the meter's rate. Defaults to Seconds.
+     */
+    TimeUnit rateUnit() default TimeUnit.SECONDS;
 
     /**
      * The type of exceptions that the meter will catch and count.
