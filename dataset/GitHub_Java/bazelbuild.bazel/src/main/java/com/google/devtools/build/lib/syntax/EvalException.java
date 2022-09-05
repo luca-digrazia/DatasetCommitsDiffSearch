@@ -70,7 +70,7 @@ public class EvalException extends Exception {
     if (message == null) {
       message = "";
     }
-    if (cause != null && !message.contains(cause.getMessage())) {
+    if (cause != null) {
       message = message + (message.isEmpty() ? "" : ": ") + cause.getMessage();
     }
     if (message.isEmpty()) {
@@ -92,16 +92,7 @@ public class EvalException extends Exception {
     return (getLocation() == null ? "" : getLocation()) + ": "
         + (message == null ? "" : message + "\n")
         + (dueToIncompleteAST ? "due to incomplete AST\n" : "")
-        + getCauseMessage();
-  }
-  
-  private String getCauseMessage() {
-    Throwable cause = getCause();
-    if (cause == null) {
-      return "";
-    }
-    String causeMessage = cause.getMessage();
-    return (causeMessage == null || message.contains(causeMessage)) ? "" : causeMessage;
+        + (getCause() != null && getCause().getMessage() != null ? getCause().getMessage() : "");
   }
 
   /**
