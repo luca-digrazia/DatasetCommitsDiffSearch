@@ -23,7 +23,6 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
@@ -51,7 +50,6 @@ import com.google.devtools.common.options.OptionsClassProvider;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,11 +61,10 @@ import java.util.Map;
  * and configuration options is guarantees not to change over the life time of the Blaze server.
  */
 public class ConfiguredRuleClassProvider implements RuleClassProvider {
-
   /**
    * Custom dependency validation logic.
    */
-  public interface PrerequisiteValidator {
+  public static interface PrerequisiteValidator {
     /**
      * Checks whether the rule in {@code contextBuilder} is allowed to depend on
      * {@code prerequisite} through the attribute {@code attribute}.
@@ -104,7 +101,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private Class<? extends BuildConfiguration.Fragment> universalFragment;
     private PrerequisiteValidator prerequisiteValidator;
     private ImmutableMap<String, SkylarkType> skylarkAccessibleJavaClasses = ImmutableMap.of();
-    private final List<Class<? extends FragmentOptions>> buildOptions = Lists.newArrayList();
 
     public void addWorkspaceFile(String contents) {
       defaultWorkspaceFile.append(contents);
@@ -118,11 +114,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
             String.format("Prelude label '%s' is invalid: %s", preludeLabelString, e.getMessage());
         throw new IllegalArgumentException(errorMsg);
       }
-      return this;
-    }
-
-    public Builder addBuildOptions(Collection<Class<? extends FragmentOptions>> optionsClasses) {
-      buildOptions.addAll(optionsClasses);
       return this;
     }
 
@@ -257,8 +248,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
           configurationCollectionFactory,
           universalFragment,
           prerequisiteValidator,
-          skylarkAccessibleJavaClasses,
-          buildOptions);
+          skylarkAccessibleJavaClasses);
     }
 
     @Override
@@ -341,9 +331,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
   private final Environment.Frame globals;
 
-  private final List<Class<? extends FragmentOptions>> buildOptions;
-
-  private ConfiguredRuleClassProvider(
+  public ConfiguredRuleClassProvider(
       Label preludeLabel,
       String runfilesPrefix,
       ImmutableMap<String, RuleClass> ruleClassMap,
@@ -356,8 +344,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       ConfigurationCollectionFactory configurationCollectionFactory,
       Class<? extends BuildConfiguration.Fragment> universalFragment,
       PrerequisiteValidator prerequisiteValidator,
-      ImmutableMap<String, SkylarkType> skylarkAccessibleJavaClasses,
-      List<Class<? extends FragmentOptions>> buildOptions) {
+      ImmutableMap<String, SkylarkType> skylarkAccessibleJavaClasses) {
     this.preludeLabel = preludeLabel;
     this.runfilesPrefix = runfilesPrefix;
     this.ruleClassMap = ruleClassMap;
@@ -371,7 +358,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     this.universalFragment = universalFragment;
     this.prerequisiteValidator = prerequisiteValidator;
     this.globals = createGlobals(skylarkAccessibleJavaClasses);
-    this.buildOptions = buildOptions;
   }
 
   public PrerequisiteValidator getPrerequisiteValidator() {
@@ -454,10 +440,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   public String getDefaultsPackageContent(OptionsClassProvider optionsProvider) {
     return DefaultsPackage.getDefaultsPackageContent(
         BuildOptions.of(configurationOptions, optionsProvider));
-  }
-
-  public ImmutableList<Class<? extends FragmentOptions>> getOptionFragments() {
-    return ImmutableList.copyOf(buildOptions);
   }
 
   /**
