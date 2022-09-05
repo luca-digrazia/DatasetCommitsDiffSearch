@@ -18,15 +18,13 @@
 
 package org.hswebframework.web.message.support;
 
+import org.hswebframework.web.message.MessageSubject;
+
 /**
  * TODO 完成注释
  *
  * @author zhouhao
  */
-public interface UserMessageSubject extends QueueMessageSubject {
+public interface UserMessageSubject extends MessageSubject {
     String getUserId();
-
-    default String getQueueName() {
-        return "queue_for_user:" + getUserId();
-    }
 }

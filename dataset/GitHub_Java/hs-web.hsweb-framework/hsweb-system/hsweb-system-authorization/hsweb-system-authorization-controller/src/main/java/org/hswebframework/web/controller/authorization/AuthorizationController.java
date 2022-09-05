@@ -55,6 +55,7 @@ public class AuthorizationController {
     private AuthorizationListenerDispatcher authorizationListenerDispatcher;
 
     @GetMapping("/login-out")
+    @AccessLogger("退出登录")
     @Authorize
     @ApiOperation("退出当前登录")
     public ResponseMessage exit(@ApiParam(hidden = true) Authentication authentication) {
@@ -62,14 +63,8 @@ public class AuthorizationController {
         return ok();
     }
 
-    @GetMapping("/me")
-    @Authorize
-    @ApiOperation("当前登录用户权限信息")
-    public ResponseMessage<Authentication> me(@ApiParam(hidden = true) Authentication authentication) {
-        return ok(authentication);
-    }
-
     @PostMapping(value = "/login")
+    @AccessLogger("授权")
     @ApiOperation("用户名密码登录")
     public ResponseMessage<String> authorize(@RequestParam @ApiParam("用户名") String username,
                                              @RequestParam @ApiParam("密码") String password,
@@ -99,6 +94,8 @@ public class AuthorizationController {
                 reason = AuthorizationFailedEvent.Reason.PASSWORD_ERROR;
                 throw new BusinessException("{password_error}", 400);
             }
+
+            userService.updateLoginInfo(entity.getId(), WebUtil.getIpAddr(request), System.currentTimeMillis());
             // 验证通过
             Authentication authentication = userService.initUserAuthorization(entity.getId());
             AuthorizationSuccessEvent event = new AuthorizationSuccessEvent(authentication, parameterGetter);
