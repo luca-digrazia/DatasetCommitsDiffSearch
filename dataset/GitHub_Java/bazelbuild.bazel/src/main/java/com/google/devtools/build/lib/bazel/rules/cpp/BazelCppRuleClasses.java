@@ -60,7 +60,6 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.AppleToolchain.RequiresXcodeConfigRule;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
@@ -372,17 +371,12 @@ public class BazelCppRuleClasses {
           /*<!-- #BLAZE_RULE($cc_decl_rule).ATTRIBUTE(includes) -->
           List of include dirs to be added to the compile line.
           ${SYNOPSIS}
-          <p>Subject to <a href="make-variables.html">"Make variable"</a> substitution.
-             Each string is prepended with <code>-isystem</code> and added to <code>COPTS</code>.
-             Unlike <a href="#cc_binary.copts">COPTS</a>, these flags are added for this rule
-             and every rule that depends on it. (Note: not the rules it depends upon!) Be
-             very careful, since this may have far-reaching effects.  When in doubt, add
-             "-I" flags to <a href="#cc_binary.copts">COPTS</a> instead.
-          </p>
-          <p>To use <code>-iquote</code> instead of <code>-isystem</code>, specify
-             <code>--use_isystem_for_includes=false</code> (the flag is undocumented and defaults
-             to <code>true</code>).
-          </p>
+          Subject to <a href="make-variables.html">"Make variable"</a> substitution.
+          Each string is prepended with <code>-iquote</code> and added to <code>COPTS</code>. Unlike
+          <a href="#cc_binary.copts">COPTS</a>, these flags are added for this rule
+          and every rule that depends on it. (Note: not the rules it depends upon!) Be
+          very careful, since this may have far-reaching effects.  When in doubt, add
+          "-I" flags to <a href="#cc_binary.copts">COPTS</a> instead.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("includes", STRING_LIST))
           .add(attr(":lipo_context_collector", LABEL)
@@ -675,8 +669,7 @@ public class BazelCppRuleClasses {
     public Metadata getMetadata() {
       return RuleDefinition.Metadata.builder()
           .name("cc_binary")
-          .ancestors(CcBinaryBaseRule.class, BazelBaseRuleClasses.BinaryBaseRule.class,
-              RequiresXcodeConfigRule.class)
+          .ancestors(CcBinaryBaseRule.class, BazelBaseRuleClasses.BinaryBaseRule.class)
           .factoryClass(BazelCcBinary.class)
           .build();
     }
@@ -794,7 +787,7 @@ public class BazelCppRuleClasses {
     public Metadata getMetadata() {
       return RuleDefinition.Metadata.builder()
           .name("cc_library")
-          .ancestors(CcLibraryBaseRule.class, RequiresXcodeConfigRule.class)
+          .ancestors(CcLibraryBaseRule.class)
           .factoryClass(BazelCcLibrary.class)
           .build();
     }
