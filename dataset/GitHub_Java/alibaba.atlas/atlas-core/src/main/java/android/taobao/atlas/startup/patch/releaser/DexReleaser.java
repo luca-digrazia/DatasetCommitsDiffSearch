@@ -326,6 +326,7 @@ public class DexReleaser {
                 target = new ZipOutputStream(new FileOutputStream(targetFile));
                 while (sourceEntries.hasMoreElements()) {
                     ZipEntry e = sourceEntries.nextElement();
+                    Log.w("dexpatch", "entry name :" + e.getName());
                     //META-INF重复
                     if (dexPatch && e.getName().startsWith("META-INF")) {
                         continue;
