@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.elasticsearch.search.aggregations.AggregationBuilders;
+
 import com.alibaba.druid.util.StringUtils;
 
 /**

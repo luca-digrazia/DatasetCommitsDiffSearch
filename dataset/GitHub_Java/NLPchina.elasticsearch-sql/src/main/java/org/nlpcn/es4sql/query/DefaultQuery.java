@@ -1,7 +1,7 @@
 package org.nlpcn.es4sql.query;
 
 import java.util.List;
-import java.util.ArrayList;
+
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
@@ -35,15 +35,14 @@ public class DefaultQuery extends Query {
 				BoolQueryBuilder boolQuery = QueryMaker.explan(where);
 				request.setQuery(boolQuery);
 			} else {
-				// TODO use regular filter instead of postFilter?
 				BoolFilterBuilder boolFilter = FilterMaker.explan(where);
 				request.setPostFilter(boolFilter);
 			}
 		}
 
-		// add source filtering.
+		// add field
 		if (select.getFields().size() > 0) {
-			setFields(request, select.getFields());
+			explanFields(request, select.getFields(), null);
 		}
 
 		request.setSearchType(SearchType.DFS_QUERY_THEN_FETCH);
@@ -61,21 +60,23 @@ public class DefaultQuery extends Query {
 		return request;
 	}
 
-
-	/**
-	 * Set source filtering on a search request.
-	 * @param request the search request to filter its source.
-	 * @param fields list of fields to source filter.
-	 */
-	private void setFields(SearchRequestBuilder request, List<Field> fields) {
-		ArrayList<String> includeFields = new ArrayList<String>();
-
+	private void explanFields(SearchRequestBuilder request, List<Field> fields, TermsBuilder groupByAgg) throws SqlParseException {
 		for (Field field : fields) {
-			if (field instanceof Field) {
-				includeFields.add(field.getName());
+			if (field == null) {
+
+			} else if (field instanceof MethodField) {
+				//如果是ｃｏｕｎｔ(*)這種查詢．那麼走ｅｓ默認查詢
+				if (field.getName().equals("COUNT")) {
+					select.setRowCount(0);
+				} else {
+					throw new SqlParseException("it did not support this field method " + field);
+				}
+
+			} else if (field instanceof Field) {
+				request.addField(field.getName());
+			} else {
+				throw new SqlParseException("it did not support this field method " + field);
 			}
 		}
-
-		request.setFetchSource(includeFields.toArray(new String[includeFields.size()]), null);
 	}
 }
