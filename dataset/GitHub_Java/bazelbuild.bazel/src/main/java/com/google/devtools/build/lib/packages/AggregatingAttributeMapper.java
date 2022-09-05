@@ -105,7 +105,7 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
   }
 
   private void visitLabels(
-      final Attribute attribute, boolean includeSelectKeys, final AcceptsLabelAttribute observer)
+      Attribute attribute, boolean includeSelectKeys, AcceptsLabelAttribute observer)
       throws InterruptedException {
     Type<?> type = attribute.getType();
     SelectorList<?> selectorList = getSelectorList(attribute.getName(), type);
@@ -115,15 +115,9 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
         // (computed) values and look for labels.
         for (Object value : visitAttribute(attribute.getName(), attribute.getType())) {
           if (value != null) {
-            type.visitLabels(new Type.LabelVisitor() {
-              @Override
-              public void visit(@Nullable Object label) throws InterruptedException {
-                if (label != null) {
-                  observer.acceptLabelAttribute(
-                      getLabel().resolveRepositoryRelative((Label) label), attribute);
-                }
-              }
-            }, value);
+            for (Label label : extractLabels(type, value)) {
+              observer.acceptLabelAttribute(getLabel().resolveRepositoryRelative(label), attribute);
+            }
           }
         }
       } else {
@@ -139,15 +133,9 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
           Object value = selector.isValueSet(selectorEntry.getKey())
               ? selectorEntry.getValue()
               : attribute.getDefaultValue(null);
-          type.visitLabels(new Type.LabelVisitor() {
-            @Override
-            public void visit(@Nullable Object label) throws InterruptedException {
-              if (label != null) {
-                observer.acceptLabelAttribute(
-                    getLabel().resolveRepositoryRelative((Label) label), attribute);
-              }
-            }
-          }, value);
+          for (Label label : extractLabels(type, value)) {
+            observer.acceptLabelAttribute(getLabel().resolveRepositoryRelative(label), attribute);
+          }
         }
       }
     }
@@ -190,9 +178,8 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
       //  3) "attr = select({...})". With just a single select, visitAttribute runs efficiently.
       for (Object value : visitAttribute(attrName, attrType)) {
         if (value != null) {
-          // TODO(bazel-team): Calculate duplicates directly using attrType.visitLabels in order to
-          // avoid intermediate collections here.
-          duplicates.addAll(CollectionUtils.duplicatedElementsOf(extractLabels(attrType, value)));
+          duplicates.addAll(CollectionUtils.duplicatedElementsOf(
+              ImmutableList.copyOf(extractLabels(attrType, value))));
         }
       }
     } else {
@@ -207,7 +194,7 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
         // they're in different selector paths (since only one path can actually get chosen).
         Set<Label> selectorLabels = new LinkedHashSet<>();
         for (Object selectorValue : selector.getEntries().values()) {
-          List<Label> labelsInSelectorValue = extractLabels(attrType, selectorValue);
+          Iterable<Label> labelsInSelectorValue = extractLabels(attrType, selectorValue);
           // Duplicates within a single path are not okay.
           duplicates.addAll(CollectionUtils.duplicatedElementsOf(labelsInSelectorValue));
           Iterables.addAll(selectorLabels, labelsInSelectorValue);
@@ -622,22 +609,5 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
         return owner.has(attrName, type);
       }
     };
-  }
-
-  private static ImmutableList<Label> extractLabels(Type<?> type, Object value) {
-    try {
-      final ImmutableList.Builder<Label> result = ImmutableList.builder();
-      type.visitLabels(new Type.LabelVisitor() {
-        @Override
-        public void visit(@Nullable Object object) {
-          if (object != null) {
-            result.add((Label) object);
-          }
-        }
-      }, value);
-      return result.build();
-    } catch (InterruptedException e) {
-      throw new IllegalStateException("Unexpected InterruptedException", e);
-    }
   }
 }

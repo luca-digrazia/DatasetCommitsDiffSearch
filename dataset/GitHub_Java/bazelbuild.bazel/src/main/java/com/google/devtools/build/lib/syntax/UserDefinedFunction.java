@@ -69,7 +69,7 @@ public class UserDefinedFunction extends BaseFunction {
   // we close over the globals at the time of definition
   private final Environment.Frame definitionGlobals;
 
-  private final Optional<Method> method;
+  private Optional<Method> method;
   // TODO(bazel-team) make this configurable once the compiler is stable
   public static boolean debugCompiler = false;
   public static boolean debugCompilerPrintByteCode = false;
@@ -250,7 +250,10 @@ public class UserDefinedFunction extends BaseFunction {
               .getLoaded();
 
       return Optional.of(
-          ReflectionUtils.getMethod(functionClass, "call", parameterTypes.toArray(new Class<?>[0]))
+          ReflectionUtils.getMethod(
+                  functionClass,
+                  "call",
+                  parameterTypes.toArray(new Class<?>[parameterTypes.size()]))
               .getLoadedMethod());
     } catch (EvalException e) {
       // don't capture EvalExceptions
@@ -292,7 +295,8 @@ public class UserDefinedFunction extends BaseFunction {
     }
     // add a return None if there are no statements or the last one to ensure the method always
     // returns something. This implements the interpreters behavior.
-    if (statements.isEmpty() || !(Iterables.getLast(statements) instanceof ReturnStatement)) {
+    if (statements.isEmpty()
+        || !(statements.get(statements.size() - 1) instanceof ReturnStatement)) {
       code.add(new ByteCodeAppender.Simple(Runtime.GET_NONE, MethodReturn.REFERENCE));
     }
     // we now know which variables we used in the method, so assign them "undefined" (i.e. null)
