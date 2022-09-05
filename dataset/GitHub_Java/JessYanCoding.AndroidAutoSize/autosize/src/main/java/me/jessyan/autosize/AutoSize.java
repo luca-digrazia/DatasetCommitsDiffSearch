@@ -132,8 +132,7 @@ public final class AutoSize {
 
     /**
      * 这里是今日头条适配方案的核心代码, 核心在于根据当前设备的实际情况做自动计算并转换 {@link DisplayMetrics#density}、
-     * {@link DisplayMetrics#scaledDensity}、{@link DisplayMetrics#densityDpi} 这三个值, 额外增加 {@link DisplayMetrics#xdpi}
-     * 以支持单位 {@code in}
+     * {@link DisplayMetrics#scaledDensity}、{@link DisplayMetrics#densityDpi} 这三个值, 有兴趣请看下面的链接
      *
      * @param activity      {@link Activity}
      * @param sizeInDp      设计图上的设计尺寸, 单位 dp, 如果 {@param isBaseOnWidth} 设置为 {@code true},
@@ -157,7 +156,6 @@ public final class AutoSize {
         float targetDensity = 0;
         int targetDensityDpi = 0;
         float targetScaledDensity = 0;
-        float targetXdpi = 0;
 
         if (displayMetricsInfo == null) {
             if (isBaseOnWidth) {
@@ -169,25 +167,18 @@ public final class AutoSize {
                     getInitScaledDensity() * 1.0f / AutoSizeConfig.getInstance().getInitDensity());
             targetDensityDpi = (int) (targetDensity * 160);
 
-            if (isBaseOnWidth) {
-                targetXdpi = AutoSizeConfig.getInstance().getScreenWidth() * 1.0f / sizeInDp;
-            } else {
-                targetXdpi = AutoSizeConfig.getInstance().getScreenHeight() * 1.0f / sizeInDp;
-            }
-
-            mCache.put(key, new DisplayMetricsInfo(targetDensity, targetDensityDpi, targetScaledDensity, targetXdpi));
+            mCache.put(key, new DisplayMetricsInfo(targetDensity, targetDensityDpi, targetScaledDensity));
         } else {
-            targetDensity = displayMetricsInfo.getDensity();
-            targetDensityDpi = displayMetricsInfo.getDensityDpi();
-            targetScaledDensity = displayMetricsInfo.getScaledDensity();
-            targetXdpi = displayMetricsInfo.getXdpi();
+            targetDensity = displayMetricsInfo.density;
+            targetDensityDpi = displayMetricsInfo.densityDpi;
+            targetScaledDensity = displayMetricsInfo.scaledDensity;
         }
 
-        setDensity(activity, targetDensity, targetDensityDpi, targetScaledDensity, targetXdpi);
+        setDensity(activity, targetDensity, targetDensityDpi, targetScaledDensity);
 
-        LogUtils.d(String.format(Locale.ENGLISH, "The %s has been adapted! \n%s Info: isBaseOnWidth = %s, %s = %f, targetDensity = %f, targetScaledDensity = %f, targetDensityDpi = %d, targetXdpi = %f"
+        LogUtils.d(String.format(Locale.ENGLISH, "The %s has been adapted! \n%s Info: isBaseOnWidth = %s, %s = %f, targetDensity = %f, targetScaledDensity = %f, targetDensityDpi = %d"
                 , activity.getClass().getName(), activity.getClass().getSimpleName(), isBaseOnWidth, isBaseOnWidth ? "designWidthInDp"
-                        : "designHeightInDp", sizeInDp, targetDensity, targetScaledDensity, targetDensityDpi, targetXdpi));
+                        : "designHeightInDp", sizeInDp, targetDensity, targetScaledDensity, targetDensityDpi));
     }
 
     /**
@@ -198,8 +189,7 @@ public final class AutoSize {
     public static void cancelAdapt(Activity activity) {
         setDensity(activity, AutoSizeConfig.getInstance().getInitDensity()
                 , AutoSizeConfig.getInstance().getInitDensityDpi()
-                , AutoSizeConfig.getInstance().getInitScaledDensity()
-                , AutoSizeConfig.getInstance().getInitXdpi());
+                , AutoSizeConfig.getInstance().getInitScaledDensity());
     }
 
     /**
@@ -209,26 +199,25 @@ public final class AutoSize {
      * @param density       {@link DisplayMetrics#density}
      * @param densityDpi    {@link DisplayMetrics#densityDpi}
      * @param scaledDensity {@link DisplayMetrics#scaledDensity}
-     * @param xdpi          {@link DisplayMetrics#xdpi}
      */
-    private static void setDensity(Activity activity, float density, int densityDpi, float scaledDensity, float xdpi) {
+    private static void setDensity(Activity activity, float density, int densityDpi, float scaledDensity) {
         final DisplayMetrics activityDisplayMetrics = activity.getResources().getDisplayMetrics();
         final DisplayMetrics appDisplayMetrics = AutoSizeConfig.getInstance().getApplication().getResources().getDisplayMetrics();
 
-        setDensity(activityDisplayMetrics, density, densityDpi, scaledDensity, xdpi);
+        setDensity(activityDisplayMetrics, density, densityDpi, scaledDensity);
 
-        setDensity(appDisplayMetrics, density, densityDpi, scaledDensity, xdpi);
+        setDensity(appDisplayMetrics, density, densityDpi, scaledDensity);
 
         //兼容 MIUI
         DisplayMetrics activityDisplayMetricsOnMIUI = getMetricsOnMiui(activity.getResources());
         DisplayMetrics appDisplayMetricsOnMIUI = getMetricsOnMiui(AutoSizeConfig.getInstance().getApplication().getResources());
 
         if (activityDisplayMetricsOnMIUI != null) {
-            setDensity(activityDisplayMetricsOnMIUI, density, densityDpi, scaledDensity, xdpi);
+            setDensity(activityDisplayMetricsOnMIUI, density, densityDpi, scaledDensity);
         }
 
         if (appDisplayMetricsOnMIUI != null) {
-            setDensity(appDisplayMetricsOnMIUI, density, densityDpi, scaledDensity, xdpi);
+            setDensity(appDisplayMetricsOnMIUI, density, densityDpi, scaledDensity);
         }
     }
 
@@ -239,13 +228,11 @@ public final class AutoSize {
      * @param density        {@link DisplayMetrics#density}
      * @param densityDpi     {@link DisplayMetrics#densityDpi}
      * @param scaledDensity  {@link DisplayMetrics#scaledDensity}
-     * @param xdpi           {@link DisplayMetrics#xdpi}
      */
-    private static void setDensity(DisplayMetrics displayMetrics, float density, int densityDpi, float scaledDensity, float xdpi) {
+    private static void setDensity(DisplayMetrics displayMetrics, float density, int densityDpi, float scaledDensity) {
         displayMetrics.density = density;
         displayMetrics.densityDpi = densityDpi;
         displayMetrics.scaledDensity = scaledDensity;
-        displayMetrics.xdpi = xdpi;
     }
 
     /**
