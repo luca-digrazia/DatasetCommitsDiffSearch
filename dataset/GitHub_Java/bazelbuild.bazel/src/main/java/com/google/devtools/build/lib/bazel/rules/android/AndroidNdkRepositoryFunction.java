@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.NdkPaths;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.NdkRelease;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpl;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpls;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
@@ -38,9 +39,9 @@ import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.DefaultCpuToolchain;
-import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
+import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
@@ -68,15 +69,16 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
   }
 
   @Override
-  public boolean isLocal() {
-    return true;
-  }
+  public SkyValue compute(SkyKey skyKey, Environment env) throws SkyFunctionException {
 
-  @Override
-  public SkyValue fetch(Rule rule, Path outputDirectory, Environment env)
-      throws SkyFunctionException {
-    prepareLocalRepositorySymlinkTree(rule, outputDirectory);
-    PathFragment pathFragment = getTargetPath(rule, getWorkspace());
+    RepositoryName repositoryName = (RepositoryName) skyKey.argument();
+    Rule rule = getRule(repositoryName, AndroidNdkRepositoryRule.NAME, env);
+    if (rule == null) {
+      return null;
+    }
+
+    Path outputDirectory = prepareLocalRepositorySymlinkTree(rule, env);
+    PathFragment pathFragment = getTargetPath(rule);
     Path ndkSymlinkTreeDirectory = outputDirectory.getRelative("ndk");
     try {
       ndkSymlinkTreeDirectory.createDirectory();
@@ -85,7 +87,7 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
     }
 
     if (!symlinkLocalRepositoryContents(
-        ndkSymlinkTreeDirectory, getOutputBase().getFileSystem().getPath(pathFragment))) {
+        ndkSymlinkTreeDirectory, getOutputBase().getFileSystem().getPath(pathFragment), env)) {
       return null;
     }
 
@@ -95,9 +97,6 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
     ApiLevel apiLevel = new ApiLevel(env.getListener(), ruleName, apiLevelAttr);
 
     NdkRelease ndkRelease = getNdkRelease(outputDirectory, env);
-    if (env.valuesMissing()) {
-      return null;
-    }
 
     ImmutableList.Builder<CrosstoolStlPair> crosstoolsAndStls = ImmutableList.builder();
     try {
@@ -125,6 +124,11 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
 
     String buildFile = createBuildFile(ruleName, crosstoolsAndStls.build());
     return writeBuildFile(outputDirectory, buildFile);
+  }
+
+  @Override
+  public SkyFunctionName getSkyFunctionName() {
+    return SkyFunctionName.create(AndroidNdkRepositoryRule.NAME.toUpperCase());
   }
 
   @Override
