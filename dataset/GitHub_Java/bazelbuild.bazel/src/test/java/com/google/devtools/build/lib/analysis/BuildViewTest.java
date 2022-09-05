@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestBase;
 import com.google.devtools.build.lib.analysis.util.ExpectedDynamicConfigurationErrors;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
@@ -164,30 +163,6 @@ public class BuildViewTest extends BuildViewTestBase {
 
     Action action = getGeneratingAction(outputArtifact);
     assertSame(FailAction.class, action.getClass());
-  }
-
-  @Test
-  public void testSyntaxErrorInDepPackage() throws Exception {
-    // Check that a loading error in a dependency is properly reported.
-    scratch.file("a/BUILD",
-        "genrule(name='x',",
-        "        srcs = ['file.txt'],",
-        "        outs = ['foo'],",
-        "        cmd = 'echo')",
-        "@");  // syntax error
-
-    scratch.file("b/BUILD",
-        "genrule(name= 'cc',",
-        "        tools = ['//a:x'],",
-        "        outs = ['bar'],",
-        "        cmd = 'echo')");
-
-    reporter.removeHandler(failFastHandler);
-    EventBus eventBus = new EventBus();
-    AnalysisResult result = update(eventBus, defaultFlags().with(Flag.KEEP_GOING), "//b:cc");
-
-    assertContainsEvent("invalid character: '@'");
-    assertThat(result.hasError()).isTrue();
   }
 
   @Test
@@ -1306,21 +1281,6 @@ public class BuildViewTest extends BuildViewTestBase {
       }
     }
     assertThat(owners).containsExactly("//x:b", "//x:b");
-  }
-
-  @Test
-  public void testErrorMessageForMissingPackageGroup() throws Exception {
-    scratch.file(
-        "apple/BUILD",
-        "py_library(name='apple', visibility=['//non:existent'])");
-    reporter.removeHandler(failFastHandler);
-    try {
-      update("//apple");
-      fail();
-    } catch (ViewCreationFailedException e) {
-      // Expected.
-    }
-    assertDoesNotContainEvent("implicitly depends upon");
   }
 
   /** Runs the same test with the reduced loading phase. */

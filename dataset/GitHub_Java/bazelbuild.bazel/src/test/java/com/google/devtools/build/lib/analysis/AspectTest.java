@@ -321,7 +321,7 @@ public class AspectTest extends AnalysisTestCase {
       implements ConfiguredAspectFactory {
       @Override
       public AspectDefinition getDefinition(AspectParameters params) {
-        return new AspectDefinition.Builder(this)
+        return new AspectDefinition.Builder("testaspect")
             .add(attr(":late", LABEL).value(EMPTY_LATE_BOUND_LABEL)).build();
       }
 
@@ -330,7 +330,7 @@ public class AspectTest extends AnalysisTestCase {
           ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters)
           throws InterruptedException {
         Object lateBoundPrereq = ruleContext.getPrerequisite(":late", TARGET);
-        return new ConfiguredAspect.Builder(this, parameters, ruleContext)
+        return new ConfiguredAspect.Builder("testaspect", ruleContext)
             .addProvider(
                 AspectInfo.class,
                 new AspectInfo(
@@ -385,17 +385,15 @@ public class AspectTest extends AnalysisTestCase {
       implements ConfiguredAspectFactory {
       @Override
       public AspectDefinition getDefinition(AspectParameters params) {
-        return new AspectDefinition.Builder(this).build();
+        return new AspectDefinition.Builder("testaspect").build();
       }
-
-
 
       @Override
       public ConfiguredAspect create(
           ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters)
               throws InterruptedException {
         ruleContext.registerAction(new NullAction(ruleContext.createOutputArtifact()));
-        return new ConfiguredAspect.Builder(this, parameters, ruleContext).build();
+        return new ConfiguredAspect.Builder("testaspect", ruleContext).build();
       }
     }
     private static final AspectThatRegistersAction ASPECT_THAT_REGISTERS_ACTION =
