@@ -67,7 +67,7 @@ public final class DotExpression extends Expression {
    * Throws the correct error message if the result is null depending on the objValue.
    */
   public static Object checkResult(Object objValue, Object result, String name, Location loc)
-      throws EvalException {
+    throws EvalException {
     if (result == null) {
       if (objValue instanceof ClassObject) {
         String customErrorMessage = ((ClassObject) objValue).errorMessage(name);
@@ -75,10 +75,8 @@ public final class DotExpression extends Expression {
           throw new EvalException(loc, customErrorMessage);
         }
       }
-      throw new EvalException(
-          loc,
-          Printer.format(
-              "Object of type '%s' has no field %r", EvalUtils.getDataTypeName(objValue), name));
+      throw new EvalException(loc, Printer.format("Object of type '%s' has no field %r",
+              EvalUtils.getDataTypeName(objValue), name));
     }
     return result;
   }
@@ -139,23 +137,14 @@ public final class DotExpression extends Expression {
         name,
         debugInfo.add(this).loadLocation,
         scope.loadEnvironment(),
-        ByteCodeUtils.invoke(
-            DotExpression.class,
-            "eval",
-            Object.class,
-            String.class,
-            Location.class,
-            Environment.class),
+        ByteCodeUtils.invoke(DotExpression.class, "eval", Object.class, String.class,
+            Location.class, Environment.class),
         // at this point we have the value of obj and the result of eval on the stack
         name,
         debugInfo.add(this).loadLocation,
-        ByteCodeUtils.invoke(
-            DotExpression.class,
-            "checkResult",
-            Object.class,
-            Object.class,
-            String.class,
-            Location.class));
+        ByteCodeUtils.invoke(DotExpression.class, "checkResult", Object.class, Object.class,
+            String.class, Location.class)
+        );
     return ByteCodeUtils.compoundAppender(code);
   }
 }

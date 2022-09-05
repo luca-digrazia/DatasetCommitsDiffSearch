@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.syntax.compiler;
 
 import com.google.devtools.build.lib.syntax.compiler.Jump.PrimitiveComparison;
-import java.util.List;
+
 import net.bytebuddy.description.method.MethodDescription.ForLoadedMethod;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.description.type.generic.GenericTypeDescription;
@@ -25,6 +25,8 @@ import net.bytebuddy.implementation.bytecode.StackManipulation;
 import net.bytebuddy.implementation.bytecode.constant.IntegerConstant;
 import net.bytebuddy.implementation.bytecode.member.FieldAccess;
 import net.bytebuddy.implementation.bytecode.member.MethodInvocation;
+
+import java.util.List;
 
 /**
  * Various utility methods for byte code generation.
@@ -60,7 +62,7 @@ public class ByteCodeUtils {
    * <p>Exists just because {@link Compound} does not have a constructor taking a list.
    */
   public static ByteCodeAppender compoundAppender(List<ByteCodeAppender> code) {
-    return new Compound(code.toArray(new ByteCodeAppender[0]));
+    return new Compound(code.toArray(new ByteCodeAppender[code.size()]));
   }
 
   /**
