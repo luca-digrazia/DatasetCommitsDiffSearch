@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.java;
 
-import com.google.auto.value.AutoValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
@@ -22,11 +21,13 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.util.FileType;
+
 import java.util.Collection;
 
-/** A container of Java compilation artifacts. */
-@AutoValue
-public abstract class JavaCompilationArgs {
+/**
+ * A container of Java compilation artifacts.
+ */
+public final class JavaCompilationArgs {
   // TODO(bazel-team): It would be desirable to use LinkOrderNestedSet here so that
   // parents-before-deps is preserved for graphs that are not trees. However, the legacy
   // JavaLibraryCollector implemented naive link ordering and many targets in the
@@ -38,28 +39,43 @@ public abstract class JavaCompilationArgs {
   // decided by the rightmost branch in such cases. For example, if A depends on {junit4,
   // B}, B depends on {C, D}, C depends on {junit3}, and D depends on {junit4},
   // the classpath of A will have junit3 before junit4.
+  private final NestedSet<Artifact> runtimeJars;
+  private final NestedSet<Artifact> compileTimeJars;
+  private final NestedSet<Artifact> instrumentationMetadata;
 
-  public static final JavaCompilationArgs EMPTY_ARGS =
-      JavaCompilationArgs.create(
-          NestedSetBuilder.<Artifact>create(Order.NAIVE_LINK_ORDER),
-          NestedSetBuilder.<Artifact>create(Order.NAIVE_LINK_ORDER),
-          NestedSetBuilder.<Artifact>create(Order.NAIVE_LINK_ORDER));
+  public static final JavaCompilationArgs EMPTY_ARGS = new JavaCompilationArgs(
+    NestedSetBuilder.<Artifact>create(Order.NAIVE_LINK_ORDER),
+    NestedSetBuilder.<Artifact>create(Order.NAIVE_LINK_ORDER),
+    NestedSetBuilder.<Artifact>create(Order.NAIVE_LINK_ORDER));
 
-  private static JavaCompilationArgs create(
-      NestedSet<Artifact> runtimeJars,
+  private JavaCompilationArgs(NestedSet<Artifact> runtimeJars,
       NestedSet<Artifact> compileTimeJars,
       NestedSet<Artifact> instrumentationMetadata) {
-    return new AutoValue_JavaCompilationArgs(runtimeJars, compileTimeJars, instrumentationMetadata);
+    this.runtimeJars = runtimeJars;
+    this.compileTimeJars = compileTimeJars;
+    this.instrumentationMetadata = instrumentationMetadata;
   }
 
-  /** Returns transitive runtime jars. */
-  public abstract NestedSet<Artifact> getRuntimeJars();
+  /**
+   * Returns transitive runtime jars.
+   */
+  public NestedSet<Artifact> getRuntimeJars() {
+    return runtimeJars;
+  }
 
-  /** Returns transitive compile-time jars. */
-  public abstract NestedSet<Artifact> getCompileTimeJars();
+  /**
+   * Returns transitive compile-time jars.
+   */
+  public NestedSet<Artifact> getCompileTimeJars() {
+    return compileTimeJars;
+  }
 
-  /** Returns transitive instrumentation metadata jars. */
-  public abstract NestedSet<Artifact> getInstrumentationMetadata();
+  /**
+   * Returns transitive instrumentation metadata jars.
+   */
+  public NestedSet<Artifact> getInstrumentationMetadata() {
+    return instrumentationMetadata;
+  }
 
   /**
    * Returns a new builder instance.
@@ -146,17 +162,35 @@ public abstract class JavaCompilationArgs {
       return this;
     }
 
+    public Builder addTransitiveCompilationArgs(
+        SourcesJavaCompilationArgsProvider dep, boolean recursive, ClasspathType type) {
+      JavaCompilationArgs args;
+      if (recursive) {
+        args = dep.getRecursiveJavaCompilationArgs();
+      } else {
+        args = dep.getJavaCompilationArgs();
+      }
+      addTransitiveArgs(args, type);
+      return this;
+    }
+
+    public Builder addSourcesTransitiveCompilationArgs(
+        Iterable<? extends SourcesJavaCompilationArgsProvider> deps,
+        boolean recursive,
+        ClasspathType type) {
+      for (SourcesJavaCompilationArgsProvider dep : deps) {
+        addTransitiveCompilationArgs(dep, recursive, type);
+      }
+
+      return this;
+    }
+
     /**
      * Merges the artifacts of another target.
      */
     public Builder addTransitiveTarget(TransitiveInfoCollection dep, boolean recursive,
         ClasspathType type) {
       JavaCompilationArgsProvider provider = dep.getProvider(JavaCompilationArgsProvider.class);
-      if (provider == null) {
-        // Only look for the JavaProvider when there is no JavaCompilationArgsProvider, else
-        // it would encapsulate the same information.
-        provider  = JavaProvider.getProvider(JavaCompilationArgsProvider.class, dep);
-      }
       if (provider != null) {
         addTransitiveCompilationArgs(provider, recursive, type);
         return this;
@@ -242,7 +276,7 @@ public abstract class JavaCompilationArgs {
      * Builds a {@link JavaCompilationArgs} object.
      */
     public JavaCompilationArgs build() {
-      return JavaCompilationArgs.create(
+      return new JavaCompilationArgs(
           runtimeJarsBuilder.build(),
           compileTimeJarsBuilder.build(),
           instrumentationMetadataBuilder.build());
@@ -262,6 +296,4 @@ public abstract class JavaCompilationArgs {
       /* Only include on runtime classpath */
       RUNTIME_ONLY;
   }
-
-  JavaCompilationArgs() {}
 }

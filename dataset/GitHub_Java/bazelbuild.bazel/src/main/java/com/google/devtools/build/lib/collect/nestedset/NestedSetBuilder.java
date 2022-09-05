@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.collect.nestedset;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
+import static com.google.common.collect.Iterables.isEmpty;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -28,8 +29,7 @@ import java.util.concurrent.ConcurrentMap;
  *
  * <p>The builder supports the standard builder interface (that is, {@code #add}, {@code #addAll}
  * and {@code #addTransitive} followed by {@code build}), in addition to shortcut method
- * {@code #wrap}. Any duplicate elements will be inserted as-is, and pruned later on during the
- * traversal of the actual NestedSet.
+ * {@code #wrap}.
  */
 public final class NestedSetBuilder<E> {
 
@@ -47,16 +47,19 @@ public final class NestedSetBuilder<E> {
   }
 
   /**
-   * Adds a direct member to the set to be built.
+   * Add an element.
    *
-   * <p>The relative left-to-right order of direct members is preserved from the sequence of calls
-   * to {@link #add} and {@link #addAll}. Since the traversal {@link Order} controls whether direct
-   * members appear before or after transitive ones, the interleaving of
-   * {@link #add}/{@link #addAll} with {@link #addTransitive} does not matter.
+   * <p>Preserves ordering of added elements. Discards duplicate values.
+   * Throws an exception if a null value is passed in.
    *
-   * @param element item to add; must not be null
-   * @return the builder
+   * <p>The collections of the direct members of the set and the nested sets are
+   * kept separate, so the order between multiple add/addAll calls matters,
+   * and the order between multiple addTransitive calls matters, but the order
+   * between add/addAll and addTransitive does not.
+   *
+   * @return the builder.
    */
+  @SuppressWarnings("unchecked")  // B is the type of the concrete subclass
   public NestedSetBuilder<E> add(E element) {
     Preconditions.checkNotNull(element);
     items.add(element);
@@ -64,17 +67,18 @@ public final class NestedSetBuilder<E> {
   }
 
   /**
-   * Adds a sequence of direct members to the set to be built. Equivalent to invoking {@link #add}
-   * for each item in {@code elements}, in order.
+   * Adds a collection of elements to the set.
    *
-   * <p>The relative left-to-right order of direct members is preserved from the sequence of calls
-   * to {@link #add} and {@link #addAll}. Since the traversal {@link Order} controls whether direct
-   * members appear before or after transitive ones, the interleaving of
-   * {@link #add}/{@link #addAll} with {@link #addTransitive} does not matter.
+   * <p>This is equivalent to invoking {@code add} for every item of the collection in iteration
+   * order.
    *
-   * @param elements the sequence of items to add; must not be null
-   * @return the builder
+   *  <p>The collections of the direct members of the set and the nested sets are kept separate, so
+   * the order between multiple add/addAll calls matters, and the order between multiple
+   * addTransitive calls matters, but the order between add/addAll and addTransitive does not.
+   *
+   * @return the builder.
    */
+  @SuppressWarnings("unchecked")  // B is the type of the concrete subclass
   public NestedSetBuilder<E> addAll(Iterable<? extends E> elements) {
     Preconditions.checkNotNull(elements);
     Iterables.addAll(items, elements);
@@ -85,43 +89,40 @@ public final class NestedSetBuilder<E> {
    * @deprecated Use {@link #addTransitive} to avoid excessive memory use.
    */
   @Deprecated
-  public NestedSetBuilder<E> addAll(NestedSet<? extends E> elements) {
+  public NestedSetBuilder<E> addAll(NestedSet<E> elements) {
     // Do not delete this method, or else addAll(Iterable) calls with a NestedSet argument
     // will not be flagged.
-    Iterable<? extends E> it = elements;
+    Iterable<E> it = elements;
     addAll(it);
     return this;
   }
 
   /**
-   * Adds a nested set as a transitive member to the set to be built.
+   * Adds another nested set to this set.
    *
-   * <p>The relative left-to-right order of transitive members is preserved from the sequence of
-   * calls to {@link #addTransitive}. Since the traversal {@link Order} controls whether direct
-   * members appear before or after transitive ones, the interleaving of
-   * {@link #add}/{@link #addAll} with {@link #addTransitive} does not matter.
+   *  <p>Preserves ordering of added nested sets. Discards duplicate values. Throws an exception if
+   * a null value is passed in.
    *
-   * <p>The {@link Order} of the added set must be compatible with the order of this builder (see
-   * {@link Order#isCompatible}). This is true even if the added set is empty. Strictly speaking, it
-   * is not technically necessary that two nested sets have compatible orders for them to be
-   * combined as part of one larger set. But checking for it helps readability and protects against
-   * bugs. Since {@link Order#STABLE_ORDER} is compatible with everything, it effectively disables
-   * the check. This can be used as an escape hatch to mix and match the set arbitrarily, including
-   * sharing the set as part of multiple other larger sets that have disagreeing orders.
+   *  <p>The collections of the direct members of the set and the nested sets are kept separate, so
+   * the order between multiple add/addAll calls matters, and the order between multiple
+   * addTransitive calls matters, but the order between add/addAll and addTransitive does not.
    *
-   * <p>The relative order of the elements of an added set are preserved, unless it has duplicates
-   * or overlaps with other added sets, or its order is different from that of the builder.
+   * <p>An error will be thrown if the ordering of {@code subset} is incompatible with the ordering
+   * of this set. Either they must match or one must be a {@code STABLE_ORDER} set.
    *
-   * @param subset the set to add as a transitive member; must not be null
-   * @return the builder
-   * @throws IllegalStateException if the order of {@code subset} is not compatible with the
-   *     order of this builder
+   * @return the builder.
    */
   public NestedSetBuilder<E> addTransitive(NestedSet<? extends E> subset) {
     Preconditions.checkNotNull(subset);
-    Preconditions.checkArgument(
-        order.isCompatible(subset.getOrder()),
-        "Order mismatch: %s != %s", subset.getOrder(), order);
+    if (subset.getOrder() != order && order != Order.STABLE_ORDER
+            && subset.getOrder() != Order.STABLE_ORDER) {
+      // Note that this check is not strictly necessary, although keeping the nested set types
+      // consistent helps readability and protects against bugs. The polymorphism regarding
+      // STABLE_ORDER is allowed in order to be able to, e.g., include an arbitrary nested set in
+      // the inputs of an action, or include a nested set that is indifferent to its order in
+      // multiple nested sets.
+      throw new IllegalStateException(subset.getOrder() + " != " + order);
+    }
     if (!subset.isEmpty()) {
       transitiveSets.add(subset);
     }
