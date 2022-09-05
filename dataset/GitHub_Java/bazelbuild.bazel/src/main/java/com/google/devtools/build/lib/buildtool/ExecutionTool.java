@@ -76,7 +76,6 @@ import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
 import com.google.devtools.build.lib.exec.SymlinkTreeStrategy;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
@@ -90,6 +89,7 @@ import com.google.devtools.build.lib.skyframe.Builder;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.AbruptExitException;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.io.OutErr;
@@ -472,11 +472,11 @@ public class ExecutionTool {
         saveCaches(actionCache);
       }
 
-      try (AutoProfiler p = AutoProfiler.profiled("Show results", ProfilerTask.INFO)) {
-        determineSuccessfulTargets(buildResult, configuredTargets, builtTargets, timer);
-        showBuildResult(request, buildResult, configuredTargets, analysisResult.getAspects());
-        Preconditions.checkNotNull(buildResult.getSuccessfulTargets());
-      }
+      long startTime = Profiler.nanoTimeMaybe();
+      determineSuccessfulTargets(buildResult, configuredTargets, builtTargets, timer);
+      showBuildResult(request, buildResult, configuredTargets, analysisResult.getAspects());
+      Preconditions.checkNotNull(buildResult.getSuccessfulTargets());
+      Profiler.instance().logSimpleTask(startTime, ProfilerTask.INFO, "Show results");
       if (explanationHandler != null) {
         uninstallExplanationHandler(explanationHandler);
       }
@@ -541,7 +541,9 @@ public class ExecutionTool {
    * Prepare for a local output build.
    */
   private void startLocalOutputBuild() throws ExecutorInitException {
-    try (AutoProfiler p = AutoProfiler.profiled("Starting local output build", ProfilerTask.INFO)) {
+    long startTime = Profiler.nanoTimeMaybe();
+
+    try {
       Path outputPath = runtime.getOutputPath();
       Path localOutputPath = runtime.getDirectories().getLocalOutputPath();
 
@@ -557,6 +559,9 @@ public class ExecutionTool {
           throw new ExecutorInitException("Couldn't handle local output directory symlinks", e);
         }
       }
+    } finally {
+      Profiler.instance().logSimpleTask(startTime, ProfilerTask.INFO,
+          "Starting local output build");
     }
   }
 
@@ -874,14 +879,21 @@ public class ExecutionTool {
     long actionCacheSizeInBytes = 0;
     long actionCacheSaveTime;
 
-    AutoProfiler p = AutoProfiler.profiledAndLogged("Saving action cache", ProfilerTask.INFO, LOG);
+    long startTime = BlazeClock.nanoTime();
     try {
+      LOG.info("saving action cache...");
       actionCacheSizeInBytes = actionCache.save();
+      LOG.info("action cache saved");
     } catch (IOException e) {
       getReporter().handle(Event.error("I/O error while writing action log: " + e.getMessage()));
     } finally {
-      actionCacheSaveTime = p.completeAndGetElapsedTimeNanos();
+      long stopTime = BlazeClock.nanoTime();
+      actionCacheSaveTime =
+          TimeUnit.MILLISECONDS.convert(stopTime - startTime, TimeUnit.NANOSECONDS);
+      Profiler.instance().logSimpleTask(startTime, stopTime,
+                                        ProfilerTask.INFO, "Saving action cache");
     }
+
     runtime.getEventBus().post(new CachesSavedEvent(
         actionCacheSaveTime, actionCacheSizeInBytes));
   }
