@@ -6,15 +6,13 @@ import org.hswebframework.web.commons.entity.factory.EntityFactory;
 import java.util.*;
 
 /**
- * 使用EntityFactory来拓展mybatis实体
+ * TODO 完成注释
  *
  * @author zhouhao
  */
 public class MybatisEntityFactory extends DefaultObjectFactory {
 
-    private static final long serialVersionUID = -7388760632000329910L;
-
-    private transient EntityFactory entityFactory;
+    private EntityFactory entityFactory;
 
     public MybatisEntityFactory(EntityFactory entityFactory) {
         this.entityFactory = entityFactory;
