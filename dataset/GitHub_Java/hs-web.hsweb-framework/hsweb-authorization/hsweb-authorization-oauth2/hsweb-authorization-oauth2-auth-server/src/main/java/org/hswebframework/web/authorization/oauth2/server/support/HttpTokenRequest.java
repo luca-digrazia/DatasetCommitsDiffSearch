@@ -29,8 +29,6 @@ import javax.servlet.http.HttpServletRequest;
 import java.util.*;
 
 /**
- * TODO 完成注释
- *
  * @author zhouhao
  */
 public class HttpTokenRequest implements TokenRequest {
@@ -50,8 +48,8 @@ public class HttpTokenRequest implements TokenRequest {
         clientCredentials = getClientCredentials(clientId, clientSecret, authorization);
 
         this.scope = getParameter(OAuth2Constants.scope)
-                .filter(Objects::nonNull)
-                .map(scope -> new HashSet<>(Arrays.asList(scope.split("[, \n]"))))
+                .filter(scopeStr -> !StringUtils.isNullOrEmpty(scopeStr))
+                .map(scopeStr -> new HashSet<>(Arrays.asList(scopeStr.split("[, \n]"))))
                 .orElseGet(HashSet::new);
     }
 
@@ -84,6 +82,10 @@ public class HttpTokenRequest implements TokenRequest {
         }
         if (authorization != null && !authorization.isEmpty()) {
             String[] decodeCredentials = decodeClientAuthenticationHeader(authorization);
+            //fix #63
+            if (decodeCredentials == null) {
+                return null;
+            }
             if (decodeCredentials.length > 1) {
                 principal = decodeCredentials[0];
                 credentials = decodeCredentials[1];
