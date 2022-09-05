@@ -251,8 +251,6 @@ public final class Lexer {
       if (c == ' ') {
         indentLen++;
         pos++;
-      } else if (c == '\r') {
-        pos++;
       } else if (c == '\t') {
         indentLen += 8 - indentLen % 8;
         pos++;
