@@ -81,11 +81,11 @@ public class AppleCommandLineOptions extends FragmentOptions {
 
   private Platform getPlatform() {
     for (String architecture : iosMultiCpus) {
-      if (Platform.forIosArch(architecture) == Platform.IOS_DEVICE) {
+      if (Platform.forArch(architecture) == Platform.IOS_DEVICE) {
         return Platform.IOS_DEVICE;
       }
     }
-    return Platform.forIosArch(iosCpu);
+    return Platform.forArch(iosCpu);
   }
   
   @Override
