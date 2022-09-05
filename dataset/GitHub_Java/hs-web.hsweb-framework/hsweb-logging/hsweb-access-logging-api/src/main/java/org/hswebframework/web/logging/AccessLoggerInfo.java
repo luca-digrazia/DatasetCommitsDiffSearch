@@ -214,7 +214,7 @@ public class AccessLoggerInfo {
         map.put("target", target != null ? target.getName() : "");
         Map<String, Object> newParameter = new LinkedHashMap<>(parameters);
         newParameter.entrySet().forEach(entry -> {
-            if (entry.getValue() != null) {
+            if (entry.getValue() != null && !(entry.getValue() instanceof Serializable)) {
                 entry.setValue(noSerialExchange.apply(entry.getValue()));
             }
         });
