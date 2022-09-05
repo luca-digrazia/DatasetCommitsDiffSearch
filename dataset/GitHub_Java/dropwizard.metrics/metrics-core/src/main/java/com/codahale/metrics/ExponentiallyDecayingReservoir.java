@@ -95,7 +95,7 @@ public class ExponentiallyDecayingReservoir implements Reservoir {
         try {
             final double itemWeight = weight(timestamp - startTime);
             final WeightedSample sample = new WeightedSample(value, itemWeight);
-            final double priority = itemWeight / ThreadLocalRandomProxy.current().nextDouble();
+            final double priority = itemWeight / ThreadLocalRandom.current().nextDouble();
             
             final long newCount = count.incrementAndGet();
             if (newCount <= size) {
@@ -124,7 +124,6 @@ public class ExponentiallyDecayingReservoir implements Reservoir {
 
     @Override
     public Snapshot getSnapshot() {
-        rescaleIfNeeded();
         lockForRegularUsage();
         try {
             return new WeightedSnapshot(values.values());
@@ -166,15 +165,12 @@ public class ExponentiallyDecayingReservoir implements Reservoir {
                 final long oldStartTime = startTime;
                 this.startTime = currentTimeInSeconds();
                 final double scalingFactor = exp(-alpha * (startTime - oldStartTime));
-                if (Double.compare(scalingFactor, 0) == 0) {
-                    values.clear();
-                } else {
-                    final ArrayList<Double> keys = new ArrayList<Double>(values.keySet());
-                    for (Double key : keys) {
-                        final WeightedSample sample = values.remove(key);
-                        final WeightedSample newSample = new WeightedSample(sample.value, sample.weight * scalingFactor);
-                        values.put(key * scalingFactor, newSample);
-                    }
+
+                final ArrayList<Double> keys = new ArrayList<Double>(values.keySet());
+                for (Double key : keys) {
+                    final WeightedSample sample = values.remove(key);
+                    final WeightedSample newSample = new WeightedSample(sample.value, sample.weight * scalingFactor);
+                    values.put(key * scalingFactor, newSample);
                 }
 
                 // make sure the counter is in sync with the number of stored samples.
