@@ -16,6 +16,7 @@ package com.google.devtools.build.android;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -38,6 +39,7 @@ import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+
 
 /**
  * Filters a {@link MergedAndroidData} resource drawables to the specified densities.
@@ -289,7 +291,7 @@ public class DensitySpecificResourceFilter {
       Files.walkFileTree(unFilteredResourceDir, EnumSet.of(FileVisitOption.FOLLOW_LINKS),
           Integer.MAX_VALUE, fileVisitor);
     } catch (IOException e) {
-      throw new RuntimeException(e);
+      throw Throwables.propagate(e);
     }
     removeResources(getResourceToRemove(fileVisitor.getCopiedFiles()));
     return filteredResourceDir;
