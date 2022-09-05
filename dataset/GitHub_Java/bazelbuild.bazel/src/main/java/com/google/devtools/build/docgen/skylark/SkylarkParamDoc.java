@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.docgen.skylark;
 
-import com.google.devtools.build.docgen.DocgenConsts;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 
@@ -43,13 +42,10 @@ public final class SkylarkParamDoc extends SkylarkDoc {
       StringBuilder sb = new StringBuilder();
       for (int i = 0; i < param.allowedTypes().length; i++) {
         ParamType paramType = param.allowedTypes()[i];
-        // Use the paramType's generic class if provided, otherwise the param's generic class
-        Class<?> generic =
-            paramType.generic1() == Object.class ? param.generic1() : paramType.generic1();
-        if (generic.equals(Object.class)) {
+        if (paramType.generic1().equals(Object.class)) {
           sb.append(getTypeAnchor(paramType.type()));
         } else {
-          sb.append(getTypeAnchor(paramType.type(), generic));
+          sb.append(getTypeAnchor(paramType.type(), paramType.generic1()));
         }
         if (i < param.allowedTypes().length - 1) {
           sb.append("; or ");
@@ -74,6 +70,6 @@ public final class SkylarkParamDoc extends SkylarkDoc {
 
   @Override
   public String getDocumentation() {
-    return param.doc().replace("$BE_ROOT", DocgenConsts.BEDocsRoot);
+    return param.doc();
   }
 }

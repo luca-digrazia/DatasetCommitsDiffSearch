@@ -53,7 +53,7 @@ public final class SkylarkBuiltinMethodDoc extends SkylarkMethodDoc {
 
   @Override
   public String getDocumentation() {
-    return SkylarkDocUtils.substituteVariables(annotation.doc());
+    return annotation.doc();
   }
 
   /**
