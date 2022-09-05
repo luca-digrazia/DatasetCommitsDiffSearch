@@ -65,7 +65,7 @@ public abstract class EnableCacheTreeSortService<E extends TreeSortSupportEntity
                     @CacheEvict(key = "'count'")
             }
     )
-    public E deleteByPk(PK pk) {
+    public int deleteByPk(PK pk) {
         return super.deleteByPk(pk);
     }
 

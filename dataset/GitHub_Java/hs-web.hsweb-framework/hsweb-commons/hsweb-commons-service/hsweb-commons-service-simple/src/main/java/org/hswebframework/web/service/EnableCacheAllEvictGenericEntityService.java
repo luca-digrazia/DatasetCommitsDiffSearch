@@ -42,7 +42,7 @@ public abstract class EnableCacheAllEvictGenericEntityService<E extends GenericE
 
     @Override
     @CacheEvict(allEntries = true)
-    public E deleteByPk(PK pk) {
+    public int deleteByPk(PK pk) {
         return super.deleteByPk(pk);
     }
 
