@@ -7,14 +7,14 @@ import com.rabbitmq.client.DefaultSocketConfigurator;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.util.concurrent.TimeoutException;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
+import java.nio.charset.Charset;
 
 /**
  * A rabbit-mq client to a Carbon server.
  */
 public class GraphiteRabbitMQ implements GraphiteSender {
+
+    private static final Charset UTF_8 = Charset.forName("UTF-8");
 
     private static final Integer DEFAULT_RABBIT_CONNECTION_TIMEOUT_MS = 500;
     private static final Integer DEFAULT_RABBIT_SOCKET_TIMEOUT_MS = 5000;
@@ -112,11 +112,7 @@ public class GraphiteRabbitMQ implements GraphiteSender {
             throw new IllegalStateException("Already connected");
         }
 
-        try {
-            connection = connectionFactory.newConnection();
-        } catch (TimeoutException e) {
-            throw new IllegalStateException(e);
-        }
+        connection = connectionFactory.newConnection();
         channel = connection.createChannel();
     }
 
@@ -162,7 +158,7 @@ public class GraphiteRabbitMQ implements GraphiteSender {
     }
 
     public String sanitize(String s) {
-        return GraphiteSanitize.sanitize(s);
+        return GraphiteSanitize.sanitize(s, '-');
     }
 
 }
