@@ -31,8 +31,6 @@ import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
-import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.MultiArchPlatformRule;
-
 import java.util.List;
 
 /**
@@ -40,7 +38,7 @@ import java.util.List;
  * accept different apple platform types (such as ios or watchos).
  */
 public class MultiArchSplitTransitionProvider implements SplitTransitionProvider {
-
+  
   @VisibleForTesting
   static final String UNSUPPORTED_PLATFORM_TYPE_ERROR_FORMAT =
       "Unsupported platform type \"%s\"";
@@ -56,11 +54,11 @@ public class MultiArchSplitTransitionProvider implements SplitTransitionProvider
    */
   public static PlatformType getPlatformType(RuleContext ruleContext) throws RuleErrorException {
     String attributeValue =
-        ruleContext.attributes().get(MultiArchPlatformRule.PLATFORM_TYPE_ATTR_NAME, STRING);
+        ruleContext.attributes().get(AppleBinaryRule.PLATFORM_TYPE_ATTR_NAME, STRING);
     try {
       return getPlatformType(attributeValue);
     } catch (IllegalArgumentException exception) {
-      throw ruleContext.throwWithAttributeError(MultiArchPlatformRule.PLATFORM_TYPE_ATTR_NAME,
+      throw ruleContext.throwWithAttributeError(AppleBinaryRule.PLATFORM_TYPE_ATTR_NAME,
           String.format(UNSUPPORTED_PLATFORM_TYPE_ERROR_FORMAT, attributeValue));
     }
   }
@@ -92,7 +90,7 @@ public class MultiArchSplitTransitionProvider implements SplitTransitionProvider
   @Override
   public SplitTransition<?> apply(Rule fromRule) {
     String platformTypeString = NonconfigurableAttributeMapper.of(fromRule)
-        .get(MultiArchPlatformRule.PLATFORM_TYPE_ATTR_NAME, STRING);
+        .get(AppleBinaryRule.PLATFORM_TYPE_ATTR_NAME, STRING);
     PlatformType platformType;
     try {
       platformType = getPlatformType(platformTypeString);
