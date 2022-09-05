@@ -73,14 +73,13 @@ public class PackageLookupFunction implements SkyFunction {
       return PackageLookupValue.DELETED_PACKAGE_VALUE;
     }
 
-    BlacklistedPackagePrefixesValue blacklistedPatternsValue =
-        (BlacklistedPackagePrefixesValue) env.getValue(BlacklistedPackagePrefixesValue.key());
-    if (blacklistedPatternsValue == null) {
+    ImmutableSet<PathFragment> patterns = PrecomputedValue.BLACKLISTED_PKG_PREFIXES.get(env);
+    if (patterns == null) {
       return null;
     }
 
     PathFragment buildFileFragment = packageKey.getPackageFragment();
-    for (PathFragment pattern : blacklistedPatternsValue.getPatterns()) {
+    for (PathFragment pattern : patterns) {
       if (buildFileFragment.startsWith(pattern)) {
         return PackageLookupValue.DELETED_PACKAGE_VALUE;
       }

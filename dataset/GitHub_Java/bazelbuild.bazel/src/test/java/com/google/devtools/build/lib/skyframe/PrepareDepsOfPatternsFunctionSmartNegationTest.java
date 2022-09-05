@@ -17,6 +17,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -78,9 +79,8 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends BuildViewTes
     ImmutableList<String> patternSequence = ImmutableList.of("//foo/...");
 
     // and a blacklist for the malformed package,
-    getSkyframeExecutor().setBlacklistedPackagePrefixesFile(
-        new PathFragment("config/blacklist.txt"));
-    scratch.file("config/blacklist.txt", "foo/foo");
+    getSkyframeExecutor().setBlacklistedPkgPrefixes(
+        ImmutableSet.of(new PathFragment("foo/foo")));
 
     assertSkipsFoo(patternSequence);
   }

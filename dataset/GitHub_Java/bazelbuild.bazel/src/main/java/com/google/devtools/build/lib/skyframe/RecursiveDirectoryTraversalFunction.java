@@ -113,13 +113,11 @@ abstract class RecursiveDirectoryTraversalFunction
    */
   TReturn visitDirectory(RecursivePkgKey recursivePkgKey, Environment env) {
     RootedPath rootedPath = recursivePkgKey.getRootedPath();
-    BlacklistedPackagePrefixesValue blacklist =
-        (BlacklistedPackagePrefixesValue) env.getValue(BlacklistedPackagePrefixesValue.key());
+    ImmutableSet<PathFragment> blacklist = PrecomputedValue.BLACKLISTED_PKG_PREFIXES.get(env);
     if (blacklist == null) {
       return null;
     }
-    Set<PathFragment> excludedPaths =
-        Sets.union(recursivePkgKey.getExcludedPaths(), blacklist.getPatterns());
+    Set<PathFragment> excludedPaths = Sets.union(recursivePkgKey.getExcludedPaths(), blacklist);
     Path root = rootedPath.getRoot();
     PathFragment rootRelativePath = rootedPath.getRelativePath();
 

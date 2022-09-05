@@ -94,8 +94,6 @@ public final class FilesetEntryFunctionTest extends FoundationTestCase {
     skyFunctions.put(
         SkyFunctions.RECURSIVE_FILESYSTEM_TRAVERSAL, new RecursiveFilesystemTraversalFunction());
     skyFunctions.put(SkyFunctions.PACKAGE_LOOKUP, new PackageLookupFunction(deletedPackages));
-    skyFunctions.put(SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
-        new BlacklistedPackagePrefixesFunction());
     skyFunctions.put(SkyFunctions.FILESET_ENTRY, new FilesetEntryFunction());
 
     differencer = new RecordingDifferencer();
@@ -103,8 +101,7 @@ public final class FilesetEntryFunctionTest extends FoundationTestCase {
     driver = new SequentialBuildDriver(evaluator);
     PrecomputedValue.BUILD_ID.set(differencer, UUID.randomUUID());
     PrecomputedValue.PATH_PACKAGE_LOCATOR.set(differencer, pkgLocator.get());
-    PrecomputedValue.BLACKLISTED_PACKAGE_PREFIXES_FILE.set(differencer,
-        PathFragment.EMPTY_FRAGMENT);
+    PrecomputedValue.BLACKLISTED_PKG_PREFIXES.set(differencer, ImmutableSet.<PathFragment>of());
   }
 
   private Artifact getSourceArtifact(String path) throws Exception {
