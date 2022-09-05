@@ -14,20 +14,20 @@
 package com.google.devtools.build.lib.query2.engine;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Argument;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ArgumentType;
-import com.google.devtools.build.lib.query2.engine.QueryEnvironment.MutableMap;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
-import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryTaskFuture;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
-import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ThreadSafeMutableSet;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ForkJoinPool;
 
 /**
  * A tests(x) filter expression, which returns all the tests in set x,
@@ -62,15 +62,15 @@ class TestsFunction implements QueryFunction {
   }
 
   @Override
-  public <T> QueryTaskFuture<Void> eval(
+  public <T> void eval(
       final QueryEnvironment<T> env,
       VariableContext<T> context,
       QueryExpression expression,
       List<Argument> args,
-      final Callback<T> callback) {
+      final Callback<T> callback) throws QueryException, InterruptedException {
     final Closure<T> closure = new Closure<>(expression, env);
 
-    return env.eval(args.get(0).getExpression(), context, new Callback<T>() {
+    env.eval(args.get(0).getExpression(), context, new Callback<T>() {
       @Override
       public void process(Iterable<T> partialResult) throws QueryException, InterruptedException {
         for (T target : partialResult) {
@@ -84,6 +84,17 @@ class TestsFunction implements QueryFunction {
         }
       }
     });
+  }
+
+  @Override
+  public <T> void parEval(
+      QueryEnvironment<T> env,
+      VariableContext<T> context,
+      QueryExpression expression,
+      List<Argument> args,
+      ThreadSafeCallback<T> callback,
+      ForkJoinPool forkJoinPool) throws QueryException, InterruptedException {
+    eval(env, context, expression, args, callback);
   }
 
   /**
@@ -140,12 +151,14 @@ class TestsFunction implements QueryFunction {
     }
   }
 
-  /** A closure over the temporary state needed to compute the expression. */
-  @ThreadSafe
+  /**
+   * A closure over the temporary state needed to compute the expression. This makes the evaluation
+   * thread-safe, as long as instances of this class are used only within a single thread.
+   */
   private static final class Closure<T> {
     private final QueryExpression expression;
     /** A dynamically-populated mapping from test_suite rules to their tests. */
-    private final MutableMap<T, ThreadSafeMutableSet<T>> testsInSuite;
+    private final Map<T, Set<T>> testsInSuite = new HashMap<>();
 
     /** The environment in which this query is being evaluated. */
     private final QueryEnvironment<T> env;
@@ -156,7 +169,6 @@ class TestsFunction implements QueryFunction {
       this.expression = expression;
       this.env = env;
       this.strict = env.isSettingEnabled(Setting.TESTS_EXPRESSION_STRICT);
-      this.testsInSuite = env.createMutableMap();
     }
 
     /**
@@ -165,11 +177,10 @@ class TestsFunction implements QueryFunction {
      *
      * @precondition env.getAccessor().isTestSuite(testSuite)
      */
-    private synchronized ThreadSafeMutableSet<T> getTestsInSuite(T testSuite)
-        throws QueryException, InterruptedException {
-      ThreadSafeMutableSet<T> tests = testsInSuite.get(testSuite);
+    private Set<T> getTestsInSuite(T testSuite) throws QueryException, InterruptedException {
+      Set<T> tests = testsInSuite.get(testSuite);
       if (tests == null) {
-        tests = env.createThreadSafeMutableSet();
+        tests = Sets.newHashSet();
         testsInSuite.put(testSuite, tests); // break cycles by inserting empty set early.
         computeTestsInSuite(testSuite, tests);
       }
@@ -184,7 +195,7 @@ class TestsFunction implements QueryFunction {
      *
      * @precondition env.getAccessor().isTestSuite(testSuite)
      */
-    private void computeTestsInSuite(T testSuite, ThreadSafeMutableSet<T> result)
+    private void computeTestsInSuite(T testSuite, Set<T> result)
         throws QueryException, InterruptedException {
       List<T> testsAndSuites = new ArrayList<>();
       // Note that testsAndSuites can contain input file targets; the test_suite rule does not
@@ -245,7 +256,7 @@ class TestsFunction implements QueryFunction {
      * @precondition {@code env.getAccessor().isTestSuite(testSuite)}
      * @precondition {@code env.getAccessor().isTestRule(test)} for all test in tests
      */
-    private void filterTests(T testSuite, ThreadSafeMutableSet<T> tests) {
+    private void filterTests(T testSuite, Set<T> tests) {
       List<String> tagsAttribute = env.getAccessor().getStringListAttr(testSuite, "tags");
       // Split the tags list into positive and negative tags
       Set<String> requiredTags = new HashSet<>();

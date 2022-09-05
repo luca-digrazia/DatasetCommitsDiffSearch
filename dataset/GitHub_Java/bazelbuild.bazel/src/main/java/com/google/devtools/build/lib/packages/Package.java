@@ -540,7 +540,12 @@ public class Package {
       suffix = "; however, a source file of this name exists.  (Perhaps add "
           + "'exports_files([\"" + targetName + "\"])' to " + name + "/BUILD?)";
     } else {
-      suffix = SpellChecker.didYouMean(targetName, targets.keySet());
+      String suggestion = SpellChecker.suggest(targetName, targets.keySet());
+      if (suggestion != null) {
+        suffix = " (did you mean '" + suggestion + "'?)";
+      } else {
+        suffix = "";
+      }
     }
 
     throw makeNoSuchTargetException(targetName, suffix);
