@@ -75,6 +75,8 @@ public final class GenQueryRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = genquery, TYPE = LIBRARY, FAMILY = General)[GENERIC_RULE] -->
 
+${ATTRIBUTE_SIGNATURE}
+
   <p>
   <code>genquery()</code> runs a query specified in the
     <a href="../blaze-query-v2.html">Blaze query language</a> and dumps the result
@@ -98,6 +100,8 @@ public final class GenQueryRule implements RuleDefinition {
   <p>
     The name of the output file is the name of the rule.
   </p>
+
+${ATTRIBUTE_DEFINITION}
 
 <h4 id="genquery_examples">Examples</h4>
   <p>
