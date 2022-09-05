@@ -467,8 +467,7 @@ public class AndroidCommon {
         ruleContext, semantics, javaCommon.getJavacOpts(), attributes);
     
     helper.addLibrariesToAttributes(javaCommon.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
-    helper.addProvidersToAttributes(
-        JavaCommon.compilationArgsFromSources(ruleContext), asNeverLink);
+    helper.addProvidersToAttributes(javaCommon.compilationArgsFromSources(), asNeverLink);
     attributes.setStrictJavaDeps(getStrictAndroidDeps());
     attributes.setRuleKind(ruleContext.getRule().getRuleClass());
     attributes.setTargetLabel(ruleContext.getLabel());

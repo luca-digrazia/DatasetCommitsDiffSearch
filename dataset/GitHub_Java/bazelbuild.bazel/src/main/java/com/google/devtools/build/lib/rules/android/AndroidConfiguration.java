@@ -20,7 +20,6 @@ import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.DefaultLabelConverter;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.EmptyToNullLabelConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
@@ -43,6 +42,13 @@ import java.util.List;
  */
 @Immutable
 public class AndroidConfiguration extends BuildConfiguration.Fragment {
+
+  /** Converter for --android_crosstool_top. */
+  public static class AndroidCrosstoolTopConverter extends DefaultLabelConverter {
+    public AndroidCrosstoolTopConverter() {
+      super(Constants.ANDROID_DEFAULT_CROSSTOOL);
+    }
+  }
 
   /** Converter for --android_sdk. */
   public static class AndroidSdkConverter extends DefaultLabelConverter {
@@ -103,9 +109,9 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     public boolean incrementalNativeLibs;
 
     @Option(name = "android_crosstool_top",
-        defaultValue = "//external:android/crosstool",
+        defaultValue = "",
         category = "semantics",
-        converter = EmptyToNullLabelConverter.class,
+        converter = AndroidCrosstoolTopConverter.class,
         help = "The location of the C++ compiler used for Android builds.")
     public Label androidCrosstoolTop;
 
@@ -187,13 +193,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       }
 
       labelMap.put("android_sdk", sdk);
-    }
-
-    @Override
-    public FragmentOptions getHost(boolean fallback) {
-      Options host = (Options) super.getHost(fallback);
-      host.androidCrosstoolTop = androidCrosstoolTop;
-      return host;
     }
 
     // This method is here because Constants.ANDROID_DEFAULT_FAT_APK_CPUS cannot be a constant
