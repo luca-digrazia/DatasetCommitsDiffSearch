@@ -24,8 +24,8 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
-import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
+import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner.Options;
 import com.google.devtools.build.lib.pkgcache.TestFilter;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue.TargetPatternList;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
@@ -165,7 +165,7 @@ final class TargetPatternPhaseFunction implements SkyFunction {
    *
    * @param targetPatterns the list of command-line target patterns specified by the user
    * @param compileOneDependency if true, enables alternative interpretation of targetPatterns; see
-   *     {@link LoadingOptions#compileOneDependency}
+   *     {@link Options#compileOneDependency}
    */
   private static ResolvedTargets<Target> getTargetsToBuild(Environment env,
       List<String> targetPatterns, boolean compileOneDependency) {
