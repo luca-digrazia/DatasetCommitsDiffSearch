@@ -23,6 +23,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.buildjar.InvalidCommandLineException;
 import com.google.devtools.build.buildjar.javac.FormattedDiagnostic.Listener;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
+import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin.PluginException;
 import com.sun.source.util.JavacTask;
 import com.sun.tools.javac.api.ClientCodeWrapper.Trusted;
 import com.sun.tools.javac.api.JavacTaskImpl;
@@ -107,6 +108,9 @@ public class BlazeJavacMain {
       } catch (PropagatedException e) {
         throw e.getCause();
       }
+    } catch (PluginException e) {
+      errWriter.println(e.getMessage());
+      result = e.getResult();
     } catch (Throwable t) {
       t.printStackTrace(errWriter);
       result = Result.ABNORMAL;
