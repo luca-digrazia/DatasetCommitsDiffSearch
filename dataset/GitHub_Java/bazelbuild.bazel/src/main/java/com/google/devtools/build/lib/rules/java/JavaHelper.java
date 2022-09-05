@@ -77,8 +77,9 @@ public abstract class JavaHelper {
     // Blaze flag --java_launcher
     JavaConfiguration javaConfig = ruleContext.getFragment(JavaConfiguration.class);
     if (ruleContext.getRule().isAttrDefined(":java_launcher", BuildType.LABEL)
-        && javaConfig.getJavaLauncherLabel() != null
-        && !javaConfig.getJavaLauncherLabel().equals(semantics.getJdkLauncherLabel())) {
+        && ((javaConfig.getJavaLauncherLabel() != null
+                && !javaConfig.getJavaLauncherLabel().equals(semantics.getJdkLauncherLabel()))
+            || semantics.forceUseJavaLauncherTarget(ruleContext))) {
       return ":java_launcher";
     }
     return null;
