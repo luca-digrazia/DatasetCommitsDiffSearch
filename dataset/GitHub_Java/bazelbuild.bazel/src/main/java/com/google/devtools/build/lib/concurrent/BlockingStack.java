@@ -51,11 +51,6 @@ public class BlockingStack<E> extends AbstractQueue<E> implements BlockingQueue<
   }
 
   @Override
-  public boolean offer(E e) {
-    return deque.offerFirst(e);
-  }
-
-  @Override
   public E take() throws InterruptedException {
     return deque.takeFirst();
   }
@@ -63,11 +58,6 @@ public class BlockingStack<E> extends AbstractQueue<E> implements BlockingQueue<
   @Override
   public E poll(long timeout, TimeUnit unit) throws InterruptedException {
     return deque.pollFirst(timeout, unit);
-  }
-
-  @Override
-  public E poll() {
-    return deque.pollFirst();
   }
 
   @Override
@@ -83,6 +73,16 @@ public class BlockingStack<E> extends AbstractQueue<E> implements BlockingQueue<
   @Override
   public int drainTo(Collection<? super E> c, int maxElements) {
     return deque.drainTo(c, maxElements);
+  }
+
+  @Override
+  public boolean offer(E e) {
+    return deque.offerFirst(e);
+  }
+
+  @Override
+  public E poll() {
+    return deque.pollFirst();
   }
 
   @Override
