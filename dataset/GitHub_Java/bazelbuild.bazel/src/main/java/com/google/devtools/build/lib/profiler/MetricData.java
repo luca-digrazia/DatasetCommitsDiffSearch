@@ -13,10 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.profiler;
 
-import static java.util.stream.Collectors.joining;
-
+import com.google.common.base.Joiner;
+import com.google.common.base.Predicate;
+import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Range;
+
 import java.text.DecimalFormat;
 
 /**
@@ -31,6 +33,14 @@ public final class MetricData {
   private final double avg;
   private final double stdDev;
   private final int max;
+  private static final Predicate<HistogramElement> NON_EMPTY_HISTOGRAM_ELEMENT =
+      new Predicate<HistogramElement>() {
+        @Override
+        public boolean apply(HistogramElement element) {
+          return element.count > 0;
+        }
+      };
+
   public MetricData(Object description, ImmutableList<HistogramElement> histogram, int count,
       double avg, double stdDev, int max) {
     this.description = description;
@@ -71,23 +81,13 @@ public final class MetricData {
       return "'" + description + "'. Zero data recorded";
     }
     DecimalFormat fmt = new DecimalFormat("0.###");
-    return "'"
-        + description
-        + "'. "
-        + " Count: "
-        + count
-        + " Avg: "
-        + fmt.format(avg)
-        + " StdDev: "
-        + fmt.format(stdDev)
-        + " Max: "
-        + max
+    return "'" + description + "'. "
+        + " Count: " + count
+        + " Avg: " + fmt.format(avg)
+        + " StdDev: " + fmt.format(stdDev)
+        + " Max: " + max
         + " Histogram:\n  "
-        + histogram
-            .stream()
-            .filter(element -> element.count > 0)
-            .map(Object::toString)
-            .collect(joining("\n  "));
+        + Joiner.on("\n  ").join(Collections2.filter(histogram, NON_EMPTY_HISTOGRAM_ELEMENT));
   }
 
   /** An histogram element that contains the range that applies to and the number of elements. */
