@@ -474,7 +474,11 @@ public final class PackageFactory {
           PackageContext context;
           if (originalContext == null) {
             Preconditions.checkArgument(!async);
-            context = getContext(env, ast);
+            try {
+              context = (PackageContext) env.lookup(PKG_CONTEXT);
+            } catch (NoSuchVariableException e) {
+              throw new EvalException(ast.getLocation(), e.getMessage());
+            }
           } else {
             context = originalContext;
           }
