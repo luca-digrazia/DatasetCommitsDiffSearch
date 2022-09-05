@@ -33,12 +33,13 @@ public class CsvReporterTest {
         this.dataDirectory = folder.newFolder();
 
         this.reporter = CsvReporter.forRegistry(registry)
+                                   .outputTo(dataDirectory)
                                    .formatFor(Locale.US)
                                    .convertRatesTo(TimeUnit.SECONDS)
                                    .convertDurationsTo(TimeUnit.MILLISECONDS)
                                    .withClock(clock)
                                    .filter(MetricFilter.ALL)
-                                   .build(dataDirectory);
+                                   .build();
     }
 
     @Test
