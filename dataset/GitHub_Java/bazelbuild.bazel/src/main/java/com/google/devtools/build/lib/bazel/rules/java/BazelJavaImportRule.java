@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.rules.java.JavaImportBaseRule;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
-import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 
 import java.util.Set;
 
@@ -68,7 +67,6 @@ public final class BazelJavaImportRule implements RuleDefinition {
             .allowedFileTypes(JavaSemantics.JAR)
             .allowedRuleClasses(ALLOWED_DEPS)
             .skipAnalysisTimeFileTypeCheck())
-        .advertiseProvider(JavaSourceInfoProvider.class)
         .build();
 
   }

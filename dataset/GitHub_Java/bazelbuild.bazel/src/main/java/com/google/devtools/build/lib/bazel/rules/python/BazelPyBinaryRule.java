@@ -14,17 +14,11 @@
 
 package com.google.devtools.build.lib.bazel.rules.python;
 
-import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-
-import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.config.HostTransition;
+import com.google.devtools.build.lib.bazel.rules.BazelBaseRuleClasses;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyRuleClasses.PyBinaryBaseRule;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.rules.python.PyRuleClasses;
 import com.google.devtools.build.lib.rules.python.PythonConfiguration;
 
 /**
@@ -39,19 +33,8 @@ public final class BazelPyBinaryRule implements RuleDefinition {
     minus the extension.  For example, if your entry point is called
     <code>main.py</code>, then your name should be <code>main</code>.
     <!-- #END_BLAZE_RULE.NAME --> */
-    Label launcher = env.getLauncherLabel();
-    if (launcher != null) {
-      builder.add(attr("$launcher", LABEL)
-          .cfg(HostTransition.INSTANCE)
-          .value(launcher));
-    }
     return builder
         .requiresConfigurationFragments(PythonConfiguration.class, BazelPythonConfiguration.class)
-        .cfg(PyRuleClasses.DEFAULT_PYTHON_VERSION_TRANSITION)
-        .add(attr("$zipper", LABEL)
-            .cfg(HostTransition.INSTANCE)
-            .exec()
-            .value(env.getToolsLabel("//tools/zip:zipper")))
         .build();
   }
 
@@ -59,7 +42,7 @@ public final class BazelPyBinaryRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("py_binary")
-        .ancestors(PyBinaryBaseRule.class, BaseRuleClasses.BinaryBaseRule.class)
+        .ancestors(PyBinaryBaseRule.class, BazelBaseRuleClasses.BinaryBaseRule.class)
         .factoryClass(BazelPyBinary.class)
         .build();
   }

@@ -13,15 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.bazel.rules.sh;
 
-import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.bazel.rules.sh.BazelShRuleClasses.ShRule;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
@@ -32,10 +27,6 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 public final class BazelShTestRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
-    Label launcher = environment.getLauncherLabel();
-    if (launcher != null) {
-      builder.add(attr("$launcher", LABEL).cfg(HostTransition.INSTANCE).value(launcher));
-    }
     return builder.build();
   }
 
@@ -54,7 +45,7 @@ public final class BazelShTestRule implements RuleDefinition {
 
 <p>A <code>sh_test()</code> rule creates a test written as a Bourne shell script.</p>
 
-<p>See the <a href="${link common-definitions#common-attributes-tests}">
+<p>See the <a href="common-definitions.html#common-attributes-tests">
 attributes common to all test rules (*_test)</a>.</p>
 
 <h4 id="sh_test_examples">Examples</h4>

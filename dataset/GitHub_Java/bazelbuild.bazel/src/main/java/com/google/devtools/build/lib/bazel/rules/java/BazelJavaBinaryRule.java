@@ -15,12 +15,11 @@
 package com.google.devtools.build.lib.bazel.rules.java;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 
-import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.bazel.rules.BazelBaseRuleClasses;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaRuleClasses.BaseJavaBinaryRule;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -55,8 +54,8 @@ public final class BazelJavaBinaryRule implements RuleDefinition {
               creates a self-contained jar file with a manifest that allows it to be run with the
               <code>java -jar</code> command or with the wrapper script's <code>--singlejar</code>
               option. Using the wrapper script is preferred to <code>java -jar</code> because it
-              also passes the <a href="${link java_binary.jvm_flags}">JVM flags</a> and the options
-              to load native libraries.
+              also passes the <a href="#java_binary.jvm_flags">JVM flags</a> and the options to load
+              native libraries.
             </p>
             <p>
               The deploy jar contains all the classes that would be found by a classloader that
@@ -64,13 +63,6 @@ public final class BazelJavaBinaryRule implements RuleDefinition {
               contains the native libraries needed for dependencies. These are automatically loaded
               into the JVM at runtime.
             </p>
-            <p>If your target specifies a <a href="#java_binary.launcher">launcher</a>
-              attribute, then instead of being a normal JAR file, the _deploy.jar will be a
-              native binary. This will contain the launcher plus any native (C++) dependencies of
-              your rule, all linked into a static binary. The actual jar file's bytes will be
-              appended to that native binary, creating a single binary blob containing both the
-              executable and the Java code. You can execute the resulting jar file directly
-              like you would execute any native binary.</p>
           </li>
           <li><code><var>name</var>_deploy-src.jar</code>: An archive containing the sources
             collected from the transitive closure of the target. These will match the classes in the
@@ -85,12 +77,6 @@ public final class BazelJavaBinaryRule implements RuleDefinition {
                 return rule.get("create_executable", BOOLEAN);
               }
             }))
-        .add(
-            attr("$jacoco_runtime", LABEL)
-                .value(env.getToolsLabel("//tools/jdk:jacoco-blaze-agent")))
-        .add(
-            attr("$jacocorunner", LABEL).value(env.getToolsLabel(
-                "//tools/jdk:JacocoCoverage")))
         .build();
   }
 
@@ -98,7 +84,7 @@ public final class BazelJavaBinaryRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("java_binary")
-        .ancestors(BaseJavaBinaryRule.class, BaseRuleClasses.BinaryBaseRule.class)
+        .ancestors(BaseJavaBinaryRule.class, BazelBaseRuleClasses.BinaryBaseRule.class)
         .factoryClass(BazelJavaBinary.class)
         .build();
   }
@@ -121,9 +107,9 @@ ${IMPLICIT_OUTPUTS}
 
 <p>
   A <code>deps</code> attribute is not allowed in a <code>java_binary</code> rule without
-  <a href="${link java_binary.srcs}"><code>srcs</code></a>; such a rule requires a
-  <a href="${link java_binary.main_class}"><code>main_class</code></a> provided by
-  <a href="${link java_binary.runtime_deps}"><code>runtime_deps</code></a>.
+  <a href="#java_binary.srcs"><code>srcs</code></a>; such a rule requires a
+  <a href="#java_binary.main_class"><code>main_class</code></a> provided by
+  <a href="#java_binary.runtime_deps"><code>runtime_deps</code></a>.
 </p>
 
 <p>The following code snippet illustrates a common mistake:</p>

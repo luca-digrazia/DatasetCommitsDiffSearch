@@ -31,6 +31,7 @@ public final class BazelShLibraryRule implements RuleDefinition {
     return builder
         /* <!-- #BLAZE_RULE(sh_library).ATTRIBUTE(srcs) -->
         The list of input files.
+        ${SYNOPSIS}
         <p>
           This attribute should be used to list shell script source files that belong to
           this library. Scripts can load other scripts using the shell's <code>source</code>

@@ -34,6 +34,7 @@ public final class BazelActionListenerRule implements RuleDefinition {
         /*<!-- #BLAZE_RULE(action_listener).ATTRIBUTE(mnemonics) -->
         A list of action mnemonics this <code>action_listener</code> should listen
         for, e.g. <code>[ "Javac" ]</code>.
+        ${SYNOPSIS}
         <p>
           Mnemonics are not a public interface.
           There's no guarantee that the mnemonics and their actions don't change.
@@ -43,6 +44,7 @@ public final class BazelActionListenerRule implements RuleDefinition {
         /*<!-- #BLAZE_RULE(action_listener).ATTRIBUTE(extra_actions) -->
         A list of <code><a href="#extra_action">extra_action</a></code> targets
         this <code>action_listener</code> should add to the build graph.
+        ${SYNOPSIS}
         E.g. <code>[ "//my/tools:analyzer" ]</code>.
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("extra_actions", LABEL_LIST).mandatory()
