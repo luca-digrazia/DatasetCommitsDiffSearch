@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,13 +39,12 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition.ConfigurationDistinguisher;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.DependencyControl;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.TargetControl;
@@ -156,7 +155,6 @@ public final class XcodeProvider implements TransitiveInfoProvider {
      * (e.g. a test host). The given provider is not registered as a dependency with this provider.
      */
     private void addTransitiveSets(XcodeProvider dependencyish) {
-      additionalSources.addTransitive(dependencyish.additionalSources);
       inputsToXcodegen.addTransitive(dependencyish.inputsToXcodegen);
       propagatedUserHeaderSearchPaths.addTransitive(dependencyish.propagatedUserHeaderSearchPaths);
       propagatedHeaderSearchPaths.addTransitive(dependencyish.propagatedHeaderSearchPaths);
@@ -186,7 +184,6 @@ public final class XcodeProvider implements TransitiveInfoProvider {
         if (dependency.productType == XcodeProductType.EXTENSION) {
           this.extensions.add(dependency);
           this.inputsToXcodegen.addTransitive(dependency.inputsToXcodegen);
-          this.additionalSources.addTransitive(dependency.additionalSources);
         } else {
           if (doPropagate) {
             this.propagatedDependencies.add(dependency);
@@ -557,17 +554,17 @@ public final class XcodeProvider implements TransitiveInfoProvider {
             .addAllHeaderSearchPath(headerSearchPaths)
             .addAllSupportFile(Artifact.toExecPaths(headers))
             .addAllCopt(compilationModeCopts)
-            .addAllCopt(CompilationSupport.DEFAULT_COMPILER_FLAGS)
+            .addAllCopt(IosSdkCommands.DEFAULT_COMPILER_FLAGS)
             .addAllCopt(Interspersing.prependEach("-D", objcProvider.get(DEFINE)))
             .addAllCopt(copts)
             .addAllLinkopt(
                 Interspersing.beforeEach("-force_load", objcProvider.get(FORCE_LOAD_FOR_XCODEGEN)))
-            .addAllLinkopt(CompilationSupport.DEFAULT_LINKER_FLAGS)
+            .addAllLinkopt(IosSdkCommands.DEFAULT_LINKER_FLAGS)
             .addAllLinkopt(
                 Interspersing.beforeEach(
                     "-weak_framework", SdkFramework.names(objcProvider.get(WEAK_SDK_FRAMEWORK))))
             .addAllBuildSetting(xcodeprojBuildSettings)
-            .addAllBuildSetting(AppleToolchain.defaultWarningsForXcode())
+            .addAllBuildSetting(IosSdkCommands.defaultWarningsForXcode())
             .addAllSdkFramework(SdkFramework.names(objcProvider.get(SDK_FRAMEWORK)))
             .addAllFramework(PathFragment.safePathStrings(objcProvider.get(FRAMEWORK_DIR)))
             .addAllXcassetsDir(PathFragment.safePathStrings(objcProvider.get(XCASSETS_DIR)))
@@ -662,7 +659,7 @@ public final class XcodeProvider implements TransitiveInfoProvider {
         .clearDependency()
         .clearBuildSetting()
         .addAllBuildSetting(companionTargetXcodeprojBuildSettings)
-        .addAllBuildSetting(AppleToolchain.defaultWarningsForXcode())
+        .addAllBuildSetting(IosSdkCommands.defaultWarningsForXcode())
         .build();
   }
 
