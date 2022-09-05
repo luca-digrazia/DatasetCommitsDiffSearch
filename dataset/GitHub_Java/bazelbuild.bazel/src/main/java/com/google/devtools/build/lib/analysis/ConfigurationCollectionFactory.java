@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,6 +39,8 @@ public interface ConfigurationCollectionFactory {
    * @param loadedPackageProvider the package provider
    * @param buildOptions top-level build options representing the command-line
    * @param errorEventListener the event listener for errors
+   * @param performSanityCheck flag to signal about performing sanity check. Can be false only for
+   * tests in skyframe. Legacy mode uses loadedPackageProvider == null condition for this.
    * @return the top-level configuration
    * @throws InvalidConfigurationException
    */
@@ -48,7 +50,8 @@ public interface ConfigurationCollectionFactory {
       Cache<String, BuildConfiguration> cache,
       PackageProviderForConfigurations loadedPackageProvider,
       BuildOptions buildOptions,
-      EventHandler errorEventListener) throws InvalidConfigurationException;
+      EventHandler errorEventListener,
+      boolean performSanityCheck) throws InvalidConfigurationException;
 
   /**
    * Returns the module the given configuration should use for choosing dynamic transitions.

@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -54,6 +53,7 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
@@ -64,7 +64,6 @@ import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.rules.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.rules.test.CoverageReportActionFactory.CoverageReportActionsWrapper;
-import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.skyframe.ActionLookupValue;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
@@ -691,23 +690,17 @@ public class BuildView {
     Set<Artifact> artifactsToBuild = new HashSet<>();
     Set<ConfiguredTarget> parallelTests = new HashSet<>();
     Set<ConfiguredTarget> exclusiveTests = new HashSet<>();
-
+    Collection<Artifact> buildInfoArtifacts;
+    buildInfoArtifacts = skyframeExecutor.getWorkspaceStatusArtifacts();
     // build-info and build-changelist.
-    Collection<Artifact> buildInfoArtifacts = skyframeExecutor.getWorkspaceStatusArtifacts();
     Preconditions.checkState(buildInfoArtifacts.size() == 2, buildInfoArtifacts);
     artifactsToBuild.addAll(buildInfoArtifacts);
-
-    // Extra actions
     addExtraActionsIfRequested(viewOptions, artifactsToBuild, configuredTargets);
-
-    // Coverage
-    NestedSet<Artifact> baselineCoverageArtifacts = getBaselineCoverageArtifacts(configuredTargets);
-    Iterables.addAll(artifactsToBuild, baselineCoverageArtifacts);
     if (coverageReportActionFactory != null) {
       CoverageReportActionsWrapper actionsWrapper;
       actionsWrapper = coverageReportActionFactory.createCoverageReportActionsWrapper(
           allTargetsToTest,
-          baselineCoverageArtifacts,
+          getBaselineCoverageArtifacts(configuredTargets),
           artifactFactory,
           CoverageReportValue.ARTIFACT_OWNER);
       if (actionsWrapper != null) {
@@ -717,7 +710,7 @@ public class BuildView {
       }
     }
 
-    // Tests. This must come last, so that the exclusive tests are scheduled after everything else.
+    // Note that this must come last, so that the tests are scheduled after all artifacts are built.
     scheduleTestsIfRequested(parallelTests, exclusiveTests, topLevelOptions, allTargetsToTest);
 
     String error = !loadingResult.hasLoadingError()
@@ -755,9 +748,11 @@ public class BuildView {
       Collection<ConfiguredTarget> configuredTargets) {
     NestedSetBuilder<Artifact> baselineCoverageArtifacts = NestedSetBuilder.stableOrder();
     for (ConfiguredTarget target : configuredTargets) {
-      InstrumentedFilesProvider provider = target.getProvider(InstrumentedFilesProvider.class);
+      OutputGroupProvider provider = target.getProvider(OutputGroupProvider.class);
       if (provider != null) {
-        baselineCoverageArtifacts.addTransitive(provider.getBaselineCoverageArtifacts());
+        baselineCoverageArtifacts.addTransitive(provider.getOutputGroup(
+            OutputGroupProvider.BASELINE_COVERAGE
+        ));
       }
     }
     return baselineCoverageArtifacts.build();

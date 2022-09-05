@@ -100,8 +100,7 @@ public class PostConfiguredTargetFunction implements SkyFunction {
     try {
       BuildConfiguration hostConfiguration =
           buildViewProvider.getSkyframeBuildView().getHostConfiguration(ct.getConfiguration());
-      deps = resolver.dependentNodeMap(ctgValue, hostConfiguration, /*aspect=*/null,
-          /*aspectParameters=*/null, configConditions);
+      deps = resolver.dependentNodeMap(ctgValue, hostConfiguration, null, configConditions);
       if (ct.getConfiguration() != null && ct.getConfiguration().useDynamicConfigurations()) {
         deps = ConfiguredTargetFunction.trimConfigurations(env, ctgValue, deps, hostConfiguration,
             ruleClassProvider);

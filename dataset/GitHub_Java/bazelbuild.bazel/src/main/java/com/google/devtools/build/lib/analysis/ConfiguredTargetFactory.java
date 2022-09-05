@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.InputFile;
@@ -281,10 +280,8 @@ public final class ConfiguredTargetFactory {
   public Aspect createAspect(
       AnalysisEnvironment env, RuleConfiguredTarget associatedTarget,
       ConfiguredAspectFactory aspectFactory,
-      AspectParameters aspectParameters,
       ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
-      Set<ConfigMatchingProvider> configConditions,
-      BuildConfiguration hostConfiguration) {
+      Set<ConfigMatchingProvider> configConditions, BuildConfiguration hostConfiguration) {
     RuleContext.Builder builder = new RuleContext.Builder(env,
         associatedTarget.getTarget(),
         associatedTarget.getConfiguration(),
@@ -300,7 +297,7 @@ public final class ConfiguredTargetFactory {
       return null;
     }
 
-    return aspectFactory.create(associatedTarget, ruleContext, aspectParameters);
+    return aspectFactory.create(associatedTarget, ruleContext);
   }
 
   /**

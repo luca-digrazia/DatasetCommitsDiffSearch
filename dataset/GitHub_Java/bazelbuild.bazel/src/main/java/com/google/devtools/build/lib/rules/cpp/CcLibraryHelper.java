@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,15 +31,15 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -611,7 +611,7 @@ public final class CcLibraryHelper {
     Preconditions.checkState(
         // 'cc_inc_library' rules do not compile, and thus are not affected by LIPO.
         ruleContext.getRule().getRuleClass().equals("cc_inc_library")
-        || ruleContext.getRule().isAttrDefined(":lipo_context_collector", BuildType.LABEL));
+        || ruleContext.getRule().isAttrDefined(":lipo_context_collector", Type.LABEL));
 
     if (checkDepsGenerateCpp) {
       for (LanguageDependentFragment dep :
@@ -789,18 +789,15 @@ public final class CcLibraryHelper {
       // TODO(bazel-team): addCppModuleMapToContext second-guesses whether module maps should
       // actually be enabled, so we need to double-check here. Who would write code like this?
       if (cppModuleMap != null) {
-        CppModuleMapAction action =
-            new CppModuleMapAction(
-                ruleContext.getActionOwner(),
-                cppModuleMap,
-                privateHeaders,
-                publicHeaders,
-                collectModuleMaps(),
-                additionalExportedHeaders,
-                featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES),
-                featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAP_HOME_CWD),
-                featureConfiguration.isEnabled(CppRuleClasses.GENERATE_SUBMODULES),
-                !featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAP_WITHOUT_EXTERN_MODULE));
+        CppModuleMapAction action = new CppModuleMapAction(ruleContext.getActionOwner(),
+            cppModuleMap,
+            privateHeaders,
+            publicHeaders,
+            collectModuleMaps(),
+            additionalExportedHeaders,
+            featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES),
+            featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAP_HOME_CWD),
+            featureConfiguration.isEnabled(CppRuleClasses.GENERATE_SUBMODULES));
         ruleContext.registerAction(action);
       }
       if (model.getGeneratesPicHeaderModule()) {

@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,14 +16,12 @@ package com.google.devtools.build.lib.skyframe;
 import static com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 
 import com.google.common.collect.ClassToInstanceMap;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.MutableClassToInstanceMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfigurationCollectionFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -42,13 +40,11 @@ import java.util.Set;
 public class BuildConfigurationFunction implements SkyFunction {
 
   private final BlazeDirectories directories;
-  private final RuleClassProvider ruleClassProvider;
   private final ConfigurationCollectionFactory collectionFactory;
 
   public BuildConfigurationFunction(BlazeDirectories directories,
       RuleClassProvider ruleClassProvider) {
     this.directories = directories;
-    this.ruleClassProvider = ruleClassProvider;
     collectionFactory =
         ((ConfiguredRuleClassProvider) ruleClassProvider).getConfigurationCollectionFactory();
   }
@@ -91,13 +87,7 @@ public class BuildConfigurationFunction implements SkyFunction {
     // Get SkyKeys for the fragments we need to load.
     Set<SkyKey> fragmentKeys = new LinkedHashSet<>();
     for (Class<? extends BuildConfiguration.Fragment> fragmentClass : key.getFragments()) {
-      // We don't want to invalidate the fragment Skyframe key due to existence of absence of
-      // options the fragment doesn't use.
-      BuildOptions optionsUsedByFragment = key.getBuildOptions().trim(
-          BuildConfiguration.getOptionsClasses(
-              ImmutableList.<Class<? extends BuildConfiguration.Fragment>>of(fragmentClass),
-              ruleClassProvider));
-      fragmentKeys.add(ConfigurationFragmentValue.key(optionsUsedByFragment, fragmentClass));
+      fragmentKeys.add(ConfigurationFragmentValue.key(key.getBuildOptions(), fragmentClass));
     }
 
     // Load them as Skyframe deps.

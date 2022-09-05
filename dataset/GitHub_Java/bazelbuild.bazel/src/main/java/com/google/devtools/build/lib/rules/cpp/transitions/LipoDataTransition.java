@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,12 +34,6 @@ public final class LipoDataTransition implements PatchTransition {
   @Override
   public BuildOptions apply(BuildOptions options) {
     if (options.get(BuildConfiguration.Options.class).isHost) {
-      return options;
-    }
-
-    // If this target and its transitive closure don't have C++ options, there's no
-    // LIPO context to change.
-    if (!options.contains(CppOptions.class)) {
       return options;
     }
 

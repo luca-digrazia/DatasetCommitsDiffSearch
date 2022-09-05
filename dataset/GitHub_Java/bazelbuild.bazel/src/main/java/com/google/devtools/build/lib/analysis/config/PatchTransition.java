@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,32 +21,16 @@ import com.google.devtools.build.lib.packages.Attribute;
  * <p>The concept is simple: given the input configuration's build options, the
  * transition does whatever it wants to them and returns the modified result.
  *
- * <p>Implementations must be stateless: the output must exclusively depend on the
- * input build options and any immutable member fields. Implementations must also override
- * {@link Object#equals} and {@link Object#hashCode} unless exclusively accessed as
- * singletons. For example:
+ * <p>Implementations must be stateless: the transformation logic cannot use
+ * any information from any data besides the input build options.
  *
- * <pre>
- * public class MyTransition implements PatchTransition {
- *   public MyTransition INSTANCE = new MyTransition();
- *
- *   private MyTransition() {}
- *
- *   {@literal @}Override
- *   public BuildOptions apply(BuildOptions options) {
- *     BuildOptions toOptions = options.clone();
- *     // Change some setting on toOptions
- *     return toOptions;
- *   }
- * }
- * </pre>
- *
- * <p>For performance reasons, the input options are passed as a <i>reference</i>, not a
- * <i>copy</i>. Implementations should <i>always</i> treat these as immutable, and call
+ * <p>For performance reasons, the input options are passed in as a <i>reference</i>,
+ * not a <i>copy</i>. Transition implementations should <i>always</i> treat these
+ * options as immutable, and call
  * {@link com.google.devtools.build.lib.analysis.config.BuildOptions#clone}
- * before making changes. Unfortunately,
- * {@link com.google.devtools.build.lib.analysis.config.BuildOptions} doesn't currently
- * enforce immutability. So care must be taken not to modify the wrong instance.
+ * before applying any mutations. Unfortunately,
+ * {@link com.google.devtools.build.lib.analysis.config.BuildOptions} does not currently
+ * enforce immutability, so care must be taken not to modify the wrong instance.
  */
 public interface PatchTransition extends Attribute.Transition {
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.Attribute.Transition;
+import com.google.devtools.build.lib.packages.InputFile;
+import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 
@@ -75,7 +77,7 @@ public final class BuildConfigurationCollection {
 
   public static BuildConfiguration configureTopLevelTarget(BuildConfiguration topLevelConfiguration,
       Target toTarget) {
-    if (!toTarget.isConfigurable()) {
+    if (toTarget instanceof InputFile || toTarget instanceof PackageGroup) {
       return null;
     }
     return topLevelConfiguration.getTransitions().toplevelConfigurationHook(toTarget);
@@ -172,6 +174,10 @@ public final class BuildConfigurationCollection {
 
     public Map<? extends Transition, ConfigurationHolder> getTransitionTable() {
       return transitionTable;
+    }
+
+    public ListMultimap<? super SplitTransition<?>, BuildConfiguration> getSplitTransitionTable() {
+      return splitTransitionTable;
     }
 
     public List<BuildConfiguration> getSplitConfigurations(SplitTransition<?> transition) {

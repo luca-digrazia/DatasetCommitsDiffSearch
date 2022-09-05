@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.Aspect;
-import com.google.devtools.build.lib.analysis.AspectWithParameters;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -46,7 +45,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectFactory;
-import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -183,7 +181,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
       }
 
       ListMultimap<Attribute, ConfiguredTarget> depValueMap = computeDependencies(env, resolver,
-          ctgValue, null, AspectParameters.EMPTY, configConditions, ruleClassProvider,
+          ctgValue, null, configConditions, ruleClassProvider,
           view.getHostConfiguration(configuration));
       ConfiguredTargetValue ans = createConfiguredTarget(
           view, env, target, configuration, depValueMap, configConditions);
@@ -204,8 +202,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
    * @param resolver The dependency resolver
    * @param ctgValue The label and the configuration of the node
    * @param aspectDefinition the aspect of the node (if null, the node is a configured target,
-   *     otherwise it's an aspect)
-   * @param aspectParameters additional parameters for aspect construction
+   *     otherwise it's an asect)
    * @param configConditions the configuration conditions for evaluating the attributes of the node
    * @param ruleClassProvider rule class provider for determining the right configuration fragments
    *   to apply to deps
@@ -218,16 +215,15 @@ final class ConfiguredTargetFunction implements SkyFunction {
   @Nullable
   static ListMultimap<Attribute, ConfiguredTarget> computeDependencies(
       Environment env, SkyframeDependencyResolver resolver, TargetAndConfiguration ctgValue,
-      AspectDefinition aspectDefinition, AspectParameters aspectParameters, 
-      Set<ConfigMatchingProvider> configConditions, RuleClassProvider ruleClassProvider,
-      BuildConfiguration hostConfiguration)
+      AspectDefinition aspectDefinition, Set<ConfigMatchingProvider> configConditions,
+      RuleClassProvider ruleClassProvider, BuildConfiguration hostConfiguration)
       throws DependencyEvaluationException {
 
     // Create the map from attributes to list of (target, configuration) pairs.
     ListMultimap<Attribute, Dependency> depValueNames;
     try {
       depValueNames = resolver.dependentNodeMap(ctgValue, hostConfiguration, aspectDefinition,
-          aspectParameters, configConditions);
+          configConditions);
     } catch (EvalException e) {
       env.getListener().handle(Event.error(e.getLocation(), e.getMessage()));
       throw new DependencyEvaluationException(new ConfiguredValueCreationException(e.print()));
@@ -483,8 +479,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
     ListMultimap<SkyKey, Aspect> result = ArrayListMultimap.create();
     Set<SkyKey> aspectKeys = new HashSet<>();
     for (Dependency dep : deps) {
-      for (AspectWithParameters depAspect : dep.getAspects()) {
-        aspectKeys.add(createAspectKey(dep.getLabel(), dep.getConfiguration(), depAspect));
+      for (Class<? extends ConfiguredAspectFactory> depAspect : dep.getAspects()) {
+        aspectKeys.add(AspectValue.key(dep.getLabel(), dep.getConfiguration(), depAspect));
       }
     }
 
@@ -501,12 +497,12 @@ final class ConfiguredTargetFunction implements SkyFunction {
         continue;
       }
       ConfiguredTarget depConfiguredTarget = configuredTargetMap.get(depKey);
-      for (AspectWithParameters depAspect : dep.getAspects()) {
-        if (!aspectMatchesConfiguredTarget(depConfiguredTarget, depAspect.getAspectFactory())) {
+      for (Class<? extends ConfiguredAspectFactory> depAspect : dep.getAspects()) {
+        if (!aspectMatchesConfiguredTarget(depConfiguredTarget, depAspect)) {
           continue;
         }
 
-        SkyKey aspectKey = createAspectKey(dep.getLabel(), dep.getConfiguration(), depAspect);
+        SkyKey aspectKey = AspectValue.key(dep.getLabel(), dep.getConfiguration(), depAspect);
         AspectValue aspectValue = null;
         try {
           aspectValue = (AspectValue) depAspects.get(aspectKey).get();
@@ -514,8 +510,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
           // The configured target should have been created in resolveConfiguredTargetDependencies()
           throw new IllegalStateException(e);
         } catch (NoSuchThingException | AspectCreationException e) {
-          AspectFactory<?, ?, ?> depAspectFactory =
-              AspectFactory.Util.create(depAspect.getAspectFactory());
+          AspectFactory<?, ?, ?> depAspectFactory = AspectFactory.Util.create(depAspect);
           throw new DependencyEvaluationException(new ConfiguredValueCreationException(
               String.format("Evaluation of aspect %s on %s failed: %s",
                   depAspectFactory.getDefinition().getName(), dep.getLabel(), e.toString())));
@@ -528,15 +523,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
         result.put(depKey, aspectValue.getAspect());
       }
     }
-    return result;
-  }
 
-  public static SkyKey createAspectKey(Label label, BuildConfiguration buildConfiguration,
-      AspectWithParameters depAspect) {
-    return AspectValue.key(label,
-        buildConfiguration,
-        depAspect.getAspectFactory(),
-        depAspect.getParameters());
+    return result;
   }
 
   private static boolean aspectMatchesConfiguredTarget(ConfiguredTarget dep,
@@ -585,7 +573,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
 
     // Collect the corresponding Skyframe configured target values. Abort early if they haven't
     // been computed yet.
-    Collection<Dependency> configValueNames = resolver.resolveRuleLabels(ctgValue, configLabelMap);
+    Collection<Dependency> configValueNames =
+        resolver.resolveRuleLabels(ctgValue, null, configLabelMap);
 
     // No need to get new configs from Skyframe - config_setting rules always use the current
     // target's config.

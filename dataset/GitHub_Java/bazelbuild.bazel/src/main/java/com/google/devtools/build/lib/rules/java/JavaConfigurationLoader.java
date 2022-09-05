@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.RedirectChaser;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
@@ -21,10 +22,10 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
+import com.google.devtools.build.lib.syntax.Label;
 
 /**
  * A loader that creates JavaConfiguration instances based on JavaBuilder configurations and
@@ -65,7 +66,10 @@ public class JavaConfigurationLoader implements ConfigurationFragmentFactory {
     boolean generateJavaDeps = javaOptions.javaDeps ||
         javaOptions.experimentalJavaClasspath != JavaClasspathMode.OFF;
 
-    return new JavaConfiguration(
-        generateJavaDeps, javaOptions.jvmOpts, javaOptions, javaToolchain, javaCpu);
+    ImmutableList<String> defaultJavaBuilderJvmOpts =
+        ImmutableList.copyOf(JavaHelper.tokenizeJavaOptions(javaOptions.javaBuilderJvmOpts));
+
+    return new JavaConfiguration(generateJavaDeps, javaOptions.jvmOpts, javaOptions,
+        javaToolchain, javaCpu, defaultJavaBuilderJvmOpts);
   }
 }

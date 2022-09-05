@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.collect.ImmutableSortedKeyListMultimap;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectFactory;
-import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
@@ -101,7 +100,7 @@ public abstract class DependencyResolver {
     private final Attribute.Transition transition;
 
     private final boolean hasStaticConfiguration;
-    private final ImmutableSet<AspectWithParameters> aspects;
+    private final ImmutableSet<Class<? extends ConfiguredAspectFactory>> aspects;
 
     /**
      * Constructs a Dependency with a given configuration (suitable for static configuration
@@ -109,7 +108,7 @@ public abstract class DependencyResolver {
      */
     public Dependency(Label label,
         @Nullable BuildConfiguration configuration,
-        ImmutableSet<AspectWithParameters> aspects) {
+        ImmutableSet<Class<? extends ConfiguredAspectFactory>> aspects) {
       this.label = Preconditions.checkNotNull(label);
       this.configuration = configuration;
       this.transition = null;
@@ -122,14 +121,14 @@ public abstract class DependencyResolver {
      * builds).
      */
     public Dependency(Label label, @Nullable BuildConfiguration configuration) {
-      this(label, configuration, ImmutableSet.<AspectWithParameters>of());
+      this(label, configuration, ImmutableSet.<Class<? extends ConfiguredAspectFactory>>of());
     }
 
     /**
      * Constructs a Dependency with a given transition (suitable for dynamic configuration builds).
      */
     public Dependency(Label label, Attribute.Transition transition,
-        ImmutableSet<AspectWithParameters> aspects) {
+        ImmutableSet<Class<? extends ConfiguredAspectFactory>> aspects) {
       this.label = Preconditions.checkNotNull(label);
       this.configuration = null;
       this.transition = Preconditions.checkNotNull(transition);
@@ -166,7 +165,7 @@ public abstract class DependencyResolver {
       return transition;
     }
 
-    public ImmutableSet<AspectWithParameters> getAspects() {
+    public ImmutableSet<Class<? extends ConfiguredAspectFactory>> getAspects() {
       return aspects;
     }
 
@@ -218,7 +217,7 @@ public abstract class DependencyResolver {
    */
   public final ListMultimap<Attribute, Dependency> dependentNodeMap(
       TargetAndConfiguration node, BuildConfiguration hostConfig, AspectDefinition aspect,
-      AspectParameters aspectParameters, Set<ConfigMatchingProvider> configConditions)
+      Set<ConfigMatchingProvider> configConditions)
       throws EvalException {
     Target target = node.getTarget();
     BuildConfiguration config = node.getConfiguration();
@@ -238,7 +237,7 @@ public abstract class DependencyResolver {
       Rule rule = (Rule) target;
       ListMultimap<Attribute, LabelAndConfiguration> labelMap =
           resolveAttributes(rule, aspect, config, hostConfig, configConditions);
-      visitRule(rule, aspect, aspectParameters, labelMap, outgoingEdges);
+      visitRule(rule, aspect, labelMap, outgoingEdges);
     } else if (target instanceof PackageGroup) {
       visitPackageGroup(node, (PackageGroup) target, outgoingEdges.get(null));
     } else {
@@ -503,8 +502,8 @@ public abstract class DependencyResolver {
       TargetAndConfiguration node, BuildConfiguration hostConfig,
       Set<ConfigMatchingProvider> configConditions) {
     try {
-      return ImmutableSet.copyOf(dependentNodeMap(node, hostConfig, /*aspect=*/null,
-          /*aspectParameters=*/null, configConditions).values());
+      return ImmutableSet.copyOf(
+          dependentNodeMap(node, hostConfig, null, configConditions).values());
     } catch (EvalException e) {
       throw new IllegalStateException(e);
     }
@@ -517,12 +516,12 @@ public abstract class DependencyResolver {
    * @throws IllegalArgumentException if the {@code node} does not refer to a {@link Rule} instance
    */
   public final Collection<Dependency> resolveRuleLabels(
-      TargetAndConfiguration node, ListMultimap<Attribute,
+      TargetAndConfiguration node, AspectDefinition aspect, ListMultimap<Attribute,
       LabelAndConfiguration> labelMap) {
     Preconditions.checkArgument(node.getTarget() instanceof Rule);
     Rule rule = (Rule) node.getTarget();
     ListMultimap<Attribute, Dependency> outgoingEdges = ArrayListMultimap.create();
-    visitRule(rule, labelMap, outgoingEdges);
+    visitRule(rule, aspect, labelMap, outgoingEdges);
     return outgoingEdges.values();
   }
 
@@ -549,59 +548,39 @@ public abstract class DependencyResolver {
     }
   }
 
-  private ImmutableSet<AspectWithParameters> requiredAspects(AspectDefinition aspectDefinition,
-      AspectParameters aspectParameters, Attribute attribute, Target target, Rule originalRule) {
+  private ImmutableSet<Class<? extends ConfiguredAspectFactory>> requiredAspects(
+      AspectDefinition aspect, Attribute attribute, Target target) {
     if (!(target instanceof Rule)) {
       return ImmutableSet.of();
     }
 
-    Set<AspectWithParameters> aspectCandidates =
-        extractAspectCandidates(aspectDefinition, aspectParameters, attribute, originalRule);
     RuleClass ruleClass = ((Rule) target).getRuleClassObject();
-    ImmutableSet.Builder<AspectWithParameters> result = ImmutableSet.builder();
-    for (AspectWithParameters candidateClass : aspectCandidates) {
-      ConfiguredAspectFactory candidate =
-          (ConfiguredAspectFactory) AspectFactory.Util.create(candidateClass.getAspectFactory());
-      if (Sets.difference(
-          candidate.getDefinition().getRequiredProviders(),
-          ruleClass.getAdvertisedProviders()).isEmpty()) {
-        result.add(candidateClass);
-      }
-    }
-    return result.build();
-  }
 
-  private static Set<AspectWithParameters> extractAspectCandidates(
-      AspectDefinition aspectDefinition, AspectParameters aspectParameters,
-      Attribute attribute, Rule originalRule) {
     // The order of this set will be deterministic. This is necessary because this order eventually
     // influences the order in which aspects are merged into the main configured target, which in
     // turn influences which aspect takes precedence if two emit the same provider (maybe this
     // should be an error)
-    Set<AspectWithParameters> aspectCandidates = new LinkedHashSet<>();
-    for (Map.Entry<Class<? extends AspectFactory<?, ?, ?>>, AspectParameters> aspectWithParameters :
-      attribute.getAspectsWithParameters(originalRule).entrySet()) {
-      aspectCandidates.add(new AspectWithParameters(
-          aspectWithParameters.getKey().asSubclass(ConfiguredAspectFactory.class),
-          aspectWithParameters.getValue()));
+    Set<Class<? extends AspectFactory<?, ?, ?>>> aspectCandidates = new LinkedHashSet<>();
+    aspectCandidates.addAll(attribute.getAspects());
+    if (aspect != null) {
+      aspectCandidates.addAll(aspect.getAttributeAspects().get(attribute.getName()));
     }
-    if (aspectDefinition != null) {
-      for (Class<? extends AspectFactory<?, ?, ?>> aspect :
-          aspectDefinition.getAttributeAspects().get(attribute.getName())) {
-        aspectCandidates.add(new AspectWithParameters(
-            aspect.asSubclass(ConfiguredAspectFactory.class),
-            aspectParameters));
+
+    ImmutableSet.Builder<Class<? extends ConfiguredAspectFactory>> result = ImmutableSet.builder();
+    for (Class<? extends AspectFactory<?, ?, ?>> candidateClass : aspectCandidates) {
+      ConfiguredAspectFactory candidate =
+          (ConfiguredAspectFactory) AspectFactory.Util.create(candidateClass);
+      if (Sets.difference(
+          candidate.getDefinition().getRequiredProviders(),
+          ruleClass.getAdvertisedProviders()).isEmpty()) {
+        result.add(candidateClass.asSubclass(ConfiguredAspectFactory.class));
       }
     }
-    return aspectCandidates;
+
+    return result.build();
   }
 
-  private void visitRule(Rule rule, ListMultimap<Attribute, LabelAndConfiguration> labelMap,
-      ListMultimap<Attribute, Dependency> outgoingEdges) {
-    visitRule(rule, /*aspect=*/null, /*aspectParameters=*/null, labelMap, outgoingEdges);
-  }
-
-  private void visitRule(Rule rule, AspectDefinition aspect, AspectParameters aspectParameters,
+  private void visitRule(Rule rule, AspectDefinition aspect,
       ListMultimap<Attribute, LabelAndConfiguration> labelMap,
       ListMultimap<Attribute, Dependency> outgoingEdges) {
     Preconditions.checkNotNull(labelMap);
@@ -643,7 +622,7 @@ public abstract class DependencyResolver {
           config.evaluateTransition(rule, attribute, toTarget, transitionApplier);
         }
         for (Dependency dependency : transitionApplier.getDependencies(label,
-            requiredAspects(aspect, aspectParameters, attribute, toTarget, rule))) {
+            requiredAspects(aspect, attribute, toTarget))) {
           outgoingEdges.put(
               entry.getKey(),
               dependency);

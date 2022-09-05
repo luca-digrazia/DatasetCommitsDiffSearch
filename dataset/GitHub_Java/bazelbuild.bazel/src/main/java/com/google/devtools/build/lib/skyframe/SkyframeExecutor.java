@@ -1634,7 +1634,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   public void prepareExecution(boolean checkOutputFiles,
-      @Nullable Range<Long> lastExecutionTimeRange) throws AbruptExitException,
+      Range<Long> lastExecutionTimeRange) throws AbruptExitException,
       InterruptedException {
     maybeInjectEmbeddedArtifacts();
 
