@@ -130,11 +130,6 @@ public abstract class ScheduledReporter implements Closeable, Reporter {
                                 ScheduledExecutorService executor,
                                 boolean shutdownExecutorOnStop,
                                 Set<MetricAttribute> disabledMetricAttributes) {
-
-        if (registry == null) {
-            throw new NullPointerException("registry == null");
-        }
-
         this.registry = registry;
         this.filter = filter;
         this.executor = executor == null ? createDefaultExecutor(name) : executor;
