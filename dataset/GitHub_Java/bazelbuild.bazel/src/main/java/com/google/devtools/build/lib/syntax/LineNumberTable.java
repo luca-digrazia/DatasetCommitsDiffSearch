@@ -110,9 +110,7 @@ public abstract class LineNumberTable implements Serializable {
     }
 
     private int getLineAt(int offset) {
-      if (offset < 0) {
-        throw new IllegalStateException("Illegal position: " + offset);
-      }
+      Preconditions.checkArgument(offset >= 0, "Illegal position: ", offset);
       int lowBoundary = 1, highBoundary = linestart.length - 1;
       while (true) {
         if ((highBoundary - lowBoundary) <= 1) {
@@ -230,9 +228,7 @@ public abstract class LineNumberTable implements Serializable {
     }
 
     private SingleHashLine getHashLine(int offset) {
-      if (offset < 0) {
-        throw new IllegalStateException("Illegal position: " + offset);
-      }
+      Preconditions.checkArgument(offset >= 0, "Illegal position: ", offset);
       int binarySearchIndex = hashOrdering.binarySearch(
           table, new SingleHashLine(offset, -1, null));
       if (binarySearchIndex >= 0) {
