@@ -558,13 +558,13 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testDictKeysTooManyArgs() throws Exception {
-    checkEvalError("too many (2) positional arguments in call to keys(self: dict)",
+    checkEvalError("Invalid number of arguments (expected 0)",
         "{'a': 1}.keys('abc')");
   }
 
   @Test
   public void testDictKeysTooManyKeyArgs() throws Exception {
-    checkEvalError("unexpected keyword 'arg' in call to keys(self: dict)",
+    checkEvalError("Invalid number of arguments (expected 0)",
         "{'a': 1}.keys(arg='abc')");
   }
 
@@ -576,8 +576,8 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testArgBothPosKey() throws Exception {
-    checkEvalErrorStartsWith("arguments 'old', 'new' passed both by position and by name "
-        + "in call to replace(self: string, ",
-        "'banana'.replace('a', 'o', 3, old='a', new=4)");
+    checkEvalError("replace(this, old, new, maxsplit = null) got multiple values "
+        + "for keyword argument 'new'",
+        "'banana'.replace('a', 'o', 3, new=4)");
   }
 }
