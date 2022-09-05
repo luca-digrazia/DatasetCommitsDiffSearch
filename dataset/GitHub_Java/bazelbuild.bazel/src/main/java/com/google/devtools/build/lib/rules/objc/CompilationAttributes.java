@@ -47,8 +47,8 @@ final class CompilationAttributes {
     private final NestedSetBuilder<Artifact> textualHdrs = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<PathFragment> includes = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<PathFragment> sdkIncludes = NestedSetBuilder.stableOrder();
-    private final ImmutableList.Builder<String> copts = ImmutableList.builder();
-    private final ImmutableList.Builder<String> linkopts = ImmutableList.builder();
+    private final NestedSetBuilder<String> copts = NestedSetBuilder.stableOrder();
+    private final NestedSetBuilder<String> linkopts = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<CppModuleMap> moduleMapsForDirectDeps =
         NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<SdkFramework> sdkFrameworks = NestedSetBuilder.stableOrder();
@@ -107,16 +107,16 @@ final class CompilationAttributes {
     /**
      * Adds compile-time options.
      */
-    public Builder addCopts(Iterable<String> copts) {
-      this.copts.addAll(copts);
+    public Builder addCopts(NestedSet<String> copts) {
+      this.copts.addTransitive(copts);
       return this;
     }
 
     /**
      * Adds link-time options.
      */
-    public Builder addLinkopts(Iterable<String> linkopts) {
-      this.linkopts.addAll(linkopts);
+    public Builder addLinkopts(NestedSet<String> linkopts) {
+      this.linkopts.addTransitive(linkopts);
       return this;
     }
 
@@ -256,11 +256,15 @@ final class CompilationAttributes {
 
     private static void addCompileOptionsFromRuleContext(Builder builder, RuleContext ruleContext) {
       if (ruleContext.attributes().has("copts", Type.STRING_LIST)) {
-        builder.addCopts(ruleContext.getTokenizedStringListAttr("copts"));
+        NestedSetBuilder<String> copts = NestedSetBuilder.stableOrder();
+        copts.addAll(ruleContext.getTokenizedStringListAttr("copts"));
+        builder.addCopts(copts.build());
       }
 
       if (ruleContext.attributes().has("linkopts", Type.STRING_LIST)) {
-        builder.addLinkopts(ruleContext.getTokenizedStringListAttr("linkopts"));
+        NestedSetBuilder<String> linkopts = NestedSetBuilder.stableOrder();
+        linkopts.addAll(ruleContext.getTokenizedStringListAttr("linkopts"));
+        builder.addLinkopts(linkopts.build());
       }
     }
 
@@ -309,8 +313,8 @@ final class CompilationAttributes {
   private final NestedSet<SdkFramework> weakSdkFrameworks;
   private final NestedSet<String> sdkDylibs;
   private final Optional<PathFragment> packageFragment;
-  private final ImmutableList<String> copts;
-  private final ImmutableList<String> linkopts;
+  private final NestedSet<String> copts;
+  private final NestedSet<String> linkopts;
   private final NestedSet<CppModuleMap> moduleMapsForDirectDeps;
   private final boolean enableModules;
 
@@ -323,8 +327,8 @@ final class CompilationAttributes {
       NestedSet<SdkFramework> weakSdkFrameworks,
       NestedSet<String> sdkDylibs,
       Optional<PathFragment> packageFragment,
-      ImmutableList<String> copts,
-      ImmutableList<String> linkopts,
+      NestedSet<String> copts,
+      NestedSet<String> linkopts,
       NestedSet<CppModuleMap> moduleMapsForDirectDeps,
       boolean enableModules) {
     this.hdrs = hdrs;
@@ -415,14 +419,14 @@ final class CompilationAttributes {
   /**
    * Returns the compile-time options.
    */
-  public ImmutableList<String> copts() {
+  public NestedSet<String> copts() {
     return this.copts;
   }
 
   /**
    * Returns the link-time options.
    */
-  public ImmutableList<String> linkopts() {
+  public NestedSet<String> linkopts() {
     return this.linkopts;
   }
 

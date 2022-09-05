@@ -32,6 +32,7 @@ final class CompilationArtifacts {
     private Iterable<Artifact> additionalHdrs = ImmutableList.of();
     private Iterable<Artifact> privateHdrs = ImmutableList.of();
     private Iterable<Artifact> precompiledSrcs = ImmutableList.of();
+    private Optional<Artifact> pchFile;
     private IntermediateArtifacts intermediateArtifacts;
 
     Builder addSrcs(Iterable<Artifact> srcs) {
@@ -71,6 +72,13 @@ final class CompilationArtifacts {
       return this;
     }
 
+    Builder setPchFile(Optional<Artifact> pchFile) {
+      Preconditions.checkState(this.pchFile == null,
+          "pchFile is already set to: %s", this.pchFile);
+      this.pchFile = Preconditions.checkNotNull(pchFile);
+      return this;
+    }
+
     Builder setIntermediateArtifacts(IntermediateArtifacts intermediateArtifacts) {
       Preconditions.checkState(this.intermediateArtifacts == null,
           "intermediateArtifacts is already set to: %s", this.intermediateArtifacts);
@@ -94,7 +102,7 @@ final class CompilationArtifacts {
         archive = Optional.of(intermediateArtifacts.archive());
       }
       return new CompilationArtifacts(
-          srcs, nonArcSrcs, additionalHdrs, privateHdrs, precompiledSrcs, archive);
+          srcs, nonArcSrcs, additionalHdrs, privateHdrs, precompiledSrcs, archive, pchFile);
     }
   }
 
@@ -104,6 +112,7 @@ final class CompilationArtifacts {
   private final Iterable<Artifact> additionalHdrs;
   private final Iterable<Artifact> privateHdrs;
   private final Iterable<Artifact> precompiledSrcs;
+  private final Optional<Artifact> pchFile;
 
   private CompilationArtifacts(
       Iterable<Artifact> srcs,
@@ -111,13 +120,15 @@ final class CompilationArtifacts {
       Iterable<Artifact> additionalHdrs,
       Iterable<Artifact> privateHdrs,
       Iterable<Artifact> precompiledSrcs,
-      Optional<Artifact> archive) {
+      Optional<Artifact> archive,
+      Optional<Artifact> pchFile) {
     this.srcs = Preconditions.checkNotNull(srcs);
     this.nonArcSrcs = Preconditions.checkNotNull(nonArcSrcs);
     this.additionalHdrs = Preconditions.checkNotNull(additionalHdrs);
     this.privateHdrs = Preconditions.checkNotNull(privateHdrs);
     this.precompiledSrcs = Preconditions.checkNotNull(precompiledSrcs);
     this.archive = Preconditions.checkNotNull(archive);
+    this.pchFile = Preconditions.checkNotNull(pchFile);
   }
 
   public Iterable<Artifact> getSrcs() {
@@ -157,6 +168,10 @@ final class CompilationArtifacts {
    */
   public Optional<Artifact> getArchive() {
     return archive;
+  }
+
+  public Optional<Artifact> getPchFile() {
+    return pchFile;
   }
 
 }
