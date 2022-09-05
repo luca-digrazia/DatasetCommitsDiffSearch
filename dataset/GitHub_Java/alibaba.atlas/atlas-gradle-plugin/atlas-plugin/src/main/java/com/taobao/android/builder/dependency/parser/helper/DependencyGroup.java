@@ -228,18 +228,14 @@ import org.gradle.api.artifacts.UnknownConfigurationException;
 import org.gradle.api.artifacts.result.DependencyResult;
 import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
 import org.gradle.api.internal.artifacts.dependencies.DefaultProjectDependency;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class DependencyGroup {
-
-    private static Logger logger = LoggerFactory.getLogger(DependencyGroup.class);
 
     public List<DependencyResult> compileDependencies = new ArrayList<>();
     public List<DependencyResult> bundleDependencies = new ArrayList<>();
 
     /**
-     * bundle (group:name) It corresponds to that Private rely on
+     * bundle (group:name) 和它对应的 私有依赖
      */
     public Map<String, Set<String>> bundleProvidedMap = new HashMap<>();
 
@@ -260,15 +256,10 @@ public class DependencyGroup {
 
 
         Set<String> bundleSets = getBundleDependencies(compileClasspath, bundleCompileDependencies);
-        //Analysis of the compileDependencies Bundle dependency
+        //分析出 compileDependencies 中的bundle依赖
         for (DependencyResult dependencyResult : compileDependencies) {
             if (DependencyConvertUtils.isAwbDependency(dependencyResult, artifacts)) {
-                String name = dependencyResult.toString();
-                if (!bundleSets.contains(name)) {
-                    bundleSets.add(name);
-                    logger.error("please use bundleCompile for " + name);
-                }
-
+                bundleSets.add(dependencyResult.toString());
             }
 
         }
@@ -315,7 +306,7 @@ public class DependencyGroup {
     }
 
     /**
-     * Gets the private dependencies of the bundle
+     * 获取bundle的私有依赖
      *
      * @param bundleClasspath
      * @return
