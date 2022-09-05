@@ -61,6 +61,7 @@ public abstract class AbstractAction implements Action {
   private Iterable<Artifact> inputs;
   private final ImmutableSet<Artifact> outputs;
 
+  private int cachedInputCount = -1;
   private String cachedKey;
 
   /**
@@ -130,6 +131,21 @@ public abstract class AbstractAction implements Action {
   protected void setInputs(Iterable<Artifact> inputs) {
     Preconditions.checkState(discoversInputs(), this);
     this.inputs = CollectionUtils.makeImmutable(inputs);
+    cachedInputCount = -1;
+  }
+
+  /*
+   * Get count of inputs.
+   *
+   * <p>Computes the count on first invocation, returns cached value for further invocations.
+   */
+  @Override
+  @ThreadSafe
+  public synchronized int getInputCount() {
+    if (cachedInputCount == -1) {
+      cachedInputCount = Iterables.size(getInputs());
+    }
+    return cachedInputCount;
   }
 
   @Override
