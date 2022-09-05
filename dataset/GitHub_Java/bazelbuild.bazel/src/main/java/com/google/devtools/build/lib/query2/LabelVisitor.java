@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.MapMaker;
 import com.google.common.collect.Multimaps;
 import com.google.common.collect.SetMultimap;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -30,17 +29,16 @@ import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
 import com.google.devtools.build.lib.pkgcache.TargetEdgeObserver;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.BinaryPredicate;
 
 import java.util.Collection;
@@ -280,7 +278,8 @@ final class LabelVisitor {
       // Observing the loading phase of a typical large package (with all subpackages) shows
       // maximum thread-level concurrency of ~20. Limiting the total number of threads to 200 is
       // therefore conservative and should help us avoid hitting native limits.
-      super(CONCURRENT, parallelThreads, 1L, TimeUnit.SECONDS, !keepGoing, THREAD_NAME);
+      super(CONCURRENT, parallelThreads, parallelThreads, 1L, TimeUnit.SECONDS, !keepGoing,
+          THREAD_NAME);
       this.eventHandler = eventHandler;
       this.maxDepth = maxDepth;
       this.errorObserver = new TargetEdgeErrorObserver();
@@ -306,7 +305,7 @@ final class LabelVisitor {
 
     @ThreadSafe
     public boolean finish() throws InterruptedException {
-      awaitQuiescence(/*interruptWorkers=*/ true);
+      work(true);
       return !errorObserver.hasErrors();
     }
 
@@ -338,7 +337,7 @@ final class LabelVisitor {
           !blockNewActions() && count < RECURSION_LIMIT) {
         newVisitRunnable(from, attr, label, depth, count + 1).run();
       } else {
-        execute(newVisitRunnable(from, attr, label, depth, 0));
+        enqueue(newVisitRunnable(from, attr, label, depth, 0));
       }
     }
 
@@ -366,11 +365,7 @@ final class LabelVisitor {
     private void visitTargetVisibility(Target target, int depth, int count) {
       Attribute attribute = null;
       if (target instanceof Rule) {
-        RuleClass ruleClass = ((Rule) target).getRuleClassObject();
-        if (!ruleClass.hasAttr("visibility", BuildType.NODEP_LABEL_LIST)) {
-          return;
-        }
-        attribute = ruleClass.getAttributeByName("visibility");
+        attribute = ((Rule) target).getRuleClassObject().getAttributeByName("visibility");
       }
 
       for (Label label : target.getVisibility().getDependencyLabels()) {

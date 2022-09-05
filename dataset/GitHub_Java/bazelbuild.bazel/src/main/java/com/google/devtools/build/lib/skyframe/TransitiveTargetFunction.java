@@ -79,17 +79,15 @@ public class TransitiveTargetFunction implements SkyFunction {
       if (target == null) {
         throw new TransitiveTargetFunctionException(e);
       }
-
-      // So we now have a Target here, but the only way for that to happen is if the package loaded
-      // at least partially, but had an error.
       successfulTransitiveLoading = false;
       transitiveRootCauses.add(label);
       errorLoadingTarget = e;
-      packageLoadedSuccessfully = false;
+      packageLoadedSuccessfully = e.getPackageLoadedSuccessfully();
     } catch (NoSuchPackageException e) {
       throw new TransitiveTargetFunctionException(e);
     } catch (NoSuchThingException e) {
-      throw new IllegalStateException(e + " not NoSuchTargetException or NoSuchPackageException");
+      throw new IllegalStateException(e
+          + " not NoSuchTargetException or NoSuchPackageException");
     }
 
     NestedSetBuilder<PackageIdentifier> transitiveSuccessfulPkgs = NestedSetBuilder.stableOrder();
