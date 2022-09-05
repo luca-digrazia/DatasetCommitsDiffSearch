@@ -252,7 +252,8 @@ public class BlazeServerStartupOptions extends OptionsBase {
   @Option(name = "command_port",
       defaultValue = "0",
       category = "undocumented",
-      help = "Port to start up the gRPC command server on. If 0, let the kernel choose.")
+      help = "Port to start up the gRPC command server on. If 0, let the kernel choose. If -1, "
+          + "use a custom protocol on an AF_UNIX socket.")
   public int commandPort;
 
   @Option(name = "product_name",
@@ -262,16 +263,4 @@ public class BlazeServerStartupOptions extends OptionsBase {
           + "directories (e.g. productName-bin for binaries) as well as for printing error "
           + "messages and logging")
   public String productName;
-
-  @Option(name = "exoblaze",
-      defaultValue = "false",
-      category = "server startup",
-      help = "If true, Blaze runs as Exoblaze")
-  public boolean exoblaze;
-
-  @Option(name = "write_command_log",
-      defaultValue = "true",
-      category = "undocumented",
-      help = "Whether or not to write the command.log file")
-  public boolean writeCommandLog;
 }
