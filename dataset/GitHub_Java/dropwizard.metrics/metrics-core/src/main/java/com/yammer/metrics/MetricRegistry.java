@@ -9,13 +9,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * A registry of metric instances.
  */
 public class MetricRegistry {
-    /**
-     * Concatenates elements to form a dotted name, eliding any null values or empty strings.
-     *
-     * @param name     the first element of the name
-     * @param names    the remaining elements of the name
-     * @return {@code name} and {@code names} concatenated by periods
-     */
     public static String name(String name, String... names) {
         final StringBuilder builder = new StringBuilder();
         append(builder, name);
@@ -25,16 +18,8 @@ public class MetricRegistry {
         return builder.toString();
     }
 
-    /**
-     * Concatenates a class name and elements to form a dotted name, eliding any null values or
-     * empty strings.
-     *
-     * @param klass    the first element of the name
-     * @param names    the remaining elements of the name
-     * @return {@code klass} and {@code names} concatenated by periods
-     */
     public static String name(Class<?> klass, String... names) {
-        return name(klass.getName(), names);
+        return name(klass.getCanonicalName(), names);
     }
 
     private static void append(StringBuilder builder, String part) {
@@ -94,29 +79,6 @@ public class MetricRegistry {
             throw new IllegalArgumentException("A metric named " + name + " already exists");
         }
         return metric;
-    }
-
-    /**
-     * Given a metric set, registers them.
-     *
-     * @param metrics    a set of metrics
-     * @throws IllegalArgumentException if any of the names are already registered
-     */
-    public void registerAll(MetricSet metrics) throws IllegalArgumentException {
-        registerAll(null, metrics);
-    }
-
-    /**
-     * Given a metric set, registers them using a prefix.
-     *
-     * @param prefix     the prefix for all the names
-     * @param metrics    a set of metrics
-     * @throws IllegalArgumentException if any of the names are already registered
-     */
-    public void registerAll(String prefix, MetricSet metrics) throws IllegalArgumentException {
-        for (Map.Entry<String, Metric> entry : metrics.getMetrics().entrySet()) {
-            register(name(prefix, entry.getKey()), entry.getValue());
-        }
     }
 
     /**
@@ -199,65 +161,30 @@ public class MetricRegistry {
         listeners.remove(listener);
     }
 
-    /**
-     * Returns the registry's name.
-     *
-     * @return the registry's name
-     */
     public String getName() {
         return name;
     }
 
-    /**
-     * Returns a set of the names of all the metrics in the registry.
-     *
-     * @return the names of all the metrics
-     */
     public SortedSet<String> getNames() {
         return Collections.unmodifiableSortedSet(new TreeSet<String>(metrics.keySet()));
     }
 
-    /**
-     * Returns a map of all the gauges in the registry and their names.
-     *
-     * @return all the gauges in the registry
-     */
     public SortedMap<String, Gauge> getGauges() {
         return getMetrics(Gauge.class);
     }
 
-    /**
-     * Returns a map of all the counters in the registry and their names.
-     *
-     * @return all the counters in the registry
-     */
     public SortedMap<String, Counter> getCounters() {
         return getMetrics(Counter.class);
     }
 
-    /**
-     * Returns a map of all the histograms in the registry and their names.
-     *
-     * @return all the histograms in the registry
-     */
     public SortedMap<String, Histogram> getHistograms() {
         return getMetrics(Histogram.class);
     }
 
-    /**
-     * Returns a map of all the meters in the registry and their names.
-     *
-     * @return all the meters in the registry
-     */
     public SortedMap<String, Meter> getMeters() {
         return getMetrics(Meter.class);
     }
 
-    /**
-     * Returns a map of all the timers in the registry and their names.
-     *
-     * @return all the timers in the registry
-     */
     public SortedMap<String, Timer> getTimers() {
         return getMetrics(Timer.class);
     }
