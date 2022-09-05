@@ -31,12 +31,12 @@ import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
-import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
 import com.google.devtools.build.lib.query2.output.QueryOptions.OrderOutput;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.common.options.EnumConverter;
+
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Serializable;
@@ -49,6 +49,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -155,8 +156,7 @@ public abstract class OutputFormatter implements Serializable {
    * the graph maintained by the QueryEnvironment), and print it to "out".
    */
   public abstract void output(QueryOptions options, Digraph<Target> result, PrintStream out,
-      AspectResolver aspectProvider)
-          throws IOException, InterruptedException;
+      AspectResolver aspectProvider) throws IOException, InterruptedException;
 
   /**
    * Unordered streamed output formatter (wrt. dependency ordering).
@@ -170,27 +170,9 @@ public abstract class OutputFormatter implements Serializable {
    * before writting in the output.
    */
   public interface StreamedFormatter {
-    /** Specifies options to be used by subsequent calls to {@link #createStreamCallback}. */
-    void setOptions(QueryOptions options, AspectResolver aspectResolver);
 
-    /**
-     * Returns a {@link OutputFormatterCallback} whose {@link OutputFormatterCallback#process}
-     * outputs formatted {@link Target}s to the given {@code out}.
-     *
-     * <p>Takes any options specified via the most recent call to {@link #setOptions} into
-     * consideration.
-     *
-     * <p>Intended to be use for streaming out during evaluation of a query.
-     */
-    OutputFormatterCallback<Target> createStreamCallback(
-        PrintStream out, QueryOptions options, @Nullable QueryEnvironment<?> env);
-
-    /**
-     * Same as {@link #createStreamCallback}, but intended to be used for outputting the
-     * already-computed result of a query.
-     */
-    OutputFormatterCallback<Target> createPostFactoStreamCallback(
-        PrintStream out, QueryOptions options);
+    OutputFormatterCallback<Target> createStreamCallback(QueryOptions options, PrintStream out,
+        AspectResolver aspectResolver);
   }
 
   /**
@@ -200,10 +182,6 @@ public abstract class OutputFormatter implements Serializable {
 
   abstract static class AbstractUnorderedFormatter extends OutputFormatter
       implements StreamedFormatter {
-    protected QueryOptions options;
-    protected AspectResolver aspectResolver;
-    protected DependencyFilter dependencyFilter;
-
     protected Iterable<Target> getOrderedTargets(
         Digraph<Target> result, QueryOptions options) {
       Iterable<Node<Target>> orderedResult =
@@ -214,21 +192,11 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public void setOptions(QueryOptions options, AspectResolver aspectResolver) {
-      this.options = options;
-      this.aspectResolver = aspectResolver;
-      this.dependencyFilter = OutputFormatter.getDependencyFilter(options);
-    }
-
-    @Override
-    public void output(
-        QueryOptions options,
-        Digraph<Target> result,
-        PrintStream out,
+    public void output(QueryOptions options, Digraph<Target> result, PrintStream out,
         AspectResolver aspectResolver) throws IOException, InterruptedException {
-      setOptions(options, aspectResolver);
       OutputFormatterCallback.processAllTargets(
-          createPostFactoStreamCallback(out, options), getOrderedTargets(result, options));
+          createStreamCallback(options, out, aspectResolver),
+          getOrderedTargets(result, options));
     }
   }
 
@@ -250,8 +218,8 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public OutputFormatterCallback<Target> createPostFactoStreamCallback(
-        final PrintStream out, final QueryOptions options) {
+    public OutputFormatterCallback<Target> createStreamCallback(QueryOptions options,
+        final PrintStream out, AspectResolver aspectResolver) {
       return new OutputFormatterCallback<Target>() {
 
         @Override
@@ -262,17 +230,10 @@ public abstract class OutputFormatter implements Serializable {
               out.print(target.getTargetKind());
               out.print(' ');
             }
-            out.printf(
-                "%s%s", target.getLabel().getDefaultCanonicalForm(), options.getLineTerminator());
+            out.println(target.getLabel().getDefaultCanonicalForm());
           }
         }
       };
-    }
-
-    @Override
-    public OutputFormatterCallback<Target> createStreamCallback(
-        PrintStream out, QueryOptions options, QueryEnvironment<?> env) {
-      return createPostFactoStreamCallback(out, options);
     }
   }
 
@@ -292,16 +253,15 @@ public abstract class OutputFormatter implements Serializable {
    * set, in lexicographical order without duplicates.
    */
   private static class PackageOutputFormatter extends AbstractUnorderedFormatter {
-
-
     @Override
     public String getName() {
       return "package";
     }
 
     @Override
-    public OutputFormatterCallback<Target> createPostFactoStreamCallback(
-        final PrintStream out, final QueryOptions options) {
+    public OutputFormatterCallback<Target> createStreamCallback(QueryOptions options,
+        final PrintStream out,
+        AspectResolver aspectResolver) {
       return new OutputFormatterCallback<Target>() {
         private final Set<String> packageNames = Sets.newTreeSet();
 
@@ -316,18 +276,11 @@ public abstract class OutputFormatter implements Serializable {
 
         @Override
         public void close() throws IOException {
-          final String lineTerm = options.getLineTerminator();
           for (String packageName : packageNames) {
-            out.printf("%s%s", packageName, lineTerm);
+            out.println(packageName);
           }
         }
       };
-    }
-
-    @Override
-    public OutputFormatterCallback<Target> createStreamCallback(
-        PrintStream out, QueryOptions options, QueryEnvironment<?> env) {
-      return createPostFactoStreamCallback(out, options);
     }
   }
 
@@ -338,39 +291,27 @@ public abstract class OutputFormatter implements Serializable {
    * line 1 is given.
    */
   private static class LocationOutputFormatter extends AbstractUnorderedFormatter {
-
     @Override
     public String getName() {
       return "location";
     }
 
     @Override
-    public OutputFormatterCallback<Target> createPostFactoStreamCallback(
-        final PrintStream out, final QueryOptions options) {
+    public OutputFormatterCallback<Target> createStreamCallback(QueryOptions options,
+        final PrintStream out,
+        AspectResolver aspectResolver) {
       return new OutputFormatterCallback<Target>() {
 
         @Override
         protected void processOutput(Iterable<Target> partialResult)
             throws IOException, InterruptedException {
-          final String lineTerm = options.getLineTerminator();
           for (Target target : partialResult) {
             Location location = target.getLocation();
-            out.print(
-                location.print()
-                    + ": "
-                    + target.getTargetKind()
-                    + " "
-                    + target.getLabel().getDefaultCanonicalForm()
-                    + lineTerm);
+            out.println(location.print() + ": " + target.getTargetKind()
+                + " " + target.getLabel().getDefaultCanonicalForm());
           }
         }
       };
-    }
-
-    @Override
-    public OutputFormatterCallback<Target> createStreamCallback(
-        PrintStream out, QueryOptions options, QueryEnvironment<?> env) {
-      return createPostFactoStreamCallback(out, options);
     }
   }
 
@@ -380,23 +321,22 @@ public abstract class OutputFormatter implements Serializable {
    * printed only once.
    */
   private static class BuildOutputFormatter extends AbstractUnorderedFormatter {
-
     @Override
     public String getName() {
       return "build";
     }
 
     @Override
-    public OutputFormatterCallback<Target> createPostFactoStreamCallback(
-        final PrintStream out, final QueryOptions options) {
+    public OutputFormatterCallback<Target> createStreamCallback(QueryOptions options,
+        final PrintStream out,
+        AspectResolver aspectResolver) {
       return new OutputFormatterCallback<Target>() {
         private final Set<Label> printed = CompactHashSet.create();
 
         private void outputRule(Rule rule, PrintStream out) {
-          final String lineTerm = options.getLineTerminator();
-          out.printf("# %s%s", rule.getLocation(), lineTerm);
-          out.printf("%s(%s", rule.getRuleClass(), lineTerm);
-          out.printf("  name = \"%s\",%s", rule.getName(), lineTerm);
+          out.printf("# %s%n", rule.getLocation());
+          out.printf("%s(%n", rule.getRuleClass());
+          out.printf("  name = \"%s\",%n", rule.getName());
 
           for (Attribute attr : rule.getAttributes()) {
             Pair<Iterable<Object>, AttributeValueSource> values =
@@ -425,9 +365,9 @@ public abstract class OutputFormatter implements Serializable {
             StringBuilder builder = new StringBuilder();
             Printer.write(builder, value);
             out.print(builder);
-            out.printf(",%s", lineTerm);
+            out.println(",");
           }
-          out.printf(")\n%s", lineTerm);
+          out.printf(")\n%n");
         }
 
         @Override
@@ -444,12 +384,6 @@ public abstract class OutputFormatter implements Serializable {
           }
         }
       };
-    }
-
-    @Override
-    public OutputFormatterCallback<Target> createStreamCallback(
-        PrintStream out, QueryOptions options, QueryEnvironment<?> env) {
-      return createPostFactoStreamCallback(out, options);
     }
   }
 
@@ -487,22 +421,17 @@ public abstract class OutputFormatter implements Serializable {
    * correspond to the shortest path from x to each of its prerequisites.
    */
   private static class MinrankOutputFormatter extends OutputFormatter {
-
     @Override
     public String getName() {
       return "minrank";
     }
 
     private static void outputToStreamOrSave(
-        int rank,
-        Label label,
-        PrintStream out,
-        @Nullable List<RankAndLabel> toSave,
-        final String lineTerminator) {
+        int rank, Label label, PrintStream out, @Nullable List<RankAndLabel> toSave) {
       if (toSave != null) {
         toSave.add(new RankAndLabel(rank, label));
       } else {
-        out.print(rank + " " + label.getDefaultCanonicalForm() + lineTerminator);
+        out.println(rank + " " + label.getDefaultCanonicalForm());
       }
     }
 
@@ -520,12 +449,11 @@ public abstract class OutputFormatter implements Serializable {
       Set<Node<Set<Node<Target>>>> rankNodes = scGraph.getRoots();
       Set<Node<Set<Node<Target>>>> seen = new HashSet<>();
       seen.addAll(rankNodes);
-      final String lineTerm = options.getLineTerminator();
       for (int rank = 0; !rankNodes.isEmpty(); rank++) {
         // Print out this rank:
         for (Node<Set<Node<Target>>> xScc : rankNodes) {
           for (Node<Target> x : xScc.getLabel()) {
-            outputToStreamOrSave(rank, x.getLabel().getLabel(), out, outputToOrder, lineTerm);
+            outputToStreamOrSave(rank, x.getLabel().getLabel(), out, outputToOrder);
           }
         }
 
@@ -543,7 +471,7 @@ public abstract class OutputFormatter implements Serializable {
       if (outputToOrder != null) {
         Collections.sort(outputToOrder);
         for (RankAndLabel item : outputToOrder) {
-          out.printf("%s%s", item, lineTerm);
+          out.println(item);
         }
       }
     }
@@ -561,7 +489,6 @@ public abstract class OutputFormatter implements Serializable {
    * correspond to the longest path from x to each of its prerequisites.
    */
   private static class MaxrankOutputFormatter extends OutputFormatter {
-
     @Override
     public String getName() {
       return "maxrank";
@@ -616,9 +543,8 @@ public abstract class OutputFormatter implements Serializable {
               }
             });
       }
-      final String lineTerm = options.getLineTerminator();
       for (RankAndLabel item : output) {
-        out.printf("%s%s", item, lineTerm);
+        out.println(item);
       }
     }
   }
