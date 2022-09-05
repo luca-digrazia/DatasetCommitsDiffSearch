@@ -480,17 +480,30 @@ final class ProtoSupport {
   }
 
   private CustomCommandLine getProtobufCommandLine() {
-    return new CustomCommandLine.Builder()
-        .add(attributes.getProtoCompiler().getExecPathString())
-        .add("--input-file-list")
-        .add(getProtoInputListFile().getExecPathString())
-        .add("--output-dir")
-        .add(getWorkspaceRelativeOutputDir().getSafePathString())
-        .add("--force")
-        .add("--proto-root-dir")
-        .add(".")
-        .addBeforeEachExecPath("--config", getPortableProtoFilters())
-        .build();
+    CustomCommandLine.Builder commandLineBuilder =
+        new CustomCommandLine.Builder()
+            .add(attributes.getProtoCompiler().getExecPathString())
+            .add("--input-file-list")
+            .add(getProtoInputListFile().getExecPathString())
+            .add("--output-dir")
+            .add(getWorkspaceRelativeOutputDir().getSafePathString())
+            .add("--force")
+            .add("--proto-root-dir")
+            .add(".");
+
+    boolean configAdded = false;
+    for (Artifact portableProtoFilter : getPortableProtoFilters()) {
+      String configFlag;
+      if (!configAdded) {
+        configFlag = "--config";
+        configAdded = true;
+      } else {
+        configFlag = "--extra-filter-config";
+      }
+
+      commandLineBuilder.add(configFlag).add(portableProtoFilter.getExecPathString());
+    }
+    return commandLineBuilder.build();
   }
 
   private ImmutableList<Artifact> generatedOutputArtifacts(FileType newFileType) {
