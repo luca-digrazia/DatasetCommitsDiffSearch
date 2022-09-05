@@ -19,10 +19,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -32,19 +34,13 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.testing.EqualsTester;
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
-import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.testutil.ManualClock;
-import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -60,7 +56,6 @@ import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.RecordingDifferencer;
 import com.google.devtools.build.skyframe.SequentialBuildDriver;
-import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -76,8 +71,6 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -128,26 +121,15 @@ public class FileFunctionTest {
     differencer = new RecordingDifferencer();
     MemoizingEvaluator evaluator =
         new InMemoryMemoizingEvaluator(
-            ImmutableMap.<SkyFunctionName, SkyFunction>builder()
-                .put(SkyFunctions.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper))
-                .put(SkyFunctions.FILE_SYMLINK_CYCLE_UNIQUENESS,
-                    new FileSymlinkCycleUniquenessFunction())
-                .put(SkyFunctions.FILE_SYMLINK_INFINITE_EXPANSION_UNIQUENESS,
-                    new FileSymlinkInfiniteExpansionUniquenessFunction())
-                .put(SkyFunctions.FILE, new FileFunction(pkgLocatorRef))
-                .put(SkyFunctions.PACKAGE,
-                    new PackageFunction(null, null, null, null, null, null, null))
-                .put(SkyFunctions.PACKAGE_LOOKUP,
-                    new PackageLookupFunction(new AtomicReference<>(
-                        ImmutableSet.<PackageIdentifier>of())))
-                .put(SkyFunctions.WORKSPACE_FILE,
-                    new WorkspaceFileFunction(TestRuleClassProvider.getRuleClassProvider(),
-                        new PackageFactory(TestRuleClassProvider.getRuleClassProvider()),
-                        new BlazeDirectories(pkgRoot, outputBase, pkgRoot)))
-                .build(),
+            ImmutableMap.of(
+                SkyFunctions.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper),
+                SkyFunctions.FILE_SYMLINK_CYCLE_UNIQUENESS,
+                    new FileSymlinkCycleUniquenessFunction(),
+                SkyFunctions.FILE_SYMLINK_INFINITE_EXPANSION_UNIQUENESS,
+                    new FileSymlinkInfiniteExpansionUniquenessFunction(),
+                SkyFunctions.FILE, new FileFunction(pkgLocatorRef, tsgm, externalFilesHelper)),
             differencer);
     PrecomputedValue.BUILD_ID.set(differencer, UUID.randomUUID());
-    PrecomputedValue.PATH_PACKAGE_LOCATOR.set(differencer, pkgLocator);
     return new SequentialBuildDriver(evaluator);
   }
 
@@ -307,30 +289,6 @@ public class FileFunctionTest {
   }
 
   @Test
-  public void testAbsoluteSymlinkToExternal() throws Exception {
-    String externalPath =
-        outputBase.getRelative(Label.EXTERNAL_PATH_PREFIX).getRelative("a/b").getPathString();
-    symlink("a", externalPath);
-    file("b");
-    file(externalPath);
-    Set<RootedPath> seenFiles = Sets.newHashSet();
-    seenFiles.addAll(getFilesSeenAndAssertValueChangesIfContentsOfFileChanges("b", false, "a"));
-    seenFiles.addAll(
-        getFilesSeenAndAssertValueChangesIfContentsOfFileChanges(externalPath, true, "a"));
-    Path root = fs.getRootDirectory();
-    assertThat(seenFiles)
-        .containsExactly(
-            rootedPath("WORKSPACE"),
-            rootedPath("a"),
-            rootedPath(""),
-            RootedPath.toRootedPath(root, PathFragment.EMPTY_FRAGMENT),
-            RootedPath.toRootedPath(root, new PathFragment("output_base")),
-            RootedPath.toRootedPath(root, new PathFragment("output_base/external")),
-            RootedPath.toRootedPath(root, new PathFragment("output_base/external/a")),
-            RootedPath.toRootedPath(root, new PathFragment("output_base/external/a/b")));
-  }
-
-  @Test
   public void testSymlinkAsAncestor() throws Exception {
     file("a/b/c/d");
     symlink("f", "a/b/c");
@@ -436,44 +394,6 @@ public class FileFunctionTest {
     FileSystemUtils.writeContentAsLatin1(p, "content");
     // Same digest, but now non-empty.
     assertThat(valueForPath(p)).isNotEqualTo(a);
-  }
-
-  @Test
-  public void testUnreadableFileWithNoFastDigest() throws Exception {
-    Path p = file("unreadable");
-    p.chmod(0);
-    p.setLastModifiedTime(0L);
-
-    FileValue value = valueForPath(p);
-    assertTrue(value.exists());
-    assertThat(value.getDigest()).isNull();
-
-    p.setLastModifiedTime(10L);
-    assertThat(valueForPath(p)).isNotEqualTo(value);
-
-    p.setLastModifiedTime(0L);
-    assertThat(valueForPath(p)).isEqualTo(value);
-  }
-
-  @Test
-  public void testUnreadableFileWithFastDigest() throws Exception {
-    final byte[] expectedDigest = MessageDigest.getInstance("md5").digest(
-        "blah".getBytes(StandardCharsets.UTF_8));
-
-    createFsAndRoot(
-        new CustomInMemoryFs(manualClock) {
-          @Override
-          protected byte[] getFastDigest(Path path) {
-            return path.getBaseName().equals("unreadable") ? expectedDigest : null;
-          }
-        });
-
-    Path p = file("unreadable");
-    p.chmod(0);
-
-    FileValue value = valueForPath(p);
-    assertThat(value.exists()).isTrue();
-    assertThat(value.getDigest()).isNotNull();
   }
 
   @Test
@@ -617,7 +537,7 @@ public class FileFunctionTest {
   }
 
   @Test
-  public void testFilesOutsideRootIsReEvaluated() throws Exception {
+  public void testFilesOutsideRootHasDepOnBuildID() throws Exception {
     Path file = file("/outsideroot");
     SequentialBuildDriver driver = makeDriver();
     SkyKey key = skyKey("/outsideroot");
@@ -632,7 +552,6 @@ public class FileFunctionTest {
     assertTrue(oldValue.exists());
 
     file.delete();
-    differencer.invalidate(ImmutableList.of(fileStateSkyKey("/outsideroot")));
     result =
         driver.evaluate(
             ImmutableList.of(key), false, DEFAULT_THREAD_COUNT, NullEventHandler.INSTANCE);
@@ -640,6 +559,16 @@ public class FileFunctionTest {
       fail(String.format("Evaluation error for %s: %s", key, result.getError()));
     }
     FileValue newValue = (FileValue) result.get(key);
+    assertSame(oldValue, newValue);
+
+    PrecomputedValue.BUILD_ID.set(differencer, UUID.randomUUID());
+    result =
+        driver.evaluate(
+            ImmutableList.of(key), false, DEFAULT_THREAD_COUNT, NullEventHandler.INSTANCE);
+    if (result.hasError()) {
+      fail(String.format("Evaluation error for %s: %s", key, result.getError()));
+    }
+    newValue = (FileValue) result.get(key);
     assertNotSame(oldValue, newValue);
     assertFalse(newValue.exists());
   }
@@ -920,36 +849,6 @@ public class FileFunctionTest {
     assertThat(errorInfo.getException()).isInstanceOf(InconsistentFilesystemException.class);
     assertThat(errorInfo.getException().getMessage()).contains("encountered error 'nope'");
     assertThat(errorInfo.getException().getMessage()).contains("/root/a is no longer a file");
-  }
-
-  @Test
-  public void testFilesystemInconsistencies_GetFastDigestAndIsReadableFailure() throws Exception {
-    createFsAndRoot(
-        new CustomInMemoryFs(manualClock) {
-          @Override
-          protected boolean isReadable(Path path) throws IOException {
-            if (path.getBaseName().equals("unreadable")) {
-              throw new IOException("isReadable failed");
-            }
-            return super.isReadable(path);
-          }
-        });
-
-    Path p = file("unreadable");
-    p.chmod(0);
-
-    SequentialBuildDriver driver = makeDriver();
-    SkyKey skyKey = skyKey("unreadable");
-    EvaluationResult<FileValue> result =
-        driver.evaluate(
-            ImmutableList.of(skyKey), false, DEFAULT_THREAD_COUNT, NullEventHandler.INSTANCE);
-    assertTrue(result.hasError());
-    ErrorInfo errorInfo = result.getError(skyKey);
-    assertThat(errorInfo.getException()).isInstanceOf(InconsistentFilesystemException.class);
-    assertThat(errorInfo.getException().getMessage())
-        .contains("encountered error 'isReadable failed'");
-    assertThat(errorInfo.getException().getMessage())
-        .contains("/root/unreadable is no longer a file");
   }
 
   private void runTestSymlinkCycle(boolean ancestorCycle, boolean startInCycle) throws Exception {

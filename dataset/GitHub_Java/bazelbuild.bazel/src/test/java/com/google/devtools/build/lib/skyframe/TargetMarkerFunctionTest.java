@@ -17,16 +17,16 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCaseForJunit4;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.util.BlazeClock;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
@@ -51,7 +51,7 @@ import java.util.Map;
  * that isn't easily mockable. So our testing strategy is to make hacky calls to SkyframeExecutor.
  */
 @RunWith(JUnit4.class)
-public class TargetMarkerFunctionTest extends BuildViewTestCase {
+public class TargetMarkerFunctionTest extends BuildViewTestCaseForJunit4 {
 
   private SkyframeExecutor skyframeExecutor;
   private CustomInMemoryFs fs = new CustomInMemoryFs();
@@ -93,7 +93,7 @@ public class TargetMarkerFunctionTest extends BuildViewTestCase {
 
     scratch.file("a/b/BUILD");
     ModifiedFileSet subpackageBuildFile =
-        ModifiedFileSet.builder().modify(PathFragment.create("a/b/BUILD")).build();
+        ModifiedFileSet.builder().modify(new PathFragment("a/b/BUILD")).build();
     skyframeExecutor.invalidateFilesUnderPathForTesting(
         reporter, subpackageBuildFile, rootDirectory);
 
@@ -109,7 +109,7 @@ public class TargetMarkerFunctionTest extends BuildViewTestCase {
     String labelName = "//no/such/package:target/withslash";
     BuildFileNotFoundException exn =
         (BuildFileNotFoundException) getErrorFromTargetValue(labelName);
-    assertEquals(PackageIdentifier.createInMainRepo("no/such/package"), exn.getPackageId());
+    assertEquals(PackageIdentifier.createInDefaultRepo("no/such/package"), exn.getPackageId());
     String expectedMessage =
         "no such package 'no/such/package': BUILD file not found on "
             + "package path for 'no/such/package'";
@@ -123,10 +123,11 @@ public class TargetMarkerFunctionTest extends BuildViewTestCase {
         "a/BUILD",
         "genrule(name = 'conflict1', cmd = '', srcs = [], outs = ['conflict'])",
         "genrule(name = 'conflict2', cmd = '', srcs = [], outs = ['conflict'])");
-    NoSuchTargetException exn = (NoSuchTargetException) getErrorFromTargetValue("@//a:conflict1");
+    String labelName = "//a:conflict1";
+    NoSuchTargetException exn = (NoSuchTargetException) getErrorFromTargetValue(labelName);
     assertThat(exn.getMessage())
         .contains("Target '//a:conflict1' contains an error and its package is in error");
-    assertEquals("//a:conflict1", exn.getLabel().toString());
+    assertEquals(labelName, exn.getLabel().toString());
     assertTrue(exn.hasTarget());
   }
 

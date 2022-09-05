@@ -14,18 +14,15 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCaseForJunit4;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
-import com.google.devtools.build.lib.util.BlazeClock;
-import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
@@ -42,7 +39,7 @@ import java.util.UUID;
  * Tests for SkylarkImportLookupFunction.
  */
 @RunWith(JUnit4.class)
-public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
+public class SkylarkImportLookupFunctionTest extends BuildViewTestCaseForJunit4 {
 
   @Before
   public final void preparePackageLoading() throws Exception  {
@@ -54,30 +51,29 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
             true,
             7,
             "",
-            UUID.randomUUID(),
-            new TimestampGranularityMonitor(BlazeClock.instance()));
+            UUID.randomUUID());
   }
 
   @Test
   public void testSkylarkImportLabels() throws Exception {
     scratch.file("pkg1/BUILD");
     scratch.file("pkg1/ext.bzl");
-    checkSuccessfulLookup("//pkg1:ext.bzl");
+    checkLabel("//pkg1:ext.bzl", "//pkg1:ext.bzl");
 
     scratch.file("pkg2/BUILD");
     scratch.file("pkg2/dir/ext.bzl");
-    checkSuccessfulLookup("//pkg2:dir/ext.bzl");
+    checkLabel("//pkg2:dir/ext.bzl", "//pkg2:dir/ext.bzl");
 
     scratch.file("dir/pkg3/BUILD");
     scratch.file("dir/pkg3/dir/ext.bzl");
-    checkSuccessfulLookup("//dir/pkg3:dir/ext.bzl");
+    checkLabel("//dir/pkg3:dir/ext.bzl", "//dir/pkg3:dir/ext.bzl");
   }
 
   @Test
   public void testSkylarkImportLabelsAlternativeRoot() throws Exception {
     scratch.file("/root_2/pkg4/BUILD");
     scratch.file("/root_2/pkg4/ext.bzl");
-    checkSuccessfulLookup("//pkg4:ext.bzl");
+    checkLabel("//pkg4:ext.bzl", "//pkg4:ext.bzl");
   }
 
   @Test
@@ -85,23 +81,7 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
     scratch.file("dir1/BUILD");
     scratch.file("dir1/dir2/BUILD");
     scratch.file("dir1/dir2/ext.bzl");
-    checkSuccessfulLookup("//dir1/dir2:ext.bzl");
-  }
-
-  @Test
-  public void testLoadFromSkylarkFileInRemoteRepo() throws Exception {
-    scratch.deleteFile("tools/build_rules/prelude_blaze");
-    scratch.overwriteFile("WORKSPACE",
-        "local_repository(",
-        "    name = 'a_remote_repo',",
-        "    path = '/a_remote_repo'",
-        ")");
-    scratch.file("/a_remote_repo/remote_pkg/BUILD");
-    scratch.file("/a_remote_repo/remote_pkg/ext1.bzl",
-        "load(':ext2.bzl', 'CONST')");
-    scratch.file("/a_remote_repo/remote_pkg/ext2.bzl",
-        "CONST = 17");
-    checkSuccessfulLookup("@a_remote_repo//remote_pkg:ext1.bzl");
+    checkLabel("//dir1/dir2:ext.bzl", "//dir1/dir2:ext.bzl");
   }
 
   @Test
@@ -161,13 +141,11 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
     return SkylarkImportLookupValue.key(Label.parseAbsoluteUnchecked(label), false);
   }
 
-  // Ensures that a Skylark file has been successfully processed by checking that the
-  // the label in its dependency set corresponds to the requested label.
-  private void checkSuccessfulLookup(String label) throws Exception {
-    SkyKey skylarkImportLookupKey = key(label);
+  private void checkLabel(String labelRequested, String labelFound) throws Exception {
+    SkyKey skylarkImportLookupKey = key(labelRequested);
     EvaluationResult<SkylarkImportLookupValue> result = get(skylarkImportLookupKey);
-    assertEquals(result.get(skylarkImportLookupKey).getDependency().getLabel().toString(),
-        label);
+    assertEquals(labelFound,
+        result.get(skylarkImportLookupKey).getDependency().getLabel().toString());
   }
 
   @Test
@@ -219,24 +197,19 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testLoadFromExternalRepoInWorkspaceFileAllowed() throws Exception {
-    scratch.deleteFile("tools/build_rules/prelude_blaze");
-    scratch.overwriteFile("WORKSPACE",
-        "local_repository(",
-        "    name = 'a_remote_repo',",
-        "    path = '/a_remote_repo'",
-        ")");
-    scratch.file("/a_remote_repo/remote_pkg/BUILD");
-    scratch.file("/a_remote_repo/remote_pkg/ext.bzl",
-        "CONST = 17");
-
+  public void testSkylarkRelativeImportFilenameWithControlChars() throws Exception {
+    scratch.file("pkg/BUILD", "");
+    scratch.file("pkg/ext.bzl", "load('oops\u0000', 'a')");
     SkyKey skylarkImportLookupKey =
-        SkylarkImportLookupValue.key(Label.parseAbsoluteUnchecked(
-            "@a_remote_repo//remote_pkg:ext.bzl"), /*inWorkspace=*/ true);
+        SkylarkImportLookupValue.key(Label.parseAbsoluteUnchecked("//pkg:ext.bzl"), false);
     EvaluationResult<SkylarkImportLookupValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), skylarkImportLookupKey, /*keepGoing=*/ false, reporter);
-
-    assertFalse(result.hasError());
+    assertTrue(result.hasError());
+    ErrorInfo errorInfo = result.getError(skylarkImportLookupKey);
+    String errorMessage = errorInfo.getException().getMessage();
+    assertEquals("invalid target name 'oops<?>.bzl': "
+        + "target names may not contain non-printable characters: '\\x00'", errorMessage);
   }
+
 }

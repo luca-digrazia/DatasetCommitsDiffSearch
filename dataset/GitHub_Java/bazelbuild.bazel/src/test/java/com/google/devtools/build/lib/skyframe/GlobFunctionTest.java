@@ -96,7 +96,7 @@ public abstract class GlobFunctionTest {
   private AtomicReference<PathPackageLocator> pkgLocator;
   private TimestampGranularityMonitor tsgm;
 
-  private static final PackageIdentifier PKG_ID = PackageIdentifier.createInDefaultRepo("pkg");
+  private static final PackageIdentifier PKG_PATH_ID = PackageIdentifier.createInDefaultRepo("pkg");
 
   @Before
   public final void setUp() throws Exception  {
@@ -104,7 +104,7 @@ public abstract class GlobFunctionTest {
     root = fs.getRootDirectory().getRelative("root/workspace");
     writableRoot = fs.getRootDirectory().getRelative("writableRoot/workspace");
     outputBase = fs.getRootDirectory().getRelative("output_base");
-    pkgPath = root.getRelative(PKG_ID.getPackageFragment());
+    pkgPath = root.getRelative(PKG_PATH_ID.getPackageFragment());
 
     pkgLocator =
         new AtomicReference<>(
@@ -125,7 +125,7 @@ public abstract class GlobFunctionTest {
   private Map<SkyFunctionName, SkyFunction> createFunctionMap() {
     AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages =
         new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
-    ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(pkgLocator, false);
+    ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(pkgLocator);
 
     Map<SkyFunctionName, SkyFunction> skyFunctions = new HashMap<>();
     skyFunctions.put(SkyFunctions.GLOB, new GlobFunction(alwaysUseDirListing()));
@@ -140,7 +140,7 @@ public abstract class GlobFunctionTest {
         SkyFunctions.FILE_STATE,
         new FileStateFunction(
             new TimestampGranularityMonitor(BlazeClock.instance()), externalFilesHelper));
-    skyFunctions.put(SkyFunctions.FILE, new FileFunction(pkgLocator));
+    skyFunctions.put(SkyFunctions.FILE, new FileFunction(pkgLocator, tsgm, externalFilesHelper));
     return skyFunctions;
   }
 
@@ -267,6 +267,33 @@ public abstract class GlobFunctionTest {
   }
 
   @Test
+  public void testGlobMissingPackage() throws Exception {
+    // This is a malformed value key, because "missing" is not a package. Nevertheless, we have a
+    // sanity check that building the corresponding GlobValue fails loudly. The test depends on
+    // implementation details of ParallelEvaluator and GlobFunction.
+    SkyKey skyKey =
+        GlobValue.key(
+            PackageIdentifier.createInDefaultRepo("missing"),
+            "foo",
+            false,
+            PathFragment.EMPTY_FRAGMENT);
+    try {
+      driver.evaluate(
+          ImmutableList.of(skyKey),
+          false,
+          SkyframeExecutor.DEFAULT_THREAD_COUNT,
+          NullEventHandler.INSTANCE);
+      fail();
+    } catch (RuntimeException e) {
+      assertThat(e.getMessage())
+          .contains("Unrecoverable error while evaluating node '" + skyKey + "'");
+      Throwable cause = e.getCause();
+      assertThat(cause).isInstanceOf(IllegalStateException.class);
+      assertThat(cause.getMessage()).contains("isn't an existing package");
+    }
+  }
+
+  @Test
   public void testGlobDoesNotCrossPackageBoundary() throws Exception {
     FileSystemUtils.createEmptyFile(pkgPath.getRelative("foo/BUILD"));
     // "foo/bar" should not be in the results because foo is a separate package.
@@ -333,7 +360,7 @@ public abstract class GlobFunctionTest {
   }
 
   private GlobValue runGlob(boolean excludeDirs, String pattern) throws Exception {
-    SkyKey skyKey = GlobValue.key(PKG_ID, root, pattern, excludeDirs, PathFragment.EMPTY_FRAGMENT);
+    SkyKey skyKey = GlobValue.key(PKG_PATH_ID, pattern, excludeDirs, PathFragment.EMPTY_FRAGMENT);
     EvaluationResult<SkyValue> result =
         driver.evaluate(
             ImmutableList.of(skyKey),
@@ -417,7 +444,7 @@ public abstract class GlobFunctionTest {
 
   private void assertIllegalPattern(String pattern) {
     try {
-      GlobValue.key(PKG_ID, root, pattern, false, PathFragment.EMPTY_FRAGMENT);
+      GlobValue.key(PKG_PATH_ID, pattern, false, PathFragment.EMPTY_FRAGMENT);
       fail("invalid pattern not detected: " + pattern);
     } catch (InvalidGlobPatternException e) {
       // Expected.
@@ -555,6 +582,7 @@ public abstract class GlobFunctionTest {
   /** Regression test for b/13319874: Directory listing crash. */
   @Test
   public void testResilienceToFilesystemInconsistencies_DirectoryExistence() throws Exception {
+    long nodeId = pkgPath.getRelative("BUILD").stat().getNodeId();
     // Our custom filesystem says "pkgPath/BUILD" exists but "pkgPath" does not exist.
     fs.stubStat(pkgPath, null);
     RootedPath pkgRootedPath = RootedPath.toRootedPath(root, pkgPath);
@@ -562,8 +590,13 @@ public abstract class GlobFunctionTest {
     FileValue pkgDirValue =
         FileValue.value(pkgRootedPath, pkgDirFileStateValue, pkgRootedPath, pkgDirFileStateValue);
     differencer.inject(ImmutableMap.of(FileValue.key(pkgRootedPath), pkgDirValue));
-    String expectedMessage = "/root/workspace/pkg is no longer an existing directory";
-    SkyKey skyKey = GlobValue.key(PKG_ID, root, "*/foo", false, PathFragment.EMPTY_FRAGMENT);
+    String expectedMessage =
+        "Some filesystem operations implied /root/workspace/pkg/BUILD was a "
+            + "regular file with size of 0 and mtime of 0 and nodeId of "
+            + nodeId
+            + " and mtime of 0 "
+            + "but others made us think it was a nonexistent path";
+    SkyKey skyKey = GlobValue.key(PKG_PATH_ID, "*/foo", false, PathFragment.EMPTY_FRAGMENT);
     EvaluationResult<GlobValue> result =
         driver.evaluate(
             ImmutableList.of(skyKey),
@@ -590,7 +623,7 @@ public abstract class GlobFunctionTest {
         ImmutableMap.of(
             DirectoryListingStateValue.key(fooBarDirRootedPath), fooBarDirListingValue));
     String expectedMessage = "/root/workspace/pkg/foo/bar/wiz is no longer an existing directory.";
-    SkyKey skyKey = GlobValue.key(PKG_ID, root, "**/wiz", false, PathFragment.EMPTY_FRAGMENT);
+    SkyKey skyKey = GlobValue.key(PKG_PATH_ID, "**/wiz", false, PathFragment.EMPTY_FRAGMENT);
     EvaluationResult<GlobValue> result =
         driver.evaluate(
             ImmutableList.of(skyKey),
@@ -662,8 +695,7 @@ public abstract class GlobFunctionTest {
         ImmutableMap.of(DirectoryListingStateValue.key(wizRootedPath), wizDirListingValue));
     String expectedMessage =
         "readdir and stat disagree about whether " + fileRootedPath.asPath() + " is a symlink";
-    SkyKey skyKey = GlobValue.key(PKG_ID, root, "foo/bar/wiz/*", false,
-        PathFragment.EMPTY_FRAGMENT);
+    SkyKey skyKey = GlobValue.key(PKG_PATH_ID, "foo/bar/wiz/*", false, PathFragment.EMPTY_FRAGMENT);
     EvaluationResult<GlobValue> result =
         driver.evaluate(
             ImmutableList.of(skyKey),

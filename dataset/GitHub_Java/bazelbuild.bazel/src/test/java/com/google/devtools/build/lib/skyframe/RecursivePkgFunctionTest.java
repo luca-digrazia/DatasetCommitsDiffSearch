@@ -18,12 +18,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCaseForJunit4;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -47,7 +47,7 @@ import org.junit.runners.JUnit4;
  * are a couple of corner cases we need to test directly.
  */
 @RunWith(JUnit4.class)
-public class RecursivePkgFunctionTest extends BuildViewTestCase {
+public class RecursivePkgFunctionTest extends BuildViewTestCaseForJunit4 {
 
   private SkyframeExecutor skyframeExecutor;
 
@@ -60,7 +60,7 @@ public class RecursivePkgFunctionTest extends BuildViewTestCase {
       Path root, PathFragment rootRelativePath, ImmutableSet<PathFragment> excludedPaths) {
     RootedPath rootedPath = RootedPath.toRootedPath(root, rootRelativePath);
     return RecursivePkgValue.key(
-        RepositoryName.MAIN, rootedPath, excludedPaths);
+        PackageIdentifier.DEFAULT_REPOSITORY_NAME, rootedPath, excludedPaths);
   }
 
   private RecursivePkgValue buildRecursivePkgValue(Path root, PathFragment rootRelativePath)

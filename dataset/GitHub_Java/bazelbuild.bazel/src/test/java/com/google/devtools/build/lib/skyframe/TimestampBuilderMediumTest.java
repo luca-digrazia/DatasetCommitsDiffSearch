@@ -63,7 +63,7 @@ public class TimestampBuilderMediumTest extends TimestampBuilderTestCase {
   /**
    * Creates and returns a new caching builder based on a given {@code cache}.
    */
-  private Builder persistentBuilder(CompactPersistentActionCache cache) throws Exception {
+  private Builder persistentBuilder(CompactPersistentActionCache cache) {
     return createBuilder(cache);
   }
 

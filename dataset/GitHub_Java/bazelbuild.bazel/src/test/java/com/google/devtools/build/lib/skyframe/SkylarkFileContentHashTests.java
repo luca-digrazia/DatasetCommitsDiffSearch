@@ -17,15 +17,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCaseForJunit4;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
-import com.google.devtools.build.lib.util.BlazeClock;
-import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 
@@ -42,7 +40,7 @@ import java.util.UUID;
  * of the imports of their respective definition SkylarkEnvironments.
  */
 @RunWith(JUnit4.class)
-public class SkylarkFileContentHashTests extends BuildViewTestCase {
+public class SkylarkFileContentHashTests extends BuildViewTestCaseForJunit4 {
 
   @Before
   public final void createFiles() throws Exception  {
@@ -163,9 +161,8 @@ public class SkylarkFileContentHashTests extends BuildViewTestCase {
             true,
             7,
             "",
-            UUID.randomUUID(),
-            new TimestampGranularityMonitor(BlazeClock.instance()));
-    SkyKey pkgLookupKey = PackageValue.key(PackageIdentifier.parse("@//" + pkg));
+            UUID.randomUUID());
+    SkyKey pkgLookupKey = PackageValue.key(PackageIdentifier.parse(pkg));
     EvaluationResult<PackageValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), pkgLookupKey, /*keepGoing=*/ false, reporter);

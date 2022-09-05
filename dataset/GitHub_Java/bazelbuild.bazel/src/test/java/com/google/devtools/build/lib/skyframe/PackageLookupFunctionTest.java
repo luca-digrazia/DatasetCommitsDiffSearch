@@ -30,7 +30,7 @@ import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue.ErrorReason;
-import com.google.devtools.build.lib.testutil.FoundationTestCase;
+import com.google.devtools.build.lib.testutil.FoundationTestCaseForJunit4;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -59,7 +59,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Tests for {@link PackageLookupFunction}.
  */
 @RunWith(JUnit4.class)
-public class PackageLookupFunctionTest extends FoundationTestCase {
+public class PackageLookupFunctionTest extends FoundationTestCaseForJunit4 {
   private AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages;
   private MemoizingEvaluator evaluator;
   private SequentialBuildDriver driver;
@@ -73,7 +73,7 @@ public class PackageLookupFunctionTest extends FoundationTestCase {
     AtomicReference<PathPackageLocator> pkgLocator = new AtomicReference<>(
         new PathPackageLocator(outputBase, ImmutableList.of(emptyPackagePath, rootDirectory)));
     deletedPackages = new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
-    ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(pkgLocator, false);
+    ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(pkgLocator);
     TimestampGranularityMonitor tsgm = new TimestampGranularityMonitor(BlazeClock.instance());
     BlazeDirectories directories = new BlazeDirectories(rootDirectory, outputBase, rootDirectory);
 
@@ -84,12 +84,10 @@ public class PackageLookupFunctionTest extends FoundationTestCase {
         SkyFunctions.PACKAGE,
         new PackageFunction(null, null, null, null, null, null, null));
     skyFunctions.put(SkyFunctions.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper));
-    skyFunctions.put(SkyFunctions.FILE, new FileFunction(pkgLocator));
+    skyFunctions.put(SkyFunctions.FILE, new FileFunction(pkgLocator, tsgm, externalFilesHelper));
     skyFunctions.put(SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
         new BlacklistedPackagePrefixesFunction());
     RuleClassProvider ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
-    skyFunctions.put(SkyFunctions.WORKSPACE_AST,
-        new WorkspaceASTFunction(TestRuleClassProvider.getRuleClassProvider()));
     skyFunctions.put(
         SkyFunctions.WORKSPACE_FILE,
         new WorkspaceFileFunction(

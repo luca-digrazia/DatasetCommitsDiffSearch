@@ -32,7 +32,7 @@ import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
+import com.google.devtools.build.lib.packages.util.PackageLoadingTestCaseForJunit4;
 import com.google.devtools.build.lib.packages.util.PreprocessorUtils;
 import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.testutil.ManualClock;
@@ -53,12 +53,13 @@ import java.util.Set;
 
 import javax.annotation.Nullable;
 
-abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCase {
+abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCaseForJunit4 {
   // Convenience constants, so test args are readable vs true/false
   protected static final boolean KEEP_GOING = true;
   protected static final boolean EXPECT_ERROR = true;
   protected TransitivePackageLoader visitor = null;
   protected CustomInMemoryFs fs = new CustomInMemoryFs(new ManualClock());
+  protected SkyframeExecutor skyframeExecutor;
   protected PreprocessorUtils.MutableFactorySupplier preprocessorFactorySupplier =
       new PreprocessorUtils.MutableFactorySupplier(null);
 
@@ -191,8 +192,7 @@ abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCas
   }
 
   protected void syncPackages(ModifiedFileSet modifiedFileSet) throws InterruptedException {
-    getSkyframeExecutor()
-        .invalidateFilesUnderPathForTesting(reporter, modifiedFileSet, rootDirectory);
+    skyframeExecutor.invalidateFilesUnderPathForTesting(reporter, modifiedFileSet, rootDirectory);
   }
 
   @Override
@@ -201,7 +201,7 @@ abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCas
     Set<Target> targets = new HashSet<>();
     for (String strLabel : strLabels) {
       Label label = Label.parseAbsolute(strLabel);
-      targets.add(getSkyframeExecutor().getPackageManager().getTarget(reporter, label));
+      targets.add(skyframeExecutor.getPackageManager().getTarget(reporter, label));
     }
     return targets;
   }

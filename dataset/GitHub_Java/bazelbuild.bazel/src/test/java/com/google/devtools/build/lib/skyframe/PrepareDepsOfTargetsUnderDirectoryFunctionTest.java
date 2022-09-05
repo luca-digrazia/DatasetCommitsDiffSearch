@@ -18,15 +18,15 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCaseForJunit4;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -46,20 +46,13 @@ import java.io.IOException;
  * Tests for {@link PrepareDepsOfTargetsUnderDirectoryFunction}. Insert excuses here.
  */
 @RunWith(JUnit4.class)
-public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTestCase {
+public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTestCaseForJunit4 {
 
   private SkyframeExecutor skyframeExecutor;
 
   @Before
   public final void setSkyframeExecutor() throws Exception {
     skyframeExecutor = getSkyframeExecutor();
-  }
-
-  private SkyKey createCollectPackagesKey(
-      Path root, PathFragment rootRelativePath, ImmutableSet<PathFragment> excludedPaths) {
-    RootedPath rootedPath = RootedPath.toRootedPath(root, rootRelativePath);
-    return CollectPackagesUnderDirectoryValue.key(
-        PackageIdentifier.DEFAULT_REPOSITORY_NAME, rootedPath, excludedPaths);
   }
 
   private SkyKey createPrepDepsKey(Path root, PathFragment rootRelativePath) {
@@ -163,15 +156,7 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
         ImmutableSet.of(excludedPathFragment));
     EvaluationResult<PrepareDepsOfTargetsUnderDirectoryValue> evaluationResult =
         getEvaluationResult(key);
-    CollectPackagesUnderDirectoryValue value =
-        (CollectPackagesUnderDirectoryValue)
-            evaluationResult
-                .getWalkableGraph()
-                .getValue(
-                    createCollectPackagesKey(
-                        rootDirectory,
-                        new PathFragment("a"),
-                        ImmutableSet.of(excludedPathFragment)));
+    PrepareDepsOfTargetsUnderDirectoryValue value = evaluationResult.get(key);
 
     // Then the value reports that "a" is a package,
     assertThat(value.isDirectoryPackage()).isTrue();
@@ -208,12 +193,7 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
     SkyKey key = createPrepDepsKey(rootDirectory, new PathFragment("a"), excludedPaths);
     EvaluationResult<PrepareDepsOfTargetsUnderDirectoryValue> evaluationResult =
         getEvaluationResult(key);
-    CollectPackagesUnderDirectoryValue value =
-        (CollectPackagesUnderDirectoryValue)
-            evaluationResult
-                .getWalkableGraph()
-                .getValue(
-                    createCollectPackagesKey(rootDirectory, new PathFragment("a"), excludedPaths));
+    PrepareDepsOfTargetsUnderDirectoryValue value = evaluationResult.get(key);
 
     // Then the value reports that "a" is a package,
     assertThat(value.isDirectoryPackage()).isTrue();
@@ -229,10 +209,10 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
     // Also, the computation graph contains a cached value for "a/b" with "a/b/c" excluded, because
     // "a/b/c" does live underneath "a/b".
     WalkableGraph graph = Preconditions.checkNotNull(evaluationResult.getWalkableGraph());
-    SkyKey abKey = createCollectPackagesKey(rootDirectory, new PathFragment("a/b"), excludedPaths);
+    SkyKey abKey = createPrepDepsKey(rootDirectory, new PathFragment("a/b"), excludedPaths);
     assertThat(graph.exists(abKey)).isTrue();
-    CollectPackagesUnderDirectoryValue abValue =
-        (CollectPackagesUnderDirectoryValue) Preconditions.checkNotNull(graph.getValue(abKey));
+    PrepareDepsOfTargetsUnderDirectoryValue abValue =
+        (PrepareDepsOfTargetsUnderDirectoryValue) Preconditions.checkNotNull(graph.getValue(abKey));
 
     // And that value says that "a/b" is not a package,
     assertThat(abValue.isDirectoryPackage()).isFalse();

@@ -14,28 +14,29 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.skyframe.WalkableGraphUtils.exists;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCaseForJunit4;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.WalkableGraph;
-import java.io.IOException;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.io.IOException;
+
 /** Tests for {@link PrepareDepsOfPatternsFunction}. */
 @RunWith(JUnit4.class)
-public class PrepareDepsOfPatternsFunctionSmartNegationTest extends BuildViewTestCase {
+public class PrepareDepsOfPatternsFunctionSmartNegationTest extends BuildViewTestCaseForJunit4 {
 
   private static SkyKey getKeyForLabel(Label label) {
     // Note that these tests used to look for TargetMarker SkyKeys before TargetMarker was
@@ -46,7 +47,7 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends BuildViewTes
 
   @Test
   public void testRecursiveEvaluationFailsOnBadBuildFile() throws Exception {
-    // Given a well-formed package "@//foo" and a malformed package "@//foo/foo",
+    // Given a well-formed package "//foo" and a malformed package "//foo/foo",
     createFooAndFooFoo();
 
     // Given a target pattern sequence consisting of a recursive pattern for "//foo/...",
@@ -58,12 +59,12 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends BuildViewTes
         getGraphFromPatternsEvaluation(
             patternSequence, /*successExpected=*/ true, /*keepGoing=*/ true);
 
-    // Then the graph contains package values for "@//foo" and "@//foo/foo",
-    assertTrue(exists(PackageValue.key(PackageIdentifier.parse("@//foo")), walkableGraph));
-    assertTrue(exists(PackageValue.key(PackageIdentifier.parse("@//foo/foo")), walkableGraph));
+    // Then the graph contains package values for "//foo" and "//foo/foo",
+    assertTrue(walkableGraph.exists(PackageValue.key(PackageIdentifier.parse("foo"))));
+    assertTrue(walkableGraph.exists(PackageValue.key(PackageIdentifier.parse("foo/foo"))));
 
-    // But the graph does not contain a value for the target "@//foo/foo:foofoo".
-    assertFalse(exists(getKeyForLabel(Label.create("@//foo/foo", "foofoo")), walkableGraph));
+    // But the graph does not contain a value for the target "//foo/foo:foofoo".
+    assertFalse(walkableGraph.exists(getKeyForLabel(Label.create("foo/foo", "foofoo"))));
   }
 
   @Test
@@ -102,15 +103,15 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends BuildViewTes
         getGraphFromPatternsEvaluation(
             patternSequence, /*successExpected=*/ true, /*keepGoing=*/ true);
 
-    // Then the graph contains a package value for "@//foo",
-    assertTrue(exists(PackageValue.key(PackageIdentifier.parse("@//foo")), walkableGraph));
+    // Then the graph contains a package value for "//foo",
+    assertTrue(walkableGraph.exists(PackageValue.key(PackageIdentifier.parse("foo"))));
 
-    // But no package value for "@//foo/foo",
-    assertFalse(exists(PackageValue.key(PackageIdentifier.parse("@//foo/foo")), walkableGraph));
+    // But no package value for "//foo/foo",
+    assertFalse(walkableGraph.exists(PackageValue.key(PackageIdentifier.parse("foo/foo"))));
 
-    // And the graph does not contain a value for the target "@//foo/foo:foofoo".
-    Label label = Label.create("@//foo/foo", "foofoo");
-    assertFalse(exists(getKeyForLabel(label), walkableGraph));
+    // And the graph does not contain a value for the target "//foo/foo:foofoo".
+    Label label = Label.create("foo/foo", "foofoo");
+    assertFalse(walkableGraph.exists(getKeyForLabel(label)));
   }
 
   @Test

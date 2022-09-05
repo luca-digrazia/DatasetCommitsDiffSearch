@@ -21,7 +21,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.fail;
 
-import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -33,12 +33,9 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.util.TestAction.DummyAction;
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.events.NullEventHandler;
-import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.ActionLookupValue.ActionLookupKey;
-import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.Pair;
@@ -64,8 +61,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -84,14 +79,6 @@ public class ArtifactFunctionTest {
   private static final SkyKey OWNER_KEY = new SkyKey(SkyFunctions.ACTION_LOOKUP, "OWNER");
   private static final ActionLookupKey ALL_OWNER = new SingletonActionLookupKey();
 
-  private PathFragment allowedMissingInput = null;
-  private Predicate<PathFragment> allowedMissingInputsPredicate = new Predicate<PathFragment>() {
-    @Override
-    public boolean apply(PathFragment input) {
-      return input.equals(allowedMissingInput);
-    }
-  };
-
   private Set<Action> actions;
   private boolean fastDigest = false;
   private RecordingDifferencer differencer = new RecordingDifferencer();
@@ -103,36 +90,25 @@ public class ArtifactFunctionTest {
   @Before
   public final void setUp() throws Exception  {
     setupRoot(new CustomInMemoryFs());
-    AtomicReference<PathPackageLocator> pkgLocator = new AtomicReference<>(new PathPackageLocator(
-        root.getFileSystem().getPath("/outputbase"), ImmutableList.of(root)));
-    ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(pkgLocator, false);
+    AtomicReference<PathPackageLocator> pkgLocator =
+        new AtomicReference<>(PathPackageLocator.EMPTY);
+    ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(pkgLocator);
     differencer = new RecordingDifferencer();
     evaluator =
         new InMemoryMemoizingEvaluator(
-            ImmutableMap.<SkyFunctionName, SkyFunction>builder()
-                .put(SkyFunctions.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper))
-                .put(SkyFunctions.FILE, new FileFunction(pkgLocator))
-                .put(SkyFunctions.ARTIFACT, new ArtifactFunction(allowedMissingInputsPredicate))
-                .put(SkyFunctions.ACTION_EXECUTION, new SimpleActionExecutionFunction())
-                .put(SkyFunctions.PACKAGE,
-                    new PackageFunction(null, null, null, null, null, null, null))
-                .put(SkyFunctions.PACKAGE_LOOKUP, new PackageLookupFunction(null))
-                .put(SkyFunctions.WORKSPACE_FILE,
-                    new WorkspaceFileFunction(TestRuleClassProvider.getRuleClassProvider(),
-                        new PackageFactory(TestRuleClassProvider.getRuleClassProvider()),
-                        new BlazeDirectories(root, root, root)))
-                .build(),
+            ImmutableMap.of(
+                SkyFunctions.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper),
+                SkyFunctions.FILE, new FileFunction(pkgLocator, tsgm, externalFilesHelper),
+                SkyFunctions.ARTIFACT, new ArtifactFunction(Predicates.<PathFragment>alwaysFalse()),
+                SkyFunctions.ACTION_EXECUTION, new SimpleActionExecutionFunction()),
             differencer);
     driver = new SequentialBuildDriver(evaluator);
     PrecomputedValue.BUILD_ID.set(differencer, UUID.randomUUID());
-    PrecomputedValue.PATH_PACKAGE_LOCATOR.set(differencer, pkgLocator.get());
     actions = new HashSet<>();
   }
 
-  private void setupRoot(CustomInMemoryFs fs) throws IOException {
+  private void setupRoot(CustomInMemoryFs fs) {
     root = fs.getPath(TestUtils.tmpDir());
-    FileSystemUtils.createDirectoryAndParents(root);
-    FileSystemUtils.createEmptyFile(root.getRelative("WORKSPACE"));
   }
 
   private void assertFileArtifactValueMatches(boolean expectDigest) throws Throwable {
@@ -158,52 +134,6 @@ public class ArtifactFunctionTest {
   public void testMissingNonMandatoryArtifact() throws Throwable {
     Artifact input = createSourceArtifact("input1");
     assertNotNull(evaluateArtifactValue(input, /*mandatory=*/ false));
-  }
-
-  @Test
-  public void testMissingMandatoryAllowedMissingArtifact() throws Throwable {
-    Artifact input = createSourceArtifact("allowedMissing");
-    allowedMissingInput = input.getRootRelativePath();
-    assertThat(evaluateArtifactValue(input, /*mandatory=*/ true))
-        .isEqualTo(FileArtifactValue.MISSING_FILE_MARKER);
-  }
-
-  @Test
-  public void testUnreadableMandatoryAllowedMissingArtifact() throws Throwable {
-    Artifact input = createSourceArtifact("allowedMissing");
-    file(input.getPath(), "allowedMissing");
-    input.getPath().chmod(0);
-
-    allowedMissingInput = input.getRootRelativePath();
-    assertThat(evaluateArtifactValue(input, /*mandatory=*/ true))
-        .isEqualTo(FileArtifactValue.MISSING_FILE_MARKER);
-  }
-
-  @Test
-  public void testUnreadableInputWithFsWithAvailableDigest() throws Throwable {
-    final byte[] expectedDigest = MessageDigest.getInstance("md5").digest(
-        "someunreadablecontent".getBytes(StandardCharsets.UTF_8));
-    setupRoot(
-        new CustomInMemoryFs() {
-          @Override
-          public byte[] getMD5Digest(Path path) throws IOException {
-            return path.getBaseName().equals("unreadable")
-                ? expectedDigest
-                : super.getMD5Digest(path);
-          }
-        });
-
-    Artifact input = createSourceArtifact("unreadable");
-    Path inputPath = input.getPath();
-    file(inputPath, "dummynotused");
-    inputPath.chmod(0);
-
-    FileArtifactValue value =
-        (FileArtifactValue) evaluateArtifactValue(input, /*mandatory=*/ true);
-
-    FileStatus stat = inputPath.stat();
-    assertThat(value.getSize()).isEqualTo(stat.getSize());
-    assertThat(value.getDigest()).isEqualTo(expectedDigest);
   }
 
   @Test

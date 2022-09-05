@@ -79,6 +79,11 @@ public class ActionDataTest extends TimestampBuilderTestCase {
       }
 
       @Override
+      public String describeStrategy(Executor executor) {
+        return "";
+      }
+
+      @Override
       public String getMnemonic() {
         return "MyAction";
       }
@@ -137,6 +142,11 @@ public class ActionDataTest extends TimestampBuilderTestCase {
     @Override
     public void execute(ActionExecutionContext actionExecutionContext) {
       throw new IllegalStateException();
+    }
+
+    @Override
+    public String describeStrategy(Executor executor) {
+      return "";
     }
 
     @Override
