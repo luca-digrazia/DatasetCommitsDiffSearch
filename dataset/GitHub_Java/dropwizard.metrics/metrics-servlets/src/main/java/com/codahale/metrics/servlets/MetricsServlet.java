@@ -27,14 +27,23 @@ public class MetricsServlet extends HttpServlet {
     private transient MetricRegistry registry;
     private transient ObjectMapper mapper;
 
+    public MetricsServlet() {
+    	super();
+    }
+    public MetricsServlet(MetricRegistry registry) {
+    	this();
+    	this.registry = registry;
+    }
     @Override
     public void init(ServletConfig config) throws ServletException {
-        final Object registryAttr = config.getServletContext().getAttribute(METRICS_REGISTRY);
-        if (registryAttr instanceof MetricRegistry) {
-            this.registry = (MetricRegistry) registryAttr;
-        } else {
-            throw new ServletException("Couldn't find a MetricRegistry instance.");
-        }
+    	if (null == registry) {
+	        final Object registryAttr = config.getServletContext().getAttribute(METRICS_REGISTRY);
+	        if (registryAttr instanceof MetricRegistry) {
+	            this.registry = (MetricRegistry) registryAttr;
+	        } else {
+	            throw new ServletException("Couldn't find a MetricRegistry instance.");
+	        }
+    	}
 
         final TimeUnit rateUnit = parseTimeUnit(config.getServletContext()
                                                       .getInitParameter(RATE_UNIT),
@@ -56,7 +65,6 @@ public class MetricsServlet extends HttpServlet {
     protected void doGet(HttpServletRequest req,
                          HttpServletResponse resp) throws ServletException, IOException {
         resp.setContentType(CONTENT_TYPE);
-        resp.setHeader("Access-Control-Allow-Origin", "*");
         resp.setHeader("Cache-Control", "must-revalidate,no-cache,no-store");
         resp.setStatus(HttpServletResponse.SC_OK);
 
