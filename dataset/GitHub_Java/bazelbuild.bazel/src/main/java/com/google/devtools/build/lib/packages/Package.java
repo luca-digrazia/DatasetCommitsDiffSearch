@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -476,23 +475,11 @@ public class Package {
     return (Rule) targets.get(targetName);
   }
 
-  /** Returns all rules in the package that match the given rule class. */
-  public Iterable<Rule> getRulesMatchingRuleClass(final String ruleClass) {
-    Iterable<Rule> targets = getTargets(Rule.class);
-    return Iterables.filter(
-        targets,
-        new Predicate<Rule>() {
-          @Override
-          public boolean apply(@Nullable Rule rule) {
-            return rule.getRuleClass().equals(ruleClass);
-          }
-        });
-  }
-
   /**
    * Returns this package's workspace name.
    *
-   * <p>Package-private to encourage callers to get their workspace name from a rule, not a package.
+   * <p>Package-private to encourage callers to get their workspace name from a rule, not a
+   * package.</p>
    */
   public String getWorkspaceName() {
     return workspaceName;
@@ -1311,7 +1298,9 @@ public class Package {
       for (Rule rule : rules) {
         AttributeMap attributes = NonconfigurableAttributeMapper.of(rule);
         if (rule.getRuleClass().equals("test_suite")
-            && attributes.get("tests", BuildType.LABEL_LIST).isEmpty()) {
+            && attributes.get("tests", BuildType.LABEL_LIST).isEmpty()
+            && (!attributes.has("suites", BuildType.LABEL_LIST)
+                || attributes.get("suites", BuildType.LABEL_LIST).isEmpty())) {
           rule.setAttributeValueByName("$implicit_tests", allTests);
         }
       }
