@@ -14,10 +14,12 @@
 package com.google.devtools.build.android;
 
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.Ordering;
 import com.google.devtools.build.android.ParsedAndroidData.KeyValueConsumer;
 import com.google.devtools.build.android.proto.SerializeFormat;
 import com.google.devtools.build.android.proto.SerializeFormat.Header;
 import com.google.protobuf.InvalidProtocolBufferException;
+
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -31,7 +33,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
-import java.util.Set;
+import java.util.NavigableSet;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -42,7 +44,9 @@ import java.util.logging.Logger;
 public class AndroidDataSerializer {
   private static final Logger logger = Logger.getLogger(AndroidDataSerializer.class.getName());
 
-  private final NavigableMap<DataKey, DataValue> entries = new TreeMap<>();
+  // TODO(corysmith): We might need a more performant comparison methodology than toString.
+  private final NavigableMap<DataKey, DataValue> entries =
+      new TreeMap<DataKey, DataValue>(Ordering.usingToString());
 
   public static AndroidDataSerializer create() {
     return new AndroidDataSerializer();
@@ -85,21 +89,20 @@ public class AndroidDataSerializer {
 
   private void writeKeyValuesTo(NavigableMap<DataKey, DataValue> map, OutputStream outStream)
       throws IOException {
-    Set<Entry<DataKey, DataValue>> entries = map.entrySet();
-    int[] orderedValueSizes = new int[entries.size()];
+    NavigableSet<DataKey> keys = map.navigableKeySet();
+    int[] orderedValueSizes = new int[keys.size()];
     int valueSizeIndex = 0;
     // Serialize all the values in sorted order to a intermediate buffer, so that the keys
     // can be associated with a value size.
     // TODO(corysmith): Tune the size of the byte array.
     ByteArrayOutputStream valuesOutputStream = new ByteArrayOutputStream(2048);
-    for (Map.Entry<DataKey, DataValue> entry : entries) {
-      orderedValueSizes[valueSizeIndex++] = entry.getValue()
-          .serializeTo(entry.getKey(), valuesOutputStream);
+    for (DataKey key : keys) {
+      orderedValueSizes[valueSizeIndex++] = map.get(key).serializeTo(key, valuesOutputStream);
     }
     // Serialize all the keys in sorted order
     valueSizeIndex = 0;
-    for (Map.Entry<DataKey, DataValue> entry : entries) {
-      entry.getKey().serializeTo(outStream, orderedValueSizes[valueSizeIndex++]);
+    for (DataKey key : keys) {
+      key.serializeTo(outStream, orderedValueSizes[valueSizeIndex++]);
     }
     // write the values to the output stream.
     outStream.write(valuesOutputStream.toByteArray());

@@ -18,8 +18,7 @@ import com.google.devtools.build.android.ParsedAndroidData.KeyValueConsumer;
 /**
  * A group of {@link KeyValueConsumer}s for each DataValue type.
  *
- * <p>This class acts as a parameter object for organizing the common grouping of consumer
- * instances.
+ * This class acts as a parameter object for organizing the common grouping of consumer instances.
  */
 class KeyValueConsumers {
   static KeyValueConsumers of(
