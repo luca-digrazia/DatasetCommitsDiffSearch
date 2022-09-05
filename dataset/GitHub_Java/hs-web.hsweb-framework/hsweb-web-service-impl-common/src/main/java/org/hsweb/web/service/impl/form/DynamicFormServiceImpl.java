@@ -48,7 +48,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     @Autowired(required = false)
-    protected FormParser formParser;
+    protected FormParser formParser = new DefaultFormParser();
 
     @Autowired
     protected DataBase dataBase;
