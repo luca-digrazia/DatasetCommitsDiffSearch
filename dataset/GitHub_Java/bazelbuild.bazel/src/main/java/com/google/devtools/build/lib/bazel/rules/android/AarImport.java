@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.actions.PopulateTreeArtifactAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -61,20 +62,19 @@ public class AarImport implements RuleConfiguredTargetFactory {
     // classes.jar is required in every AAR.
     Artifact classesJar = createAarArtifact(ruleContext, CLASSES_JAR);
     ruleContext.registerAction(
-        createEmbeddedJarExtractorActions(ruleContext, aar, CLASSES_JAR, classesJar));
+        createSingleFileExtractor(ruleContext, aar, CLASSES_JAR, classesJar));
 
     // AndroidManifest.xml is required in every AAR.
     Artifact androidManifestArtifact = createAarArtifact(ruleContext, ANDROID_MANIFEST);
-    ruleContext.registerAction(createSingleFileExtractorActions(
-        ruleContext, aar, ANDROID_MANIFEST, androidManifestArtifact));
+    ruleContext.registerAction(
+        createSingleFileExtractor(ruleContext, aar, ANDROID_MANIFEST, androidManifestArtifact));
 
     Artifact resourcesManifest = createAarArtifact(ruleContext, "resource_manifest");
     ruleContext.registerAction(
-        createManifestExtractorActions(ruleContext, aar, "res/.*", resourcesManifest));
+        createManifestExtractor(ruleContext, aar, "res/.*", resourcesManifest));
 
     Artifact resources = createResourcesTreeArtifact(ruleContext);
-    ruleContext.registerAction(
-        createManifestFileEntriesExtractorActions(ruleContext, aar, resourcesManifest, resources));
+    ruleContext.registerAction(createTreePopulater(ruleContext, aar, resourcesManifest, resources));
 
     ApplicationManifest androidManifest =
         ApplicationManifest.fromExplicitManifest(ruleContext, androidManifestArtifact);
@@ -114,53 +114,32 @@ public class AarImport implements RuleConfiguredTargetFactory {
         .build();
   }
 
-  private static Action[] createSingleFileExtractorActions(RuleContext ruleContext, Artifact aar,
+  private static Action[] createSingleFileExtractor(RuleContext ruleContext, Artifact aar,
       String filename, Artifact outputArtifact) {
     return new SpawnAction.Builder()
-        .setExecutable(ruleContext.getExecutablePrerequisite("$zipper", Mode.HOST))
+        .setExecutable(ruleContext.getExecutablePrerequisite("$unzip", Mode.HOST))
         .setMnemonic("AarFileExtractor")
         .setProgressMessage("Extracting " + filename + " from " + aar.getFilename())
-        .addArgument("x")
+        .addArgument("-j")
         .addInputArgument(aar)
+        .addArgument(filename)
         .addArgument("-d")
         .addOutput(outputArtifact)
         .addArgument(outputArtifact.getExecPath().getParentDirectory().getPathString())
-        .addArgument(filename)
         .build(ruleContext);
   }
 
-  private static Action[] createManifestFileEntriesExtractorActions(RuleContext ruleContext,
-      Artifact aar, Artifact manifest, Artifact outputTree) {
-    return new SpawnAction.Builder()
-        .setExecutable(ruleContext.getExecutablePrerequisite("$zipper", Mode.HOST))
-        .setMnemonic("AarManifestFileEntriesExtractor")
-        .addArgument("x")
-        .addInputArgument(aar)
-        .addArgument("-d")
-        .addOutputArgument(outputTree)
-        .addArgument("@" + manifest.getExecPathString())
-        .addInput(manifest)
-        .build(ruleContext);
+  private static Action createTreePopulater(RuleContext ruleContext, Artifact aar,
+      Artifact manifest, Artifact outputTree) {
+    return new PopulateTreeArtifactAction(
+        ruleContext.getActionOwner(),
+        aar,
+        manifest,
+        outputTree,
+        ruleContext.getExecutablePrerequisite("$zipper", Mode.HOST));
   }
 
-  // Extracts a jar file from the aar if it exists, otherwise outputs an empty jar file.
-  private static Action[] createEmbeddedJarExtractorActions(RuleContext ruleContext, Artifact aar,
-      String filename, Artifact outputArtifact) {
-    return new SpawnAction.Builder()
-        .setExecutable(ruleContext.getExecutablePrerequisite("$embedded_jar_extractor", Mode.HOST))
-        .setMnemonic("AarJarExtractor")
-        .setProgressMessage("Extracting " + filename + " from " + aar.getFilename())
-        .addArgument("--input_archive")
-        .addInputArgument(aar)
-        .addArgument("--filename")
-        .addArgument(filename)
-        .addArgument("--output_dir")
-        .addOutput(outputArtifact)
-        .addArgument(outputArtifact.getExecPath().getParentDirectory().getPathString())
-        .build(ruleContext);
-  }
-
-  private static Action[] createManifestExtractorActions(RuleContext ruleContext, Artifact aar,
+  private static Action[] createManifestExtractor(RuleContext ruleContext, Artifact aar,
       String filenameRegexp, Artifact manifest) {
     return new SpawnAction.Builder()
         .setExecutable(ruleContext.getExecutablePrerequisite("$zip_manifest_creator", Mode.HOST))
