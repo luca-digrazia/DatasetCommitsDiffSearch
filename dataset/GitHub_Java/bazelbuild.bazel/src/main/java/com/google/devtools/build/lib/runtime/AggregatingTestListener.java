@@ -214,7 +214,7 @@ public class AggregatingTestListener {
   @AllowConcurrentEvents
   public void targetComplete(TargetCompleteEvent event) {
     if (event.failed()) {
-      targetFailure(LabelAndConfiguration.of(event.getTarget()));
+      targetFailure(new LabelAndConfiguration(event.getTarget()));
     }
   }
 
@@ -254,6 +254,6 @@ public class AggregatingTestListener {
   }
 
   private LabelAndConfiguration asKey(ConfiguredTarget target) {
-    return LabelAndConfiguration.of(target);
+    return new LabelAndConfiguration(target);
   }
 }
