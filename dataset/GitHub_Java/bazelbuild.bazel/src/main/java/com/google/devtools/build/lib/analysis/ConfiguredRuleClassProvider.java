@@ -229,7 +229,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    * Used to make the label instances unique, so that we don't create a new
    * instance for every rule.
    */
-  private static final LoadingCache<String, Label> LABELS = CacheBuilder.newBuilder().build(
+  private static LoadingCache<String, Label> LABELS = CacheBuilder.newBuilder().build(
       new CacheLoader<String, Label>() {
     @Override
     public Label load(String from) {
@@ -307,9 +307,8 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     this.configurationCollectionFactory = configurationCollectionFactory;
     this.prerequisiteValidator = prerequisiteValidator;
     this.skylarkAccessibleJavaClasses = skylarkAccessibleJavaClasses;
-    this.skylarkValidationEnvironment = new ValidationEnvironment(
-        // TODO(bazel-team): refactor constructors so we don't have those null-s
-        createSkylarkRuleClassEnvironment(null, null));
+    this.skylarkValidationEnvironment = SkylarkModules.getValidationEnvironment(
+        skylarkAccessibleJavaClasses.keySet());
   }
 
   public PrerequisiteValidator getPrerequisiteValidator() {

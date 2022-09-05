@@ -20,6 +20,7 @@ import com.google.common.base.Stopwatch;
 import com.google.common.base.Throwables;
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
@@ -49,7 +50,6 @@ import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildInterruptedEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.TestFilteringCompleteEvent;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Event;
@@ -60,6 +60,7 @@ import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
@@ -203,7 +204,8 @@ public class BuildTool {
         runtime.getSkyframeExecutor().injectTopLevelContext(request.getTopLevelArtifactContext());
         executionTool.executeBuild(request.getId(), analysisResult, result,
             runtime.getSkyframeExecutor(), configurations,
-            transformPackageRoots(loadingResult.getPackageRoots()));
+            mergePackageRoots(loadingResult.getPackageRoots(),
+            runtime.getSkyframeExecutor().getPackageRoots()));
       }
 
       String delayedErrorMsg = analysisResult.getError();
@@ -289,13 +291,22 @@ public class BuildTool {
     }
   }
 
-  private ImmutableMap<PathFragment, Path> transformPackageRoots(
-      ImmutableMap<PackageIdentifier, Path> packageRoots) {
-    ImmutableMap.Builder<PathFragment, Path> builder = ImmutableMap.builder();
-    for (Map.Entry<PackageIdentifier, Path> entry : packageRoots.entrySet()) {
+  private ImmutableMap<PathFragment, Path> mergePackageRoots(
+      ImmutableMap<PackageIdentifier, Path> first,
+      ImmutableMap<PackageIdentifier, Path> second) {
+    Map<PathFragment, Path> builder = Maps.newHashMap();
+    for (Map.Entry<PackageIdentifier, Path> entry : first.entrySet()) {
       builder.put(entry.getKey().getPathFragment(), entry.getValue());
     }
-    return builder.build();
+    for (Map.Entry<PackageIdentifier, Path> entry : second.entrySet()) {
+      if (first.containsKey(entry.getKey())) {
+        Preconditions.checkState(first.get(entry.getKey()).equals(entry.getValue()));
+      } else {
+        // This could overwrite entries from first in other repositories.
+        builder.put(entry.getKey().getPackageFragment(), entry.getValue());
+      }
+    }
+    return ImmutableMap.copyOf(builder);
   }
 
   private void reportExceptionError(Exception e) {

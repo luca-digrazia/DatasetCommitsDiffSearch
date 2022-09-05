@@ -15,19 +15,14 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Objects;
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.analysis.Aspect;
-import com.google.devtools.build.lib.analysis.AspectWithParameters;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
-
-import javax.annotation.Nullable;
 
 /**
  * An aspect in the context of the Skyframe graph.
@@ -39,15 +34,16 @@ public final class AspectValue extends ActionLookupValue {
   public static final class AspectKey extends ActionLookupKey {
     private final Label label;
     private final BuildConfiguration configuration;
-    private final AspectWithParameters aspect;
+    // TODO(bazel-team): class objects are not really hashable or comparable for equality other than
+    // by reference. We should identify the aspect here in a way that does not rely on comparison
+    // by reference so that keys can be serialized and deserialized properly.
+    private final Class<? extends ConfiguredAspectFactory> aspectFactory;
 
     private AspectKey(Label label, BuildConfiguration configuration,
-        Class<? extends ConfiguredAspectFactory> aspectFactory,
-        AspectParameters parameters) {
-      Preconditions.checkNotNull(parameters);
+        Class<? extends ConfiguredAspectFactory> aspectFactory) {
       this.label = label;
       this.configuration = configuration;
-      this.aspect = new AspectWithParameters(aspectFactory, parameters);
+      this.aspectFactory = aspectFactory;
     }
 
     @Override
@@ -60,12 +56,7 @@ public final class AspectValue extends ActionLookupValue {
     }
 
     public Class<? extends ConfiguredAspectFactory> getAspect() {
-      return aspect.getAspectFactory();
-    }
-
-    @Nullable
-    public AspectParameters getParameters() {
-      return aspect.getParameters();
+      return aspectFactory;
     }
 
     @Override
@@ -75,7 +66,7 @@ public final class AspectValue extends ActionLookupValue {
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(label, configuration, aspect);
+      return Objects.hashCode(label, configuration, aspectFactory);
     }
 
     @Override
@@ -91,14 +82,13 @@ public final class AspectValue extends ActionLookupValue {
       AspectKey that = (AspectKey) other;
       return Objects.equal(label, that.label)
           && Objects.equal(configuration, that.configuration)
-          && Objects.equal(aspect, that.aspect);
+          && Objects.equal(aspectFactory, that.aspectFactory);
     }
 
     @Override
     public String toString() {
-      return label + "#" + aspect.getAspectFactory().getSimpleName() + " "
-          + (configuration == null ? "null" : configuration.checksum()) + " "
-          + aspect.getParameters();
+      return label + "#" + aspectFactory.getSimpleName() + " "
+          + (configuration == null ? "null" : configuration.checksum());
     }
   }
 
@@ -133,10 +123,8 @@ public final class AspectValue extends ActionLookupValue {
   }
 
   public static SkyKey key(Label label, BuildConfiguration configuration,
-      Class<? extends ConfiguredAspectFactory> aspectFactory,
-      AspectParameters additionalConfiguration) {
-    return new SkyKey(SkyFunctions.ASPECT,
-        new AspectKey(label, configuration, aspectFactory, additionalConfiguration));
+      Class<? extends ConfiguredAspectFactory> aspectFactory) {
+    return new SkyKey(SkyFunctions.ASPECT, new AspectKey(label, configuration, aspectFactory));
   }
 
   public static SkyKey key(AspectKey aspectKey) {
@@ -147,6 +135,6 @@ public final class AspectValue extends ActionLookupValue {
       Label label,
       BuildConfiguration configuration,
       Class<? extends ConfiguredAspectFactory> aspectFactory) {
-    return new AspectKey(label, configuration, aspectFactory, AspectParameters.EMPTY);
+    return new AspectKey(label, configuration, aspectFactory);
   }
 }

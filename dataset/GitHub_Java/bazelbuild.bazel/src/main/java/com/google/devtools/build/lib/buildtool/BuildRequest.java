@@ -56,6 +56,8 @@ import java.util.regex.Pattern;
  * as --keep_going, --jobs, etc.
  */
 public class BuildRequest implements OptionsClassProvider {
+  private static final String DEFAULT_SYMLINK_PREFIX_MARKER = "...---:::@@@DEFAULT@@@:::--...";
+
   /**
    * A converter for symlink prefixes that defaults to {@code Constants.PRODUCT_NAME} and a
    * minus sign if the option is not given.
@@ -65,7 +67,9 @@ public class BuildRequest implements OptionsClassProvider {
   public static class SymlinkPrefixConverter implements Converter<String> {
     @Override
     public String convert(String input) throws OptionsParsingException {
-      return input.isEmpty() ? Constants.PRODUCT_NAME + "-" : input;
+      return input.equals(DEFAULT_SYMLINK_PREFIX_MARKER)
+          ? Constants.PRODUCT_NAME + "-"
+          : input;
     }
 
     @Override
@@ -233,12 +237,12 @@ public class BuildRequest implements OptionsClassProvider {
     public boolean announce;
 
     @Option(name = "symlink_prefix",
-        defaultValue = "",
+        defaultValue = DEFAULT_SYMLINK_PREFIX_MARKER,
         converter = SymlinkPrefixConverter.class,
         category = "misc",
         help = "The prefix that is prepended to any of the convenience symlinks that are created "
             + "after a build. If '/' is passed, then no symlinks are created and no warning is "
-            + "emitted. If omitted or is empty, the default value is the name of the build tool."
+            + "emitted."
         )
     public String symlinkPrefix;
 

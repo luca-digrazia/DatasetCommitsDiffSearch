@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,8 +22,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.test.TestProvider;
 import com.google.devtools.build.lib.skyframe.AspectValue;
-
-import javax.annotation.Nullable;
 
 /**
  * A small static class containing utility methods for handling the inclusion of
@@ -125,34 +123,53 @@ public final class TopLevelArtifactHelper {
    */
   public static ArtifactsToBuild getAllArtifactsToBuild(TransitiveInfoCollection target,
       TopLevelArtifactContext context) {
-    return getAllArtifactsToBuild(
-        target.getProvider(OutputGroupProvider.class),
-        target.getProvider(FileProvider.class),
-        context
-    );
-  }
-
-  public static ArtifactsToBuild getAllArtifactsToBuild(
-      AspectValue aspectValue, TopLevelArtifactContext context) {
-    Aspect aspect = aspectValue.getAspect();
-    return getAllArtifactsToBuild(
-        aspect.getProvider(OutputGroupProvider.class),
-        aspect.getProvider(FileProvider.class),
-        context
-    );
-  }
-
-  public static ArtifactsToBuild getAllArtifactsToBuild(
-      @Nullable OutputGroupProvider outputGroupProvider,
-      @Nullable FileProvider fileProvider,
-      TopLevelArtifactContext context) {
     NestedSetBuilder<Artifact> importantBuilder = NestedSetBuilder.stableOrder();
     NestedSetBuilder<Artifact> allBuilder = NestedSetBuilder.stableOrder();
+
+    OutputGroupProvider outputGroupProvider =
+        target.getProvider(OutputGroupProvider.class);
 
     for (String outputGroup : context.outputGroups()) {
       NestedSetBuilder<Artifact> results = NestedSetBuilder.stableOrder();
 
       if (outputGroup.equals(OutputGroupProvider.DEFAULT)) {
+        // For the default group, we also throw in filesToBuild
+        FileProvider fileProvider = target.getProvider(FileProvider.class);
+        if (fileProvider != null) {
+          results.addTransitive(fileProvider.getFilesToBuild());
+        }
+      }
+
+      if (outputGroupProvider != null) {
+        results.addTransitive(outputGroupProvider.getOutputGroup(outputGroup));
+      }
+
+      if (outputGroup.startsWith(OutputGroupProvider.HIDDEN_OUTPUT_GROUP_PREFIX)) {
+        allBuilder.addTransitive(results.build());
+      } else {
+        importantBuilder.addTransitive(results.build());
+      }
+    }
+
+    NestedSet<Artifact> importantArtifacts = importantBuilder.build();
+    allBuilder.addTransitive(importantArtifacts);
+    return new ArtifactsToBuild(importantArtifacts, allBuilder.build());
+  }
+
+  public static ArtifactsToBuild getAllArtifactsToBuild(
+      AspectValue aspectValue, TopLevelArtifactContext context) {
+    NestedSetBuilder<Artifact> importantBuilder = NestedSetBuilder.stableOrder();
+    NestedSetBuilder<Artifact> allBuilder = NestedSetBuilder.stableOrder();
+
+    OutputGroupProvider outputGroupProvider =
+        aspectValue.getAspect().getProvider(OutputGroupProvider.class);
+
+    for (String outputGroup : context.outputGroups()) {
+      NestedSetBuilder<Artifact> results = NestedSetBuilder.stableOrder();
+
+      if (outputGroup.equals(OutputGroupProvider.DEFAULT)) {
+        // For the default group, we also throw in filesToBuild
+        FileProvider fileProvider = aspectValue.getAspect().getProvider(FileProvider.class);
         if (fileProvider != null) {
           results.addTransitive(fileProvider.getFilesToBuild());
         }

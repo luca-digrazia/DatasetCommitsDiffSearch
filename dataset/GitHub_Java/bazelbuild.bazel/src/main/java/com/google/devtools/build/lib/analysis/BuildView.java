@@ -525,10 +525,6 @@ public class BuildView {
       return error;
     }
 
-    public boolean hasError() {
-      return error != null;
-    }
-
     /**
      * Returns the action graph.
      */

@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.packages.AspectFactory;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.DependencyEvaluationException;
@@ -49,11 +48,9 @@ import javax.annotation.Nullable;
  */
 public final class AspectFunction implements SkyFunction {
   private final BuildViewProvider buildViewProvider;
-  private final RuleClassProvider ruleClassProvider;
 
-  public AspectFunction(BuildViewProvider buildViewProvider, RuleClassProvider ruleClassProvider) {
+  public AspectFunction(BuildViewProvider buildViewProvider) {
     this.buildViewProvider = buildViewProvider;
-    this.ruleClassProvider = ruleClassProvider;
   }
 
   @Nullable
@@ -87,14 +84,11 @@ public final class AspectFunction implements SkyFunction {
         (ConfiguredTargetValue)
             env.getValue(ConfiguredTargetValue.key(key.getLabel(), key.getConfiguration()));
     if (configuredTargetValue == null) {
-      // TODO(bazel-team): remove this check when top-level targets also use dynamic configurations.
-      // Right now the key configuration may be dynamic while the original target's configuration
-      // is static, resulting in a Skyframe cache miss even though the original target is, in fact,
-      // precomputed.
       return null;
     }
     RuleConfiguredTarget associatedTarget =
         (RuleConfiguredTarget) configuredTargetValue.getConfiguredTarget();
+
     if (associatedTarget == null) {
       return null;
     }
@@ -118,8 +112,7 @@ public final class AspectFunction implements SkyFunction {
 
       ListMultimap<Attribute, ConfiguredTarget> depValueMap =
           ConfiguredTargetFunction.computeDependencies(env, resolver, ctgValue,
-              aspectFactory.getDefinition(), configConditions, ruleClassProvider,
-              view.getHostConfiguration(ctgValue.getConfiguration()));
+              aspectFactory.getDefinition(), configConditions);
 
       return createAspect(env, key, associatedTarget, configConditions, depValueMap);
     } catch (DependencyEvaluationException e) {
@@ -130,7 +123,8 @@ public final class AspectFunction implements SkyFunction {
   @Nullable
   private AspectValue createAspect(Environment env, AspectKey key,
       RuleConfiguredTarget associatedTarget, Set<ConfigMatchingProvider> configConditions,
-      ListMultimap<Attribute, ConfiguredTarget> directDeps) throws AspectFunctionException {
+      ListMultimap<Attribute, ConfiguredTarget> directDeps)
+      throws AspectFunctionException {
     SkyframeBuildView view = buildViewProvider.getSkyframeBuildView();
     BuildConfiguration configuration = associatedTarget.getConfiguration();
 
@@ -143,8 +137,8 @@ public final class AspectFunction implements SkyFunction {
 
     ConfiguredAspectFactory aspectFactory =
         (ConfiguredAspectFactory) AspectFactory.Util.create(key.getAspect());
-    Aspect aspect = view.createAspect(analysisEnvironment, associatedTarget, aspectFactory,
-        directDeps, configConditions);
+    Aspect aspect = view.createAspect(
+        analysisEnvironment, associatedTarget, aspectFactory, directDeps, configConditions);
 
     events.replayOn(env.getListener());
     if (events.hasErrors()) {
