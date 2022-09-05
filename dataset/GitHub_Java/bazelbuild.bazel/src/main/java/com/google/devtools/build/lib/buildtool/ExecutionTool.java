@@ -84,7 +84,6 @@ import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
-import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -358,17 +357,15 @@ public class ExecutionTool {
     }
 
     OutputService outputService = env.getOutputService();
-    ModifiedFileSet modifiedOutputFiles = ModifiedFileSet.EVERYTHING_MODIFIED;
     if (outputService != null) {
-      modifiedOutputFiles = outputService.startBuild(buildId);
+      outputService.startBuild(buildId);
     } else {
       startLocalOutputBuild(); // TODO(bazel-team): this could be just another OutputService
     }
 
     ActionCache actionCache = getActionCache();
     SkyframeExecutor skyframeExecutor = env.getSkyframeExecutor();
-    Builder builder =
-            createBuilder(request, executor, actionCache, skyframeExecutor, modifiedOutputFiles);
+    Builder builder = createBuilder(request, executor, actionCache, skyframeExecutor);
 
     //
     // Execution proper.  All statements below are logically nested in
@@ -665,8 +662,7 @@ public class ExecutionTool {
   private Builder createBuilder(BuildRequest request,
       Executor executor,
       ActionCache actionCache,
-      SkyframeExecutor skyframeExecutor,
-      ModifiedFileSet modifiedOutputFiles) {
+      SkyframeExecutor skyframeExecutor) {
     BuildRequest.BuildRequestOptions options = request.getBuildOptions();
     boolean verboseExplanations = options.verboseExplanations;
     boolean keepGoing = request.getViewOptions().keepGoing;
@@ -686,9 +682,8 @@ public class ExecutionTool {
     return new SkyframeBuilder(skyframeExecutor,
         new ActionCacheChecker(actionCache, env.getView().getArtifactFactory(), executionFilter,
             verboseExplanations),
-        keepGoing, actualJobs,
-        options.checkOutputFiles ? modifiedOutputFiles : ModifiedFileSet.NOTHING_MODIFIED,
-        options.finalizeActions, fileCache, request.getBuildOptions().progressReportInterval);
+        keepGoing, actualJobs, options.checkOutputFiles, fileCache,
+        request.getBuildOptions().progressReportInterval);
   }
 
   private void configureResourceManager(BuildRequest request) {
