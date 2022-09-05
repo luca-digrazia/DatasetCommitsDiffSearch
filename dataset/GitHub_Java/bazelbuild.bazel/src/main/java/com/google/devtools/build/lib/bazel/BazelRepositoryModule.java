@@ -46,8 +46,6 @@ import com.google.devtools.build.lib.bazel.rules.workspace.NewLocalRepositoryRul
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeModule;
-import com.google.devtools.build.lib.runtime.BlazeRuntime;
-import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.vfs.Path;
@@ -69,7 +67,6 @@ public class BazelRepositoryModule extends BlazeModule {
   // A map of repository handlers that can be looked up by rule class name.
   private final ImmutableMap<String, RepositoryFunction> repositoryHandlers;
   private final AtomicBoolean isFetch = new AtomicBoolean(false);
-  private HttpDownloadFunction downloadFunction;
 
   public BazelRepositoryModule() {
     repositoryHandlers = ImmutableMap.<String, RepositoryFunction>builder()
@@ -82,11 +79,6 @@ public class BazelRepositoryModule extends BlazeModule {
         .put(AndroidSdkRepositoryRule.NAME, new AndroidSdkRepositoryFunction())
         .put(AndroidNdkRepositoryRule.NAME, new AndroidNdkRepositoryFunction())
         .build();
-  }
-
-  @Override
-  public void beforeCommand(BlazeRuntime runtime, Command command) {
-    downloadFunction.setReporter(runtime.getReporter());
   }
 
   @Override
@@ -143,8 +135,7 @@ public class BazelRepositoryModule extends BlazeModule {
         new RepositoryDelegatorFunction(directories, repositoryHandlers, isFetch));
 
     // Helper SkyFunctions.
-    downloadFunction = new HttpDownloadFunction();
-    builder.put(SkyFunctionName.create(HttpDownloadFunction.NAME), downloadFunction);
+    builder.put(SkyFunctionName.create(HttpDownloadFunction.NAME), new HttpDownloadFunction());
     builder.put(JarFunction.NAME, new JarFunction());
     builder.put(ZipFunction.NAME, new ZipFunction());
     return builder.build();

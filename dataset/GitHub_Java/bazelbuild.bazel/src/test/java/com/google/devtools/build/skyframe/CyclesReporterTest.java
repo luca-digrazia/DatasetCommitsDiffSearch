@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,18 +16,20 @@ package com.google.devtools.build.skyframe;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.skyframe.CyclesReporter.SingleCycleReporter;
-import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 @RunWith(JUnit4.class)
 public class CyclesReporterTest {
 
-  private static final SkyKey DUMMY_KEY = SkyKey.create(SkyFunctionName.create("func"), "key");
+  private static final SkyKey DUMMY_KEY = new SkyKey(SkyFunctionName.create("func"), "key");
 
   @Test
   public void nullEventHandler() {
@@ -42,17 +44,13 @@ public class CyclesReporterTest {
 
   @Test
   public void notReportedAssertion() {
-    SingleCycleReporter singleReporter =
-        new SingleCycleReporter() {
-          @Override
-          public boolean maybeReportCycle(
-              SkyKey topLevelKey,
-              CycleInfo cycleInfo,
-              boolean alreadyReported,
-              ExtendedEventHandler eventHandler) {
-            return false;
-          }
-        };
+    SingleCycleReporter singleReporter = new SingleCycleReporter() {
+      @Override
+      public boolean maybeReportCycle(SkyKey topLevelKey, CycleInfo cycleInfo,
+          boolean alreadyReported, EventHandler eventHandler) {
+        return false;
+      }
+    };
 
     CycleInfo cycleInfo = new CycleInfo(ImmutableList.of(DUMMY_KEY));
     CyclesReporter cyclesReporter = new CyclesReporter(singleReporter);
@@ -68,18 +66,14 @@ public class CyclesReporterTest {
   @Test
   public void smoke() {
     final AtomicBoolean reported = new AtomicBoolean();
-    SingleCycleReporter singleReporter =
-        new SingleCycleReporter() {
-          @Override
-          public boolean maybeReportCycle(
-              SkyKey topLevelKey,
-              CycleInfo cycleInfo,
-              boolean alreadyReported,
-              ExtendedEventHandler eventHandler) {
-            reported.set(true);
-            return true;
-          }
-        };
+    SingleCycleReporter singleReporter = new SingleCycleReporter() {
+      @Override
+      public boolean maybeReportCycle(SkyKey topLevelKey, CycleInfo cycleInfo,
+          boolean alreadyReported, EventHandler eventHandler) {
+        reported.set(true);
+        return true;
+      }
+    };
 
     CycleInfo cycleInfo = new CycleInfo(ImmutableList.of(DUMMY_KEY));
     CyclesReporter cyclesReporter = new CyclesReporter(singleReporter);

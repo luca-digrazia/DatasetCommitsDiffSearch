@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,13 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import static com.google.common.truth.Truth.assertThat;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 
 import java.util.Collection;
@@ -311,15 +308,6 @@ public class GraphTester {
     public String toString() {
       return "StringValue: " + getValue();
     }
-
-    public static StringValue of(String string) {
-      return new StringValue(string);
-    }
-
-    public static StringValue from(SkyValue skyValue) {
-      assertThat(skyValue).isInstanceOf(StringValue.class);
-      return (StringValue) skyValue;
-    }
   }
 
   /**
@@ -348,14 +336,4 @@ public class GraphTester {
       return new StringValue(result.toString());
     }
   };
-
-  public static ValueComputer formatter(final SkyKey key, final String format) {
-    return new ValueComputer() {
-      @Override
-      public SkyValue compute(Map<SkyKey, SkyValue> deps, Environment env)
-          throws InterruptedException {
-        return StringValue.of(String.format(format, StringValue.from(deps.get(key)).getValue()));
-      }
-    };
-  }
 }

@@ -78,8 +78,8 @@ public class HttpArchiveFunction extends RepositoryFunction {
         return null;
       }
 
-      DecompressorValue value = (DecompressorValue) env.getValueOrThrow(
-          decompressorValueKey(rule, downloadValue.getPath(), outputDirectory),
+      DecompressorValue value = (DecompressorValue) env.getValueOrThrow(DecompressorValue.key(
+          rule.getTargetKind(), rule.getName(), downloadValue.getPath(), outputDirectory),
           IOException.class);
       if (value == null) {
         return null;
@@ -89,12 +89,6 @@ public class HttpArchiveFunction extends RepositoryFunction {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
     return RepositoryValue.create(directoryValue);
-  }
-
-  protected SkyKey decompressorValueKey(Rule rule, Path downloadPath, Path outputDirectory)
-      throws IOException {
-    return DecompressorValue.key(
-        rule.getTargetKind(), rule.getName(), downloadPath, outputDirectory);
   }
 
   @Override

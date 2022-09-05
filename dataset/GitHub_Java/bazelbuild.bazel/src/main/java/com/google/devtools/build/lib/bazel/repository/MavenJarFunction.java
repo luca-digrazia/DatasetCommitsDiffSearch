@@ -91,7 +91,7 @@ public class MavenJarFunction extends HttpArchiveFunction {
     // Add a WORKSPACE file & BUILD file to the Maven jar.
     DecompressorValue value;
     try {
-      value = (DecompressorValue) env.getValueOrThrow(DecompressorValue.jarKey(
+      value = (DecompressorValue) env.getValueOrThrow(DecompressorValue.key(
           MavenJarRule.NAME, downloader.getName(), repositoryJar,
           outputDirectoryValue.realRootedPath().asPath()), IOException.class);
       if (value == null) {

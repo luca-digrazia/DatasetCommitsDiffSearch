@@ -48,49 +48,43 @@ public class ReverseDepsUtilTest {
     this.numElements = numElements;
   }
 
-  private static final ReverseDepsUtil<Example> REVERSE_DEPS_UTIL =
-      new ReverseDepsUtil<Example>() {
-        @Override
-        void setReverseDepsObject(Example container, Object object) {
-          container.reverseDeps = object;
-        }
+  private static final ReverseDepsUtil<Example> REVERSE_DEPS_UTIL = new ReverseDepsUtil<Example>() {
+    @Override
+    void setReverseDepsObject(Example container, Object object) {
+      container.reverseDeps = object;
+    }
 
-        @Override
-        void setSingleReverseDep(Example container, boolean singleObject) {
-          container.single = singleObject;
-        }
+    @Override
+    void setSingleReverseDep(Example container, boolean singleObject) {
+      container.single = singleObject;
+    }
 
-        @Override
-        void setDataToConsolidate(Example container, Object dataToConsolidate) {
-          container.dataToConsolidate = dataToConsolidate;
-        }
+    @Override
+    void setReverseDepsToRemove(Example container, List<SkyKey> object) {
+      container.reverseDepsToRemove = object;
+    }
 
-        @Override
-        Object getReverseDepsObject(Example container) {
-          return container.reverseDeps;
-        }
+    @Override
+    Object getReverseDepsObject(Example container) {
+      return container.reverseDeps;
+    }
 
-        @Override
-        boolean isSingleReverseDep(Example container) {
-          return container.single;
-        }
+    @Override
+    boolean isSingleReverseDep(Example container) {
+      return container.single;
+    }
 
-        @Override
-        Object getDataToConsolidate(Example container) {
-          return container.dataToConsolidate;
-        }
-      };
+    @Override
+    List<SkyKey> getReverseDepsToRemove(Example container) {
+      return container.reverseDepsToRemove;
+    }
+  };
 
   private class Example {
 
     Object reverseDeps = ImmutableList.of();
     boolean single;
-    Object dataToConsolidate;
-
-    @Override
-    public String toString() {
-      return "Example: " + reverseDeps + ", " + single + ", " + dataToConsolidate;
-    }
+    List<SkyKey> reverseDepsToRemove;
   }
 
   @Test
@@ -107,7 +101,7 @@ public class ReverseDepsUtilTest {
         REVERSE_DEPS_UTIL.removeReverseDep(example, new SkyKey(NODE_TYPE, i));
       }
       assertThat(REVERSE_DEPS_UTIL.getReverseDeps(example)).hasSize(numElements - numRemovals);
-      assertThat(example.dataToConsolidate).isNull();
+      assertThat(example.reverseDepsToRemove).isNull();
     }
   }
 
@@ -126,7 +120,7 @@ public class ReverseDepsUtilTest {
         REVERSE_DEPS_UTIL.removeReverseDep(example, new SkyKey(NODE_TYPE, i));
       }
       assertThat(REVERSE_DEPS_UTIL.getReverseDeps(example)).hasSize(numElements - numRemovals);
-      assertThat(example.dataToConsolidate).isNull();
+      assertThat(example.reverseDepsToRemove).isNull();
     }
   }
 
