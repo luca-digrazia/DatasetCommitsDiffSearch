@@ -719,8 +719,7 @@ public class AggMaker {
                 value = kv.value.toString();
                 switch (kv.key.toLowerCase()) {
                     case "interval":
-                        //modified by xzb histogram聚合, interval必须为数值
-                        histogram.interval(Long.parseLong(value.replace("'", "")));
+                        histogram.interval(Long.parseLong(value));
                         break;
                     case "field":
                         histogram.field(value);

@@ -2,11 +2,7 @@ package org.nlpcn.es4sql;
 
 import com.alibaba.druid.sql.SQLUtils;
 import com.alibaba.druid.sql.ast.SQLExpr;
-import com.alibaba.druid.sql.ast.expr.SQLIdentifierExpr;
-import com.alibaba.druid.sql.ast.expr.SQLInListExpr;
-import com.alibaba.druid.sql.ast.expr.SQLNumericLiteralExpr;
-import com.alibaba.druid.sql.ast.expr.SQLPropertyExpr;
-import com.alibaba.druid.sql.ast.expr.SQLVariantRefExpr;
+import com.alibaba.druid.sql.ast.expr.*;
 import com.alibaba.druid.util.StringUtils;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
@@ -14,10 +10,7 @@ import com.google.common.collect.Sets;
 import org.elasticsearch.common.collect.Tuple;
 import org.nlpcn.es4sql.domain.KVValue;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Created by allwefantasy on 8/19/16.
@@ -33,9 +26,7 @@ public class SQLFunctions {
             "field", "date_format", "if",//if判断目前支持多个二元操作符
             "max_bw", "min_bw", //added by xzb 取两个数的最大/小值
             "coalesce", //added by xzb  取两个值中间有值的那个
-            "case_new",//added by xzb 支持多个判断条件
-            //支持正则表达式抽取原字段后赋给新字段,注意必须指定一个group。如 parse(hobby,(?<type>\S+)球, defaultValue)
-            "parse"//此函数需要在elasticsearch.yml中设置 script.painless.regex.enabled : true
+            "case_new"//added by xzb 支持多个判断条件
     );
     //added by xzb 增加二元操作运算符
         public static Set<String> binaryOperators = Sets.newHashSet("=" ,"!=", ">", ">=", "<", "<=");
@@ -109,7 +100,6 @@ public class SQLFunctions {
             case "max_bw":
             case "min_bw":
             case "coalesce":
-            case "parse":
             case "case_new":
             case "floor":
                 //zhongshu-comment es的round()默认是保留到个位，这里给round()函数加上精确到小数点后第几位的功能
@@ -126,13 +116,10 @@ public class SQLFunctions {
                         functionStr = mathBetweenTemplate("Math.min", methodName, paramers, name);
                         break;
                     } else if (methodName.equals("coalesce")) {
-                        functionStr = coalesceTemplate(methodName, paramers);
+                        functionStr = mathCoalesceTemplate(methodName, paramers);
                         break;
                     }else if (methodName.equals("case_new")) {
                         functionStr = caseNewTemplate(methodName, paramers, binaryOperatorNames);
-                        break;
-                    }else if (methodName.equals("parse")) {
-                        functionStr = parseTemplate(methodName, paramers);
                         break;
                     }
                 }
@@ -205,7 +192,6 @@ public class SQLFunctions {
         //added by xzb 以下几种情况的脚本，script中均不需要return语句
         if(returnValue && !methodName.equalsIgnoreCase("if") &&
                 !methodName.equalsIgnoreCase("coalesce") &&
-                !methodName.equalsIgnoreCase("parse") &&
                 !methodName.equalsIgnoreCase("case_new") &&
                 buildInFunctions.contains(methodName)){
             String generatedFieldName = functionStr.v1();
@@ -441,7 +427,7 @@ public class SQLFunctions {
     }
 
    //实现coalesce(field1, field2, ...)功能，只要任意一个不为空即可
-    private static Tuple<String, String> coalesceTemplate(String fieldName, List<KVValue> paramer) {
+    private static Tuple<String, String> mathCoalesceTemplate(String fieldName, List<KVValue> paramer) {
         //if((doc['age2'].value != null)){doc['age2'].value} else if((doc['age1'].value != null)){doc['age1'].value}
         String name = fieldName + "_" + random();
         StringBuffer sb = new StringBuffer();
@@ -458,29 +444,10 @@ public class SQLFunctions {
         return new Tuple<>(name, sb.toString());
     }
 
-    //实现正则表达式抽取原字段后赋给新字段,注意必须指定一个group。如 parse(hobby,(?<type>\S+)球, defaultValue)
-    //"SELECT  parse(hobby, '(?<type>\\\\S+)球', 'NOT_MATCH') AS ballType, COUNT(_index) FROM bank GROUP BY ballType"
-    private static Tuple<String, String> parseTemplate(String fieldName, List<KVValue> params) {
-       //  def m = /(?<type>\S+)球/.matcher(doc['hobby'].value); if(m.matches()) { return m.group(1) } else { return \"no_match\" }
-        String name = fieldName + "_" + random();
-        StringBuffer sb = new StringBuffer();
-        if (null == params || params.size()!= 3) {
-            throw new IllegalArgumentException("======================parse 函数必须包含三个参数，第一个是原字段，第二个是带有group的正则表达式, 第三个值会抽取不成功的默认值");
-        }
-        String srcField = params.get(0).value.toString();
-        String regexStr = params.get(1).value.toString();
-        //需要去除自动添加的单引号
-        regexStr = regexStr.substring(1, regexStr.length() - 1);
-        String defaultValue = params.get(2).value.toString();
-
-        sb.append("def m = /" + regexStr + "/.matcher(doc['" + srcField + "'].value); if(m.matches()) { return m.group(1) } else { return " + defaultValue +" }");
-        return new Tuple<>(name, sb.toString());
-    }
-
     //实现   case_new(gender='m', '男', gender='f', '女',  default, '无') as myGender  功能
-    private static Tuple<String, String> caseNewTemplate(String fieldName, List<KVValue> paramer, List<String> binaryOperatorNames) throws IllegalArgumentException{
+    private static Tuple<String, String> caseNewTemplate(String fieldName, List<KVValue> paramer, List<String> binaryOperatorNames) {
         if (paramer.size() % 2 != 0) {//如果参数不是偶数个，则抛异常
-            throw new IllegalArgumentException("请检查参数数量，必须是偶数个！");
+            new Exception("请检查参数数量，必须是偶数个！");
         }
         //1.找出所有字段及其对应的值存入到Map中，如果有default，则将其移除
         String defaultVal = null;
