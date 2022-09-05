@@ -19,13 +19,14 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 public abstract class TreeStructureSqlTermCustomizer extends AbstractSqlTermCustomizer {
-    boolean not = false;
+    protected boolean not;
 
-    boolean parent = false;
+    protected boolean parent;
 
     public TreeStructureSqlTermCustomizer(String termType, boolean not, boolean parent) {
         super(termType);
         this.not = not;
+        this.parent = parent;
     }
 
     protected abstract String getTableName();
@@ -58,7 +59,7 @@ public abstract class TreeStructureSqlTermCustomizer extends AbstractSqlTermCust
         }
         for (int i = 0; i < len; i++) {
             if (i > 0) {
-                termCondition.addSpc("or");
+                termCondition.addSpc(" or");
             }
             if (parent) {
                 SqlFunction function = dialect.getFunction(SqlFunction.concat);
