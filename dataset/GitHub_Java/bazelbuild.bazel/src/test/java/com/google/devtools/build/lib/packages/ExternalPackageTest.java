@@ -13,13 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -53,8 +52,7 @@ public class ExternalPackageTest extends BuildViewTestCase {
 
     invalidatePackages(/*alsoConfigs=*/false);
     // Make sure the second rule "wins."
-    assertThat(getTarget("//external:my_rule").getTargetKind())
-        .isEqualTo("new_local_repository rule");
+    assertEquals("new_local_repository rule", getTarget("//external:my_rule").getTargetKind());
   }
 
   @Test
@@ -72,39 +70,6 @@ public class ExternalPackageTest extends BuildViewTestCase {
 
     invalidatePackages(/*alsoConfigs=*/false);
     // Make sure the second rule "wins."
-    assertThat(getTarget("//external:my_rule").getTargetKind())
-        .isEqualTo("new_local_repository rule");
-  }
-
-  @Test
-  public void testBindToConfigSetting() throws Exception {
-    FileSystemUtils.appendIsoLatin1(
-        workspacePath,
-        "bind(",
-        "    name = 'condition',",
-        "    actual = '//:setting',",
-        ")");
-    FileSystemUtils.writeIsoLatin1(
-        rootDirectory.getRelative("BUILD"),
-        "config_setting(",
-        "    name = 'setting',",
-        "    values = {'define': 'foo=bar'},",
-        ")",
-        "java_library(",
-        "    name = 'a',",
-        "    runtime_deps = select({",
-        "        '//external:condition': [':b'],",
-        "        '//conditions:default': [':c'],",
-        "    }),",
-        ")",
-        "java_library(name = 'b', srcs = [])",
-        "java_library(name = 'c', srcs = [])");
-    invalidatePackages();
-    useConfiguration("--define", "foo=bar");
-    ConfiguredTargetAndTarget ctat = getConfiguredTargetAndTarget("//:a");
-    ConfiguredAttributeMapper configuredAttributeMapper =
-        getMapperFromConfiguredTargetAndTarget(ctat);
-    assertThat(configuredAttributeMapper.get("runtime_deps", BuildType.LABEL_LIST))
-        .containsExactly(Label.parseAbsolute("//:b"));
+    assertEquals("new_local_repository rule", getTarget("//external:my_rule").getTargetKind());
   }
 }
