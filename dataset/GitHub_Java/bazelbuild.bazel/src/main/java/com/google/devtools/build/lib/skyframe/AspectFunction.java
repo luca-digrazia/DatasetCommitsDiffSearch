@@ -159,7 +159,7 @@ public final class AspectFunction implements SkyFunction {
     try {
       configuredTargetValue =
           (ConfiguredTargetValue) env.getValueOrThrow(
-              ConfiguredTargetValue.key(key.getLabel(), key.getBaseConfiguration()),
+              ConfiguredTargetValue.key(key.getLabel(), key.getConfiguration()),
               ConfiguredValueCreationException.class);
     } catch (ConfiguredValueCreationException e) {
       throw new AspectFunctionException(new AspectCreationException(e.getRootCauses()));
@@ -179,19 +179,12 @@ public final class AspectFunction implements SkyFunction {
 
     SkyframeDependencyResolver resolver = view.createDependencyResolver(env);
 
-    // When getting the dependencies of this hybrid aspect+base target, use the aspect's
-    // configuration. The configuration of the aspect will always be a superset of the target's
-    // (dynamic configuration mode: target is part of the aspect's config fragment requirements;
-    // static configuration mode: target is the same configuration as the aspect), so the fragments
-    // required by all dependencies (both those of the aspect and those of the base target)
-    // will be present this way.
-    TargetAndConfiguration originalTargetAndAspectConfiguration =
-        new TargetAndConfiguration(target, key.getAspectConfiguration());
+    TargetAndConfiguration ctgValue =
+        new TargetAndConfiguration(target, key.getConfiguration());
     try {
       // Get the configuration targets that trigger this rule's configurable attributes.
       Set<ConfigMatchingProvider> configConditions = ConfiguredTargetFunction.getConfigConditions(
-          target, env, resolver, originalTargetAndAspectConfiguration,
-          transitivePackages, transitiveRootCauses);
+          target, env, resolver, ctgValue, transitivePackages, transitiveRootCauses);
       if (configConditions == null) {
         // Those targets haven't yet been resolved.
         return null;
@@ -201,11 +194,11 @@ public final class AspectFunction implements SkyFunction {
           ConfiguredTargetFunction.computeDependencies(
               env,
               resolver,
-              originalTargetAndAspectConfiguration,
+              ctgValue,
               key.getAspect(),
               configConditions,
               ruleClassProvider,
-              view.getHostConfiguration(originalTargetAndAspectConfiguration.getConfiguration()),
+              view.getHostConfiguration(ctgValue.getConfiguration()),
               transitivePackages,
               transitiveRootCauses);
       if (depValueMap == null) {
@@ -221,7 +214,6 @@ public final class AspectFunction implements SkyFunction {
           key,
           aspectFactory,
           associatedTarget,
-          key.getAspectConfiguration(),
           configConditions,
           depValueMap,
           transitivePackages);
@@ -247,17 +239,17 @@ public final class AspectFunction implements SkyFunction {
       AspectKey key,
       ConfiguredAspectFactory aspectFactory,
       RuleConfiguredTarget associatedTarget,
-      BuildConfiguration aspectConfiguration,
       Set<ConfigMatchingProvider> configConditions,
       ListMultimap<Attribute, ConfiguredTarget> directDeps,
       NestedSetBuilder<Package> transitivePackages)
       throws AspectFunctionException, InterruptedException {
 
     SkyframeBuildView view = buildViewProvider.getSkyframeBuildView();
+    BuildConfiguration configuration = associatedTarget.getConfiguration();
 
     StoredEventHandler events = new StoredEventHandler();
     CachingAnalysisEnvironment analysisEnvironment = view.createAnalysisEnvironment(
-        key, false, events, env, aspectConfiguration);
+        key, false, events, env, configuration);
     if (env.valuesMissing()) {
       return null;
     }
@@ -270,8 +262,7 @@ public final class AspectFunction implements SkyFunction {
             key.getAspect(),
             directDeps,
             configConditions,
-            aspectConfiguration,
-            view.getHostConfiguration(aspectConfiguration));
+            view.getHostConfiguration(associatedTarget.getConfiguration()));
 
     events.replayOn(env.getListener());
     if (events.hasErrors()) {

@@ -809,7 +809,7 @@ public class BuildView {
       }
 
       @Override
-      protected Target getTarget(Target from, Label label, NestedSetBuilder<Label> rootCauses) {
+      protected Target getTarget(Label label) {
         if (targetCache == null) {
           try {
             return LoadedPackageProvider.Bridge.getLoadedTarget(
@@ -879,13 +879,9 @@ public class BuildView {
       }
 
       @Override
-      protected Target getTarget(Target from, Label label, NestedSetBuilder<Label> rootCauses) {
-        try {
-          return LoadedPackageProvider.Bridge.getLoadedTarget(
-              skyframeExecutor.getPackageManager(), eventHandler, label);
-        } catch (NoSuchThingException e) {
-          throw new IllegalStateException(e);
-        }
+      protected Target getTarget(Label label) throws NoSuchThingException {
+        return LoadedPackageProvider.Bridge.getLoadedTarget(
+            skyframeExecutor.getPackageManager(), eventHandler, label);
       }
     }
 
