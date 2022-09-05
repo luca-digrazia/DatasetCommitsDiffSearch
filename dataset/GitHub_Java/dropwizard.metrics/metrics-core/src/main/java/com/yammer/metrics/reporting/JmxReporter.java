@@ -20,7 +20,6 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
     private final Map<MetricName, ObjectName> registeredBeans;
     private final MBeanServer server;
-    private final MetricDispatcher dispatcher;
 
     // CHECKSTYLE:OFF
     @SuppressWarnings("UnusedDeclaration")
@@ -61,7 +60,7 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public Object getValue() {
-            return metric.getValue();
+            return metric.value();
         }
     }
 
@@ -83,7 +82,7 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public long getCount() {
-            return metric.getCount();
+            return metric.count();
         }
     }
 
@@ -116,37 +115,37 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public long getCount() {
-            return metric.getCount();
+            return metric.count();
         }
 
         @Override
         public String getEventType() {
-            return metric.getEventType();
+            return metric.eventType();
         }
 
         @Override
         public TimeUnit getRateUnit() {
-            return metric.getRateUnit();
+            return metric.rateUnit();
         }
 
         @Override
         public double getMeanRate() {
-            return metric.getMeanRate();
+            return metric.meanRate();
         }
 
         @Override
         public double getOneMinuteRate() {
-            return metric.getOneMinuteRate();
+            return metric.oneMinuteRate();
         }
 
         @Override
         public double getFiveMinuteRate() {
-            return metric.getFiveMinuteRate();
+            return metric.fiveMinuteRate();
         }
 
         @Override
         public double getFifteenMinuteRate() {
-            return metric.getFifteenMinuteRate();
+            return metric.fifteenMinuteRate();
         }
     }
 
@@ -200,27 +199,27 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public long getCount() {
-            return metric.getCount();
+            return metric.count();
         }
 
         @Override
         public double getMin() {
-            return metric.getMin();
+            return metric.min();
         }
 
         @Override
         public double getMax() {
-            return metric.getMax();
+            return metric.max();
         }
 
         @Override
         public double getMean() {
-            return metric.getMean();
+            return metric.mean();
         }
 
         @Override
         public double getStdDev() {
-            return metric.getStdDev();
+            return metric.stdDev();
         }
 
         @Override
@@ -276,27 +275,27 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public TimeUnit getLatencyUnit() {
-            return metric.getDurationUnit();
+            return metric.durationUnit();
         }
 
         @Override
         public double getMin() {
-            return metric.getMin();
+            return metric.min();
         }
 
         @Override
         public double getMax() {
-            return metric.getMax();
+            return metric.max();
         }
 
         @Override
         public double getMean() {
-            return metric.getMean();
+            return metric.mean();
         }
 
         @Override
         public double getStdDev() {
-            return metric.getStdDev();
+            return metric.stdDev();
         }
 
         @Override
@@ -387,14 +386,13 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
         super(registry);
         this.registeredBeans = new ConcurrentHashMap<MetricName, ObjectName>(100);
         this.server = ManagementFactory.getPlatformMBeanServer();
-        this.dispatcher = new MetricDispatcher();
     }
 
     @Override
     public void onMetricAdded(MetricName name, Metric metric) {
         if (metric != null) {
             try {
-                dispatcher.dispatch(metric, name, this, new Context(name, new ObjectName(name.getMBeanName())));
+                metric.processWith(this, name, new Context(name, new ObjectName(name.getMBeanName())));
             } catch (Exception e) {
                 LOGGER.warn("Error processing {}", name, e);
             }
