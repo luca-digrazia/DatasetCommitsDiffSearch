@@ -32,7 +32,7 @@ import org.hswebframework.web.dao.CrudDao;
 public interface GenericService<E, PK> extends
         DefaultDSLQueryService<E, PK>,
         DefaultDSLUpdateService<E,PK>,
-        DefaultDSLDeleteService<E,PK>,
+        DefaultDSLDeleteService<PK>,
         CrudService<E, PK> {
     @Override
     CrudDao<E, PK> getDao();

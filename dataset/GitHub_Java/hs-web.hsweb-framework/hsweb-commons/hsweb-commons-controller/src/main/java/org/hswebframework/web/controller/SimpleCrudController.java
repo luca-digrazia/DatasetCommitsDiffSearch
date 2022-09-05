@@ -18,7 +18,6 @@
 
 package org.hswebframework.web.controller;
 
-import org.hswebframework.web.authorization.annotation.Authorize;
 import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.service.CrudService;
 import org.springframework.beans.BeanUtils;
@@ -38,15 +37,12 @@ public interface SimpleCrudController<E, PK, Q extends Entity>
         extends QueryController<E, PK, Q>
         , UpdateController<E, PK, E>
         , CreateController<E, PK, E>
-        , DeleteController<E,PK> {
+        , DeleteController<PK> {
 
-    @Override
     @SuppressWarnings("unchecked")
-    @Authorize(ignore = true)
     CrudService<E, PK> getService();
 
     @Override
-    @Authorize(ignore = true)
     default E modelToEntity(E model, E entity) {
         // model = entity
         return model;

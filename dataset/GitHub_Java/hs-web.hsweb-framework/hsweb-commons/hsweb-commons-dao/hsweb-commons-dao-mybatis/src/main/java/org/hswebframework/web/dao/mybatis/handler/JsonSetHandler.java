@@ -20,75 +20,60 @@ package org.hswebframework.web.dao.mybatis.handler;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.serializer.SerializerFeature;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.ibatis.type.*;
-import org.springframework.util.StringUtils;
 
 import java.sql.CallableStatement;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.*;
+import java.util.HashSet;
+import java.util.Set;
 
 @Alias("jsonSetHandler")
 @MappedTypes({Set.class})
 @MappedJdbcTypes({JdbcType.VARCHAR, JdbcType.CLOB})
-@Slf4j
-public class JsonSetHandler extends BaseTypeHandler<Set> {
+public class JsonSetHandler extends BaseTypeHandler<Set<Object>> {
 
-    @SuppressWarnings("unchecked")
-    private Set<Object> parseSet(String json) {
-        if (!StringUtils.hasText(json)) {
-            return null;
-        }
-        json = json.trim();
-        if (json.startsWith("{")) {
-            return new HashSet<>(Collections.singletonList(JSON.parseObject(json)));
-        } else if (json.startsWith("[")) {
-            return (Set) JSON.parseArray(json, Set.class);
-        } else {
-            log.warn("parse json array error,maybe it's not json format: {}", json);
-        }
-        return null;
+    @Override
+    public Set<Object> getResult(ResultSet rs, int columnIndex) throws SQLException {
+        String s = rs.getString(columnIndex);
+        return new HashSet<>(JSON.parseArray(s));
     }
 
     @Override
-    public Set getResult(ResultSet rs, int columnIndex) throws SQLException {
-        return parseSet(rs.getString(columnIndex));
+    public Set<Object> getResult(ResultSet rs, String columnName) throws SQLException {
+        String s = rs.getString(columnName);
+        return new HashSet<>(JSON.parseArray(s));
     }
 
     @Override
-    public Set getResult(ResultSet rs, String columnName) throws SQLException {
-        return parseSet(rs.getString(columnName));
+    public Set<Object> getResult(CallableStatement cs, int columnIndex) throws SQLException {
+        String s = cs.getString(columnIndex);
+        return new HashSet<>(JSON.parseArray(s));
     }
 
     @Override
-    public Set getResult(CallableStatement cs, int columnIndex) throws SQLException {
-        return parseSet(cs.getString(columnIndex));
-    }
-
-    @Override
-    public void setParameter(PreparedStatement ps, int i, Set parameter, JdbcType jdbcType) throws SQLException {
+    public void setParameter(PreparedStatement ps, int i, Set<Object> parameter, JdbcType jdbcType) throws SQLException {
         ps.setString(i, JSON.toJSONString(parameter, SerializerFeature.WriteClassName));
     }
 
     @Override
-    public void setNonNullParameter(PreparedStatement ps, int i, Set parameter, JdbcType jdbcType) throws SQLException {
+    public void setNonNullParameter(PreparedStatement ps, int i, Set<Object> parameter, JdbcType jdbcType) throws SQLException {
         ps.setString(i, "[]");
     }
 
     @Override
-    public Set getNullableResult(ResultSet rs, String columnName) throws SQLException {
+    public Set<Object> getNullableResult(ResultSet rs, String columnName) throws SQLException {
         return new HashSet<>();
     }
 
     @Override
-    public Set getNullableResult(ResultSet rs, int columnIndex) throws SQLException {
+    public Set<Object> getNullableResult(ResultSet rs, int columnIndex) throws SQLException {
         return new HashSet<>();
     }
 
     @Override
-    public Set getNullableResult(CallableStatement cs, int columnIndex) throws SQLException {
+    public Set<Object> getNullableResult(CallableStatement cs, int columnIndex) throws SQLException {
         return new HashSet<>();
     }
 }
