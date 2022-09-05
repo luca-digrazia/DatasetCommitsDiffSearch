@@ -1,11 +1,8 @@
 package com.yammer.metrics;
 
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
+import java.io.*;
 import java.nio.charset.Charset;
-import java.util.Arrays;
-import java.util.Collection;
+import java.util.*;
 
 import static java.lang.Math.floor;
 
@@ -20,7 +17,7 @@ public class Snapshot {
     /**
      * Create a new {@link Snapshot} with the given values.
      *
-     * @param values    an unordered set of values in the reservoir
+     * @param values    an unordered set of values in the sample
      */
     public Snapshot(Collection<Long> values) {
         final Object[] copy = values.toArray();
@@ -34,7 +31,7 @@ public class Snapshot {
     /**
      * Create a new {@link Snapshot} with the given values.
      *
-     * @param values    an unordered set of values in the reservoir
+     * @param values    an unordered set of values in the sample
      */
     public Snapshot(long[] values) {
         this.values = Arrays.copyOf(values, values.length);
@@ -74,7 +71,7 @@ public class Snapshot {
     /**
      * Returns the number of values in the snapshot.
      *
-     * @return the number of values
+     * @return the number of values in the snapshot
      */
     public int size() {
         return values.length;
@@ -83,7 +80,7 @@ public class Snapshot {
     /**
      * Returns the median value in the distribution.
      *
-     * @return the median value
+     * @return the median value in the distribution
      */
     public double getMedian() {
         return getValue(0.5);
@@ -92,7 +89,7 @@ public class Snapshot {
     /**
      * Returns the value at the 75th percentile in the distribution.
      *
-     * @return the value at the 75th percentile
+     * @return the value at the 75th percentile in the distribution
      */
     public double get75thPercentile() {
         return getValue(0.75);
@@ -101,7 +98,7 @@ public class Snapshot {
     /**
      * Returns the value at the 95th percentile in the distribution.
      *
-     * @return the value at the 95th percentile
+     * @return the value at the 95th percentile in the distribution
      */
     public double get95thPercentile() {
         return getValue(0.95);
@@ -110,7 +107,7 @@ public class Snapshot {
     /**
      * Returns the value at the 98th percentile in the distribution.
      *
-     * @return the value at the 98th percentile
+     * @return the value at the 98th percentile in the distribution
      */
     public double get98thPercentile() {
         return getValue(0.98);
@@ -119,7 +116,7 @@ public class Snapshot {
     /**
      * Returns the value at the 99th percentile in the distribution.
      *
-     * @return the value at the 99th percentile
+     * @return the value at the 99th percentile in the distribution
      */
     public double get99thPercentile() {
         return getValue(0.99);
@@ -128,7 +125,7 @@ public class Snapshot {
     /**
      * Returns the value at the 99.9th percentile in the distribution.
      *
-     * @return the value at the 99.9th percentile
+     * @return the value at the 99.9th percentile in the distribution
      */
     public double get999thPercentile() {
         return getValue(0.999);
@@ -137,79 +134,14 @@ public class Snapshot {
     /**
      * Returns the entire set of values in the snapshot.
      *
-     * @return the entire set of values
+     * @return the entire set of values in the snapshot
      */
     public long[] getValues() {
         return Arrays.copyOf(values, values.length);
     }
 
     /**
-     * Returns the highest value in the snapshot.
-     *
-     * @return the highest value
-     */
-    public long getMax() {
-        if (values.length == 0) {
-            return 0;
-        }
-        return values[values.length - 1];
-    }
-
-    /**
-     * Returns the lowest value in the snapshot.
-     *
-     * @return the lowest value
-     */
-    public long getMin() {
-        if (values.length == 0) {
-            return 0;
-        }
-        return values[0];
-    }
-
-    /**
-     * Returns the arithmetic mean of the values in the snapshot.
-     *
-     * @return the arithmetic mean
-     */
-    public double getMean() {
-        if (values.length == 0) {
-            return 0;
-        }
-
-        double sum = 0;
-        for (long value : values) {
-            sum += value;
-        }
-        return sum / values.length;
-    }
-
-    /**
-     * Returns the standard deviation of the values in the snapshot.
-     *
-     * @return the standard value
-     */
-    public double getStdDev() {
-        // two-pass algorithm for variance, avoids numeric overflow
-
-        if (values.length <= 1) {
-            return 0;
-        }
-
-        final double mean = getMean();
-        double sum = 0;
-
-        for (long value : values) {
-            final double diff = value - mean;
-            sum += diff * diff;
-        }
-
-        final double variance = sum / (values.length - 1);
-        return Math.sqrt(variance);
-    }
-
-    /**
-     * Writes the values of the snapshot to the given stream.
+     * Writes the values of the sample to the given stream.
      *
      * @param output an output stream
      */
