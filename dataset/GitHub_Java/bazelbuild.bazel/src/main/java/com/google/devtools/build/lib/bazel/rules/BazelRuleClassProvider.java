@@ -80,8 +80,6 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.genquery.GenQueryRule;
-import com.google.devtools.build.lib.rules.java.J2ObjcCommandLineOptions;
-import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.JavaCpuSupplier;
@@ -90,13 +88,13 @@ import com.google.devtools.build.lib.rules.java.JavaOptions;
 import com.google.devtools.build.lib.rules.java.JavaToolchainRule;
 import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.rules.java.JvmConfigurationLoader;
-import com.google.devtools.build.lib.rules.objc.BazelJ2ObjcLibraryRule;
 import com.google.devtools.build.lib.rules.objc.ExperimentalIosTestRule;
 import com.google.devtools.build.lib.rules.objc.IosApplicationRule;
 import com.google.devtools.build.lib.rules.objc.IosDeviceRule;
 import com.google.devtools.build.lib.rules.objc.IosExtensionBinaryRule;
 import com.google.devtools.build.lib.rules.objc.IosExtensionRule;
-import com.google.devtools.build.lib.rules.objc.J2ObjcLibraryBaseRule;
+import com.google.devtools.build.lib.rules.objc.J2ObjcCommandLineOptions;
+import com.google.devtools.build.lib.rules.objc.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.objc.ObjcBinaryRule;
 import com.google.devtools.build.lib.rules.objc.ObjcBuildInfoFactory;
 import com.google.devtools.build.lib.rules.objc.ObjcBundleLibraryRule;
@@ -138,7 +136,8 @@ public class BazelRuleClassProvider {
     @Override
     public String getJavaCpu(BuildOptions buildOptions, ConfigurationEnvironment env)
         throws InvalidConfigurationException {
-      return "default";
+      JavaOptions javaOptions = buildOptions.get(JavaOptions.class);
+      return javaOptions.javaCpu == null ? "default" : javaOptions.javaCpu;
     }
   };
 
@@ -330,8 +329,6 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new IosApplicationRule());
     builder.addRuleDefinition(new IosExtensionBinaryRule());
     builder.addRuleDefinition(new IosExtensionRule());
-    builder.addRuleDefinition(new J2ObjcLibraryBaseRule());
-    builder.addRuleDefinition(new BazelJ2ObjcLibraryRule());
 
     builder.addRuleDefinition(new BazelExtraActionRule());
     builder.addRuleDefinition(new BazelActionListenerRule());
@@ -351,8 +348,8 @@ public class BazelRuleClassProvider {
         Functions.<String>identity()));
     builder.addConfigurationFragment(new PythonConfigurationLoader(Functions.<String>identity()));
     builder.addConfigurationFragment(new BazelPythonConfiguration.Loader());
-    builder.addConfigurationFragment(new JvmConfigurationLoader(false, JAVA_CPU_SUPPLIER));
-    builder.addConfigurationFragment(new JavaConfigurationLoader());
+    builder.addConfigurationFragment(new JvmConfigurationLoader(JAVA_CPU_SUPPLIER));
+    builder.addConfigurationFragment(new JavaConfigurationLoader(JAVA_CPU_SUPPLIER));
     builder.addConfigurationFragment(new ObjcConfigurationLoader());
     builder.addConfigurationFragment(new J2ObjcConfiguration.Loader());
     builder.addConfigurationFragment(new AndroidConfiguration.Loader());
