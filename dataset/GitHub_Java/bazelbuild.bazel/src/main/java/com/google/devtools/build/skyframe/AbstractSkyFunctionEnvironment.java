@@ -111,7 +111,7 @@ public abstract class AbstractSkyFunctionEnvironment implements SkyFunction.Envi
 
   /** Implementations should set {@link #valuesMissing} as necessary. */
   protected abstract Map<SkyKey, ValueOrUntypedException> getValueOrUntypedExceptions(
-      Set<SkyKey> depKeys);
+      Iterable<SkyKey> depKeys);
 
   @Override
   @Nullable
