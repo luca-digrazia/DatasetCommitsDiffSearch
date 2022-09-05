@@ -16,15 +16,14 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fromTemplates;
 import static com.google.devtools.build.lib.rules.cpp.Link.LINK_LIBRARY_FILETYPES;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DYNAMIC_FRAMEWORK_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FORCE_LOAD_LIBRARY;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_SEARCH_PATH_ONLY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE_SYSTEM;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_DYLIB;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_FRAMEWORK;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAMEWORK_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.COMPILABLE_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.HEADERS;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.NON_ARC_SRCS_TYPE;
@@ -290,10 +289,7 @@ public abstract class CompilationSupport {
     return frameworkNames
         // Add custom (non-SDK) framework search paths. For each framework foo/bar.framework,
         // include "foo" as a search path.
-        .addAll(PathFragment.safePathStrings(
-            uniqueParentDirectories(provider.get(STATIC_FRAMEWORK_DIR))))
-        .addAll(PathFragment.safePathStrings(
-            uniqueParentDirectories(provider.get(DYNAMIC_FRAMEWORK_DIR))))
+        .addAll(PathFragment.safePathStrings(uniqueParentDirectories(provider.get(FRAMEWORK_DIR))))
         .addAll(
             PathFragment.safePathStrings(
                 uniqueParentDirectories(provider.get(FRAMEWORK_SEARCH_PATH_ONLY))))
@@ -333,22 +329,6 @@ public abstract class CompilationSupport {
     this.intermediateArtifacts = intermediateArtifacts;
   }
   
-  /**
-   * Registers all actions necessary to compile this rule's sources and archive them.
-   *
-   * @param compilationArtifacts collection of artifacts required for the compilation
-   * @param objcProvider provides all compiling and linking information to register these actions
-   * @return this compilation support
-   * @throws RuleErrorException for invalid crosstool files
-   */
-  CompilationSupport registerCompileAndArchiveActions(
-      CompilationArtifacts compilationArtifacts,
-      ObjcProvider objcProvider) throws RuleErrorException, InterruptedException {
-    return registerCompileAndArchiveActions(
-        compilationArtifacts, objcProvider, ExtraCompileArgs.NONE,
-        ImmutableList.<PathFragment>of());
-  }
-
   /**
    * Registers all actions necessary to compile this rule's sources and archive them.
    *
@@ -468,12 +448,16 @@ public abstract class CompilationSupport {
    * Registers an action that will generate a clang module map for this target, using the hdrs
    * attribute of this rule.
    */
-  CompilationSupport registerGenerateModuleMapAction(CompilationArtifacts compilationArtifacts) {
+  CompilationSupport registerGenerateModuleMapAction(
+      Optional<CompilationArtifacts> compilationArtifacts) {
     // TODO(bazel-team): Include textual headers in the module map when Xcode 6 support is
     // dropped.
     // TODO(b/32225593): Include private headers in the module map.
     Iterable<Artifact> publicHeaders = attributes.hdrs();
-      publicHeaders = Iterables.concat(publicHeaders, compilationArtifacts.getAdditionalHdrs());
+    if (compilationArtifacts.isPresent()) {
+      CompilationArtifacts artifacts = compilationArtifacts.get();
+      publicHeaders = Iterables.concat(publicHeaders, artifacts.getAdditionalHdrs());
+    }
     CppModuleMap moduleMap = intermediateArtifacts.moduleMap();
     registerGenerateModuleMapAction(moduleMap, publicHeaders);
 
@@ -566,36 +550,15 @@ public abstract class CompilationSupport {
   /**
    * Registers all actions necessary to compile this rule's sources and archive them.
    *
-   * @param compilationArtifacts collection of artifacts required for the compilation
-   * @param objcProvider provides all compiling and linking information to register these actions
-   * @param extraCompileArgs args to be added to compile actions
-   * @param priorityHeaders priority headers to be included before the dependency headers
-   * @return this compilation support
-   * @throws RuleErrorException for invalid crosstool files
-   */
-  abstract CompilationSupport registerCompileAndArchiveActions(
-      CompilationArtifacts compilationArtifacts, ObjcProvider objcProvider,
-      ExtraCompileArgs extraCompileArgs, Iterable<PathFragment> priorityHeaders)
-      throws RuleErrorException, InterruptedException;
-
-  /**
-   * Registers all actions necessary to compile this rule's sources and archive them.
-   *
    * @param common common information about this rule and its dependencies
    * @param extraCompileArgs args to be added to compile actions
    * @param priorityHeaders priority headers to be included before the dependency headers
    * @return this compilation support
    * @throws RuleErrorException for invalid crosstool files
    */
-  CompilationSupport registerCompileAndArchiveActions(
+  abstract CompilationSupport registerCompileAndArchiveActions(
       ObjcCommon common, ExtraCompileArgs extraCompileArgs, Iterable<PathFragment> priorityHeaders)
-      throws RuleErrorException, InterruptedException {
-    if (common.getCompilationArtifacts().isPresent()) {
-      registerCompileAndArchiveActions(common.getCompilationArtifacts().get(),
-          common.getObjcProvider(), extraCompileArgs, priorityHeaders);
-    }
-    return this;
-  }
+      throws RuleErrorException, InterruptedException;
 
   /**
    * Registers any actions necessary to link this rule and its dependencies.
@@ -713,8 +676,7 @@ public abstract class CompilationSupport {
   protected Set<String> frameworkNames(ObjcProvider provider) {
     Set<String> names = new LinkedHashSet<>();
     Iterables.addAll(names, SdkFramework.names(provider.get(SDK_FRAMEWORK)));
-    for (PathFragment frameworkDir :
-        Iterables.concat(provider.get(STATIC_FRAMEWORK_DIR), provider.get(DYNAMIC_FRAMEWORK_DIR))) {
+    for (PathFragment frameworkDir : provider.get(FRAMEWORK_DIR)) {
       String segment = frameworkDir.getBaseName();
       Preconditions.checkState(
           segment.endsWith(FRAMEWORK_SUFFIX),
@@ -908,9 +870,8 @@ public abstract class CompilationSupport {
    * Registers an action that will generate a clang module map.
    * @param moduleMap the module map to generate
    * @param publicHeaders the headers that should be directly accessible by dependers
-   * @return this compilation support
    */
-  public CompilationSupport registerGenerateModuleMapAction(
+  private void registerGenerateModuleMapAction(
       CppModuleMap moduleMap, Iterable<Artifact> publicHeaders) {
     publicHeaders = Iterables.filter(publicHeaders, MODULE_MAP_HEADER);
     ruleContext.registerAction(
@@ -925,8 +886,6 @@ public abstract class CompilationSupport {
             /*moduleMapHomeIsCwd=*/ false,
             /*generateSubModules=*/ false,
             /*externDependencies=*/ true));
-
-    return this;
   }
     
   /**

@@ -363,7 +363,8 @@ public final class ReleaseBundlingSupport {
     result.put("UILaunchStoryboardName", launchStoryboardName);
     String contents = result.toGnuStepASCIIPropertyList();
     ruleContext.registerAction(
-        FileWriteAction.create(ruleContext, getLaunchStoryboardPlist(), contents, false));
+        new FileWriteAction(
+            ruleContext.getActionOwner(), getLaunchStoryboardPlist(), contents, false));
   }
 
   private void registerEnvironmentPlistAction() {
@@ -389,8 +390,8 @@ public final class ReleaseBundlingSupport {
 
   private void registerAutomaticPlistAction() {
     ruleContext.registerAction(
-        FileWriteAction.create(
-            ruleContext,
+        new FileWriteAction(
+            ruleContext.getActionOwner(),
             getGeneratedAutomaticPlist(),
             automaticEntries().toGnuStepASCIIPropertyList(),
             /*makeExecutable=*/ false));
@@ -705,10 +706,7 @@ public final class ReleaseBundlingSupport {
             .addTransitiveAndPropagate(ObjcProvider.DYNAMIC_FRAMEWORK_FILE, objcProvider)
             .addTransitiveAndPropagate(
                 ObjcProvider.FRAMEWORK_SEARCH_PATH_ONLY,
-                objcProvider.get(ObjcProvider.STATIC_FRAMEWORK_DIR))
-            .addTransitiveAndPropagate(
-                ObjcProvider.FRAMEWORK_SEARCH_PATH_ONLY,
-                objcProvider.get(ObjcProvider.DYNAMIC_FRAMEWORK_DIR))
+                objcProvider.get(ObjcProvider.FRAMEWORK_DIR))
             .build();
     return new XcTestAppProvider(
         intermediateArtifacts.combinedArchitectureBinary(),

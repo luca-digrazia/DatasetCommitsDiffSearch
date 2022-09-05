@@ -14,23 +14,21 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import static com.google.devtools.build.lib.rules.objc.LegacyCompilationSupport.AUTOMATIC_SDK_FRAMEWORKS;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.BUNDLE_IMPORT_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.CC_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DEFINE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FORCE_LOAD_FOR_XCODEGEN;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_SEARCH_PATH_ONLY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.GENERAL_RESOURCE_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.GENERAL_RESOURCE_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_DYLIB;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_FRAMEWORK;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAMEWORK_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.WEAK_SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCASSETS_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCDATAMODEL;
 import static com.google.devtools.build.lib.rules.objc.XcodeProductType.LIBRARY_STATIC;
-import static com.google.devtools.build.lib.rules.objc.XcodeProductType.WATCH_OS1_APPLICATION;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
@@ -38,7 +36,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -629,14 +626,6 @@ public final class XcodeProvider implements TransitiveInfoProvider {
             .addTransitive(strictlyPropagatedHeaderSearchPaths)
             .build();
 
-    // Automatic SDK frameworks are no longer propagated through ObjcProvider; they are now added
-    // during the link action. To preserve the existing Xcode project generation, we need to add
-    // them to the Xcode target below, unless it is a watchOS 1 application.
-    Set<SdkFramework> automaticSdkFrameworks =
-        (productType != WATCH_OS1_APPLICATION)
-            ? ImmutableSet.copyOf(AUTOMATIC_SDK_FRAMEWORKS)
-            : ImmutableSet.<SdkFramework>of();
-
     // TODO(bazel-team): Add provisioning profile information when Xcodegen supports it.
     TargetControl.Builder targetControl =
         TargetControl.newBuilder()
@@ -661,9 +650,8 @@ public final class XcodeProvider implements TransitiveInfoProvider {
                     "-weak_framework", SdkFramework.names(objcProvider.get(WEAK_SDK_FRAMEWORK))))
             .addAllBuildSetting(xcodeprojBuildSettings)
             .addAllBuildSetting(AppleToolchain.defaultWarningsForXcode())
-            .addAllSdkFramework(SdkFramework.names(automaticSdkFrameworks))
             .addAllSdkFramework(SdkFramework.names(objcProvider.get(SDK_FRAMEWORK)))
-            .addAllFramework(PathFragment.safePathStrings(objcProvider.get(STATIC_FRAMEWORK_DIR)))
+            .addAllFramework(PathFragment.safePathStrings(objcProvider.get(FRAMEWORK_DIR)))
             .addAllFrameworkSearchPathOnly(
                 PathFragment.safePathStrings(objcProvider.get(FRAMEWORK_SEARCH_PATH_ONLY)))
             .addAllXcassetsDir(PathFragment.safePathStrings(objcProvider.get(XCASSETS_DIR)))

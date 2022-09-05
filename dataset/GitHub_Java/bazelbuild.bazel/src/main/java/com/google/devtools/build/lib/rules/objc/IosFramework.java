@@ -16,8 +16,8 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.devtools.build.lib.rules.objc.ObjcCommon.uniqueContainers;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MERGE_ZIP;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAMEWORK_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAMEWORK_FILE;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -94,13 +94,13 @@ public class IosFramework extends ReleaseBundlingTargetFactory {
 
     // Create framework binary
     Artifact frameworkBinary =
-        outputArtifact(ruleContext, PathFragment.create(bundleName(ruleContext)));
+        outputArtifact(ruleContext, new PathFragment(bundleName(ruleContext)));
     builder.put(intermediateArtifacts.combinedArchitectureBinary(), frameworkBinary);
 
     // Create framework headers
     for (Pair<Artifact, Label> header : headers) {
       Artifact frameworkHeader =
-          outputArtifact(ruleContext, PathFragment.create("Headers/" + header.first.getFilename()));
+          outputArtifact(ruleContext, new PathFragment("Headers/" + header.first.getFilename()));
 
       builder.put(header.first, frameworkHeader);
     }
@@ -132,7 +132,7 @@ public class IosFramework extends ReleaseBundlingTargetFactory {
             // linker actions but not added to the final bundle.
             .addAll(STATIC_FRAMEWORK_FILE, frameworkImports)
             .addAll(
-                STATIC_FRAMEWORK_DIR,
+                FRAMEWORK_DIR,
                 uniqueContainers(frameworkImports, ObjcCommon.FRAMEWORK_CONTAINER_TYPE))
             .build();
 
@@ -160,9 +160,9 @@ public class IosFramework extends ReleaseBundlingTargetFactory {
    */
   private Artifact outputArtifact(RuleContext ruleContext, PathFragment path) {
     PathFragment frameworkRoot =
-        PathFragment.create(
-            PathFragment.create("_frameworks"),
-            PathFragment.create(bundleName(ruleContext) + ".framework"),
+        new PathFragment(
+            new PathFragment("_frameworks"),
+            new PathFragment(bundleName(ruleContext) + ".framework"),
             path);
 
     return ruleContext.getPackageRelativeArtifact(
