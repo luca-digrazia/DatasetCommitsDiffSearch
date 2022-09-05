@@ -951,7 +951,7 @@ public class ParserTest extends EvaluationTestCase {
         "  x = 2",
         "x = 3;\n");
     assertThat(stmts).hasSize(2);
-    assertContainsEvent("This is not supported in BUILD files");
+    assertContainsEvent("This Python-style construct is not supported");
   }
 
   @Test
