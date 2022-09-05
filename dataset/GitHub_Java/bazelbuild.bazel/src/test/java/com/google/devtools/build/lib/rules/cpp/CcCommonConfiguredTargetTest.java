@@ -478,7 +478,8 @@ public class CcCommonConfiguredTargetTest extends BuildViewTestCase {
     // Tests that cc_tests built statically and with Fission will have the .dwp file
     // in their runfiles.
 
-    useConfiguration("--build_test_dwp", "--dynamic_mode=off", "--fission=yes");
+    useConfiguration("--build_test_dwp", "--dynamic_mode=off", "--linkopt=-static",
+        "--fission=yes");
     ConfiguredTarget target =
         scratchConfiguredTarget(
             "mypackage",
