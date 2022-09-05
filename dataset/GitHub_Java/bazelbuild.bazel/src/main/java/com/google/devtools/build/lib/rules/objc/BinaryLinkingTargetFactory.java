@@ -104,10 +104,7 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
             .registerCompileAndArchiveActions(common)
             .addXcodeSettings(xcodeProviderBuilder, common)
             .registerLinkActions(
-                objcProvider,
-                getExtraLinkArgs(ruleContext),
-                ImmutableList.<Artifact>of(),
-                DsymOutputType.APP)
+                objcProvider, getExtraLinkArgs(ruleContext), ImmutableList.<Artifact>of())
             .validateAttributes();
 
     if (ruleContext.hasErrors()) {
@@ -121,17 +118,13 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
         ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
         AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
         // TODO(bazel-team): Remove once all bundle users are migrated to ios_application.
-        ReleaseBundlingSupport releaseBundlingSupport =
-            new ReleaseBundlingSupport(
-                ruleContext,
-                objcProvider,
-                LinkedBinary.LOCAL_AND_DEPENDENCIES,
-                ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT,
-                objcConfiguration.getMinimumOs());
+        ReleaseBundlingSupport releaseBundlingSupport = new ReleaseBundlingSupport(
+            ruleContext, objcProvider, LinkedBinary.LOCAL_AND_DEPENDENCIES,
+            ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT, objcConfiguration.getMinimumOs());
         releaseBundlingSupport
-            .registerActions(DsymOutputType.APP)
+            .registerActions()
             .addXcodeSettings(xcodeProviderBuilder)
-            .addFilesToBuild(filesToBuild, DsymOutputType.APP)
+            .addFilesToBuild(filesToBuild)
             .validateResources()
             .validateAttributes();
 
@@ -224,7 +217,7 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
     builder.addDepObjcProviders(createSkylarkObjcProviders(ruleContext));
     
     if (ObjcRuleClasses.objcConfiguration(ruleContext).generateDebugSymbols()) {
-      builder.addDebugArtifacts(DsymOutputType.APP);
+      builder.addDebugArtifacts();
     }
 
     if (ObjcRuleClasses.objcConfiguration(ruleContext).generateLinkmap()) {

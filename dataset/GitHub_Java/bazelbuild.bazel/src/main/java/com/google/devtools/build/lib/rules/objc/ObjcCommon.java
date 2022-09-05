@@ -307,7 +307,7 @@ public final class ObjcCommon {
     private boolean alwayslink;
     private boolean hasModuleMap;
     private Iterable<Artifact> extraImportLibraries = ImmutableList.of();
-    private DsymOutputType dsymOutputType;
+    private boolean shouldAddDebugArtifacts;
     private Optional<Artifact> linkedBinary = Optional.absent();
     private Optional<Artifact> linkmapFile = Optional.absent();
     private Iterable<CppCompilationContext> depCcHeaderProviders = ImmutableList.of();
@@ -427,10 +427,10 @@ public final class ObjcCommon {
     }
 
     /**
-     * Sets which type of dsym output this rule generated to be propagated to dependers.
+     * Sets whether the debug artifacts (breakpad, dsym files) should be propagated to dependers.
      */
-    Builder addDebugArtifacts(DsymOutputType dsymOutputType) {
-      this.dsymOutputType = dsymOutputType;
+    Builder addDebugArtifacts() {
+      this.shouldAddDebugArtifacts = true;
       return this;
     }
 
@@ -624,11 +624,11 @@ public final class ObjcCommon {
       objcProvider.addAll(LINKED_BINARY, linkedBinary.asSet())
           .addAll(LINKMAP_FILE, linkmapFile.asSet());
 
-      if (dsymOutputType != null) {
+      if (shouldAddDebugArtifacts) {
         objcProvider
             .add(BREAKPAD_FILE, intermediateArtifacts.breakpadSym())
-            .add(DEBUG_SYMBOLS, intermediateArtifacts.dsymSymbol(dsymOutputType))
-            .add(DEBUG_SYMBOLS_PLIST, intermediateArtifacts.dsymPlist(dsymOutputType));
+            .add(DEBUG_SYMBOLS, intermediateArtifacts.dsymSymbol())
+            .add(DEBUG_SYMBOLS_PLIST, intermediateArtifacts.dsymPlist());
       }
 
       return new ObjcCommon(objcProvider.build(), compilationArtifacts);

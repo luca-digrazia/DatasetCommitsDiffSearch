@@ -206,8 +206,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Override
   public List<SplitTransition<BuildOptions>> getPotentialSplitTransitions() {
     return ImmutableList.of(
-        IosApplication.SPLIT_ARCH_TRANSITION, IosExtension.MINIMUM_OS_AND_SPLIT_ARCH_TRANSITION,
-        AppleWatch1Extension.MINIMUM_OS_AND_SPLIT_ARCH_TRANSITION);
+        IosApplication.SPLIT_ARCH_TRANSITION, IosExtension.MINIMUM_OS_AND_SPLIT_ARCH_TRANSITION);
   }
 
   /** Converter for the iOS configuration distinguisher. */
