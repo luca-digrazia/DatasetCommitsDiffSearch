@@ -146,7 +146,7 @@ public class BaseJavaCompilationHelper {
       PathFragment ruleBase = ruleContext.getUniqueDirectory("_ijar");
       PathFragment artifactDirFragment = jar.getRootRelativePath().getParentDirectory();
       String ijarBasename = FileSystemUtils.removeExtension(jar.getFilename()) + "-ijar.jar";
-      return ruleContext.getDerivedArtifact(
+      return getAnalysisEnvironment().getDerivedArtifact(
           ruleBase.getRelative(artifactDirFragment).getRelative(ijarBasename),
           getConfiguration().getGenfilesDirectory());
     } else {
@@ -217,21 +217,15 @@ public class BaseJavaCompilationHelper {
     return workDir(outputJar, "_temp");
   }
 
-  protected PathFragment classDir(Artifact outputJar) {
-    return workDir(outputJar, "_classes");
-  }
-
   /**
    * For an output jar and a suffix, produces a derived directory under
    * {@code bin} directory with a given suffix.
-   *
-   * <p>Note that this won't work if a rule produces two jars with the same basename.
    */
   private PathFragment workDir(Artifact outputJar, String suffix) {
-    String basename = FileSystemUtils.removeExtension(outputJar.getExecPath().getBaseName());
-    return getConfiguration().getBinDirectory().getExecPath()
-        .getRelative(ruleContext.getUniqueDirectory("_javac"))
-        .getRelative(basename + suffix);
+    PathFragment path = outputJar.getRootRelativePath();
+    String basename = FileSystemUtils.removeExtension(path.getBaseName()) + suffix;
+    path = path.replaceName(basename);
+    return getConfiguration().getBinDirectory().getExecPath().getRelative(path);
   }
 
   /**
@@ -247,6 +241,6 @@ public class BaseJavaCompilationHelper {
     PathFragment path = artifact.getRootRelativePath();
     String basename = FileSystemUtils.removeExtension(path.getBaseName()) + suffix;
     path = path.replaceName(prefix + basename);
-    return ruleContext.getDerivedArtifact(path, root);
+    return getAnalysisEnvironment().getDerivedArtifact(path, root);
   }
 }

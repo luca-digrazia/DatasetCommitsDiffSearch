@@ -131,7 +131,6 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
     builder.setCompressJar(true);
     builder.setSourceGenDirectory(sourceGenDir(outputJar));
     builder.setTempDirectory(tempDir(outputJar));
-    builder.setClassDirectory(classDir(outputJar));
     builder.addProcessorPaths(attributes.getProcessorPath());
     builder.addProcessorNames(attributes.getProcessorNames());
     builder.setStrictJavaDeps(attributes.getStrictJavaDeps());
@@ -201,7 +200,7 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
    */
   public Artifact createGensrcJar(@Nullable Artifact outputJar) {
     if (usesAnnotationProcessing()) {
-      return getRuleContext().getDerivedArtifact(
+      return getAnalysisEnvironment().getDerivedArtifact(
           FileSystemUtils.appendWithoutExtension(outputJar.getRootRelativePath(), "-gensrc"),
           outputJar.getRoot());
     } else {
@@ -225,7 +224,7 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
    * @return The output artifact for the manifest proto emitted from JavaBuilder 
    */
   public Artifact createManifestProtoOutput(Artifact outputJar) {
-    return getRuleContext().getDerivedArtifact(
+    return getAnalysisEnvironment().getDerivedArtifact(
         FileSystemUtils.appendExtension(outputJar.getRootRelativePath(), "_manifest_proto"),
         outputJar.getRoot());
   }
@@ -277,7 +276,7 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
       return null;
     }
 
-    outputDepsProtoArtifact = getRuleContext().getDerivedArtifact(
+    outputDepsProtoArtifact = getAnalysisEnvironment().getDerivedArtifact(
           FileSystemUtils.replaceExtension(outputJar.getRootRelativePath(), ".jdeps"),
           outputJar.getRoot());
 
@@ -317,7 +316,6 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
     builder.addTranslations(getTranslations());
     builder.setCompressJar(true);
     builder.setTempDirectory(tempDir(resourceJar));
-    builder.setClassDirectory(classDir(resourceJar));
     builder.setJavaBuilderJar(getJavaBuilderJar());
     builder.setJavacOpts(getDefaultJavacOptsFromRule(getRuleContext()));
     builder.setJavacJvmOpts(
