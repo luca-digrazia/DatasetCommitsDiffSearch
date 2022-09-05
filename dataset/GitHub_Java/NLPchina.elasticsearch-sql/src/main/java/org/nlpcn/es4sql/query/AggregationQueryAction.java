@@ -7,12 +7,15 @@ import java.util.Map;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.index.query.BoolFilterBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.aggregations.AbstractAggregationBuilder;
+import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.bucket.nested.NestedBuilder;
+import org.elasticsearch.search.aggregations.bucket.nested.ReverseNested;
+import org.elasticsearch.search.aggregations.bucket.nested.ReverseNestedBuilder;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.aggregations.bucket.terms.TermsBuilder;
 import org.elasticsearch.search.sort.SortOrder;
@@ -26,7 +29,7 @@ import org.nlpcn.es4sql.domain.hints.Hint;
 import org.nlpcn.es4sql.domain.hints.HintType;
 import org.nlpcn.es4sql.exception.SqlParseException;
 import org.nlpcn.es4sql.query.maker.AggMaker;
-import org.nlpcn.es4sql.query.maker.FilterMaker;
+import org.nlpcn.es4sql.query.maker.QueryMaker;
 
 /**
  * Transform SQL query to Elasticsearch aggregations query
@@ -45,7 +48,7 @@ public class AggregationQueryAction extends QueryAction {
 	@Override
 	public SqlElasticSearchRequestBuilder explain() throws SqlParseException {
 		this.request = client.prepareSearch();
-		request.setListenerThreaded(false);
+
 		setIndicesAndTypes();
 
 		setWhere(select.getWhere());
@@ -136,11 +139,11 @@ public class AggregationQueryAction extends QueryAction {
 				}
 			}
 		}
-        
-		setLimit(getLimitFromHint());
+
+		setLimitFromHint(this.select.getHints());
 
 		request.setSearchType(SearchType.DEFAULT);
-        updateRequestWithIndexAndRoutingOptions(select, request);
+        updateWithIndicesOptionsIfNeeded(select,request);
         SqlElasticSearchRequestBuilder sqlElasticRequestBuilder = new SqlElasticSearchRequestBuilder(request);
         return sqlElasticRequestBuilder;
 	}
@@ -245,8 +248,8 @@ public class AggregationQueryAction extends QueryAction {
 	 */
 	private void setWhere(Where where) throws SqlParseException {
 		if (where != null) {
-			BoolFilterBuilder boolFilter = FilterMaker.explan(where);
-			request.setQuery(QueryBuilders.filteredQuery(null, boolFilter));
+			QueryBuilder whereQuery = QueryMaker.explan(where);
+			request.setQuery(whereQuery);
 		}
 	}
 
@@ -263,20 +266,26 @@ public class AggregationQueryAction extends QueryAction {
 		}
 	}
 
-	private void setLimit( int size) {
-		request.setFrom(0);
-
-		if (size > -1) {
-			request.setSize(size);
-		}
-	}
-
-    public int getLimitFromHint() {
-        for(Hint hint : this.select.getHints()){
-            if(hint.getType() == HintType.DOCS_WITH_AGGREGATION){
-                return (int) hint.getParams()[0];
+    private void setLimitFromHint(List<Hint> hints) {
+        int from = 0;
+        int size = 0;
+        for (Hint hint : hints) {
+            if (hint.getType() == HintType.DOCS_WITH_AGGREGATION) {
+                Integer[] params = (Integer[]) hint.getParams();
+                if (params.length > 1) {
+                    // if 2 or more are given, use the first as the from and the second as the size
+                    // so it is the same as LIMIT from,size
+                    // except written as /*! DOCS_WITH_AGGREGATION(from,size) */
+                    from = params[0];
+                    size = params[1];
+                } else if (params.length == 1) {
+                    // if only 1 parameter is given, use it as the size with a from of 0
+                    size = params[0];
+                }
+                break;
             }
         }
-        return 0;
+        request.setFrom(from);
+        request.setSize(size);
     }
 }
