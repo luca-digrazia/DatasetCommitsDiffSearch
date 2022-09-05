@@ -207,90 +207,63 @@
  *
  */
 
-package com.taobao.android.builder.extension;
+package com.taobao.android.builder.tools.guide;
 
 import com.android.builder.signing.DefaultSigningConfig;
-import com.taobao.android.builder.extension.annotation.Config;
-
-import java.io.File;
+import com.taobao.android.builder.extension.*;
+import org.apache.commons.beanutils.BeanUtils;
+import org.apache.commons.beanutils.ConvertUtils;
+import org.apache.commons.beanutils.converters.FileConverter;
 
 /**
- * Created by shenghua.nish on 2016-05-17 上午10:21.
+ * Created by wuzhong on 2017/1/11.
  */
-public class TBuildType {
+public class AtlasExtensionOutput extends AtlasExtension {
 
-    private String name;
+    static {
 
-    private File baseApFile;
+        ConvertUtils.register(new FileConverter(null), java.io.File.class);
 
-    @Config(title = "基线的依赖坐标",message = "如： com.taobao.android:taobao-android-release:6.3.0-SNAPSHOT@ap ", order = 1, group = "atlas_patch")
-    private String baseApDependency;
-
-    private PatchConfig patchConfig;
-
-    public DexConfig getDexConfig() {
-        return dexConfig;
     }
 
-    public void setDexConfig(DexConfig dexConfig) {
-        this.dexConfig = dexConfig;
+    public TBuildType tBuildType;
+
+    public AtlasExtensionOutput(AtlasExtension atlasExtension, String name) {
+
+        this.setAtlasEnabled(atlasExtension.isAtlasEnabled());
+
+        this.manifestOptions = new ManifestOptions();
+        this.tBuildConfig = new TBuildConfig();
+        copyProps(this.manifestOptions, atlasExtension.getManifestOptions());
+        copyProps(this.tBuildConfig, atlasExtension.getTBuildConfig());
+
+        this.tBuildType = new TBuildType(name);
+
+        TBuildType mtlBuildTypeValue = (TBuildType)atlasExtension.getBuildTypes().findByName(name);
+        if (null == mtlBuildTypeValue) {
+            return;
+        }
+//        mtlBuildTypeValue.setDexConfig((DexConfig) atlasExtension.dexConfigs.maybeCreate(name));
+
+        tBuildType.setBaseApDependency(mtlBuildTypeValue.getBaseApDependency());
+        tBuildType.setBaseApFile(mtlBuildTypeValue.getBaseApFile());
+        tBuildType.setSigningConfig(new DefaultSigningConfig(name));
+        tBuildType.setPatchConfig(new PatchConfig(name));
+        tBuildType.setDexConfig(new DexConfig(name));
+
+        copyProps(tBuildType.getSigningConfig(), mtlBuildTypeValue.getSigningConfig());
+        copyProps(tBuildType.getPatchConfig(), mtlBuildTypeValue.getPatchConfig());
+        copyProps(tBuildType.getDexConfig(),mtlBuildTypeValue.getDexConfig());
     }
 
-    private DexConfig dexConfig;
-
-    private MultiDexConfig multiDexConfig;
-
-    private DefaultSigningConfig signingConfig;
-
-    public TBuildType(String name) {
-        this.name = name;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public File getBaseApFile() {
-        return baseApFile;
-    }
-
-    public void setBaseApFile(File baseApFile) {
-        this.baseApFile = baseApFile;
-    }
-
-    public String getBaseApDependency() {
-        return baseApDependency;
-    }
-
-    public void setBaseApDependency(String baseApDependency) {
-        this.baseApDependency = baseApDependency;
-    }
-
-    public PatchConfig getPatchConfig() {
-        return patchConfig;
-    }
-
-    public void setPatchConfig(PatchConfig patchConfig) {
-        this.patchConfig = patchConfig;
-    }
-
-    public DefaultSigningConfig getSigningConfig() {
-        return signingConfig;
-    }
-
-    public void setSigningConfig(DefaultSigningConfig signingConfig) {
-        this.signingConfig = signingConfig;
-    }
-
-    public MultiDexConfig getMultiDexConfig() {
-        return multiDexConfig;
-    }
-
-    public void setMultiDexConfig(MultiDexConfig multiDexConfig) {
-        this.multiDexConfig = multiDexConfig;
+    private void copyProps(Object dest, Object orig) {
+        if (orig == null) {
+            return;
+        }
+        try {
+            BeanUtils.copyProperties(dest, orig);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
     }
 }

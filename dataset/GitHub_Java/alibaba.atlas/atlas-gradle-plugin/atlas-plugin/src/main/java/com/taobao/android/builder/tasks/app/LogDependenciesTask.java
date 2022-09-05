@@ -238,7 +238,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Record the build dependency information, facilitate the analysis and analysis
+ * 记录构建的依赖信息，便于排查分析
  */
 public class LogDependenciesTask extends BaseTask {
 
@@ -249,6 +249,7 @@ public class LogDependenciesTask extends BaseTask {
     @TaskAction
     void generate() {
 
+        AtlasBuildContext.appVariantContext = appVariantContext;
         AtlasDependencyTree atlasDependencyTree = AtlasBuildContext.androidDependencyTrees.get(
             getVariantName());
 
@@ -290,7 +291,7 @@ public class LogDependenciesTask extends BaseTask {
             e.printStackTrace();
         }
 
-        //Output runtime plug-in dependency list
+        //输出运行时的插件依赖列表
         try {
             //ClassLoader cl = ClassLoader.getSystemClassLoader();
             URL[] urls = ((URLClassLoader)LogDependenciesTask.class.getClassLoader()).getURLs();
@@ -351,7 +352,7 @@ public class LogDependenciesTask extends BaseTask {
             if (appVariantContext.getAtlasExtension()
                 .getTBuildConfig()
                 .isAbortIfDependencyConflict()) {
-                throw new GradleException("Rely on conflict, specific see warning - dependencyConflict. Properties");
+                throw new GradleException("依赖冲突，具体见warning-dependencyConflict.properties");
             }
         }
 

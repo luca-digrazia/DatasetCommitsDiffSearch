@@ -9,7 +9,7 @@ import org.gradle.internal.reflect.Instantiator;
 
 /**
  * @author lilong
- * @create 2017-05-26 On the afternoon of mount zalmon
+ * @create 2017-05-26 下午9:48
  */
 
 public class DexConfigFactory implements NamedDomainObjectFactory<DexConfig> {
