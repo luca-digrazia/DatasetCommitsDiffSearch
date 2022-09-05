@@ -16,6 +16,7 @@ package com.google.devtools.build.skyframe;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 
 import java.util.Map;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -34,5 +35,5 @@ public interface QueryableGraph {
    * Fetches all the given nodes. Returns a map {@code m} such that {@code m.get(k).equals(e)} for
    * all {@code k} such that {@code get(k) == e} and {@code e != null}.
    */
-  Map<SkyKey, NodeEntry> getBatch(Iterable<SkyKey> keys);
+  Map<SkyKey, NodeEntry> getBatch(Set<SkyKey> keys);
 }
