@@ -144,9 +144,7 @@ public abstract class AbstractJ2ObjcProtoAspect implements ConfiguredNativeAspec
           j2ObjcSource.getHeaderSearchPaths(),
           DEPENDENT_ATTRIBUTES);
 
-      new CompilationSupport(ruleContext)
-          .registerCompileAndArchiveActions(common)
-          .registerFullyLinkAction(common.getObjcProvider());
+      new CompilationSupport(ruleContext).registerCompileAndArchiveActions(common);
     }
 
     NestedSet<Artifact> j2ObjcTransitiveHeaderMappingFiles = j2ObjcTransitiveHeaderMappingFiles(
