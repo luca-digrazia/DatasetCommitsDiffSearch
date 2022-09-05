@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1458,9 +1458,7 @@ public class MethodLibrary {
   };
 
   @SkylarkSignature(name = "print", returnType = Runtime.NoneType.class,
-      doc = "Prints a warning with the text <code>msg</code>. It can be used for debugging or "
-          + "for transition (before changing to an error). In other cases, warnings are "
-          + "discouraged.",
+      doc = "Prints <code>msg</code> to the console.",
       optionalNamedOnly = {
         @Param(name = "sep", type = String.class, defaultValue = "' '",
             doc = "The separator string between the objects, default is space (\" \").")},
