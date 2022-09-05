@@ -13,11 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
@@ -45,8 +45,8 @@ public final class PrepareDepsOfPatternsValue implements SkyValue {
 
   private final ImmutableList<TargetPatternKey> targetPatternKeys;
 
-  public PrepareDepsOfPatternsValue(ImmutableList<TargetPatternKey> targetPatternKeys) {
-    this.targetPatternKeys = Preconditions.checkNotNull(targetPatternKeys);
+  PrepareDepsOfPatternsValue(ImmutableList<TargetPatternKey> targetPatternKeys) {
+    this.targetPatternKeys = targetPatternKeys;
   }
 
   public ImmutableList<TargetPatternKey> getTargetPatternKeys() {
@@ -55,8 +55,8 @@ public final class PrepareDepsOfPatternsValue implements SkyValue {
 
   @ThreadSafe
   public static SkyKey key(ImmutableList<String> patterns, String offset) {
-    return SkyKey.create(
-        SkyFunctions.PREPARE_DEPS_OF_PATTERNS, new TargetPatternSequence(patterns, offset));
+    return new SkyKey(SkyFunctions.PREPARE_DEPS_OF_PATTERNS,
+        new TargetPatternSequence(patterns, offset));
   }
 
   /** The argument value for {@link SkyKey}s of {@link PrepareDepsOfPatternsFunction}. */
@@ -94,16 +94,5 @@ public final class PrepareDepsOfPatternsValue implements SkyValue {
     public int hashCode() {
       return Objects.hash(patterns, offset);
     }
-  }
-
-  @Override
-  public boolean equals(Object other) {
-    return other instanceof PrepareDepsOfPatternsValue
-        && targetPatternKeys.equals(((PrepareDepsOfPatternsValue) other).getTargetPatternKeys());
-  }
-
-  @Override
-  public int hashCode() {
-    return targetPatternKeys.hashCode();
   }
 }
