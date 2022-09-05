@@ -48,6 +48,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -124,14 +125,11 @@ public class JavacTurbine implements AutoCloseable {
 
     ImmutableList.Builder<String> argbuilder = ImmutableList.builder();
 
-    filterJavacopts(argbuilder, turbineOptions.javacOpts());
+    addLanguageLevel(argbuilder, turbineOptions.javacOpts());
 
     // Disable compilation of implicit source files.
     // This is insurance: the sourcepath is empty, so we don't expect implicit sources.
     argbuilder.add("-implicit:none");
-
-    // Disable debug info
-    argbuilder.add("-g:none");
 
     ImmutableList<Path> processorpath;
     if (!turbineOptions.processors().isEmpty()) {
@@ -323,25 +321,25 @@ public class JavacTurbine implements AutoCloseable {
     return result.build();
   }
 
+  /** Extract the language level from the javacopts. */
   @VisibleForTesting
-  static void filterJavacopts(
+  static void addLanguageLevel(
       ImmutableList.Builder<String> javacArgs, Iterable<String> defaultJavacopts) {
-    for (String opt : defaultJavacopts) {
-      if (isErrorProneFlag(opt)) {
-        // drop Error Prone's fake javacopts
-        continue;
+    Iterator<String> it = defaultJavacopts.iterator();
+    while (it.hasNext()) {
+      String curr = it.next();
+      switch (curr) {
+        case "-source":
+        case "-target":
+          if (it.hasNext()) {
+            javacArgs.add(curr);
+            javacArgs.add(it.next());
+          }
+          break;
+        default:
+          break;
       }
-      javacArgs.add(opt);
     }
-  }
-
-  /**
-   * Returns true for flags that are specific to Error Prone.
-   *
-   * <p>WARNING: keep in sync with ErrorProneOptions#isSupportedOption
-   */
-  static boolean isErrorProneFlag(String opt) {
-    return opt.startsWith("-extra_checks") || opt.startsWith("-Xep");
   }
 
   /** Extra sources in srcjars to disk. */

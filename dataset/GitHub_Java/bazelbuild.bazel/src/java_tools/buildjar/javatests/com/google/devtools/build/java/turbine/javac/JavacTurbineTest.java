@@ -343,26 +343,14 @@ public class JavacTurbineTest {
       };
 
   @Test
-  public void filterJavacopts() {
+  public void extractLanguageLevel() {
     ImmutableList.Builder<String> output = ImmutableList.builder();
-    JavacTurbine.filterJavacopts(
+    JavacTurbine.addLanguageLevel(
         output,
         Arrays.asList(
-            "-g",
-            "-source",
-            "6",
-            "-target",
-            "6",
-            "-Xlint:all",
-            "-source",
-            "7",
-            "-target",
-            "7",
-            "-extra_checks:off",
-            "-Xep:GuardedBy:ERROR"));
+            "-g", "-source", "6", "-target", "6", "-Xlint:all", "-source", "7", "-target", "7"));
     assertThat(output.build())
-        .containsExactly(
-            "-g", "-source", "6", "-target", "6", "-Xlint:all", "-source", "7", "-target", "7")
+        .containsExactly("-source", "6", "-target", "6", "-source", "7", "-target", "7")
         .inOrder();
   }
 
@@ -1029,17 +1017,5 @@ public class JavacTurbineTest {
       ""
     };
     assertThat(text).isEqualTo(Joiner.on('\n').join(expected));
-  }
-
-  @Test
-  public void invalidJavacopts() throws Exception {
-    addSourceLines("Hello.java", "class Hello {}");
-    optionsBuilder.addAllJavacOpts(Arrays.asList("-NOT_AN_OPTION"));
-    StringWriter errOutput = new StringWriter();
-    try (JavacTurbine turbine =
-        new JavacTurbine(new PrintWriter(errOutput, true), optionsBuilder.build())) {
-      assertThat(turbine.compile()).isEqualTo(Result.ERROR);
-    }
-    assertThat(errOutput.toString()).contains("invalid flag: -NOT_AN_OPTION");
   }
 }
