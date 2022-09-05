@@ -97,8 +97,7 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
           .setTestHost(appIpaXcodeProvider)
           .setProductType(productType);
 
-      XcTestAppProvider testApp = xcTestAppProvider(ruleContext);
-      Artifact bundleLoader = testApp.getBundleLoader();
+      Artifact bundleLoader = xcTestAppProvider(ruleContext).getBundleLoader();
 
       // -bundle causes this binary to be linked as a bundle and not require an entry point
       // (i.e. main())
@@ -110,8 +109,6 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
           "-bundle_loader", bundleLoader.getExecPathString());
 
       extraLinkInputs = new ExtraLinkInputs(bundleLoader);
-
-      filesToBuild.add(testApp.getIpa());
     }
 
     if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {

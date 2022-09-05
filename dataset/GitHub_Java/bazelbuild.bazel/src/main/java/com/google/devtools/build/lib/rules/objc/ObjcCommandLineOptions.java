@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.devtools.build.xcode.common.BuildOptionsUtil.DEFAULT_OPTIONS_NAME;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
@@ -56,13 +58,13 @@ public class
   public String iosSimulatorDevice;
 
   @Option(name = "ios_cpu",
-      defaultValue = DEFAULT_IOS_CPU,
+      defaultValue = "i386",
       category = "build",
       help = "Specifies to target CPU of iOS compilation.")
   public String iosCpu;
 
   @Option(name = "xcode_options",
-      defaultValue = "Debug",
+      defaultValue = DEFAULT_OPTIONS_NAME,
       category = "undocumented",
       help = "Specifies the name of the build settings to use.")
   // TODO(danielwh): Do literally anything with this flag. Ideally, pass it to xcodegen via a
@@ -110,7 +112,6 @@ public class
   public String iosSplitCpu;
 
   @VisibleForTesting static final String DEFAULT_MINIMUM_IOS = "7.0";
-  @VisibleForTesting static final String DEFAULT_IOS_CPU = "i386";
 
   @Override
   public void addAllLabels(Multimap<String, Label> labelMap) {}

@@ -682,8 +682,7 @@ public class ObjcRuleClasses {
                 }
               })
               .allowedFileTypes()
-              // TODO(bazel-team): Remove objc_binary once it stops exporting XcTestAppProvider.
-              .allowedRuleClasses("objc_binary", "ios_application"))
+              .allowedRuleClasses("objc_binary"))
           .override(attr("infoplist", LABEL)
               .value(new Attribute.ComputedDefault(IosTest.IS_XCTEST) {
                 @Override

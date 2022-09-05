@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
+import com.google.devtools.build.xcode.common.TargetDeviceFamily;
 
 /**
  * Implementation for {@code objc_bundle_library}.
@@ -84,7 +85,6 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
         ObjcRuleClasses.intermediateArtifacts(ruleContext);
     return new Bundling.Builder()
         .setName(ruleContext.getLabel().getName())
-        .setArchitecture(ObjcRuleClasses.objcConfiguration(ruleContext).getIosCpu())
         .setBundleDirFormat("%s.bundle")
         .setObjcProvider(common.getObjcProvider())
         .setInfoplistMerging(

@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.rules.objc.XcodeProductType.LIBRARY_STATIC;
 
+import com.google.common.base.Optional;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -51,6 +52,7 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
         .validateAttributes();
 
     new ResourceSupport(ruleContext)
+        .registerActions(common.getStoryboards())
         .validateAttributes()
         .addXcodeSettings(xcodeProviderBuilder);
 
@@ -60,9 +62,11 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
         .registerActions(xcodeProviderBuilder.build())
         .addFilesToBuild(filesToBuild);
 
-    return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
-        .addProvider(XcodeProvider.class, xcodeProviderBuilder.build())
-        .addProvider(ObjcProvider.class, common.getObjcProvider())
-        .build();
+    return common.configuredTarget(
+        filesToBuild.build(),
+        Optional.of(xcodeProviderBuilder.build()),
+        Optional.of(common.getObjcProvider()),
+        Optional.<XcTestAppProvider>absent(),
+        Optional.<J2ObjcSrcsProvider>absent());
   }
 }

@@ -113,7 +113,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   }
 
   public String getIosCpu() {
-    return iosCpu;
+    return iosSplitCpu.isEmpty() ? iosCpu : iosSplitCpu;
   }
 
   public Platform getPlatform() {

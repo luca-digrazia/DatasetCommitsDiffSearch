@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.xcode.common.Platform;
 
 /**
  * Implementation for {@code ios_application}.
@@ -50,8 +51,7 @@ public class IosApplication extends ReleaseBundlingTargetFactory {
   protected void configureTarget(RuleConfiguredTargetBuilder target, RuleContext ruleContext,
       ReleaseBundlingSupport releaseBundlingSupport) {
     // If this is an application built for the simulator, make it runnable.
-    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
-    if (objcConfiguration.getBundlingPlatform() == Platform.SIMULATOR) {
+    if (ObjcRuleClasses.objcConfiguration(ruleContext).getPlatform() == Platform.SIMULATOR) {
       Artifact runnerScript = ObjcRuleClasses.intermediateArtifacts(ruleContext).runnerScript();
       Artifact ipaFile = ruleContext.getImplicitOutputArtifact(ReleaseBundlingSupport.IPA);
       releaseBundlingSupport.registerGenerateRunnerScriptAction(runnerScript, ipaFile);

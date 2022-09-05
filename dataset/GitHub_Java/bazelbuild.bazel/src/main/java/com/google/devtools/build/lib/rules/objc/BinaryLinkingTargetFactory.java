@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.rules.objc.ObjcActionsBuilder.ExtraLinkInpu
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.CompilationAttributes;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.LinkedBinary;
+import com.google.devtools.build.xcode.common.Platform;
 
 /**
  * Implementation for rules that link binaries.

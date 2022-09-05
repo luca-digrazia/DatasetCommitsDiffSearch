@@ -21,6 +21,7 @@ import static com.google.devtools.build.lib.packages.Type.LABEL;
 import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
@@ -30,6 +31,13 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 /**
  * Rule definition for ios_application.
  */
+@BlazeRule(name = "ios_application",
+    factoryClass = IosApplication.class,
+    ancestors = {
+        BaseRuleClasses.BaseRule.class,
+        ObjcRuleClasses.ReleaseBundlingRule.class,
+        ObjcRuleClasses.XcodegenRule.class,
+        ObjcRuleClasses.SimulatorRule.class })
 public class IosApplicationRule implements RuleDefinition {
 
   @Override
@@ -67,16 +75,6 @@ public class IosApplicationRule implements RuleDefinition {
             .value(env.getLabel("//tools/objc:ios_runner.sh.mac_template")))
         .add(attr("$is_executable", BOOLEAN).value(true)
             .nonconfigurable("Called from RunCommand.isExecutable, which takes a Target"))
-        .build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("ios_application")
-        .factoryClass(IosApplication.class)
-        .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.ReleaseBundlingRule.class,
-            ObjcRuleClasses.XcodegenRule.class, ObjcRuleClasses.SimulatorRule.class)
         .build();
   }
 }
