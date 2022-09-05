@@ -861,6 +861,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     List<String> result = new ArrayList<>();
     result.addAll(commonLinkOptions);
 
+    result.add("-B" + ldExecutable.getParentDirectory().getPathString());
     if (stripBinaries) {
       result.add("-Wl,-S");
     }
@@ -987,7 +988,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   public CcToolchainFeatures getFeatures() {
     return toolchainFeatures;
   }
-
+  
   /**
    * Returns the configured current compilation mode. Rules should not call this directly, but
    * instead use {@code CcToolchainProvider.getCompilationMode}.
@@ -1723,6 +1724,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
     // TODO(bazel-team): delete all of these.
     globalMakeEnvBuilder.put("CROSSTOOLTOP", crosstoolTopPathFragment.getPathString());
+    globalMakeEnvBuilder.put("GNU_TARGET", targetSystemName);
 
     globalMakeEnvBuilder.putAll(getAdditionalMakeVariables());
 
@@ -1855,11 +1857,8 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
   @Override
   public Map<String, Object> lateBoundOptionDefaults() {
-    // --cpu and --compiler initially default to null because their *actual* defaults aren't known
-    // until they're read from the CROSSTOOL. Feed the CROSSTOOL defaults in here.
-    return ImmutableMap.<String, Object>of(
-        "cpu", getTargetCpu(),
-        "compiler", getCompiler()
-    );
+    // --cpu defaults to null. With that default, the actual target cpu string gets picked up
+    // by the "default_target_cpu" crosstool parameter.
+    return ImmutableMap.<String, Object>of("cpu", getTargetCpu());
   }
 }
