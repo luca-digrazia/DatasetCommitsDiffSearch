@@ -62,7 +62,6 @@ public enum TokenKind {
   NONLOCAL("nonlocal"),
   NOT("not"),
   NOT_EQUALS("!="),
-  NOT_IN("not in"),
   OR("or"),
   OUTDENT("outdent"),
   PASS("pass"),
