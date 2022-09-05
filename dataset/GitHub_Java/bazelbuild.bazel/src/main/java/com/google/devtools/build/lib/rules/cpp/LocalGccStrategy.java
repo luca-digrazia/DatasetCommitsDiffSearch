@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.common.options.OptionsClassProvider;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -37,6 +38,9 @@ public class LocalGccStrategy implements CppCompileActionContext {
       throw new IllegalStateException("Remotely computed data requested for local action");
     }
   };
+
+  public LocalGccStrategy(OptionsClassProvider options) {
+  }
 
   @Override
   public String strategyLocality() {
