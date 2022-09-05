@@ -18,6 +18,7 @@ import javax.servlet.ServletOutputStream;
 import javax.servlet.WriteListener;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
@@ -54,7 +55,7 @@ public class InstrumentedHandlerTest {
     }
 
     @Test
-    public void createsAndRemovesMetricsForTheHandler() throws Exception {
+    public void createsMetricsForTheHandler() throws Exception {
         final ContentResponse response = client.GET(uri("/hello"));
 
         assertThat(response.getStatus())
@@ -91,12 +92,8 @@ public class InstrumentedHandlerTest {
                 MetricRegistry.name(TestHandler.class, "handler.delete-requests"),
                 MetricRegistry.name(TestHandler.class, "handler.move-requests")
             );
-
-        server.stop();
-
-        assertThat(registry.getNames())
-                .isEmpty();
     }
+
 
     @Test
     public void responseTimesAreRecordedForBlockingResponses() throws Exception {
