@@ -24,15 +24,12 @@ import com.google.common.base.Supplier;
 import com.google.common.base.Throwables;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Multimap;
 import com.google.common.collect.Range;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
@@ -1183,12 +1180,12 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * returned list.
    */
   @ThreadSafety.ThreadSafe
-  public ImmutableMultimap<Dependency, ConfiguredTarget> getConfiguredTargetMap(
+  public ImmutableMap<Dependency, ConfiguredTarget> getConfiguredTargetMap(
       EventHandler eventHandler, BuildConfiguration originalConfig, Iterable<Dependency> keys,
       boolean useOriginalConfig) {
     checkActive();
 
-    Multimap<Dependency, BuildConfiguration> configs;
+    Map<Dependency, BuildConfiguration> configs;
     if (originalConfig != null) {
 
       if (useOriginalConfig) {
@@ -1201,13 +1198,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         // other configurations. In that case, we need to preserve the original configuration.
         // TODO(bazel-team); make this unnecessary once split transition logic is properly ported
         // out of configurations.
-        configs = ArrayListMultimap.<Dependency, BuildConfiguration>create();
+        configs = new HashMap<>();
         configs.put(Iterables.getOnlyElement(keys), originalConfig);
       } else {
         configs = getConfigurations(eventHandler, originalConfig.getOptions(), keys);
       }
     } else {
-      configs = ArrayListMultimap.<Dependency, BuildConfiguration>create();
+      configs = new HashMap<>();
       for (Dependency key : keys) {
         configs.put(key, null);
       }
@@ -1220,12 +1217,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         // it couldn't be loaded). Exclude it from the results.
         continue;
       }
-      for (BuildConfiguration depConfig : configs.get(key)) {
-        skyKeys.add(ConfiguredTargetValue.key(key.getLabel(), depConfig));
-        for (AspectDescriptor aspectDescriptor : key.getAspects()) {
-          skyKeys.add(ActionLookupValue.key(AspectValue.createAspectKey(key.getLabel(), depConfig,
-              aspectDescriptor, depConfig)));
-        }
+      skyKeys.add(ConfiguredTargetValue.key(key.getLabel(), configs.get(key)));
+      for (AspectDescriptor aspectDescriptor : key.getAspects()) {
+        skyKeys.add(
+            ActionLookupValue.key(AspectValue.createAspectKey(
+                key.getLabel(), configs.get(key),
+                aspectDescriptor, configs.get(key)
+            )));
       }
     }
 
@@ -1234,8 +1232,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       reportCycles(eventHandler, entry.getValue().getCycleInfo(), entry.getKey());
     }
 
-    ImmutableMultimap.Builder<Dependency, ConfiguredTarget> cts =
-        ImmutableMultimap.<Dependency, ConfiguredTarget>builder();
+    ImmutableMap.Builder<Dependency, ConfiguredTarget> cts = ImmutableMap.builder();
 
   DependentNodeLoop:
     for (Dependency key : keys) {
@@ -1244,34 +1241,35 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         // it couldn't be loaded). Exclude it from the results.
         continue;
       }
-      for (BuildConfiguration depConfig : configs.get(key)) {
-        SkyKey configuredTargetKey = ConfiguredTargetValue.key(
-            key.getLabel(), depConfig);
-        if (result.get(configuredTargetKey) == null) {
-          continue;
+      SkyKey configuredTargetKey = ConfiguredTargetValue.key(
+          key.getLabel(), configs.get(key));
+      if (result.get(configuredTargetKey) == null) {
+        continue;
+      }
+
+      ConfiguredTarget configuredTarget =
+          ((ConfiguredTargetValue) result.get(configuredTargetKey)).getConfiguredTarget();
+      List<ConfiguredAspect> configuredAspects = new ArrayList<>();
+
+      for (AspectDescriptor aspectDescriptor : key.getAspects()) {
+        SkyKey aspectKey =
+            ActionLookupValue.key(AspectValue.createAspectKey(
+                key.getLabel(), configs.get(key),
+                aspectDescriptor, configs.get(key)
+            ));
+        if (result.get(aspectKey) == null) {
+          continue DependentNodeLoop;
         }
 
-        ConfiguredTarget configuredTarget =
-            ((ConfiguredTargetValue) result.get(configuredTargetKey)).getConfiguredTarget();
-        List<ConfiguredAspect> configuredAspects = new ArrayList<>();
+        configuredAspects.add(((AspectValue) result.get(aspectKey)).getConfiguredAspect());
+      }
 
-        for (AspectDescriptor aspectDescriptor : key.getAspects()) {
-          SkyKey aspectKey = ActionLookupValue.key(AspectValue.createAspectKey(key.getLabel(),
-              depConfig, aspectDescriptor, depConfig));
-          if (result.get(aspectKey) == null) {
-            continue DependentNodeLoop;
-          }
-
-          configuredAspects.add(((AspectValue) result.get(aspectKey)).getConfiguredAspect());
-        }
-
-        try {
-          cts.put(key, MergedConfiguredTarget.of(configuredTarget, configuredAspects));
-        } catch (DuplicateException e) {
-          throw new IllegalStateException(
-              String.format("Error creating %s", configuredTarget.getTarget().getLabel()),
-              e);
-        }
+      try {
+        cts.put(key, MergedConfiguredTarget.of(configuredTarget, configuredAspects));
+      } catch (DuplicateException e) {
+        throw new IllegalStateException(
+            String.format("Error creating %s", configuredTarget.getTarget().getLabel()),
+            e);
       }
     }
 
@@ -1285,10 +1283,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    *
    * <p>Skips targets with loading phase errors.
    */
-  public Multimap<Dependency, BuildConfiguration> getConfigurations(EventHandler eventHandler,
+  public Map<Dependency, BuildConfiguration> getConfigurations(EventHandler eventHandler,
       BuildOptions fromOptions, Iterable<Dependency> keys) {
-    Multimap<Dependency, BuildConfiguration> builder =
-        ArrayListMultimap.<Dependency, BuildConfiguration>create();
+    Map<Dependency, BuildConfiguration> builder = new HashMap<>();
     Set<Dependency> depsToEvaluate = new HashSet<>();
 
     // Check: if !Configuration.useDynamicConfigs then just return the original configs.
@@ -1885,8 +1882,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
               patternParsingValue.getFilteredTargets(),
               patternParsingValue.getTestFilteredTargets(),
               time,
-              targetPatterns,
-              patternParsingValue.getTargets()));
+              targetPatterns));
       if (callback != null) {
         callback.notifyTargets(patternParsingValue.getTargets());
       }
