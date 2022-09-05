@@ -17,6 +17,7 @@ import static org.junit.Assert.fail;
 
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Root;
@@ -39,7 +40,7 @@ import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.testutil.FoundationTestCase;
+import com.google.devtools.build.lib.testutil.FoundationTestCaseForJunit4;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.BlazeClock;
@@ -67,7 +68,7 @@ import java.util.UUID;
  * Testing framework for tests which check ConfigurationFactory.
  */
 @RunWith(JUnit4.class)
-public abstract class ConfigurationTestCase extends FoundationTestCase {
+public abstract class ConfigurationTestCase extends FoundationTestCaseForJunit4 {
 
   public static final class TestOptions extends OptionsBase {
     @Option(name = "multi_cpu",
@@ -105,6 +106,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
             BinTools.forUnitTesting(directories, TestConstants.EMBEDDED_TOOLS),
             workspaceStatusActionFactory,
             ruleClassProvider.getBuildInfoFactories(),
+            ImmutableSet.<Path>of(),
             ImmutableList.<DiffAwareness.Factory>of(),
             Predicates.<PathFragment>alwaysFalse(),
             Preprocessor.Factory.Supplier.NullSupplier.INSTANCE,
@@ -119,7 +121,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
     analysisMock.setupMockClient(new MockToolsConfig(rootDirectory));
     analysisMock.setupMockWorkspaceFiles(directories.getEmbeddedBinariesRoot());
     configurationFactory = analysisMock.createConfigurationFactory();
-    buildOptionClasses = TestRuleClassProvider.getRuleClassProvider().getOptionFragments();
+    buildOptionClasses = analysisMock.getBuildOptions();
   }
 
   protected AnalysisMock getAnalysisMock() {
