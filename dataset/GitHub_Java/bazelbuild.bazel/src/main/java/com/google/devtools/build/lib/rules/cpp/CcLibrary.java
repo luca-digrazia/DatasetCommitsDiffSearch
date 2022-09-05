@@ -262,7 +262,6 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     targetBuilder
         .setFilesToBuild(filesToBuild)
         .addProviders(info.getProviders())
-        .addSkylarkTransitiveInfo(CcSkylarkApiProvider.NAME, new CcSkylarkApiProvider())
         .addOutputGroups(info.getOutputGroups())
         .add(InstrumentedFilesProvider.class, instrumentedFilesProvider)
         .add(RunfilesProvider.class, RunfilesProvider.withData(staticRunfiles, sharedRunfiles))
@@ -376,7 +375,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     // TODO(bazel-team): remove this hack for a more principled solution.
     try {
       rule.get("srcs", Type.LABEL_LIST);
-    } catch (IllegalArgumentException e) {
+    } catch (ClassCastException e) {
       // "srcs" is actually a configurable selector. Assume object files are possible somewhere.
       return false;
     }

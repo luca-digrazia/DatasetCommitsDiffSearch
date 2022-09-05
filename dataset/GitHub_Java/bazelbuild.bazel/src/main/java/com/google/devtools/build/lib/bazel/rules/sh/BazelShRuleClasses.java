@@ -19,7 +19,9 @@ import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.Attribute.AllowedValueSet;
@@ -43,11 +45,14 @@ public final class BazelShRuleClasses {
   static final Collection<String> ALLOWED_RULES_IN_DEPS_WITH_WARNING = ImmutableSet.of(
       "filegroup", "genrule", "sh_binary", "sh_test", "test_suite");
 
-  static final FileTypeSet SH_FILES = FileTypeSet.of(FileType.of(".sh"), FileType.of(".bash"));
+  static final FileTypeSet SH_FILES = FileTypeSet.of(FileType.of(".sh"));
 
   /**
    * Common attributes for shell rules.
    */
+  @BlazeRule(name = "$sh_target",
+               type = RuleClassType.ABSTRACT,
+               ancestors = { BaseRuleClasses.RuleBase.class })
   public static final class ShRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
@@ -69,7 +74,7 @@ public final class BazelShRuleClasses {
           The list of "library" targets to be aggregated into this target.
           ${SYNOPSIS}
           See general comments about <code>deps</code>
-          at <a href="#common.deps">Attributes common to all build rules</a>.
+          at <a href="#common-attributes.deps">Attributes common to all build rules</a>.
           <p>
             This attribute should be used to list other <code>sh_library</code> rules that provide
             interpreted program source code depended on by the code in <code>srcs</code>. The files
@@ -80,15 +85,6 @@ public final class BazelShRuleClasses {
               .allowedRuleClasses("sh_library")
               .allowedRuleClassesWithWarning(ALLOWED_RULES_IN_DEPS_WITH_WARNING)
               .allowedFileTypes())
-          .build();
-    }
-
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$sh_target")
-          .type(RuleClassType.ABSTRACT)
-          .ancestors(BaseRuleClasses.RuleBase.class)
           .build();
     }
   }

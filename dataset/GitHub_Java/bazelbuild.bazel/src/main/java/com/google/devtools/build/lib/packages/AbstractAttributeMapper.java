@@ -58,14 +58,7 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
     if (value instanceof Attribute.ComputedDefault) {
       value = ((Attribute.ComputedDefault) value).getDefault(this);
     }
-    try {
-      return type.cast(value);
-    } catch (ClassCastException e) {
-      // getIndexWithTypeCheck checks the type is right, but unexpected configurable attributes
-      // can still trigger cast exceptions.
-      throw new IllegalArgumentException(
-          "wrong type for attribute \"" + attributeName + "\" in rule " + ruleLabel, e);
-    }
+    return type.cast(value);
   }
 
   /**
@@ -117,6 +110,11 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
   }
 
   @Override
+  public Boolean getPackageDefaultObsolete() {
+    return pkg.getDefaultObsolete();
+  }
+
+  @Override
   public Boolean getPackageDefaultTestOnly() {
     return pkg.getDefaultTestOnly();
   }
@@ -135,53 +133,55 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
   public void visitLabels(AcceptsLabelAttribute observer) {
     for (Attribute attribute : ruleClass.getAttributes()) {
       Type<?> type = attribute.getType();
-      // TODO(bazel-team): clean up the typing / visitation interface so we don't have to
-      // special-case these types.
-      if (type != Type.OUTPUT && type != Type.OUTPUT_LIST
-          && type != Type.NODEP_LABEL && type != Type.NODEP_LABEL_LIST) {
-        visitLabels(attribute, observer);
+      // TODO(bazel-team): This is incoherent: we shouldn't have to special-case these types
+      // for our visitation policy. But this is the semantics the calling code requires. Audit
+      // exactly which calling code expects what and clean up this interface.
+      if (type == Type.OUTPUT || type == Type.OUTPUT_LIST
+              || type == Type.NODEP_LABEL || type == Type.NODEP_LABEL_LIST) {
+        continue;
+      }
+      for (Object value : visitAttribute(attribute.getName(), type)) {
+        if (value == null) {
+          // This is particularly possible for computed defaults.
+          continue;
+        }
+        for (Label label : type.getLabels(value)) {
+          observer.acceptLabelAttribute(label, attribute);
+        }
       }
     }
   }
 
   /**
-   * Visits all labels reachable from the given attribute.
+   * Implementations should provide policy-appropriate mappings when an attribute is requested in
+   * the context of a rule visitation.
    */
-  protected void visitLabels(Attribute attribute, AcceptsLabelAttribute observer) {
-    Type<?> type = attribute.getType();
-    Object value = get(attribute.getName(), type);
-    if (value != null) { // null values are particularly possible for computed defaults.
-      for (Label label : type.getLabels(value)) {
-        observer.acceptLabelAttribute(label, attribute);
-      }
-    }
-  }
+  protected abstract <T> Iterable<T> visitAttribute(String attributeName, Type<T> type);
 
   /**
-   * Returns a {@link Type.SelectorList} for the given attribute if the attribute is configurable
+   * Returns a {@link Type.Selector} for the given attribute if the attribute is configurable
    * for this rule, null otherwise.
    *
-   * @return a {@link Type.SelectorList} if the attribute takes the form
+   * @return a {@link Type.Selector} if the attribute takes the form
    *     "attrName = { 'a': value1_of_type_T, 'b': value2_of_type_T }") for this rule, null
    *     if it takes the form "attrName = value_of_type_T", null if it doesn't exist
    * @throws IllegalArgumentException if the attribute is configurable but of the wrong type
    */
   @Nullable
-  @SuppressWarnings("unchecked")
-  protected <T> Type.SelectorList<T> getSelectorList(String attributeName, Type<T> type) {
+  protected <T> Type.Selector<T> getSelector(String attributeName, Type<T> type) {
     Integer index = ruleClass.getAttributeIndex(attributeName);
     if (index == null) {
       return null;
     }
     Object attrValue = attributes.getAttributeValue(index);
-    if (!(attrValue instanceof Type.SelectorList)) {
+    if (!(attrValue instanceof Type.Selector<?>)) {
       return null;
     }
-    if (((Type.SelectorList) attrValue).getOriginalType() != type) {
+    if (((Type.Selector<?>) attrValue).getOriginalType() != type) {
       throw new IllegalArgumentException("Attribute " + attributeName
-          + " is not of type " + type + " in rule " + ruleLabel);
+          + " is not of type " + type + " in rule " + ruleLabel.getName());
     }
-    return (Type.SelectorList<T>) attrValue;
+    return (Type.Selector<T>) attrValue;
   }
 
   /**
@@ -197,7 +197,7 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
     Attribute attr = ruleClass.getAttribute(index);
     if (attr.getType() != type) {
       throw new IllegalArgumentException("Attribute " + attrName
-          + " is not of type " + type + " in rule " + ruleLabel);
+          + " is not of type " + type + " in rule " + ruleLabel.getName());
     }
     return index;
   }
