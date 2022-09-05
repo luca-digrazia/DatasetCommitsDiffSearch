@@ -3,6 +3,7 @@ package org.hswebframework.web.authorization.basic.define;
 import org.hswebframework.web.authorization.annotation.Logical;
 import org.hswebframework.web.authorization.define.AuthorizeDefinition;
 import org.hswebframework.web.authorization.define.DataAccessDefinition;
+import org.hswebframework.web.authorization.define.Phased;
 import org.hswebframework.web.authorization.define.Script;
 
 import java.util.Set;
@@ -12,11 +13,19 @@ import java.util.Set;
  */
 public class EmptyAuthorizeDefinition implements AuthorizeDefinition {
 
-    public static final EmptyAuthorizeDefinition instance=new EmptyAuthorizeDefinition();
-    private EmptyAuthorizeDefinition(){}
+    public static final EmptyAuthorizeDefinition instance = new EmptyAuthorizeDefinition();
+
+    private EmptyAuthorizeDefinition() {
+    }
+
+    @Override
+    public Phased getPhased() {
+        throw new UnsupportedOperationException();
+    }
+
     @Override
     public int getPriority() {
-       throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -26,6 +35,16 @@ public class EmptyAuthorizeDefinition implements AuthorizeDefinition {
 
     @Override
     public Set<String> getPermissions() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String[] getPermissionDescription() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String[] getActionDescription() {
         throw new UnsupportedOperationException();
     }
 
@@ -57,6 +76,11 @@ public class EmptyAuthorizeDefinition implements AuthorizeDefinition {
     @Override
     public Logical getLogical() {
         throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return true;
     }
 
     @Override

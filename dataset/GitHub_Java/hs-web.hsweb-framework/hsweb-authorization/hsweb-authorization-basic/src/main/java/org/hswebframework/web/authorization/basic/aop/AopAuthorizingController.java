@@ -5,6 +5,7 @@ import org.aopalliance.intercept.MethodInterceptor;
 import org.hswebframework.web.AopUtils;
 import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.annotation.Authorize;
+import org.hswebframework.web.authorization.basic.define.EmptyAuthorizeDefinition;
 import org.hswebframework.web.authorization.basic.handler.AuthorizingHandler;
 import org.hswebframework.web.authorization.define.AuthorizeDefinition;
 import org.hswebframework.web.authorization.define.AuthorizeDefinitionInitializedEvent;
@@ -17,6 +18,8 @@ import org.springframework.aop.support.StaticMethodMatcherPointcutAdvisor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -70,7 +73,7 @@ public class AopAuthorizingController extends StaticMethodMatcherPointcutAdvisor
                     }
                     if (definition.getPhased() == Phased.before) {
                         //RDAC before
-                        authorizingHandler.handRBAC(context);
+                        authorizingHandler.handRDAC(context);
 
                         //方法调用前验证数据权限
                         if (dataAccessPhased == Phased.before) {
@@ -93,7 +96,7 @@ public class AopAuthorizingController extends StaticMethodMatcherPointcutAdvisor
                         result = methodInvocation.proceed();
                         context.setParamContext(holder.createParamContext(result));
 
-                        authorizingHandler.handRBAC(context);
+                        authorizingHandler.handRDAC(context);
 
                         //方法调用后验证数据权限
                         if (dataAccessPhased == Phased.after) {

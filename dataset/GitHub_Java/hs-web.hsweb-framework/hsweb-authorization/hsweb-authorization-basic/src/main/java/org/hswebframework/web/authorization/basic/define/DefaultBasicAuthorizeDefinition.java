@@ -6,12 +6,13 @@ import org.hswebframework.web.authorization.annotation.Authorize;
 import org.hswebframework.web.authorization.annotation.Logical;
 import org.hswebframework.web.authorization.annotation.RequiresDataAccess;
 import org.hswebframework.web.authorization.annotation.RequiresExpression;
-import org.hswebframework.web.authorization.define.*;
+import org.hswebframework.web.authorization.define.AuthorizeDefinition;
+import org.hswebframework.web.authorization.define.DataAccessDefinition;
+import org.hswebframework.web.authorization.define.Phased;
+import org.hswebframework.web.authorization.define.Script;
 
-import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
@@ -25,20 +26,20 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString
-public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
+public class DefaultBasicAuthorizeDefinition implements AuthorizeDefinition {
     private boolean dataAccessControl;
 
     private String[] permissionDescription = {};
 
     private String[] actionDescription = {};
 
-    private Set<String> permissions = new LinkedHashSet<>();
+    private Set<String> permissions = new HashSet<>();
 
-    private Set<String> actions = new LinkedHashSet<>();
+    private Set<String> actions = new HashSet<>();
 
-    private Set<String> roles = new LinkedHashSet<>();
+    private Set<String> roles = new HashSet<>();
 
-    private Set<String> user = new LinkedHashSet<>();
+    private Set<String> user = new HashSet<>();
 
     private Script script;
 
@@ -49,10 +50,6 @@ public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
     private DataAccessDefinition dataAccessDefinition;
 
     private Phased phased = Phased.before;
-
-    private Class targetClass;
-
-    private Method targetMethod;
 
     @Override
     public Phased getPhased() {
@@ -107,7 +104,6 @@ public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
             definition.setController(dataAccess.getClass().getName());
         }
         dataAccessDefinition = definition;
-        dataAccessControl=true;
     }
 
 

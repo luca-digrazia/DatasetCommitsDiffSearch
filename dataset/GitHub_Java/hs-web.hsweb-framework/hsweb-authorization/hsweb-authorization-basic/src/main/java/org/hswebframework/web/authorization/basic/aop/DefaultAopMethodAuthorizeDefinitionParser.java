@@ -52,11 +52,8 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
         CacheKey key = buildCacheKey(target, method);
 
         AuthorizeDefinition definition = cache.get(key);
-        if ((definition instanceof EmptyAuthorizeDefinition)) {
+        if (definition != null && (definition instanceof EmptyAuthorizeDefinition)) {
             return null;
-        }
-        if(null!=definition){
-            return definition;
         }
         //使用自定义
         if (!CollectionUtils.isEmpty(parserCustomers)) {
@@ -69,6 +66,7 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
             }
 
         }
+
         Authorize classAuth = AopUtils.findAnnotation(target, Authorize.class);
         Authorize methodAuth = AopUtils.findMethodAnnotation(target, method, Authorize.class);
 
