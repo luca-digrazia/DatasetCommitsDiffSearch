@@ -16,7 +16,10 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.actions.extra.SpawnInfo;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.Collection;
 
 /**
@@ -52,8 +55,23 @@ public class DelegateSpawn implements Spawn {
   }
 
   @Override
+  public String asShellCommand(Path workingDir) {
+    return spawn.asShellCommand(workingDir);
+  }
+
+  @Override
+  public ImmutableMap<PathFragment, Artifact> getRunfilesManifests() {
+    return spawn.getRunfilesManifests();
+  }
+
+  @Override
   public RunfilesSupplier getRunfilesSupplier() {
     return spawn.getRunfilesSupplier();
+  }
+
+  @Override
+  public SpawnInfo getExtraActionInfo() {
+    return spawn.getExtraActionInfo();
   }
 
   @Override

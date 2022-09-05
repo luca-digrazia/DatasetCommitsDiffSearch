@@ -54,7 +54,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 /** Strategy that uses sandboxing to execute a process, for Darwin */
 @ExecutionStrategy(
@@ -148,16 +147,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
 
   @Override
   public void exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
-      throws ExecException, InterruptedException {
-    exec(spawn, actionExecutionContext, null);
-  }
-
-  @Override
-  public void exec(
-      Spawn spawn,
-      ActionExecutionContext actionExecutionContext,
-      AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
-      throws ExecException, InterruptedException {
+      throws ExecException {
     Executor executor = actionExecutionContext.getExecutor();
 
     // Certain actions can't run remotely or in a sandbox - pass them on to the standalone strategy.
@@ -186,8 +176,6 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
     ImmutableMap<String, String> spawnEnvironment =
         StandaloneSpawnStrategy.locallyDeterminedEnv(execRoot, productName, spawn.getEnvironment());
 
-    Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment());
-
     Path runUnderPath = getRunUnderPath(spawn);
 
     try {
@@ -195,6 +183,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
           new HardlinkedExecRoot(execRoot, sandboxPath, sandboxExecRoot, errWriter);
 
       ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
+      Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment(), outputs);
       hardlinkedExecRoot.createFileSystem(
           getMounts(spawn, actionExecutionContext), outputs, writableDirs);
 
@@ -207,7 +196,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
           new DarwinSandboxRunner(
               sandboxPath,
               sandboxExecRoot,
-              getWritableDirs(sandboxExecRoot, spawnEnvironment),
+              getWritableDirs(sandboxExecRoot, spawnEnvironment, outputs),
               getInaccessiblePaths(),
               runUnderPath,
               verboseFailures);
@@ -220,12 +209,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
             Spawns.getTimeoutSeconds(spawn),
             SandboxHelpers.shouldAllowNetwork(buildRequest, spawn));
       } finally {
-        if (writeOutputFiles != null
-            && !writeOutputFiles.compareAndSet(null, DarwinSandboxedStrategy.class)) {
-          Thread.currentThread().interrupt();
-        } else {
-          hardlinkedExecRoot.copyOutputs(execRoot, outputs);
-        }
+        hardlinkedExecRoot.copyOutputs(execRoot, outputs);
         if (!sandboxDebug) {
           SandboxHelpers.lazyCleanup(backgroundWorkers, runner);
         }
@@ -233,18 +217,15 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
     } catch (IOException e) {
       throw new UserExecException("I/O error during sandboxed execution", e);
     }
-
-    if (Thread.interrupted()) {
-      throw new InterruptedException();
-    }
   }
 
   @Override
-  protected ImmutableSet<Path> getWritableDirs(Path sandboxExecRoot, Map<String, String> env) {
+  protected ImmutableSet<Path> getWritableDirs(Path sandboxExecRoot, Map<String, String> env,
+      ImmutableSet<PathFragment> outputs) {
     FileSystem fs = sandboxExecRoot.getFileSystem();
     ImmutableSet.Builder<Path> writableDirs = ImmutableSet.builder();
 
-    writableDirs.addAll(super.getWritableDirs(sandboxExecRoot, env));
+    writableDirs.addAll(super.getWritableDirs(sandboxExecRoot, env, outputs));
     writableDirs.add(fs.getPath("/dev"));
 
     String sysTmpDir = System.getenv("TMPDIR");

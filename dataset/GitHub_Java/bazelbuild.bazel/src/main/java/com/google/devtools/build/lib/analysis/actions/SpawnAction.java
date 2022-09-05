@@ -568,7 +568,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       Iterable<String> arguments = argumentsBuilder.build();
       // Check to see if we need to use param file.
       Artifact paramsFile = ParamFileHelper.getParamsFileMaybe(
-          buildExecutableArgs(configuration.getShellExecutable()),
+          buildExecutableArgs(configuration.getShExecutable()),
           arguments,
           commandLine,
           paramFileInfo,
@@ -589,7 +589,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           buildSpawnAction(
               owner,
               configuration.getLocalShellEnvironment(),
-              configuration.getShellExecutable(),
+              configuration.getShExecutable(),
               paramsFile,
               paramFileWriteAction));
       if (paramFileWriteAction != null) {

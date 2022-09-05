@@ -16,7 +16,10 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.actions.extra.SpawnInfo;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.Collection;
 
 /**
@@ -48,6 +51,18 @@ public interface Spawn {
   ImmutableMap<String, String> getExecutionInfo();
 
   /**
+   * Returns this Spawn as a Bourne shell command.
+   *
+   * @param workingDir the initial working directory of the command
+   */
+  String asShellCommand(Path workingDir);
+
+  /**
+   * Returns the runfiles data for remote execution. Format is (directory, manifest file).
+   */
+  ImmutableMap<PathFragment, Artifact> getRunfilesManifests();
+
+  /**
    * Returns the {@link RunfilesSupplier} helper encapsulating the runfiles for this spawn.
    */
   RunfilesSupplier getRunfilesSupplier();
@@ -56,6 +71,11 @@ public interface Spawn {
    * Returns artifacts for filesets, so they can be scheduled on remote execution.
    */
   ImmutableList<Artifact> getFilesetManifests();
+
+  /**
+   * Returns a protocol buffer describing this spawn for use by the extra_action functionality.
+   */
+  SpawnInfo getExtraActionInfo();
 
   /**
    * Returns the command (the first element) and its arguments.

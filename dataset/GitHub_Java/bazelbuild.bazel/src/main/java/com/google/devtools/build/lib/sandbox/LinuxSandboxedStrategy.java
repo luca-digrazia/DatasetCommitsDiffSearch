@@ -34,7 +34,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 /** Strategy that uses sandboxing to execute a process. */
 @ExecutionStrategy(
@@ -82,19 +81,12 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
     this.fullySupported = fullySupported;
   }
 
-  /** Executes the given {@code spawn}. */
+  /**
+   * Executes the given {@code spawn}.
+   */
   @Override
   public void exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
-      throws ExecException, InterruptedException {
-    exec(spawn, actionExecutionContext, null);
-  }
-
-  @Override
-  public void exec(
-      Spawn spawn,
-      ActionExecutionContext actionExecutionContext,
-      AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
-      throws ExecException, InterruptedException {
+      throws ExecException {
     Executor executor = actionExecutionContext.getExecutor();
 
     // Certain actions can't run remotely or in a sandbox - pass them on to the standalone strategy.
@@ -111,12 +103,12 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
     Path sandboxExecRoot = sandboxPath.getRelative("execroot").getRelative(execRoot.getBaseName());
     Path sandboxTempDir = sandboxPath.getRelative("tmp");
 
-    Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment());
 
     try {
       // Build the execRoot for the sandbox.
       SymlinkedExecRoot symlinkedExecRoot = new SymlinkedExecRoot(sandboxExecRoot);
       ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
+      Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment(), outputs);
       symlinkedExecRoot.createFileSystem(
           getMounts(spawn, actionExecutionContext), outputs, writableDirs);
       sandboxTempDir.createDirectory();
@@ -129,7 +121,7 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
                 sandboxPath,
                 sandboxExecRoot,
                 sandboxTempDir,
-                getWritableDirs(sandboxExecRoot, spawn.getEnvironment()),
+                getWritableDirs(sandboxExecRoot, spawn.getEnvironment(), outputs),
                 getInaccessiblePaths(),
                 getBindMounts(blazeDirs),
                 verboseFailures,
@@ -137,7 +129,6 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
       } else {
         runner = new ProcessWrapperRunner(execRoot, sandboxPath, sandboxExecRoot, verboseFailures);
       }
-
       try {
         runner.run(
             spawn.getArguments(),
@@ -146,23 +137,13 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
             Spawns.getTimeoutSeconds(spawn),
             SandboxHelpers.shouldAllowNetwork(buildRequest, spawn));
       } finally {
-        if (writeOutputFiles != null
-            && !writeOutputFiles.compareAndSet(null, LinuxSandboxedStrategy.class)) {
-          Thread.currentThread().interrupt();
-        } else {
-          symlinkedExecRoot.copyOutputs(execRoot, outputs);
-        }
-
+        symlinkedExecRoot.copyOutputs(execRoot, outputs);
         if (!sandboxOptions.sandboxDebug) {
           SandboxHelpers.lazyCleanup(backgroundWorkers, runner);
         }
       }
     } catch (IOException e) {
       throw new UserExecException("I/O error during sandboxed execution", e);
-    }
-
-    if (Thread.interrupted()) {
-      throw new InterruptedException();
     }
   }
 
@@ -178,4 +159,5 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
     }
     return bindMounts.build();
   }
+
 }
