@@ -41,7 +41,7 @@ public class DictionaryProperties {
                 try {
                     MetadataReader reader = metadataReaderFactory.getMetadataReader(resource);
                     String name = reader.getClassMetadata().getClassName();
-                    Class<?> clazz = ClassUtils.forName(name,null);
+                    Class clazz = Class.forName(name);
                     if (clazz.isEnum() && EnumDict.class.isAssignableFrom(clazz)) {
                         classes.add(clazz);
                     }
