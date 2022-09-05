@@ -305,8 +305,6 @@ public class TBuildConfig {
     @Config(message = "Whether to use fast proguard", order = 16, advance = true, group = "atlas")
     private boolean fastProguard = false;
 
-    private boolean keepJavaResAfterProguard = false;
-
     @Config(message = "Whether to use the proguard cache", order = 17, advance = true, group = "atlas")
     private boolean proguardCacheEnabled = true;
 
@@ -582,13 +580,5 @@ public class TBuildConfig {
 
     public void setKeepInLibSoNames(Set<String> keepInLibSoNames) {
         this.keepInLibSoNames = keepInLibSoNames;
-    }
-
-    public boolean isKeepJavaResAfterProguard() {
-        return keepJavaResAfterProguard;
-    }
-
-    public void setKeepJavaResAfterProguard(boolean keepJavaResAfterProguard) {
-        this.keepJavaResAfterProguard = keepJavaResAfterProguard;
     }
 }
