@@ -17,7 +17,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
-import com.google.common.base.Receiver;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
@@ -31,7 +30,6 @@ import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.InvalidationSt
 import com.google.devtools.build.skyframe.NodeEntry.DependencyState;
 
 import java.io.PrintStream;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -159,29 +157,9 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
       performInvalidation();
       injectValues(intVersion);
 
-      // We must delete all nodes that are still in-flight at the end of the evaluation (in case the
-      // evaluation is aborted for some reason). In order to quickly return control to the caller,
-      // we store the set of such nodes for deletion at the start of the next evaluation.
-      Receiver<Collection<SkyKey>> lazyDeletingReceiver =
-          new Receiver<Collection<SkyKey>>() {
-            @Override
-            public void accept(Collection<SkyKey> skyKeys) {
-              valuesToDelete.addAll(skyKeys);
-            }
-          };
-      ParallelEvaluator evaluator =
-          new ParallelEvaluator(
-              graph,
-              intVersion,
-              skyFunctions,
-              eventHandler,
-              emittedEventState,
-              DEFAULT_STORED_EVENT_FILTER,
-              keepGoing,
-              numThreads,
-              progressReceiver,
-              dirtyKeyTracker,
-              lazyDeletingReceiver);
+      ParallelEvaluator evaluator = new ParallelEvaluator(graph, intVersion,
+          skyFunctions, eventHandler, emittedEventState, DEFAULT_STORED_EVENT_FILTER, keepGoing,
+          numThreads, progressReceiver, dirtyKeyTracker);
       EvaluationResult<T> result = evaluator.eval(roots);
       return EvaluationResult.<T>builder()
           .mergeFrom(result)

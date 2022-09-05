@@ -16,11 +16,6 @@ package com.google.devtools.build.skyframe;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertContainsEvent;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertEventCount;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertGreaterThan;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertLessThan;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertNoEvents;
 import static com.google.devtools.build.skyframe.GraphTester.CONCATENATE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -44,6 +39,8 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.OutputFilter.RegexOutputFilter;
 import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.testutil.JunitTestUtils;
+import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.testutil.TestThread;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.skyframe.GraphTester.StringValue;
@@ -142,7 +139,7 @@ public class ParallelEvaluatorTest {
     tester.getOrCreate("ab").addDependency("a").addDependency("b").setComputedValue(CONCATENATE);
     StringValue value = (StringValue) eval(false, GraphTester.toSkyKey("ab"));
     assertEquals("ab", value.getValue());
-    assertNoEvents(eventCollector);
+    JunitTestUtils.assertNoEvents(eventCollector);
   }
 
   /**
@@ -249,7 +246,7 @@ public class ParallelEvaluatorTest {
     final Set<SkyKey> receivedValues = Sets.newConcurrentHashSet();
     revalidationReceiver = new EvaluationProgressReceiver() {
       @Override
-      public void invalidated(SkyKey skyKey, InvalidationState state) {}
+      public void invalidated(SkyValue value, InvalidationState state) {}
 
       @Override
       public void enqueueing(SkyKey key) {}
@@ -406,8 +403,8 @@ public class ParallelEvaluatorTest {
     set("a", "a").setWarning("warning on 'a'");
     StringValue value = (StringValue) eval(false, GraphTester.toSkyKey("a"));
     assertEquals("a", value.getValue());
-    assertContainsEvent(eventCollector, "warning on 'a'");
-    assertEventCount(1, eventCollector);
+    JunitTestUtils.assertContainsEvent(eventCollector, "warning on 'a'");
+    JunitTestUtils.assertEventCount(1, eventCollector);
   }
 
   @Test
@@ -419,8 +416,8 @@ public class ParallelEvaluatorTest {
     tester.getOrCreate(a).setTag("a");
     StringValue value = (StringValue) eval(false, a);
     assertEquals("a value", value.getValue());
-    assertContainsEvent(eventCollector, "warning message");
-    assertEventCount(1, eventCollector);
+    JunitTestUtils.assertContainsEvent(eventCollector, "warning message");
+    JunitTestUtils.assertEventCount(1, eventCollector);
   }
 
   @Test
@@ -432,7 +429,7 @@ public class ParallelEvaluatorTest {
     tester.getOrCreate(a).setTag("b");
     StringValue value = (StringValue) eval(false, a);
     assertEquals("a value", value.getValue());
-    assertEventCount(0, eventCollector);  }
+    JunitTestUtils.assertEventCount(0, eventCollector);  }
 
   @Test
   public void warningDoesNotMatchRegex() throws Exception {
@@ -443,7 +440,7 @@ public class ParallelEvaluatorTest {
     tester.getOrCreate(a).setTag("a");
     StringValue value = (StringValue) eval(false, a);
     assertEquals("a", value.getValue());
-    assertEventCount(0, eventCollector);
+    JunitTestUtils.assertEventCount(0, eventCollector);
   }
 
   /** Regression test: events from already-done value not replayed. */
@@ -456,15 +453,15 @@ public class ParallelEvaluatorTest {
     tester.getOrCreate(top).addDependency(a).setComputedValue(CONCATENATE);
     // Build a so that it is already in the graph.
     eval(false, a);
-    assertEventCount(1, eventCollector);
+    JunitTestUtils.assertEventCount(1, eventCollector);
     eventCollector.clear();
     // Build top. The warning from a should be reprinted.
     eval(false, top);
-    assertEventCount(1, eventCollector);
+    JunitTestUtils.assertEventCount(1, eventCollector);
     eventCollector.clear();
     // Build top again. The warning should have been stored in the value.
     eval(false, top);
-    assertEventCount(1, eventCollector);
+    JunitTestUtils.assertEventCount(1, eventCollector);
   }
 
   @Test
@@ -498,9 +495,9 @@ public class ParallelEvaluatorTest {
         });
     evaluator.eval(ImmutableList.of(a));
     assertTrue(evaluated.get());
-    assertEventCount(2, eventCollector);
-    assertContainsEvent(eventCollector, "boop");
-    assertContainsEvent(eventCollector, "beep");
+    JunitTestUtils.assertEventCount(2, eventCollector);
+    JunitTestUtils.assertContainsEvent(eventCollector, "boop");
+    JunitTestUtils.assertContainsEvent(eventCollector, "beep");
     eventCollector.clear();
     evaluator = makeEvaluator(graph,
         ImmutableMap.of(GraphTester.NODE_TYPE, tester.createDelegatingFunction()),
@@ -508,8 +505,8 @@ public class ParallelEvaluatorTest {
     evaluated.set(false);
     evaluator.eval(ImmutableList.of(a));
     assertFalse(evaluated.get());
-    assertEventCount(1, eventCollector);
-    assertContainsEvent(eventCollector, "boop");
+    JunitTestUtils.assertEventCount(1, eventCollector);
+    JunitTestUtils.assertContainsEvent(eventCollector, "boop");
   }
 
   @Test
@@ -1153,8 +1150,8 @@ public class ParallelEvaluatorTest {
    * topKey, if {@code selfEdge} is true.
    */
   private static void assertManyCycles(ErrorInfo errorInfo, SkyKey topKey, boolean selfEdge) {
-    assertGreaterThan(1, Iterables.size(errorInfo.getCycleInfo()));
-    assertLessThan(50, Iterables.size(errorInfo.getCycleInfo()));
+    MoreAsserts.assertGreaterThan(1, Iterables.size(errorInfo.getCycleInfo()));
+    MoreAsserts.assertLessThan(50, Iterables.size(errorInfo.getCycleInfo()));
     boolean foundSelfEdge = false;
     for (CycleInfo cycle : errorInfo.getCycleInfo()) {
       assertEquals(1, cycle.getCycle().size()); // Self-edge.
@@ -1886,7 +1883,7 @@ public class ParallelEvaluatorTest {
     final Set<SkyKey> evaluatedValues = Sets.newConcurrentHashSet();
     EvaluationProgressReceiver progressReceiver = new EvaluationProgressReceiver() {
       @Override
-      public void invalidated(SkyKey skyKey, InvalidationState state) {
+      public void invalidated(SkyValue value, InvalidationState state) {
         throw new IllegalStateException();
       }
 
