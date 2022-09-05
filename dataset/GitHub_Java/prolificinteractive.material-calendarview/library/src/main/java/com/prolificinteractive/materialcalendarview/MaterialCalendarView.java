@@ -238,18 +238,6 @@ public class MaterialCalendarView extends FrameLayout {
 
         currentMonth = CalendarDay.today();
         setCurrentDate(currentMonth);
-
-        if(isInEditMode()) {
-            removeView(pager);
-            MonthView monthView = new MonthView(context, currentMonth, getFirstDayOfWeek());
-            monthView.setSelectionColor(getSelectionColor());
-//            monthView.setWeekDayFormatter(weekDayFormatter);
-//            monthView.setDayFormatter(dayFormatter);
-            monthView.setDateTextAppearance(adapter.getDateTextAppearance());
-            monthView.setWeekDayTextAppearance(adapter.getWeekDayTextAppearance());
-            monthView.setShowOtherDates(getShowOtherDates());
-            addView(monthView, new LayoutParams(MonthView.DEFAULT_MONTH_TILE_HEIGHT));
-        }
     }
 
     private void setupChildren() {
@@ -392,12 +380,7 @@ public class MaterialCalendarView extends FrameLayout {
      */
     public void setSelectionColor(int color) {
         if(color == 0) {
-            if(!isInEditMode()) {
-                return;
-            }
-            else {
-                color = Color.GRAY;
-            }
+            return;
         }
         accentColor = color;
         adapter.setSelectionColor(color);
