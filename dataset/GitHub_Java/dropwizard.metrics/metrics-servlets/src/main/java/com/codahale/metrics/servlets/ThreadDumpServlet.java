@@ -41,8 +41,11 @@ public class ThreadDumpServlet extends HttpServlet {
             resp.getWriter().println("Sorry your runtime environment does not allow to dump threads.");
             return;
         }
-        try (OutputStream output = resp.getOutputStream()) {
+        final OutputStream output = resp.getOutputStream();
+        try {
             threadDump.dump(output);
+        } finally {
+            output.close();
         }
     }
 }
