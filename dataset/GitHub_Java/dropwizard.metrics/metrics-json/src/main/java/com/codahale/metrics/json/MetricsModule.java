@@ -1,19 +1,12 @@
 package com.codahale.metrics.json;
 
-import com.codahale.metrics.Counter;
-import com.codahale.metrics.Gauge;
-import com.codahale.metrics.Histogram;
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricFilter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Snapshot;
-import com.codahale.metrics.Timer;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.Version;
 import com.fasterxml.jackson.databind.Module;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleSerializers;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import com.codahale.metrics.*;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -195,7 +188,7 @@ public class MetricsModule extends Module {
         private static final long serialVersionUID = 1L;
 
         private final MetricFilter filter;
-
+        
         private MetricRegistrySerializer(MetricFilter filter) {
             super(MetricRegistry.class);
             this.filter = filter;
@@ -216,11 +209,11 @@ public class MetricsModule extends Module {
         }
     }
 
-    protected final TimeUnit rateUnit;
-    protected final TimeUnit durationUnit;
-    protected final boolean showSamples;
-    protected final MetricFilter filter;
-
+    private final TimeUnit rateUnit;
+    private final TimeUnit durationUnit;
+    private final boolean showSamples;
+    private final MetricFilter filter;
+    
     public MetricsModule(TimeUnit rateUnit, TimeUnit durationUnit, boolean showSamples) {
         this(rateUnit, durationUnit, showSamples, MetricFilter.ALL);
     }
