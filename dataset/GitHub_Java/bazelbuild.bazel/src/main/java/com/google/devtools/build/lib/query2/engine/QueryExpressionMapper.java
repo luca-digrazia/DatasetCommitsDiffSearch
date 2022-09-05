@@ -93,54 +93,45 @@ public abstract class QueryExpressionMapper {
     return IdentityMapper.INSTANCE;
   }
 
-  /**
-   * Returns a {@link QueryExpressionMapper} which applies all the mappings provided by {@code
-   * mappers}, in the reverse order of mapper array.
-   */
-  public static QueryExpressionMapper compose(QueryExpressionMapper... mappers) {
-    return new ComposedQueryExpressionMapper(mappers);
+  public static QueryExpressionMapper compose(
+      QueryExpressionMapper outerMapper, QueryExpressionMapper innerMapper) {
+    return new ComposedQueryExpressionMapper(outerMapper, innerMapper);
   }
 
   private static class ComposedQueryExpressionMapper extends QueryExpressionMapper {
-    private final QueryExpressionMapper[] mappers;
+    private QueryExpressionMapper outerMapper;
+    private QueryExpressionMapper innerMapper;
 
-    private ComposedQueryExpressionMapper(QueryExpressionMapper... mappers) {
-      this.mappers = mappers;
+    private ComposedQueryExpressionMapper(
+        QueryExpressionMapper outerMapper,
+        QueryExpressionMapper innerMapper) {
+      this.outerMapper = outerMapper;
+      this.innerMapper = innerMapper;
     }
 
     @Override
     public QueryExpression map(TargetLiteral targetLiteral) {
-      return mapAll(targetLiteral, mappers);
+      return innerMapper.map(targetLiteral).getMapped(outerMapper);
     }
 
     @Override
     public QueryExpression map(BinaryOperatorExpression binaryOperatorExpression) {
-      return mapAll(binaryOperatorExpression, mappers);
+      return innerMapper.map(binaryOperatorExpression).getMapped(outerMapper);
     }
 
     @Override
     public QueryExpression map(FunctionExpression functionExpression) {
-      return mapAll(functionExpression, mappers);
+      return innerMapper.map(functionExpression).getMapped(outerMapper);
     }
 
     @Override
     public QueryExpression map(LetExpression letExpression) {
-      return mapAll(letExpression, mappers);
+      return innerMapper.map(letExpression).getMapped(outerMapper);
     }
 
     @Override
     public QueryExpression map(SetExpression setExpression) {
-      return mapAll(setExpression, mappers);
-    }
-
-    private static QueryExpression mapAll(
-        QueryExpression expression, QueryExpressionMapper[] mappers) {
-      QueryExpression expr = expression;
-      for (int i = mappers.length - 1; i >= 0; i--) {
-        expr = expr.getMapped(mappers[i]);
-      }
-
-      return expr;
+      return innerMapper.map(setExpression).getMapped(outerMapper);
     }
   }
 
