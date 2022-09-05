@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
+
 import java.util.List;
 
 /**
@@ -85,18 +86,13 @@ public class AppleCommandLineOptions extends FragmentOptions {
   @VisibleForTesting public static final String DEFAULT_IOS_SDK_VERSION = "8.4";
   @VisibleForTesting public static final String DEFAULT_WATCHOS_SDK_VERSION = "2.0";
   @VisibleForTesting public static final String DEFAULT_MACOSX_SDK_VERSION = "10.10";
-  @VisibleForTesting public static final String DEFAULT_TVOS_SDK_VERSION = "9.0";
+  @VisibleForTesting public static final String DEFAULT_APPLETVOS_SDK_VERSION = "1.0";
   @VisibleForTesting static final String DEFAULT_IOS_CPU = "x86_64";
 
   /**
    * The default watchos CPU value.
    */
   public static final String DEFAULT_WATCHOS_CPU = "i386";
-
-  /**
-   * The default tvOS CPU value.
-   */
-  public static final String DEFAULT_TVOS_CPU = "x86_64";
 
   @Option(name = "ios_cpu",
       defaultValue = DEFAULT_IOS_CPU,
@@ -145,15 +141,8 @@ public class AppleCommandLineOptions extends FragmentOptions {
       converter = CommaSeparatedOptionListConverter.class,
       defaultValue = DEFAULT_WATCHOS_CPU,
       category = "flags",
-      help = "Comma-separated list of architectures for which to build Apple watchOS binaries.")
+      help = "Comma-separated list of architectures for which to build apple watchos binaries.")
   public List<String> watchosCpus;
-
-  @Option(name = "tvos_cpus",
-      converter = CommaSeparatedOptionListConverter.class,
-      defaultValue = DEFAULT_TVOS_CPU,
-      category = "flags",
-      help = "Comma-separated list of architectures for which to build Apple tvOS binaries.")
-  public List<String> tvosCpus;
 
   @Option(name = "default_ios_provisioning_profile",
       defaultValue = "",
@@ -161,22 +150,18 @@ public class AppleCommandLineOptions extends FragmentOptions {
       converter = DefaultProvisioningProfileConverter.class)
   public Label defaultProvisioningProfile;
 
-  @Option(
-    name = "xcode_version_config",
-    defaultValue = "@local_config_xcode//:host_xcodes",
-    category = "undocumented",
-    converter = LabelConverter.class,
-    help =
-        "The label of the xcode_config rule to be used for selecting the xcode version "
-            + "in the build configuration"
-  )
+  @Option(name = "xcode_version_config",
+      defaultValue = "@bazel_tools" + DEFAULT_XCODE_VERSION_CONFIG_LABEL,
+      category = "undocumented",
+      converter = LabelConverter.class,
+      help = "The label of the xcode_config rule to be used for selecting the xcode version "
+          + "in the build configuration")
   public Label xcodeVersionConfig;
 
   /**
    * The default label of the build-wide {@code xcode_config} configuration rule. This can be
    * changed from the default using the {@code xcode_version_config} build flag.
    */
-  // TODO(cparsons): Update all callers to reference the actual xcode_version_config flag value.
   static final String DEFAULT_XCODE_VERSION_CONFIG_LABEL = "//tools/objc:host_xcodes";
 
   /** Converter for --default_ios_provisioning_profile. */
