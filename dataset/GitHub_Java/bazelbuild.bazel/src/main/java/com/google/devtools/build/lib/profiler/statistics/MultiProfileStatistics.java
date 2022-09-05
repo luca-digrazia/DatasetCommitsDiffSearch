@@ -13,10 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.profiler.statistics;
 
+import com.google.devtools.build.lib.profiler.ProfileInfo;
+import com.google.devtools.build.lib.profiler.ProfileInfo.InfoListener;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
-import com.google.devtools.build.lib.profiler.analysis.ProfileInfo;
-import com.google.devtools.build.lib.profiler.analysis.ProfileInfo.InfoListener;
 import com.google.devtools.build.lib.vfs.Path;
+
 import java.io.IOException;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -33,6 +34,7 @@ public final class MultiProfileStatistics implements Iterable<Path> {
   private final Map<Path, EnumMap<ProfilePhase, PhaseStatistics>> filePhaseStatistics;
   private final SkylarkStatistics skylarkStatistics;
 
+  private int missingActionsCount;
   private boolean generateVfsStatistics;
 
   public MultiProfileStatistics(
@@ -65,6 +67,10 @@ public final class MultiProfileStatistics implements Iterable<Path> {
 
   public SkylarkStatistics getSkylarkStatistics() {
     return skylarkStatistics;
+  }
+
+  public int getMissingActionsCount() {
+    return missingActionsCount;
   }
 
   public EnumMap<ProfilePhase, PhaseStatistics> getPhaseStatistics(Path file) {
@@ -112,5 +118,7 @@ public final class MultiProfileStatistics implements Iterable<Path> {
     }
 
     skylarkStatistics.addProfileInfo(info);
+
+    missingActionsCount += info.getMissingActionsCount();
   }
 }

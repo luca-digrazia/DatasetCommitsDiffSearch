@@ -13,9 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.profiler.statistics;
 
+import com.google.devtools.build.lib.profiler.ProfileInfo;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
-import com.google.devtools.build.lib.profiler.analysis.ProfileInfo;
-import java.time.Duration;
+
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -39,8 +39,10 @@ public final class PhaseSummaryStatistics implements Iterable<ProfilePhase> {
     addProfileInfo(info);
   }
 
-  /** Add a summary of the {@link ProfilePhase}s durations from a {@link ProfileInfo}. */
-  private void addProfileInfo(ProfileInfo info) {
+  /**
+   * Add a summary of the {@link ProfilePhase}s durations from a {@link ProfileInfo}.
+   */
+  public void addProfileInfo(ProfileInfo info) {
     for (ProfilePhase phase : ProfilePhase.values()) {
       ProfileInfo.Task phaseTask = info.getPhaseTask(phase);
       if (phaseTask != null) {
@@ -51,14 +53,10 @@ public final class PhaseSummaryStatistics implements Iterable<ProfilePhase> {
     }
   }
 
-  /** Add a single profile phase. */
-  public void addProfilePhase(ProfilePhase phase, Duration duration) {
-    totalDurationNanos += duration.toNanos();
-    durations.put(phase, duration.toNanos());
-  }
-
-  /** @return whether the given {@link ProfilePhase} was executed */
-  private boolean contains(ProfilePhase phase) {
+  /**
+   * @return whether the given {@link ProfilePhase} was executed
+   */
+  public boolean contains(ProfilePhase phase) {
     return durations.containsKey(phase);
   }
 
@@ -78,6 +76,20 @@ public final class PhaseSummaryStatistics implements Iterable<ProfilePhase> {
   public double getRelativeDuration(ProfilePhase phase) {
     checkContains(phase);
     return (double) getDurationNanos(phase) / totalDurationNanos;
+  }
+
+  /**
+   * Converts {@link #getRelativeDuration(ProfilePhase)} to a percentage string
+   * @return formatted percentage string ("%.2f%%") or "N/A" when totalNanos is 0.
+   * @throws NoSuchElementException if the given {@link ProfilePhase} was not executed
+   */
+  public String getPrettyPercentage(ProfilePhase phase) {
+    checkContains(phase);
+    if (totalDurationNanos == 0) {
+      // Return "not available" string if total is 0 and result is undefined.
+      return "N/A";
+    }
+    return String.format("%.2f%%", getRelativeDuration(phase) * 100);
   }
 
   public long getTotalDuration() {

@@ -14,19 +14,19 @@
 package com.google.devtools.build.lib.profiler.output;
 
 import com.google.common.base.Optional;
+import com.google.devtools.build.lib.profiler.ProfileInfo;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
-import com.google.devtools.build.lib.profiler.analysis.ProfileInfo;
 import com.google.devtools.build.lib.profiler.chart.AggregatingChartCreator;
 import com.google.devtools.build.lib.profiler.chart.Chart;
 import com.google.devtools.build.lib.profiler.chart.ChartCreator;
 import com.google.devtools.build.lib.profiler.chart.DetailedChartCreator;
 import com.google.devtools.build.lib.profiler.chart.HtmlChartVisitor;
-import com.google.devtools.build.lib.profiler.statistics.CriticalPathStatistics;
 import com.google.devtools.build.lib.profiler.statistics.MultiProfileStatistics;
 import com.google.devtools.build.lib.profiler.statistics.PhaseStatistics;
 import com.google.devtools.build.lib.profiler.statistics.PhaseSummaryStatistics;
 import com.google.devtools.build.lib.profiler.statistics.SkylarkStatistics;
 import com.google.devtools.build.lib.vfs.Path;
+
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -151,8 +151,6 @@ public final class HtmlCreator extends HtmlPrinter {
       Path htmlFile,
       PhaseSummaryStatistics phaseSummaryStats,
       EnumMap<ProfilePhase, PhaseStatistics> statistics,
-      CriticalPathStatistics criticalPathStats,
-      int missingActionsCount,
       boolean detailed,
       int htmlPixelsPerSecond,
       int vfsStatsLimit,
@@ -160,14 +158,7 @@ public final class HtmlCreator extends HtmlPrinter {
       boolean generateHistograms)
       throws IOException {
     try (PrintStream out = new PrintStream(new BufferedOutputStream(htmlFile.getOutputStream()))) {
-      PhaseHtml phaseHtml =
-          new PhaseHtml(
-              out,
-              phaseSummaryStats,
-              statistics,
-              Optional.of(criticalPathStats),
-              Optional.of(missingActionsCount),
-              vfsStatsLimit);
+      PhaseHtml phaseHtml = new PhaseHtml(out, phaseSummaryStats, statistics, vfsStatsLimit);
       Optional<SkylarkHtml> skylarkStats = Optional.absent();
       Optional<Chart> chart = Optional.absent();
       if (detailed) {
@@ -181,11 +172,7 @@ public final class HtmlCreator extends HtmlPrinter {
         } else {
           chartCreator = new AggregatingChartCreator(info);
         }
-        // Bar widths are in nanoseconds. Therefore, because of integer division, the following
-        // expression is the minimum nanosecond width that would correspond to a non-zero
-        // number of pixels.
-        long minBarWidth = 1000000000L / htmlPixelsPerSecond;
-        chart = Optional.of(chartCreator.create(minBarWidth));
+        chart = Optional.of(chartCreator.create());
       }
       new HtmlCreator(
               out,

@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.profiler.statistics;
 
+import com.google.common.base.Supplier;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Table;
@@ -22,6 +23,7 @@ import com.google.devtools.build.lib.profiler.ProfileInfo;
 import com.google.devtools.build.lib.profiler.ProfileInfo.Task;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
+
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -106,7 +108,13 @@ public final class PhaseVfsStatistics implements Iterable<ProfilerTask> {
     this.phase = phase;
     this.statistics =
         Tables.newCustomTable(
-            new EnumMap<ProfilerTask, Map<String, Stat>>(ProfilerTask.class), HashMap::new);
+            new EnumMap<ProfilerTask, Map<String, Stat>>(ProfilerTask.class),
+            new Supplier<Map<String, Stat>>() {
+              @Override
+              public Map<String, Stat> get() {
+                return new HashMap<>();
+              }
+            });
   }
 
   public PhaseVfsStatistics(final String workSpaceName, ProfilePhase phase, ProfileInfo info) {

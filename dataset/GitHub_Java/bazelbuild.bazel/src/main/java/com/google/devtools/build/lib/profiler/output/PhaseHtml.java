@@ -13,10 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.profiler.output;
 
-import com.google.common.base.Optional;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.statistics.CriticalPathStatistics;
 import com.google.devtools.build.lib.profiler.statistics.PhaseStatistics;
 import com.google.devtools.build.lib.profiler.statistics.PhaseSummaryStatistics;
 import com.google.devtools.build.lib.profiler.statistics.PhaseVfsStatistics;
@@ -28,8 +26,6 @@ import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.EnumMap;
 
-import javax.annotation.Nullable;
-
 /**
  * Output {@link PhaseSummaryStatistics}, {@link PhaseStatistics} and {@link PhaseVfsStatistics}
  * in HTML format.
@@ -38,9 +34,7 @@ public final class PhaseHtml extends HtmlPrinter {
 
   private final PhaseSummaryStatistics phaseSummaryStats;
   private final EnumMap<ProfilePhase, PhaseStatistics> phaseStatistics;
-  private final Optional<CriticalPathStatistics> criticalPathStatistics;
   private final int vfsStatsLimit;
-  private final Optional<Integer> missingActionsCount;
 
   /**
    * @param vfsStatsLimit maximum number of VFS statistics to print, or -1 for no limit.
@@ -49,29 +43,11 @@ public final class PhaseHtml extends HtmlPrinter {
       PrintStream out,
       PhaseSummaryStatistics phaseSummaryStats,
       EnumMap<ProfilePhase, PhaseStatistics> phaseStatistics,
-      Optional<CriticalPathStatistics> critPathStats,
-      Optional<Integer> missingActionsCount,
       int vfsStatsLimit) {
     super(out);
     this.phaseSummaryStats = phaseSummaryStats;
     this.phaseStatistics = phaseStatistics;
-    this.criticalPathStatistics = critPathStats;
-    this.missingActionsCount = missingActionsCount;
     this.vfsStatsLimit = vfsStatsLimit;
-  }
-
-  public PhaseHtml(
-      PrintStream out,
-      PhaseSummaryStatistics summaryStatistics,
-      EnumMap<ProfilePhase, PhaseStatistics> summaryPhaseStatistics,
-      int vfsStatsLimit) {
-    this(
-        out,
-        summaryStatistics,
-        summaryPhaseStatistics,
-        Optional.<CriticalPathStatistics>absent(),
-        Optional.<Integer>absent(),
-        vfsStatsLimit);
   }
 
   /**
@@ -116,7 +92,6 @@ public final class PhaseHtml extends HtmlPrinter {
       }
       printPhaseStatistics(statistics);
     }
-    printExecutionPhaseStatistics();
     lnElement("div", "style", "clear: both;");
   }
 
@@ -124,90 +99,28 @@ public final class PhaseHtml extends HtmlPrinter {
    * Print header and tables for a single phase.
    */
   private void printPhaseStatistics(PhaseStatistics phaseStat) {
-    printPhaseHead(phaseStat);
-    printTwoColumnStatistic(
-        String.format("Total %s time", phaseStat.getProfilePhase().nick),
-        phaseStat.getPhaseDurationNanos());
-
-    printTimingDistribution(phaseStat);
-    lnClose(); // table
-    printVfsStatistics(phaseStat.getVfsStatistics());
-    lnClose(); // div
-  }
-
-  private void printPhaseHead(PhaseStatistics phaseStat) {
     lnOpen("div", "class", "phase-statistics");
     lnElement(
         "h3",
         String.format(
             "%s Phase Information", StringUtil.capitalize(phaseStat.getProfilePhase().nick)));
     lnOpen("table", "class", "phase-statistics");
-  }
+    lnOpen("tr");
+    open("td", "class", "left", "colspan", "3");
+    printf("Total %s phase time", phaseStat.getProfilePhase().nick);
+    close(); // td
+    element("td", TimeUtilities.prettyTime(phaseStat.getPhaseDurationNanos()));
+    lnClose(); // tr
 
-  private void printExecutionPhaseStatistics() {
-    PhaseStatistics execPhase = phaseStatistics.get(ProfilePhase.EXECUTE);
-    if (execPhase == null || !execPhase.wasExecuted()) {
-      return;
-    }
-    printPhaseHead(execPhase);
-    for (PhaseStatistics phaseStat :
-        Arrays.asList(
-            phaseStatistics.get(ProfilePhase.PREPARE),
-            execPhase,
-            phaseStatistics.get(ProfilePhase.FINISH))) {
-      if (phaseStat.wasExecuted()) {
-        printTwoColumnStatistic(
-            String.format("Total %s time", phaseStat.getProfilePhase().nick),
-            phaseStat.getPhaseDurationNanos());
-      }
-    }
-
-    long graphTime = execPhase.getTotalDurationNanos(ProfilerTask.ACTION_GRAPH);
-    long execTime = execPhase.getPhaseDurationNanos() - graphTime;
-
-    printTwoColumnStatistic("Action dependency map creation", graphTime);
-    printTwoColumnStatistic("Actual execution time", execTime);
-
-    CriticalPathHtml criticalPaths = null;
-    if (criticalPathStatistics.isPresent()) {
-      criticalPaths = new CriticalPathHtml(out, criticalPathStatistics.get(), execTime);
-      criticalPaths.printTimingBreakdown();
-    }
-
-    printTimingDistribution(execPhase);
-    lnClose(); // table opened by printPhaseHead
-
-    if (criticalPathStatistics.isPresent()) {
-      criticalPaths.printCriticalPaths();
-    }
-
-    if (missingActionsCount.isPresent() && missingActionsCount.get() > 0) {
-      lnOpen("p");
-      lnPrint(missingActionsCount.get());
-      print(
-          " action(s) are present in the"
-              + " action graph but missing instrumentation data. Most likely the profile file"
-              + " has been created during a failed or aborted build.");
-      lnClose();
-    }
-
-    printVfsStatistics(execPhase.getVfsStatistics());
-    lnClose(); // div
-  }
-
-  /**
-   * Print the table rows for the {@link ProfilerTask} types and their execution times.
-   */
-  private void printTimingDistribution(PhaseStatistics phaseStat) {
     if (!phaseStat.isEmpty()) {
       lnOpen("tr");
       element("td", "class", "left", "colspan", "4", "Total time (across all threads) spent on:");
       close(); // tr
       lnOpen("tr");
-      element("th", "Type");
-      element("th", "Total");
-      element("th", "Count");
-      element("th", "Average");
+      element("td", "Type");
+      element("td", "Total");
+      element("td", "Count");
+      element("td", "Average");
       close(); // tr
       for (ProfilerTask taskType : phaseStat) {
         lnOpen("tr", "class", "phase-task-statistics");
@@ -218,6 +131,9 @@ public final class PhaseHtml extends HtmlPrinter {
         close(); // tr
       }
     }
+    lnClose(); // table
+    printVfsStatistics(phaseStat.getVfsStatistics());
+    lnClose(); // div
   }
 
   /**
@@ -225,8 +141,8 @@ public final class PhaseHtml extends HtmlPrinter {
    * by descending duration. If multiple of the same VFS operation were logged for the same path,
    * print the total duration.
    */
-  private void printVfsStatistics(@Nullable PhaseVfsStatistics stats) {
-    if (vfsStatsLimit == 0 || stats == null || stats.isEmpty()) {
+  private void printVfsStatistics(PhaseVfsStatistics stats) {
+    if (vfsStatsLimit == 0 || stats.isEmpty()) {
       return;
     }
 
@@ -285,13 +201,6 @@ public final class PhaseHtml extends HtmlPrinter {
     lnClose(); // tr
     lnClose(); // table
     lnClose(); // div
-  }
-
-  private void printTwoColumnStatistic(String name, long duration) {
-    lnOpen("tr");
-    element("td", "class", "left", "colspan", "3", name);
-    element("td", TimeUtilities.prettyTime(duration));
-    lnClose(); // tr
   }
 }
 

@@ -127,11 +127,6 @@ public final class SkylarkHtml extends HtmlPrinter {
         "user",
         stats.getUserTotalNanos());
     printStatsJs(
-        stats.getCompiledUserFunctionStatistics(),
-        stats.getCompiledUserFunctionSelfStatistics(),
-        "compiled",
-        stats.getCompiledUserTotalNanos());
-    printStatsJs(
         stats.getBuiltinFunctionStatistics(),
         stats.getBuiltinFunctionSelfStatistics(),
         "builtin",
@@ -142,9 +137,6 @@ public final class SkylarkHtml extends HtmlPrinter {
 
       lnPrint("document.querySelector('#user-close').onclick = function() {");
       lnPrint("  document.querySelector('#user-histogram').style.display = 'none';");
-      lnPrint("};");
-      lnPrint("document.querySelector('#compiled-close').onclick = function() {");
-      lnPrint("  document.querySelector('#compiled-histogram').style.display = 'none';");
       lnPrint("};");
       lnPrint("document.querySelector('#builtin-close').onclick = function() {");
       lnPrint("  document.querySelector('#builtin-histogram').style.display = 'none';");
@@ -157,7 +149,6 @@ public final class SkylarkHtml extends HtmlPrinter {
     down();
     printHistogramData(stats.getBuiltinFunctionDurations(), "builtin");
     printHistogramData(stats.getUserFunctionDurations(), "user");
-    printHistogramData(stats.getCompiledUserFunctionDurations(), "compiled");
     up();
     lnPrint("}");
   }
@@ -269,13 +260,6 @@ public final class SkylarkHtml extends HtmlPrinter {
     lnElement("button", "id", "user-close", "Hide");
     lnClose(); // div user-histogram
     lnElement("div", "class", "skylark-table", "id", "user_function_stats");
-
-    lnElement("h4", "Compiled function execution time");
-    lnOpen("div", "class", "skylark-histogram", "id", "compiled-histogram");
-    lnElement("div", "class", "skylark-chart", "id", "compiled-chart");
-    lnElement("button", "id", "user-close", "Hide");
-    lnClose(); // div compiled-histogram
-    lnElement("div", "class", "skylark-table", "id", "compiled_function_stats");
 
     lnElement("h4", "Builtin function execution time");
     lnOpen("div", "class", "skylark-histogram", "id", "builtin-histogram");
