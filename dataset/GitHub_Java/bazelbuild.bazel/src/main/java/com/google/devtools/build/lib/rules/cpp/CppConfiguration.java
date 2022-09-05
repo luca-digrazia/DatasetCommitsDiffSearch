@@ -118,13 +118,10 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
-   * Values for the --hdrs_check option. Note that Bazel only supports and will default to "strict".
+   * Values for the --hdrs_check option.
    */
   public static enum HeadersCheckingMode {
-    /**
-     * Legacy behavior: Silently allow any source header file in any of the directories of the
-     * containing package to be included by sources in this rule and dependent rules.
-     */
+    /** Legacy behavior: Silently allow undeclared headers. */
     LOOSE,
     /** Warn about undeclared headers. */
     WARN,
@@ -377,7 +374,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     this.greppedIncludesDirectory = Root.asDerivedRoot(execRoot,
         execRoot.getRelative(IncludeScanningUtil.GREPPED_INCLUDES));
 
-    this.crosstoolTopPathFragment = crosstoolTop.getPackageIdentifier().getPathFragment();
+    this.crosstoolTopPathFragment = crosstoolTop.getPackageFragment();
 
     try {
       this.staticRuntimeLibsLabel =
@@ -1416,7 +1413,10 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   public boolean shouldScanIncludes() {
-    return Constants.ALLOW_CC_INCLUDE_SCANNING && cppOptions.scanIncludes;
+    if (Constants.HARD_DISABLE_CC_INCLUDE_SCANNING) {
+      return false;
+    }
+    return cppOptions.scanIncludes;
   }
 
   /**
@@ -1445,6 +1445,13 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   public boolean isAutoFdoLipo() {
     return cppOptions.fdoOptimize != null && FdoSupport.isAutoFdo(cppOptions.fdoOptimize)
            && getLipoMode() != LipoMode.OFF;
+  }
+
+  /**
+   * Returns the default header check mode.
+   */
+  public HeadersCheckingMode getHeadersCheckingMode() {
+    return cppOptions.headersCheckingMode;
   }
 
   /**
@@ -1836,9 +1843,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
       Root sysrootRoot;
       try {
         sysrootRoot = Iterables.getOnlyElement(
-          resolver.findPackageRootsForFiles(
-              // See doc of findPackageRootsForFiles for why we need a getChild here.
-              ImmutableList.of(getSysroot().getChild("dummy_child"))).entrySet()).getValue();
+          resolver.findPackageRoots(ImmutableList.of(getSysroot())).entrySet()).getValue();
       } catch (PackageRootResolutionException prre) {
         throw new ViewCreationFailedException("Failed to determine sysroot", prre);
       }
