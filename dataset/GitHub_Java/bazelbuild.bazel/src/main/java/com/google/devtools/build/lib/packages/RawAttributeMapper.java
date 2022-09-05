@@ -40,6 +40,12 @@ public class RawAttributeMapper extends AbstractAttributeMapper {
         rule.getAttributeContainer());
   }
 
+  @Override
+  protected <T> Iterable<T> visitAttribute(String attributeName, Type<T> type) {
+    T value = get(attributeName, type);
+    return value == null ? ImmutableList.<T>of() : ImmutableList.of(value);
+  }
+
   /**
    * Variation of {@link #get} that merges the values of configurable lists together (with
    * duplicates removed).
@@ -65,11 +71,10 @@ public class RawAttributeMapper extends AbstractAttributeMapper {
       return get(attributeName, type);
     }
 
+    Type.Selector<List<T>> selector = getSelector(attributeName, type);
     ImmutableSet.Builder<T> mergedValues = ImmutableSet.builder();
-    for (Type.Selector<List<T>> selector : getSelectorList(attributeName, type).getSelectors()) {
-      for (List<T> configuredList : selector.getEntries().values()) {
-        mergedValues.addAll(configuredList);
-      }
+    for (List<T> configuredList : selector.getEntries().values()) {
+      mergedValues.addAll(configuredList);
     }
     return mergedValues.build();
   }
@@ -79,7 +84,14 @@ public class RawAttributeMapper extends AbstractAttributeMapper {
    * otherwise.
    */
   public <T> boolean isConfigurable(String attributeName, Type<T> type) {
-    return getSelectorList(attributeName, type) != null;
+    return getSelector(attributeName, type) != null;
+  }
+
+  /**
+   * Returns true if this attribute has a null value.
+   */
+  public <T> boolean isNull(String attributeName, Type<T> type) {
+    return !isConfigurable(attributeName, type) && (get(attributeName, type) == null);
   }
 
   /**
@@ -87,14 +99,7 @@ public class RawAttributeMapper extends AbstractAttributeMapper {
    * keys. Else returns an empty list.
    */
   public <T> Iterable<Label> getConfigurabilityKeys(String attributeName, Type<T> type) {
-    Type.SelectorList<T> selectorList = getSelectorList(attributeName, type);
-    if (selectorList == null) {
-      return ImmutableList.of();
-    }
-    ImmutableList.Builder<Label> builder = ImmutableList.builder();
-    for (Type.Selector<T> selector : selectorList.getSelectors()) {
-      builder.addAll(selector.getEntries().keySet());
-    }
-    return builder.build();
+    Type.Selector<T> selector = getSelector(attributeName, type);
+    return selector == null ? ImmutableList.<Label>of() : selector.getEntries().keySet();
   }
 }

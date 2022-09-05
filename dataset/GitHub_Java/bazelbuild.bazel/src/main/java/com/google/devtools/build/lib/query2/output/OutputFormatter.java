@@ -144,8 +144,8 @@ public abstract class OutputFormatter implements Serializable {
    * Format the result (a set of target nodes implicitly ordered according to
    * the graph maintained by the QueryEnvironment), and print it to "out".
    */
-  public abstract void output(QueryOptions options, Digraph<Target> result, PrintStream out,
-      AspectResolver aspectProvider) throws IOException, InterruptedException;
+  public abstract void output(QueryOptions options, Digraph<Target> result, PrintStream out)
+      throws IOException;
 
   /**
    * Unordered output formatter (wrt. dependency ordering).
@@ -157,8 +157,8 @@ public abstract class OutputFormatter implements Serializable {
    * subgraph extraction step before presenting the query results.
    */
   public interface UnorderedFormatter {
-    void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out,
-        AspectResolver aspectResolver) throws IOException, InterruptedException;
+    void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out)
+        throws IOException;
   }
 
   /**
@@ -184,8 +184,7 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out,
-        AspectResolver aspectResolver) {
+    public void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out) {
       for (Target target : result) {
         if (showKind) {
           out.print(target.getTargetKind());
@@ -196,11 +195,10 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public void output(QueryOptions options, Digraph<Target> result, PrintStream out,
-        AspectResolver aspectResolver) {
+    public void output(QueryOptions options, Digraph<Target> result, PrintStream out) {
       Iterable<Target> ordered = Iterables.transform(
           result.getTopologicalOrder(new TargetOrdering()), EXTRACT_NODE_LABEL);
-      outputUnordered(options, ordered, out, aspectResolver);
+      outputUnordered(options, ordered, out);
     }
   }
 
@@ -226,8 +224,7 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out,
-        AspectResolver aspectResolver) {
+    public void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out) {
       Set<String> packageNames = Sets.newTreeSet();
       for (Target target : result) {
         packageNames.add(target.getLabel().getPackageName());
@@ -238,11 +235,10 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public void output(QueryOptions options, Digraph<Target> result, PrintStream out,
-        AspectResolver aspectResolver) {
+    public void output(QueryOptions options, Digraph<Target> result, PrintStream out) {
       Iterable<Target> ordered = Iterables.transform(
           result.getTopologicalOrder(new TargetOrdering()), EXTRACT_NODE_LABEL);
-      outputUnordered(options, ordered, out, aspectResolver);
+      outputUnordered(options, ordered, out);
     }
   }
 
@@ -260,8 +256,7 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out,
-        AspectResolver aspectResolver) {
+    public void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out) {
       for (Target target : result) {
         Location location = target.getLocation();
         out.println(location.print()  + ": " + target.getTargetKind() + " " + target.getLabel());
@@ -269,11 +264,10 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public void output(QueryOptions options, Digraph<Target> result, PrintStream out,
-        AspectResolver aspectResolver) {
+    public void output(QueryOptions options, Digraph<Target> result, PrintStream out) {
       Iterable<Target> ordered = Iterables.transform(
           result.getTopologicalOrder(new TargetOrdering()), EXTRACT_NODE_LABEL);
-      outputUnordered(options, ordered, out, aspectResolver);
+      outputUnordered(options, ordered, out);
     }
   }
 
@@ -316,8 +310,7 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out,
-        AspectResolver aspectResolver) {
+    public void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out) {
       Set<Label> printed = new HashSet<>();
       for (Target target : result) {
         Rule rule = target.getAssociatedRule();
@@ -330,11 +323,10 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public void output(QueryOptions options, Digraph<Target> result, PrintStream out,
-        AspectResolver aspectResolver) {
+    public void output(QueryOptions options, Digraph<Target> result, PrintStream out) {
       Iterable<Target> ordered = Iterables.transform(
           result.getTopologicalOrder(new TargetOrdering()), EXTRACT_NODE_LABEL);
-      outputUnordered(options, ordered, out, aspectResolver);
+      outputUnordered(options, ordered, out);
     }
   }
 
@@ -355,8 +347,7 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public void output(QueryOptions options, Digraph<Target> result, PrintStream out,
-        AspectResolver aspectResolver) {
+    public void output(QueryOptions options, Digraph<Target> result, PrintStream out) {
       // getRoots() isn't defined for cyclic graphs, so in order to handle
       // cycles correctly, we need work on the strong component graph, as
       // cycles should be treated a "clump" of nodes all on the same rank.
@@ -406,8 +397,7 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public void output(QueryOptions options, Digraph<Target> result, PrintStream out,
-        AspectResolver aspectResolver) {
+    public void output(QueryOptions options, Digraph<Target> result, PrintStream out) {
       // In order to handle cycles correctly, we need work on the strong
       // component graph, as cycles should be treated a "clump" of nodes all on
       // the same rank. Graphs may contain cycles because there are errors in BUILD files.
