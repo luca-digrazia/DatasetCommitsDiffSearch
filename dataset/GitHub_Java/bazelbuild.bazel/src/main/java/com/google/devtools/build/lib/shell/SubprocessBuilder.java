@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableMap;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
-import javax.annotation.Nullable;
 
 /**
  * A builder class that starts a subprocess.
@@ -37,8 +36,7 @@ public class SubprocessBuilder {
     DISCARD,
 
     /** Stream back to the parent process using an output stream. */
-    STREAM
-  }
+    STREAM };
 
   private ImmutableList<String> argv;
   private ImmutableMap<String, String> env;
@@ -47,9 +45,9 @@ public class SubprocessBuilder {
   private StreamAction stderrAction;
   private File stderrFile;
   private File workingDirectory;
-  private long timeoutMillis;
+  private long timeoutMillis = -1;
 
-  static Subprocess.Factory factory = JavaSubprocessFactory.INSTANCE;
+  private static Subprocess.Factory factory = JavaSubprocessFactory.INSTANCE;
 
   public static void setSubprocessFactory(Subprocess.Factory factory) {
     SubprocessBuilder.factory = factory;
@@ -101,8 +99,9 @@ public class SubprocessBuilder {
    * Sets the environment passed to the child process. If null, inherit the environment of the
    * server.
    */
-  public SubprocessBuilder setEnv(@Nullable Map<String, String> env) {
-    this.env = env == null ? null : ImmutableMap.copyOf(env);
+  public SubprocessBuilder setEnv(Map<String, String> env) {
+    this.env = env == null
+        ? null : ImmutableMap.copyOf(env);
     return this;
   }
 
