@@ -86,31 +86,26 @@ public class TransitiveTraversalFunction extends TransitiveBaseTraversalFunction
         : TransitiveTraversalValue.unsuccessfulTransitiveTraversal(errorLoadingTarget);
   }
 
-  @Override
-  protected Iterable<SkyKey> getStrictLabelAspectKeys(Target target, Environment env) {
-    return ImmutableSet.of();
+ @Override
+ protected Iterable<SkyKey> getLabelAspectKeys(Target target, Environment env) {
+  if (!(target instanceof Rule)) {
+   return ImmutableSet.of();
+  }
+  Rule rule = (Rule) target;
+  Multimap<Attribute, Label> attibuteMap = LinkedHashMultimap.create();
+   for (Attribute attribute : rule.getTransitions(Rule.NO_NODEP_ATTRIBUTES).keys()) {
+    for (Class<? extends AspectFactory<?, ?, ?>> aspectFactory : attribute.getAspects()) {
+      AspectDefinition.addAllAttributesOfAspect(rule, attibuteMap,
+          AspectFactory.Util.create(aspectFactory).getDefinition(), Rule.ALL_DEPS);
+    }
   }
 
-  @Override
-  protected Iterable<SkyKey> getConservativeLabelAspectKeys(Target target) {
-    if (!(target instanceof Rule)) {
-      return ImmutableSet.of();
-    }
-    Rule rule = (Rule) target;
-    Multimap<Attribute, Label> attibuteMap = LinkedHashMultimap.create();
-    for (Attribute attribute : rule.getTransitions(Rule.NO_NODEP_ATTRIBUTES).keys()) {
-      for (Class<? extends AspectFactory<?, ?, ?>> aspectFactory : attribute.getAspects()) {
-        AspectDefinition.addAllAttributesOfAspect(rule, attibuteMap,
-            AspectFactory.Util.create(aspectFactory).getDefinition(), Rule.ALL_DEPS);
-      }
-    }
-
-    ImmutableSet.Builder<SkyKey> depKeys = new ImmutableSet.Builder<>();
-    for (Label label : attibuteMap.values()) {
-      depKeys.add(getKey(label));
-    }
-    return depKeys.build();
+  ImmutableSet.Builder<SkyKey> depKeys = new ImmutableSet.Builder<>();
+  for (Label label : attibuteMap.values()) {
+    depKeys.add(getKey(label));
   }
+  return depKeys.build();
+ }
 
  /**
    * Because {@link TransitiveTraversalFunction} is invoked only when its side-effects are desired,
