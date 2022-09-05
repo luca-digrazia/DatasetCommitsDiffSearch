@@ -16,12 +16,9 @@ package com.google.devtools.build.lib.ideinfo;
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.rules.android.AndroidIdeInfoProvider;
-import com.google.devtools.build.lib.rules.android.AndroidIdeInfoProvider.SourceDirectory;
+import com.google.devtools.build.lib.syntax.Label;
 
 /**
  * File provider for Android Studio ide build files.
@@ -30,65 +27,11 @@ import com.google.devtools.build.lib.rules.android.AndroidIdeInfoProvider.Source
 public final class AndroidStudioInfoFilesProvider implements TransitiveInfoProvider {
   private final NestedSet<Artifact> ideBuildFiles;
   private final NestedSet<Label> transitiveDependencies;
-  private final NestedSet<AndroidIdeInfoProvider.SourceDirectory> transitiveResources;
 
-  /**
-   * Builder class for {@link AndroidStudioInfoFilesProvider}
-   */
-  public static class Builder {
-    private final NestedSetBuilder<Artifact> ideBuildFilesBuilder;
-    private final NestedSetBuilder<Label> transitiveDependenciesBuilder;
-    private NestedSetBuilder<AndroidIdeInfoProvider.SourceDirectory> transitiveResourcesBuilder;
-    private NestedSet<AndroidIdeInfoProvider.SourceDirectory> transitiveResources;
-
-    public Builder() {
-      ideBuildFilesBuilder = NestedSetBuilder.stableOrder();
-      transitiveDependenciesBuilder = NestedSetBuilder.stableOrder();
-      transitiveResourcesBuilder = NestedSetBuilder.stableOrder();
-      transitiveResources = null;
-    }
-
-    public NestedSetBuilder<Artifact> ideBuildFilesBuilder() {
-      return ideBuildFilesBuilder;
-    }
-
-    public NestedSetBuilder<Label> transitiveDependenciesBuilder() {
-      return transitiveDependenciesBuilder;
-    }
-
-    public NestedSetBuilder<SourceDirectory> transitiveResourcesBuilder() {
-      return transitiveResourcesBuilder;
-    }
-
-    /**
-     * Returns a set of transitive resources. {@link Builder#transitiveResourcesBuilder}
-     * is unusable after this operation.
-     */
-    public NestedSet<AndroidIdeInfoProvider.SourceDirectory> getTransitiveResources() {
-      if (transitiveResources != null) {
-        return transitiveResources;
-      }
-      transitiveResources = transitiveResourcesBuilder.build();
-      transitiveResourcesBuilder = null;
-      return transitiveResources;
-    }
-
-    public AndroidStudioInfoFilesProvider build() {
-      return new AndroidStudioInfoFilesProvider(
-          ideBuildFilesBuilder.build(),
-          transitiveDependenciesBuilder.build(),
-          getTransitiveResources()
-      );
-    }
-  }
-
-  private AndroidStudioInfoFilesProvider(
-      NestedSet<Artifact> ideBuildFiles,
-      NestedSet<Label> transitiveDependencies,
-      NestedSet<SourceDirectory> transitiveResources) {
+  public AndroidStudioInfoFilesProvider(
+      NestedSet<Artifact> ideBuildFiles, NestedSet<Label> transitiveDependencies) {
     this.ideBuildFiles = ideBuildFiles;
     this.transitiveDependencies = transitiveDependencies;
-    this.transitiveResources = transitiveResources;
   }
 
   public NestedSet<Artifact> getIdeBuildFiles() {
@@ -97,9 +40,5 @@ public final class AndroidStudioInfoFilesProvider implements TransitiveInfoProvi
 
   public NestedSet<Label> getTransitiveDependencies() {
     return transitiveDependencies;
-  }
-
-  public NestedSet<SourceDirectory> getTransitiveResources() {
-    return transitiveResources;
   }
 }
