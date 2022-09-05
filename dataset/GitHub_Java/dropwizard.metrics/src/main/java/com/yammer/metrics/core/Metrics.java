@@ -1,9 +1,12 @@
 package com.yammer.metrics.core;
 
-import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
+
+import com.yammer.metrics.core.HistogramMetric.SampleType;
 
 /**
  * A set of factory methods for creating centrally registered metric instances.
@@ -12,6 +15,10 @@ import java.util.concurrent.TimeUnit;
  */
 public class Metrics {
 	private static final ConcurrentMap<MetricName, Metric> METRICS = new ConcurrentHashMap<MetricName, Metric>();
+	private static final JmxReporter JMX_REPORTER = new JmxReporter();
+	static {{
+		JMX_REPORTER.start();
+	}}
 
 	private Metrics() { /* unused */ }
 
@@ -42,6 +49,33 @@ public class Metrics {
 	}
 
 	/**
+	 * Creates a new {@link HistogramMetric} and registers it under the given
+	 * class and name.
+	 *
+	 * @param klass the class which owns the metric
+	 * @param name the name of the metric
+	 * @param biased whether or not the histogram should be biased
+	 * @return a new {@link HistogramMetric}
+	 */
+	public static HistogramMetric newHistogram(Class<?> klass, String name,
+											   boolean biased) {
+		return getOrAdd(new MetricName(klass, name),
+				new HistogramMetric(biased ? SampleType.BIASED : SampleType.UNIFORM));
+	}
+
+	/**
+	 * Creates a new non-baised {@link HistogramMetric} and registers it under
+	 * the given class and name.
+	 *
+	 * @param klass the class which owns the metric
+	 * @param name the name of the metric
+	 * @return a new {@link HistogramMetric}
+	 */
+	public static HistogramMetric newHistogram(Class<?> klass, String name) {
+		return newHistogram(klass, name, false);
+	}
+
+	/**
 	 * Creates a new {@link MeterMetric} and registers it under the given
 	 * class and name.
 	 *
@@ -53,7 +87,17 @@ public class Metrics {
 	 * @return a new {@link MeterMetric}
 	 */
 	public static MeterMetric newMeter(Class<?> klass, String name, String eventType, TimeUnit unit) {
-		return getOrAdd(new MetricName(klass, name), MeterMetric.newMeter(eventType, unit));
+		MetricName metricName = new MetricName(klass, name);
+		final Metric existingMetric = METRICS.get(metricName);
+		if (existingMetric == null) {
+			final MeterMetric metric = MeterMetric.newMeter(eventType, unit);
+			final Metric justAddedMetric = METRICS.putIfAbsent(metricName, metric);
+			if (justAddedMetric == null) {
+				return metric;
+			}
+			return (MeterMetric) justAddedMetric;
+		}
+		return (MeterMetric) existingMetric;
 	}
 
 	/**
@@ -67,19 +111,17 @@ public class Metrics {
 	 * @return a new {@link TimerMetric}
 	 */
 	public static TimerMetric newTimer(Class<?> klass, String name, TimeUnit durationUnit, TimeUnit rateUnit) {
-		return getOrAdd(new MetricName(klass, name), new TimerMetric(durationUnit, rateUnit));
-	}
-
-	/**
-	 * Enables the HTTP/JSON reporter on the given port.
-	 *
-	 * @param port the port on which the HTTP server will listen
-	 * @throws IOException if there is a problem listening on the given port
-	 * @see HttpReporter
-	 */
-	public static void enableHttpReporting(int port) throws IOException {
-		final HttpReporter reporter = new HttpReporter(METRICS, port);
-		reporter.start();
+		MetricName metricName = new MetricName(klass, name);
+		final Metric existingMetric = METRICS.get(metricName);
+		if (existingMetric == null) {
+			final TimerMetric metric = new TimerMetric(durationUnit, rateUnit);
+			final Metric justAddedMetric = METRICS.putIfAbsent(metricName, metric);
+			if (justAddedMetric == null) {
+				return metric;
+			}
+			return (TimerMetric) justAddedMetric;
+		}
+		return (TimerMetric) existingMetric;
 	}
 
 	/**
@@ -90,8 +132,17 @@ public class Metrics {
 	 * @param unit the time unit of {@code period}
 	 */
 	public static void enableConsoleReporting(long period, TimeUnit unit) {
-		final ConsoleReporter reporter = new ConsoleReporter(METRICS, System.out);
+		final ConsoleReporter reporter = new ConsoleReporter(System.out);
 		reporter.start(period, unit);
+	}
+
+	/**
+	 * Returns an unmodifiable map of all metrics and their names.
+	 *
+	 * @return an unmodifiable map of all metrics and their names
+	 */
+	public static Map<MetricName, Metric> allMetrics() {
+		return Collections.unmodifiableMap(METRICS);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -105,10 +156,5 @@ public class Metrics {
 			return (T) justAddedMetric;
 		}
 		return (T) existingMetric;
-	}
-
-	public static void enableJmxReporting() {
-		final JmxReporter reporter = new JmxReporter(METRICS);
-		reporter.start();
 	}
 }
