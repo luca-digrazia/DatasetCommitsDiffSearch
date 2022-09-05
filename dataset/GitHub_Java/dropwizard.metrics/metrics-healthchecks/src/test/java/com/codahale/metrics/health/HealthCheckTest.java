@@ -15,7 +15,7 @@ public class HealthCheckTest {
         }
 
         @Override
-        protected Result check() {
+        protected Result check() throws Exception {
             return underlying.execute();
         }
     }
@@ -24,7 +24,7 @@ public class HealthCheckTest {
     private final HealthCheck healthCheck = new ExampleHealthCheck(underlying);
 
     @Test
-    public void canHaveHealthyResults() {
+    public void canHaveHealthyResults() throws Exception {
         final HealthCheck.Result result = HealthCheck.Result.healthy();
 
         assertThat(result.isHealthy())
@@ -38,7 +38,7 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void canHaveHealthyResultsWithMessages() {
+    public void canHaveHealthyResultsWithMessages() throws Exception {
         final HealthCheck.Result result = HealthCheck.Result.healthy("woo");
 
         assertThat(result.isHealthy())
@@ -52,7 +52,7 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void canHaveHealthyResultsWithFormattedMessages() {
+    public void canHaveHealthyResultsWithFormattedMessages() throws Exception {
         final HealthCheck.Result result = HealthCheck.Result.healthy("foo %s", "bar");
 
         assertThat(result.isHealthy())
@@ -66,7 +66,7 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void canHaveUnhealthyResults() {
+    public void canHaveUnhealthyResults() throws Exception {
         final HealthCheck.Result result = HealthCheck.Result.unhealthy("bad");
 
         assertThat(result.isHealthy())
@@ -80,7 +80,7 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void canHaveUnhealthyResultsWithFormattedMessages() {
+    public void canHaveUnhealthyResultsWithFormattedMessages() throws Exception {
         final HealthCheck.Result result = HealthCheck.Result.unhealthy("foo %s %d", "bar", 123);
 
         assertThat(result.isHealthy())
@@ -94,7 +94,7 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void canHaveUnhealthyResultsWithExceptions() {
+    public void canHaveUnhealthyResultsWithExceptions() throws Exception {
         final RuntimeException e = mock(RuntimeException.class);
         when(e.getMessage()).thenReturn("oh noes");
 
@@ -111,71 +111,71 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void canHaveHealthyBuilderWithDetail() {
+    public void canHaveHealthyBuilderWithDetail() throws Exception {
         final HealthCheck.Result result = HealthCheck.Result.builder()
-                .healthy()
-                .withDetail("detail", "value")
-                .build();
+            .healthy()
+            .withDetail("detail", "value")
+            .build();
 
         assertThat(result.isHealthy())
-                .isTrue();
+            .isTrue();
 
         assertThat(result.getMessage())
-                .isNull();
+            .isNull();
 
         assertThat(result.getError())
-                .isNull();
+            .isNull();
 
         assertThat(result.getDetails())
-                .containsEntry("detail", "value");
+            .containsEntry("detail", "value");
     }
 
     @Test
-    public void canHaveUnHealthyBuilderWithDetail() {
+    public void canHaveUnHealthyBuilderWithDetail() throws Exception {
         final HealthCheck.Result result = HealthCheck.Result.builder()
-                .unhealthy()
-                .withDetail("detail", "value")
-                .build();
+            .unhealthy()
+            .withDetail("detail", "value")
+            .build();
 
         assertThat(result.isHealthy())
-                .isFalse();
+            .isFalse();
 
         assertThat(result.getMessage())
-                .isNull();
+            .isNull();
 
         assertThat(result.getError())
-                .isNull();
+            .isNull();
 
         assertThat(result.getDetails())
-                .containsEntry("detail", "value");
+            .containsEntry("detail", "value");
     }
 
     @Test
-    public void canHaveUnHealthyBuilderWithDetailAndError() {
+    public void canHaveUnHealthyBuilderWithDetailAndError() throws Exception {
         final RuntimeException e = mock(RuntimeException.class);
         when(e.getMessage()).thenReturn("oh noes");
 
         final HealthCheck.Result result = HealthCheck.Result
-                .builder()
-                .unhealthy(e)
-                .withDetail("detail", "value")
-                .build();
+            .builder()
+            .unhealthy(e)
+            .withDetail("detail", "value")
+            .build();
 
         assertThat(result.isHealthy())
-                .isFalse();
+            .isFalse();
 
         assertThat(result.getMessage())
-                .isEqualTo("oh noes");
+            .isEqualTo("oh noes");
 
         assertThat(result.getError())
-                .isEqualTo(e);
+            .isEqualTo(e);
 
         assertThat(result.getDetails())
-                .containsEntry("detail", "value");
+            .containsEntry("detail", "value");
     }
 
     @Test
-    public void returnsResultsWhenExecuted() {
+    public void returnsResultsWhenExecuted() throws Exception {
         final HealthCheck.Result result = mock(HealthCheck.Result.class);
         when(underlying.execute()).thenReturn(result);
 
@@ -184,7 +184,7 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void wrapsExceptionsWhenExecuted() {
+    public void wrapsExceptionsWhenExecuted() throws Exception {
         final RuntimeException e = mock(RuntimeException.class);
         when(e.getMessage()).thenReturn("oh noes");
 
@@ -202,14 +202,14 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void toStringWorksEvenForNullAttributes() {
+    public void toStringWorksEvenForNullAttributes() throws Exception {
         final HealthCheck.Result resultWithNullDetailValue = HealthCheck.Result.builder()
-                .unhealthy()
-                .withDetail("aNullDetail", null)
-                .build();
+           .unhealthy()
+           .withDetail("aNullDetail", null)
+           .build();
         assertThat(resultWithNullDetailValue.toString())
-                .contains(
-                        "Result{isHealthy=false, timestamp=", // Skip the timestamp part of the String.
-                        ", aNullDetail=null}");
+           .contains(
+              "Result{isHealthy=false, timestamp=", // Skip the timestamp part of the String.
+              ", aNullDetail=null}");
     }
 }
