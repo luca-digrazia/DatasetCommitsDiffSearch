@@ -15,10 +15,8 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
-import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.skylarkinterface.Param;
@@ -28,6 +26,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.BuiltinFunction;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
+
 import java.util.Map.Entry;
 import javax.annotation.Nullable;
 
@@ -65,8 +64,6 @@ public class AppleSkylarkCommon {
 
   @Nullable
   private SkylarkClassObject platformType;
-  @Nullable
-  private SkylarkClassObject platform;
 
   @SkylarkCallable(
       name = "apple_toolchain",
@@ -90,21 +87,6 @@ public class AppleSkylarkCommon {
       platformType = PlatformType.getSkylarkStruct();
     }
     return platformType;
-  }
-
-  @SkylarkCallable(
-      name = "platform",
-      doc = "Returns a struct containing fields corresponding to Apple platforms. These values "
-          + "can be passed to methods that expect a platform, like the 'apple' configuration "
-          + "fragment's 'sdk_version_for_platform' method. Each platform_type except for macosx "
-          + "has two platform types -- one for device, and one for simulator.",
-      structField = true
-  )
-  public SkylarkClassObject getPlatformStruct() {
-    if (platform == null) {
-      platform = Platform.getSkylarkStruct();
-    }
-    return platform;
   }
 
   @SkylarkSignature(
@@ -154,49 +136,6 @@ public class AppleSkylarkCommon {
             }
           }
           return resultBuilder.build();
-        }
-      };
-
-  @SkylarkSignature(
-    name = "new_xctest_app_provider",
-    objectType = AppleSkylarkCommon.class,
-    returnType = XcTestAppProvider.class,
-    doc = "Creates a new XcTestAppProvider instance.",
-    parameters = {
-      @Param(name = "self", type = AppleSkylarkCommon.class, doc = "The apple_common instance."),
-      @Param(
-        name = "bundle_loader",
-        type = Artifact.class,
-        named = true,
-        positional = false,
-        doc = "The bundle loader for the test. Corresponds to the binary inside the test IPA."
-      ),
-      @Param(
-        name = "ipa",
-        type = Artifact.class,
-        named = true,
-        positional = false,
-        doc = "The test IPA."
-      ),
-      @Param(
-        name = "objc_provider",
-        type = ObjcProvider.class,
-        named = true,
-        positional = false,
-        doc = "An ObjcProvider that should be included by tests using this test bundle."
-      )
-    }
-  )
-  public static final BuiltinFunction NEW_XCTEST_APP_PROVIDER =
-      new BuiltinFunction("new_xctest_app_provider") {
-        @SuppressWarnings("unused")
-        // This method is registered statically for skylark, and never called directly.
-        public XcTestAppProvider invoke(
-            AppleSkylarkCommon self,
-            Artifact bundleLoader,
-            Artifact ipa,
-            ObjcProvider objcProvider) {
-          return new XcTestAppProvider(bundleLoader, ipa, objcProvider);
         }
       };
 
