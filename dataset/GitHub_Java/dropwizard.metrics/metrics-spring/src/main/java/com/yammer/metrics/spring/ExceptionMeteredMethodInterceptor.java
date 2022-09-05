@@ -50,7 +50,8 @@ public class ExceptionMeteredMethodInterceptor implements MethodInterceptor, Met
                     meter.mark();
                 }
             }
-            throw t;
+            ReflectionUtils.rethrowException(t);
+            return null;
         }
     }
 
