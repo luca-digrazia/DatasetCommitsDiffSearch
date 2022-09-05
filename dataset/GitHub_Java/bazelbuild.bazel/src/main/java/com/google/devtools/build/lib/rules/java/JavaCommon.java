@@ -47,6 +47,7 @@ import com.google.devtools.build.lib.rules.test.BaselineCoverageAction;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.LocalMetadataCollector;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesProviderImpl;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -519,19 +520,20 @@ public class JavaCommon {
 
   public void addTransitiveInfoProviders(RuleConfiguredTargetBuilder builder,
       NestedSet<Artifact> filesToBuild, @Nullable Artifact classJar) {
-    InstrumentedFilesProvider instrumentedFilesProvider =
-        InstrumentedFilesCollector.collect(ruleContext, semantics.getCoverageInstrumentationSpec(),
+    InstrumentedFilesCollector instrumentedFilesCollector =
+        new InstrumentedFilesCollector(ruleContext, semantics.getCoverageInstrumentationSpec(),
             JAVA_METADATA_COLLECTOR, filesToBuild);
 
     builder
-        .add(InstrumentedFilesProvider.class, instrumentedFilesProvider)
+        .add(InstrumentedFilesProvider.class, new InstrumentedFilesProviderImpl(
+            instrumentedFilesCollector))
         .add(JavaExportsProvider.class, new JavaExportsProvider(collectTransitiveExports()))
         .addOutputGroup(OutputGroupProvider.FILES_TO_COMPILE, getFilesToCompile(classJar));
 
     if (!TargetUtils.isTestRule(ruleContext.getTarget())) {
       builder.addOutputGroup(OutputGroupProvider.BASELINE_COVERAGE,
           BaselineCoverageAction.getBaselineCoverageArtifacts(ruleContext,
-              instrumentedFilesProvider.getInstrumentedFiles()));
+              instrumentedFilesCollector.getInstrumentedFiles()));
     }
   }
 
