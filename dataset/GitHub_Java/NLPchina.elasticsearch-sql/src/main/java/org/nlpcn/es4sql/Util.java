@@ -49,15 +49,11 @@ public class Util {
 
 
     public static Object expr2Object(SQLExpr expr) {
-        return expr2Object(expr, "");
-    }
-
-    public static Object expr2Object(SQLExpr expr, String charWithQuote) {
         Object value = null;
         if (expr instanceof SQLNumericLiteralExpr) {
             value = ((SQLNumericLiteralExpr) expr).getNumber();
         } else if (expr instanceof SQLCharExpr) {
-            value = charWithQuote + ((SQLCharExpr) expr).getText() + charWithQuote;
+            value = ((SQLCharExpr) expr).getText();
         } else if (expr instanceof SQLIdentifierExpr) {
             value = expr.toString();
         } else if (expr instanceof SQLPropertyExpr) {
