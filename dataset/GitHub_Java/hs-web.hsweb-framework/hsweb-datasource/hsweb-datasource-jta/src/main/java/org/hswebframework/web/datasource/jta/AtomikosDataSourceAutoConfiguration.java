@@ -27,9 +27,9 @@ public class AtomikosDataSourceAutoConfiguration {
         return new AtomikosDataSourceBean();
     }
 
-    @ConditionalOnMissingBean(DynamicDataSourceConfigRepository.class)
+    @ConditionalOnMissingBean(JtaDataSourceRepository.class)
     @Bean
-    public DynamicDataSourceConfigRepository inMemoryAtomikosDataSourceRepository() {
+    public InMemoryAtomikosDataSourceRepository memoryJtaDataSourceStore() {
         return new InMemoryAtomikosDataSourceRepository();
     }
 
