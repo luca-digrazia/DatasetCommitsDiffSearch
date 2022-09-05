@@ -189,15 +189,8 @@ public final class ActionsTestUtil {
       Root.asSourceRoot(new InMemoryFileSystem().getRootDirectory()));
 
   public static final ActionOwner NULL_ACTION_OWNER =
-      ActionOwner.create(
-          NULL_LABEL,
-          null,
-          null,
-          null,
-          "dummy-configuration-mnemonic",
-          null,
-          "dummy-configuration",
-          null);
+      new ActionOwner(
+          NULL_LABEL, null, "dummy-configuration-mnemonic", null, "dummy-configuration", null);
 
   public static final ArtifactOwner NULL_ARTIFACT_OWNER =
       new ArtifactOwner() {
