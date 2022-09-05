@@ -20,7 +20,6 @@ import static org.junit.Assert.assertFalse;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
@@ -33,15 +32,18 @@ import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Te
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * Tests {@link TemplateExpansionAction}.
@@ -67,12 +69,11 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
     substitutions = Lists.newArrayList();
     substitutions.add(Substitution.of("%key%", "foo"));
     substitutions.add(Substitution.of("%value%", "bar"));
-    directories =
-        new BlazeDirectories(
-            scratch.resolve("/install"),
-            scratch.resolve("/base"),
-            scratch.resolve("/workspace"),
-            "mock-product-name");
+    directories = new BlazeDirectories(
+        scratch.resolve("/install"),
+        scratch.resolve("/base"),
+        scratch.resolve("/workspace"),
+        TestConstants.PRODUCT_NAME);
     binTools = BinTools.empty(directories);
   }
 
@@ -173,8 +174,7 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
   }
 
   private ActionExecutionContext createContext(Executor executor) {
-    return new ActionExecutionContext(executor, null, null, new FileOutErr(),
-        ImmutableMap.<String, String>of(), null);
+    return new ActionExecutionContext(executor, null, null, new FileOutErr(), null);
   }
 
   private void executeTemplateExpansion(String expected) throws Exception {
