@@ -36,13 +36,16 @@ import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.List;
 
 /**
  * Tests for SkylarkRuleContext.
@@ -525,23 +528,23 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     SkylarkRuleContext allContext = createRuleContext("//test/getrule:all_str");
     Object result = evalRuleContextCode(allContext, "ruleContext.attr.s");
     assertEquals(
-        SkylarkList.createImmutable(ImmutableList.<String>of("genrule", "a", "nop_rule", "c")),
+        new SkylarkList.MutableList(ImmutableList.<String>of("genrule", "a", "nop_rule", "c")),
         result);
 
     result = evalRuleContextCode(createRuleContext("//test/getrule:a_str"), "ruleContext.attr.s");
     assertEquals(
-        SkylarkList.createImmutable(
+        new SkylarkList.MutableList(
             ImmutableList.<String>of("genrule", "a", ":a.txt", "//test:bla")),
         result);
 
     result = evalRuleContextCode(createRuleContext("//test/getrule:c_str"), "ruleContext.attr.s");
     assertEquals(
-        SkylarkList.createImmutable(ImmutableList.<String>of("nop_rule", "c", ":a")), result);
+        new SkylarkList.MutableList(ImmutableList.<String>of("nop_rule", "c", ":a")), result);
 
     result =
         evalRuleContextCode(createRuleContext("//test/getrule:genrule_attr"), "ruleContext.attr.s");
     assertEquals(
-        SkylarkList.createImmutable(
+        new SkylarkList.MutableList(
             ImmutableList.<String>of(
                 "cmd",
                 "compatible_with",
@@ -709,7 +712,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   public void testFeatures() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:cc_with_features");
     Object result = evalRuleContextCode(ruleContext, "ruleContext.features");
-    assertThat((SkylarkList<?>) result).containsExactly("cc_include_scanning", "f1", "f2");
+    assertThat((SkylarkList) result).containsExactly("cc_include_scanning", "f1", "f2");
   }
 
 
@@ -722,11 +725,9 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
 
   @Test
   public void testWorkspaceName() throws Exception {
-    assertThat(ruleClassProvider.getRunfilesPrefix()).isNotNull();
-    assertThat(ruleClassProvider.getRunfilesPrefix()).isNotEmpty();
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result = evalRuleContextCode(ruleContext, "ruleContext.workspace_name");
-    assertSame(result, ruleClassProvider.getRunfilesPrefix());
+    assertSame(result, TestConstants.WORKSPACE_NAME);
   }
 
   @Test
