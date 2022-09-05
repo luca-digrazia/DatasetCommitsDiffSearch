@@ -33,8 +33,7 @@ import javax.annotation.Nullable;
 public class ErrorInfo {
 
   /** Create an ErrorInfo from a {@link ReifiedSkyFunctionException}. */
-  public static ErrorInfo fromException(ReifiedSkyFunctionException skyFunctionException,
-      boolean isTransitivelyTransient) {
+  public static ErrorInfo fromException(ReifiedSkyFunctionException skyFunctionException) {
     SkyKey rootCauseSkyKey = skyFunctionException.getRootCauseSkyKey();
     Exception rootCauseException = skyFunctionException.getCause();
     return new ErrorInfo(
@@ -42,7 +41,7 @@ public class ErrorInfo {
         Preconditions.checkNotNull(rootCauseException, "Cause null %s", rootCauseException),
         rootCauseSkyKey,
         /*cycles=*/ ImmutableList.<CycleInfo>of(),
-        isTransitivelyTransient || skyFunctionException.isTransient(),
+        skyFunctionException.isTransient(),
         skyFunctionException.isCatastrophic());
   }
 
@@ -54,7 +53,7 @@ public class ErrorInfo {
         /*rootCauseOfException=*/ null,
         ImmutableList.of(cycleInfo),
         /*isTransient=*/ false,
-        /*isCatastrophic=*/ false);
+        /*isCatostrophic=*/ false);
   }
 
   /** Create an ErrorInfo from a collection of existing errors. */
@@ -66,17 +65,15 @@ public class ErrorInfo {
     ImmutableList.Builder<CycleInfo> cycleBuilder = ImmutableList.builder();
     Exception firstException = null;
     SkyKey firstChildKey = null;
-    boolean isTransient = false;
     boolean isCatastrophic = false;
+    // Arbitrarily pick the first error.
     for (ErrorInfo child : childErrors) {
       if (firstException == null) {
-        // Arbitrarily pick the first error.
         firstException = child.getException();
         firstChildKey = child.getRootCauseOfException();
       }
       rootCausesBuilder.addTransitive(child.rootCauses);
       cycleBuilder.addAll(CycleInfo.prepareCycles(currentValue, child.cycles));
-      isTransient |= child.isTransient();
       isCatastrophic |= child.isCatastrophic();
     }
 
@@ -85,7 +82,9 @@ public class ErrorInfo {
         firstException,
         firstChildKey,
         cycleBuilder.build(),
-        isTransient,
+        // Parent errors should not be transient -- we depend on the child's transience, if any, to
+        // force re-evaluation if necessary.
+        /*isTransient=*/ false,
         isCatastrophic);
   }
 
@@ -162,12 +161,13 @@ public class ErrorInfo {
   }
 
   /**
-   * Returns true iff the error is transitively transient, i.e. if retrying the same computation
-   * could lead to a different result.
+   * Returns true iff the error is transient, i.e. if retrying the same computation could lead to a
+   * different result.
    */
   public boolean isTransient() {
     return isTransient;
   }
+
 
   /**
    * Returns true iff the error is catastrophic, i.e. it should halt even for a keepGoing update()
