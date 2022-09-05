@@ -4,7 +4,8 @@ import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.expr.SQLIntegerExpr;
 import com.alibaba.druid.sql.ast.expr.SQLPropertyExpr;
 import com.alibaba.druid.sql.ast.expr.SQLQueryExpr;
-import org.elasticsearch.index.query.BoolQueryBuilder;
+import com.alibaba.druid.sql.dialect.mysql.ast.statement.MySqlSelectQueryBlock;
+import org.elasticsearch.index.query.BoolFilterBuilder;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -16,7 +17,7 @@ import org.nlpcn.es4sql.parse.ElasticSqlExprParser;
 import org.nlpcn.es4sql.parse.FieldMaker;
 import org.nlpcn.es4sql.parse.ScriptFilter;
 import org.nlpcn.es4sql.parse.SqlParser;
-import org.nlpcn.es4sql.query.maker.QueryMaker;
+import org.nlpcn.es4sql.query.maker.FilterMaker;
 
 import java.io.IOException;
 import java.sql.SQLFeatureNotSupportedException;
@@ -33,7 +34,7 @@ public class SqlParserTests {
     private static SqlParser parser;
 
     @BeforeClass
-    public static void init() {
+    public static void init(){
         parser = new SqlParser();
     }
 
@@ -43,21 +44,21 @@ public class SqlParserTests {
                 "LEFT JOIN elasticsearch-sql_test_index/dog d on d.holdersName = a.firstname " +
                 " AND d.age < a.age " +
                 " WHERE a.firstname = 'eliran' AND " +
-                " (a.age > 10 OR a.balance > 2000)" +
+                " (a.age > 10 OR a.balance > 2000)"  +
                 " AND d.age > 1";
 
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
 
         List<Field> t1Fields = joinSelect.getFirstTable().getSelectedFields();
-        Assert.assertEquals(t1Fields.size(), 3);
+        Assert.assertEquals(t1Fields.size(),3);
         Assert.assertTrue(fieldExist(t1Fields, "firstname"));
         Assert.assertTrue(fieldExist(t1Fields, "lastname"));
         Assert.assertTrue(fieldExist(t1Fields, "gender"));
 
         List<Field> t2Fields = joinSelect.getSecondTable().getSelectedFields();
-        Assert.assertEquals(t2Fields.size(), 2);
-        Assert.assertTrue(fieldExist(t2Fields, "holdersName"));
-        Assert.assertTrue(fieldExist(t2Fields, "name"));
+        Assert.assertEquals(t2Fields.size(),2);
+        Assert.assertTrue(fieldExist(t2Fields,"holdersName"));
+        Assert.assertTrue(fieldExist(t2Fields,"name"));
     }
 
     @Test
@@ -66,25 +67,25 @@ public class SqlParserTests {
                 "LEFT JOIN elasticsearch-sql_test_index/dog d on d.holdersName = a.firstname " +
                 " AND d.age < a.age " +
                 " WHERE a.firstname = 'eliran' AND " +
-                " (a.age > 10 OR a.balance > 2000)" +
+                " (a.age > 10 OR a.balance > 2000)"  +
                 " AND d.age > 1";
 
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
 
         List<Field> t1Fields = joinSelect.getFirstTable().getConnectedFields();
-        Assert.assertEquals(t1Fields.size(), 2);
+        Assert.assertEquals(t1Fields.size(),2);
         Assert.assertTrue(fieldExist(t1Fields, "firstname"));
         Assert.assertTrue(fieldExist(t1Fields, "age"));
 
         List<Field> t2Fields = joinSelect.getSecondTable().getConnectedFields();
-        Assert.assertEquals(t2Fields.size(), 2);
-        Assert.assertTrue(fieldExist(t2Fields, "holdersName"));
-        Assert.assertTrue(fieldExist(t2Fields, "age"));
+        Assert.assertEquals(t2Fields.size(),2);
+        Assert.assertTrue(fieldExist(t2Fields,"holdersName"));
+        Assert.assertTrue(fieldExist(t2Fields,"age"));
     }
 
     private boolean fieldExist(List<Field> fields, String fieldName) {
-        for (Field field : fields)
-            if (field.getName().equals(fieldName)) return true;
+        for(Field field : fields)
+            if(field.getName().equals(fieldName)) return true;
 
         return false;
     }
@@ -95,20 +96,20 @@ public class SqlParserTests {
         String query = "SELECT a.firstname ,a.lastname , a.gender ,  d.holdersName ,d.name  FROM elasticsearch-sql_test_index/account a " +
                 "LEFT JOIN elasticsearch-sql_test_index/dog d on d.holdersName = a.firstname" +
                 " WHERE a.firstname = 'eliran' AND " +
-                " (a.age > 10 OR a.balance > 2000)" +
+                " (a.age > 10 OR a.balance > 2000)"  +
                 " AND d.age > 1";
 
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
         List<From> t1From = joinSelect.getFirstTable().getFrom();
 
         Assert.assertNotNull(t1From);
-        Assert.assertEquals(1, t1From.size());
-        Assert.assertTrue(checkFrom(t1From.get(0), "elasticsearch-sql_test_index", "account", "a"));
+        Assert.assertEquals(1,t1From.size());
+        Assert.assertTrue(checkFrom(t1From.get(0),"elasticsearch-sql_test_index","account","a"));
 
         List<From> t2From = joinSelect.getSecondTable().getFrom();
         Assert.assertNotNull(t2From);
-        Assert.assertEquals(1, t2From.size());
-        Assert.assertTrue(checkFrom(t2From.get(0), "elasticsearch-sql_test_index", "dog", "d"));
+        Assert.assertEquals(1,t2From.size());
+        Assert.assertTrue(checkFrom(t2From.get(0),"elasticsearch-sql_test_index","dog","d"));
     }
 
     private boolean checkFrom(From from, String index, String type, String alias) {
@@ -121,14 +122,14 @@ public class SqlParserTests {
         String query = "SELECT a.*, a.firstname ,a.lastname , a.gender ,  d.holdersName ,d.name  FROM elasticsearch-sql_test_index/account a " +
                 "LEFT JOIN elasticsearch-sql_test_index/dog d on d.holdersName = a.firstname" +
                 " WHERE a.firstname = 'eliran' AND " +
-                " (a.age > 10 OR a.balance > 2000)" +
+                " (a.age > 10 OR a.balance > 2000)"  +
                 " AND d.age > 1";
 
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
         List<Condition> conditions = joinSelect.getConnectedConditions();
         Assert.assertNotNull(conditions);
-        Assert.assertEquals(1, conditions.size());
-        Assert.assertTrue("condition not exist: d.holdersName = a.firstname", conditionExist(conditions, "d.holdersName", "a.firstname", Condition.OPEAR.EQ));
+        Assert.assertEquals(1,conditions.size());
+        Assert.assertTrue("condition not exist: d.holdersName = a.firstname",conditionExist(conditions, "d.holdersName", "a.firstname", Condition.OPEAR.EQ));
     }
 
     @Test
@@ -137,15 +138,15 @@ public class SqlParserTests {
                 "LEFT JOIN elasticsearch-sql_test_index/dog d on d.holdersName = a.firstname " +
                 " AND d.age < a.age " +
                 " WHERE a.firstname = 'eliran' AND " +
-                " (a.age > 10 OR a.balance > 2000)" +
+                " (a.age > 10 OR a.balance > 2000)"  +
                 " AND d.age > 1";
 
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
         List<Condition> conditions = joinSelect.getConnectedConditions();
         Assert.assertNotNull(conditions);
-        Assert.assertEquals(2, conditions.size());
-        Assert.assertTrue("condition not exist: d.holdersName = a.firstname", conditionExist(conditions, "d.holdersName", "a.firstname", Condition.OPEAR.EQ));
-        Assert.assertTrue("condition not exist: d.age < a.age", conditionExist(conditions, "d.age", "a.age", Condition.OPEAR.LT));
+        Assert.assertEquals(2,conditions.size());
+        Assert.assertTrue("condition not exist: d.holdersName = a.firstname",conditionExist(conditions, "d.holdersName", "a.firstname",Condition.OPEAR.EQ));
+        Assert.assertTrue("condition not exist: d.age < a.age",conditionExist(conditions, "d.age", "a.age", Condition.OPEAR.LT));
     }
 
 
@@ -154,14 +155,14 @@ public class SqlParserTests {
         String query = "SELECT a.*, a.firstname ,a.lastname , a.gender ,  d.holdersName ,d.name  FROM elasticsearch-sql_test_index/account a " +
                 "LEFT JOIN elasticsearch-sql_test_index/dog d on d.holdersName = a.firstname" +
                 " WHERE a.firstname = 'eliran' AND " +
-                " (a.age > 10 OR a.balance > 2000)" +
+                " (a.age > 10 OR a.balance > 2000)"  +
                 " AND d.age > 1";
 
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
         String s1Where = joinSelect.getFirstTable().getWhere().toString();
-        Assert.assertEquals("AND ( AND firstname EQ eliran, AND ( OR age GT 10, OR balance GT 2000 )  ) ", s1Where);
+        Assert.assertEquals("AND ( AND firstname EQ eliran, AND ( OR age GT 10, OR balance GT 2000 )  ) " , s1Where);
         String s2Where = joinSelect.getSecondTable().getWhere().toString();
-        Assert.assertEquals("AND age GT 1", s2Where);
+        Assert.assertEquals("AND age GT 1",s2Where);
     }
 
     @Test
@@ -169,12 +170,12 @@ public class SqlParserTests {
         String query = String.format("select c.name.firstname,c.parents.father , h.name,h.words from %s/gotCharacters c " +
                 "JOIN %s/gotHouses h " +
                 "on h.name = c.name.lastname  " +
-                "where c.name.firstname='Daenerys'", TEST_INDEX, TEST_INDEX);
+                "where c.name.firstname='Daenerys'", TEST_INDEX,TEST_INDEX);
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
         List<Condition> conditions = joinSelect.getConnectedConditions();
         Assert.assertNotNull(conditions);
-        Assert.assertEquals(1, conditions.size());
-        Assert.assertTrue("condition not exist: h.name = c.name.lastname", conditionExist(conditions, "h.name", "c.name.lastname", Condition.OPEAR.EQ));
+        Assert.assertEquals(1,conditions.size());
+        Assert.assertTrue("condition not exist: h.name = c.name.lastname",conditionExist(conditions, "h.name", "c.name.lastname", Condition.OPEAR.EQ));
     }
 
     @Test
@@ -182,48 +183,48 @@ public class SqlParserTests {
         String query = String.format("select c.name.firstname,c.parents.father , h.name,h.words from %s/gotCharacters c " +
                 "JOIN %s/gotHouses h " +
                 "on c.name.lastname = h.name  " +
-                "where c.name.firstname='Daenerys'", TEST_INDEX, TEST_INDEX);
+                "where c.name.firstname='Daenerys'", TEST_INDEX,TEST_INDEX);
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
         List<Condition> conditions = joinSelect.getConnectedConditions();
         Assert.assertNotNull(conditions);
-        Assert.assertEquals(1, conditions.size());
-        Assert.assertTrue("condition not exist: c.name.lastname = h.name", conditionExist(conditions, "c.name.lastname", "h.name", Condition.OPEAR.EQ));
+        Assert.assertEquals(1,conditions.size());
+        Assert.assertTrue("condition not exist: c.name.lastname = h.name",conditionExist(conditions, "c.name.lastname", "h.name", Condition.OPEAR.EQ));
     }
 
 
     @Test
     public void limitHintsOnJoin() throws SqlParseException {
         String query = String.format("select /*! JOIN_TABLES_LIMIT(1000,null) */ c.name.firstname,c.parents.father , h.name,h.words from %s/gotCharacters c " +
-                "use KEY (termsFilter) " +
+                "use KEY (termsFilter) "+
                 "JOIN %s/gotHouses h " +
                 "on c.name.lastname = h.name  " +
-                "where c.name.firstname='Daenerys'", TEST_INDEX, TEST_INDEX);
+                "where c.name.firstname='Daenerys'", TEST_INDEX,TEST_INDEX);
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
         List<Hint> hints = joinSelect.getHints();
         Assert.assertNotNull(hints);
         Assert.assertEquals("hints size was not 1", 1, hints.size());
-        Hint hint = hints.get(0);
-        Assert.assertEquals(HintType.JOIN_LIMIT, hint.getType());
+        Hint hint  = hints.get(0);
+        Assert.assertEquals(HintType.JOIN_LIMIT,hint.getType());
         Object[] params = hint.getParams();
         Assert.assertNotNull(params);
         Assert.assertEquals("params size was not 2", 2, params.length);
-        Assert.assertEquals(1000, params[0]);
-        Assert.assertEquals(null, params[1]);
+        Assert.assertEquals(1000,params[0]);
+        Assert.assertEquals(null,params[1]);
     }
 
     @Test
     public void hashTermsFilterHint() throws SqlParseException {
         String query = String.format("select /*! HASH_WITH_TERMS_FILTER*/ c.name.firstname,c.parents.father , h.name,h.words from %s/gotCharacters c " +
-                "use KEY (termsFilter) " +
+                "use KEY (termsFilter) "+
                 "JOIN %s/gotHouses h " +
                 "on c.name.lastname = h.name  " +
-                "where c.name.firstname='Daenerys'", TEST_INDEX, TEST_INDEX);
+                "where c.name.firstname='Daenerys'", TEST_INDEX,TEST_INDEX);
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
         List<Hint> hints = joinSelect.getHints();
         Assert.assertNotNull(hints);
         Assert.assertEquals("hints size was not 1", 1, hints.size());
-        Hint hint = hints.get(0);
-        Assert.assertEquals(HintType.HASH_WITH_TERMS_FILTER, hint.getType());
+        Hint hint  = hints.get(0);
+        Assert.assertEquals(HintType.HASH_WITH_TERMS_FILTER,hint.getType());
     }
 
     @Test
@@ -231,25 +232,25 @@ public class SqlParserTests {
         String query = String.format("select /*! HASH_WITH_TERMS_FILTER*/ /*! JOIN_TABLES_LIMIT(1000,null) */ " +
                 " /*! JOIN_TABLES_LIMIT(100,200) */ " +
                 "c.name.firstname,c.parents.father , h.name,h.words from %s/gotCharacters c " +
-                "use KEY (termsFilter) " +
+                "use KEY (termsFilter) "+
                 "JOIN %s/gotHouses h " +
                 "on c.name.lastname = h.name  " +
-                "where c.name.firstname='Daenerys'", TEST_INDEX, TEST_INDEX);
+                "where c.name.firstname='Daenerys'", TEST_INDEX,TEST_INDEX);
 
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
         List<Hint> hints = joinSelect.getHints();
 
         Assert.assertNotNull(hints);
         Assert.assertEquals("hints size was not 3", 3, hints.size());
-        Hint firstHint = hints.get(0);
+        Hint firstHint  = hints.get(0);
         Assert.assertEquals(HintType.HASH_WITH_TERMS_FILTER, firstHint.getType());
-        Hint secondHint = hints.get(1);
+        Hint secondHint  = hints.get(1);
         Assert.assertEquals(HintType.JOIN_LIMIT, secondHint.getType());
-        Assert.assertEquals(1000, secondHint.getParams()[0]);
-        Assert.assertEquals(null, secondHint.getParams()[1]);
-        Hint thirdHint = hints.get(2);
-        Assert.assertEquals(100, thirdHint.getParams()[0]);
-        Assert.assertEquals(200, thirdHint.getParams()[1]);
+        Assert.assertEquals(1000,secondHint.getParams()[0]);
+        Assert.assertEquals(null,secondHint.getParams()[1]);
+        Hint thirdHint  = hints.get(2);
+        Assert.assertEquals(100,thirdHint.getParams()[0]);
+        Assert.assertEquals(200,thirdHint.getParams()[1]);
         Assert.assertEquals(HintType.JOIN_LIMIT, thirdHint.getType());
     }
 
@@ -259,9 +260,9 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         LinkedList<Where> wheres = select.getWhere().getWheres();
-        Assert.assertEquals(1, wheres.size());
+        Assert.assertEquals(1,wheres.size());
         Condition condition = (Condition) wheres.get(0);
-        Assert.assertEquals("{ts '2015-03-15 00:00:00.000'}", condition.getValue().toString());
+        Assert.assertEquals("{ts '2015-03-15 00:00:00.000'}",condition.getValue().toString());
 
     }
 
@@ -273,7 +274,7 @@ public class SqlParserTests {
         List<From> fromList = select.getFrom();
         Assert.assertEquals(1, fromList.size());
         From from = fromList.get(0);
-        Assert.assertEquals("Test Index", from.getIndex());
+        Assert.assertEquals("Test Index",from.getIndex());
     }
 
     @Test
@@ -284,8 +285,8 @@ public class SqlParserTests {
         List<From> fromList = select.getFrom();
         Assert.assertEquals(1, fromList.size());
         From from = fromList.get(0);
-        Assert.assertEquals("Test Index", from.getIndex());
-        Assert.assertEquals("type1", from.getType());
+        Assert.assertEquals("Test Index",from.getIndex());
+        Assert.assertEquals("type1",from.getType());
     }
 
 
@@ -295,10 +296,10 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         List<Where> where = select.getWhere().getWheres();
-        Assert.assertEquals(1, where.size());
+        Assert.assertEquals(1,where.size());
         Condition condition = (Condition) where.get(0);
-        Assert.assertEquals("first name", condition.getName());
-        Assert.assertEquals("Name", condition.getValue());
+        Assert.assertEquals("first name",condition.getName());
+        Assert.assertEquals("Name",condition.getValue());
     }
 
     @Test
@@ -312,7 +313,7 @@ public class SqlParserTests {
         From from2 = fromList.get(1);
         boolean preservedOrder = from1.getIndex().equals("index1") && from1.getType().equals("type1")
                 && from2.getIndex().equals("index2") && from2.getType().equals("type2");
-        boolean notPreservedOrder = from1.getIndex().equals("index2") && from1.getType().equals("type2")
+        boolean notPreservedOrder = from1.getIndex().equals("index2")  && from1.getType().equals("type2")
                 && from2.getIndex().equals("index1") && from2.getType().equals("type1");
         Assert.assertTrue(preservedOrder || notPreservedOrder);
     }
@@ -323,7 +324,7 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         LinkedList<Where> wheres = select.getWhere().getWheres();
-        Assert.assertEquals(1, wheres.size());
+        Assert.assertEquals(1,wheres.size());
         Condition condition = (Condition) wheres.get(0);
         Assert.assertEquals("@field", condition.getName());
     }
@@ -334,9 +335,9 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         List<Field> fields = select.getFields();
-        Assert.assertEquals(1, fields.size());
+        Assert.assertEquals(1,fields.size());
         Field field = fields.get(0);
-        Assert.assertEquals(field.getName(), "@field");
+        Assert.assertEquals(field.getName(),"@field");
     }
 
     @Test
@@ -345,9 +346,9 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         List<Field> fields = select.getFields();
-        Assert.assertEquals(1, fields.size());
+        Assert.assertEquals(1,fields.size());
         Field field = fields.get(0);
-        Assert.assertEquals("MAX(@field)", field.toString());
+        Assert.assertEquals("MAX(@field)",field.toString());
     }
 
     @Test
@@ -356,9 +357,9 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         List<Field> fields = select.getFields();
-        Assert.assertEquals(1, fields.size());
+        Assert.assertEquals(1,fields.size());
         Field field = fields.get(0);
-        Assert.assertEquals(field.getName(), "a:b");
+        Assert.assertEquals(field.getName(),"a:b");
     }
 
     @Test
@@ -367,7 +368,7 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         LinkedList<Where> wheres = select.getWhere().getWheres();
-        Assert.assertEquals(1, wheres.size());
+        Assert.assertEquals(1,wheres.size());
         Condition condition = (Condition) wheres.get(0);
         Assert.assertEquals("a:b", condition.getName());
     }
@@ -378,7 +379,7 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         LinkedList<Where> wheres = select.getWhere().getWheres();
-        Assert.assertEquals(1, wheres.size());
+        Assert.assertEquals(1,wheres.size());
         Condition condition = (Condition) wheres.get(0);
         Assert.assertEquals("a", condition.getName());
         Assert.assertNull(condition.getValue());
@@ -386,39 +387,39 @@ public class SqlParserTests {
 
     @Test
     public void innerQueryTest() throws SqlParseException {
-        String query = String.format("select * from %s/dog where holdersName IN (select firstname from %s/account where firstname = 'eliran')", TEST_INDEX, TEST_INDEX);
+        String query = String.format("select * from %s/dog where holdersName IN (select firstname from %s/account where firstname = 'eliran')",TEST_INDEX,TEST_INDEX);
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         Assert.assertTrue(select.containsSubQueries());
-        Assert.assertEquals(1, select.getSubQueries().size());
+        Assert.assertEquals(1,select.getSubQueries().size());
     }
 
     @Test
     public void inTermsSubQueryTest() throws SqlParseException {
-        String query = String.format("select * from %s/dog where holdersName = IN_TERMS (select firstname from %s/account where firstname = 'eliran')", TEST_INDEX, TEST_INDEX);
+        String query = String.format("select * from %s/dog where holdersName = IN_TERMS (select firstname from %s/account where firstname = 'eliran')",TEST_INDEX,TEST_INDEX);
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         Assert.assertTrue(select.containsSubQueries());
-        Assert.assertEquals(1, select.getSubQueries().size());
+        Assert.assertEquals(1,select.getSubQueries().size());
     }
 
 
     @Test
     public void innerQueryTestTwoQueries() throws SqlParseException {
-        String query = String.format("select * from %s/dog where holdersName IN (select firstname from %s/account where firstname = 'eliran') and age IN (select name.ofHisName from %s/gotCharacters) ", TEST_INDEX, TEST_INDEX, TEST_INDEX);
+        String query = String.format("select * from %s/dog where holdersName IN (select firstname from %s/account where firstname = 'eliran') and age IN (select name.ofHisName from %s/gotCharacters) ",TEST_INDEX,TEST_INDEX,TEST_INDEX);
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         Assert.assertTrue(select.containsSubQueries());
-        Assert.assertEquals(2, select.getSubQueries().size());
+        Assert.assertEquals(2,select.getSubQueries().size());
     }
 
     @Test
-    public void indexWithDotsAndHyphen() throws SqlParseException {
+     public void indexWithDotsAndHyphen() throws SqlParseException {
         String query = "select * from data-2015.08.22";
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Assert.assertEquals(1, select.getFrom().size());
-        Assert.assertEquals("data-2015.08.22", select.getFrom().get(0).getIndex());
+        Assert.assertEquals(1,select.getFrom().size());
+        Assert.assertEquals("data-2015.08.22",select.getFrom().get(0).getIndex());
     }
 
     @Test
@@ -426,8 +427,8 @@ public class SqlParserTests {
         String query = "select * from some;index";
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Assert.assertEquals(1, select.getFrom().size());
-        Assert.assertEquals("some;index", select.getFrom().get(0).getIndex());
+        Assert.assertEquals(1,select.getFrom().size());
+        Assert.assertEquals("some;index",select.getFrom().get(0).getIndex());
     }
 
     @Test
@@ -436,13 +437,14 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         List<Field> fields = select.getFields();
-        Assert.assertEquals(1, fields.size());
+        Assert.assertEquals(1,fields.size());
         Field field = fields.get(0);
         Assert.assertTrue(field instanceof MethodField);
         MethodField scriptMethod = (MethodField) field;
-        Assert.assertEquals("script", scriptMethod.getName().toLowerCase());
-        Assert.assertEquals(2, scriptMethod.getParams().size());
-        Assert.assertTrue(scriptMethod.getParams().get(1).toString().endsWith("doc['field1'].value + 3"));
+        Assert.assertEquals("script",scriptMethod.getName().toLowerCase());
+        Assert.assertEquals(2,scriptMethod.getParams().size());
+        Assert.assertEquals("field1 + 3" ,scriptMethod.getParams().get(0).toString());
+        Assert.assertEquals("doc['field1'].value + 3" ,scriptMethod.getParams().get(1).toString());
     }
 
     @Test
@@ -451,13 +453,14 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         List<Field> fields = select.getFields();
-        Assert.assertEquals(1, fields.size());
+        Assert.assertEquals(1,fields.size());
         Field field = fields.get(0);
         Assert.assertTrue(field instanceof MethodField);
         MethodField scriptMethod = (MethodField) field;
-        Assert.assertEquals("script", scriptMethod.getName().toLowerCase());
-        Assert.assertEquals(2, scriptMethod.getParams().size());
-        Assert.assertTrue(scriptMethod.getParams().get(1).toString().endsWith("doc['field1'].value + doc['field2'].value"));
+        Assert.assertEquals("script",scriptMethod.getName().toLowerCase());
+        Assert.assertEquals(2,scriptMethod.getParams().size());
+        Assert.assertEquals("field1 + field2" ,scriptMethod.getParams().get(0).toString());
+        Assert.assertEquals("doc['field1'].value + doc['field2'].value" ,scriptMethod.getParams().get(1).toString());
     }
 
 
@@ -467,13 +470,30 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         List<Field> fields = select.getFields();
-        Assert.assertEquals(1, fields.size());
+        Assert.assertEquals(1,fields.size());
         Field field = fields.get(0);
         Assert.assertTrue(field instanceof MethodField);
         MethodField scriptMethod = (MethodField) field;
-        Assert.assertEquals("script", scriptMethod.getName().toLowerCase());
-        Assert.assertEquals(2, scriptMethod.getParams().size());
-        Assert.assertTrue(scriptMethod.getParams().get(1).toString().endsWith("1 + 2"));
+        Assert.assertEquals("script",scriptMethod.getName().toLowerCase());
+        Assert.assertEquals(2,scriptMethod.getParams().size());
+        Assert.assertEquals("1 + 2" ,scriptMethod.getParams().get(0).toString());
+        Assert.assertEquals("1 + 2" ,scriptMethod.getParams().get(1).toString());
+    }
+
+    @Test
+    public void scriptFieldPlusFieldWithAliasTest() throws SqlParseException {
+        String query = "SELECT field1 + field2 as myfield FROM index/type";
+        SQLExpr sqlExpr = queryToExpr(query);
+        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
+        List<Field> fields = select.getFields();
+        Assert.assertEquals(1,fields.size());
+        Field field = fields.get(0);
+        Assert.assertTrue(field instanceof MethodField);
+        MethodField scriptMethod = (MethodField) field;
+        Assert.assertEquals("script",scriptMethod.getName().toLowerCase());
+        Assert.assertEquals(2,scriptMethod.getParams().size());
+        Assert.assertEquals("myfield" ,scriptMethod.getParams().get(0).toString());
+        Assert.assertEquals("doc['field1'].value + doc['field2'].value" ,scriptMethod.getParams().get(1).toString());
     }
 
 
@@ -483,33 +503,34 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         List<Field> fields = select.getFields();
-        Assert.assertEquals(1, fields.size());
+        Assert.assertEquals(1,fields.size());
         Field field = fields.get(0);
         Assert.assertTrue(field instanceof MethodField);
         MethodField avgMethodField = (MethodField) field;
-        Assert.assertEquals("avg", avgMethodField.getName().toLowerCase());
-        Assert.assertEquals(1, avgMethodField.getParams().size());
+        Assert.assertEquals("avg",avgMethodField.getName().toLowerCase());
+        Assert.assertEquals(1,avgMethodField.getParams().size());
         MethodField scriptMethod = (MethodField) avgMethodField.getParams().get(0).value;
-        Assert.assertEquals("script", scriptMethod.getName().toLowerCase());
-        Assert.assertEquals(2, scriptMethod.getParams().size());
-        Assert.assertEquals("doc['field1'].value + doc['field2'].value", scriptMethod.getParams().get(1).toString());
+        Assert.assertEquals("script",scriptMethod.getName().toLowerCase());
+        Assert.assertEquals(2,scriptMethod.getParams().size());
+        Assert.assertEquals("doc['field1'].value + doc['field2'].value" ,scriptMethod.getParams().get(1).toString());
     }
 
     @Test
     public void implicitScriptOnAggregation() throws SqlParseException {
-        String query = "SELECT avg(field(field1) + field(field2)) FROM index/type";
+        String query = "SELECT avg(field1 + field2) FROM index/type";
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         List<Field> fields = select.getFields();
-        Assert.assertEquals(1, fields.size());
+        Assert.assertEquals(1,fields.size());
         Field field = fields.get(0);
         Assert.assertTrue(field instanceof MethodField);
         MethodField avgMethodField = (MethodField) field;
-        Assert.assertEquals("avg", avgMethodField.getName().toLowerCase());
-        Assert.assertEquals(1, avgMethodField.getParams().size());
-        Assert.assertTrue(avgMethodField.getParams().get(0).value.toString().contains("doc['field1'].value"));
-        Assert.assertTrue(avgMethodField.getParams().get(0).value.toString().contains("doc['field2'].value"));
-
+        Assert.assertEquals("avg",avgMethodField.getName().toLowerCase());
+        Assert.assertEquals(1,avgMethodField.getParams().size());
+        MethodField scriptMethod = (MethodField) avgMethodField.getParams().get(0).value;
+        Assert.assertEquals("script",scriptMethod.getName().toLowerCase());
+        Assert.assertEquals(2,scriptMethod.getParams().size());
+        Assert.assertEquals("doc['field1'].value + doc['field2'].value" ,scriptMethod.getParams().get(1).toString());
     }
 
     @Test
@@ -520,9 +541,9 @@ public class SqlParserTests {
         Where where = select.getWhere().getWheres().get(0);
         Assert.assertTrue("where should be condition", where instanceof Condition);
         Condition condition = (Condition) where;
-        Assert.assertTrue("condition should be nested", condition.isNested());
-        Assert.assertEquals("message", condition.getNestedPath());
-        Assert.assertEquals("message.name", condition.getName());
+        Assert.assertTrue("condition should be nested",condition.isNested());
+        Assert.assertEquals("message",condition.getNestedPath());
+        Assert.assertEquals("message.name",condition.getName());
     }
 
 
@@ -534,25 +555,9 @@ public class SqlParserTests {
         Where where = select.getWhere().getWheres().get(0);
         Assert.assertTrue("where should be condition", where instanceof Condition);
         Condition condition = (Condition) where;
-        Assert.assertTrue("condition should be nested", condition.isNested());
-        Assert.assertEquals("message.moreNested", condition.getNestedPath());
-        Assert.assertEquals("message.moreNested.name", condition.getName());
-    }
-    
-
-    @Test
-    public void aggFieldWithAliasTableAliasShouldBeRemoved() throws SqlParseException {
-        String query = "select count(t.*) as counts,sum(t.size) from xxx/locs as t group by t.kk";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        List<Field> fields = select.getFields();
-        Assert.assertTrue(fields.size()==2);
-        Assert.assertEquals("COUNT(*)",fields.get(0).toString());
-        Assert.assertEquals("SUM(size)",fields.get(1).toString());
-        List<List<Field>> groups = select.getGroupBys();
-        Assert.assertTrue(groups.size()==1);
-        Assert.assertTrue(groups.get(0).size()==1);
-        Assert.assertEquals("kk",groups.get(0).get(0).getName());
+        Assert.assertTrue("condition should be nested",condition.isNested());
+        Assert.assertEquals("message.moreNested",condition.getNestedPath());
+        Assert.assertEquals("message.moreNested.name",condition.getName());
     }
 
     @Test
@@ -563,9 +568,9 @@ public class SqlParserTests {
         Where where = select.getWhere().getWheres().get(0);
         Assert.assertTrue("where should be condition", where instanceof Condition);
         Condition condition = (Condition) where;
-        Assert.assertTrue("condition should be nested", condition.isNested());
-        Assert.assertEquals("message", condition.getNestedPath());
-        Assert.assertEquals("message.name", condition.getName());
+        Assert.assertTrue("condition should be nested",condition.isNested());
+        Assert.assertEquals("message",condition.getNestedPath());
+        Assert.assertEquals("message.name",condition.getName());
     }
 
     @Test
@@ -574,9 +579,9 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         Field field = select.getGroupBys().get(0).get(0);
-        Assert.assertTrue("condition should be nested", field.isNested());
-        Assert.assertEquals("message", field.getNestedPath());
-        Assert.assertEquals("message.name", field.getName());
+        Assert.assertTrue("condition should be nested",field.isNested());
+        Assert.assertEquals("message",field.getNestedPath());
+        Assert.assertEquals("message.name",field.getName());
     }
 
     @Test
@@ -585,9 +590,9 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         Field field = select.getGroupBys().get(0).get(0);
-        Assert.assertTrue("condition should be nested", field.isNested());
-        Assert.assertEquals("message", field.getNestedPath());
-        Assert.assertEquals("message.name", field.getName());
+        Assert.assertTrue("condition should be nested",field.isNested());
+        Assert.assertEquals("message",field.getNestedPath());
+        Assert.assertEquals("message.name",field.getName());
     }
 
     @Test
@@ -596,21 +601,21 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         List<List<Field>> groupBys = select.getGroupBys();
-        Assert.assertEquals(1, groupBys.size());
+        Assert.assertEquals(1,groupBys.size());
         Field aAgg = groupBys.get(0).get(0);
-        Assert.assertEquals("a", aAgg.getName());
+        Assert.assertEquals("a",aAgg.getName());
         Field field = groupBys.get(0).get(1);
-        Assert.assertTrue("filter field should be method field", field instanceof MethodField);
+        Assert.assertTrue("filter field should be method field",field instanceof MethodField);
         MethodField filterAgg = (MethodField) field;
         Assert.assertEquals("filter", filterAgg.getName());
         Map<String, Object> params = filterAgg.getParamsAsMap();
         Assert.assertEquals(2, params.size());
         Object alias = params.get("alias");
-        Assert.assertEquals("filter(a > 3 AND b = '3')@FILTER", alias);
+        Assert.assertEquals("filter(a > 3 AND b = '3')@FILTER",alias);
 
         Assert.assertTrue(params.get("where") instanceof Where);
-        Where where = (Where) params.get("where");
-        Assert.assertEquals(2, where.getWheres().size());
+        Where where  = (Where) params.get("where");
+        Assert.assertEquals(2,where.getWheres().size());
     }
 
     @Test
@@ -619,21 +624,21 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         List<List<Field>> groupBys = select.getGroupBys();
-        Assert.assertEquals(1, groupBys.size());
+        Assert.assertEquals(1,groupBys.size());
         Field aAgg = groupBys.get(0).get(0);
-        Assert.assertEquals("a", aAgg.getName());
+        Assert.assertEquals("a",aAgg.getName());
         Field field = groupBys.get(0).get(1);
-        Assert.assertTrue("filter field should be method field", field instanceof MethodField);
+        Assert.assertTrue("filter field should be method field",field instanceof MethodField);
         MethodField filterAgg = (MethodField) field;
         Assert.assertEquals("filter", filterAgg.getName());
         Map<String, Object> params = filterAgg.getParamsAsMap();
         Assert.assertEquals(2, params.size());
         Object alias = params.get("alias");
-        Assert.assertEquals("myFilter@FILTER", alias);
+        Assert.assertEquals("myFilter@FILTER",alias);
 
         Assert.assertTrue(params.get("where") instanceof Where);
-        Where where = (Where) params.get("where");
-        Assert.assertEquals(2, where.getWheres().size());
+        Where where  = (Where) params.get("where");
+        Assert.assertEquals(2,where.getWheres().size());
     }
 
 
@@ -643,46 +648,45 @@ public class SqlParserTests {
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         List<List<Field>> groupBys = select.getGroupBys();
-        Assert.assertEquals(1, groupBys.size());
+        Assert.assertEquals(1,groupBys.size());
         Field aAgg = groupBys.get(0).get(0);
-        Assert.assertEquals("a", aAgg.getName());
+        Assert.assertEquals("a",aAgg.getName());
         Field field = groupBys.get(0).get(1);
-        Assert.assertTrue("filter field should be method field", field instanceof MethodField);
+        Assert.assertTrue("filter field should be method field",field instanceof MethodField);
         MethodField filterAgg = (MethodField) field;
         Assert.assertEquals("filter", filterAgg.getName());
         Map<String, Object> params = filterAgg.getParamsAsMap();
         Assert.assertEquals(2, params.size());
         Object alias = params.get("alias");
-        Assert.assertEquals("my filter@FILTER", alias);
+        Assert.assertEquals("my filter@FILTER",alias);
 
         Assert.assertTrue(params.get("where") instanceof Where);
-        Where where = (Where) params.get("where");
-        Assert.assertEquals(2, where.getWheres().size());
+        Where where  = (Where) params.get("where");
+        Assert.assertEquals(2,where.getWheres().size());
     }
-
     @Test
     public void doubleOrderByTest() throws SqlParseException {
         String query = "select * from indexName order by a asc, b desc";
         SQLExpr sqlExpr = queryToExpr(query);
         Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
         List<Order> orderBys = select.getOrderBys();
-        Assert.assertEquals(2, orderBys.size());
-        Assert.assertEquals("a", orderBys.get(0).getName());
-        Assert.assertEquals("ASC", orderBys.get(0).getType());
+        Assert.assertEquals(2,orderBys.size());
+        Assert.assertEquals("a",orderBys.get(0).getName());
+        Assert.assertEquals("ASC",orderBys.get(0).getType());
 
-        Assert.assertEquals("b", orderBys.get(1).getName());
-        Assert.assertEquals("DESC", orderBys.get(1).getType());
+        Assert.assertEquals("b",orderBys.get(1).getName());
+        Assert.assertEquals("DESC",orderBys.get(1).getType());
     }
 
     @Test
     public void parseJoinWithOneTableOrderByAttachToCorrectTable() throws SqlParseException {
         String query = String.format("select c.name.firstname , d.words from %s/gotCharacters c " +
-                        "JOIN %s/gotHouses d on d.name = c.house " +
-                        "order by c.name.firstname"
-                , TEST_INDEX, TEST_INDEX);
+                "JOIN %s/gotHouses d on d.name = c.house " +
+                "order by c.name.firstname"
+                ,  TEST_INDEX, TEST_INDEX);
 
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
-        Assert.assertTrue("first table should be ordered", joinSelect.getFirstTable().isOrderdSelect());
+        Assert.assertTrue("first table should be ordered",joinSelect.getFirstTable().isOrderdSelect());
         Assert.assertFalse("second table should not be ordered", joinSelect.getSecondTable().isOrderdSelect());
 
     }
@@ -690,13 +694,13 @@ public class SqlParserTests {
     @Test
     public void parseJoinWithOneTableOrderByRemoveAlias() throws SqlParseException {
         String query = String.format("select c.name.firstname , d.words from %s/gotCharacters c " +
-                        "JOIN %s/gotHouses d on d.name = c.house " +
-                        "order by c.name.firstname"
-                , TEST_INDEX, TEST_INDEX);
+                "JOIN %s/gotHouses d on d.name = c.house " +
+                "order by c.name.firstname"
+                ,  TEST_INDEX, TEST_INDEX);
 
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
         List<Order> orderBys = joinSelect.getFirstTable().getOrderBys();
-        Assert.assertEquals(1, orderBys.size());
+        Assert.assertEquals(1,orderBys.size());
         Order order = orderBys.get(0);
         Assert.assertEquals("name.firstname", order.getName());
 
@@ -708,8 +712,8 @@ public class SqlParserTests {
         Select select = parser.parseSelect((SQLQueryExpr) queryToExpr(query));
         Condition condition = (Condition) select.getWhere().getWheres().get(0);
         Object[] values = (Object[]) condition.getValue();
-        Assert.assertEquals("a", values[0]);
-        Assert.assertEquals("b", values[1]);
+        Assert.assertEquals("a",values[0]);
+        Assert.assertEquals("b",values[1]);
     }
 
     @Test
@@ -718,7 +722,7 @@ public class SqlParserTests {
         Select select = parser.parseSelect((SQLQueryExpr) queryToExpr(query));
         Condition condition = (Condition) select.getWhere().getWheres().get(0);
         Object[] values = (Object[]) condition.getValue();
-        Assert.assertEquals("a", values[0]);
+        Assert.assertEquals("a",values[0]);
     }
 
     @Test
@@ -726,11 +730,11 @@ public class SqlParserTests {
         String query = "select * from x where nested('y',y.b = 'a' and y.c  = 'd') ";
         Select select = parser.parseSelect((SQLQueryExpr) queryToExpr(query));
         Condition condition = (Condition) select.getWhere().getWheres().get(0);
-        Assert.assertEquals(Condition.OPEAR.NESTED_COMPLEX, condition.getOpear());
-        Assert.assertEquals("y", condition.getName());
+        Assert.assertEquals(Condition.OPEAR.NESTED_COMPLEX,condition.getOpear());
+        Assert.assertEquals("y",condition.getName());
         Assert.assertTrue(condition.getValue() instanceof Where);
         Where where = (Where) condition.getValue();
-        Assert.assertEquals(2, where.getWheres().size());
+        Assert.assertEquals(2,where.getWheres().size());
     }
 
     @Test
@@ -738,11 +742,11 @@ public class SqlParserTests {
         String query = "select * from x where script('doc[\\'field\\'].date.hourOfDay == 3') ";
         Select select = parser.parseSelect((SQLQueryExpr) queryToExpr(query));
         Condition condition = (Condition) select.getWhere().getWheres().get(0);
-        Assert.assertEquals(Condition.OPEAR.SCRIPT, condition.getOpear());
-        Assert.assertEquals(null, condition.getName());
+        Assert.assertEquals(Condition.OPEAR.SCRIPT,condition.getOpear());
+        Assert.assertEquals(null,condition.getName());
         Assert.assertTrue(condition.getValue() instanceof ScriptFilter);
         ScriptFilter scriptFilter = (ScriptFilter) condition.getValue();
-        Assert.assertEquals("doc['field'].date.hourOfDay == 3", scriptFilter.getScript());
+        Assert.assertEquals("doc['field'].date.hourOfDay == 3",scriptFilter.getScript());
         Assert.assertFalse(scriptFilter.containsParameters());
     }
 
@@ -751,11 +755,11 @@ public class SqlParserTests {
         String query = "select * from x where script('doc[\\'field\\'].date.hourOfDay == x','x'=3) ";
         Select select = parser.parseSelect((SQLQueryExpr) queryToExpr(query));
         Condition condition = (Condition) select.getWhere().getWheres().get(0);
-        Assert.assertEquals(Condition.OPEAR.SCRIPT, condition.getOpear());
-        Assert.assertEquals(null, condition.getName());
+        Assert.assertEquals(Condition.OPEAR.SCRIPT,condition.getOpear());
+        Assert.assertEquals(null,condition.getName());
         Assert.assertTrue(condition.getValue() instanceof ScriptFilter);
         ScriptFilter scriptFilter = (ScriptFilter) condition.getValue();
-        Assert.assertEquals("doc['field'].date.hourOfDay == x", scriptFilter.getScript());
+        Assert.assertEquals("doc['field'].date.hourOfDay == x",scriptFilter.getScript());
         Assert.assertTrue(scriptFilter.containsParameters());
         Map<String, Object> args = scriptFilter.getArgs();
         Assert.assertEquals(1, args.size());
@@ -771,7 +775,7 @@ public class SqlParserTests {
         LinkedList<Where> wheres = select.getWhere().getWheres();
         Assert.assertEquals(1, wheres.size());
         Where where = wheres.get(0);
-        Assert.assertEquals(Condition.class, where.getClass());
+        Assert.assertEquals(Condition.class,where.getClass());
         Condition condition = (Condition) where;
         Assert.assertEquals("3", condition.getName());
     }
@@ -780,7 +784,7 @@ public class SqlParserTests {
     public void likeTestWithEscaped() throws SqlParseException {
         String query = "select * from x where name like '&UNDERSCOREhey_%&PERCENT'";
         Select select = parser.parseSelect((SQLQueryExpr) queryToExpr(query));
-        BoolQueryBuilder explan = QueryMaker.explan(select.getWhere());
+        BoolFilterBuilder explan = FilterMaker.explan(select.getWhere());
         String filterAsString = explan.toString();
         Assert.assertTrue(filterAsString.contains("_hey?*%"));
     }
@@ -792,8 +796,8 @@ public class SqlParserTests {
         Select select = parser.parseSelect((SQLQueryExpr) queryToExpr(query));
         LinkedList<Where> wheres = select.getWhere().getWheres();
         Assert.assertEquals(2, wheres.size());
-        Assert.assertEquals("AND path NESTED_COMPLEX AND ( AND path.x EQ 3 ) ", wheres.get(0).toString());
-        Assert.assertEquals("AND y EQ 3", wheres.get(1).toString());
+        Assert.assertEquals("AND path NESTED_COMPLEX AND ( AND path.x EQ 3 ) ",wheres.get(0).toString());
+        Assert.assertEquals("AND y EQ 3",wheres.get(1).toString());
     }
 
     private SQLExpr queryToExpr(String query) {
@@ -801,21 +805,21 @@ public class SqlParserTests {
     }
 
     private boolean conditionExist(List<Condition> conditions, String from, String to, Condition.OPEAR opear) {
-        String[] aliasAndField = to.split("\\.", 2);
+        String[] aliasAndField = to.split("\\.",2);
         String toAlias = aliasAndField[0];
         String toField = aliasAndField[1];
-        for (Condition condition : conditions) {
-            if (condition.getOpear() != opear) continue;
+        for (Condition condition : conditions){
+            if(condition.getOpear() !=  opear) continue;
 
             boolean fromIsEqual = condition.getName().equals(from);
-            if (!fromIsEqual) continue;
+            if(!fromIsEqual) continue;
 
-            String[] valueAliasAndField = condition.getValue().toString().split("\\.", 2);
+            String[] valueAliasAndField = condition.getValue().toString().split("\\.",2);
             boolean toFieldNameIsEqual = valueAliasAndField[1].equals(toField);
-            boolean toAliasIsEqual = valueAliasAndField[0].equals(toAlias);
+            boolean toAliasIsEqual =  valueAliasAndField[0].equals(toAlias);
             boolean toIsEqual = toAliasIsEqual && toFieldNameIsEqual;
 
-            if (toIsEqual) return true;
+            if(toIsEqual) return true;
         }
         return false;
     }
