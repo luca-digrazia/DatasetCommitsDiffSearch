@@ -16,12 +16,13 @@ package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.io.ByteSource;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform;
-import com.google.devtools.build.lib.rules.apple.DottedVersion;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
+import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.xcode.bundlemerge.proto.BundleMergeProtos;
 import com.google.devtools.build.xcode.bundlemerge.proto.BundleMergeProtos.Control;
 import com.google.devtools.build.xcode.bundlemerge.proto.BundleMergeProtos.MergeZip;
+
 import java.io.InputStream;
 
 /**
@@ -34,16 +35,13 @@ import java.io.InputStream;
 final class BundleMergeControlBytes extends ByteSource {
   private final Bundling rootBundling;
   private final Artifact mergedIpa;
-  private final DottedVersion iosSdkVersion;
-  private final ApplePlatform platform;
+  private final AppleConfiguration appleConfiguration;
 
   public BundleMergeControlBytes(
-      Bundling rootBundling, Artifact mergedIpa, DottedVersion iosSdkVersion,
-      ApplePlatform platform) {
+      Bundling rootBundling, Artifact mergedIpa, AppleConfiguration appleConfiguration) {
     this.rootBundling = Preconditions.checkNotNull(rootBundling);
     this.mergedIpa = Preconditions.checkNotNull(mergedIpa);
-    this.iosSdkVersion = iosSdkVersion;
-    this.platform = platform;
+    this.appleConfiguration = Preconditions.checkNotNull(appleConfiguration);
   }
 
   @Override
@@ -59,8 +57,8 @@ final class BundleMergeControlBytes extends ByteSource {
             .addAllBundleFile(BundleableFile.toBundleFiles(bundling.getBundleFiles()))
             // TODO(bazel-team): Add rule attribute for specifying targeted device family
             .setMinimumOsVersion(bundling.getMinimumOsVersion().toString())
-            .setSdkVersion(iosSdkVersion.toString())
-            .setPlatform(platform.name())
+            .setSdkVersion(appleConfiguration.getIosSdkVersion().toString())
+            .setPlatform(appleConfiguration.getMultiArchPlatform(PlatformType.IOS).name())
             .setBundleRoot(bundling.getBundleDir());
 
     if (bundling.getBundleInfoplist().isPresent()) {

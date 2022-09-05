@@ -538,10 +538,6 @@ public final class CompilationSupport {
       .add("-MD")
       .addExecPath("-MF", dotdFile);
 
-    if (objcConfiguration.moduleMapsEnabled()) {
-      additionalInputs.addAll(objcProvider.get(MODULE_MAP));
-    }
-
     if (moduleMap.isPresent()) {
       // If modules are enabled for the rule, -fmodules is added to the copts already. (This implies
       // module map usage). Otherwise, we need to pass -fmodule-maps.
@@ -576,6 +572,7 @@ public final class CompilationSupport {
             .addOutputs(gcnoFiles.build())
             .addOutput(dotdFile)
             .addTransitiveInputs(objcProvider.get(HEADER))
+            .addTransitiveInputs(objcProvider.get(MODULE_MAP))
             .addInputs(compilationArtifacts.getPrivateHdrs())
             .addTransitiveInputs(objcProvider.get(STATIC_FRAMEWORK_FILE))
             .addTransitiveInputs(objcProvider.get(DYNAMIC_FRAMEWORK_FILE))
@@ -779,7 +776,8 @@ public final class CompilationSupport {
 
   private void registerArchiveActions(ImmutableList.Builder<Artifact> objFiles, Artifact archive) {
     for (Action action :
-        archiveActions(ruleContext, objFiles.build(), archive, intermediateArtifacts.objList())) {
+        archiveActions(ruleContext, objFiles.build(), archive,
+            intermediateArtifacts.archiveObjList())) {
       ruleContext.registerAction(action);
     }
   }
@@ -792,11 +790,7 @@ public final class CompilationSupport {
 
     ImmutableList.Builder<Action> actions = new ImmutableList.Builder<>();
 
-    actions.add(new FileWriteAction(
-        context.getActionOwner(),
-        objList,
-        Artifact.joinExecPaths("\n", objFiles),
-        /*makeExecutable=*/ false));
+    actions.add(objFilelistAction(context, objFiles, objList));
 
     actions.add(ObjcRuleClasses.spawnAppleEnvActionBuilder(
             ruleContext, appleConfiguration.getSingleArchPlatform())
@@ -815,6 +809,15 @@ public final class CompilationSupport {
         .build(context));
 
     return actions.build();
+  }
+
+  private Action objFilelistAction(ActionConstructionContext context,
+      Iterable<Artifact> objFiles, Artifact objList) {
+    return new FileWriteAction(
+        context.getActionOwner(),
+        objList,
+        Artifact.joinExecPaths("\n", objFiles),
+        /*makeExecutable=*/ false);
   }
 
   /**
@@ -953,18 +956,19 @@ public final class CompilationSupport {
    */
   CompilationSupport registerGenerateModuleMapAction(
       Optional<CompilationArtifacts> compilationArtifacts) {
-    // TODO(bazel-team): Include textual headers in the module map when Xcode 6 support is
-    // dropped.
-    Iterable<Artifact> publicHeaders = attributes.hdrs();
-    Iterable<Artifact> privateHeaders = ImmutableList.of();
-    if (compilationArtifacts.isPresent()) {
-      CompilationArtifacts artifacts = compilationArtifacts.get();
-      publicHeaders = Iterables.concat(publicHeaders, artifacts.getAdditionalHdrs());
-      privateHeaders = Iterables.concat(privateHeaders, artifacts.getPrivateHdrs());
+    if (objcConfiguration.moduleMapsEnabled()) {
+      // TODO(bazel-team): Include textual headers in the module map when Xcode 6 support is
+      // dropped.
+      Iterable<Artifact> publicHeaders = attributes.hdrs();
+      Iterable<Artifact> privateHeaders = ImmutableList.of();
+      if (compilationArtifacts.isPresent()) {
+        CompilationArtifacts artifacts = compilationArtifacts.get();
+        publicHeaders = Iterables.concat(publicHeaders, artifacts.getAdditionalHdrs());
+        privateHeaders = Iterables.concat(privateHeaders, artifacts.getPrivateHdrs());
+      }
+      CppModuleMap moduleMap = ObjcRuleClasses.intermediateArtifacts(ruleContext).moduleMap();
+      registerGenerateModuleMapAction(moduleMap, publicHeaders, privateHeaders);
     }
-    CppModuleMap moduleMap = intermediateArtifacts.moduleMap();
-    registerGenerateModuleMapAction(moduleMap, publicHeaders, privateHeaders);
-
     return this;
   }
 
@@ -1046,6 +1050,7 @@ public final class CompilationSupport {
             .addInputs(ccLibraries)
             .addInputs(extraLinkInputs)
             .addInputs(prunedJ2ObjcArchives)
+            .addInput(intermediateArtifacts.linkerObjList())
             .addInput(xcrunwrapper(ruleContext).getExecutable())
             .build(ruleContext));
 
@@ -1159,11 +1164,14 @@ public final class CompilationSupport {
       commandLine.add("-dead_strip").add("-no_dead_strip_inits_and_terms");
     }
 
+    Artifact inputFileList = intermediateArtifacts.linkerObjList();
+    ruleContext.registerAction(
+        objFilelistAction(ruleContext,
+            Iterables.concat(bazelBuiltLibraries, objcProvider.get(IMPORTED_LIBRARY), ccLibraries),
+            inputFileList));
+    
     if (objcConfiguration.shouldPrioritizeStaticLibs()) {
-      commandLine
-          .addExecPaths(bazelBuiltLibraries)
-          .addExecPaths(objcProvider.get(IMPORTED_LIBRARY))
-          .addExecPaths(ccLibraries);
+      commandLine.add("-filelist").add(inputFileList.getExecPathString());
     }
 
     commandLine
@@ -1185,10 +1193,7 @@ public final class CompilationSupport {
         .addFormatEach("-l%s", libraryNames);
 
     if (!objcConfiguration.shouldPrioritizeStaticLibs()) {
-      commandLine
-          .addExecPaths(bazelBuiltLibraries)
-          .addExecPaths(objcProvider.get(IMPORTED_LIBRARY))
-          .addExecPaths(ccLibraries);
+      commandLine.add("-filelist").add(inputFileList.getExecPathString());
     }
 
     Iterable<Artifact> ccLibrariesToForceLoad =
