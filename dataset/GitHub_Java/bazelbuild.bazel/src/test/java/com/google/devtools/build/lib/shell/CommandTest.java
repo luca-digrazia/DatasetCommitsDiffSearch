@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,7 +52,8 @@ public class CommandTest {
   // Platform-independent tests ----------------------------------------------
 
   @Before
-  public final void configureLogger() throws Exception  {
+  public void setUp() throws Exception {
+
     // enable all log statements to ensure there are no problems with
     // logging code
     Logger.getLogger("com.google.devtools.build.lib.shell.Command").setLevel(Level.FINEST);
