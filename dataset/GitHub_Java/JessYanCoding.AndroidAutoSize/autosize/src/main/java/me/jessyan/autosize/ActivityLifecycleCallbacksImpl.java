@@ -18,8 +18,6 @@ package me.jessyan.autosize;
 import android.app.Activity;
 import android.app.Application;
 import android.os.Bundle;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentActivity;
 
 /**
  * ================================================
@@ -36,27 +34,16 @@ public class ActivityLifecycleCallbacksImpl implements Application.ActivityLifec
      * 屏幕适配逻辑策略类
      */
     private AutoAdaptStrategy mAutoAdaptStrategy;
-    /**
-     * 让 {@link Fragment} 支持自定义适配参数
-     */
-    private FragmentLifecycleCallbacksImpl mFragmentLifecycleCallbacks;
 
     public ActivityLifecycleCallbacksImpl(AutoAdaptStrategy autoAdaptStrategy) {
-        mFragmentLifecycleCallbacks = new FragmentLifecycleCallbacksImpl(autoAdaptStrategy);
-        mAutoAdaptStrategy = autoAdaptStrategy;
+        setAutoAdaptStrategy(autoAdaptStrategy);
     }
 
     @Override
     public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
-        if (AutoSizeConfig.getInstance().isCustomFragment()) {
-            if (activity instanceof FragmentActivity) {
-                ((FragmentActivity) activity).getSupportFragmentManager().registerFragmentLifecycleCallbacks(mFragmentLifecycleCallbacks, true);
-            }
-        }
-
         //Activity 中的 setContentView(View) 一定要在 super.onCreate(Bundle); 之后执行
         if (mAutoAdaptStrategy != null) {
-            mAutoAdaptStrategy.applyAdapt(activity, activity);
+            mAutoAdaptStrategy.applyAdapt(activity);
         }
     }
 
@@ -97,6 +84,5 @@ public class ActivityLifecycleCallbacksImpl implements Application.ActivityLifec
      */
     public void setAutoAdaptStrategy(AutoAdaptStrategy autoAdaptStrategy) {
         mAutoAdaptStrategy = autoAdaptStrategy;
-        mFragmentLifecycleCallbacks.setAutoAdaptStrategy(autoAdaptStrategy);
     }
 }
