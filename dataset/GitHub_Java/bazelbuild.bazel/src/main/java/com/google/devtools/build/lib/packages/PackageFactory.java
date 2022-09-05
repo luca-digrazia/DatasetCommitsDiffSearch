@@ -29,7 +29,7 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
-import com.google.devtools.build.lib.packages.Globber.BadGlobException;
+import com.google.devtools.build.lib.packages.GlobCache.BadGlobException;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.Preprocessor.AstAfterPreprocessing;
 import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
@@ -122,6 +122,31 @@ public final class PackageFactory {
     protected abstract void process(
         Package.LegacyBuilder pkgBuilder, Location location, T value)
         throws EvalException;
+  }
+
+  /** Interface for evaluating globs during package loading. */
+  public static interface Globber {
+    /** An opaque token for fetching the result of a glob computation. */
+    abstract static class Token {}
+
+    /**
+     * Asynchronously starts the given glob computation and returns a token for fetching the
+     * result.
+     */
+    Token runAsync(List<String> includes, List<String> excludes, boolean excludeDirs)
+        throws BadGlobException;
+
+    /** Fetches the result of a previously started glob computation. */
+    List<String> fetch(Token token) throws IOException, InterruptedException;
+
+    /** Should be called when the globber is about to be discarded due to an interrupt. */
+    void onInterrupt();
+
+    /** Should be called when the globber is no longer needed. */
+    void onCompletion();
+
+    /** Returns all the glob computations requested before {@link #onCompletion} was called. */
+    Set<Pair<String, Boolean>> getGlobPatterns();
   }
 
   /**
@@ -506,7 +531,7 @@ public final class PackageFactory {
     if (async) {
       try {
         context.globber.runAsync(includes, excludes, excludeDirs);
-      } catch (BadGlobException e) {
+      } catch (GlobCache.BadGlobException e) {
         // Ignore: errors will appear during the actual evaluation of the package.
       }
       globList = GlobList.captureResults(includes, excludes, ImmutableList.<String>of());
@@ -538,7 +563,7 @@ public final class PackageFactory {
               "error globbing [" + Joiner.on(", ").join(includes) + "]: " + expected.getMessage()));
       context.pkgBuilder.setContainsErrors();
       return GlobList.captureResults(includes, excludes, ImmutableList.<String>of());
-    } catch (BadGlobException e) {
+    } catch (GlobCache.BadGlobException e) {
       throw new EvalException(ast.getLocation(), e.getMessage());
     }
   }

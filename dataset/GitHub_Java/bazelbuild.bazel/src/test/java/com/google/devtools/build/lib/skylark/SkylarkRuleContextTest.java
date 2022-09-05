@@ -22,7 +22,6 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FileConfiguredTarget;
@@ -33,6 +32,7 @@ import com.google.devtools.build.lib.rules.SkylarkRuleContext;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.python.PythonSourcesProvider;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.testutil.TestConstants;
@@ -559,7 +559,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   public void testSkylarkRuleContextGetDefaultShellEnv() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result = evalRuleContextCode(ruleContext, "ruleContext.configuration.default_shell_env");
-    assertThat(result).isInstanceOf(ImmutableMap.class);
+    assertThat(result).isInstanceOf(SkylarkDict.class);
   }
 
   @Test
@@ -656,41 +656,6 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         + "ruleContext.files.tools[0].basename + '.params')");
     PathFragment fragment = ((Artifact) result).getRootRelativePath();
     assertEquals("foo/t.exe.params", fragment.getPathString());
-  }
-
-  @Test
-  public void testLabelAttributeDefault() throws Exception {
-    scratch.file(
-        "my_rule.bzl",
-        "def _impl(ctx):",
-        "  return",
-        "my_rule = rule(",
-        "  implementation = _impl,",
-        "  attrs = {",
-        "    'explicit_dep': attr.label(default = Label('//:dep')),",
-        "    '_implicit_dep': attr.label(default = Label('//:dep')),",
-        "    'explicit_dep_list': attr.label_list(default = [Label('//:dep')]),",
-        "    '_implicit_dep_list': attr.label_list(default = [Label('//:dep')]),",
-        "  }",
-        ")");
-
-    scratch.file(
-        "BUILD", "filegroup(name='dep')", "load('/my_rule', 'my_rule')", "my_rule(name='r')");
-
-    invalidatePackages();
-    SkylarkRuleContext context = createRuleContext("@//:r");
-    Label explicitDepLabel =
-        (Label) evalRuleContextCode(context, "ruleContext.attr.explicit_dep.label");
-    assertThat(explicitDepLabel).isEqualTo(Label.parseAbsolute("@//:dep"));
-    Label implicitDepLabel =
-        (Label) evalRuleContextCode(context, "ruleContext.attr._implicit_dep.label");
-    assertThat(implicitDepLabel).isEqualTo(Label.parseAbsolute("@//:dep"));
-    Label explicitDepListLabel =
-        (Label) evalRuleContextCode(context, "ruleContext.attr.explicit_dep_list[0].label");
-    assertThat(explicitDepListLabel).isEqualTo(Label.parseAbsolute("@//:dep"));
-    Label implicitDepListLabel =
-        (Label) evalRuleContextCode(context, "ruleContext.attr._implicit_dep_list[0].label");
-    assertThat(implicitDepListLabel).isEqualTo(Label.parseAbsolute("@//:dep"));
   }
 
   @Test

@@ -273,9 +273,11 @@ public final class CommandHelper {
   public List<String> buildCommandLine(
       String command, NestedSetBuilder<Artifact> inputs, String scriptPostFix,
       Map<String, String> executionInfo) {
+    // Use vanilla /bin/bash for actions running on mac machines.
+    PathFragment shellPath = executionInfo.containsKey("requires-darwin")
+        ? new PathFragment("/bin/bash") : ruleContext.getConfiguration().getShExecutable();
     Pair<List<String>, Artifact> argvAndScriptFile =
-        buildCommandLineMaybeWithScriptFile(ruleContext, command, scriptPostFix,
-            shellPath(executionInfo));
+        buildCommandLineMaybeWithScriptFile(ruleContext, command, scriptPostFix, shellPath);
     if (argvAndScriptFile.second != null) {
       inputs.add(argvAndScriptFile.second);
     }
@@ -288,22 +290,12 @@ public final class CommandHelper {
    * Fixes up the input artifact list with the created bash script when required.
    */
   public List<String> buildCommandLine(
-      String command, List<Artifact> inputs, String scriptPostFix,
-      Map<String, String> executionInfo) {
+      String command, List<Artifact> inputs, String scriptPostFix) {
     Pair<List<String>, Artifact> argvAndScriptFile = buildCommandLineMaybeWithScriptFile(
-        ruleContext, command, scriptPostFix, shellPath(executionInfo));
+        ruleContext, command, scriptPostFix, ruleContext.getConfiguration().getShExecutable());
     if (argvAndScriptFile.second != null) {
       inputs.add(argvAndScriptFile.second);
     }
     return argvAndScriptFile.first;
-  }
-
-  /**
-   * Returns the path to the shell for an action with the given execution requirements.
-   */
-  private PathFragment shellPath(Map<String, String> executionInfo) {
-    // Use vanilla /bin/bash for actions running on mac machines.
-    return executionInfo.containsKey("requires-darwin")
-        ? new PathFragment("/bin/bash") : ruleContext.getConfiguration().getShExecutable();
   }
 }

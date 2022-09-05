@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.bazel.rules.genrule;
 
 import static com.google.devtools.build.lib.analysis.RunfilesProvider.withData;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -133,13 +132,13 @@ public class GenRule implements RuleConfiguredTargetFactory {
     ruleContext.registerAction(
         new GenRuleAction(
             ruleContext.getActionOwner(),
-            ImmutableList.copyOf(commandHelper.getResolvedTools()),
+            commandHelper.getResolvedTools(),
             inputs.build(),
             filesToBuild,
             argv,
             env,
             ImmutableMap.copyOf(executionInfo),
-            ImmutableMap.copyOf(commandHelper.getRemoteRunfileManifestMap()),
+            commandHelper.getRemoteRunfileManifestMap(),
             message + ' ' + ruleContext.getLabel()));
 
     RunfilesProvider runfilesProvider = withData(
@@ -161,11 +160,8 @@ public class GenRule implements RuleConfiguredTargetFactory {
 
   private String resolveCommand(final RuleContext ruleContext, final String command,
       final List<Artifact> resolvedSrcs, final NestedSet<Artifact> filesToBuild) {
-    return ruleContext.expandMakeVariables(
-        "cmd",
-        command,
-        new ConfigurationMakeVariableContext(
-            ruleContext.getRule().getPackage(), ruleContext.getConfiguration()) {
+    return ruleContext.expandMakeVariables("cmd", command, new ConfigurationMakeVariableContext(
+        ruleContext.getRule().getPackage(), ruleContext.getConfiguration()) {
           @Override
           public String lookupMakeVariable(String name) throws ExpansionException {
             if (name.equals("SRCS")) {
@@ -188,8 +184,8 @@ public class GenRule implements RuleConfiguredTargetFactory {
                 if (relativeOutputFile.segmentCount() <= 1) {
                   // This should never happen, since the path should contain at
                   // least a package name and a file name.
-                  throw new IllegalStateException(
-                      "$(@D) for genrule " + ruleContext.getLabel() + " has less than one segment");
+                  throw new IllegalStateException("$(@D) for genrule " + ruleContext.getLabel()
+                      + " has less than one segment");
                 }
                 return relativeOutputFile.getParentDirectory().getPathString();
               } else {
@@ -199,15 +195,15 @@ public class GenRule implements RuleConfiguredTargetFactory {
                 } else {
                   dir = ruleContext.getConfiguration().getGenfilesFragment();
                 }
-                PathFragment relPath =
-                    ruleContext.getRule().getLabel().getPackageIdentifier().getPathFragment();
+                PathFragment relPath = ruleContext.getRule().getLabel().getPackageFragment();
                 return dir.getRelative(relPath).getPathString();
               }
             } else {
               return super.lookupMakeVariable(name);
             }
           }
-        });
+        }
+    );
   }
 
   // Returns the path of the sole element "artifacts", generating an exception

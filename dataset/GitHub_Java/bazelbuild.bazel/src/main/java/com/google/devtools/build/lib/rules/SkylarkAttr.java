@@ -201,17 +201,6 @@ public final class SkylarkAttr {
     }
   }
 
-  private static Descriptor createNonconfigurableAttrDescriptor(
-      Map<String, Object> kwargs, Type<?> type, String whyNotConfigurable, FuncallExpression ast,
-      Environment env) throws EvalException {
-    try {
-      return new Descriptor(
-          createAttribute(type, kwargs, ast, env).nonconfigurable(whyNotConfigurable));
-    } catch (ConversionException e) {
-      throw new EvalException(ast.getLocation(), e.getMessage());
-    }
-  }
-
   @SkylarkSignature(
     name = "int",
     doc = "Creates an attribute of type int.",
@@ -663,10 +652,9 @@ public final class SkylarkAttr {
             Object defaultO, Boolean mandatory, FuncallExpression ast, Environment env)
             throws EvalException {
           env.checkLoadingPhase("attr.output", ast.getLocation());
-          return createNonconfigurableAttrDescriptor(
+          return createAttrDescriptor(
               EvalUtils.optionMap(DEFAULT_ARG, defaultO, MANDATORY_ARG, mandatory),
               BuildType.OUTPUT,
-              "output paths are part of the static graph structure",
               ast,
               env);
         }
@@ -807,10 +795,9 @@ public final class SkylarkAttr {
             Object defaultO, Boolean mandatory, FuncallExpression ast, Environment env)
             throws EvalException {
           env.checkLoadingPhase("attr.license", ast.getLocation());
-          return createNonconfigurableAttrDescriptor(
+          return createAttrDescriptor(
               EvalUtils.optionMap(DEFAULT_ARG, defaultO, MANDATORY_ARG, mandatory),
               BuildType.LICENSE,
-              "loading phase license checking logic assumes non-configurable values",
               ast,
               env);
         }
