@@ -14,9 +14,12 @@
 
 package com.google.devtools.build.lib.packages;
 
+import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.SetMultimap;
@@ -27,7 +30,6 @@ import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Collection;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -51,34 +53,31 @@ import javax.annotation.Nullable;
  */
 @Immutable
 public final class AspectDefinition {
+
   private final AspectClass aspectClass;
   private final RequiredProviders requiredProviders;
   private final RequiredProviders requiredProvidersForAspects;
   private final ImmutableMap<String, Attribute> attributes;
-
-  /**
-   * Which attributes aspect should propagate along:
-   * <ul>
-   *  <li>A {@code null} value means propagate along all attributes</li>
-   *  <li>A (possibly empty) set means to propagate only along the attributes in a set</li>
-   * </ul>
-   */
-  @Nullable private final ImmutableSet<String> restrictToAttributes;
+  private final PropagationFunction attributeAspects;
   @Nullable private final ConfigurationFragmentPolicy configurationFragmentPolicy;
+
+  private interface PropagationFunction {
+    ImmutableCollection<AspectClass> propagate(Attribute attribute);
+  }
 
   private AspectDefinition(
       AspectClass aspectClass,
       RequiredProviders requiredProviders,
       RequiredProviders requiredAspectProviders,
       ImmutableMap<String, Attribute> attributes,
-      @Nullable ImmutableSet<String> restrictToAttributes,
+      PropagationFunction attributeAspects,
       @Nullable ConfigurationFragmentPolicy configurationFragmentPolicy) {
     this.aspectClass = aspectClass;
     this.requiredProviders = requiredProviders;
     this.requiredProvidersForAspects = requiredAspectProviders;
 
     this.attributes = attributes;
-    this.restrictToAttributes = restrictToAttributes;
+    this.attributeAspects = attributeAspects;
     this.configurationFragmentPolicy = configurationFragmentPolicy;
   }
 
@@ -120,13 +119,10 @@ public final class AspectDefinition {
 
 
   /**
-   * Returns the set of required aspects for a given attribute.
+   * Returns the set of required aspects for a given atribute.
    */
-  public boolean propagateAlong(Attribute attribute) {
-    if (restrictToAttributes != null) {
-      return restrictToAttributes.contains(attribute.getName());
-    }
-    return true;
+  public ImmutableCollection<AspectClass> getAttributeAspects(Attribute attribute) {
+    return attributeAspects.propagate(attribute);
   }
 
   /**
@@ -220,8 +216,8 @@ public final class AspectDefinition {
     private RequiredProviders.Builder requiredProviders = RequiredProviders.acceptAnyBuilder();
     private RequiredProviders.Builder requiredAspectProviders =
         RequiredProviders.acceptNoneBuilder();
-    @Nullable
-    private LinkedHashSet<String> propagateAlongAttributes = new LinkedHashSet<>();
+    private final Multimap<String, AspectClass> attributeAspects = LinkedHashMultimap.create();
+    private ImmutableCollection<AspectClass> allAttributesAspects = null;
     private final ConfigurationFragmentPolicy.Builder configurationFragmentPolicy =
         new ConfigurationFragmentPolicy.Builder();
 
@@ -269,38 +265,42 @@ public final class AspectDefinition {
 
 
     /**
-     * Declares that this aspect propagates along an {@code attribute} on the target
-     * associated with this aspect.
+     * Declares that this aspect depends on the given aspects in {@code aspectFactories} provided
+     * by direct dependencies through attribute {@code attribute} on the target associated with this
+     * aspect.
      *
-     * Specify multiple attributes by calling {@link #propagateAlongAttribute(String)}
-     * repeatedly.
-     *
-     * Aspect can also declare to propagate along all attributes with
-     * {@link #propagateAlongAttributes}.
+     * <p>Note that {@code ConfiguredAspectFactory} instances are expected in the second argument,
+     * but we cannot reference that interface here.
      */
-    public final Builder propagateAlongAttribute(String attribute) {
+    public final Builder attributeAspect(String attribute, NativeAspectClass... aspectClasses) {
       Preconditions.checkNotNull(attribute);
-      Preconditions.checkState(this.propagateAlongAttributes != null,
-          "Either propagate along all attributes, or along specific attributes, not both");
-
-      this.propagateAlongAttributes.add(attribute);
-
+      for (NativeAspectClass aspectClass : aspectClasses) {
+        this.attributeAspect(attribute, Preconditions.checkNotNull(aspectClass));
+      }
       return this;
     }
 
     /**
-     * Declares that this aspect propagates along all attributes on the target
-     * associated with this aspect.
-     *
-     * Specify either this or {@link #propagateAlongAttribute(String)}, not both.
+     * Declares that this aspect depends on the given {@link AspectClass} provided
+     * by direct dependencies through attribute {@code attribute} on the target associated with this
+     * aspect.
      */
-    public final Builder propagateAlongAllAttributes() {
-      Preconditions.checkState(this.propagateAlongAttributes != null,
-          "Aspects for all attributes must only be specified once");
-
-      Preconditions.checkState(this.propagateAlongAttributes.isEmpty(),
+    public final Builder attributeAspect(String attribute, AspectClass aspectClass) {
+      Preconditions.checkNotNull(attribute);
+      Preconditions.checkState(this.allAttributesAspects == null,
           "Specify either aspects for all attributes, or for specific attributes, not both");
-      this.propagateAlongAttributes = null;
+
+      this.attributeAspects.put(attribute, Preconditions.checkNotNull(aspectClass));
+
+      return this;
+    }
+
+    public final Builder allAttributesAspect(AspectClass... aspectClasses) {
+      Preconditions.checkState(this.attributeAspects.isEmpty(),
+          "Specify either aspects for all attributes, or for specific attributes, not both");
+      Preconditions.checkState(this.allAttributesAspects == null,
+          "Aspects for all attributes must only be specified once");
+      this.allAttributesAspects = ImmutableList.copyOf(aspectClasses);
       return this;
     }
 
@@ -394,6 +394,34 @@ public final class AspectDefinition {
       return this;
     }
 
+    @Immutable
+    private static final class AllAttributesPropagationFunction implements PropagationFunction {
+      private final ImmutableCollection<AspectClass> aspects;
+
+      private AllAttributesPropagationFunction(ImmutableCollection<AspectClass> aspects) {
+        this.aspects = aspects;
+      }
+
+      @Override
+      public ImmutableCollection<AspectClass> propagate(Attribute attribute) {
+        return aspects;
+      }
+    }
+
+    @Immutable
+    private static final class PerAttributePropagationFunction implements PropagationFunction {
+      ImmutableSetMultimap<String, AspectClass> aspects;
+
+      public PerAttributePropagationFunction(
+          ImmutableSetMultimap<String, AspectClass> aspects) {
+        this.aspects = aspects;
+      }
+
+      @Override
+      public ImmutableCollection<AspectClass> propagate(Attribute attribute) {
+        return aspects.get(attribute.getName());
+      }
+    }
 
     /**
      * Builds the aspect definition.
@@ -405,9 +433,9 @@ public final class AspectDefinition {
           requiredProviders.build(),
           requiredAspectProviders.build(),
           ImmutableMap.copyOf(attributes),
-          propagateAlongAttributes == null
-              ? null
-              : ImmutableSet.copyOf(propagateAlongAttributes),
+          allAttributesAspects != null
+              ? new AllAttributesPropagationFunction(allAttributesAspects)
+              : new PerAttributePropagationFunction(ImmutableSetMultimap.copyOf(attributeAspects)),
           configurationFragmentPolicy.build());
     }
   }
