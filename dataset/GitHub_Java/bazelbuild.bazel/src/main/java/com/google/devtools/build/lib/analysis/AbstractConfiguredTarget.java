@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -76,15 +75,6 @@ public abstract class AbstractConfiguredTarget
   @Override
   public BuildConfiguration getConfiguration() {
     return configuration;
-  }
-
-  @Nullable
-  @Override
-  public Object get(SkylarkProviderIdentifier id) {
-    if (id.isLegacy()) {
-      return get(id.getLegacyId());
-    }
-    return get(id.getKey());
   }
 
   @Override
