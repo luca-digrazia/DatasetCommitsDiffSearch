@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
-import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -122,16 +121,14 @@ public class ObjcProviderSkylarkConverters {
    */
   private static void validateTypes(Object toCheck, Class<?> expectedSetType, String keyName) {
     if (!(toCheck instanceof SkylarkNestedSet)) {
-      throw new IllegalArgumentException(
-          String.format(NOT_SET_ERROR, keyName, EvalUtils.getDataTypeName(toCheck)));
+      throw new IllegalArgumentException(String.format(NOT_SET_ERROR, keyName, toCheck.getClass()));
     } else if (!((SkylarkNestedSet) toCheck).getContentType().canBeCastTo(expectedSetType)) {
       throw new IllegalArgumentException(
           String.format(
               BAD_SET_TYPE_ERROR,
               keyName,
-              EvalUtils.getDataTypeNameFromClass(expectedSetType),
-              EvalUtils.getDataTypeNameFromClass(
-                  ((SkylarkNestedSet) toCheck).getContentType().getType())));
+              expectedSetType,
+              ((SkylarkNestedSet) toCheck).getContentType().getType()));
     }
   }
 }
