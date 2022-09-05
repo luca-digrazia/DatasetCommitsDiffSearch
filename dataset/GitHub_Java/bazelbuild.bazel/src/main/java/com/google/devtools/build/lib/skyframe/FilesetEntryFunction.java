@@ -49,8 +49,7 @@ public final class FilesetEntryFunction implements SkyFunction {
   }
 
   @Override
-  public SkyValue compute(SkyKey key, Environment env)
-      throws FilesetEntryFunctionException, InterruptedException {
+  public SkyValue compute(SkyKey key, Environment env) throws FilesetEntryFunctionException {
     FilesetTraversalParams t = (FilesetTraversalParams) key.argument();
     Preconditions.checkState(
         t.getNestedTraversal().isPresent() != t.getDirectTraversal().isPresent(),
@@ -217,7 +216,7 @@ public final class FilesetEntryFunction implements SkyFunction {
       public boolean apply(String e) {
         // Keep the top-level exclusions only. Do not look for "/" but count the path segments
         // instead, in anticipation of future Windows support.
-        return PathFragment.create(e).segmentCount() == 1;
+        return new PathFragment(e).segmentCount() == 1;
       }
     });
   }
@@ -227,9 +226,8 @@ public final class FilesetEntryFunction implements SkyFunction {
     return null;
   }
 
-  private static RecursiveFilesystemTraversalValue traverse(
-      Environment env, String errorInfo, DirectTraversal traversal)
-      throws MissingDepException, InterruptedException {
+  private RecursiveFilesystemTraversalValue traverse(Environment env, String errorInfo,
+      DirectTraversal traversal) throws MissingDepException {
     SkyKey depKey = RecursiveFilesystemTraversalValue.key(
         new RecursiveFilesystemTraversalValue.TraversalRequest(traversal.getRoot().asRootedPath(),
             traversal.isGenerated(), traversal.getPackageBoundaryMode(), traversal.isPackage(),

@@ -14,9 +14,7 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.DirectTraversal;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.DirectTraversalRoot;
@@ -113,7 +111,7 @@ public final class FilesetTraversalParamsFactory {
    * an error on its own, any error messages printed will still be correct.
    *
    * @param ownerLabel the rule that created this object
-   * @param nested the list of traversal params that were used for the nested (inner) Fileset
+   * @param nested the traversal params that were used for the nested (inner) Fileset
    * @param destDir path in the Fileset's output directory that will be the root of files coming
    *     from the nested Fileset
    * @param excludes optional; set of files directly below (not in a subdirectory of) the nested
@@ -121,15 +119,13 @@ public final class FilesetTraversalParamsFactory {
    */
   public static FilesetTraversalParams nestedTraversal(
       Label ownerLabel,
-      ImmutableList<FilesetTraversalParams> nested,
+      FilesetTraversalParams nested,
       PathFragment destDir,
       @Nullable Set<String> excludes) {
-    if (nested.size() == 1
-        && destDir.segmentCount() == 0
-        && (excludes == null || excludes.isEmpty())) {
+    if (destDir.segmentCount() == 0 && (excludes == null || excludes.isEmpty())) {
       // Wrapping the traversal here would not lead to a different result: the output location is
       // the same and there are no additional excludes.
-      return Iterables.getOnlyElement(nested);
+      return nested;
     }
     // When srcdir is another Fileset, then files must be null so strip_prefix must also be null.
     return new NestedTraversalParams(ownerLabel, nested, destDir, excludes);
@@ -279,8 +275,8 @@ public final class FilesetTraversalParamsFactory {
     }
 
     @Override
-    public ImmutableList<FilesetTraversalParams> getNestedTraversal() {
-      return ImmutableList.of();
+    public Optional<FilesetTraversalParams> getNestedTraversal() {
+      return Optional.absent();
     }
 
     @Override
@@ -308,11 +304,11 @@ public final class FilesetTraversalParamsFactory {
   }
 
   private static final class NestedTraversalParams extends ParamsCommon {
-    private final ImmutableList<FilesetTraversalParams> nested;
+    private final FilesetTraversalParams nested;
 
     NestedTraversalParams(
         Label ownerLabel,
-        ImmutableList<FilesetTraversalParams> nested,
+        FilesetTraversalParams nested,
         PathFragment destDir,
         @Nullable Set<String> excludes) {
       super(ownerLabel, destDir, excludes);
@@ -325,16 +321,14 @@ public final class FilesetTraversalParamsFactory {
     }
 
     @Override
-    public ImmutableList<FilesetTraversalParams> getNestedTraversal() {
-      return nested;
+    public Optional<FilesetTraversalParams> getNestedTraversal() {
+      return Optional.of(nested);
     }
 
     @Override
     public void fingerprint(Fingerprint fp) {
       commonFingerprint(fp);
-      for (FilesetTraversalParams param : nested) {
-        param.fingerprint(fp);
-      }
+      nested.fingerprint(fp);
     }
 
     @Override
