@@ -27,7 +27,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
 import com.google.devtools.build.lib.collect.CompactHashSet;
@@ -37,6 +36,7 @@ import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
@@ -525,7 +525,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
   }
 
   /**
-   * Get SkyKeys for the FileValues for the given {@code pathFragments}. To do this, we look for a
+   * Get SkyKeys for the FileValues for the given {@param pathFragments}. To do this, we look for a
    * package lookup node for each path fragment, since package lookup nodes contain the "root" of a
    * package. The returned SkyKeys correspond to FileValues that may not exist in the graph.
    */
