@@ -201,19 +201,19 @@ public final class AndroidRuleClasses {
           buildOptions.get(AndroidConfiguration.Options.class);
       CppOptions cppOptions = buildOptions.get(CppOptions.class);
       Label androidCrosstoolTop = androidOptions.realAndroidCrosstoolTop();
-      if (androidOptions.realFatApkCpus().isEmpty()
+      if (androidOptions.fatApkCpus.isEmpty()
           && (androidCrosstoolTop == null || androidCrosstoolTop.equals(cppOptions.crosstoolTop))) {
         return ImmutableList.of();
       }
 
-      if (androidOptions.realFatApkCpus().isEmpty()) {
+      if (androidOptions.fatApkCpus.isEmpty()) {
         BuildOptions splitOptions = buildOptions.clone();
         setCrosstoolToAndroid(splitOptions, buildOptions);
         return ImmutableList.of(splitOptions);
       }
 
       List<BuildOptions> result = new ArrayList<>();
-      for (String cpu : ImmutableSortedSet.copyOf(androidOptions.realFatApkCpus())) {
+      for (String cpu : ImmutableSortedSet.copyOf(androidOptions.fatApkCpus)) {
         BuildOptions splitOptions = buildOptions.clone();
         // Disable fat APKs for the child configurations.
         splitOptions.get(AndroidConfiguration.Options.class).fatApkCpus = ImmutableList.of();
@@ -314,7 +314,6 @@ public final class AndroidRuleClasses {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
       return builder
-          .requiresConfigurationFragments(AndroidConfiguration.class)
           .setUndocumented()
           // This is the Proguard that comes from the --proguard_top attribute.
           .add(attr(":proguard", LABEL).cfg(HOST).value(PROGUARD).exec())
