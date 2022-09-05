@@ -866,7 +866,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> libraryResourceJars = libraryResourceJarsBuilder.build();
 
     Iterable<Artifact> filteredJars = ImmutableList.copyOf(
-        filter(jars, not(in(libraryResourceJars.toSet()))));
+        filter(jars, not(in(libraryResourceJars.toSet())))); 
 
     AndroidSdkProvider sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
 
@@ -935,17 +935,11 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .add(sdk.getAndroidJar())
         .addTransitive(common.getTransitiveNeverLinkLibraries())
         .build();
-    Artifact proguardSeeds =
-        ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_PROGUARD_SEEDS);
-    Artifact proguardUsage =
-        ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_PROGUARD_USAGE);
     ProguardOutput result = ProguardHelper.createProguardAction(
         ruleContext,
         sdk.getProguard(),
         deployJarArtifact,
         proguardSpecs,
-        proguardSeeds,
-        proguardUsage,
         proguardMapping,
         libraryJars,
         proguardOutputJar,
@@ -970,12 +964,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
           throws InterruptedException {
     NestedSetBuilder<Artifact> failures = NestedSetBuilder.<Artifact>stableOrder();
     ProguardOutput outputs =
-        ProguardHelper.getProguardOutputs(
-            proguardOutputJar,
-            /* proguardSeeds */ (Artifact) null,
-            /* proguardUsage */ (Artifact) null,
-            ruleContext,
-            semantics);
+        ProguardHelper.getProguardOutputs(proguardOutputJar, ruleContext, semantics);
     outputs.addAllToSet(failures);
     JavaOptimizationMode optMode = getJavaOptimizationMode(ruleContext);
     ruleContext.registerAction(
@@ -986,7 +975,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 optMode == JavaOptimizationMode.LEGACY
                     ? "without proguard_specs"
                     : "in optimization mode " + optMode)));
-    return new ProguardOutput(deployJarArtifact, null, null, null, null, null);
+    return new ProguardOutput(deployJarArtifact, null, null, null);
   }
 
   private static ResourceApk shrinkResources(
@@ -1287,14 +1276,11 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   }
 
   /**
-   * Returns a {@link DexArchiveProvider} of all transitively generated dex archives as well as dex
-   * archives for the Jars produced by the binary target itself.
+   * Returns a {@link DexArchiveProvider} of all transitively generated dex archives as well as
+   * dex archives for the Jars produced by the binary target itself.
    */
   private static Function<Artifact, Artifact> collectDexArchives(
-      RuleContext ruleContext,
-      AndroidCommon common,
-      List<String> dexopts,
-      JavaTargetAttributes attributes) {
+      RuleContext ruleContext, AndroidCommon common, List<String> dexopts) {
     DexArchiveProvider.Builder result = new DexArchiveProvider.Builder()
         // Use providers from all attributes that declare DexArchiveAspect
         .addTransitiveProviders(
@@ -1303,30 +1289,15 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         DexArchiveAspect.incrementalDexopts(ruleContext, dexopts);
     for (Artifact jar : common.getJarsProducedForRuntime()) {
       // Create dex archives next to all Jars produced by AndroidCommon for this rule.  We need to
-      // do this (instead of placing dex archives into the _dx subdirectory like DexArchiveAspect)
-      // because for "legacy" ResourceApks, AndroidCommon produces Jars per resource dependency that
-      // can theoretically have duplicate basenames, so they go into special directories, and we
-      // piggyback on that naming scheme here by placing dex archives into the same directories.
+      // do this (instead of placing dex archives into the _dx subdirectory like DexArchiveAspect
+      // does because for "legacy" ResourceApks, AndroidCommon produces Jars per resource dependency
+      // that can theoretically have duplicate basenames, so they go into special directories, and
+      // we piggyback on that naming scheme here by placing dex archives into the same directories.
       PathFragment jarPath = jar.getRootRelativePath();
-      Artifact jarToDex = jar;
-      if (AndroidCommon.getAndroidConfig(ruleContext).desugarJava8()) {
-        // desugar jars first if desired...
-        jarToDex =
-            DexArchiveAspect.desugar(
-                ruleContext,
-                jar,
-                attributes.getBootClassPath(),
-                attributes.getCompileTimeClassPath(),
-                ruleContext.getDerivedArtifact(
-                    jarPath.replaceName(jarPath.getBaseName() + "_desugared.jar"), jar.getRoot()));
-      }
-      Artifact dexArchive =
-          DexArchiveAspect.createDexArchiveAction(
-              ruleContext,
-              jarToDex,
-              incrementalDexopts,
-              ruleContext.getDerivedArtifact(
-                  jarPath.replaceName(jarPath.getBaseName() + ".dex.zip"), jar.getRoot()));
+      Artifact dexArchive = ruleContext.getDerivedArtifact(
+          jarPath.replaceName(jarPath.getBaseName() + ".dex.zip"),
+          jar.getRoot());
+      DexArchiveAspect.createDexArchiveAction(ruleContext, jar, dexArchive, incrementalDexopts);
       result.addDexArchive(incrementalDexopts, dexArchive, jar);
     }
     return result.build().archivesForDexopts(incrementalDexopts);
@@ -1384,7 +1355,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         // there should be very few or no Jar files that still end up in shards.  The dexing
         // step below will have to deal with those in addition to merging .dex files together.
         classpath = Iterables
-            .transform(classpath, collectDexArchives(ruleContext, common, dexopts, attributes));
+            .transform(classpath, collectDexArchives(ruleContext, common, dexopts));
         shardCommandLine.add("--split_dexed_classes");
       }
       shardCommandLine.addBeforeEachExecPath("--input_jar", classpath);

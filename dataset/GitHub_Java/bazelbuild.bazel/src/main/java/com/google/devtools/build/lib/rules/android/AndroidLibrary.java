@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.rules.java.JavaNeverlinkInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
+import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.ProguardLibrary;
 import com.google.devtools.build.lib.rules.java.ProguardSpecProvider;
@@ -62,14 +63,9 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     NestedSet<LinkerInput> transitiveNativeLibraries =
         AndroidCommon.collectTransitiveNativeLibraries(
             AndroidCommon.collectTransitiveInfo(ruleContext, Mode.TARGET));
-
-    NestedSetBuilder<Artifact> proguardConfigsbuilder = NestedSetBuilder.stableOrder();
-    proguardConfigsbuilder.addTransitive(new ProguardLibrary(ruleContext).collectProguardSpecs());
-    AndroidIdlHelper.addSupportLibProguardConfigs(ruleContext, proguardConfigsbuilder);
-    NestedSet<Artifact> transitiveProguardConfigs = proguardConfigsbuilder.build();
-
-    JavaCommon javaCommon =
-        AndroidCommon.createJavaCommonWithAndroidDataBinding(ruleContext, javaSemantics, true);
+    NestedSet<Artifact> transitiveProguardConfigs =
+        new ProguardLibrary(ruleContext).collectProguardSpecs();
+    JavaCommon javaCommon = new JavaCommon(ruleContext, javaSemantics);
     javaSemantics.checkRule(ruleContext, javaCommon);
     AndroidCommon androidCommon = new AndroidCommon(javaCommon);
 
@@ -98,8 +94,8 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
           null, /* proguardCfgOut */
           null, /* mainDexProguardCfg */
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST),
-          ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP),
-          DataBinding.isEnabled(ruleContext) ? DataBinding.getLayoutInfoFile(ruleContext) : null);
+          // This is just to communicate the results from the merge step to the validator step.
+          ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP));
       if (ruleContext.hasErrors()) {
         return null;
       }
@@ -201,10 +197,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     }
 
     builder
-        .addProvider(
-            NativeLibsZipsProvider.class,
-            new NativeLibsZipsProvider(
-                AndroidCommon.collectTransitiveNativeLibsZips(ruleContext).build()))
         .add(
             AndroidNativeLibraryProvider.class,
             AndroidNativeLibraryProvider.create(transitiveNativeLibraries))
@@ -214,6 +206,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         .add(
             JavaSourceInfoProvider.class,
             JavaSourceInfoProvider.fromJavaTargetAttributes(javaTargetAttributes, javaSemantics))
+        .add(JavaSourceJarsProvider.class, androidCommon.getJavaSourceJarsProvider())
         .add(
             AndroidCcLinkParamsProvider.class,
             AndroidCcLinkParamsProvider.create(androidCommon.getCcLinkParamsStore()))

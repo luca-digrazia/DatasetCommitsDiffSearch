@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.Outpu
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+
 import javax.annotation.Nullable;
 
 /**
@@ -165,18 +166,9 @@ public class AndroidSkylarkApiProvider extends SkylarkApiProvider {
   @SkylarkModule(
     name = "AndroidSkylarkIdlInfo",
     category = SkylarkModuleCategory.NONE,
-    doc = "Provides access to information about Android rules."
+    doc = "Provides access to information about Android rules"
   )
   public class IdlInfo {
-    @SkylarkCallable(
-        name = "import_root",
-        structField = true,
-        allowReturnNones = true,
-        doc = "Returns the root of IDL packages if not the java root."
-    )
-    public String getImportRoot() {
-      return getIdeInfoProvider().getIdlImportRoot();
-    }
     @SkylarkCallable(
         name = "sources",
         structField = true,
