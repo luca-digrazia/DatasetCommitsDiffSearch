@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.events.util;
 
-import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventCollector;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -23,6 +22,7 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.io.OutErr;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -45,7 +45,7 @@ public final class EventCollectionApparatus {
   public EventCollectionApparatus(Set<EventKind> mask) {
     eventCollector = new EventCollector(mask);
     printingEventHandler = new PrintingEventHandler(EventKind.ERRORS_AND_WARNINGS_AND_OUTPUT);
-    reporter = new Reporter(new EventBus(), eventCollector, printingEventHandler);
+    reporter = new Reporter(eventCollector, printingEventHandler);
     this.setFailFast(true);
   }
 

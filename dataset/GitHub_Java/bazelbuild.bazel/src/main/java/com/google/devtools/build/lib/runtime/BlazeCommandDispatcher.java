@@ -143,7 +143,6 @@ public class BlazeCommandDispatcher {
 
     Path doNotBuild = workspace.getParentDirectory().getRelative(
         BlazeRuntime.DO_NOT_BUILD_FILE_NAME);
-
     if (doNotBuild.exists()) {
       if (!commandAnnotation.canRunInOutputDirectory()) {
         outErr.printErrLn(getNotInRealWorkspaceError(doNotBuild));
