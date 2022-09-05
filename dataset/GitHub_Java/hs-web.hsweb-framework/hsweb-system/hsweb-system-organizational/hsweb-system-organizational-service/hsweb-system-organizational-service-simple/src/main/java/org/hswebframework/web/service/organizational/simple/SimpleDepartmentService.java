@@ -97,12 +97,6 @@ public class SimpleDepartmentService
     }
 
     @Override
-    public String insert(DepartmentEntity entity) {
-        publisher.publishEvent(new ClearPersonCacheEvent());
-        return super.insert(entity);
-    }
-
-    @Override
     public int updateByPk(String id, DepartmentEntity entity) {
         publisher.publishEvent(new ClearPersonCacheEvent());
         return super.updateByPk(id, entity);
