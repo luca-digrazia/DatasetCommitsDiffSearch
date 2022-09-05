@@ -798,6 +798,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   public void setSkyframeBuildView(SkyframeBuildView skyframeBuildView) {
     this.skyframeBuildView = skyframeBuildView;
     this.artifactFactory.set(skyframeBuildView.getArtifactFactory());
+    if (skyframeBuildView.getWarningListener() != null) {
+      setErrorEventListener(skyframeBuildView.getWarningListener());
+    }
   }
 
   /**
@@ -805,6 +808,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    */
   public void setEventBus(EventBus eventBus) {
     this.eventBus.set(eventBus);
+  }
+
+  /**
+   * Sets the eventHandler to use for reporting errors.
+   */
+  public void setErrorEventListener(EventHandler eventHandler) {
+    this.errorEventListener = eventHandler;
   }
 
   /**
@@ -938,7 +948,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   EvaluationResult<TargetPatternValue> targetPatterns(Iterable<SkyKey> patternSkyKeys,
       int numThreads, boolean keepGoing, EventHandler eventHandler) throws InterruptedException {
     checkActive();
-    return buildDriver.evaluate(patternSkyKeys, keepGoing, numThreads, eventHandler);
+    return buildDriver.evaluate(patternSkyKeys, keepGoing, numThreads,
+        eventHandler);
   }
 
   /**
@@ -1345,8 +1356,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return new CyclesReporter(
         new TransitiveTargetCycleReporter(packageManager),
         new ActionArtifactCycleReporter(packageManager),
-        new SkylarkModuleCycleReporter(),
-        new ConfiguredTargetCycleReporter(packageManager));
+        new SkylarkModuleCycleReporter());
   }
 
   CyclesReporter getCyclesReporter() {
