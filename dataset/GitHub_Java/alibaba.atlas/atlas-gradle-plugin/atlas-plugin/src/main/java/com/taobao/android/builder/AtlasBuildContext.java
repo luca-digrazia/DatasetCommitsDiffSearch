@@ -224,12 +224,12 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Created by shenghua.nish on 2016-05-09 At 3:50 p.m.
+ * Created by shenghua.nish on 2016-05-09 下午3:50.
  */
 public class AtlasBuildContext {
 
     /**
-     * External plug-ins can change the specific implementation of this class
+     * 外部插件可以更改该类的具体的实现
      */
     public static BuilderAdapter sBuilderAdapter = new BuilderAdapter();
 
@@ -248,14 +248,14 @@ public class AtlasBuildContext {
     public static DexBuilder dexBuilder = DefaultDexBuilder.getInstance();
 
     /**
-     * Depending on the original coordinate address, classInject You need to find atlas.
+     * 依赖对应原始的坐标地址， classInject 需要查找到atlas。
      *
-     * File open directory -> Coordinates the address
+     * 文件展开目录 -> 坐标地址
      */
     public static Map<String, MavenCoordinates> dependencyTraceMap = new HashMap<>();
 
     /**
-     * Modified file -> The original file
+     * 修改后的文件 -> 原始文件
      */
     public static Map<String, String> jarTraceMap = new HashMap<String, String>();
 

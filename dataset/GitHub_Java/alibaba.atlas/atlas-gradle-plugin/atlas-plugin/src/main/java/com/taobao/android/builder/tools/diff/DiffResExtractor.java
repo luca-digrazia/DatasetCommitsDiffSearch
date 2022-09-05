@@ -234,8 +234,8 @@ import static com.taobao.android.builder.tools.xml.XmlHelper.removeStringValue;
 public class DiffResExtractor {
 
     /**
-     * assets : Compare apk directly
-     * res : Through diffResFiles , Go to apk validation
+     * assets : 直接通过比较apk
+     * res : 通过diffResFiles ， 再去apk 验证
      *
      * @param appVariantContext
      * @param diffResFiles
@@ -272,7 +272,7 @@ public class DiffResExtractor {
 
         //List<String> diffResPath = new ArrayList<String>();
 
-        //Calculate the assets
+        //计算assets
         for (File file : files) {
 
             String relativePath = file.getAbsolutePath().substring(basePathLength);
@@ -287,7 +287,7 @@ public class DiffResExtractor {
             }
         }
 
-        //Calculate the res
+        //计算res
         for (String diffFile : diffResFiles) {
 
             File baseFile = new File(baseApkDir, diffFile);
@@ -305,7 +305,7 @@ public class DiffResExtractor {
             }
         }
 
-        // //Resource. Arsc must be generated
+        // //必须生成resource.arsc
         File resDir = new File(destDir, "res");
         File valuesDir = new File(resDir, "values");
         FileUtils.forceMkdir(valuesDir);
@@ -337,11 +337,11 @@ public class DiffResExtractor {
             }
         }
 
-        //XML Settings values.
+        //设置values.xml
         File valuesXml = new File(resDir, "values/values.xml");
-
         AtlasBuildContext.sBuilderAdapter.apkInjectInfoCreator.injectTpatchValuesRes(appVariantContext, valuesXml);
         try {
+            removeStringValue(valuesXml, "config_channel");
             removeStringValue(valuesXml, "ttid");
             removeStringValue(valuesXml, "config_channel");
         } catch (Exception e) {
