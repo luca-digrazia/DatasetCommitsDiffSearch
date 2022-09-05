@@ -44,13 +44,16 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.rules.objc.BundleSupport.ExtraActoolArgs;
+import com.google.devtools.build.lib.rules.objc.ObjcActionsBuilder.ExtraActoolArgs;
+import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.InvalidFamilyNameException;
+import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.RepeatedFamilyNameException;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.XcodeprojBuildSetting;
 
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -93,6 +96,7 @@ public final class ReleaseBundlingSupport {
   private final Bundling bundling;
   private final ObjcProvider objcProvider;
   private final LinkedBinary linkedBinary;
+  private final ImmutableSet<TargetDeviceFamily> families;
   private final IntermediateArtifacts intermediateArtifacts;
 
   /**
@@ -118,6 +122,8 @@ public final class ReleaseBundlingSupport {
    * @param ruleContext context for the application-generating rule
    * @param objcProvider provider containing all dependencies' information as well as some of this
    *    rule's
+   * @param optionsProvider provider containing options and plist settings for this rule and its
+   *    dependencies
    * @param linkedBinary whether to look for a linked binary from this rule and dependencies or just
    *    the latter
    * @param bundleDirFormat format string representing the bundle's directory with a single
@@ -126,15 +132,18 @@ public final class ReleaseBundlingSupport {
    *    for (<b>not</b> the minimum OS version its binary is compiled with, that needs to be set
    *    through the configuration)
    */
-  ReleaseBundlingSupport(RuleContext ruleContext, ObjcProvider objcProvider,
+  ReleaseBundlingSupport(
+      RuleContext ruleContext, ObjcProvider objcProvider, OptionsProvider optionsProvider,
       LinkedBinary linkedBinary, String bundleDirFormat, String bundleMinimumOsVersion) {
     this.linkedBinary = linkedBinary;
     this.attributes = new Attributes(ruleContext);
     this.ruleContext = ruleContext;
     this.objcProvider = objcProvider;
+    this.families = ImmutableSet.copyOf(attributes.families());
     this.intermediateArtifacts = ObjcRuleClasses.intermediateArtifacts(ruleContext);
-    bundling = bundling(ruleContext, objcProvider, bundleDirFormat, bundleMinimumOsVersion);
-    bundleSupport = new BundleSupport(ruleContext, bundling, extraActoolArgs());
+    bundling = bundling(
+        ruleContext, objcProvider, optionsProvider, bundleDirFormat, bundleMinimumOsVersion);
+    bundleSupport = new BundleSupport(ruleContext, families, bundling, extraActoolArgs());
   }
 
   /**
@@ -159,7 +168,7 @@ public final class ReleaseBundlingSupport {
       }
     }
 
-    if (bundleSupport.targetDeviceFamilies().isEmpty()) {
+    if (families.isEmpty()) {
       ruleContext.attributeError("families", INVALID_FAMILIES_ERROR);
     }
 
@@ -206,7 +215,7 @@ public final class ReleaseBundlingSupport {
     registerEmbedLabelPlistAction();
 
     BundleMergeControlBytes bundleMergeControlBytes = new BundleMergeControlBytes(
-        bundling, maybeSignedIpa, objcConfiguration, bundleSupport.targetDeviceFamilies());
+        bundling, maybeSignedIpa, objcConfiguration, families);
     registerBundleMergeActions(
         maybeSignedIpa, bundling.getBundleContentArtifacts(), bundleMergeControlBytes);
 
@@ -387,7 +396,8 @@ public final class ReleaseBundlingSupport {
     return new ExtraActoolArgs(extraArgs.build());
   }
 
-  private Bundling bundling(RuleContext ruleContext, ObjcProvider objcProvider,
+  private Bundling bundling(
+      RuleContext ruleContext, ObjcProvider objcProvider, OptionsProvider optionsProvider,
       String bundleDirFormat, String minimumOsVersion) {
     ImmutableList<BundleableFile> extraBundleFiles;
     ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
@@ -416,8 +426,9 @@ public final class ReleaseBundlingSupport {
         .addExtraBundleFiles(extraBundleFiles)
         .setObjcProvider(objcProvider)
         .setInfoplistMerging(
-            BundleSupport.infoPlistMerging(ruleContext, objcProvider, primaryBundleId,
-                fallbackBundleId, new BundleSupport.ExtraMergePlists(getGeneratedVersionPlist())))
+            BundleSupport.infoPlistMerging(ruleContext, objcProvider, optionsProvider,
+                primaryBundleId, fallbackBundleId,
+                new BundleSupport.ExtraMergePlists(getGeneratedVersionPlist())))
         .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
         .setPrimaryBundleId(primaryBundleId)
         .setFallbackBundleId(fallbackBundleId)
@@ -429,7 +440,7 @@ public final class ReleaseBundlingSupport {
     Artifact resultingLinkedBinary = intermediateArtifacts.combinedArchitectureBinary();
     NestedSet<Artifact> linkedBinaries = linkedBinaries();
 
-    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
+    ruleContext.registerAction(ObjcActionsBuilder.spawnOnDarwinActionBuilder()
         .setMnemonic("ObjcCombiningArchitectures")
         .addTransitiveInputs(linkedBinaries)
         .addOutput(resultingLinkedBinary)
@@ -467,7 +478,6 @@ public final class ReleaseBundlingSupport {
     }
 
     // Convert names to a sequence containing "1" and/or "2" for iPhone and iPad, respectively.
-    ImmutableSet<TargetDeviceFamily> families = bundleSupport.targetDeviceFamilies();
     Iterable<Integer> familyIndexes =
         families.isEmpty() ? ImmutableList.<Integer>of() : UI_DEVICE_FAMILY_VALUES.get(families);
     buildSettings.add(XcodeprojBuildSetting.newBuilder()
@@ -489,7 +499,7 @@ public final class ReleaseBundlingSupport {
   private ReleaseBundlingSupport registerSignBundleAction(
       Artifact entitlements, Artifact ipaOutput, Artifact ipaUnsigned) {
     // TODO(bazel-team): Support variable substitution
-    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
+    ruleContext.registerAction(ObjcActionsBuilder.spawnOnDarwinActionBuilder()
         .setMnemonic("IosSignBundle")
         .setProgressMessage("Signing iOS bundle: " + ruleContext.getLabel())
         .setExecutable(new PathFragment("/bin/bash"))
@@ -589,15 +599,23 @@ public final class ReleaseBundlingSupport {
   }
 
   private void registerExtractTeamPrefixAction(Artifact teamPrefixFile) {
-    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
+    ruleContext.registerAction(ObjcActionsBuilder.spawnOnDarwinActionBuilder()
         .setMnemonic("ExtractIosTeamPrefix")
         .setExecutable(new PathFragment("/bin/bash"))
         .addArgument("-c")
         .addArgument("set -e &&"
-            + "PLIST=$(mktemp -t teamprefix.plist) && trap \"rm ${PLIST}\" EXIT && "
-            + extractPlistCommand(attributes.provisioningProfile()) + " > ${PLIST} && "
-            + "/usr/libexec/PlistBuddy -c 'Print ApplicationIdentifierPrefix:0' ${PLIST} > "
-            + teamPrefixFile.getExecPathString())
+            + " PLIST=$(" + extractPlistCommand(attributes.provisioningProfile()) + ") && "
+
+            // We think PlistBuddy uses PRead internally to seek through the file. Or possibly
+            // mmaps the file. Or something similar.
+            //
+            // Pipe FDs do not support PRead or mmap, though.
+            //
+            // <<< however does something magical like write to a temporary file or something
+            // like that internally, which means that this Just Works.
+            + " PREFIX=$(/usr/libexec/PlistBuddy -c 'Print ApplicationIdentifierPrefix:0'"
+            + " /dev/stdin <<< \"${PLIST}\") && "
+            + " echo ${PREFIX} > " + teamPrefixFile.getExecPathString())
         .addInput(attributes.provisioningProfile())
         .addOutput(teamPrefixFile)
         .build(ruleContext));
@@ -610,16 +628,25 @@ public final class ReleaseBundlingSupport {
     // BundleID consists of a reverse-DNS string to identify the app, where the last component
     // is the application name, and is specified as an attribute.
 
-    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
+    ruleContext.registerAction(ObjcActionsBuilder.spawnOnDarwinActionBuilder()
         .setMnemonic("ExtractIosEntitlements")
         .setProgressMessage("Extracting entitlements: " + ruleContext.getLabel())
         .setExecutable(new PathFragment("/bin/bash"))
         .addArgument("-c")
         .addArgument("set -e && "
-            + "PLIST=$(mktemp -t entitlements.plist) && trap \"rm ${PLIST}\" EXIT && "
-            + extractPlistCommand(attributes.provisioningProfile()) + " > ${PLIST} && "
-            + "/usr/libexec/PlistBuddy -x -c 'Print Entitlements' ${PLIST} > "
-            + entitlements.getExecPathString())
+            + "PLIST=$("
+            + extractPlistCommand(attributes.provisioningProfile()) + ") && "
+
+            // We think PlistBuddy uses PRead internally to seek through the file. Or possibly
+            // mmaps the file. Or something similar.
+            //
+            // Pipe FDs do not support PRead or mmap, though.
+            //
+            // <<< however does something magical like write to a temporary file or something
+            // like that internally, which means that this Just Works.
+
+            + "/usr/libexec/PlistBuddy -x -c 'Print Entitlements' /dev/stdin <<< \"${PLIST}\" "
+            + "> " + entitlements.getExecPathString())
         .addInput(attributes.provisioningProfile())
         .addOutput(entitlements)
         .build(ruleContext));
@@ -660,9 +687,8 @@ public final class ReleaseBundlingSupport {
   private String codesignCommand(
       Artifact provisioningProfile, Artifact entitlements, String appDir) {
     String fingerprintCommand =
-        "PLIST=$(mktemp -t cert.plist) && trap \"rm ${PLIST}\" EXIT && "
-            + extractPlistCommand(provisioningProfile) + " > ${PLIST} && "
-            + "/usr/libexec/PlistBuddy -c 'Print DeveloperCertificates:0' ${PLIST} | "
+        "/usr/libexec/PlistBuddy -c 'Print DeveloperCertificates:0' /dev/stdin <<< "
+            + "$(" + extractPlistCommand(provisioningProfile) + ") | "
             + "openssl x509 -inform DER -noout -fingerprint | "
             + "cut -d= -f2 | sed -e 's#:##g'";
     return String.format(
@@ -707,6 +733,20 @@ public final class ReleaseBundlingSupport {
         return explicitProvisioningProfile;
       }
       return ruleContext.getPrerequisiteArtifact(":default_provisioning_profile", Mode.TARGET);
+    }
+
+    /**
+     * Returns the value of the {@code families} attribute in a form that is more useful than a list
+     * of strings. Returns an empty set for any invalid {@code families} attribute value, including
+     * an empty list.
+     */
+    Set<TargetDeviceFamily> families() {
+      List<String> rawFamilies = ruleContext.attributes().get("families", Type.STRING_LIST);
+      try {
+        return TargetDeviceFamily.fromNamesInRule(rawFamilies);
+      } catch (InvalidFamilyNameException | RepeatedFamilyNameException e) {
+        return ImmutableSet.of();
+      }
     }
 
     @Nullable
