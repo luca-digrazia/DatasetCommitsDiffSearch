@@ -17,6 +17,7 @@ package com.google.devtools.build.java.turbine.javac;
 import com.sun.tools.javac.api.ClientCodeWrapper.Trusted;
 import com.sun.tools.javac.file.JavacFileManager;
 import com.sun.tools.javac.util.Context;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
@@ -31,8 +32,10 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 import javax.tools.FileObject;
+import javax.tools.JavaFileManager;
 import javax.tools.JavaFileObject;
 import javax.tools.SimpleJavaFileObject;
 import javax.tools.StandardLocation;
@@ -43,13 +46,9 @@ public class ZipOutputFileManager extends JavacFileManager {
 
   private final Map<String, OutputFileObject> files;
 
-  public ZipOutputFileManager(Map<String, OutputFileObject> files) {
-    super(new Context(), false, StandardCharsets.UTF_8);
+  public ZipOutputFileManager(Context context, Map<String, OutputFileObject> files) {
+    super(context, true, StandardCharsets.UTF_8);
     this.files = files;
-  }
-
-  public void setContext(Context context) {
-    super.setContext(context);
   }
 
   /**
@@ -161,6 +160,17 @@ public class ZipOutputFileManager extends JavacFileManager {
     public byte[] asBytes() {
       return buffer != null ? buffer.toByteArray() : null;
     }
+  }
+
+  public static void preRegister(Context context, final Map<String, OutputFileObject> files) {
+    context.put(
+        JavaFileManager.class,
+        new Context.Factory<JavaFileManager>() {
+          @Override
+          public JavaFileManager make(Context c) {
+            return new ZipOutputFileManager(c, files);
+          }
+        });
   }
 
   @Override
