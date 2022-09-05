@@ -422,9 +422,9 @@ public class ParallelEvaluatorTest {
     try {
       evaluator.eval(ImmutableList.of(valueToEval));
     } catch (RuntimeException re) {
-      assertThat(re.getMessage())
-          .contains("Unrecoverable error while evaluating node '" + valueToEval.toString() + "'");
-      assertThat(re.getCause()).isInstanceOf(CustomRuntimeException.class);
+      assertTrue(re.getMessage()
+          .contains("Unrecoverable error while evaluating node '" + valueToEval.toString() + "'"));
+      assertTrue(re.getCause() instanceof CustomRuntimeException);
     }
   }
 
