@@ -75,20 +75,6 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
         }
       };
 
-  static String jarString(String base, String jar, String iJar, String sourceJar) {
-    StringBuilder sb = new StringBuilder();
-    if (jar != null) {
-      sb.append("<jar:" + base + "/" + jar + ">");
-    }
-    if (iJar != null) {
-      sb.append("<ijar:" + base + "/" + iJar + ">");
-    }
-    if (sourceJar != null) {
-      sb.append("<source:" + base + "/" + sourceJar + ">");
-    }
-    return sb.toString();
-  }
-
   public void testSimpleJavaLibrary() throws Exception {
     Path buildFilePath =
         scratch.file(
@@ -113,8 +99,8 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
         .containsExactly("com/google/example/simple/Simple.java");
     assertThat(
             transform(ruleIdeInfo.getJavaRuleIdeInfo().getJarsList(), LIBRARY_ARTIFACT_TO_STRING))
-        .containsExactly(jarString("com/google/example",
-                "libsimple.jar", "libsimple-ijar.jar", "libsimple-src.jar"));
+        .containsExactly(
+            "<jar:com/google/example/libsimple.jar><source:com/google/example/libsimple-src.jar>");
   }
 
   private static Iterable<String> relativePathsForSourcesOf(RuleIdeInfo ruleIdeInfo) {
@@ -348,8 +334,8 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
     assertThat(javaRuleIdeInfo).isNotNull();
     assertThat(transform(javaRuleIdeInfo.getJarsList(), LIBRARY_ARTIFACT_TO_STRING))
         .containsExactly(
-            jarString("com/google/example", "a.jar", null, "impsrc.jar"),
-            jarString("com/google/example", "b.jar", null, "impsrc.jar"));
+            "<jar:com/google/example/a.jar><source:com/google/example/impsrc.jar>",
+            "<jar:com/google/example/b.jar><source:com/google/example/impsrc.jar>");
   }
 
   public void testJavaImportWithExports() throws Exception {
@@ -382,27 +368,27 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
 
   public void testJavaTest() throws Exception {
     scratch.file(
-        "java/com/google/example/BUILD",
+        "com/google/example/BUILD",
         "java_library(",
         "   name = 'foobar',",
         "   srcs = ['FooBar.java'],",
         ")",
         "java_test(",
-        "   name = 'FooBarTest',",
+        "   name = 'foobar-test',",
+        "   test_class = 'MyTestClass',",
         "   srcs = ['FooBarTest.java'],",
         "   deps = [':foobar'],",
         ")");
-    String target = "//java/com/google/example:FooBarTest";
+    String target = "//com/google/example:foobar-test";
     Map<String, RuleIdeInfo> ruleIdeInfos = buildRuleIdeInfo(target);
     RuleIdeInfo testInfo = getRuleInfoAndVerifyLabel(target, ruleIdeInfos);
     assertThat(testInfo.getKind()).isEqualTo(Kind.JAVA_TEST);
     assertThat(relativePathsForSourcesOf(testInfo))
-        .containsExactly("java/com/google/example/FooBarTest.java");
-    assertThat(testInfo.getDependenciesList())
-        .containsExactly("//java/com/google/example:foobar");
+        .containsExactly("com/google/example/FooBarTest.java");
+    assertThat(testInfo.getDependenciesList()).containsExactly("//com/google/example:foobar");
     assertThat(transform(testInfo.getJavaRuleIdeInfo().getJarsList(), LIBRARY_ARTIFACT_TO_STRING))
-        .containsExactly(jarString("java/com/google/example",
-                "FooBarTest.jar", null, "FooBarTest-src.jar"));
+        .containsExactly(
+            "<jar:com/google/example/foobar-test.jar><source:com/google/example/foobar-test-src.jar>");
   }
 
   public void testJavaBinary() throws Exception {
@@ -426,8 +412,8 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
         .containsExactly("com/google/example/FooBarMain.java");
     assertThat(binaryInfo.getDependenciesList()).containsExactly("//com/google/example:foobar");
     assertThat(transform(binaryInfo.getJavaRuleIdeInfo().getJarsList(), LIBRARY_ARTIFACT_TO_STRING))
-        .containsExactly(jarString("com/google/example",
-                "foobar-exe.jar", null, "foobar-exe-src.jar"));
+        .containsExactly(
+            "<jar:com/google/example/foobar-exe.jar><source:com/google/example/foobar-exe-src.jar>");
   }
 
   public void testAndroidLibrary() throws Exception {
@@ -453,8 +439,8 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
     assertThat(ruleInfo.getKind()).isEqualTo(Kind.ANDROID_LIBRARY);
     assertThat(relativePathsForSourcesOf(ruleInfo)).containsExactly("com/google/example/Main.java");
     assertThat(transform(ruleInfo.getJavaRuleIdeInfo().getJarsList(), LIBRARY_ARTIFACT_TO_STRING))
-        .containsExactly(jarString("com/google/example",
-                "libl.jar", "libl-ijar.jar", "libl-src.jar"));
+        .containsExactly(
+            "<jar:com/google/example/libl.jar><source:com/google/example/libl-src.jar>");
     assertThat(
             transform(
                 ruleInfo.getAndroidRuleIdeInfo().getResourcesList(), ARTIFACT_TO_RELATIVE_PATH))
@@ -494,8 +480,8 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
     assertThat(ruleInfo.getKind()).isEqualTo(Kind.ANDROID_BINARY);
     assertThat(relativePathsForSourcesOf(ruleInfo)).containsExactly("com/google/example/Main.java");
     assertThat(transform(ruleInfo.getJavaRuleIdeInfo().getJarsList(), LIBRARY_ARTIFACT_TO_STRING))
-        .containsExactly(jarString("com/google/example",
-                "libb.jar", "libb-ijar.jar", "libb-src.jar"));
+        .containsExactly(
+            "<jar:com/google/example/libb.jar><source:com/google/example/libb-src.jar>");
     assertThat(
             transform(
                 ruleInfo.getAndroidRuleIdeInfo().getResourcesList(), ARTIFACT_TO_RELATIVE_PATH))
@@ -563,8 +549,9 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
 
     assertThat(idlRuleInfo.getAndroidRuleIdeInfo().getHasIdlSources()).isTrue();
     assertThat(LIBRARY_ARTIFACT_TO_STRING.apply(idlRuleInfo.getAndroidRuleIdeInfo().getIdlJar()))
-        .isEqualTo(jarString("java/com/google/example",
-                "libhas_idl-idl.jar", null, "libhas_idl-idl.srcjar"));
+        .isEqualTo(
+                "<jar:java/com/google/example/libhas_idl-idl.jar>"
+                + "<source:java/com/google/example/libhas_idl-idl.srcjar>");
   }
   
   public void testJavaLibraryWithoutGeneratedSourcesHasNoGenJars() throws Exception {
@@ -607,8 +594,9 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
     assertThat(
             transform(ruleIdeInfo.getJavaRuleIdeInfo().getGeneratedJarsList(), 
                 LIBRARY_ARTIFACT_TO_STRING))
-        .containsExactly(jarString("java/com/google/example",
-                "libtest-gen.jar", null, "libtest-gensrc.jar"));
+        .containsExactly(
+            "<jar:java/com/google/example/libtest-gen.jar>"
+            + "<source:java/com/google/example/libtest-gensrc.jar>");
   }
   
   public void testNonConformingPackageName() throws Exception {
