@@ -1250,15 +1250,6 @@ public class CppLinkActionBuilder {
       return isNativeDeps && cppConfiguration.shareNativeDeps();
     }
 
-    private boolean inputNeedsWholeArchive(LinkerInput input) {
-      if (Link.useStartEndLib(input, cppConfiguration.archiveType())) {
-        return false;
-      }
-
-      return input.getArtifactCategory() == ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY
-           && !wholeArchive && !needWholeArchive;
-    }
-
     /**
      * When linking a shared library fully or mostly static then we need to link in *all* dependent
      * files, not just what the shared library needs for its own code. This is done by wrapping all
@@ -1272,6 +1263,9 @@ public class CppLinkActionBuilder {
 
       // Used to collect -L and -Wl,-rpath options, ensuring that each used only once.
       Set<String> libOpts = new LinkedHashSet<>();
+
+      // List of command line parameters to link input files (either directly or using -l).
+      List<String> linkerInputParameters = new ArrayList<>();
 
       // List of command line parameters that need to be placed *outside* of
       // --whole-archive ... --no-whole-archive.
@@ -1371,9 +1365,6 @@ public class CppLinkActionBuilder {
         }
       }
 
-      List<String> wholeArchiveInputParams = new ArrayList<>();
-      List<String> standardArchiveInputParams = new ArrayList<>();
-
       for (LinkerInput input : linkerInputs) {
         if (input.getArtifactCategory() == ArtifactCategory.DYNAMIC_LIBRARY) {
           PathFragment libDir = input.getArtifact().getExecPath().getParentDirectory();
@@ -1385,19 +1376,16 @@ public class CppLinkActionBuilder {
           if (libDir.equals(solibDir)) {
             includeSolibDir = true;
           }
-          addDynamicInputLinkOptions(
-              input, standardArchiveInputParams, libOpts, solibDir, rpathRoot);
+          addDynamicInputLinkOptions(input, linkerInputParameters, libOpts, solibDir, rpathRoot);
         } else {
-          addStaticInputLinkOptions(
-              input, wholeArchiveInputParams, standardArchiveInputParams, ltoMap);
+          addStaticInputLinkOptions(input, linkerInputParameters, ltoMap);
         }
       }
 
       boolean includeRuntimeSolibDir = false;
 
       for (LinkerInput input : runtimeLinkerInputs) {
-        List<String> optionsList = needWholeArchive
-            ? noWholeArchiveInputs : standardArchiveInputParams;
+        List<String> optionsList = needWholeArchive ? noWholeArchiveInputs : linkerInputParameters;
 
         if (input.getArtifactCategory() == ArtifactCategory.DYNAMIC_LIBRARY) {
           PathFragment libDir = input.getArtifact().getExecPath().getParentDirectory();
@@ -1409,10 +1397,7 @@ public class CppLinkActionBuilder {
           includeRuntimeSolibDir = true;
           addDynamicInputLinkOptions(input, optionsList, libOpts, solibDir, rpathRoot);
         } else {
-          addStaticInputLinkOptions(input,
-              needWholeArchive ? noWholeArchiveInputs : wholeArchiveInputParams,
-              needWholeArchive ? noWholeArchiveInputs : standardArchiveInputParams,
-              ltoMap);
+          addStaticInputLinkOptions(input, optionsList, ltoMap);
         }
       }
 
@@ -1426,8 +1411,18 @@ public class CppLinkActionBuilder {
 
       linkArgCollector.setLibopts(libOpts);
 
-      linkArgCollector.setLinkerInputParams(standardArchiveInputParams);
-      linkArgCollector.setWholeArchiveLinkerInputParams(wholeArchiveInputParams);
+      ImmutableList.Builder<String> wholeArchiveInputParams = ImmutableList.builder();
+      ImmutableList.Builder<String> standardArchiveInputParams = ImmutableList.builder();
+      for (String param : linkerInputParameters) {
+        if (!wholeArchive && Link.LINK_LIBRARY_FILETYPES.matches(param) && !needWholeArchive) {
+          wholeArchiveInputParams.add(param);
+        } else {
+          standardArchiveInputParams.add(param);
+        }
+      }
+
+      linkArgCollector.setLinkerInputParams(standardArchiveInputParams.build());
+      linkArgCollector.setWholeArchiveLinkerInputParams(wholeArchiveInputParams.build());
       linkArgCollector.setNoWholeArchiveInputs(noWholeArchiveInputs);
 
       if (ltoMap != null) {
@@ -1482,15 +1477,14 @@ public class CppLinkActionBuilder {
      *     be supplied for LTO final links.
      */
     private void addStaticInputLinkOptions(
-        LinkerInput input, List<String> wholeArchiveOptions, List<String> standardOptions,
-        @Nullable Map<Artifact, Artifact> ltoMap) {
+        LinkerInput input, List<String> options, @Nullable Map<Artifact, Artifact> ltoMap) {
       Preconditions.checkState(!(input.getArtifactCategory() == ArtifactCategory.DYNAMIC_LIBRARY));
 
       // start-lib/end-lib library: adds its input object files.
       if (Link.useStartEndLib(input, cppConfiguration.archiveType())) {
         Iterable<Artifact> archiveMembers = input.getObjectFiles();
         if (!Iterables.isEmpty(archiveMembers)) {
-          standardOptions.add("-Wl,--start-lib");
+          options.add("-Wl,--start-lib");
           for (Artifact member : archiveMembers) {
             if (ltoMap != null) {
               Artifact backend = ltoMap.remove(member);
@@ -1503,13 +1497,11 @@ public class CppLinkActionBuilder {
               }
             }
 
-            standardOptions.add(member.getExecPathString());
+            options.add(member.getExecPathString());
           }
-          standardOptions.add("-Wl,--end-lib");
+          options.add("-Wl,--end-lib");
         }
       } else {
-        List<String> options = inputNeedsWholeArchive(input)
-            ? wholeArchiveOptions : standardOptions;
         // For anything else, add the input directly.
         Artifact inputArtifact = input.getArtifact();
 

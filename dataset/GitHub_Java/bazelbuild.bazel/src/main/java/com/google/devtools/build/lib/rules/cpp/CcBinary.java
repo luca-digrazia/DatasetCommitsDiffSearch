@@ -240,10 +240,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
           CppLinkAction.symbolCountsFileName(binaryPath)));
     }
 
-    if (isLinkShared(ruleContext)) {
-      linkActionBuilder.setLibraryIdentifier(CcLinkingOutputs.libraryIdentifierOf(binary));
-    }
-
     // Store immutable context for use in other *_binary rules that are implemented by
     // linking the interpreter (Java, Python, etc.) together with native deps.
     CppLinkAction.Context linkContext = new CppLinkAction.Context(linkActionBuilder);
@@ -259,6 +255,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       }
 
       linkActionBuilder.setLTOIndexing(false);
+    }
+
+    if (isLinkShared(ruleContext)) {
+      linkActionBuilder.setLibraryIdentifier(CcLinkingOutputs.libraryIdentifierOf(binary));
     }
 
     CppLinkAction linkAction = linkActionBuilder.build();
