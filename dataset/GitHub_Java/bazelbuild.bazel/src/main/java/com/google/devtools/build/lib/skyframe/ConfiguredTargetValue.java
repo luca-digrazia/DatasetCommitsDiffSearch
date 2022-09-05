@@ -14,11 +14,10 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
-import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -26,8 +25,11 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyKey;
-import java.util.List;
+
+import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -38,21 +40,18 @@ import javax.annotation.Nullable;
 @VisibleForTesting
 public final class ConfiguredTargetValue extends ActionLookupValue {
 
-  // These variables are only non-final because they may be clear()ed to save memory.
-  // configuredTarget is null only after it is cleared.
+  // These variables are only non-final because they may be clear()ed to save memory. They are null
+  // only after they are cleared.
   @Nullable private ConfiguredTarget configuredTarget;
 
-  // May be null either after clearing or because transitive packages are not tracked.
-  @Nullable private NestedSet<Package> transitivePackagesForPackageRootResolution;
+  private final NestedSet<Package> transitivePackages;
 
-  ConfiguredTargetValue(
-      ConfiguredTarget configuredTarget,
-      GeneratingActions generatingActions,
-      @Nullable NestedSet<Package> transitivePackagesForPackageRootResolution,
-      boolean removeActionsAfterEvaluation) {
-    super(generatingActions, removeActionsAfterEvaluation);
-    this.configuredTarget = Preconditions.checkNotNull(configuredTarget, generatingActions);
-    this.transitivePackagesForPackageRootResolution = transitivePackagesForPackageRootResolution;
+  ConfiguredTargetValue(ConfiguredTarget configuredTarget,
+      Map<Artifact, ActionAnalysisMetadata> generatingActionMap,
+      NestedSet<Package> transitivePackages) {
+    super(generatingActionMap);
+    this.configuredTarget = configuredTarget;
+    this.transitivePackages = transitivePackages;
   }
 
   @VisibleForTesting
@@ -62,21 +61,14 @@ public final class ConfiguredTargetValue extends ActionLookupValue {
   }
 
   @VisibleForTesting
-  public List<ActionAnalysisMetadata> getActions() {
-    Preconditions.checkNotNull(configuredTarget, this);
-    return actions;
+  public Iterable<ActionAnalysisMetadata> getActions() {
+    Preconditions.checkNotNull(configuredTarget);
+    return generatingActionMap.values();
   }
 
-  /**
-   * Returns the set of packages transitively loaded by this value. Must only be used for
-   * constructing the package -> source root map needed for some builds. If the caller has not
-   * specified that this map needs to be constructed (via the constructor argument in {@link
-   * ConfiguredTargetFunction#ConfiguredTargetFunction}), calling this will crash.
-   */
-  public NestedSet<Package> getTransitivePackagesForPackageRootResolution() {
-    return Preconditions.checkNotNull(transitivePackagesForPackageRootResolution);
+  public NestedSet<Package> getTransitivePackages() {
+    return transitivePackages;
   }
-
   /**
    * Clears configured target data from this value, leaving only the artifact->generating action
    * map.
@@ -84,18 +76,10 @@ public final class ConfiguredTargetValue extends ActionLookupValue {
    * <p>Should only be used when user specifies --discard_analysis_cache. Must be called at most
    * once per value, after which {@link #getConfiguredTarget} and {@link #getActions} cannot be
    * called.
-   *
-   * @param clearEverything if true, clear the {@link #configuredTarget}. If not, only the {@link
-   *     #transitivePackagesForPackageRootResolution} field is cleared. Top-level targets need their
-   *     {@link #configuredTarget} preserved, so should pass false here.
    */
-  public void clear(boolean clearEverything) {
+  public void clear() {
     Preconditions.checkNotNull(configuredTarget);
-    Preconditions.checkNotNull(transitivePackagesForPackageRootResolution);
-    if (clearEverything) {
-      configuredTarget = null;
-    }
-    transitivePackagesForPackageRootResolution = null;
+    configuredTarget = null;
   }
 
   @VisibleForTesting
@@ -123,6 +107,7 @@ public final class ConfiguredTargetValue extends ActionLookupValue {
 
   @Override
   public String toString() {
-    return getStringHelper().add("configuredTarget", configuredTarget).toString();
+    return "ConfiguredTargetValue: " + configuredTarget + ", actions: "
+        + (configuredTarget == null ? null : Iterables.toString(getActions()));
   }
 }
