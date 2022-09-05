@@ -505,8 +505,9 @@ public final class BuildConfiguration {
         help = "Stamp binaries with the date, username, hostname, workspace information, etc.")
     public boolean stampBinaries;
 
-    // This default value is always overwritten in the case of "bazel coverage" by
-    // CoverageCommand.setDefaultInstrumentationFilter().
+    // TODO(bazel-team): delete from OSS tree
+    // This default value is always overwritten in the case of "blaze coverage" by
+    // CoverageCommand.setDefaultInstrumentationFilter()
     @Option(name = "instrumentation_filter",
         converter = RegexFilter.RegexFilterConverter.class,
         defaultValue = "-/javatests[/:]",
@@ -2227,10 +2228,7 @@ public final class BuildConfiguration {
   }
 
   @SkylarkCallable(name = "coverage_enabled", structField = true,
-      doc = "A boolean that tells whether code coverage is enabled for this run. Note that this "
-          + "does not compute whether a specific rule should be instrumented for code coverage "
-          + "data collection. For that, see the <a href=\"ctx.html#coverage_instrumented\"><code>"
-          + "ctx.coverage_instrumented</code></a> function.")
+      doc = "A boolean that tells whether code coverage is enabled.")
   public boolean isCodeCoverageEnabled() {
     return options.collectCodeCoverage;
   }

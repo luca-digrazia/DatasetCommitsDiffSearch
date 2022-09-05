@@ -165,8 +165,6 @@ public class ConfigurationCollectionFunction implements SkyFunction {
       // TODO(bazel-team): Options classes should be immutable. This is a bit of a hack.
       buildOptions = buildOptions.clone();
       buildOptions.get(BuildConfiguration.Options.class).cpu = cpuOverride;
-      buildOptions.get(BuildConfiguration.Options.class).experimentalMultiCpuDistinguisher =
-          cpuOverride;
     }
 
     BuildConfiguration targetConfig = configurationFactory.get().createConfigurations(
