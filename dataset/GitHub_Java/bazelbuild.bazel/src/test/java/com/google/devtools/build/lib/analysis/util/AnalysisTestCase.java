@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.runtime.InvocationPolicyEnforcer;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
@@ -65,6 +64,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
+
 import org.junit.Before;
 
 import java.util.Arrays;
@@ -200,10 +200,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         ruleClassProvider.getConfigurationOptions()));
     optionsParser.parse(new String[] {"--default_visibility=public" });
     optionsParser.parse(args);
-
-    InvocationPolicyEnforcer optionsPolicyEnforcer =
-        new InvocationPolicyEnforcer(TestConstants.TEST_INVOCATION_POLICY);
-    optionsPolicyEnforcer.enforce(optionsParser);
   }
 
   protected FlagBuilder defaultFlags() {
@@ -252,7 +248,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         outputBase, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
     skyframeExecutor.preparePackageLoading(pathPackageLocator,
         packageCacheOptions.defaultVisibility, true,
-        7, ruleClassProvider.getDefaultsPackageContent(optionsParser), UUID.randomUUID());
+        7, ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID());
     skyframeExecutor.invalidateFilesUnderPathForTesting(reporter,
         ModifiedFileSet.EVERYTHING_MODIFIED, rootDirectory);
 

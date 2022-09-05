@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -78,7 +77,6 @@ public final class CommandEnvironment {
   private final EventBus eventBus;
   private final BlazeModule.ModuleEnvironment blazeModuleEnvironment;
   private final Map<String, String> clientEnv = new HashMap<>();
-  private final TimestampGranularityMonitor timestampGranularityMonitor;
 
   private final BuildView view;
 
@@ -112,12 +110,6 @@ public final class CommandEnvironment {
     this.reporter = new Reporter();
     this.eventBus = eventBus;
     this.blazeModuleEnvironment = new BlazeModuleEnvironment();
-    this.timestampGranularityMonitor = new TimestampGranularityMonitor(runtime.getClock());
-    // Record the command's starting time again, for use by
-    // TimestampGranularityMonitor.waitForTimestampGranularity().
-    // This should be done as close as possible to the start of
-    // the command's execution.
-    timestampGranularityMonitor.setCommandStartTime();
 
     this.view = new BuildView(runtime.getDirectories(), runtime.getRuleClassProvider(),
         runtime.getSkyframeExecutor(), runtime.getCoverageReportActionFactory());
@@ -167,10 +159,6 @@ public final class CommandEnvironment {
     for (Map.Entry<String, String> entry : env) {
       clientEnv.put(entry.getKey(), entry.getValue());
     }
-  }
-
-  public TimestampGranularityMonitor getTimestampGranularityMonitor() {
-    return timestampGranularityMonitor;
   }
 
   public PackageManager getPackageManager() {
@@ -309,8 +297,7 @@ public final class CommandEnvironment {
       skyframeExecutor.resetEvaluator();
     }
     skyframeExecutor.sync(reporter, packageCacheOptions, runtime.getOutputBase(),
-        getWorkingDirectory(), defaultsPackageContents, commandId,
-        timestampGranularityMonitor);
+        getWorkingDirectory(), defaultsPackageContents, commandId);
   }
 
   public void recordLastExecutionTime() {

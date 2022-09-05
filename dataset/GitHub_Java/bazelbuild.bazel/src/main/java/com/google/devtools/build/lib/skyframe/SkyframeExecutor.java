@@ -1398,8 +1398,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
      * Loads the specified {@link TransitiveTargetValue}s.
      */
     EvaluationResult<TransitiveTargetValue> loadTransitiveTargets(EventHandler eventHandler,
-            Iterable<Target> targetsToVisit, Iterable<Label> labelsToVisit, boolean keepGoing,
-            int parallelThreads)
+        Iterable<Target> targetsToVisit, Iterable<Label> labelsToVisit, boolean keepGoing)
         throws InterruptedException {
       List<SkyKey> valueNames = new ArrayList<>();
       for (Target target : targetsToVisit) {
@@ -1409,7 +1408,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         valueNames.add(TransitiveTargetValue.key(label));
       }
 
-      return buildDriver.evaluate(valueNames, keepGoing, parallelThreads, eventHandler);
+      return buildDriver.evaluate(valueNames, keepGoing, DEFAULT_THREAD_COUNT,
+          eventHandler);
     }
 
     public Set<Package> retrievePackages(
