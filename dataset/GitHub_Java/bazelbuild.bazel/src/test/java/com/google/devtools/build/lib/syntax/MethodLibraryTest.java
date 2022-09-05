@@ -478,7 +478,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
             + "a method of that name exists";
     new SkylarkTest()
         .testIfExactError(msg, "getattr('a string', 'count')")
-        .testStatement("getattr('a string', 'count', 'default')", "default");
+        .testIfExactError(msg, "getattr('a string', 'count', 'unused default')");
   }
 
   @Test

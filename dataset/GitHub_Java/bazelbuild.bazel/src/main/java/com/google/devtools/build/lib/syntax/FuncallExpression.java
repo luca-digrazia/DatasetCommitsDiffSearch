@@ -505,7 +505,6 @@ public final class FuncallExpression extends Expression {
       sb.append(EvalUtils.getDataTypeName(kwarg.getValue()));
       sb.append(" ");
       sb.append(kwarg.getKey());
-      first = false;
     }
     return sb.append(")").toString();
   }

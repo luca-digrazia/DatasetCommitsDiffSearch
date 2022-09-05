@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.devtools.build.lib.syntax.DictionaryLiteral.DictionaryEntryLiteral;
 import com.google.devtools.build.lib.syntax.IfStatement.ConditionalStatements;
+
 import java.util.List;
 
 /**
@@ -97,11 +98,6 @@ public class SyntaxTreeVisitor {
   }
 
   public void visit(AssignmentStatement node) {
-    visit(node.getLValue());
-    visit(node.getExpression());
-  }
-
-  public void visit(AugmentedAssignmentStatement node) {
     visit(node.getLValue());
     visit(node.getExpression());
   }

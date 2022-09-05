@@ -17,9 +17,9 @@ package com.google.devtools.build.lib.syntax;
 import com.google.devtools.build.lib.events.Location;
 
 /**
- * Skylark values that support index access, i.e. `object[key]`
+ * Skylark values that support index access, i.e. object[key]
  */
-public interface SkylarkIndexable extends SkylarkQueryable {
+public interface SkylarkIndexable {
 
   /**
    * Returns the value associated with the given key.

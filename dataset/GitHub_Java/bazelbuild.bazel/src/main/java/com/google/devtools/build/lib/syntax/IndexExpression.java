@@ -44,7 +44,14 @@ public final class IndexExpression extends Expression {
   Object doEval(Environment env) throws EvalException, InterruptedException {
     Object objValue = obj.eval(env);
     Object keyValue = key.eval(env);
-    Location loc = getLocation();
+    return eval(objValue, keyValue, getLocation(), env);
+  }
+
+  /**
+   * Returns the field of the given key of the struct objValue, or null if no such field exists.
+   */
+  private Object eval(Object objValue, Object keyValue, Location loc, Environment env)
+      throws EvalException {
 
     if (objValue instanceof SkylarkIndexable) {
       Object result = ((SkylarkIndexable) objValue).getIndex(keyValue, loc);
