@@ -227,8 +227,10 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
-import java.util.function.Consumer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Created by wuzhong on 2016/11/24.
@@ -336,9 +338,7 @@ public class BundleInfoUtils {
             appVariantContext.getVariantData().getName()).getAwbBundles();
 
         List<String> duplicatedBundleInfo = new ArrayList<>();
-        Set<String>pkgNames = new HashSet<>();
         for (AwbBundle awbBundle : awbBundles) {
-            pkgNames.add(awbBundle.getPackageName());
             String name = awbBundle.getResolvedCoordinates().getArtifactId();
             File bundleBaseInfoFile = new File(awbBundle.getAndroidLibrary().getFolder(), "bundleBaseInfoFile.json");
             if (bundleBaseInfoFile.exists()) {
@@ -358,17 +358,6 @@ public class BundleInfoUtils {
 
             }
         }
-
-        bundleFileMap.values().forEach(bundleInfo -> {
-            List<String>removedBundles = new ArrayList<>();
-            List<String>deps = bundleInfo.getDependency();
-            for (String s:deps){
-                if (!pkgNames.contains(s)){
-                    removedBundles.add(s);
-                }
-            }
-            deps.removeAll(removedBundles);
-        });
 
         if (duplicatedBundleInfo.size() > 0) {
             FileUtils.writeLines(
