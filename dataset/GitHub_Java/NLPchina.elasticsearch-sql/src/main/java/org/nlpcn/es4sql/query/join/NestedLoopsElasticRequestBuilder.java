@@ -15,21 +15,22 @@ import java.util.Map;
  * Created by Eliran on 15/9/2015.
  */
 public class NestedLoopsElasticRequestBuilder extends JoinRequestBuilder {
-
-    private Where connectedWhere;
+    private Map<Field,Condition> t1FieldToCondition;
     private int multiSearchMaxSize;
     public NestedLoopsElasticRequestBuilder() {
-
+        t1FieldToCondition = new HashMap<>();
         multiSearchMaxSize = 100;
     }
 
     @Override
     public String explain() {
         String baseExplain = super.explain();
-        Where where = this.connectedWhere;
+        Where where = Where.newInstance();
+        for(Condition c : t1FieldToCondition.values()){
+            where.addWhere(c);
+        }
         BoolFilterBuilder explan = null;
         try {
-            if(where!=null)
             explan = FilterMaker.explan(where);
         } catch (SqlParseException e) {
         }
@@ -38,6 +39,13 @@ public class NestedLoopsElasticRequestBuilder extends JoinRequestBuilder {
         return nestedExplain;
     }
 
+    public Map<Field, Condition> getT1FieldToCondition() {
+        return t1FieldToCondition;
+    }
+
+    public void setT1FieldToCondition(Map<Field, Condition> t1FieldToCondition) {
+        this.t1FieldToCondition = t1FieldToCondition;
+    }
 
     public int getMultiSearchMaxSize() {
         return multiSearchMaxSize;
@@ -47,11 +55,7 @@ public class NestedLoopsElasticRequestBuilder extends JoinRequestBuilder {
         this.multiSearchMaxSize = multiSearchMaxSize;
     }
 
-    public Where getConnectedWhere() {
-        return connectedWhere;
-    }
-
-    public void setConnectedWhere(Where connectedWhere) {
-        this.connectedWhere = connectedWhere;
+    public void addConditionMapping(Condition c){
+        t1FieldToCondition.put(new Field(c.getName(),null),c);
     }
 }
