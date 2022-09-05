@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 import static org.mockito.ArgumentCaptor.forClass;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,19 +37,16 @@ public class HealthCheckRegistryTest {
 
     private final HealthCheck.Result ar = mock(HealthCheck.Result.class);
     private final HealthCheck ahc = new TestAsyncHealthCheck(ar);
-
-    @SuppressWarnings("rawtypes")
     private final ScheduledFuture af = mock(ScheduledFuture.class);
 
     @Before
-    @SuppressWarnings("unchecked")
     public void setUp() throws Exception {
         registry.addListener(listener);
 
         when(hc1.execute()).thenReturn(r1);
         when(hc2.execute()).thenReturn(r2);
-        when(executorService.scheduleAtFixedRate(any(AsyncHealthCheckDecorator.class), eq(0L), eq(10L), eq(TimeUnit.SECONDS)))
-                .thenReturn(af);
+        when(executorService.scheduleAtFixedRate(any(AsyncHealthCheckDecorator.class),eq(0L), eq(10L), eq(TimeUnit
+                .SECONDS))).thenReturn(af);
 
         registry.register("hc1", hc1);
         registry.register("hc2", hc2);
@@ -124,20 +121,6 @@ public class HealthCheckRegistryTest {
     }
 
     @Test
-    public void runsRegisteredHealthChecksWithFilter() throws Exception {
-        final Map<String, HealthCheck.Result> results = registry.runHealthChecks((name, healthCheck) -> "hc1".equals(name));
-
-        assertThat(results).containsOnly(entry("hc1", r1));
-    }
-
-    @Test
-    public void runsRegisteredHealthChecksWithNonMatchingFilter() throws Exception {
-        final Map<String, HealthCheck.Result> results = registry.runHealthChecks((name, healthCheck) -> false);
-
-        assertThat(results).isEmpty();
-    }
-
-    @Test
     public void runsRegisteredHealthChecksInParallel() throws Exception {
         final ExecutorService executor = Executors.newFixedThreadPool(10);
         final Map<String, HealthCheck.Result> results = registry.runHealthChecks(executor);
@@ -148,29 +131,6 @@ public class HealthCheckRegistryTest {
         assertThat(results).contains(entry("hc1", r1));
         assertThat(results).contains(entry("hc2", r2));
         assertThat(results).containsKey("ahc");
-    }
-
-    @Test
-    public void runsRegisteredHealthChecksInParallelWithNonMatchingFilter() throws Exception {
-        final ExecutorService executor = Executors.newFixedThreadPool(10);
-        final Map<String, HealthCheck.Result> results = registry.runHealthChecks(executor, (name, healthCheck) -> false);
-
-        executor.shutdown();
-        executor.awaitTermination(1, TimeUnit.SECONDS);
-
-        assertThat(results).isEmpty();
-    }
-
-    @Test
-    public void runsRegisteredHealthChecksInParallelWithFilter() throws Exception {
-        final ExecutorService executor = Executors.newFixedThreadPool(10);
-        final Map<String, HealthCheck.Result> results = registry.runHealthChecks(executor,
-                (name, healthCheck) -> "hc2".equals(name));
-
-        executor.shutdown();
-        executor.awaitTermination(1, TimeUnit.SECONDS);
-
-        assertThat(results).containsOnly(entry("hc2", r2));
     }
 
     @Test
