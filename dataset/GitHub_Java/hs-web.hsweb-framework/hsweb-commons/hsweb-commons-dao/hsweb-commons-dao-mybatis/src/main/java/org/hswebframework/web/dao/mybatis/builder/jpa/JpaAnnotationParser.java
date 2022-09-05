@@ -120,25 +120,26 @@ public class JpaAnnotationParser {
                 .getPropertyUtils()
                 .getPropertyDescriptors(entityClass);
         for (PropertyDescriptor descriptor : descriptors) {
-            Column columnAnn = getAnnotation(entityClass, descriptor, Column.class);
-            if (columnAnn == null) {
+            Column column = getAnnotation(entityClass, descriptor, Column.class);
+            if (column == null) {
                 continue;
             }
-            RDBColumnMetaData column = new RDBColumnMetaData();
-            column.setName(columnAnn.name());
-            column.setAlias(descriptor.getName());
-            column.setLength(columnAnn.length());
-            column.setPrecision(columnAnn.precision());
-            column.setJavaType(descriptor.getPropertyType());
-            if (!columnAnn.updatable()) {
-                column.setProperty("read-only", true);
+            RDBColumnMetaData columnMetaData = new RDBColumnMetaData();
+            columnMetaData.setName(column.name());
+            columnMetaData.setAlias(descriptor.getName());
+            columnMetaData.setLength(column.length());
+            columnMetaData.setPrecision(column.precision());
+            columnMetaData.setJavaType(descriptor.getPropertyType());
+            if (!column.updatable()) {
+                columnMetaData.setProperty("read-only", true);
             }
-            if (!columnAnn.nullable()) {
-                column.setNotNull(true);
+            if (!column.nullable()) {
+                columnMetaData.setNotNull(true);
             }
-            if (StringUtils.hasText(columnAnn.columnDefinition())) {
-                column.setColumnDefinition(columnAnn.columnDefinition());
+            if (StringUtils.hasText(column.columnDefinition())) {
+                columnMetaData.setColumnDefinition(column.columnDefinition());
             }
+
             Class propertyType = descriptor.getPropertyType();
 
             JDBCType type = jdbcTypeMapping.get(propertyType);
@@ -149,8 +150,8 @@ public class JpaAnnotationParser {
                         .findFirst()
                         .orElse(JDBCType.OTHER);
             }
-            column.setJdbcType(type);
-            ValueConverter dateConvert = new DateTimeConverter("yyyy-MM-dd HH:mm:ss", column.getJavaType()) {
+            columnMetaData.setJdbcType(type);
+            ValueConverter dateConvert = new DateTimeConverter("yyyy-MM-dd HH:mm:ss", columnMetaData.getJavaType()) {
                 @Override
                 public Object getData(Object value) {
                     if (value instanceof Number) {
@@ -160,15 +161,15 @@ public class JpaAnnotationParser {
                 }
             };
 
-            if (column.getJdbcType() == JDBCType.DATE
-                    || column.getJdbcType() == JDBCType.TIMESTAMP) {
-                column.setValueConverter(dateConvert);
-            } else if (column.getJavaType() == boolean.class || column.getJavaType() == Boolean.class) {
-                column.setValueConverter(new NumberValueConverter(Boolean.class));
-            } else if (TypeUtils.isNumberType(column)) {
-                column.setValueConverter(new NumberValueConverter(column.getJavaType()));
+            if (columnMetaData.getJdbcType() == JDBCType.DATE
+                    || columnMetaData.getJdbcType() == JDBCType.TIMESTAMP) {
+                columnMetaData.setValueConverter(dateConvert);
+            } else if (TypeUtils.isNumberType(columnMetaData)) {
+                columnMetaData.setValueConverter(new NumberValueConverter(columnMetaData.getJavaType()));
             }
-            tableMetaData.addColumn(column);
+
+
+            tableMetaData.addColumn(columnMetaData);
         }
         return tableMetaData;
     }
