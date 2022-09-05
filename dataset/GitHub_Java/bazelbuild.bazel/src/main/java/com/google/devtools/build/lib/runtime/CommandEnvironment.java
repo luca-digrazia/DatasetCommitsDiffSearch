@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.runtime;
 import static com.google.devtools.build.lib.profiler.AutoProfiler.profiled;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
@@ -36,6 +37,7 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
@@ -45,10 +47,8 @@ import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionPriority;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -70,6 +70,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * command is done and all corresponding objects are garbage collected.
  */
 public final class CommandEnvironment {
+  private static final boolean USE_SKYFRAME_LOADING_PHASE = false;
+
   private final BlazeRuntime runtime;
 
   private final UUID commandId;  // Unique identifier for the command being run
@@ -78,9 +80,9 @@ public final class CommandEnvironment {
   private final BlazeModule.ModuleEnvironment blazeModuleEnvironment;
   private final Map<String, String> clientEnv = new HashMap<>();
 
+  private final LoadingPhaseRunner loadingPhaseRunner;
   private final BuildView view;
 
-  private PathFragment relativeWorkingDirectory = PathFragment.EMPTY_FRAGMENT;
   private long commandStartTime;
   private OutputService outputService;
   private String outputFileSystem;
@@ -111,6 +113,8 @@ public final class CommandEnvironment {
     this.eventBus = eventBus;
     this.blazeModuleEnvironment = new BlazeModuleEnvironment();
 
+    this.loadingPhaseRunner = runtime.getSkyframeExecutor().getLoadingPhaseRunner(
+        runtime.getPackageFactory().getRuleClassNames(), USE_SKYFRAME_LOADING_PHASE);
     this.view = new BuildView(runtime.getDirectories(), runtime.getRuleClassProvider(),
         runtime.getSkyframeExecutor(), runtime.getCoverageReportActionFactory());
 
@@ -165,17 +169,15 @@ public final class CommandEnvironment {
     return runtime.getPackageManager();
   }
 
-  public PathFragment getRelativeWorkingDirectory() {
-    return relativeWorkingDirectory;
+  public LoadingPhaseRunner getLoadingPhaseRunner() {
+    return loadingPhaseRunner;
   }
 
   /**
-   * Creates and returns a new target pattern parser.
+   * Returns the target pattern parser.
    */
-  public TargetPatternEvaluator newTargetPatternEvaluator() {
-    TargetPatternEvaluator result = getPackageManager().newTargetPatternEvaluator();
-    result.updateOffset(relativeWorkingDirectory);
-    return result;
+  public TargetPatternEvaluator getTargetPatternEvaluator() {
+    return loadingPhaseRunner.getTargetPatternEvaluator();
   }
 
   public BuildView getView() {
@@ -364,7 +366,7 @@ public final class CommandEnvironment {
       workspace = FileSystemUtils.getWorkingDirectory(runtime.getDirectories().getFileSystem());
       workingDirectory = workspace;
     }
-    this.relativeWorkingDirectory = workingDirectory.relativeTo(workspace);
+    loadingPhaseRunner.updatePatternEvaluator(workingDirectory.relativeTo(workspace));
     this.workingDirectory = workingDirectory;
 
     updateClientEnv(options.clientEnv, options.ignoreClientEnv);

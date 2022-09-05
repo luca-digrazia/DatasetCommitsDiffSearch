@@ -234,13 +234,12 @@ public class SkyframeBuilder implements Builder {
         skyframeExecutor.reportCycles(eventHandler, cycles, entry.getKey());
         hasCycles |= !Iterables.isEmpty(cycles);
       }
-      boolean hasCatastrophe = resultHasCatastrophicError(result);
-      if (keepGoing && !hasCatastrophe) {
+      if (keepGoing && !resultHasCatastrophicError(result)) {
         return false;
       }
       if (hasCycles || result.errorMap().isEmpty()) {
         // error map may be empty in the case of a catastrophe.
-        throw new BuildFailedException(null, hasCatastrophe);
+        throw new BuildFailedException();
       } else {
         rethrow(Preconditions.checkNotNull(result.getError().getException()));
       }

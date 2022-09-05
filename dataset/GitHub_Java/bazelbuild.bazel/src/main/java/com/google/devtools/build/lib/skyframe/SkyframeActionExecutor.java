@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.devtools.build.lib.vfs.FileSystemUtils.createDirectoryAndParents;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
@@ -63,7 +64,6 @@ import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.Path;
@@ -953,11 +953,13 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
    */
   private void printError(String message, Action action, FileOutErr actionOutput) {
     synchronized (reporter) {
+      if (actionOutput != null && actionOutput.hasRecordedOutput()) {
+        dumpRecordedOutErr(action, actionOutput);
+      }
       if (keepGoing) {
         message = "Couldn't " + describeAction(action) + ": " + message;
       }
-      Event event = Event.error(action.getOwner().getLocation(), message);
-      dumpRecordedOutErr(event, actionOutput);
+      reporter.handle(Event.error(action.getOwner().getLocation(), message));
       recordExecutionError();
     }
   }
@@ -984,17 +986,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     message.append("From ");
     message.append(action.describe());
     message.append(":");
-    Event event = Event.info(message.toString());
-    dumpRecordedOutErr(event, outErrBuffer);
-  }
 
-  /**
-   * Dump the output from the action.
-   *
-   * @param prefixEvent An event to post before dumping the output
-   * @param outErrBuffer The OutErr that recorded the actions output
-   */
-  private void dumpRecordedOutErr(Event prefixEvent, FileOutErr outErrBuffer) {
     // Synchronize this on the reporter, so that the output from multiple
     // actions will not be interleaved.
     synchronized (reporter) {
@@ -1002,13 +994,11 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
       if (isBuilderAborting()) {
         return;
       }
-      reporter.handle(prefixEvent);
+      reporter.handle(Event.info(message.toString()));
 
-      if (outErrBuffer != null && outErrBuffer.hasRecordedOutput()) {
-        OutErr outErr = this.reporter.getOutErr();
-        outErrBuffer.dumpOutAsLatin1(outErr.getOutputStream());
-        outErrBuffer.dumpErrAsLatin1(outErr.getErrorStream());
-      }
+      OutErr outErr = this.reporter.getOutErr();
+      outErrBuffer.dumpOutAsLatin1(outErr.getOutputStream());
+      outErrBuffer.dumpErrAsLatin1(outErr.getErrorStream());
     }
   }
 
