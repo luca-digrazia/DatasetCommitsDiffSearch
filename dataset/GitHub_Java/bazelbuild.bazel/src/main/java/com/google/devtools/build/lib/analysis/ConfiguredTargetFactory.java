@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -34,10 +33,7 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy;
-import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
-import com.google.devtools.build.lib.packages.EnvironmentGroup;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.PackageGroup;
@@ -45,11 +41,13 @@ import com.google.devtools.build.lib.packages.PackageGroupsRuleVisibility;
 import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.SkylarkRuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.rules.fileset.FilesetProvider;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
@@ -203,8 +201,6 @@ public final class ConfiguredTargetFactory {
     } else if (target instanceof PackageGroup) {
       PackageGroup packageGroup = (PackageGroup) target;
       return new PackageGroupConfiguredTarget(targetContext, packageGroup);
-    } else if (target instanceof EnvironmentGroup) {
-      return new EnvironmentGroupConfiguredTarget(targetContext, (EnvironmentGroup) target);
     } else {
       throw new AssertionError("Unexpected target class: " + target.getClass().getName());
     }
@@ -230,16 +226,14 @@ public final class ConfiguredTargetFactory {
     if (ruleContext.hasErrors()) {
       return null;
     }
-    ConfigurationFragmentPolicy configurationFragmentPolicy =
-        rule.getRuleClassObject().getConfigurationFragmentPolicy();
-    if (!configurationFragmentPolicy.getRequiredConfigurationFragments().isEmpty()) {
+    if (!rule.getRuleClassObject().getRequiredConfigurationFragments().isEmpty()) {
       MissingFragmentPolicy missingFragmentPolicy =
-          configurationFragmentPolicy.getMissingFragmentPolicy();
+          rule.getRuleClassObject().missingFragmentPolicy();
       if (missingFragmentPolicy != MissingFragmentPolicy.IGNORE
           && !configuration.hasAllFragments(
-              configurationFragmentPolicy.getRequiredConfigurationFragments())) {
+              rule.getRuleClassObject().getRequiredConfigurationFragments())) {
         if (missingFragmentPolicy == MissingFragmentPolicy.FAIL_ANALYSIS) {
-          ruleContext.ruleError(missingFragmentError(ruleContext, configurationFragmentPolicy));
+          ruleContext.ruleError(missingFragmentError(ruleContext));
           return null;
         }
         return createFailConfiguredTarget(ruleContext);
@@ -257,11 +251,10 @@ public final class ConfiguredTargetFactory {
     }
   }
 
-  private String missingFragmentError(
-      RuleContext ruleContext, ConfigurationFragmentPolicy configurationFragmentPolicy) {
+  private String missingFragmentError(RuleContext ruleContext) {
     RuleClass ruleClass = ruleContext.getRule().getRuleClassObject();
     Set<Class<?>> missingFragments = new LinkedHashSet<>();
-    for (Class<?> fragment : configurationFragmentPolicy.getRequiredConfigurationFragments()) {
+    for (Class<?> fragment : ruleClass.getRequiredConfigurationFragments()) {
       if (!ruleContext.getConfiguration().hasFragment(fragment.asSubclass(Fragment.class))) {
         missingFragments.add(fragment);
       }

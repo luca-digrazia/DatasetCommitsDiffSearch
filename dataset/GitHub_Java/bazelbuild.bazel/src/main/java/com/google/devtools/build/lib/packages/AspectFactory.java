@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,8 +29,7 @@ public interface AspectFactory<TConfiguredTarget, TRuleContext, TAspect> {
    * @param parameters information from attributes of the rule that have requested this
    *     aspect
    */
-  TAspect create(TConfiguredTarget base, TRuleContext context, AspectParameters parameters)
-      throws InterruptedException;
+  TAspect create(TConfiguredTarget base, TRuleContext context, AspectParameters parameters);
 
   /**
    * Returns the definition of the aspect.

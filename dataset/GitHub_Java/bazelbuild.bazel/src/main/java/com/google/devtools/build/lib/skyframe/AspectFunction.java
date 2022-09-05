@@ -25,12 +25,10 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.AspectFactory;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
-import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
@@ -63,7 +61,6 @@ public final class AspectFunction implements SkyFunction {
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws AspectFunctionException {
     SkyframeBuildView view = buildViewProvider.getSkyframeBuildView();
-    NestedSetBuilder<Package> transitivePackages = NestedSetBuilder.stableOrder();
     AspectKey key = (AspectKey) skyKey.argument();
     ConfiguredAspectFactory aspectFactory =
         (ConfiguredAspectFactory) AspectFactory.Util.create(key.getAspect());
@@ -112,8 +109,8 @@ public final class AspectFunction implements SkyFunction {
 
     try {
       // Get the configuration targets that trigger this rule's configurable attributes.
-      Set<ConfigMatchingProvider> configConditions = ConfiguredTargetFunction.getConfigConditions(
-          target, env, resolver, ctgValue, transitivePackages);
+      Set<ConfigMatchingProvider> configConditions =
+          ConfiguredTargetFunction.getConfigConditions(target, env, resolver, ctgValue);
       if (configConditions == null) {
         // Those targets haven't yet been resolved.
         return null;
@@ -122,11 +119,9 @@ public final class AspectFunction implements SkyFunction {
       ListMultimap<Attribute, ConfiguredTarget> depValueMap =
           ConfiguredTargetFunction.computeDependencies(env, resolver, ctgValue,
               aspectFactory.getDefinition(), key.getParameters(), configConditions,
-              ruleClassProvider, view.getHostConfiguration(ctgValue.getConfiguration()),
-              transitivePackages);
+              ruleClassProvider, view.getHostConfiguration(ctgValue.getConfiguration()));
 
-      return createAspect(env, key, associatedTarget, configConditions, depValueMap,
-          transitivePackages);
+      return createAspect(env, key, associatedTarget, configConditions, depValueMap);
     } catch (DependencyEvaluationException e) {
       throw new AspectFunctionException(e.getRootCauseSkyKey(), e.getCause());
     }
@@ -135,10 +130,7 @@ public final class AspectFunction implements SkyFunction {
   @Nullable
   private AspectValue createAspect(Environment env, AspectKey key,
       RuleConfiguredTarget associatedTarget, Set<ConfigMatchingProvider> configConditions,
-      ListMultimap<Attribute, ConfiguredTarget> directDeps,
-      NestedSetBuilder<Package> transitivePackages)
-      throws AspectFunctionException {
-
+      ListMultimap<Attribute, ConfiguredTarget> directDeps) throws AspectFunctionException {
     SkyframeBuildView view = buildViewProvider.getSkyframeBuildView();
     BuildConfiguration configuration = associatedTarget.getConfiguration();
 
@@ -176,8 +168,7 @@ public final class AspectFunction implements SkyFunction {
         associatedTarget.getLabel(),
         associatedTarget.getTarget().getLocation(),
         aspect,
-        ImmutableList.copyOf(analysisEnvironment.getRegisteredActions()),
-        transitivePackages.build());
+        ImmutableList.copyOf(analysisEnvironment.getRegisteredActions()));
   }
 
   @Nullable
@@ -185,7 +176,7 @@ public final class AspectFunction implements SkyFunction {
   public String extractTag(SkyKey skyKey) {
     return null;
   }
-
+  
   /**
    * An exception indicating that there was a problem creating an aspect.
    */

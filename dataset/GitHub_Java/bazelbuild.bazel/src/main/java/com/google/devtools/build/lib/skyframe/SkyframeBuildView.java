@@ -549,9 +549,6 @@ public final class SkyframeBuildView {
     public void enqueueing(SkyKey skyKey) {}
 
     @Override
-    public void computed(SkyKey skyKey, long elapsedTimeNanos) {}
-
-    @Override
     public void evaluated(SkyKey skyKey, Supplier<SkyValue> skyValueSupplier,
         EvaluationState state) {
       if (skyKey.functionName().equals(SkyFunctions.CONFIGURED_TARGET)) {

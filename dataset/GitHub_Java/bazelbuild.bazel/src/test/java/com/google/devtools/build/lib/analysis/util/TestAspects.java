@@ -306,10 +306,8 @@ public class TestAspects {
       @Override
       public AspectParameters apply(Rule rule) {
         if (rule.isAttrDefined("baz", STRING)) {
-          String value = rule.getAttributeContainer().getAttr("baz").toString();
-          if (!value.equals("")) {
-            return new AspectParameters.Builder().addAttribute("baz", value).build();
-          }
+          return new AspectParameters.Builder().addAttribute("baz",
+              rule.getAttributeContainer().getAttr("baz").toString()).build();
         }
         return AspectParameters.EMPTY;
       }

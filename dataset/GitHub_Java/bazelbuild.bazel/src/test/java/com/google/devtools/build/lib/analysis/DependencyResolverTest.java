@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.util.TestAspects;
 import com.google.devtools.build.lib.analysis.util.TestAspects.AspectRequiringRule;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectFactory;
-import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Target;
@@ -117,8 +116,7 @@ public class DependencyResolverTest extends AnalysisTestCase {
         new TargetAndConfiguration(target, getTargetConfiguration()),
         getHostConfiguration(),
         aspectDefinition,
-        AspectParameters.EMPTY,
-        ImmutableSet.<ConfigMatchingProvider>of());
+        null, ImmutableSet.<ConfigMatchingProvider>of());
   }
 
   @SafeVarargs
@@ -126,7 +124,7 @@ public class DependencyResolverTest extends AnalysisTestCase {
       ListMultimap<Attribute, Dependency> dependentNodeMap,
       String attrName,
       String dep,
-      AspectWithParameters... aspects) {
+      Class<? extends AspectFactory<?, ?, ?>>... aspects) {
     Attribute attr = null;
     for (Attribute candidate : dependentNodeMap.keySet()) {
       if (candidate.getName().equals(attrName)) {
@@ -155,7 +153,7 @@ public class DependencyResolverTest extends AnalysisTestCase {
         "aspect(name='a', foo=[':b'])",
         "aspect(name='b', foo=[])");
     ListMultimap<Attribute, Dependency> map = dependentNodeMap("//a:a", null);
-    assertDep(map, "foo", "//a:b", new AspectWithParameters(TestAspects.SimpleAspect.class));
+    assertDep(map, "foo", "//a:b", TestAspects.SimpleAspect.class);
   }
 
   @Test
@@ -166,7 +164,7 @@ public class DependencyResolverTest extends AnalysisTestCase {
         "simple(name='b', foo=[])");
     ListMultimap<Attribute, Dependency> map =
         dependentNodeMap("//a:a", TestAspects.AttributeAspect.class);
-    assertDep(map, "foo", "//a:b", new AspectWithParameters(TestAspects.AttributeAspect.class));
+    assertDep(map, "foo", "//a:b", TestAspects.AttributeAspect.class);
   }
 
   @Test
