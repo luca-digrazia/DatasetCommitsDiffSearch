@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ public class NewHttpArchiveRule implements RuleDefinition {
          "tgz" here.</p>
          <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("type", STRING))
-        /* <!-- #BLAZE_RULE(new_http_archive).ATTRIBUTE(strip_prefix) -->
+        /* <!-- #BLAZE_RULE(http_archive).ATTRIBUTE(strip_prefix) -->
          A directory prefix to strip from the extracted files.
          ${SYNOPSIS}
 
