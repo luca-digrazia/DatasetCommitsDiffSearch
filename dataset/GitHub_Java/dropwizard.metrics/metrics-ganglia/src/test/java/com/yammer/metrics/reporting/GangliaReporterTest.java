@@ -1,8 +1,11 @@
 package com.yammer.metrics.reporting;
 
-import com.yammer.metrics.core.*;
+import com.yammer.metrics.core.Clock;
+import com.yammer.metrics.core.MetricName;
+import com.yammer.metrics.core.MetricsRegistry;
+import com.yammer.metrics.core.VirtualMachineMetrics;
 import com.yammer.metrics.reporting.tests.AbstractPollingReporterTest;
-import com.yammer.metrics.core.MetricPredicate;
+import com.yammer.metrics.util.MetricPredicate;
 import org.apache.commons.io.IOUtils;
 import org.junit.Test;
 
@@ -63,7 +66,7 @@ public class GangliaReporterTest extends AbstractPollingReporterTest {
                                                              MetricPredicate.ALL,
                                                              false,
                                                              messageBuilder,
-                                                             VirtualMachineMetrics.getInstance()) {
+                                                             VirtualMachineMetrics.INSTANCE) {
             @Override
             String getHostLabel() {
                 return "localhost";

@@ -3,7 +3,7 @@ package com.yammer.metrics.reporting;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.*;
 import com.yammer.metrics.stats.Snapshot;
-import com.yammer.metrics.core.MetricPredicate;
+import com.yammer.metrics.util.MetricPredicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -222,7 +222,7 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
              groupPrefix,
              predicate,
              compressPackageNames,
-             new GangliaMessageBuilder(gangliaHost, port), VirtualMachineMetrics.getInstance());
+             new GangliaMessageBuilder(gangliaHost, port), VirtualMachineMetrics.INSTANCE);
     }
 
     /**
@@ -424,7 +424,7 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
                              "jvm");
         }
 
-        for (Map.Entry<String, VirtualMachineMetrics.GarbageCollectorStats> entry : vm.garbageCollectors().entrySet()) {
+        for (Map.Entry<String, VirtualMachineMetrics.GarbageCollector> entry : vm.garbageCollectors().entrySet()) {
             printLongField("jvm.gc." + entry.getKey() + ".time",
                            entry.getValue().getTime(TimeUnit.MILLISECONDS),
                            "jvm");

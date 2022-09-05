@@ -2,8 +2,6 @@ package com.yammer.metrics.guice;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.matcher.Matchers;
-import com.yammer.metrics.HealthChecks;
-import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.HealthCheckRegistry;
 import com.yammer.metrics.core.MetricsRegistry;
 import com.yammer.metrics.reporting.JmxReporter;
@@ -15,8 +13,8 @@ import com.yammer.metrics.reporting.JmxReporter;
  * @see com.yammer.metrics.annotation.Gauge
  * @see com.yammer.metrics.annotation.Metered
  * @see com.yammer.metrics.annotation.Timed
- * @see MeteredInterceptor
- * @see TimedInterceptor
+ * @see com.yammer.metrics.aop.MeteredInterceptor
+ * @see com.yammer.metrics.aop.TimedInterceptor
  * @see GaugeInjectionListener
  */
 public class InstrumentationModule extends AbstractModule {
@@ -43,13 +41,13 @@ public class InstrumentationModule extends AbstractModule {
      * Override to provide a custom {@link HealthCheckRegistry}
      */
     protected HealthCheckRegistry createHealthCheckRegistry() {
-        return HealthChecks.defaultRegistry();
+        return new HealthCheckRegistry();
     }
 
     /**
      * Override to provide a custom {@link MetricsRegistry}
      */
     protected MetricsRegistry createMetricsRegistry() {
-        return Metrics.defaultRegistry();
+        return new MetricsRegistry();
     }
 }
