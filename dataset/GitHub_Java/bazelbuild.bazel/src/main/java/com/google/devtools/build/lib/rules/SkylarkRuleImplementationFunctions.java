@@ -195,20 +195,20 @@ public class SkylarkRuleImplementationFunctions {
             SkylarkRuleContext ctx,
             SkylarkList outputs,
             SkylarkList inputs,
-            Object executableUnchecked,
+            Object executableO,
             SkylarkList arguments,
-            Object mnemonicUnchecked,
-            Object commandUnchecked,
+            Object mnemonicO,
+            Object commandO,
             Object progressMessage,
             Boolean useDefaultShellEnv,
-            Object envUnchecked,
-            Object executionRequirementsUnchecked,
-            Object inputManifestsUnchecked,
+            Object envO,
+            Object executionRequirementsO,
+            Object inputManifestsO,
             Location loc)
             throws EvalException, ConversionException {
           SpawnAction.Builder builder = new SpawnAction.Builder();
           // TODO(bazel-team): builder still makes unnecessary copies of inputs, outputs and args.
-          boolean hasCommand = commandUnchecked != Runtime.NONE;
+          boolean hasCommand = commandO != Runtime.NONE;
           builder.addInputs(inputs.getContents(Artifact.class, "inputs"));
           builder.addOutputs(outputs.getContents(Artifact.class, "outputs"));
           if (hasCommand && arguments.size() > 0) {
@@ -219,9 +219,9 @@ public class SkylarkRuleImplementationFunctions {
             builder.addArgument("");
           }
           builder.addArguments(arguments.getContents(String.class, "arguments"));
-          if (executableUnchecked != Runtime.NONE) {
-            if (executableUnchecked instanceof Artifact) {
-              Artifact executable = (Artifact) executableUnchecked;
+          if (executableO != Runtime.NONE) {
+            if (executableO instanceof Artifact) {
+              Artifact executable = (Artifact) executableO;
               builder.addInput(executable);
               FilesToRunProvider provider = ctx.getExecutableRunfiles(executable);
               if (provider == null) {
@@ -229,26 +229,26 @@ public class SkylarkRuleImplementationFunctions {
               } else {
                 builder.setExecutable(provider);
               }
-            } else if (executableUnchecked instanceof PathFragment) {
-              builder.setExecutable((PathFragment) executableUnchecked);
+            } else if (executableO instanceof PathFragment) {
+              builder.setExecutable((PathFragment) executableO);
             } else {
               throw new EvalException(
                   loc,
                   "expected file or PathFragment for "
                       + "executable but got "
-                      + EvalUtils.getDataTypeName(executableUnchecked)
+                      + EvalUtils.getDataTypeName(executableO)
                       + " instead");
             }
           }
-          if ((commandUnchecked == Runtime.NONE) == (executableUnchecked == Runtime.NONE)) {
+          if ((commandO == Runtime.NONE) == (executableO == Runtime.NONE)) {
             throw new EvalException(
                 loc, "You must specify either 'command' or 'executable' argument");
           }
           if (hasCommand) {
-            if (commandUnchecked instanceof String) {
-              builder.setShellCommand((String) commandUnchecked);
-            } else if (commandUnchecked instanceof SkylarkList) {
-              SkylarkList commandList = (SkylarkList) commandUnchecked;
+            if (commandO instanceof String) {
+              builder.setShellCommand((String) commandO);
+            } else if (commandO instanceof SkylarkList) {
+              SkylarkList commandList = (SkylarkList) commandO;
               if (commandList.size() < 3) {
                 throw new EvalException(loc, "'command' list has to be of size at least 3");
               }
@@ -258,7 +258,7 @@ public class SkylarkRuleImplementationFunctions {
                   loc,
                   "expected string or list of strings for "
                       + "command instead of "
-                      + EvalUtils.getDataTypeName(commandUnchecked));
+                      + EvalUtils.getDataTypeName(commandO));
             }
           }
 
@@ -267,12 +267,12 @@ public class SkylarkRuleImplementationFunctions {
           // input file that is in HOST configuration to the action as a precaution.
           addRequiredIndirectRunfiles(ctx, builder);
 
-          if (mnemonicUnchecked != Runtime.NONE) {
-            builder.setMnemonic((String) mnemonicUnchecked);
+          if (mnemonicO != Runtime.NONE) {
+            builder.setMnemonic((String) mnemonicO);
           }
-          if (envUnchecked != Runtime.NONE) {
+          if (envO != Runtime.NONE) {
             builder.setEnvironment(
-                ImmutableMap.copyOf(castMap(envUnchecked, String.class, String.class, "env")));
+                ImmutableMap.copyOf(castMap(envO, String.class, String.class, "env")));
           }
           if (progressMessage != Runtime.NONE) {
             builder.setProgressMessage((String) progressMessage);
@@ -280,19 +280,19 @@ public class SkylarkRuleImplementationFunctions {
           if (EvalUtils.toBoolean(useDefaultShellEnv)) {
             builder.useDefaultShellEnvironment();
           }
-          if (executionRequirementsUnchecked != Runtime.NONE) {
+          if (executionRequirementsO != Runtime.NONE) {
             builder.setExecutionInfo(
                 ImmutableMap.copyOf(
                     castMap(
-                        executionRequirementsUnchecked,
+                        executionRequirementsO,
                         String.class,
                         String.class,
                         "execution_requirements")));
           }
-          if (inputManifestsUnchecked != Runtime.NONE) {
+          if (inputManifestsO != Runtime.NONE) {
             for (Map.Entry<PathFragment, Artifact> entry :
                 castMap(
-                        inputManifestsUnchecked,
+                        inputManifestsO,
                         PathFragment.class,
                         Artifact.class,
                         "input manifest file map")
@@ -466,12 +466,12 @@ public class SkylarkRuleImplementationFunctions {
             doc = "whether the output file should be executable (default is False)")})
   private static final BuiltinFunction createTemplateAction =
       new BuiltinFunction("template_action", Arrays.<Object>asList(false)) {
-        public TemplateExpansionAction invoke(SkylarkRuleContext ctx, Artifact template,
-            Artifact output, Map<?, ?> substitutionsUnchecked, Boolean executable)
+        public TemplateExpansionAction invoke(SkylarkRuleContext ctx,
+            Artifact template, Artifact output, Map<?, ?> substitutionsO, Boolean executable)
             throws EvalException, ConversionException {
           ImmutableList.Builder<Substitution> substitutions = ImmutableList.builder();
           for (Map.Entry<String, String> substitution : castMap(
-              substitutionsUnchecked, String.class, String.class, "substitutions").entrySet()) {
+              substitutionsO, String.class, String.class, "substitutions").entrySet()) {
             // ParserInputSource.create(Path) uses Latin1 when reading BUILD files, which might
             // contain UTF-8 encoded symbols as part of template substitution.
             // As a quick fix, the substitution values are corrected before being passed on.
@@ -669,31 +669,30 @@ public class SkylarkRuleImplementationFunctions {
         public Tuple invoke(
             SkylarkRuleContext ctx,
             String command,
-            Object attributeUnchecked,
+            Object attributeO,
             Boolean expandLocations,
-            Object makeVariablesUnchecked,
+            Object makeVariablesO,
             SkylarkList tools,
-            Map<?, ?> labelDictUnchecked,
-            Map<?, ?> executionRequirementsUnchecked,
+            Map<?, ?> labelDictM,
+            Map<?, ?> executionRequirementsM,
             Location loc,
             Environment env)
             throws ConversionException, EvalException {
           Label ruleLabel = ctx.getLabel();
-          Map<Label, Iterable<Artifact>> labelDict = checkLabelDict(labelDictUnchecked, loc);
+          Map<Label, Iterable<Artifact>> labelDict = checkLabelDict(labelDictM, loc);
           // The best way to fix this probably is to convert CommandHelper to Skylark.
           CommandHelper helper = new CommandHelper(
               ctx.getRuleContext(),
               tools.getContents(TransitiveInfoCollection.class, "tools"),
               ImmutableMap.copyOf(labelDict));
-          String attribute =
-              Type.STRING.convertOptional(attributeUnchecked, "attribute", ruleLabel);
+          String attribute = Type.STRING.convertOptional(attributeO, "attribute", ruleLabel);
           if (expandLocations) {
             command = helper.resolveCommandAndExpandLabels(
                 command, attribute, false, false);
           }
-          if (!EvalUtils.isNullOrNone(makeVariablesUnchecked)) {
+          if (!EvalUtils.isNullOrNone(makeVariablesO)) {
             Map<String, String> makeVariables = Type.STRING_DICT.convert(
-                makeVariablesUnchecked, "make_variables", ruleLabel);
+                makeVariablesO, "make_variables", ruleLabel);
             command = ctx.expandMakeVariables(attribute, command, makeVariables);
           }
           List<Artifact> inputs = new ArrayList<>();
@@ -701,7 +700,7 @@ public class SkylarkRuleImplementationFunctions {
 
           ImmutableMap<String, String> executionRequirements = ImmutableMap.copyOf(
                 castMap(
-                    executionRequirementsUnchecked,
+                    executionRequirementsM,
                     String.class,
                     String.class,
                     "execution_requirements"));
