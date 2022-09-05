@@ -29,14 +29,16 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.OptionsParser.OptionValueDescription;
 import com.google.devtools.common.options.OptionsParser.UnparsedOptionValueDescription;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Tests {@link OptionsParser}.
@@ -386,7 +388,6 @@ public class OptionsParserTest {
     public String multipartName;
   }
 
-  @Test
   public void assertDefaultStringsForCustomOptions() throws OptionsParsingException {
     CustomOptions options = Options.parse(CustomOptions.class).getOptions();
     assertEquals("simple default", options.simple);
