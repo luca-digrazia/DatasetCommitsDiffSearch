@@ -22,6 +22,7 @@ import com.android.sdklib.internal.build.DebugKeyProvider.IKeyGenOutput;
 import com.android.sdklib.internal.build.DebugKeyProvider.KeytoolException;
 import com.android.sdklib.internal.build.SignedJarBuilder;
 import com.android.sdklib.internal.build.SignedJarBuilder.IZipEntryFilter;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -67,9 +68,6 @@ public final class ApkBuilder implements IArchiveBuilder {
         @Override
         public boolean checkEntry(String archivePath) throws ZipAbortException {
             verbosePrintln("=> %s", archivePath);
-            if ("META-INF".equals(archivePath)) {
-              return false;
-            }
 
             File duplicate = checkFileForDuplicate(archivePath);
             if (duplicate != null) {
@@ -108,14 +106,7 @@ public final class ApkBuilder implements IArchiveBuilder {
             // Folders like CVS, .svn, etc.. should already have been excluded from the
             // jar file, but we need to exclude some other folder (like /META-INF) so
             // we check anyway.
-            for (int i = 0; i < segments.length - 1; i++) {
-                String nextSegment = i + 1 < segments.length ? segments[i + 1] : null;
-                // allow an exception only for contents of a leading META-INF/services
-                if (i == 0
-                    && "META-INF".equalsIgnoreCase(segments[i])
-                    && "services".equalsIgnoreCase(nextSegment)) {
-                    continue;
-                }
+            for (int i = 0 ; i < segments.length - 1; i++) {
                 if (!checkFolderForPackaging(segments[i])) {
                     return false;
                 }
@@ -841,7 +832,7 @@ public final class ApkBuilder implements IArchiveBuilder {
      *
      * @param file the {@link File} to process.
      * @param path the relative path of this file to the source folder.
-     *         Can be <code>null</code> to identify a root file.
+     *          Can be <code>null</code> to identify a root file.
      * @throws IOException
      * @throws DuplicateFileException if a file conflicts with another already added
      *          to the APK at the same location inside the APK archive.
@@ -849,12 +840,8 @@ public final class ApkBuilder implements IArchiveBuilder {
      * @throws ApkCreationException if an error occurred
      */
     private static void processFileForResource(IArchiveBuilder builder, File file, String path)
-      throws IOException, DuplicateFileException, ApkCreationException, SealedApkException {
+            throws IOException, DuplicateFileException, ApkCreationException, SealedApkException {
         if (file.isDirectory()) {
-            if ("META-INF".equalsIgnoreCase(file.getName())) {
-                return;
-            }
-
             // a directory? we check it
             if (checkFolderForPackaging(file.getName())) {
                 // if it's valid, we append its name to the current path.
@@ -962,9 +949,8 @@ public final class ApkBuilder implements IArchiveBuilder {
     }
 
     /**
-     * Checks whether a folder and its content is valid for packaging into the .apk as standard Java
-     * resource.
-     *
+     * Checks whether a folder and its content is valid for packaging into the .apk as
+     * standard Java resource.
      * @param folderName the name of the folder.
      */
     public static boolean checkFolderForPackaging(String folderName) {
@@ -998,7 +984,7 @@ public final class ApkBuilder implements IArchiveBuilder {
      */
     public static boolean checkFileForPackaging(String fileName, String extension) {
         // ignore hidden files and backup files
-        if (fileName.charAt(0) == '.' || fileName.charAt(fileName.length() - 1) == '~') {
+        if (fileName.charAt(0) == '.' || fileName.charAt(fileName.length()-1) == '~') {
             return false;
         }
 
@@ -1012,7 +998,6 @@ public final class ApkBuilder implements IArchiveBuilder {
                 !"class".equalsIgnoreCase(extension) &&           // Java class files
                 !"scc".equalsIgnoreCase(extension) &&             // VisualSourceSafe
                 !"swp".equalsIgnoreCase(extension) &&             // vi swap file
-                !fileName.endsWith(".gwt.xml") &&                 // Google Web Toolkit modules
                 !"thumbs.db".equalsIgnoreCase(fileName) &&        // image index file
                 !"picasa.ini".equalsIgnoreCase(fileName) &&       // image index file
                 !"package.html".equalsIgnoreCase(fileName) &&     // Javadoc
