@@ -121,7 +121,7 @@ public final class JavaLibraryHelper {
   /**
    * Creates the compile actions and providers.
    */
-  public JavaCompilationArgs build(JavaSemantics semantics) {
+  public JavaCompilationArtifacts build(JavaSemantics semantics) {
     Preconditions.checkState(output != null, "must have an output file; use setOutput()");
     JavaTargetAttributes.Builder attributes = new JavaTargetAttributes.Builder(semantics);
     attributes.addSourceJars(sourceJars);
@@ -149,7 +149,7 @@ public final class JavaLibraryHelper {
     helper.createCompileTimeJarAction(output, artifactsBuilder);
     artifactsBuilder.addRuntimeJar(output);
 
-    return JavaCompilationArgs.builder().merge(artifactsBuilder.build()).build();
+    return artifactsBuilder.build();
   }
 
   private void addDepsToAttributes(JavaTargetAttributes.Builder attributes) {
