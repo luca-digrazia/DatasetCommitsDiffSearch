@@ -47,7 +47,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -109,7 +109,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public ExtendedEventHandler getEventHandler() {
+    public EventHandler getEventHandler() {
       return original.getEventHandler();
     }
 
@@ -136,6 +136,11 @@ public final class AnalysisTestUtil {
     @Override
     public Artifact getFilesetArtifact(PathFragment rootRelativePath, Root root) {
       return original.getFilesetArtifact(rootRelativePath, root);
+    }
+
+    @Override
+    public Artifact getEmbeddedToolArtifact(String embeddedPath) {
+      return original.getEmbeddedToolArtifact(embeddedPath);
     }
 
     @Override
@@ -311,6 +316,11 @@ public final class AnalysisTestUtil {
     }
 
     @Override
+    public Artifact getEmbeddedToolArtifact(String embeddedPath) {
+      return null;
+    }
+
+    @Override
     public Artifact getConstantMetadataArtifact(PathFragment rootRelativePath, Root root) {
       return null;
     }
@@ -321,7 +331,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public ExtendedEventHandler getEventHandler() {
+    public EventHandler getEventHandler() {
       return null;
     }
 

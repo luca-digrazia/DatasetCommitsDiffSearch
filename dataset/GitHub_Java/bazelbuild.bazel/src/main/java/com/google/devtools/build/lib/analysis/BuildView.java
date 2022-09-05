@@ -184,6 +184,13 @@ public class BuildView {
             help = "Only schedules extra_actions for top level targets.")
     public boolean extraActionTopLevelOnly;
 
+    @Option(name = "experimental_interleave_loading_and_analysis",
+            defaultValue = "true",
+            category = "experimental",
+            help = "Interleave loading and analysis phases, so that one target may be analyzed at"
+                + " the same time as an unrelated target is loaded.")
+    public boolean interleaveLoadingAndAnalysis;
+
     @Option(name = "version_window_for_dirty_node_gc",
             defaultValue = "0",
             category = "undocumented",
@@ -191,15 +198,6 @@ public class BuildView {
                 + " from the graph upon the next update. Values must be non-negative long integers,"
                 + " or -1 indicating the maximum possible window.")
     public long versionWindowForDirtyNodeGc;
-
-    @Deprecated
-    @Option(
-      name = "experimental_interleave_loading_and_analysis",
-      defaultValue = "true",
-      category = "experimental",
-      help = "No-op."
-    )
-    public boolean interleaveLoadingAndAnalysis;
   }
 
   private static Logger LOG = Logger.getLogger(BuildView.class.getName());
