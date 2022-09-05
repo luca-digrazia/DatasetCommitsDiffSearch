@@ -20,7 +20,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
@@ -33,8 +32,10 @@ import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import java.util.Collection;
+
 import org.junit.Before;
+
+import java.util.Collection;
 
 public abstract class FileWriteActionTestCase extends BuildViewTestCase {
 
@@ -55,8 +56,7 @@ public abstract class FileWriteActionTestCase extends BuildViewTestCase {
   @Before
   public final void createExecutorAndContext() throws Exception {
     executor = new TestExecutorBuilder(directories, binTools).build();
-    context = new ActionExecutionContext(executor, null, null, new FileOutErr(),
-          ImmutableMap.<String, String>of(), null);
+    context = new ActionExecutionContext(executor, null, null, new FileOutErr(), null);
   }
 
   protected abstract Action createAction(

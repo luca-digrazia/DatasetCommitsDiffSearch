@@ -53,7 +53,8 @@ public class CompilationHelperTest extends BuildViewTestCase {
   private List<Artifact> getAggregatingMiddleman(
       ConfiguredTarget rule, BuildConfiguration configuration, boolean withSolib) throws Exception {
     return CppHelper.getAggregatingMiddlemanForTesting(
-        getRuleContext(rule, analysisEnvironment),
+        analysisEnvironment,
+        getRuleContext(rule),
         ActionsTestUtil.NULL_ACTION_OWNER,
         "middleman",
         rule,
@@ -90,8 +91,8 @@ public class CompilationHelperTest extends BuildViewTestCase {
    */
   @Test
   public void testMiddlemanAndSolibMiddlemanAreDistinct() throws Exception {
-    ConfiguredTarget rule = scratchConfiguredTarget("package", "liba.so",
-        "cc_binary(name = 'liba.so', srcs = ['a.cc'], linkshared = 1)");
+    ConfiguredTarget rule =
+        scratchConfiguredTarget("package", "a", "cc_binary(name = 'a'," + "    srcs = ['a.cc'])");
 
     List<Artifact> middleman = getAggregatingMiddleman(rule, false);
     assertThat(middleman).hasSize(1);
@@ -111,10 +112,10 @@ public class CompilationHelperTest extends BuildViewTestCase {
 
     // Equivalent cc / Python configurations:
 
-    ConfiguredTarget ccRuleA = getConfiguredTarget("//foo:liba.so");
+    ConfiguredTarget ccRuleA = getConfiguredTarget("//foo:a");
     List<Artifact> middleman1 = getAggregatingMiddleman(ccRuleA, true);
     try {
-      ConfiguredTarget ccRuleB = getConfiguredTarget("//foo:libb.so");
+      ConfiguredTarget ccRuleB = getConfiguredTarget("//foo:b");
       getAggregatingMiddleman(ccRuleB, true);
       analysisEnvironment.registerWith(getMutableActionGraph());
       fail("Expected ActionConflictException due to same middleman artifact with different files");
@@ -126,11 +127,8 @@ public class CompilationHelperTest extends BuildViewTestCase {
     // This should succeed because the py_binary's middleman is under the Python configuration's
     // internal directory, while the cc_binary's middleman is under the cc config's directory,
     // and both configurations are the same.
-    ConfiguredTarget pyRuleB = getDirectPrerequisite(
-        getConfiguredTarget("//foo:c"), "//foo:libb.so");
-
-
-    List<Artifact> middleman2 = getAggregatingMiddleman(pyRuleB, true);
+    ConfiguredTarget pyRuleC = getConfiguredTarget("//foo:c");
+    List<Artifact> middleman2 = getAggregatingMiddleman(pyRuleC, true);
     assertEquals(
         Iterables.getOnlyElement(middleman1).getExecPathString(),
         Iterables.getOnlyElement(middleman2).getExecPathString());
@@ -147,10 +145,10 @@ public class CompilationHelperTest extends BuildViewTestCase {
 
     // Equivalent cc / Java configurations:
 
-    ConfiguredTarget ccRuleA = getConfiguredTarget("//foo:liba.so");
+    ConfiguredTarget ccRuleA = getConfiguredTarget("//foo:a");
     List<Artifact> middleman1 = getAggregatingMiddleman(ccRuleA, true);
     try {
-      ConfiguredTarget ccRuleB = getConfiguredTarget("//foo:libb.so");
+      ConfiguredTarget ccRuleB = getConfiguredTarget("//foo:b");
       getAggregatingMiddleman(ccRuleB, true);
       analysisEnvironment.registerWith(getMutableActionGraph());
       fail("Expected ActionConflictException due to same middleman artifact with different files");
@@ -161,9 +159,8 @@ public class CompilationHelperTest extends BuildViewTestCase {
 
     // This should succeed because the java_binary's middleman is under the Java configuration's
     // internal directory, while the cc_binary's middleman is under the cc config's directory.
-    ConfiguredTarget javaRuleB = getDirectPrerequisite(
-        getConfiguredTarget("//foo:d"), "//foo:libb.so");
-    List<Artifact> middleman2 = getAggregatingMiddleman(javaRuleB, false);
+    ConfiguredTarget javaRuleD = getConfiguredTarget("//foo:d");
+    List<Artifact> middleman2 = getAggregatingMiddleman(javaRuleD, false);
     assertFalse(
         Iterables.getOnlyElement(middleman1)
             .getExecPathString()
@@ -173,18 +170,14 @@ public class CompilationHelperTest extends BuildViewTestCase {
   private void setupJavaPythonCcConfigurationFiles() throws IOException {
     scratch.file(
         "foo/BUILD",
-        "cc_binary(name = 'liba.so',",
-        "    linkshared = 1,",
+        "cc_binary(name = 'a',",
         "    srcs = ['a.cc'])",
-        "cc_binary(name = 'libb.so',",
-        "    linkshared = 1,",
+        "cc_binary(name = 'b',",
         "    srcs = ['b.cc'])",
         "py_binary(name = 'c',",
-        "    data = [':libb.so'],",
         "    srcs = ['c.py'])",
         "java_binary(name = 'd',",
         "    srcs = ['d.java'],",
-        "    data = [':libb.so'],",
         "    main_class = 'd')");
   }
 }

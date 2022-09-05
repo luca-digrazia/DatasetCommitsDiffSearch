@@ -83,21 +83,25 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       if (applicationManifest == null) {
         return null;
       }
-      resourceApk = applicationManifest.packWithDataAndResources(
-          ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK),
-          ruleContext,
-          ResourceDependencies.fromRuleDeps(ruleContext, JavaCommon.isNeverLink(ruleContext)),
-          ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
-          ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_SYMBOLS_TXT),
-          ImmutableList.<String>of(), /* configurationFilters */
-          ImmutableList.<String>of(), /* uncompressedExtensions */
-          ImmutableList.<String>of(), /* densities */
-          null /* applicationId */,
-          null /* versionCode */,
-          null /* versionName */,
-          false,
-          null /* proguardCfgOut */);
-      if (ruleContext.hasErrors()) {
+      try {
+        resourceApk = applicationManifest.packWithDataAndResources(
+            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK),
+            ruleContext,
+            ResourceDependencies.fromRuleDeps(ruleContext, JavaCommon.isNeverLink(ruleContext)),
+            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
+            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_SYMBOLS_TXT),
+            ImmutableList.<String>of(), /* configurationFilters */
+            ImmutableList.<String>of(), /* uncompressedExtensions */
+            ImmutableList.<String>of(), /* densities */
+            null /* applicationId */,
+            null /* versionCode */,
+            null /* versionName */,
+            false,
+            null /* proguardCfgOut */);
+
+      } catch (RuleConfigurationException e) {
+        // RuleConfigurations exceptions will only be thrown after the RuleContext is updated.
+        // So, exit.
         return null;
       }
     } else {

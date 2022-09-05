@@ -21,6 +21,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.config.ConfigRuleClasses.ConfigSettingRule;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -28,7 +29,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.rules.python.PythonConfiguration;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 
@@ -234,7 +234,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void testSelectForDefaultCrosstoolTop() throws Exception {
-    String crosstoolTop = TestConstants.TOOLS_REPOSITORY + "//tools/cpp:toolchain";
+    String crosstoolTop = Constants.TOOLS_REPOSITORY + "//tools/cpp:toolchain";
     scratchConfiguredTarget("a", "a",
         "config_setting(name='cs', values={'crosstool_top': '" + crosstoolTop + "'})",
         "sh_library(name='a', srcs=['a.sh'], deps=select({':cs': []}))");

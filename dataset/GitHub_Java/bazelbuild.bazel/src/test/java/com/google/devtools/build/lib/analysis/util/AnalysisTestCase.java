@@ -13,8 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.util;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
@@ -40,6 +42,7 @@ import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
+import com.google.devtools.build.lib.pkgcache.LegacyLoadingPhaseRunner;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
 import com.google.devtools.build.lib.pkgcache.LoadingResult;
@@ -57,9 +60,9 @@ import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.BlazeClock;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.common.options.Options;
@@ -88,8 +91,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
   /** All the flags that can be passed to {@link BuildView#update}. */
   public enum Flag {
-    KEEP_GOING,
-    SKYFRAME_LOADING_PHASE,
+    KEEP_GOING
   }
 
   /** Helper class to make it easy to enable and disable flags. */
@@ -104,10 +106,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     public FlagBuilder without(Flag flag) {
       flags.remove(flag);
       return this;
-    }
-
-    boolean contains(Flag flag) {
-      return flags.contains(flag);
     }
   }
 
@@ -163,6 +161,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             binTools,
             workspaceStatusActionFactory,
             ruleClassProvider.getBuildInfoFactories(),
+            ImmutableSet.<Path>of(),
             ImmutableList.<DiffAwareness.Factory>of(),
             Predicates.<PathFragment>alwaysFalse(),
             Preprocessor.Factory.Supplier.NullSupplier.INSTANCE,
@@ -173,8 +172,8 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         Options.getDefaults(PackageCacheOptions.class).defaultVisibility, true,
         3, ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID());
     packageManager = skyframeExecutor.getPackageManager();
-    loadingPhaseRunner = skyframeExecutor.getLoadingPhaseRunner(
-        pkgFactory.getRuleClassNames(), defaultFlags().contains(Flag.SKYFRAME_LOADING_PHASE));
+    loadingPhaseRunner =
+        new LegacyLoadingPhaseRunner(packageManager, pkgFactory.getRuleClassNames());
     buildView = new BuildView(directories, ruleClassProvider, skyframeExecutor, null);
     useConfiguration();
   }
@@ -230,9 +229,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   /**
    * Update the BuildView: syncs the package cache; loads and analyzes the given labels.
    */
-  protected AnalysisResult update(
-      EventBus eventBus, FlagBuilder config, ImmutableList<String> aspects, String... labels)
-          throws Exception {
+  protected void update(EventBus eventBus, FlagBuilder config, String... labels) throws Exception {
     Set<Flag> flags = config.flags;
 
     LoadingOptions loadingOptions = Options.getDefaults(LoadingOptions.class);
@@ -245,7 +242,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     PackageCacheOptions packageCacheOptions = optionsParser.getOptions(PackageCacheOptions.class);
 
     PathPackageLocator pathPackageLocator = PathPackageLocator.create(
-        outputBase, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
+        null, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
     skyframeExecutor.preparePackageLoading(pathPackageLocator,
         packageCacheOptions.defaultVisibility, true,
         7, ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID());
@@ -265,34 +262,23 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         buildView.update(
             loadingResult,
             masterConfig,
-            aspects,
+            ImmutableList.<String>of(),
             viewOptions,
             AnalysisTestUtil.TOP_LEVEL_ARTIFACT_CONTEXT,
             reporter,
             eventBus,
             isLoadingEnabled());
-    return analysisResult;
   }
 
-  protected AnalysisResult update(EventBus eventBus, FlagBuilder config, String... labels)
-      throws Exception {
-    return update(eventBus, config, /*aspects=*/ImmutableList.<String>of(), labels);
-  }
-
-  protected AnalysisResult update(FlagBuilder config, String... labels) throws Exception {
-    return update(new EventBus(), config, /*aspects=*/ImmutableList.<String>of(), labels);
+  protected void update(FlagBuilder config, String... labels) throws Exception {
+    update(new EventBus(), config, labels);
   }
 
   /**
    * Update the BuildView: syncs the package cache; loads and analyzes the given labels.
    */
-  protected AnalysisResult update(String... labels) throws Exception {
-    return update(new EventBus(), defaultFlags(), /*aspects=*/ImmutableList.<String>of(), labels);
-  }
-
-  protected AnalysisResult update(ImmutableList<String> aspects, String... labels)
-      throws Exception {
-    return update(new EventBus(), defaultFlags(), aspects, labels);
+  protected void update(String... labels) throws Exception {
+    update(new EventBus(), defaultFlags(), labels);
   }
 
   protected Target getTarget(String label) {

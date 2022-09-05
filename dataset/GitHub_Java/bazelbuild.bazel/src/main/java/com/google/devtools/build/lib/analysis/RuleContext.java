@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.analysis;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
@@ -68,7 +69,6 @@ import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -136,7 +136,7 @@ public final class RuleContext extends TargetContext
   private final Set<ConfigMatchingProvider> configConditions;
   private final AttributeMap attributes;
   private final ImmutableSet<String> features;
-  private final ImmutableMap<String, Attribute> aspectAttributes;
+  private final Map<String, Attribute> aspectAttributes;
   private final BuildConfiguration hostConfiguration;
   private final ConfigurationFragmentPolicy configurationFragmentPolicy;
   private final Class<? extends BuildConfiguration.Fragment> universalFragment;
@@ -147,13 +147,11 @@ public final class RuleContext extends TargetContext
   /* lazily computed cache for Make variables, computed from the above. See get... method */
   private transient ConfigurationMakeVariableContext configurationMakeVariableContext = null;
 
-  private RuleContext(
-      Builder builder,
-      ListMultimap<String, ConfiguredTarget> targetMap,
+  private RuleContext(Builder builder, ListMultimap<String, ConfiguredTarget> targetMap,
       ListMultimap<String, ConfiguredFilesetEntry> filesetEntryMap,
       Set<ConfigMatchingProvider> configConditions,
       Class<? extends BuildConfiguration.Fragment> universalFragment,
-      ImmutableMap<String, Attribute> aspectAttributes) {
+      Map<String, Attribute> aspectAttributes) {
     super(builder.env, builder.rule, builder.configuration, builder.prerequisiteMap.get(null),
         builder.visibility);
     this.rule = builder.rule;
@@ -233,13 +231,6 @@ public final class RuleContext extends TargetContext
    */
   public BuildConfiguration getHostConfiguration() {
     return hostConfiguration;
-  }
-
-  /**
-   * Attributes from aspects.
-   */
-  public ImmutableMap<String, Attribute> getAspectAttributes() {
-    return aspectAttributes;
   }
 
   /**
@@ -1250,7 +1241,7 @@ public final class RuleContext extends TargetContext
     private ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap;
     private Set<ConfigMatchingProvider> configConditions;
     private NestedSet<PackageSpecification> visibility;
-    private ImmutableMap<String, Attribute> aspectAttributes;
+    private Map<String, Attribute> aspectAttributes;
 
     Builder(AnalysisEnvironment env, Rule rule, BuildConfiguration configuration,
         BuildConfiguration hostConfiguration,
@@ -1293,7 +1284,7 @@ public final class RuleContext extends TargetContext
      * Adds attributes which are defined by an Aspect (and not by RuleClass).
      */
     Builder setAspectAttributes(Map<String, Attribute> aspectAttributes) {
-      this.aspectAttributes = ImmutableMap.copyOf(aspectAttributes);
+      this.aspectAttributes = aspectAttributes;
       return this;
     }
 

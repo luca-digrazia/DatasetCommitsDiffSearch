@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Te
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -72,8 +71,7 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
     directories = new BlazeDirectories(
         scratch.resolve("/install"),
         scratch.resolve("/base"),
-        scratch.resolve("/workspace"),
-        TestConstants.PRODUCT_NAME);
+        scratch.resolve("/workspace"));
     binTools = BinTools.empty(directories);
   }
 
