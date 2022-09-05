@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -193,7 +193,7 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
 
   private ImmutableMap<Path, Path> getMounts(
       Spawn spawn, ActionExecutionContext executionContext) throws IOException {
-    MountMap mounts = new MountMap();
+    MountMap<Path, Path> mounts = new MountMap<>();
     mounts.putAll(mountUsualUnixDirs());
     mounts.putAll(withRecursedDirs(setupBlazeUtils()));
     mounts.putAll(withRecursedDirs(mountRunfilesFromManifests(spawn)));
@@ -230,8 +230,9 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
    * @return a new mounts multimap with the added mounts.
    */
   @VisibleForTesting
-  static MountMap withResolvedSymlinks(Map<Path, Path> mounts) throws IOException {
-    MountMap fixedMounts = new MountMap();
+  static MountMap<Path, Path> withResolvedSymlinks(Map<Path, Path> mounts)
+      throws IOException {
+    MountMap<Path, Path> fixedMounts = new MountMap<>();
     for (Entry<Path, Path> mount : mounts.entrySet()) {
       Path target = mount.getKey();
       Path source = mount.getValue();
@@ -252,8 +253,8 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
    * @return a new mounts multimap with the added mounts.
    */
   @VisibleForTesting
-  static MountMap withRecursedDirs(Map<Path, Path> mounts) throws IOException {
-    MountMap fixedMounts = new MountMap();
+  static MountMap<Path, Path> withRecursedDirs(Map<Path, Path> mounts) throws IOException {
+    MountMap<Path, Path> fixedMounts = new MountMap<>();
     for (Entry<Path, Path> mount : mounts.entrySet()) {
       Path target = mount.getKey();
       Path source = mount.getValue();
@@ -274,8 +275,8 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
    * Mount a certain set of unix directories to make the usual tools and libraries available to the
    * spawn that runs.
    */
-  private MountMap mountUsualUnixDirs() throws IOException {
-    MountMap mounts = new MountMap();
+  private MountMap<Path, Path> mountUsualUnixDirs() throws IOException {
+    MountMap<Path, Path> mounts = new MountMap<>();
     FileSystem fs = blazeDirs.getFileSystem();
     mounts.put(fs.getPath("/bin"), fs.getPath("/bin"));
     mounts.put(fs.getPath("/etc"), fs.getPath("/etc"));
@@ -297,8 +298,8 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
   /**
    * Mount the embedded tools.
    */
-  private MountMap setupBlazeUtils() throws IOException {
-    MountMap mounts = new MountMap();
+  private MountMap<Path, Path> setupBlazeUtils() throws IOException {
+    MountMap<Path, Path> mounts = new MountMap<>();
     Path mount = blazeDirs.getEmbeddedBinariesRoot().getRelative("build-runfiles");
     mounts.put(mount, mount);
     return mounts;
@@ -307,8 +308,9 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
   /**
    * Mount all runfiles that the spawn needs as specified in its runfiles manifests.
    */
-  private MountMap mountRunfilesFromManifests(Spawn spawn) throws IOException {
-    MountMap mounts = new MountMap();
+  private MountMap<Path, Path> mountRunfilesFromManifests(Spawn spawn)
+      throws IOException {
+    MountMap<Path, Path> mounts = new MountMap<>();
     for (Entry<PathFragment, Artifact> manifest : spawn.getRunfilesManifests().entrySet()) {
       String manifestFilePath = manifest.getValue().getPath().getPathString();
       Preconditions.checkState(!manifest.getKey().isAbsolute());
@@ -319,8 +321,9 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
     return mounts;
   }
 
-  static MountMap parseManifestFile(Path targetDirectory, File manifestFile) throws IOException {
-    MountMap mounts = new MountMap();
+  static MountMap<Path, Path> parseManifestFile(
+      Path targetDirectory, File manifestFile) throws IOException {
+    MountMap<Path, Path> mounts = new MountMap<>();
     for (String line : Files.readLines(manifestFile, Charset.defaultCharset())) {
       String[] fields = line.trim().split(" ");
       Path source;
@@ -343,8 +346,9 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
   /**
    * Mount all runfiles that the spawn needs as specified via its runfiles suppliers.
    */
-  private MountMap mountRunfilesFromSuppliers(Spawn spawn) throws IOException {
-    MountMap mounts = new MountMap();
+  private MountMap<Path, Path> mountRunfilesFromSuppliers(Spawn spawn)
+      throws IOException {
+    MountMap<Path, Path> mounts = new MountMap<>();
     FileSystem fs = blazeDirs.getFileSystem();
     Map<PathFragment, Map<PathFragment, Artifact>> rootsAndMappings =
         spawn.getRunfilesSupplier().getMappings();
@@ -366,9 +370,10 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
   /**
    * Mount all inputs of the spawn.
    */
-  private MountMap mountInputs(Spawn spawn, ActionExecutionContext actionExecutionContext)
+  private MountMap<Path, Path> mountInputs(
+      Spawn spawn, ActionExecutionContext actionExecutionContext)
       throws IOException {
-    MountMap mounts = new MountMap();
+    MountMap<Path, Path> mounts = new MountMap<>();
 
     List<ActionInput> inputs =
         ActionInputHelper.expandMiddlemen(
@@ -399,8 +404,8 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
    * <p>If --run_under= refers to a label, it is automatically provided in the spawn's input files,
    * so mountInputs() will catch that case.
    */
-  private MountMap mountRunUnderCommand(Spawn spawn) {
-    MountMap mounts = new MountMap();
+  private MountMap<Path, Path> mountRunUnderCommand(Spawn spawn) {
+    MountMap<Path, Path> mounts = new MountMap<>();
 
     if (spawn.getResourceOwner() instanceof TestRunnerAction) {
       TestRunnerAction testRunnerAction = ((TestRunnerAction) spawn.getResourceOwner());
