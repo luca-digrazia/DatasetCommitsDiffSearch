@@ -15,8 +15,6 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Preconditions;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * An instance of a given {@code AspectClass} with loaded definition and parameters.
@@ -32,37 +30,25 @@ public final class Aspect implements DependencyFilter.AttributeInfoProvider {
   /** */
   public static final String INJECTING_RULE_KIND_PARAMETER_KEY = "$injecting_rule_kind";
 
-  /**
-   * The aspect definition is a function of the aspect class + its parameters, so we can cache that.
-   *
-   * <p>The native aspects are loaded with blaze and are not stateful. Reference equality works fine
-   * in this case.
-   *
-   * <p>Caching of Skylark aspects is not yet implemented.
-   */
-  private static final Map<NativeAspectClass, Map<AspectParameters, AspectDefinition>>
-      definitionCache = new ConcurrentHashMap<>();
-
-  private final AspectDescriptor aspectDescriptor;
+  // TODO(bazel-team): class objects are not really hashable or comparable for equality other than
+  // by reference. We should identify the aspect here in a way that does not rely on comparison
+  // by reference so that keys can be serialized and deserialized properly.
+  private final AspectClass aspectClass;
+  private final AspectParameters parameters;
   private final AspectDefinition aspectDefinition;
 
   private Aspect(
       AspectClass aspectClass,
       AspectDefinition aspectDefinition,
       AspectParameters parameters) {
-    this.aspectDescriptor = new AspectDescriptor(
-        Preconditions.checkNotNull(aspectClass),
-        Preconditions.checkNotNull(parameters));
+    this.aspectClass = Preconditions.checkNotNull(aspectClass);
     this.aspectDefinition = Preconditions.checkNotNull(aspectDefinition);
+    this.parameters = Preconditions.checkNotNull(parameters);
   }
 
   public static Aspect forNative(
       NativeAspectClass nativeAspectClass, AspectParameters parameters) {
-    AspectDefinition definition =
-        definitionCache
-            .computeIfAbsent(nativeAspectClass, key -> new ConcurrentHashMap<>())
-            .computeIfAbsent(parameters, nativeAspectClass::getDefinition);
-    return new Aspect(nativeAspectClass, definition, parameters);
+    return new Aspect(nativeAspectClass, nativeAspectClass.getDefinition(parameters), parameters);
   }
 
   public static Aspect forNative(NativeAspectClass nativeAspectClass) {
@@ -71,32 +57,28 @@ public final class Aspect implements DependencyFilter.AttributeInfoProvider {
 
   public static Aspect forSkylark(
       SkylarkAspectClass skylarkAspectClass,
-      AspectDefinition aspectDefinition,
+      AspectDefinition definition,
       AspectParameters parameters) {
-    return new Aspect(skylarkAspectClass, aspectDefinition, parameters);
+    return new Aspect(skylarkAspectClass, definition, parameters);
   }
 
   /**
    * Returns the aspectClass required for building the aspect.
    */
   public AspectClass getAspectClass() {
-    return aspectDescriptor.getAspectClass();
+    return aspectClass;
   }
 
   /**
    * Returns parameters for evaluation of the aspect.
    */
   public AspectParameters getParameters() {
-    return aspectDescriptor.getParameters();
-  }
-
-  public AspectDescriptor getDescriptor() {
-    return aspectDescriptor;
+    return parameters;
   }
 
   @Override
   public String toString() {
-    return String.format("Aspect %s", aspectDescriptor.toString());
+    return String.format("Aspect %s(%s)", aspectClass, parameters);
   }
 
   public AspectDefinition getDefinition() {
