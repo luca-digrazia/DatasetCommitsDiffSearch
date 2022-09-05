@@ -88,7 +88,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   private final int shardNum;
   private final int runNumber;
   private final String workspaceName;
-  private final PathFragment shExecutable;
 
   // Mutable state related to test caching.
   private boolean checkedCaching = false;
@@ -168,7 +167,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     this.undeclaredOutputsAnnotationsPath = undeclaredOutputsAnnotationsDir.getChild("ANNOTATIONS");
     this.testInfrastructureFailure = baseDir.getChild(namePrefix + ".infrastructure_failure");
     this.workspaceName = workspaceName;
-    this.shExecutable = configuration.getShExecutable();
 
     Map<String, String> mergedTestEnv = new HashMap<>(configuration.getTestEnv());
     mergedTestEnv.putAll(extraTestEnv);
@@ -299,7 +297,9 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
 
   @Override
   public ResourceSet estimateResourceConsumption(Executor executor) {
-    return ResourceSet.ZERO;
+    // return null here to indicate that resources would be managed manually
+    // during action execution.
+    return null;
   }
 
   @Override
@@ -554,10 +554,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     }
 
     throw new UserExecException("'" + basename + "' not found in test runtime");
-  }
-
-  public PathFragment getShExecutable() {
-    return shExecutable;
   }
 
   /**
