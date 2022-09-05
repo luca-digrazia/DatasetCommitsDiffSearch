@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,17 +16,19 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+
 import java.util.Objects;
 import java.util.Set;
 
-/** Contains options which control the set of artifacts to build for top-level targets. */
+/**
+ * Contains options which control the set of artifacts to build for top-level targets.
+ */
 @Immutable
-@AutoCodec
 public final class TopLevelArtifactContext {
-  public static final ObjectCodec<TopLevelArtifactContext> CODEC =
-      new TopLevelArtifactContext_AutoCodec();
+
+  public static final TopLevelArtifactContext DEFAULT = new TopLevelArtifactContext(
+      /*runTestsExclusively=*/false,
+      /*outputGroups=*/ImmutableSortedSet.<String>of());
 
   private final boolean runTestsExclusively;
   private final ImmutableSortedSet<String> outputGroups;
