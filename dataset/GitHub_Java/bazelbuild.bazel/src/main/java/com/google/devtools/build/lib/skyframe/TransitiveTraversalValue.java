@@ -13,6 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import static com.google.devtools.build.skyframe.SkyKeyInterner.SKY_KEY_INTERNER;
+
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -20,7 +23,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -39,20 +41,19 @@ import javax.annotation.Nullable;
 @Immutable
 @ThreadSafe
 public class TransitiveTraversalValue implements SkyValue {
-  private final boolean canHaveAnyProvider;
+
   @Nullable private final ImmutableSet<String> providers;
   @Nullable private final String firstErrorMessage;
 
-  public TransitiveTraversalValue(boolean canHaveAnyProvider,
+  private TransitiveTraversalValue(
       @Nullable Iterable<String> providers, @Nullable String firstErrorMessage) {
-    this.canHaveAnyProvider = canHaveAnyProvider;
     this.providers = (providers == null) ? null : canonicalSet(providers);
     this.firstErrorMessage =
         (firstErrorMessage == null) ? null : StringCanonicalizer.intern(firstErrorMessage);
   }
 
   public static TransitiveTraversalValue unsuccessfulTransitiveTraversal(String firstErrorMessage) {
-    return new TransitiveTraversalValue(false, null, Preconditions.checkNotNull(firstErrorMessage));
+    return new TransitiveTraversalValue(null, Preconditions.checkNotNull(firstErrorMessage));
   }
 
   public static TransitiveTraversalValue forTarget(
@@ -60,16 +61,14 @@ public class TransitiveTraversalValue implements SkyValue {
     if (target instanceof Rule) {
       Rule rule = (Rule) target;
       return new TransitiveTraversalValue(
-          rule.getRuleClassObject().canHaveAnyProvider(),
-          toStringSet(rule.getRuleClassObject().getAdvertisedProviders()),
-          firstErrorMessage);
+          toStringSet(rule.getRuleClassObject().getAdvertisedProviders()), firstErrorMessage);
     }
-  return new TransitiveTraversalValue(false, ImmutableList.<String>of(), firstErrorMessage);
+    return new TransitiveTraversalValue(ImmutableList.<String>of(), firstErrorMessage);
   }
 
   public static TransitiveTraversalValue withProviders(
       Collection<String> providers, @Nullable String firstErrorMessage) {
-    return new TransitiveTraversalValue(false, ImmutableSet.copyOf(providers), firstErrorMessage);
+    return new TransitiveTraversalValue(ImmutableSet.copyOf(providers), firstErrorMessage);
   }
 
   private static ImmutableSet<String> canonicalSet(Iterable<String> strIterable) {
@@ -88,13 +87,6 @@ public class TransitiveTraversalValue implements SkyValue {
       }
     }
     return pBuilder.build();
-  }
-
-  /**
-   * Returns if the associated target can have any provider. True for "alias" rules.
-   */
-  public boolean canHaveAnyProvider() {
-    return canHaveAnyProvider;
   }
 
   /**
@@ -125,18 +117,17 @@ public class TransitiveTraversalValue implements SkyValue {
     }
     TransitiveTraversalValue that = (TransitiveTraversalValue) o;
     return Objects.equals(this.firstErrorMessage, that.firstErrorMessage)
-        && Objects.equals(this.providers, that.providers)
-        && Objects.equals(this.canHaveAnyProvider, canHaveAnyProvider);
+        && Objects.equals(this.providers, that.providers);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(firstErrorMessage, providers, canHaveAnyProvider);
+    return 31 * Objects.hashCode(firstErrorMessage) + Objects.hashCode(providers);
   }
 
   @ThreadSafe
   public static SkyKey key(Label label) {
-    Preconditions.checkArgument(!label.getPackageIdentifier().getRepository().isDefault());
-    return SkyKey.create(SkyFunctions.TRANSITIVE_TRAVERSAL, label);
+    // Intern in order to save memory.
+    return SKY_KEY_INTERNER.intern(new SkyKey(SkyFunctions.TRANSITIVE_TRAVERSAL, label));
   }
 }
