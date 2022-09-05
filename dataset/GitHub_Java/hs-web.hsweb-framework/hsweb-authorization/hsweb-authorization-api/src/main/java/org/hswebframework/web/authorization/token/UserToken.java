@@ -65,11 +65,10 @@ public interface UserToken extends Serializable, Comparable<UserToken> {
         return getState() == TokenState.offline;
     }
 
-    default boolean validate() {
+    default void validate() {
         if (!isEffective()) {
             throw new UnAuthorizedException(getState());
         }
-        return true;
     }
 
     @Override
