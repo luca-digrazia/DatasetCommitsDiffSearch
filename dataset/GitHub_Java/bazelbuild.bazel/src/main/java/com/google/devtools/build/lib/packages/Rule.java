@@ -483,8 +483,8 @@ public final class Rule implements Target {
    * first, followed by any explicit files. Additionally both implicit and explicit output files
    * will retain the relative order in which they were declared.
    */
-  void populateOutputFiles(EventHandler eventHandler, Package.Builder pkgBuilder)
-      throws SyntaxException, InterruptedException {
+  void populateOutputFiles(EventHandler eventHandler,
+      Package.Builder pkgBuilder) throws SyntaxException {
     Preconditions.checkState(outputFiles == null);
     // Order is important here: implicit before explicit
     outputFiles = Lists.newArrayList();
@@ -519,8 +519,8 @@ public final class Rule implements Target {
    * Implicit output files come from rule-specific patterns, and are a function
    * of the rule's "name", "srcs", and other attributes.
    */
-  private void populateImplicitOutputFiles(EventHandler eventHandler, Package.Builder pkgBuilder)
-      throws InterruptedException {
+  private void populateImplicitOutputFiles(EventHandler eventHandler,
+      Package.Builder pkgBuilder) {
     try {
       for (String out : ruleClass.getImplicitOutputsFunction().getImplicitOutputs(attributeMap)) {
         try {
