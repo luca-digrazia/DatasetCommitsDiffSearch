@@ -752,11 +752,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     // TODO(kmb): In modes other than LEGACY verify that proguard specs don't include -dont... flags
     // since those flags would override the desired optMode (b/25621573)
     ImmutableSortedSet.Builder<Artifact> builder =
-        ImmutableSortedSet.orderedBy(Artifact.EXEC_PATH_COMPARATOR)
-            .addAll(proguardSpecs)
-            .addAll(ruleContext
-                .getPrerequisiteArtifacts(":extra_proguard_specs", Mode.TARGET)
-                .list());
+        ImmutableSortedSet.<Artifact>orderedBy(Artifact.EXEC_PATH_COMPARATOR).addAll(proguardSpecs);
     for (ProguardSpecProvider dep :
         ruleContext.getPrerequisites("deps", Mode.TARGET, ProguardSpecProvider.class)) {
       builder.addAll(dep.getTransitiveProguardSpecs());
