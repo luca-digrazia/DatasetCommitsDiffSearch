@@ -68,7 +68,12 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   @Nullable private final Label dumpSymsLabel;
   @Nullable private final Label defaultProvisioningProfileLabel;
 
-  ObjcConfiguration(ObjcCommandLineOptions objcOptions, BuildConfiguration.Options options) {
+  ObjcConfiguration(
+      ObjcCommandLineOptions objcOptions,
+      BuildConfiguration.Options options,
+      @Nullable Label gcovLabel,
+      @Nullable Label dumpSymsLabel,
+      @Nullable Label defaultProvisioningProfileLabel) {
     this.iosSdkVersion = Preconditions.checkNotNull(objcOptions.iosSdkVersion, "iosSdkVersion");
     this.iosMinimumOs = Preconditions.checkNotNull(objcOptions.iosMinimumOs, "iosMinimumOs");
     this.iosSimulatorDevice =
@@ -81,9 +86,9 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.runMemleaks = objcOptions.runMemleaks;
     this.copts = ImmutableList.copyOf(objcOptions.copts);
     this.compilationMode = Preconditions.checkNotNull(options.compilationMode, "compilationMode");
-    this.gcovLabel = options.objcGcovBinary;
-    this.dumpSymsLabel = objcOptions.dumpSyms;
-    this.defaultProvisioningProfileLabel = objcOptions.defaultProvisioningProfile;
+    this.gcovLabel = gcovLabel;
+    this.dumpSymsLabel = dumpSymsLabel;
+    this.defaultProvisioningProfileLabel = defaultProvisioningProfileLabel;
     this.iosMultiCpus = Preconditions.checkNotNull(objcOptions.iosMultiCpus, "iosMultiCpus");
     this.iosSplitCpu = Preconditions.checkNotNull(objcOptions.iosSplitCpu, "iosSplitCpu");
   }

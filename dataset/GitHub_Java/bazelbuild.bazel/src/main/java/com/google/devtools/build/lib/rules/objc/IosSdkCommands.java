@@ -61,8 +61,6 @@ public class IosSdkCommands {
           .put("GCC_WARN_UNUSED_VARIABLE", "-Wunused-variable")
           .build();
 
-  static final ImmutableList<String> DEFAULT_COMPILER_FLAGS = ImmutableList.of("-DOS_IOS");
-
   static final ImmutableList<String> DEFAULT_LINKER_FLAGS = ImmutableList.of("-ObjC");
 
   private IosSdkCommands() {
@@ -94,7 +92,7 @@ public class IosSdkCommands {
     return parents.build();
   }
 
-  public static List<String> commonLinkAndCompileFlagsForClang(
+  public static List<String> commonLinkAndCompileArgsForClang(
       ObjcProvider provider, ObjcConfiguration configuration) {
     ImmutableList.Builder<String> builder = new ImmutableList.Builder<>();
     if (Platform.forArch(configuration.getIosCpu()) == Platform.SIMULATOR) {
@@ -122,16 +120,14 @@ public class IosSdkCommands {
         .build();
   }
 
-  public static Iterable<String> compileFlagsForClang(ObjcConfiguration configuration) {
+  public static Iterable<String> compileArgsForClang(ObjcConfiguration configuration) {
     return Iterables.concat(
         DEFAULT_WARNINGS.values(),
-        platformSpecificCompileFlagsForClang(configuration),
-        DEFAULT_COMPILER_FLAGS
+        platformSpecificCompileArgsForClang(configuration)
     );
   }
 
-  private static List<String> platformSpecificCompileFlagsForClang(
-      ObjcConfiguration configuration) {
+  private static List<String> platformSpecificCompileArgsForClang(ObjcConfiguration configuration) {
     switch (Platform.forArch(configuration.getIosCpu())) {
       case DEVICE:
         return ImmutableList.of();
