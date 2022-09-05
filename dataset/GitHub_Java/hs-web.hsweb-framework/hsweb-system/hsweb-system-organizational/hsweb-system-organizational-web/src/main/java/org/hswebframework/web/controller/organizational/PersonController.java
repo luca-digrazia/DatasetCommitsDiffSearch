@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019 http://www.hswebframework.org
+ *  Copyright 2016 http://www.hswebframework.org
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import org.hswebframework.web.NotFoundException;
 import org.hswebframework.web.authorization.Permission;
 import org.hswebframework.web.authorization.annotation.Authorize;
 import org.hswebframework.web.authorization.annotation.RequiresDataAccess;
-import org.hswebframework.web.authorization.define.Phased;
 import org.hswebframework.web.commons.entity.PagerResult;
 import org.hswebframework.web.commons.entity.param.QueryParamEntity;
 import org.hswebframework.web.controller.SimpleGenericEntityController;
@@ -111,29 +110,29 @@ public class PersonController implements SimpleGenericEntityController<PersonEnt
 
     @GetMapping("/{personId}/authorization")
     @ApiOperation("查看人员权限信息")
-    @Authorize(action = Permission.ACTION_GET, dataAccess = @RequiresDataAccess(ignore = true))
+    @Authorize(action = Permission.ACTION_GET)
     public ResponseMessage<PersonnelAuthentication> getPersonDetail(@PathVariable String personId) {
         return ResponseMessage.ok(PersonnelAuthenticationHolder.getByPersonId(personId));
     }
 
     @GetMapping("/{id}/detail")
     @ApiOperation("查看人员详情")
-    @Authorize(action = Permission.ACTION_GET, dataAccess = @RequiresDataAccess(phased = Phased.after))
+    @Authorize(action = Permission.ACTION_GET)
     public ResponseMessage<PersonAuthBindEntity> getDetail(@PathVariable String id) {
         return ResponseMessage.ok(personService.selectAuthBindByPk(id));
     }
 
     @PostMapping("/detail")
     @ApiOperation("新增人员信息,并关联用户信息")
-    @Authorize(action = Permission.ACTION_ADD, dataAccess = @RequiresDataAccess(ignore = true))
+    @Authorize(action = Permission.ACTION_ADD)
     @ResponseStatus(HttpStatus.CREATED)
-    public ResponseMessage<String> createPersonDetail(@RequestBody PersonAuthBindEntity bindEntity) {
+    public ResponseMessage<String> getDetail(@RequestBody PersonAuthBindEntity bindEntity) {
         return ResponseMessage.ok(personService.insert(bindEntity));
     }
 
     @PutMapping("/{id}/detail")
     @ApiOperation("修改人员信息,并关联用户信息")
-    @Authorize(action = Permission.ACTION_UPDATE, dataAccess = @RequiresDataAccess(ignore = true))
+    @Authorize(action = Permission.ACTION_UPDATE)
     public ResponseMessage<String> getDetail(@PathVariable String id, @RequestBody PersonAuthBindEntity bindEntity) {
         bindEntity.setId(id);
         personService.updateByPk(bindEntity);
@@ -142,7 +141,7 @@ public class PersonController implements SimpleGenericEntityController<PersonEnt
 
     @GetMapping("/in-position/{positionId}")
     @ApiOperation("获取指定岗位的人员")
-    @Authorize(action = Permission.ACTION_GET, dataAccess = @RequiresDataAccess(phased = Phased.after))
+    @Authorize(action = Permission.ACTION_GET)
     public ResponseMessage<List<PersonEntity>> getByPositionId(@PathVariable String positionId) {
         return ResponseMessage.ok(personService.selectByPositionId(positionId));
     }
