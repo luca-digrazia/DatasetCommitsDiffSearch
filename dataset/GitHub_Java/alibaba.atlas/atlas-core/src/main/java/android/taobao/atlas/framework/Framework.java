@@ -219,8 +219,10 @@ import android.taobao.atlas.runtime.ClassNotFoundInterceptorCallback;
 import android.taobao.atlas.runtime.InstrumentationHook;
 import android.taobao.atlas.runtime.LowDiskException;
 import android.taobao.atlas.runtime.RuntimeVariables;
+import android.taobao.atlas.startup.patch.KernalBundle;
 import android.taobao.atlas.util.*;
 import android.taobao.atlas.util.AtlasFileLock;
+import android.taobao.atlas.util.log.impl.AtlasMonitor;
 import android.taobao.atlas.versionInfo.BaselineInfoManager;
 import android.text.TextUtils;
 import android.util.Log;
@@ -241,8 +243,6 @@ import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -379,6 +379,7 @@ public final class Framework {
     private static boolean bundleUpdated = false;
 
     static {
+//        Log.e("KernalBundle","EEEEEEEEEEEE");
         File fileDir = RuntimeVariables.androidApplication.getFilesDir();
         if (fileDir == null || !fileDir.exists()) {
             fileDir = RuntimeVariables.androidApplication.getFilesDir();
@@ -437,11 +438,6 @@ public final class Framework {
         } else if (RuntimeVariables.getProcessName(RuntimeVariables.androidApplication).equals(RuntimeVariables.androidApplication.getPackageName())) {
             restoreProfile();
         }
-
-        if(RuntimeVariables.shouldSyncUpdateInThisProcess()) {
-            BaselineInfoManager.instance().checkUpdateBundles(STORAGE_LOCATION);
-        }
-
         notifyFrameworkListeners(0 /* STARTING */, systemBundle, null);
         // save the metadata
         if (init) {
@@ -619,8 +615,8 @@ public final class Framework {
             out.flush();
             out.close();
         } catch (IOException ioe) {
-//            AtlasMonitor.getInstance().trace(AtlasMonitor.BUNDLE_INSTALL_FAIL, "System", AtlasMonitor.UPDATE_META_FAILED_MSG,
-//                    FileUtils.getDataAvailableSpace());
+            AtlasMonitor.getInstance().trace(AtlasMonitor.BUNDLE_INSTALL_FAIL, "System", AtlasMonitor.UPDATE_META_FAILED_MSG,
+                    FileUtils.getDataAvailableSpace());
             Log.e("Framework","Could not save meta data.", ioe);
         }
     }
@@ -677,8 +673,8 @@ public final class Framework {
                     deleteDirectory(storage);
                 } catch (Exception e) {
                     if (count == 1) {
-//                        AtlasMonitor.getInstance().trace(AtlasMonitor.DELETE_STORAGE_FAIL,
-//                                "System", AtlasMonitor.DELETE_STORAGE_FAILED_MSG, FileUtils.getDataAvailableSpace());
+                        AtlasMonitor.getInstance().trace(AtlasMonitor.DELETE_STORAGE_FAIL,
+                                "System", AtlasMonitor.DELETE_STORAGE_FAILED_MSG, FileUtils.getDataAvailableSpace());
                         throw new RuntimeException("deleteDirectory failed", e);
                     }
                 }
@@ -688,8 +684,8 @@ public final class Framework {
         }
         // Still not removed yet, throw exception
         if (storage.exists()) {
-//            AtlasMonitor.getInstance().trace(AtlasMonitor.DELETE_STORAGE_FAIL,
-//                    "System", AtlasMonitor.DELETE_STORAGE_FAILED_MSG, FileUtils.getDataAvailableSpace());
+            AtlasMonitor.getInstance().trace(AtlasMonitor.DELETE_STORAGE_FAIL,
+                    "System", AtlasMonitor.DELETE_STORAGE_FAILED_MSG, FileUtils.getDataAvailableSpace());
             throw new RuntimeException("deleteDirectory failed");
         }
 
@@ -894,7 +890,7 @@ public final class Framework {
             BundleListing.BundleInfo info = AtlasBundleInfoManager.instance().getBundleInfo(location);
             String version = info!=null ? info.getVersion() : "-1";
             bundle = new BundleImpl(bundleDir, location, new BundleContext(), in, null, version,true,-1);
-//            storeMetadata();
+            storeMetadata();
             return bundle;
         } catch (IOException e) {
 
@@ -953,7 +949,7 @@ public final class Framework {
             BundleListing.BundleInfo info = AtlasBundleInfoManager.instance().getBundleInfo(location);
             String version = info!=null ? info.getVersion() : "-1";
             bundle = new BundleImpl(bundleDir, location, new BundleContext(), null, file,version,true,-1);
-//            storeMetadata();
+            storeMetadata();
             return bundle;
         } catch (IOException e) {
             BundleException e1 = new BundleException("Failed to install bundle." + FileUtils.getAvailableDisk(), e);
@@ -980,14 +976,11 @@ public final class Framework {
         try {
             for (String location : locations) {
                 if (isKernalBundle(location)) {
-                    final File bundleDir = new File(STORAGE_LOCATION, "com.taobao.maindex");
+                    final File bundleDir = new File(STORAGE_LOCATION, KernalBundle.KERNAL_BUNDLE_NAME);
                     if (!bundleDir.exists()) {
                         return false;
                     } else {
-                        Class KernalBundleClass = RuntimeVariables.getRawClassLoader().loadClass("android.taobao.atlas.startup.patch.KernalBundle");
-                        Method downgradeRevision = KernalBundleClass.getDeclaredMethod("downgradeRevision",File.class,boolean.class);
-                        boolean success = (Boolean)downgradeRevision.invoke(KernalBundleClass,bundleDir,false);
-                        if (!success) {
+                        if (!KernalBundle.downgradeRevision(bundleDir, false)) {
                             return false;
                         }
                     }
@@ -1069,8 +1062,8 @@ public final class Framework {
                         bundle = null;
                     }
                 }
-//                AtlasMonitor.getInstance().trace(AtlasMonitor.BUNDLE_INSTALL_FAIL,
-//                        location, AtlasMonitor.RESTORED_FAILED_MSG, FileUtils.getDataAvailableSpace());
+                AtlasMonitor.getInstance().trace(AtlasMonitor.BUNDLE_INSTALL_FAIL,
+                        location, AtlasMonitor.RESTORED_FAILED_MSG, FileUtils.getDataAvailableSpace());
                 Log.e("Framework","restore bundle failed" + location, e);
             }finally {
                 if(lockSuccess) {
@@ -1093,8 +1086,6 @@ public final class Framework {
         File walsDir = new File(STORAGE_LOCATION, "wal");
         File walDir = new File(walsDir, writeAhead);
         walDir.mkdirs();
-        Class KernalBundleClass = null;
-        Object kernalBundle = null;
 
         for (int i = 0; i < locations.length; i++) {
             if (locations[i] == null || files[i] == null) {
@@ -1104,27 +1095,18 @@ public final class Framework {
             try {
                 BundleLock.WriteLock(locations[i]);
                 if (isKernalBundle(locations[i])) {
-                    KernalBundleClass = RuntimeVariables.getRawClassLoader().loadClass("android.taobao.atlas.startup.patch.KernalBundle");
-                    kernalBundle = KernalBundleClass.getDeclaredField("kernalBundle").get(KernalBundleClass);
-                    if (kernalBundle != null) {
-                        Method updateMethod = KernalBundleClass.getMethod("update",File.class,String.class,long.class);
-                        updateMethod.setAccessible(true);
-                        updateMethod.invoke(kernalBundle,files[i],Framework.containerVersion,dexPatchVersion);
-//                        bundle.update();
+                    KernalBundle bundle = KernalBundle.kernalBundle;
+                    if (bundle != null) {
+                        bundle.update(files[i],Framework.containerVersion,dexPatchVersion);
                     } else {
-                        bundleDir = new File(STORAGE_LOCATION, "com.taobao.maindex");
+                        bundleDir = new File(STORAGE_LOCATION, KernalBundle.KERNAL_BUNDLE_NAME);
                         if (!bundleDir.exists()){
                             bundleDir.mkdirs();
                         }
                         AtlasFileLock.getInstance().LockExclusive(bundleDir);
-                        Constructor cons = KernalBundleClass.getDeclaredConstructor(File.class,File.class,String.class,long.class);
-                        cons.setAccessible(true);
-                        Object b = cons.newInstance(bundleDir, files[i],Framework.containerVersion,dexPatchVersion);
-//                        KernalBundle b = new KernalBundle(bundleDir, files[i],Framework.containerVersion,dexPatchVersion);
+                        KernalBundle b = new KernalBundle(bundleDir, files[i],Framework.containerVersion,dexPatchVersion);
                         if (b != null) {
-                            Method getRevisionDir = b.getClass().getDeclaredMethod("getRevisionDir");
-                            File file = (File) getRevisionDir.invoke(b);
-                            FileUtils.createNewDirIfNotExist(file, UPDATED_MARK);
+                            FileUtils.createNewDirIfNotExist(b.getArchive().getRevisionDir(), UPDATED_MARK);
                         }
                     }
                 } else {
@@ -1150,23 +1132,20 @@ public final class Framework {
                     }
                 }
             } catch (Exception e) {
-//                AtlasMonitor.getInstance().trace(AtlasMonitor.BUNDLE_INSTALL_FAIL,
-//                        locations[i], AtlasMonitor.UPDATE_FAILED_MSG, FileUtils.getDataAvailableSpace());
+                AtlasMonitor.getInstance().trace(AtlasMonitor.BUNDLE_INSTALL_FAIL,
+                        locations[i], AtlasMonitor.UPDATE_FAILED_MSG, FileUtils.getDataAvailableSpace());
                 /**
                  * bundle 安装需要支持事务,失败时回滚已部署的bundle
                  */
                 for (int x = 0; x <= i; x++) {
                         if (isKernalBundle(locations[x])) {
-                            if (kernalBundle != null) {
+                            if (KernalBundle.kernalBundle != null) {
                                 try {
-                                    Method downgradeRevision = kernalBundle.getClass().getDeclaredMethod("downgradeRevision",File.class,boolean.class);
-                                    downgradeRevision.setAccessible(true);
-                                    downgradeRevision.invoke(KernalBundleClass,new File(STORAGE_LOCATION, "com.taobao.maindex"), true);
-//                                    KernalBundle.downgradeRevision(new File(STORAGE_LOCATION, "com.taobao.maindex"), true);
-                                } catch (Throwable e2) {
+                                    KernalBundle.downgradeRevision(new File(STORAGE_LOCATION, KernalBundle.KERNAL_BUNDLE_NAME), true);
+                                } catch (IOException e2) {
                                 }
                             } else {
-                                deleteDirectory(new File(STORAGE_LOCATION, "com.taobao.maindex"));
+                                deleteDirectory(new File(STORAGE_LOCATION, KernalBundle.KERNAL_BUNDLE_NAME));
                             }
                         } else {
                             try {
@@ -1205,7 +1184,7 @@ public final class Framework {
         if (TextUtils.isEmpty(location)) {
             return false;
         }
-        return location.equals("com.taobao.maindex");
+        return location.equals(KernalBundle.KERNAL_BUNDLE_NAME);
     }
 
     /**

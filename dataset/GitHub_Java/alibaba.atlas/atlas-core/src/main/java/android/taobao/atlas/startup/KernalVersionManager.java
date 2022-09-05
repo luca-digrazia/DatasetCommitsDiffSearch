@@ -210,10 +210,8 @@ package android.taobao.atlas.startup;
 
 import android.app.ActivityManager;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.os.Process;
 import android.taobao.atlas.startup.patch.KernalConstants;
 import android.taobao.atlas.startup.patch.KernalFileLock;
 import android.text.TextUtils;
@@ -329,10 +327,14 @@ public class KernalVersionManager {
                 cachePreVersion = input.readBoolean();
                 input.close();
             } catch (Throwable e) {
-                updateMonitor(KernalConstants.DD_BASELINEINFO_FAIL, e==null?"":e.getMessage());
-                rollbackHardly();
-                killChildProcesses(KernalConstants.baseContext);
-                android.os.Process.killProcess(Process.myPid());
+                removeBaseLineInfo();
+                baselineVersion = "";
+                updateBundles = "";
+                lastVersionName = "";
+                lastUpdateBundles="";
+                dexpatchVersion=0;
+                dexPatchBundles="";
+                e.printStackTrace();
             }
         }
         LAST_VERSIONNAME = lastVersionName;
@@ -346,13 +348,8 @@ public class KernalVersionManager {
     }
 
     public void removeBaseLineInfo(){
-        if(BASELINEINFO_DIR.exists()) {
-            deleteDirectory(BASELINEINFO_DIR);
-        }
-        File bundleupdate = new File(KernalConstants.baseContext.getFilesDir(),"bundleupdate");
-        if(bundleupdate.exists()) {
-            deleteDirectory(bundleupdate);
-        }
+        deleteDirectory(BASELINEINFO_DIR);
+        deleteDirectory(new File(KernalConstants.baseContext.getFilesDir(),"bundleupdate"));
     }
 
     public void deleteDirectory(final File path) {
@@ -602,27 +599,20 @@ public class KernalVersionManager {
         }
     }
 
-    public void killChildProcesses(Context context) {
+    private void killChildProcesses(Context context) {
         try {
-            long uid = context.getApplicationInfo().uid;
             ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
             List<ActivityManager.RunningAppProcessInfo> a = am.getRunningAppProcesses();
             for (int i = 0; i < a.size(); i++) {
                 ActivityManager.RunningAppProcessInfo b = a.get(i);
-                if(b.uid == uid && !b.processName.equals(context.getPackageName())){
+                if (b.processName.contains(context.getPackageName() + ":")) {
                     android.os.Process.killProcess(b.pid);
+                    continue;
                 }
-
             }
         } catch (Exception e) {
 
         }
-    }
-
-    private void updateMonitor(String stage, String detail) {
-        SharedPreferences sharedPreferences = KernalConstants.baseContext.getSharedPreferences(KernalConstants.ATLAS_MONITOR, Context.MODE_PRIVATE);
-        SharedPreferences.Editor editor = sharedPreferences.edit();
-        editor.putString(stage, detail).commit();
     }
 
 }
