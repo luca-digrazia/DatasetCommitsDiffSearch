@@ -2,17 +2,18 @@ package com.codahale.metrics.servlets;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.time.Duration;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import org.joda.time.Duration;
+
 import com.papertrail.profiler.CpuProfile;
 
 /**
- * An HTTP servlets which outputs a {@link https://github.com/gperftools/gperftools} parseable response.
+ * An HTTP servlets which outputs a <a href="https://github.com/gperftools/gperftools">pprof</a> parseable response.
  */
 public class CpuProfileServlet extends HttpServlet {
     private static final long serialVersionUID = -668666696530287501L;
@@ -38,6 +39,7 @@ public class CpuProfileServlet extends HttpServlet {
         if (req.getParameter("frequency") != null) {
             try {
                 frequency = Integer.parseInt(req.getParameter("frequency"));
+                frequency = Math.min(Math.max(frequency, 1), 1000);
             } catch (NumberFormatException e) {
                 frequency = 100;
             }
@@ -46,26 +48,22 @@ public class CpuProfileServlet extends HttpServlet {
         final Thread.State state;
         if ("blocked".equalsIgnoreCase(req.getParameter("state"))) {
             state = Thread.State.BLOCKED;
-        }
-        else {
+        } else {
             state = Thread.State.RUNNABLE;
         }
 
         resp.setStatus(HttpServletResponse.SC_OK);
         resp.setHeader(CACHE_CONTROL, NO_CACHE);
         resp.setContentType(CONTENT_TYPE);
-        final OutputStream output = resp.getOutputStream();
-        try {
+        try (OutputStream output = resp.getOutputStream()) {
             doProfile(output, duration, frequency, state);
-        } finally {
-            output.close();
         }
     }
 
     protected void doProfile(OutputStream out, int duration, int frequency, Thread.State state) throws IOException {
         if (lock.tryLock()) {
             try {
-                CpuProfile profile = CpuProfile.record(Duration.standardSeconds(duration),
+                CpuProfile profile = CpuProfile.record(Duration.ofSeconds(duration),
                         frequency, state);
                 if (profile == null) {
                     throw new RuntimeException("could not create CpuProfile");
