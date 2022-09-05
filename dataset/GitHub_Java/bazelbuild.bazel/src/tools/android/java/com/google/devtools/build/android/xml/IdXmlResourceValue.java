@@ -14,14 +14,10 @@
 package com.google.devtools.build.android.xml;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.collect.FluentIterable;
-import com.google.devtools.build.android.AndroidDataWritingVisitor;
 import com.google.devtools.build.android.FullyQualifiedName;
 import com.google.devtools.build.android.XmlResourceValue;
 
-import java.nio.file.Path;
-
-import javax.annotation.concurrent.Immutable;
+import java.io.Writer;
 
 /**
  * Represents an Android Resource id.
@@ -32,7 +28,6 @@ import javax.annotation.concurrent.Immutable;
  * that they have no intrinsic defined value. They exist to reference parts of other resources.
  * Ids can also be declared on the fly in components with the syntax @[+][package:]id/resource_name.
  */
-@Immutable
 public class IdXmlResourceValue implements XmlResourceValue {
 
   static final IdXmlResourceValue SINGLETON = new IdXmlResourceValue();
@@ -42,13 +37,9 @@ public class IdXmlResourceValue implements XmlResourceValue {
   }
 
   @Override
-  public void write(
-      FullyQualifiedName key, Path source, AndroidDataWritingVisitor mergedDataWriter) {
-    mergedDataWriter.writeToValuesXml(
-        key,
-        FluentIterable.of(
-            String.format("<!-- %s -->", source),
-            String.format("<item type='id' name='%s'/>", key.name())));
+  public void write(Writer buffer, FullyQualifiedName name) {
+    // TODO(corysmith): Implement write.
+    throw new UnsupportedOperationException();
   }
 
   @Override

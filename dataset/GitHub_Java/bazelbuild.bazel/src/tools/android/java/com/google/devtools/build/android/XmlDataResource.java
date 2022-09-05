@@ -171,16 +171,6 @@ public class XmlDataResource implements DataResource {
   }
 
   @Override
-  public Path source() {
-    return source;
-  }
-
-  @Override
-  public FullyQualifiedName fullyQualifiedName() {
-    return fqn;
-  }
-
-  @Override
   public int hashCode() {
     return Objects.hash(fqn, source, xml);
   }
@@ -209,10 +199,5 @@ public class XmlDataResource implements DataResource {
   public void write(Path newResourceDirectory) throws IOException {
     // TODO(corysmith): Implement write.
     throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int compareTo(DataResource o) {
-    return fqn.compareTo(o.fullyQualifiedName());
   }
 }
