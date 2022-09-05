@@ -1,5 +1,6 @@
 package org.hswebframework.web.organizational.authorization;
 
+import org.hswebframework.web.organizational.authorization.relation.RelationTargetSupplierAutoRegister;
 import org.hswebframework.web.organizational.authorization.simple.*;
 import org.hswebframework.web.organizational.authorization.simple.handler.*;
 import org.springframework.beans.BeansException;
@@ -10,17 +11,22 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * TODO 完成注释
- *
  * @author zhouhao
  */
 @Configuration
 public class OrganizationalAuthorizationAutoConfiguration implements BeanPostProcessor {
 
     @Bean
-    @ConditionalOnMissingBean(AreaScopeDataAccessHandler.class)
-    public AreaScopeDataAccessHandler areaScopeDataAccessHandler() {
-        return new AreaScopeDataAccessHandler();
+    @ConditionalOnMissingBean(DistrictScopeDataAccessHandler.class)
+    public DistrictScopeDataAccessHandler areaScopeDataAccessHandler() {
+        return new DistrictScopeDataAccessHandler();
+    }
+
+
+    @Bean
+    @ConditionalOnMissingBean(CustomScopeHandler.class)
+    public CustomScopeHandler customScopeHandler() {
+        return new CustomScopeHandler();
     }
 
     @Bean
@@ -53,6 +59,24 @@ public class OrganizationalAuthorizationAutoConfiguration implements BeanPostPro
         return new ScopeDataAccessConfigConvert();
     }
 
+    @Bean
+    @ConditionalOnMissingBean(CustomScopeDataAccessConfigConvert.class)
+    public CustomScopeDataAccessConfigConvert customScopeDataAccessConfigConvert() {
+        return new CustomScopeDataAccessConfigConvert();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ScopeByUserDataAccessConfigConvert.class)
+    public ScopeByUserDataAccessConfigConvert scopeByUserDataAccessConfigConvert() {
+        return new ScopeByUserDataAccessConfigConvert();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ScopeByUserHandler.class)
+    public ScopeByUserHandler scopeByUserHandler() {
+        return new ScopeByUserHandler();
+    }
+
     @Override
     public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
         return bean;
@@ -60,18 +84,29 @@ public class OrganizationalAuthorizationAutoConfiguration implements BeanPostPro
 
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
-        if (bean instanceof PersonnelAuthorizationSupplier) {
-            PersonnelAuthorizationHolder.addSupplier(((PersonnelAuthorizationSupplier) bean));
+        if (bean instanceof PersonnelAuthenticationSupplier) {
+            PersonnelAuthenticationHolder.addSupplier(((PersonnelAuthenticationSupplier) bean));
         }
         return bean;
     }
 
+    @Bean
+    public RelationTargetSupplierAutoRegister relationTargetSupplierAutoRegister() {
+        return new RelationTargetSupplierAutoRegister();
+    }
+
     @Configuration
-    @ConditionalOnBean(PersonnelAuthorizationManager.class)
+    @ConditionalOnBean(PersonnelAuthenticationManager.class)
     public static class PersonnelAuthorizationSupplierAutoConfiguration {
+
         @Bean
-        public DefaultPersonnelAuthorizationSupplier personnelAuthorizationManager(PersonnelAuthorizationManager personnelAuthorizationManager) {
-            return new DefaultPersonnelAuthorizationSupplier(personnelAuthorizationManager);
+        public DefaultPersonnelAuthenticationSupplier personnelAuthorizationManager(PersonnelAuthenticationManager personnelAuthenticationManager) {
+            return new DefaultPersonnelAuthenticationSupplier(personnelAuthenticationManager);
+        }
+
+        @Bean
+        public PersonnelAuthenticationSettingTypeSupplier personnelAuthorizationSettingTypeSupplier() {
+            return new PersonnelAuthenticationSettingTypeSupplier();
         }
     }
 }

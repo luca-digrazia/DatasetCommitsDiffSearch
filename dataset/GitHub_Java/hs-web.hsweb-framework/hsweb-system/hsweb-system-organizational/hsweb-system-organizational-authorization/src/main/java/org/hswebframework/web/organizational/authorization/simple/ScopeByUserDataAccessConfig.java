@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hswebframework.web.authorization.simple.AbstractDataAccessConfig;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -17,8 +18,6 @@ public class ScopeByUserDataAccessConfig extends AbstractDataAccessConfig {
     private static final long serialVersionUID = 6678003761927318688L;
 
     private String scopeType;
-
-    private String scopeTypeName;
 
     private Set<String> scope;
 
