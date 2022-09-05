@@ -170,7 +170,7 @@ public final class CommandHelper {
   public String resolveCommandAndExpandLabels(Boolean supportLegacyExpansion,
       Boolean allowDataInLabel) {
     String command = ruleContext.attributes().get("cmd", Type.STRING);
-    command = new LocationExpander(ruleContext, labelMap, allowDataInLabel).expand("cmd", command);
+    command = new LocationExpander(ruleContext, allowDataInLabel).expand("cmd", command);
 
     if (supportLegacyExpansion) {
       command = expandLabels(command, labelMap);
@@ -235,7 +235,8 @@ public final class CommandHelper {
    */
   public List<String> buildCommandLine(
       String command, NestedSetBuilder<Artifact> inputs, String scriptPostFix) {
-    return buildCommandLine(command, inputs, scriptPostFix, ImmutableMap.<String, String>of());
+    return buildCommandLine(command, inputs, scriptPostFix,
+        ruleContext.getConfiguration().getShExecutable());
   }
 
   /**
@@ -243,15 +244,11 @@ public final class CommandHelper {
    * if the command line is longer than the allowed maximum {@link #maxCommandLength}.
    * Fixes up the input artifact list with the created bash script when required.
    *
-   * @param executionInfo an execution info map of the action associated with the command line to be
-   *     built.
+   * @param shellPath path to the shell that should invoke this command
    */
   public List<String> buildCommandLine(
       String command, NestedSetBuilder<Artifact> inputs, String scriptPostFix,
-      Map<String, String> executionInfo) {
-    // Use vanilla /bin/bash for actions running on mac machines.
-    PathFragment shellPath = executionInfo.containsKey("requires-darwin")
-        ? new PathFragment("/bin/bash") : ruleContext.getConfiguration().getShExecutable();
+      PathFragment shellPath) {
     Pair<List<String>, Artifact> argvAndScriptFile =
         buildCommandLineMaybeWithScriptFile(ruleContext, command, scriptPostFix, shellPath);
     if (argvAndScriptFile.second != null) {
