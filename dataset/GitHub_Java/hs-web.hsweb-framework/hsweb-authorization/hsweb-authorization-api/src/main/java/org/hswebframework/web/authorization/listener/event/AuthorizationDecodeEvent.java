@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 http://www.hswebframework.org
+ *  Copyright 2019 http://www.hswebframework.org
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@ import java.util.function.Function;
  */
 public class AuthorizationDecodeEvent extends AbstractAuthorizationEvent {
 
+    private static final long serialVersionUID = 5418501934490174251L;
+
     public AuthorizationDecodeEvent(String username, String password, Function<String, Object> parameterGetter) {
         super(username, password, parameterGetter);
     }
@@ -37,7 +39,7 @@ public class AuthorizationDecodeEvent extends AbstractAuthorizationEvent {
     }
 
     public void setPassword(String password) {
-        super.username = password;
+        super.password = password;
     }
 
 }
