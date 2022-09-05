@@ -181,7 +181,7 @@ public final class ActionsTestUtil {
     }
 
     @Override
-    public final String getConfigurationChecksum() {
+    public final String getConfigurationShortCacheKey() {
       return "dummy-configuration";
     }
   }

@@ -1052,7 +1052,7 @@ public final class SkyframeActionExecutor {
     private final ActionInputFileCache perActionCache;
     private final ActionInputFileCache perBuildFileCache;
 
-    private DelegatingPairFileCache(PerActionFileCache mainCache,
+    private DelegatingPairFileCache(ActionInputFileCache mainCache,
         ActionInputFileCache perBuildFileCache) {
       this.perActionCache = mainCache;
       this.perBuildFileCache = perBuildFileCache;
@@ -1062,12 +1062,6 @@ public final class SkyframeActionExecutor {
     public ByteString getDigest(ActionInput actionInput) throws IOException {
       ByteString digest = perActionCache.getDigest(actionInput);
       return digest != null ? digest : perBuildFileCache.getDigest(actionInput);
-    }
-
-    @Override
-    public boolean isFile(Artifact input) {
-      // PerActionCache must have a value for all artifacts.
-      return perActionCache.isFile(input);
     }
 
     @Override
