@@ -64,9 +64,7 @@ public final class ShortcutBadger {
             applyCountOrThrow(context, badgeCount);
             return true;
         } catch (ShortcutBadgeException e) {
-            if (Log.isLoggable(LOG_TAG, Log.DEBUG)) {
-                Log.d(LOG_TAG, "Unable to execute badge", e);
-            }
+            Log.e(LOG_TAG, "Unable to execute badge", e);
             return false;
         }
     }
@@ -116,7 +114,7 @@ public final class ShortcutBadger {
     private static boolean initBadger(Context context) {
         Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
         if (launchIntent == null) {
-            Log.e(LOG_TAG, "Unable to find launch intent for package " + context.getPackageName());
+            Log.e(LOG_TAG, "Unable to find launch intent for package", context.getPackageName());
             return false;
         }
 
