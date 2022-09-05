@@ -11,7 +11,7 @@ public interface GraphiteSender extends Closeable{
 	 * @throws IllegalStateException if the client is already connected
 	 * @throws IOException if there is an error connecting
 	 */
-	public void connect() throws IllegalStateException, IOException;
+	void connect() throws IllegalStateException, IOException;
 
 	/**
 	 * Sends the given measurement to the server.
@@ -21,14 +21,25 @@ public interface GraphiteSender extends Closeable{
 	 * @param timestamp    the timestamp of the metric
 	 * @throws IOException if there was an error sending the metric
 	 */
-	public void send(String name, String value, long timestamp)
-			throws IOException;
+	void send(String name, String value, long timestamp) throws IOException;
+
+	/**
+	 * Flushes buffer, if applicable
+	 *
+	 * @throws IOException if there was an error during flushing metrics to the socket
+	 */
+	void flush() throws IOException;
+
+	/**
+	 * Returns true if ready to send data
+	 */
+	boolean isConnected();
 
 	/**
 	 * Returns the number of failed writes to the server.
 	 *
 	 * @return the number of failed writes to the server
 	 */
-	public int getFailures();
+	int getFailures();
 
 }

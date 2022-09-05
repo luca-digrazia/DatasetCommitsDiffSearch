@@ -1,14 +1,10 @@
 package com.codahale.metrics.httpasyncclient;
 
-import org.apache.http.HttpException;
 import org.apache.http.HttpHost;
-import org.apache.http.HttpRequest;
-import org.apache.http.HttpResponse;
 import org.apache.http.impl.nio.bootstrap.HttpServer;
 import org.apache.http.impl.nio.bootstrap.ServerBootstrap;
 import org.apache.http.nio.protocol.BasicAsyncRequestHandler;
 import org.apache.http.nio.reactor.ListenerEndpoint;
-import org.apache.http.protocol.HttpContext;
 import org.apache.http.protocol.HttpRequestHandler;
 import org.junit.After;
 
@@ -22,13 +18,7 @@ public abstract class HttpClientTestBase {
     /**
      * {@link HttpRequestHandler} that responds with a {@code 200 OK}.
      */
-    public static HttpRequestHandler STATUS_OK = new HttpRequestHandler() {
-        @Override
-        public void handle(HttpRequest request, HttpResponse response, HttpContext context)
-                throws HttpException, IOException {
-            response.setStatusCode(200);
-        }
-    };
+    public static HttpRequestHandler STATUS_OK = (request, response, context) -> response.setStatusCode(200);
 
     private HttpServer server;
 
@@ -50,8 +40,8 @@ public abstract class HttpClientTestBase {
      *
      * @param handler The request handler that will be used to respond to every request.
      * @return The {@link HttpHost} of the server
-     * @throws IOException
-     * @throws InterruptedException
+     * @throws IOException          in case it's not possible to start the server
+     * @throws InterruptedException in case the server's main thread was interrupted
      */
     public HttpHost startServerWithGlobalRequestHandler(HttpRequestHandler handler)
             throws IOException, InterruptedException {
