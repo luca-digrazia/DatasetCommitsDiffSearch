@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.util;
 
-import java.util.EnumSet;
-
 /**
  * Detects the running operating system and returns a describing enum value.
  */
@@ -24,8 +22,6 @@ public enum OS {
   LINUX("linux", "Linux"),
   WINDOWS("windows", "Windows"),
   UNKNOWN("unknown", "");
-
-  private static final EnumSet<OS> POSIX_COMPATIBLE = EnumSet.of(DARWIN, FREEBSD, LINUX);
 
   private final String canonicalName;
   private final String detectionName;
@@ -40,10 +36,6 @@ public enum OS {
    */
   public static OS getCurrent() {
     return HOST_SYSTEM;
-  }
-
-  public static boolean isPosixCompatible() {
-    return POSIX_COMPATIBLE.contains(getCurrent());
   }
 
   public String getCanonicalName() {
