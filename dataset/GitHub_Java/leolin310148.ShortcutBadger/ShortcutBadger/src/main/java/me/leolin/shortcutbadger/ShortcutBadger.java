@@ -8,21 +8,11 @@ import android.content.pm.ResolveInfo;
 import android.os.Build;
 import android.util.Log;
 
+import me.leolin.shortcutbadger.impl.*;
+
+import java.lang.reflect.Constructor;
 import java.util.LinkedList;
 import java.util.List;
-
-import me.leolin.shortcutbadger.impl.AdwHomeBadger;
-import me.leolin.shortcutbadger.impl.ApexHomeBadger;
-import me.leolin.shortcutbadger.impl.AsusHomeLauncher;
-import me.leolin.shortcutbadger.impl.DefaultBadger;
-import me.leolin.shortcutbadger.impl.HuaweiHomeBadger;
-import me.leolin.shortcutbadger.impl.NewHtcHomeBadger;
-import me.leolin.shortcutbadger.impl.NovaHomeBadger;
-import me.leolin.shortcutbadger.impl.OPPOHomeBader;
-import me.leolin.shortcutbadger.impl.SamsungHomeBadger;
-import me.leolin.shortcutbadger.impl.SonyHomeBadger;
-import me.leolin.shortcutbadger.impl.XiaomiHomeBadger;
-import me.leolin.shortcutbadger.impl.ZukHomeBadger;
 
 
 /**
@@ -44,9 +34,7 @@ public final class ShortcutBadger {
         BADGERS.add(AsusHomeLauncher.class);
         BADGERS.add(HuaweiHomeBadger.class);
 //        BADGERS.add(LGHomeBadger.class);
-        BADGERS.add(OPPOHomeBader.class);
         BADGERS.add(SamsungHomeBadger.class);
-        BADGERS.add(ZukHomeBadger.class);
     }
 
     private static Badger sShortcutBadger;
@@ -64,9 +52,7 @@ public final class ShortcutBadger {
             applyCountOrThrow(context, badgeCount);
             return true;
         } catch (ShortcutBadgeException e) {
-            if (Log.isLoggable(LOG_TAG, Log.ERROR)) {
-                Log.e(LOG_TAG, "Unable to execute badge", e);
-            }
+            Log.e(LOG_TAG, "Unable to execute badge", e);
             return false;
         }
     }
@@ -130,7 +116,7 @@ public final class ShortcutBadger {
             Badger shortcutBadger = null;
             try {
                 shortcutBadger = badger.newInstance();
-            } catch (Exception ignored) {
+            } catch (Exception e) {
             }
             if (shortcutBadger != null && shortcutBadger.getSupportLaunchers().contains(currentHomePackage)) {
                 sShortcutBadger = shortcutBadger;
@@ -141,10 +127,6 @@ public final class ShortcutBadger {
         if (sShortcutBadger == null) {
             if (Build.MANUFACTURER.equalsIgnoreCase("Xiaomi"))
                 sShortcutBadger = new XiaomiHomeBadger();
-            else if (Build.MANUFACTURER.equalsIgnoreCase("ZUK"))
-                sShortcutBadger = new ZukHomeBadger();
-            else if (Build.MANUFACTURER.equalsIgnoreCase("OPPO"))
-                sShortcutBadger = new OPPOHomeBader();
             else
                 sShortcutBadger = new DefaultBadger();
         }
