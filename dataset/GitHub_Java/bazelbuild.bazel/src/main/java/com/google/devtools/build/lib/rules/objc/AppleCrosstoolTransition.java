@@ -17,21 +17,23 @@ package com.google.devtools.build.lib.rules.objc;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.PatchTransition;
+import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
+import java.util.List;
 
 /**
  * Transition that produces a configuration that causes c++ toolchain selection to use the
  * CROSSTOOL given in apple_crosstool_top.
  */
-public class AppleCrosstoolTransition implements PatchTransition {
+public class AppleCrosstoolTransition implements SplitTransition<BuildOptions> {
 
   /**
    * A singleton instance of AppleCrosstoolTransition.
    */
-  public static final PatchTransition APPLE_CROSSTOOL_TRANSITION = new AppleCrosstoolTransition();
+  public static final SplitTransition<BuildOptions> APPLE_CROSSTOOL_TRANSITION =
+      new AppleCrosstoolTransition();
   
   @Override
   public boolean defaultsToSelf() {
@@ -39,7 +41,7 @@ public class AppleCrosstoolTransition implements PatchTransition {
   }
 
   @Override
-  public BuildOptions apply(BuildOptions buildOptions) {
+  public List<BuildOptions> split(BuildOptions buildOptions) {
     BuildOptions result = buildOptions.clone();
     result.get(AppleCommandLineOptions.class).configurationDistinguisher =
         ConfigurationDistinguisher.APPLE_CROSSTOOL;
@@ -49,7 +51,7 @@ public class AppleCrosstoolTransition implements PatchTransition {
     // --apple_cpu) for toolchain selection in top-level consuming rules.
     String cpu = "ios_" + buildOptions.get(AppleCommandLineOptions.class).iosCpu;
     setAppleCrosstoolTransitionConfiguration(buildOptions, result, cpu);
-    return result;
+    return ImmutableList.of(result);
   }
   
   /**
@@ -79,4 +81,5 @@ public class AppleCrosstoolTransition implements PatchTransition {
     // OSX toolchains do not support fission.
     to.get(CppOptions.class).fissionModes = ImmutableList.of();
   }
+  
 }
