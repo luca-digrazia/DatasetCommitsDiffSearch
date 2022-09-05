@@ -15,6 +15,9 @@
 package com.google.devtools.build.lib.runtime;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableSet;
@@ -39,15 +42,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class InvocationPolicyEnforcerTest {
 
-  // Useful constants
-  public static final String BUILD_COMMAND = "build";
-  public static final String TEST_STRING_USER_VALUE = "user value";
-  public static final String TEST_STRING_USER_VALUE_2 = "user value 2";
-  public static final String TEST_STRING_POLICY_VALUE = "policy value";
-  public static final String TEST_STRING_POLICY_VALUE_2 = "policy value 2";
-  public static final String FILTERED_VALUE_1 = "foo";
-  public static final String FILTERED_VALUE_2 = "bar";
-  public static final String UNFILTERED_VALUE = "baz";
+  public static final String STRING_FLAG_DEFAULT = "test string default";
 
   /** Test converter that splits a string by commas to produce a list. */
   public static class ToListConverter implements Converter<List<String>> {
@@ -71,8 +66,7 @@ public class InvocationPolicyEnforcerTest {
      * Basic types
      */
 
-    public static final String TEST_STRING_DEFAULT = "test string default";
-    @Option(name = "test_string", defaultValue = TEST_STRING_DEFAULT)
+    @Option(name = "test_string", defaultValue = STRING_FLAG_DEFAULT)
     public String testString;
 
     /*
@@ -80,10 +74,9 @@ public class InvocationPolicyEnforcerTest {
      */
 
     @Option(
-      name = "test_multiple_string",
-      defaultValue = "", // default value is ignored when allowMultiple=true.
-      allowMultiple = true
-    )
+        name = "test_multiple_string",
+        defaultValue = "", // default value is ignored when allowMultiple = true.
+        allowMultiple = true)
     public List<String> testMultipleString;
 
     /*
@@ -102,28 +95,17 @@ public class InvocationPolicyEnforcerTest {
      * Expansion flags
      */
 
-    public static final boolean EXPANDED_A_TEST_EXPANSION = false;
-    public static final boolean EXPANDED_B_TEST_EXPANSION = false;
-    public static final int EXPANDED_C_TEST_EXPANSION = 42;
-    public static final String EXPANDED_D_TEST_EXPANSION = "bar";
     @Option(
-      name = "test_expansion",
-      defaultValue = "null",
-      expansion = {
-        "--noexpanded_a",
-        "--expanded_b=false",
-        "--expanded_c",
-        "42",
-        "--expanded_d",
-        "bar"
-      }
-    )
+        name = "test_expansion",
+        defaultValue = "null",
+        expansion = {
+            "--notest_expansion_a",
+            "--test_expansion_b=false",
+            "--test_expansion_c", "42",
+            "--test_expansion_d", "bar"
+        })
     public Void testExpansion;
 
-    public static final boolean EXPANDED_A_TEST_RECURSIVE_EXPANSION = false;
-    public static final boolean EXPANDED_B_TEST_RECURSIVE_EXPANSION = false;
-    public static final int EXPANDED_C_TEST_RECURSIVE_EXPANSION = 56;
-    public static final String EXPANDED_D_TEST_RECURSIVE_EXPANSION = "baz";
     @Option(
         name = "test_recursive_expansion_top_level",
         defaultValue = "null",
@@ -134,65 +116,54 @@ public class InvocationPolicyEnforcerTest {
     public Void testRecursiveExpansionTopLevel;
 
     @Option(
-      name = "test_recursive_expansion_middle1",
-      defaultValue = "null",
-      expansion = {
-        "--expanded_a=false",
-        "--expanded_c=56",
-      }
-    )
+        name = "test_recursive_expansion_middle1",
+        defaultValue = "null",
+        expansion = {
+            "--test_expansion_a=false",
+            "--test_expansion_c=56",
+        })
     public Void testRecursiveExpansionMiddle1;
 
     @Option(
-      name = "test_recursive_expansion_middle2",
-      defaultValue = "null",
-      expansion = {
-        "--expanded_b=false",
-        "--expanded_d=baz",
-      }
-    )
+        name = "test_recursive_expansion_middle2",
+        defaultValue = "null",
+        expansion = {
+            "--test_expansion_b=false",
+            "--test_expansion_d=baz",
+        })
     public Void testRecursiveExpansionMiddle2;
 
-    public static final boolean EXPANDED_A_DEFAULT = true;
-    @Option(name = "expanded_a", defaultValue = "true")
-    public boolean expandedA;
+    @Option(name = "test_expansion_a", defaultValue = "true")
+    public boolean testExpansionA;
 
-    public static final boolean EXPANDED_B_DEFAULT = true;
-    @Option(name = "expanded_b", defaultValue = "true")
-    public boolean expandedB;
+    @Option(name = "test_expansion_b", defaultValue = "true")
+    public boolean testExpansionB;
 
-    public static final int EXPANDED_C_DEFAULT = 12;
-    @Option(name = "expanded_c", defaultValue = "12")
-    public int expandedC;
+    @Option(name = "test_expansion_c", defaultValue = "12")
+    public int testExpansionC;
 
-    public static final String EXPANDED_D_DEFAULT = "foo";
-    @Option(name = "expanded_d", defaultValue = "foo")
-    public String expandedD;
+    @Option(name = "test_expansion_d", defaultValue = "foo")
+    public String testExpansionD;
 
     /*
      * Implicit requirement flags
      */
 
-    public static final String TEST_IMPLICIT_REQUIREMENT_DEFAULT = "direct implicit";
-    public static final String IMPLICIT_REQUIREMENT_A_REQUIRED = "implicit requirement, required";
     @Option(
-      name = "test_implicit_requirement",
-      defaultValue = TEST_IMPLICIT_REQUIREMENT_DEFAULT,
-      implicitRequirements = {"--implicit_requirement_a=" + IMPLICIT_REQUIREMENT_A_REQUIRED}
-    )
+        name = "test_implicit_requirement",
+        defaultValue = "test implicit requirement default",
+        implicitRequirements = {"--an_implicit_requirement=foo"})
     public String testImplicitRequirement;
 
-    public static final String IMPLICIT_REQUIREMENT_A_DEFAULT = "implicit requirement, unrequired";
-    @Option(name = "implicit_requirement_a", defaultValue = IMPLICIT_REQUIREMENT_A_DEFAULT)
-    public String implicitRequirementA;
-
-    public static final String TEST_RECURSIVE_IMPLICIT_REQUIREMENT_DEFAULT = "recursive implicit";
-    public static final String TEST_IMPLICIT_REQUIREMENT_REQUIRED = "intermediate, required";
     @Option(
-      name = "test_recursive_implicit_requirement",
-      defaultValue = TEST_RECURSIVE_IMPLICIT_REQUIREMENT_DEFAULT,
-      implicitRequirements = {"--test_implicit_requirement=" + TEST_IMPLICIT_REQUIREMENT_REQUIRED}
-    )
+        name = "an_implicit_requirement",
+        defaultValue = "implicit default")
+    public String anImplicitRequirement;
+
+    @Option(
+        name = "test_recursive_implicit_requirement",
+        defaultValue = "test recursive implicit requirement default",
+        implicitRequirements = {"--test_implicit_requirement=bar"})
     public String testRecursiveImplicitRequirement;
 
   }
@@ -250,23 +221,22 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testSetValueOverridesUser() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getSetValueBuilder()
-        .addFlagValue(TEST_STRING_POLICY_VALUE);
+            .addFlagValue("policy value");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + TEST_STRING_USER_VALUE);
+    parser.parse("--test_string=user value");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TEST_STRING_USER_VALUE);
+    assertEquals("user value", testOptions.testString);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Get the options again after policy enforcement.
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TEST_STRING_POLICY_VALUE);
+    assertEquals("policy value", testOptions.testString);
   }
 
   /**
@@ -276,24 +246,23 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testSetValueOverridesDefault() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getSetValueBuilder()
-        .addFlagValue(TEST_STRING_POLICY_VALUE);
+            .addFlagValue("policy value");
 
     // No user value.
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
 
     // All the flags should be their default value.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TestOptions.TEST_STRING_DEFAULT);
+    assertEquals(STRING_FLAG_DEFAULT, testOptions.testString);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Get the options again after policy enforcement.
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TEST_STRING_POLICY_VALUE);
+    assertEquals("policy value", testOptions.testString);
   }
 
   /**
@@ -302,31 +271,26 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testSetValueWithMultipleValuesOverridesUser() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_multiple_string")
         .getSetValueBuilder()
-        .addFlagValue(TEST_STRING_POLICY_VALUE)
-        .addFlagValue(TEST_STRING_POLICY_VALUE_2);
+            .addFlagValue("policy value 1")
+            .addFlagValue("policy value 2");
 
     InvocationPolicyEnforcer enforcer =  createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse(
-        "--test_multiple_string=" + TEST_STRING_USER_VALUE,
-        "--test_multiple_string=" + TEST_STRING_USER_VALUE_2);
+    parser.parse("--test_multiple_string=user value 1", "--test_multiple_string=user value 2");
 
     // Options should not be modified by running the parser through OptionsPolicyEnforcer.create().
     TestOptions testOptions = getTestOptions();
     assertThat(testOptions.testMultipleString)
-        .containsExactly(TEST_STRING_USER_VALUE, TEST_STRING_USER_VALUE_2)
-        .inOrder();
+        .containsExactly("user value 1", "user value 2").inOrder();
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Get the options again after policy enforcement.
     testOptions = getTestOptions();
     assertThat(testOptions.testMultipleString)
-        .containsExactly(TEST_STRING_POLICY_VALUE, TEST_STRING_POLICY_VALUE_2)
-        .inOrder();
+        .containsExactly("policy value 1", "policy value 2").inOrder();
   }
 
   /**
@@ -336,12 +300,11 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testSetValueWithMultipleValuesOverridesDefault() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_multiple_string")
         .getSetValueBuilder()
-        .addFlagValue(TEST_STRING_POLICY_VALUE)
-        .addFlagValue(TEST_STRING_POLICY_VALUE_2);
+            .addFlagValue("policy value 1")
+            .addFlagValue("policy value 2");
 
     // No user value.
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
@@ -350,29 +313,27 @@ public class InvocationPolicyEnforcerTest {
     TestOptions testOptions = getTestOptions();
     assertThat(testOptions.testMultipleString).isEmpty();
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Options should now be the values from the policy.
     testOptions = getTestOptions();
     assertThat(testOptions.testMultipleString)
-        .containsExactly(TEST_STRING_POLICY_VALUE, TEST_STRING_POLICY_VALUE_2)
-        .inOrder();
+        .containsExactly("policy value 1", "policy value 2").inOrder();
   }
 
   @Test
   public void testSetValueHasMultipleValuesButFlagIsNotMultiple() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string") // Not repeatable flag.
         .getSetValueBuilder()
-        .addFlagValue(TEST_STRING_POLICY_VALUE) // Has multiple values.
-        .addFlagValue(TEST_STRING_POLICY_VALUE_2);
+            .addFlagValue("policy value 1") // Has multiple values.
+            .addFlagValue("policy value 2");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
 
     try {
-      enforcer.enforce(parser, BUILD_COMMAND);
+      enforcer.enforce(parser, "build");
       fail();
     } catch (OptionsParsingException e) {
       // expected.
@@ -382,36 +343,31 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testSetValueAppendsToMultipleValuedFlag() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_multiple_string")
         .getSetValueBuilder()
-        .addFlagValue(TEST_STRING_POLICY_VALUE)
-        .addFlagValue(TEST_STRING_POLICY_VALUE_2)
-        .setAppend(true);
+            .addFlagValue("policy value 1")
+            .addFlagValue("policy value 2")
+            .setAppend(true);
 
     InvocationPolicyEnforcer enforcer =  createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse(
-        "--test_multiple_string=" + TEST_STRING_USER_VALUE,
-        "--test_multiple_string=" + TEST_STRING_USER_VALUE_2);
+    parser.parse("--test_multiple_string=user value 1", "--test_multiple_string=user value 2");
 
     // Options should not be modified by running the parser through OptionsPolicyEnforcer.create().
     TestOptions testOptions = getTestOptions();
     assertThat(testOptions.testMultipleString)
-        .containsExactly(TEST_STRING_USER_VALUE, TEST_STRING_USER_VALUE_2)
-        .inOrder();
+        .containsExactly("user value 1", "user value 2").inOrder();
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Get the options again after policy enforcement.
     testOptions = getTestOptions();
     assertThat(testOptions.testMultipleString)
         .containsExactly(
-            TEST_STRING_USER_VALUE,
-            TEST_STRING_USER_VALUE_2,
-            TEST_STRING_POLICY_VALUE,
-            TEST_STRING_POLICY_VALUE_2)
-        .inOrder();
+            "user value 1",
+            "user value 2",
+            "policy value 1",
+            "policy value 2").inOrder();
   }
   
   @Test
@@ -424,102 +380,98 @@ public class InvocationPolicyEnforcerTest {
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
     // Unrelated flag, but --test_expansion is not set
-    parser.parse("--test_string=throwaway value");
+    parser.parse("--test_string=foo");
 
     // The flags that --test_expansion expands into should still be their default values
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.expandedA).isEqualTo(TestOptions.EXPANDED_A_DEFAULT);
-    assertThat(testOptions.expandedB).isEqualTo(TestOptions.EXPANDED_B_DEFAULT);
-    assertThat(testOptions.expandedC).isEqualTo(TestOptions.EXPANDED_C_DEFAULT);
-    assertThat(testOptions.expandedD).isEqualTo(TestOptions.EXPANDED_D_DEFAULT);
+    assertTrue(testOptions.testExpansionA);
+    assertTrue(testOptions.testExpansionB);
+    assertEquals(12, testOptions.testExpansionC);
+    assertEquals("foo", testOptions.testExpansionD);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // After policy enforcement, the flags should be the values from --test_expansion
     testOptions = getTestOptions();
-    assertThat(testOptions.expandedA).isEqualTo(TestOptions.EXPANDED_A_TEST_EXPANSION);
-    assertThat(testOptions.expandedB).isEqualTo(TestOptions.EXPANDED_B_TEST_EXPANSION);
-    assertThat(testOptions.expandedC).isEqualTo(TestOptions.EXPANDED_C_TEST_EXPANSION);
-    assertThat(testOptions.expandedD).isEqualTo(TestOptions.EXPANDED_D_TEST_EXPANSION);
+    assertFalse(testOptions.testExpansionA);
+    assertFalse(testOptions.testExpansionB);
+    assertEquals(42, testOptions.testExpansionC);
+    assertEquals("bar", testOptions.testExpansionD);
   }
   
   @Test
   public void testSetValueWithExpandedFlags() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
-        .setFlagName("expanded_c")
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
+        .setFlagName("test_expansion_c")
         .getSetValueBuilder()
-        .addFlagValue("64");
+            .addFlagValue("64");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
     parser.parse("--test_expansion");
 
     // --test_expansion should set the values from its expansion
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.expandedA).isEqualTo(TestOptions.EXPANDED_A_TEST_EXPANSION);
-    assertThat(testOptions.expandedB).isEqualTo(TestOptions.EXPANDED_B_TEST_EXPANSION);
-    assertThat(testOptions.expandedC).isEqualTo(TestOptions.EXPANDED_C_TEST_EXPANSION);
-    assertThat(testOptions.expandedD).isEqualTo(TestOptions.EXPANDED_D_TEST_EXPANSION);
+    assertFalse(testOptions.testExpansionA);
+    assertFalse(testOptions.testExpansionB);
+    assertEquals(42, testOptions.testExpansionC);
+    assertEquals("bar", testOptions.testExpansionD);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
-    // After policy enforcement, expanded_c should be set to 64 from the policy, but the
+    // After policy enforcement, test_expansion_c should be set to 64 from the policy, but the
     // flags should remain the same from the expansion of --test_expansion.
     testOptions = getTestOptions();
-    assertThat(testOptions.expandedA).isEqualTo(TestOptions.EXPANDED_A_TEST_EXPANSION);
-    assertThat(testOptions.expandedB).isEqualTo(TestOptions.EXPANDED_B_TEST_EXPANSION);
-    assertThat(testOptions.expandedC).isEqualTo(64);
-    assertThat(testOptions.expandedD).isEqualTo(TestOptions.EXPANDED_D_TEST_EXPANSION);
+    assertFalse(testOptions.testExpansionA);
+    assertFalse(testOptions.testExpansionB);
+    assertEquals(64, testOptions.testExpansionC);
+    assertEquals("bar", testOptions.testExpansionD);
   }
 
   @Test
   public void testSetValueWithImplicitlyRequiredFlags() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
-        .setFlagName("implicit_requirement_a")
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
+        .setFlagName("an_implicit_requirement")
         .getSetValueBuilder()
-        .addFlagValue(TEST_STRING_POLICY_VALUE);
+            .addFlagValue("policy value");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_implicit_requirement=" + TEST_STRING_USER_VALUE);
+    parser.parse("--test_implicit_requirement=user value");
 
-    // test_implicit_requirement sets implicit_requirement_a to "foo"
+    // test_implicit_requirement sets an_implicit_requirement to "foo"
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testImplicitRequirement).isEqualTo(TEST_STRING_USER_VALUE);
-    assertThat(testOptions.implicitRequirementA)
-        .isEqualTo(TestOptions.IMPLICIT_REQUIREMENT_A_REQUIRED);
+    assertEquals("user value", testOptions.testImplicitRequirement);
+    assertEquals("foo", testOptions.anImplicitRequirement);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     testOptions = getTestOptions();
-    assertThat(testOptions.testImplicitRequirement).isEqualTo(TEST_STRING_USER_VALUE);
-    assertThat(testOptions.implicitRequirementA).isEqualTo(TEST_STRING_POLICY_VALUE);
+    assertEquals("user value", testOptions.testImplicitRequirement);
+    assertEquals("policy value", testOptions.anImplicitRequirement);
   }
 
   @Test
   public void testSetValueOverridable() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getSetValueBuilder()
-        .addFlagValue(TEST_STRING_POLICY_VALUE)
-        .setOverridable(true);
+            .addFlagValue("policy value")
+            .setOverridable(true);
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + TEST_STRING_USER_VALUE);
+    parser.parse("--test_string=user value");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TEST_STRING_USER_VALUE);
+    assertEquals("user value", testOptions.testString);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Even though the policy sets the value for test_string, the policy is overridable and the
     // user set the value, so it should be the user's value.
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TEST_STRING_USER_VALUE);
+    assertEquals("user value", testOptions.testString);
   }
 
   @Test
@@ -530,13 +482,13 @@ public class InvocationPolicyEnforcerTest {
         .getSetValueBuilder(); // No value.
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + TEST_STRING_USER_VALUE);
+    parser.parse("--test_string=user value");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TEST_STRING_USER_VALUE);
+    assertEquals("user value", testOptions.testString);
 
     try {
-      enforcer.enforce(parser, BUILD_COMMAND);
+      enforcer.enforce(parser, "build");
       fail();
     } catch (OptionsParsingException e) {
       // expected.
@@ -555,18 +507,18 @@ public class InvocationPolicyEnforcerTest {
         .getUseDefaultBuilder();
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + TEST_STRING_USER_VALUE);
+    parser.parse("--test_string=user value");
 
     // Options should be the user specified value before enforcing policy.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TEST_STRING_USER_VALUE);
+    assertEquals("user value", testOptions.testString);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Get the options again after policy enforcement: The flag should now be back to its default
     // value
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TestOptions.TEST_STRING_DEFAULT);
+    assertEquals(STRING_FLAG_DEFAULT, testOptions.testString);
   }
 
   /**
@@ -583,13 +535,13 @@ public class InvocationPolicyEnforcerTest {
 
     // Options should be the default since the user never specified it.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TestOptions.TEST_STRING_DEFAULT);
+    assertEquals(STRING_FLAG_DEFAULT, testOptions.testString);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Still the default.
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TestOptions.TEST_STRING_DEFAULT);
+    assertEquals(STRING_FLAG_DEFAULT, testOptions.testString);
   }
 
   @Test
@@ -603,20 +555,20 @@ public class InvocationPolicyEnforcerTest {
     parser.parse("--test_expansion");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.expandedA).isEqualTo(TestOptions.EXPANDED_A_TEST_EXPANSION);
-    assertThat(testOptions.expandedB).isEqualTo(TestOptions.EXPANDED_B_TEST_EXPANSION);
-    assertThat(testOptions.expandedC).isEqualTo(TestOptions.EXPANDED_C_TEST_EXPANSION);
-    assertThat(testOptions.expandedD).isEqualTo(TestOptions.EXPANDED_D_TEST_EXPANSION);
+    assertFalse(testOptions.testExpansionA);
+    assertFalse(testOptions.testExpansionB);
+    assertEquals(42, testOptions.testExpansionC);
+    assertEquals("bar", testOptions.testExpansionD);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // After policy enforcement, all the flags that --test_expansion expanded into should be back
     // to their default values.
     testOptions = getTestOptions();
-    assertThat(testOptions.expandedA).isEqualTo(TestOptions.EXPANDED_A_DEFAULT);
-    assertThat(testOptions.expandedB).isEqualTo(TestOptions.EXPANDED_B_DEFAULT);
-    assertThat(testOptions.expandedC).isEqualTo(TestOptions.EXPANDED_C_DEFAULT);
-    assertThat(testOptions.expandedD).isEqualTo(TestOptions.EXPANDED_D_DEFAULT);
+    assertTrue(testOptions.testExpansionA);
+    assertTrue(testOptions.testExpansionB);
+    assertEquals(12, testOptions.testExpansionC);
+    assertEquals("foo", testOptions.testExpansionD);
   }
 
   @Test
@@ -630,28 +582,27 @@ public class InvocationPolicyEnforcerTest {
     parser.parse("--test_recursive_expansion_top_level");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.expandedA).isEqualTo(TestOptions.EXPANDED_A_TEST_RECURSIVE_EXPANSION);
-    assertThat(testOptions.expandedB).isEqualTo(TestOptions.EXPANDED_B_TEST_RECURSIVE_EXPANSION);
-    assertThat(testOptions.expandedC).isEqualTo(TestOptions.EXPANDED_C_TEST_RECURSIVE_EXPANSION);
-    assertThat(testOptions.expandedD).isEqualTo(TestOptions.EXPANDED_D_TEST_RECURSIVE_EXPANSION);
+    assertFalse(testOptions.testExpansionA);
+    assertFalse(testOptions.testExpansionB);
+    assertEquals(56, testOptions.testExpansionC);
+    assertEquals("baz", testOptions.testExpansionD);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // After policy enforcement, all the flags that --test_recursive_expansion_top_level and its
     // recursive expansions set should be back to their default values.
     testOptions = getTestOptions();
-    assertThat(testOptions.expandedA).isEqualTo(TestOptions.EXPANDED_A_DEFAULT);
-    assertThat(testOptions.expandedB).isEqualTo(TestOptions.EXPANDED_B_DEFAULT);
-    assertThat(testOptions.expandedC).isEqualTo(TestOptions.EXPANDED_C_DEFAULT);
-    assertThat(testOptions.expandedD).isEqualTo(TestOptions.EXPANDED_D_DEFAULT);
+    assertTrue(testOptions.testExpansionA);
+    assertTrue(testOptions.testExpansionB);
+    assertEquals(12, testOptions.testExpansionC);
+    assertEquals("foo", testOptions.testExpansionD);
   }
 
   @Test
   public void testUseDefaultWithExpandedFlags() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
-        .setFlagName("expanded_b")
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
+        .setFlagName("test_expansion_b")
         .getUseDefaultBuilder();
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
@@ -659,20 +610,20 @@ public class InvocationPolicyEnforcerTest {
 
     // --test_expansion should turn set the values from its expansion
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.expandedA).isEqualTo(TestOptions.EXPANDED_A_TEST_EXPANSION);
-    assertThat(testOptions.expandedB).isEqualTo(TestOptions.EXPANDED_B_TEST_EXPANSION);
-    assertThat(testOptions.expandedC).isEqualTo(TestOptions.EXPANDED_C_TEST_EXPANSION);
-    assertThat(testOptions.expandedD).isEqualTo(TestOptions.EXPANDED_D_TEST_EXPANSION);
+    assertFalse(testOptions.testExpansionA);
+    assertFalse(testOptions.testExpansionB);
+    assertEquals(42, testOptions.testExpansionC);
+    assertEquals("bar", testOptions.testExpansionD);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
-    // After policy enforcement, expanded_b should be back to its default (true), but the
+    // After policy enforcement, test_expansion_b should be back to its default (true), but the
     // rest should remain the same.
     testOptions = getTestOptions();
-    assertThat(testOptions.expandedA).isEqualTo(TestOptions.EXPANDED_A_TEST_EXPANSION);
-    assertThat(testOptions.expandedB).isEqualTo(TestOptions.EXPANDED_B_DEFAULT);
-    assertThat(testOptions.expandedC).isEqualTo(TestOptions.EXPANDED_C_TEST_EXPANSION);
-    assertThat(testOptions.expandedD).isEqualTo(TestOptions.EXPANDED_D_TEST_EXPANSION);
+    assertFalse(testOptions.testExpansionA);
+    assertTrue(testOptions.testExpansionB);
+    assertEquals(42, testOptions.testExpansionC);
+    assertEquals("bar", testOptions.testExpansionD);
   }
 
   @Test
@@ -683,52 +634,45 @@ public class InvocationPolicyEnforcerTest {
         .getUseDefaultBuilder();
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_implicit_requirement=" + TEST_STRING_USER_VALUE);
+    parser.parse("--test_implicit_requirement=user value");
 
-    // test_implicit_requirement sets implicit_requirement_a to "foo", which ignores the user's
+    // test_implicit_requirement sets an_implicit_requirement to "foo", which ignores the user's
     // value because the parser processes implicit values last.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testImplicitRequirement).isEqualTo(TEST_STRING_USER_VALUE);
-    assertThat(testOptions.implicitRequirementA)
-        .isEqualTo(TestOptions.IMPLICIT_REQUIREMENT_A_REQUIRED);
+    assertEquals("user value", testOptions.testImplicitRequirement);
+    assertEquals("foo", testOptions.anImplicitRequirement);
 
     // Then policy puts test_implicit_requirement and its implicit requirements back to its default.
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     testOptions = getTestOptions();
-    assertThat(testOptions.testImplicitRequirement)
-        .isEqualTo(TestOptions.TEST_IMPLICIT_REQUIREMENT_DEFAULT);
-    assertThat(testOptions.implicitRequirementA)
-        .isEqualTo(TestOptions.IMPLICIT_REQUIREMENT_A_DEFAULT);
+    assertEquals("test implicit requirement default", testOptions.testImplicitRequirement);
+    assertEquals("implicit default", testOptions.anImplicitRequirement);
   }
 
   @Test
   public void testUseDefaultWithImplicitlyRequiredFlag() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
-        .setFlagName("implicit_requirement_a")
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
+        .setFlagName("an_implicit_requirement")
         .getUseDefaultBuilder();
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse(
-        "--test_implicit_requirement=" + TEST_STRING_USER_VALUE,
-        "--implicit_requirement_a=thrownaway value");
+    parser.parse("--test_implicit_requirement=user value",
+        "--an_implicit_requirement=implicit user value");
 
-    // test_implicit_requirement sets implicit_requirement_a to "foo", which ignores the user's
+    // test_implicit_requirement sets an_implicit_requirement to "foo", which ignores the user's
     // value because the parser processes implicit values last.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testImplicitRequirement).isEqualTo(TEST_STRING_USER_VALUE);
-    assertThat(testOptions.implicitRequirementA)
-        .isEqualTo(TestOptions.IMPLICIT_REQUIREMENT_A_REQUIRED);
+    assertEquals("user value", testOptions.testImplicitRequirement);
+    assertEquals("foo", testOptions.anImplicitRequirement);
 
-    // Then policy puts implicit_requirement_a back to its default.
-    enforcer.enforce(parser, BUILD_COMMAND);
+    // Then policy puts an_implicit_requirement back to its default.
+    enforcer.enforce(parser, "build");
 
     testOptions = getTestOptions();
-    assertThat(testOptions.testImplicitRequirement).isEqualTo(TEST_STRING_USER_VALUE);
-    assertThat(testOptions.implicitRequirementA)
-        .isEqualTo(TestOptions.IMPLICIT_REQUIREMENT_A_DEFAULT);
+    assertEquals("user value", testOptions.testImplicitRequirement);
+    assertEquals("implicit default", testOptions.anImplicitRequirement);
   }
 
   @Test
@@ -739,28 +683,24 @@ public class InvocationPolicyEnforcerTest {
         .getUseDefaultBuilder();
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_recursive_implicit_requirement=" + TEST_STRING_USER_VALUE);
+    parser.parse("--test_recursive_implicit_requirement=user value");
 
     // test_recursive_implicit_requirement gets its value from the command line,
     // test_implicit_requirement gets its value from test_recursive_implicit_requirement, and
-    // implicit_requirement_a gets its value from test_implicit_requirement.
+    // an_implicit_requirement gets its value from test_implicit_requirement.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testRecursiveImplicitRequirement).isEqualTo(TEST_STRING_USER_VALUE);
-    assertThat(testOptions.testImplicitRequirement)
-        .isEqualTo(TestOptions.TEST_IMPLICIT_REQUIREMENT_REQUIRED);
-    assertThat(testOptions.implicitRequirementA)
-        .isEqualTo(TestOptions.IMPLICIT_REQUIREMENT_A_REQUIRED);
+    assertEquals("user value", testOptions.testRecursiveImplicitRequirement);
+    assertEquals("bar", testOptions.testImplicitRequirement);
+    assertEquals("foo", testOptions.anImplicitRequirement);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Policy enforcement should set everything back to its default value.
     testOptions = getTestOptions();
-    assertThat(testOptions.testRecursiveImplicitRequirement)
-        .isEqualTo(TestOptions.TEST_RECURSIVE_IMPLICIT_REQUIREMENT_DEFAULT);
-    assertThat(testOptions.testImplicitRequirement)
-        .isEqualTo(TestOptions.TEST_IMPLICIT_REQUIREMENT_DEFAULT);
-    assertThat(testOptions.implicitRequirementA)
-        .isEqualTo(TestOptions.IMPLICIT_REQUIREMENT_A_DEFAULT);
+    assertEquals("test recursive implicit requirement default",
+        testOptions.testRecursiveImplicitRequirement);
+    assertEquals("test implicit requirement default", testOptions.testImplicitRequirement);
+    assertEquals("implicit default", testOptions.anImplicitRequirement);
   }
 
   /*************************************************************************************************
@@ -774,49 +714,47 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testAllowValuesAllowsValue() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getAllowValuesBuilder()
-        .addAllowedValues(TestOptions.TEST_STRING_DEFAULT)
-        .addAllowedValues(FILTERED_VALUE_1)
-        .addAllowedValues(FILTERED_VALUE_2);
+            .addAllowedValues(STRING_FLAG_DEFAULT)
+            .addAllowedValues("foo")
+            .addAllowedValues("bar");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + FILTERED_VALUE_1);
+    parser.parse("--test_string=foo");
 
     // Option should be "foo" as specified by the user.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(FILTERED_VALUE_1);
+    assertEquals("foo", testOptions.testString);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Still "foo" since "foo" is allowed by the policy.
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(FILTERED_VALUE_1);
+    assertEquals("foo", testOptions.testString);
   }
 
   @Test
   public void testAllowValuesDisallowsValue() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getAllowValuesBuilder()
-        // no foo!
-        .addAllowedValues(TestOptions.TEST_STRING_DEFAULT)
-        .addAllowedValues(FILTERED_VALUE_2);
+            // no foo!
+            .addAllowedValues(STRING_FLAG_DEFAULT)
+            .addAllowedValues("bar");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + FILTERED_VALUE_1);
+    parser.parse("--test_string=foo");
 
     // Option should be "foo" as specified by the user.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(FILTERED_VALUE_1);
+    assertEquals("foo", testOptions.testString);
 
     try {
       // Should throw because "foo" is not allowed.
-      enforcer.enforce(parser, BUILD_COMMAND);
+      enforcer.enforce(parser, "build");
       fail();
     } catch (OptionsParsingException e) {
       // expected
@@ -826,25 +764,21 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testAllowValuesDisallowsMultipleValues() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_multiple_string")
         .getAllowValuesBuilder()
-        .addAllowedValues(FILTERED_VALUE_1)
-        .addAllowedValues(FILTERED_VALUE_2);
+            .addAllowedValues("foo")
+            .addAllowedValues("bar");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse(
-        "--test_multiple_string=" + UNFILTERED_VALUE, "--test_multiple_string=" + FILTERED_VALUE_2);
+    parser.parse("--test_multiple_string=baz", "--test_multiple_string=bar");
 
     // Option should be "baz" and "bar" as specified by the user.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testMultipleString)
-        .containsExactly(UNFILTERED_VALUE, FILTERED_VALUE_2)
-        .inOrder();
+    assertThat(testOptions.testMultipleString).containsExactly("baz", "bar").inOrder();
 
     try {
-      enforcer.enforce(parser, BUILD_COMMAND);
+      enforcer.enforce(parser, "build");
       fail();
     } catch (OptionsParsingException e) {
       // expected, since baz is not allowed.
@@ -854,70 +788,64 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testAllowValuesSetsNewValue() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getAllowValuesBuilder()
-        .addAllowedValues(FILTERED_VALUE_1)
-        .addAllowedValues(FILTERED_VALUE_2)
-        .setNewValue(FILTERED_VALUE_1);
+            .addAllowedValues("foo")
+            .addAllowedValues("bar")
+            .setNewValue("foo");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + UNFILTERED_VALUE);
+    parser.parse("--test_string=baz");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(UNFILTERED_VALUE);
+    assertEquals("baz", testOptions.testString);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(FILTERED_VALUE_1);
+    assertEquals("foo", testOptions.testString);
   }
 
   @Test
   public void testAllowValuesSetsDefaultValue() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getAllowValuesBuilder()
-        .addAllowedValues(FILTERED_VALUE_1)
-        .addAllowedValues(TestOptions.TEST_STRING_DEFAULT)
-        .getUseDefaultBuilder();
+            .addAllowedValues("foo")
+            .addAllowedValues(STRING_FLAG_DEFAULT)
+            .getUseDefaultBuilder();
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + UNFILTERED_VALUE);
+    parser.parse("--test_string=bar");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(UNFILTERED_VALUE);
+    assertEquals("bar", testOptions.testString);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TestOptions.TEST_STRING_DEFAULT);
+    assertEquals(STRING_FLAG_DEFAULT, testOptions.testString);
   }
 
   @Test
   public void testAllowValuesSetsDefaultValueForRepeatableFlag() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_multiple_string")
         .getAllowValuesBuilder()
-        .addAllowedValues(FILTERED_VALUE_1)
-        .addAllowedValues(FILTERED_VALUE_2)
-        .getUseDefaultBuilder();
+            .addAllowedValues("foo")
+            .addAllowedValues("bar")
+            .getUseDefaultBuilder();
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse(
-        "--test_multiple_string=" + FILTERED_VALUE_1, "--test_multiple_string=" + UNFILTERED_VALUE);
+    parser.parse("--test_multiple_string=foo", "--test_multiple_string=baz");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testMultipleString)
-        .containsExactly(FILTERED_VALUE_1, UNFILTERED_VALUE)
-        .inOrder();
+    assertThat(testOptions.testMultipleString).containsExactly("foo", "baz").inOrder();
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     testOptions = getTestOptions();
     // Default value for repeatable flags is always empty.
@@ -931,48 +859,46 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testAllowValuesSetsNewDefaultWhenFlagDefaultIsDisallowed() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getAllowValuesBuilder()
-        // default value from flag's definition is not allowed
-        .addAllowedValues(FILTERED_VALUE_1)
-        .addAllowedValues(FILTERED_VALUE_2)
-        .setNewValue("new default");
+            // default value from flag's definition is not allowed
+            .addAllowedValues("foo")
+            .addAllowedValues("bar")
+            .setNewValue("new default");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
 
     // Option should be its default
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TestOptions.TEST_STRING_DEFAULT);
+    assertEquals(STRING_FLAG_DEFAULT, testOptions.testString);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Flag's value should be the default value from the policy.
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo("new default");
+    assertEquals("new default", testOptions.testString);
   }
 
   @Test
   public void testAllowValuesDisallowsFlagDefaultButNoPolicyDefault() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getAllowValuesBuilder()
-        // default value from flag's definition is not allowed, and no alternate default
-        // is given.
-        .addAllowedValues(FILTERED_VALUE_1)
-        .addAllowedValues(FILTERED_VALUE_2);
+            // default value from flag's definition is not allowed, and no alternate default
+            // is given.
+            .addAllowedValues("foo")
+            .addAllowedValues("bar");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
 
     // Option should be its default
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TestOptions.TEST_STRING_DEFAULT);
+    assertEquals(STRING_FLAG_DEFAULT, testOptions.testString);
 
     try {
-      enforcer.enforce(parser, BUILD_COMMAND);
+      enforcer.enforce(parser, "build");
       fail();
     } catch (OptionsParsingException e) {
       // expected.
@@ -992,10 +918,10 @@ public class InvocationPolicyEnforcerTest {
     parser.parse("--test_list_converters=a,b,c");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testListConverters).isEqualTo(Arrays.asList("a", "b", "c"));
+    assertEquals(Arrays.asList("a", "b", "c"), testOptions.testListConverters);
 
     try {
-      enforcer.enforce(parser, BUILD_COMMAND);
+      enforcer.enforce(parser, "build");
       fail();
     } catch (OptionsParsingException e) {
       assertThat(e.getMessage())
@@ -1011,46 +937,44 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testDisallowValuesAllowsValue() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getDisallowValuesBuilder()
-        .addDisallowedValues(FILTERED_VALUE_1)
-        .addDisallowedValues(FILTERED_VALUE_2);
+            .addDisallowedValues("foo")
+            .addDisallowedValues("bar");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + UNFILTERED_VALUE);
+    parser.parse("--test_string=baz");
 
     // Option should be "baz" as specified by the user.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(UNFILTERED_VALUE);
+    assertEquals("baz", testOptions.testString);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Still "baz" since "baz" is allowed by the policy.
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(UNFILTERED_VALUE);
+    assertEquals("baz", testOptions.testString);
   }
 
   @Test
   public void testDisallowValuesDisallowsValue() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getDisallowValuesBuilder()
-        .addDisallowedValues(FILTERED_VALUE_1)
-        .addDisallowedValues(FILTERED_VALUE_2);
+            .addDisallowedValues("foo")
+            .addDisallowedValues("bar");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + FILTERED_VALUE_1);
+    parser.parse("--test_string=foo");
 
     // Option should be "foo" as specified by the user.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(FILTERED_VALUE_1);
+    assertEquals("foo", testOptions.testString);
 
     try {
-      enforcer.enforce(parser, BUILD_COMMAND);
+      enforcer.enforce(parser, "build");
       fail();
     } catch (OptionsParsingException e) {
       // expected, since foo is disallowed.
@@ -1060,25 +984,21 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testDisallowValuesDisallowsMultipleValues() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_multiple_string")
         .getDisallowValuesBuilder()
-        .addDisallowedValues(FILTERED_VALUE_1)
-        .addDisallowedValues(FILTERED_VALUE_2);
+            .addDisallowedValues("foo")
+            .addDisallowedValues("bar");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse(
-        "--test_multiple_string=" + UNFILTERED_VALUE, "--test_multiple_string=" + FILTERED_VALUE_2);
+    parser.parse("--test_multiple_string=baz", "--test_multiple_string=bar");
 
     // Option should be "baz" and "bar" as specified by the user.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testMultipleString)
-        .containsExactly(UNFILTERED_VALUE, FILTERED_VALUE_2)
-        .inOrder();
+    assertThat(testOptions.testMultipleString).containsExactly("baz", "bar").inOrder();
 
     try {
-      enforcer.enforce(parser, BUILD_COMMAND);
+      enforcer.enforce(parser, "build");
       fail();
     } catch (OptionsParsingException e) {
       // expected, since bar is disallowed.
@@ -1088,65 +1008,62 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testDisallowValuesSetsNewValue() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getDisallowValuesBuilder()
-        .addDisallowedValues(FILTERED_VALUE_1)
-        .setNewValue(UNFILTERED_VALUE);
+            .addDisallowedValues("user value")
+            .setNewValue("baz");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + FILTERED_VALUE_1);
+    parser.parse("--test_string=user value");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(FILTERED_VALUE_1);
+    assertEquals("user value", testOptions.testString);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Should now be "baz" because the policy forces disallowed values to "baz"
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(UNFILTERED_VALUE);
+    assertEquals("baz", testOptions.testString);
   }
 
   @Test
   public void testDisallowValuesSetsDefaultValue() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getDisallowValuesBuilder()
-        .addDisallowedValues(FILTERED_VALUE_1)
-        .getUseDefaultBuilder();
+            .addDisallowedValues("user value")
+            .getUseDefaultBuilder();
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + FILTERED_VALUE_1);
+    parser.parse("--test_string=user value");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(FILTERED_VALUE_1);
+    assertEquals("user value", testOptions.testString);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TestOptions.TEST_STRING_DEFAULT);
+    assertEquals(STRING_FLAG_DEFAULT, testOptions.testString);
   }
 
   @Test
   public void testDisallowValuesSetsDefaultValueForRepeatableFlag() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_multiple_string")
         .getDisallowValuesBuilder()
-        .addDisallowedValues(FILTERED_VALUE_1)
-        .getUseDefaultBuilder();
+            .addDisallowedValues("user value")
+            .getUseDefaultBuilder();
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_multiple_string=" + FILTERED_VALUE_1);
+    parser.parse("--test_multiple_string=user value");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testMultipleString).containsExactly(FILTERED_VALUE_1);
+    assertThat(testOptions.testMultipleString).containsExactly("user value");
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     testOptions = getTestOptions();
     // Default for repeatable flags is always empty.
@@ -1157,17 +1074,16 @@ public class InvocationPolicyEnforcerTest {
   public void testDisallowValuesRaisesErrorIfDefaultIsDisallowedAndSetsUseDefault()
       throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getDisallowValuesBuilder()
-        .addDisallowedValues(TestOptions.TEST_STRING_DEFAULT)
-        .getUseDefaultBuilder();
+            .addDisallowedValues(STRING_FLAG_DEFAULT)
+            .getUseDefaultBuilder();
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
 
     try {
-      enforcer.enforce(parser, BUILD_COMMAND);
+      enforcer.enforce(parser, "build");
       fail();
     } catch (OptionsParsingException e) {
       assertThat(e.getMessage()).contains("but also specifies to use the default value");
@@ -1177,44 +1093,42 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testDisallowValuesSetsNewValueWhenDefaultIsDisallowed() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getDisallowValuesBuilder()
-        .addDisallowedValues(TestOptions.TEST_STRING_DEFAULT)
-        .setNewValue(UNFILTERED_VALUE);
+            .addDisallowedValues(STRING_FLAG_DEFAULT)
+            .setNewValue("baz");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
 
     // Option should be the default since the use didn't specify a value.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TestOptions.TEST_STRING_DEFAULT);
+    assertEquals(STRING_FLAG_DEFAULT, testOptions.testString);
 
-    enforcer.enforce(parser, BUILD_COMMAND);
+    enforcer.enforce(parser, "build");
 
     // Should now be "baz" because the policy set the new default to "baz"
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(UNFILTERED_VALUE);
+    assertEquals("baz", testOptions.testString);
   }
 
   @Test
   public void testDisallowValuesDisallowsFlagDefaultButNoPolicyDefault() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getDisallowValuesBuilder()
-        // No new default is set
-        .addDisallowedValues(TestOptions.TEST_STRING_DEFAULT);
+            // No new default is set
+            .addDisallowedValues(STRING_FLAG_DEFAULT);
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
 
     // Option should be the default since the use didn't specify a value.
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TestOptions.TEST_STRING_DEFAULT);
+    assertEquals(STRING_FLAG_DEFAULT, testOptions.testString);
 
     try {
-      enforcer.enforce(parser, BUILD_COMMAND);
+      enforcer.enforce(parser, "build");
       fail();
     } catch (OptionsParsingException e) {
       // expected.
@@ -1234,10 +1148,10 @@ public class InvocationPolicyEnforcerTest {
     parser.parse("--test_list_converters=a,b,c");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testListConverters).isEqualTo(Arrays.asList("a", "b", "c"));
+    assertEquals(Arrays.asList("a", "b", "c"), testOptions.testListConverters);
 
     try {
-      enforcer.enforce(parser, BUILD_COMMAND);
+      enforcer.enforce(parser, "build");
       fail();
     } catch (OptionsParsingException e) {
       assertThat(e.getMessage())
@@ -1253,51 +1167,48 @@ public class InvocationPolicyEnforcerTest {
   @Test
   public void testFlagPolicyDoesNotApply() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .addCommands("build")
         .getSetValueBuilder()
-        .addFlagValue(TEST_STRING_POLICY_VALUE);
+            .addFlagValue("policy value");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + TEST_STRING_USER_VALUE);
+    parser.parse("--test_string=user value");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TEST_STRING_USER_VALUE);
+    assertEquals("user value", testOptions.testString);
 
     enforcer.enforce(parser, "test");
 
     // Still user value.
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TEST_STRING_USER_VALUE);
+    assertEquals("user value", testOptions.testString);
   }
 
   @Test
   public void testNonExistantFlagFromPolicy() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("i_do_not_exist")
         .getSetValueBuilder()
-        .addFlagValue(TEST_STRING_POLICY_VALUE);
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+            .addFlagValue("policy value 1");
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getSetValueBuilder()
-        .addFlagValue(TEST_STRING_POLICY_VALUE_2);
+            .addFlagValue("policy value 2");
     
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + TEST_STRING_USER_VALUE);
+    parser.parse("--test_string=user value");
 
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TEST_STRING_USER_VALUE);
+    assertEquals("user value", testOptions.testString);
 
     enforcer.enforce(parser, "test");
 
     // Still user value.
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TEST_STRING_POLICY_VALUE_2);
+    assertEquals("policy value 2", testOptions.testString);
   }
 
   @Test
@@ -1307,16 +1218,16 @@ public class InvocationPolicyEnforcerTest {
     // No operations added to the flag policy
     
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=" + TEST_STRING_USER_VALUE);
+    parser.parse("--test_string=user value");
     
     TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TEST_STRING_USER_VALUE);
+    assertEquals("user value", testOptions.testString);
 
     // Shouldn't throw.
     enforcer.enforce(parser, "test");
 
     // Still user value.
     testOptions = getTestOptions();
-    assertThat(testOptions.testString).isEqualTo(TEST_STRING_USER_VALUE);
+    assertEquals("user value", testOptions.testString);
   }
 }
