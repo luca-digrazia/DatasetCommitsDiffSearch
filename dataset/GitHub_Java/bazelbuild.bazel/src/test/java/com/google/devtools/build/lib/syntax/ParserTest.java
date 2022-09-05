@@ -29,9 +29,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.util.LinkedList;
 import java.util.List;
-
 
 /**
  *  Tests of parser behaviour.
@@ -147,7 +145,7 @@ public class ParserTest extends EvaluationTestCase {
   public void testFuncallExpr() throws Exception {
     FuncallExpression e = (FuncallExpression) parseExpression("foo(1, 2, bar=wiz)");
 
-    Identifier ident = e.getFunction();
+    Ident ident = e.getFunction();
     assertEquals("foo", ident.getName());
 
     assertThat(e.getArguments()).hasSize(3);
@@ -161,7 +159,7 @@ public class ParserTest extends EvaluationTestCase {
 
     Argument.Passed arg2 = e.getArguments().get(2);
     assertEquals("bar", arg2.getName());
-    Identifier arg2val = (Identifier) arg2.getValue();
+    Ident arg2val = (Ident) arg2.getValue();
     assertEquals("wiz", arg2val.getName());
   }
 
@@ -170,7 +168,7 @@ public class ParserTest extends EvaluationTestCase {
     FuncallExpression e =
       (FuncallExpression) parseExpression("foo.foo(1, 2, bar=wiz)");
 
-    Identifier ident = e.getFunction();
+    Ident ident = e.getFunction();
     assertEquals("foo", ident.getName());
 
     assertThat(e.getArguments()).hasSize(3);
@@ -184,7 +182,7 @@ public class ParserTest extends EvaluationTestCase {
 
     Argument.Passed arg2 = e.getArguments().get(2);
     assertEquals("bar", arg2.getName());
-    Identifier arg2val = (Identifier) arg2.getValue();
+    Ident arg2val = (Ident) arg2.getValue();
     assertEquals("wiz", arg2val.getName());
   }
 
@@ -193,7 +191,7 @@ public class ParserTest extends EvaluationTestCase {
     FuncallExpression e =
       (FuncallExpression) parseExpression("foo.replace().split(1)");
 
-    Identifier ident = e.getFunction();
+    Ident ident = e.getFunction();
     assertEquals("split", ident.getName());
 
     assertThat(e.getArguments()).hasSize(1);
@@ -207,7 +205,7 @@ public class ParserTest extends EvaluationTestCase {
   public void testPropRefExpr() throws Exception {
     DotExpression e = (DotExpression) parseExpression("foo.foo");
 
-    Identifier ident = e.getField();
+    Ident ident = e.getField();
     assertEquals("foo", ident.getName());
   }
 
@@ -215,7 +213,7 @@ public class ParserTest extends EvaluationTestCase {
   public void testStringMethExpr() throws Exception {
     FuncallExpression e = (FuncallExpression) parseExpression("'foo'.foo()");
 
-    Identifier ident = e.getFunction();
+    Ident ident = e.getFunction();
     assertEquals("foo", ident.getName());
 
     assertThat(e.getArguments()).isEmpty();
@@ -282,7 +280,7 @@ public class ParserTest extends EvaluationTestCase {
 
     // Test that the actual parameters are: (1, $error$, 3):
 
-    Identifier ident = e.getFunction();
+    Ident ident = e.getFunction();
     assertEquals("f", ident.getName());
 
     assertThat(e.getArguments()).hasSize(3);
@@ -292,7 +290,7 @@ public class ParserTest extends EvaluationTestCase {
     assertEquals(1, (int) arg0.getValue());
 
     Argument.Passed arg1 = e.getArguments().get(1);
-    Identifier arg1val = ((Identifier) arg1.getValue());
+    Ident arg1val = ((Ident) arg1.getValue());
     assertEquals("$error$", arg1val.getName());
 
     assertLocation(5, 29, arg1val.getLocation());
@@ -660,7 +658,7 @@ public class ParserTest extends EvaluationTestCase {
     assertThat(clauses.get(0).getLValue().getExpression().toString()).isEqualTo("x");
     assertThat(clauses.get(0).getExpression()).isInstanceOf(ListLiteral.class);
     assertThat(clauses.get(1).getLValue().getExpression().toString()).isEqualTo("y");
-    assertThat(clauses.get(1).getExpression()).isInstanceOf(Identifier.class);
+    assertThat(clauses.get(1).getExpression()).isInstanceOf(Ident.class);
   }
 
   @Test
@@ -1070,47 +1068,6 @@ public class ParserTest extends EvaluationTestCase {
     assertContainsEvent("function 'load' does not exist");
   }
 
-  @Test
-  public void testLoadAlias() throws Exception {
-    runLoadAliasTestForSymbols("my_alias = 'lawl'", "my_alias");
-  }
-
-  @Test
-  public void testLoadAliasMultiple() throws Exception {
-    runLoadAliasTestForSymbols(
-        "my_alias = 'lawl', 'lol', next_alias = 'rofl'", "my_alias", "lol", "next_alias");
-  }
-
-  private void runLoadAliasTestForSymbols(String loadSymbolString, String... expectedSymbols) {
-    List<Statement> statements =
-        parseFileForSkylark(String.format("load('/foo/bar/file', %s)\n", loadSymbolString));
-    LoadStatement stmt = (LoadStatement) statements.get(0);
-    ImmutableList<Identifier> actualSymbols = stmt.getSymbols();
-
-    assertThat(actualSymbols).hasSize(expectedSymbols.length);
-
-    List<String> actualSymbolNames = new LinkedList<>();
-
-    for (Identifier identifier : actualSymbols) {
-      actualSymbolNames.add(identifier.getName());
-    }
-
-    assertThat(actualSymbolNames).containsExactly((Object[]) expectedSymbols);
-  }
-
-  @Test
-  public void testLoadAliasSyntaxError() throws Exception {
-    setFailFast(false);
-    parseFileForSkylark("load('/foo', test1 = )\n");
-    assertContainsEvent("syntax error at ')': expected string");
-
-    parseFileForSkylark("load('/foo', test2 = 1)\n");
-    assertContainsEvent("syntax error at '1': expected string");
-
-    parseFileForSkylark("load('/foo', test3 = old)\n");
-    assertContainsEvent("syntax error at 'old': expected string");
-  }
-  
   @Test
   public void testParseErrorNotComparison() throws Exception {
     setFailFast(false);
