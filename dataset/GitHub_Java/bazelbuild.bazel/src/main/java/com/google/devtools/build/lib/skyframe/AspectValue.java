@@ -15,8 +15,8 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Objects;
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
+import com.google.devtools.build.lib.analysis.AspectDescriptor;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectClass;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.syntax.SkylarkImport;
@@ -48,22 +47,36 @@ public final class AspectValue extends ActionLookupValue {
    */
   public static final class AspectKey extends AspectValueKey {
     private final Label label;
-    private final ImmutableList<AspectKey> baseKeys;
+    private final AspectKey baseKey;
     private final BuildConfiguration aspectConfiguration;
     private final BuildConfiguration baseConfiguration;
-    private final AspectDescriptor aspectDescriptor;
+    private final AspectClass aspectClass;
+    private final AspectParameters parameters;
 
     private AspectKey(
         Label label,
+        BuildConfiguration aspectConfiguration,
         BuildConfiguration baseConfiguration,
-        ImmutableList<AspectKey> baseKeys,
-        AspectDescriptor aspectDescriptor,
-        BuildConfiguration aspectConfiguration) {
-      this.baseKeys = baseKeys;
+        AspectClass aspectClass,
+        AspectParameters parameters) {
+      this.baseKey = null;
       this.label = label;
-      this.baseConfiguration = baseConfiguration;
       this.aspectConfiguration = aspectConfiguration;
-      this.aspectDescriptor = aspectDescriptor;
+      this.baseConfiguration = baseConfiguration;
+      this.aspectClass = aspectClass;
+      this.parameters = parameters;
+    }
+
+    private AspectKey(
+        AspectKey baseKey,
+        AspectClass aspectClass, AspectParameters aspectParameters,
+        BuildConfiguration aspectConfiguration) {
+      this.baseKey = baseKey;
+      this.label = baseKey.label;
+      this.baseConfiguration = baseKey.getBaseConfiguration();
+      this.aspectConfiguration = aspectConfiguration;
+      this.aspectClass = aspectClass;
+      this.parameters = aspectParameters;
     }
 
     @Override
@@ -78,31 +91,25 @@ public final class AspectValue extends ActionLookupValue {
     }
 
     public AspectClass getAspectClass() {
-      return aspectDescriptor.getAspectClass();
+      return aspectClass;
     }
 
     @Nullable
     public AspectParameters getParameters() {
-      return aspectDescriptor.getParameters();
-    }
-
-    public AspectDescriptor getAspectDescriptor() {
-      return aspectDescriptor;
+      return parameters;
     }
 
     @Nullable
-    public ImmutableList<AspectKey> getBaseKeys() {
-      return baseKeys;
+    public AspectKey getBaseKey() {
+      return baseKey;
     }
 
     @Override
     public String getDescription() {
-      if (baseKeys.isEmpty()) {
-        return String.format("%s of %s",
-            aspectDescriptor.getAspectClass().getName(), getLabel());
+      if (baseKey == null) {
+        return String.format("%s of %s", aspectClass.getName(), getLabel());
       } else {
-        return String.format("%s on top of %s",
-            aspectDescriptor.getAspectClass().getName(), baseKeys.toString());
+        return String.format("%s on top of %s", aspectClass.getName(), baseKey.toString());
       }
     }
 
@@ -146,10 +153,11 @@ public final class AspectValue extends ActionLookupValue {
     public int hashCode() {
       return Objects.hashCode(
           label,
-          baseKeys,
+          baseKey,
           aspectConfiguration,
           baseConfiguration,
-          aspectDescriptor);
+          aspectClass,
+          parameters);
     }
 
     @Override
@@ -164,52 +172,45 @@ public final class AspectValue extends ActionLookupValue {
 
       AspectKey that = (AspectKey) other;
       return Objects.equal(label, that.label)
-          && Objects.equal(baseKeys, that.baseKeys)
+          && Objects.equal(baseKey, that.baseKey)
           && Objects.equal(aspectConfiguration, that.aspectConfiguration)
           && Objects.equal(baseConfiguration, that.baseConfiguration)
-          && Objects.equal(aspectDescriptor, that.aspectDescriptor);
+          && Objects.equal(aspectClass, that.aspectClass)
+          && Objects.equal(parameters, that.parameters);
     }
 
     public String prettyPrint() {
       if (label == null) {
         return "null";
       }
-
-      String baseKeysString =
-          baseKeys.isEmpty()
-          ? ""
-          : String.format(" (over %s)", baseKeys.toString());
-      return String.format("%s with aspect %s%s%s",
-          label.toString(),
-          aspectDescriptor.getAspectClass().getName(),
+      return String.format("%s with aspect %s%s",
+          baseKey == null ? label.toString() : baseKey.prettyPrint(),
+          aspectClass.getName(),
           (aspectConfiguration != null && aspectConfiguration.isHostConfiguration())
-              ? "(host) " : "",
-          baseKeysString
-      );
+              ? "(host) " : "");
     }
 
     @Override
     public String toString() {
-      return (baseKeys == null ? label : baseKeys.toString())
+      return (baseKey == null ? label : baseKey.toString())
           + "#"
-          + aspectDescriptor.getAspectClass().getName()
+          + aspectClass.getName()
           + " "
           + (aspectConfiguration == null ? "null" : aspectConfiguration.checksum())
           + " "
           + (baseConfiguration == null ? "null" : baseConfiguration.checksum())
           + " "
-          + aspectDescriptor.getParameters();
+          + parameters;
     }
 
     public AspectKey withLabel(Label label) {
-      ImmutableList.Builder<AspectKey> newBaseKeys = ImmutableList.builder();
-      for (AspectKey baseKey : baseKeys) {
-        newBaseKeys.add(baseKey.withLabel(label));
+      if (baseKey == null) {
+        return new AspectKey(
+            label, aspectConfiguration, baseConfiguration, aspectClass, parameters);
+      } else {
+        return new AspectKey(
+            baseKey.withLabel(label), aspectClass, parameters, aspectConfiguration);
       }
-
-      return new AspectKey(
-          label, baseConfiguration,
-          newBaseKeys.build(), aspectDescriptor, aspectConfiguration);
     }
   }
 
@@ -353,14 +354,10 @@ public final class AspectValue extends ActionLookupValue {
     return transitivePackages;
   }
 
-  public static AspectKey createAspectKey(
-      Label label, BuildConfiguration baseConfiguration,
-      ImmutableList<AspectKey> baseKeys, AspectDescriptor aspectDescriptor,
+  public static AspectKey createAspectKey(AspectKey baseKey, AspectDescriptor aspectDescriptor,
       BuildConfiguration aspectConfiguration) {
     return new AspectKey(
-        label, baseConfiguration,
-        baseKeys,
-        aspectDescriptor,
+        baseKey, aspectDescriptor.getAspectClass(), aspectDescriptor.getParameters(),
         aspectConfiguration
     );
   }
@@ -371,8 +368,8 @@ public final class AspectValue extends ActionLookupValue {
       BuildConfiguration baseConfiguration, AspectDescriptor aspectDescriptor,
       BuildConfiguration aspectConfiguration) {
     return new AspectKey(
-        label, baseConfiguration, ImmutableList.<AspectKey>of(),
-        aspectDescriptor, aspectConfiguration);
+        label, aspectConfiguration, baseConfiguration,
+        aspectDescriptor.getAspectClass(), aspectDescriptor.getParameters());
   }
 
 

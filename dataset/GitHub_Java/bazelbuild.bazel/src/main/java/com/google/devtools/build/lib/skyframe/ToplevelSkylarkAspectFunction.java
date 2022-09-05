@@ -17,9 +17,9 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.analysis.AspectDescriptor;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.skyframe.AspectFunction.AspectCreationException;
@@ -83,11 +83,11 @@ public class ToplevelSkylarkAspectFunction implements SkyFunction {
       throw new LoadSkylarkAspectFunctionException(e);
     }
     SkyKey aspectKey =
-        AspectValue.createAspectKey(
-            aspectLoadingKey.getTargetLabel(),
-            aspectLoadingKey.getTargetConfiguration(),
+        ActionLookupValue.key(AspectValue.createAspectKey(
+            aspectLoadingKey.getTargetLabel(), aspectLoadingKey.getTargetConfiguration(),
             new AspectDescriptor(skylarkAspect.getAspectClass(), AspectParameters.EMPTY),
-            aspectLoadingKey.getAspectConfiguration());
+            aspectLoadingKey.getAspectConfiguration()
+        ));
 
     return env.getValue(aspectKey);
   }
