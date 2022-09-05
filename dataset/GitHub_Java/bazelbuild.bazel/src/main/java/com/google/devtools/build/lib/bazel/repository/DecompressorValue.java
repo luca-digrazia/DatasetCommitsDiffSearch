@@ -42,7 +42,7 @@ public class DecompressorValue implements SkyValue {
       return true;
     }
 
-    if (!(other instanceof DecompressorValue)) {
+    if (other == null || !(other instanceof DecompressorValue)) {
       return false;
     }
 
@@ -52,13 +52,6 @@ public class DecompressorValue implements SkyValue {
   @Override
   public int hashCode() {
     return directory.hashCode();
-  }
-
-  public static SkyKey fileKey(
-      String targetKind, String targetName, Path archivePath, Path repositoryPath) {
-    return new SkyKey(
-        FileFunction.NAME,
-        new DecompressorDescriptor(targetKind, targetName, archivePath, repositoryPath));
   }
 
   public static SkyKey jarKey(
@@ -126,7 +119,7 @@ public class DecompressorValue implements SkyValue {
         return true;
       }
 
-      if (!(other instanceof DecompressorDescriptor)) {
+      if (other == null || !(other instanceof DecompressorDescriptor)) {
         return false;
       }
 

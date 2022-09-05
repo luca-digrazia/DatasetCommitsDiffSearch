@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.Reso
 import com.google.devtools.build.lib.rules.android.LocalResourceContainer.Builder.InvalidAssetPath;
 import com.google.devtools.build.lib.rules.android.LocalResourceContainer.Builder.InvalidResourcePath;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
-import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.List;
 
@@ -89,10 +88,12 @@ public final class ApplicationManifest {
       return ruleContext.attributes().get("application_id", Type.STRING);
     }
 
-    AndroidResourcesProvider resourcesProvider = AndroidCommon.getAndroidResources(ruleContext);
-    if (resourcesProvider != null) {
+    TransitiveInfoCollection resourcesPrerequisite =
+        ruleContext.getPrerequisite("resources", Mode.TARGET);
+    if (resourcesPrerequisite != null) {
       ResourceContainer resourceContainer = Iterables.getOnlyElement(
-          resourcesProvider.getTransitiveAndroidResources());
+          resourcesPrerequisite.getProvider(AndroidResourcesProvider.class)
+          .getTransitiveAndroidResources());
       return resourceContainer.getRenameManifestPackage();
     } else {
       return null;
@@ -144,8 +145,9 @@ public final class ApplicationManifest {
    * @return the generated ApplicationManifest
    */
   public static ApplicationManifest generatedManifest(RuleContext ruleContext) {
-    Artifact generatedManifest = ruleContext.getUniqueDirectoryArtifact(
-        ruleContext.getRule().getName() + "_generated", new PathFragment("AndroidManifest.xml"),
+    Artifact generatedManifest = ruleContext.getAnalysisEnvironment().getDerivedArtifact(
+        ruleContext.getUniqueDirectory(ruleContext.getRule().getName() + "_generated")
+            .getChild("AndroidManifest.xml"),
         ruleContext.getBinOrGenfilesDirectory());
 
     String manifestPackage;
@@ -177,8 +179,9 @@ public final class ApplicationManifest {
       Iterable<ResourceContainer> resourceContainers) {
     if (!Iterables.isEmpty(getMergeeManifests(resourceContainers))) {
       Iterable<Artifact> exportedManifests = getMergeeManifests(resourceContainers);
-      Artifact outputManifest = ruleContext.getUniqueDirectoryArtifact(
-          ruleContext.getRule().getName() + "_merged", "AndroidManifest.xml",
+      Artifact outputManifest = ruleContext.getAnalysisEnvironment().getDerivedArtifact(
+          ruleContext.getUniqueDirectory(
+              ruleContext.getRule().getName() + "_merged").getChild("AndroidManifest.xml"),
           ruleContext.getBinOrGenfilesDirectory());
       AndroidManifestMergeHelper.createMergeManifestAction(ruleContext, getManifest(),
           exportedManifests, ImmutableList.of("all"), outputManifest);
