@@ -1719,7 +1719,7 @@ public class MethodLibrary {
     name = "dict",
     returnType = SkylarkDict.class,
     doc =
-        "Creates a <a href=\"dict.html\">dictionary</a> from an optional positional "
+        "Creates a <a href=\"#modules.dict\">dictionary</a> from an optional positional "
             + "argument and an optional set of keyword arguments. Values from the keyword "
             + "argument will overwrite values from the positional argument if a key appears "
             + "multiple times.",
@@ -1910,17 +1910,18 @@ public class MethodLibrary {
       @Param(name = "x", doc = "The object to check."),
       @Param(name = "name", type = String.class, doc = "The name of the attribute.")
     },
+    useLocation = true,
     useEnvironment = true
   )
   private static final BuiltinFunction hasattr =
       new BuiltinFunction("hasattr") {
         @SuppressWarnings("unused")
-        public Boolean invoke(Object obj, String name, Environment env)
+        public Boolean invoke(Object obj, String name, Location loc, Environment env)
             throws EvalException {
           if (obj instanceof ClassObject && ((ClassObject) obj).getValue(name) != null) {
             return true;
           }
-          return hasMethod(obj, name);
+          return hasMethod(obj, name, loc);
         }
       };
 
@@ -1958,7 +1959,7 @@ public class MethodLibrary {
           if (result == null) {
             // 'Real' describes methods with structField() == false. Because DotExpression.eval
             // returned null in this case, we know that structField() cannot return true.
-            boolean isRealMethod = hasMethod(obj, name);
+            boolean isRealMethod = hasMethod(obj, name, loc);
             if (defaultValue != Runtime.UNBOUND) {
               return defaultValue;
             }
@@ -1977,7 +1978,7 @@ public class MethodLibrary {
   /**
    * Returns whether the given object has a method with the given name.
    */
-  private static boolean hasMethod(Object obj, String name) throws EvalException {
+  private static boolean hasMethod(Object obj, String name, Location loc) throws EvalException {
     if (Runtime.getFunctionNames(obj.getClass()).contains(name)) {
       return true;
     }
@@ -2046,12 +2047,9 @@ public class MethodLibrary {
       };
 
   @SkylarkSignature(name = "print", returnType = Runtime.NoneType.class,
-      doc = "Prints <code>args</code> as output. It will be prefixed with the string <code>"
-          + "\"WARNING\"</code> and the location (file and line number) of this call. It can be "
-          + "used for debugging."
-          + "<p>Using <code>print</code> in production code is discouraged due to the spam it "
-          + "creates for users. For deprecations, prefer a hard error using <a href=\"#fail\">"
-          + "fail()</a> when possible.",
+      doc = "Prints <code>args</code> as a warning. It can be used for debugging or "
+          + "for transition (before changing to an error). In other cases, warnings are "
+          + "discouraged.",
       parameters = {
         @Param(name = "sep", type = String.class, defaultValue = "' '",
             named = true, positional = false,

@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.collect.CompactHashSet;
+
 import java.util.AbstractCollection;
 import java.util.Arrays;
 import java.util.Collection;
@@ -26,6 +27,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -142,8 +144,7 @@ public final class NestedSet<E> implements Iterable<E> {
   }
 
   /**
-   * Returns the internal item or array. For use by NestedSetVisitor and NestedSetView. Those to
-   * classes also have knowledge of the internal implementation of NestedSet.
+   * Returns the internal item or array.  For use by NestedSetVisitor.
    */
   Object rawChildren() {
     return children;

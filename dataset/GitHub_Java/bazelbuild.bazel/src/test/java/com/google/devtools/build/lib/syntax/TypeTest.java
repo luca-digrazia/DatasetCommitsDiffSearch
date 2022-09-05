@@ -256,10 +256,10 @@ public class TypeTest {
   @Test
   public void testInvalidLabel() throws Exception {
     try {
-      BuildType.LABEL.convert("not//a label", null, currentRule);
+      BuildType.LABEL.convert("not a label", null, currentRule);
       fail();
     } catch (Type.ConversionException e) {
-      MoreAsserts.assertContainsWordsWithQuotes(e.getMessage(), "not//a label");
+      MoreAsserts.assertContainsWordsWithQuotes(e.getMessage(), "not a label");
     }
   }
 
@@ -437,29 +437,76 @@ public class TypeTest {
   }
 
   @Test
+  public void testStringDictUnary() throws Exception {
+    Object input = ImmutableMap.of("foo", "bar",
+                                   "wiz", "bang");
+    Map<?, ?> converted =
+        Type.STRING_DICT_UNARY.convert(input, null, currentRule);
+    Map<?, ?> expected = ImmutableMap.<String, String>of(
+            "foo", "bar",
+            "wiz", "bang");
+    assertEquals(expected, converted);
+    assertNotSame(expected, converted);
+    assertThat(collectLabels(Type.STRING_DICT_UNARY, converted)).isEmpty();
+  }
+
+  @Test
+  public void testStringDictUnaryBadFirstElement() throws Exception {
+    Object input = ImmutableMap.of(2, Arrays.asList("foo", "bar"),
+                                   "wiz", Arrays.asList("bang"));
+    try {
+      Type.STRING_DICT_UNARY.convert(input, null, currentRule);
+      fail();
+    } catch (Type.ConversionException e) {
+      assertThat(e).hasMessage("expected value of type 'string' for dict key element, but got "
+          + "2 (int)");
+    }
+  }
+
+  @Test
+  public void testStringDictUnaryBadSecondElement() throws Exception {
+    Object input = ImmutableMap.of("foo", "bar", "wiz", MutableList.of(null, "bang"));
+    try {
+      Type.STRING_DICT_UNARY.convert(input, null, currentRule);
+      fail();
+    } catch (Type.ConversionException e) {
+      assertThat(e).hasMessage("expected value of type 'string' for dict value element, but got "
+          + "[\"bang\"] (list)");
+    }
+  }
+
+  @Test
+  public void testStringDictUnaryBadElements1() throws Exception {
+    Object input = ImmutableMap.of("foo", "bar", Tuple.of("foo", "bar"), Tuple.of("wiz", "bang"));
+    try {
+      Type.STRING_DICT_UNARY.convert(input, null);
+      fail();
+    } catch (Type.ConversionException e) {
+      assertThat(e).hasMessage("expected value of type 'string' for dict key element, but got "
+          + "(\"foo\", \"bar\") (tuple)");
+    }
+  }
+
+  @Test
   public void testStringDictThrowsConversionException() throws Exception {
     try {
       Type.STRING_DICT.convert("some string", null);
       fail();
     } catch (ConversionException e) {
-      assertThat(e).hasMessage(
-          "expected value of type 'dict(string, string)', but got \"some string\" (string)");
+      assertThat(e).hasMessage("Expected a map for dictionary but got a java.lang.String");
     }
   }
 
   private static ImmutableList<Label> collectLabels(Type<?> type, Object value)
       throws InterruptedException {
     final ImmutableList.Builder<Label> result = ImmutableList.builder();
-    type.visitLabels(
-        new Type.LabelVisitor<Object>() {
-          @SuppressWarnings("unchecked")
-          @Override
-          public void visit(Label label, Object dummy) throws InterruptedException {
-            result.add(label);
-          }
-         },
-        value,
-        /*context=*/ null);
+    type.visitLabels(new Type.LabelVisitor() {
+      @SuppressWarnings("unchecked")
+      @Override
+      public void visit(Label label) throws InterruptedException {
+        result.add(label);
+      }
+    }, value);
     return result.build();
   }
 }

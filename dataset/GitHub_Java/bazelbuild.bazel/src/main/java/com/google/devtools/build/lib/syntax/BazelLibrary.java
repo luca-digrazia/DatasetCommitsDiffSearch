@@ -48,7 +48,12 @@ public class BazelLibrary {
       new BuiltinFunction("type") {
         public String invoke(Object object) {
           // There is no 'type' type in Skylark, so we return a string with the type name.
-          return EvalUtils.getDataTypeName(object, false);
+          String name = EvalUtils.getDataTypeName(object, false);
+          // TODO(bazel-team): Temporary change to avoid breaking existing code.
+          if (name.equals("depset")) {
+            return "set";
+          }
+          return name;
         }
       };
 

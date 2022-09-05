@@ -24,11 +24,13 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.compiler.ByteCodeUtils;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import net.bytebuddy.implementation.bytecode.StackManipulation;
 
 /**
  * Utilities used by the evaluator.
@@ -72,30 +74,37 @@ public final class EvalUtils {
           o1 = SkylarkType.convertToSkylark(o1, /*env=*/ null);
           o2 = SkylarkType.convertToSkylark(o2, /*env=*/ null);
 
+          if (o1 instanceof ClassObject && o2 instanceof ClassObject) {
+            throw new ComparisonException("Cannot compare structs");
+          }
+          if (o1 instanceof SkylarkNestedSet && o2 instanceof SkylarkNestedSet) {
+            throw new ComparisonException("Cannot compare depsets");
+          }
           if (o1 instanceof SkylarkList
               && o2 instanceof SkylarkList
               && ((SkylarkList) o1).isTuple() == ((SkylarkList) o2).isTuple()) {
             return compareLists((SkylarkList) o1, (SkylarkList) o2);
           }
-          if (!o1.getClass().equals(o2.getClass())) {
-            throw new ComparisonException(
-                "Cannot compare " + getDataTypeName(o1) + " with " + getDataTypeName(o2));
-          }
-
-          if (o1 instanceof ClassObject) {
-            throw new ComparisonException("Cannot compare structs");
-          }
-          if (o1 instanceof SkylarkNestedSet) {
-            throw new ComparisonException("Cannot compare depsets");
-          }
           try {
             return ((Comparable<Object>) o1).compareTo(o2);
           } catch (ClassCastException e) {
-            throw new ComparisonException(
-                "Cannot compare " + getDataTypeName(o1) + " with " + getDataTypeName(o2));
+            return compareByClass(o1, o2);
           }
         }
       };
+
+  public static final int compareByClass(Object o1, Object o2) {
+    try {
+      // Different types -> let the class names decide
+      return o1.getClass().getName().compareTo(o2.getClass().getName());
+    } catch (NullPointerException ex) {
+      throw new ComparisonException(
+          "Cannot compare " + getDataTypeName(o1) + " with " + EvalUtils.getDataTypeName(o2));
+    }
+  }
+
+  public static final StackManipulation checkValidDictKey =
+      ByteCodeUtils.invoke(EvalUtils.class, "checkValidDictKey", Object.class);
 
   /**
    * Checks that an Object is a valid key for a Skylark dict.
@@ -272,6 +281,9 @@ public final class EvalUtils {
     return obj;
   }
 
+  public static final StackManipulation toBoolean =
+      ByteCodeUtils.invoke(EvalUtils.class, "toBoolean", Object.class);
+
   /**
    * @return the truth value of an object, according to Python rules.
    * http://docs.python.org/2/library/stdtypes.html#truth-value-testing
@@ -299,6 +311,9 @@ public final class EvalUtils {
       return true;
     }
   }
+
+  public static final StackManipulation toCollection =
+      ByteCodeUtils.invoke(EvalUtils.class, "toCollection", Object.class, Location.class);
 
   public static Collection<?> toCollection(Object o, Location loc) throws EvalException {
     if (o instanceof Collection) {
@@ -329,6 +344,9 @@ public final class EvalUtils {
           "type '" + getDataTypeName(o) + "' is not a collection");
     }
   }
+
+  public static final StackManipulation toIterable =
+      ByteCodeUtils.invoke(EvalUtils.class, "toIterable", Object.class, Location.class);
 
   public static Iterable<?> toIterable(Object o, Location loc) throws EvalException {
     if (o instanceof String) {
