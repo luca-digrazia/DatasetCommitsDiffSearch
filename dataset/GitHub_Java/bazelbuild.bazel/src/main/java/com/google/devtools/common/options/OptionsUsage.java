@@ -13,11 +13,14 @@
 // limitations under the License.
 package com.google.devtools.common.options;
 
+import static com.google.devtools.common.options.OptionsParserImpl.findConverter;
+
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.escape.Escaper;
+
 import java.lang.reflect.Field;
 import java.text.BreakIterator;
 import java.util.Collections;
@@ -130,36 +133,28 @@ class OptionsUsage {
   static void getUsageHtml(Field optionField, StringBuilder usage, Escaper escaper) {
     String plainFlagName = optionField.getAnnotation(Option.class).name();
     String flagName = getFlagName(optionField);
-    String valueDescription = optionField.getAnnotation(Option.class).valueHelp();
     String typeDescription = getTypeDescription(optionField);
     Option annotation = optionField.getAnnotation(Option.class);
     usage.append("<dt><code><a name=\"flag--").append(plainFlagName).append("\"></a>--");
-    usage.append(flagName);
-    if (OptionsData.isBooleanField(optionField) || OptionsData.isVoidField(optionField)) {
-      // Nothing for boolean, tristate, boolean_or_enum, or void options.
-    } else if (!valueDescription.isEmpty()) {
-      usage.append("=").append(escaper.escape(valueDescription));
-    } else if (!typeDescription.isEmpty()) {
-      // Generic fallback, which isn't very good.
-      usage.append("=&lt;").append(escaper.escape(typeDescription)).append("&gt");
-    }
-    usage.append("</code>");
+    usage.append(flagName).append("</code>");
     if (annotation.abbrev() != '\0') {
       usage.append(" [<code>-").append(annotation.abbrev()).append("</code>]");
     }
-    if (annotation.allowMultiple()) {
-      // Allow-multiple options can't have a default value.
-      usage.append(" multiple uses are accumulated");
-    } else {
-      // Don't call the annotation directly (we must allow overrides to certain defaults).
-      String defaultValueString = OptionsParserImpl.getDefaultOptionString(optionField);
-      if (OptionsData.isVoidField(optionField)) {
-        // Void options don't have a default.
-      } else if (OptionsParserImpl.isSpecialNullDefault(defaultValueString, optionField)) {
-        usage.append(" default: see description");
+    if (!typeDescription.isEmpty()) {
+      usage.append(" (").append(escaper.escape(typeDescription)).append("; ");
+      if (annotation.allowMultiple()) {
+        // Allow-multiple options can't have a default value.
+        usage.append("may be used multiple times");
       } else {
-        usage.append(" default: \"").append(escaper.escape(defaultValueString)).append("\"");
+        // Don't call the annotation directly (we must allow overrides to certain defaults).
+        String defaultValueString = OptionsParserImpl.getDefaultOptionString(optionField);
+        if (OptionsParserImpl.isSpecialNullDefault(defaultValueString, optionField)) {
+          usage.append("default: see description");
+        } else {
+          usage.append("default: \"").append(escaper.escape(defaultValueString)).append("\"");
+        }
       }
+      usage.append(")");
     }
     usage.append("</dt>\n");
     usage.append("<dd>\n");
@@ -255,12 +250,12 @@ class OptionsUsage {
   };
 
   private static String getTypeDescription(Field optionsField) {
-    return OptionsData.findConverter(optionsField).getTypeDescription();
+    return findConverter(optionsField).getTypeDescription();
   }
 
   static String getFlagName(Field field) {
     String name = field.getAnnotation(Option.class).name();
-    return OptionsData.isBooleanField(field) ? "[no]" + name : name;
+    return OptionsParserImpl.isBooleanField(field) ? "[no]" + name : name;
   }
 
 }
