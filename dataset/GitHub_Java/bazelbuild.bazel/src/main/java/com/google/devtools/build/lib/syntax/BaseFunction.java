@@ -22,7 +22,6 @@ import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
-import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -232,11 +231,11 @@ public abstract class BaseFunction implements SkylarkValue {
       // and this is actually the same as in Python.
       int starParamIndex = numNamedParams;
       if (numPositionalArgs > numPositionalParams) {
-        arguments[starParamIndex] =
-            Tuple.copyOf(args.subList(numPositionalParams, numPositionalArgs));
+        arguments[starParamIndex] = SkylarkList.tuple(
+            args.subList(numPositionalParams, numPositionalArgs));
         numPositionalArgs = numPositionalParams; // clip numPositionalArgs
       } else {
-        arguments[starParamIndex] = Tuple.EMPTY;
+        arguments[starParamIndex] = SkylarkList.EMPTY_TUPLE;
       }
     } else if (numPositionalArgs > numPositionalParams) {
       throw new EvalException(loc,

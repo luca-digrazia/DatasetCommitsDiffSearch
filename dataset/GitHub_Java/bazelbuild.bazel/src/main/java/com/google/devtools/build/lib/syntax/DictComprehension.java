@@ -16,53 +16,74 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.collect.ImmutableMap;
 
 import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * Syntax node for dictionary comprehension expressions.
  */
-public class DictComprehension extends AbstractComprehension {
+public class DictComprehension extends Expression {
+  // TODO(bazel-team): Factor code with ListComprehension.java.
+
   private final Expression keyExpression;
   private final Expression valueExpression;
+  private final LValue loopVar;
+  private final Expression listExpression;
 
-  public DictComprehension(Expression keyExpression, Expression valueExpression) {
-    super('{', '}', keyExpression, valueExpression);
+  public DictComprehension(Expression keyExpression, Expression valueExpression, Expression loopVar,
+      Expression listExpression) {
     this.keyExpression = keyExpression;
     this.valueExpression = valueExpression;
+    this.loopVar = new LValue(loopVar);
+    this.listExpression = listExpression;
+  }
+
+  Expression getKeyExpression() {
+    return keyExpression;
+  }
+
+  Expression getValueExpression() {
+    return valueExpression;
+  }
+
+  LValue getLoopVar() {
+    return loopVar;
+  }
+
+  Expression getListExpression() {
+    return listExpression;
   }
 
   @Override
-  String printExpressions() {
-    return String.format("%s: %s", keyExpression, valueExpression);
-  }
-
-  @Override
-  OutputCollector createCollector() {
-    return new DictOutputCollector();
-  }
-
-  /**
-   * Helper class that collects the intermediate results of the {@link DictComprehension} and
-   * provides access to the resulting {@link Map}.
-   */
-  private final class DictOutputCollector implements OutputCollector {
-    private final Map<Object, Object> result;
-
-    DictOutputCollector() {
-      // We want to keep the iteration order
-      result = new LinkedHashMap<>();
-    }
-
-    @Override
-    public void evaluateAndCollect(Environment env) throws EvalException, InterruptedException {
+  Object doEval(Environment env) throws EvalException, InterruptedException {
+    // We want to keep the iteration order
+    LinkedHashMap<Object, Object> map = new LinkedHashMap<>();
+    Iterable<?> elements = EvalUtils.toIterable(listExpression.eval(env), getLocation());
+    for (Object element : elements) {
+      loopVar.assign(env, getLocation(), element);
       Object key = keyExpression.eval(env);
       EvalUtils.checkValidDictKey(key);
-      result.put(key, valueExpression.eval(env));
+      map.put(key, valueExpression.eval(env));
     }
+    return ImmutableMap.copyOf(map);
+  }
 
-    @Override
-    public Object getResult(Environment env) throws EvalException {
-      return ImmutableMap.copyOf(result);
-    }
+  @Override
+  void validate(ValidationEnvironment env) throws EvalException {
+    listExpression.validate(env);
+    loopVar.validate(env, getLocation());
+    keyExpression.validate(env);
+  }
+
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append('{').append(keyExpression).append(": ").append(valueExpression);
+    sb.append(" for ").append(loopVar).append(" in ").append(listExpression);
+    sb.append('}');
+    return sb.toString();
+  }
+
+  @Override
+  public void accept(SyntaxTreeVisitor visitor) {
+    visitor.accept(this);
   }
 }

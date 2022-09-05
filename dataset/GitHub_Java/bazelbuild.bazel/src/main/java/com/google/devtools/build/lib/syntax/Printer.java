@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.io.IOException;
@@ -428,7 +427,7 @@ public final class Printer {
           if (a >= argLength) {
             throw new MissingFormatWidthException("not enough arguments for format pattern "
                 + repr(pattern) + ": "
-                + repr(Tuple.copyOf(arguments)));
+                + repr(SkylarkList.tuple(arguments)));
           }
           Object argument = arguments.get(a++);
           switch (directive) {
