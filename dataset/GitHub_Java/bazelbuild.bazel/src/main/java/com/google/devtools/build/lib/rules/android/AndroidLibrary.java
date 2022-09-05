@@ -80,9 +80,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     final ResourceApk resourceApk;
     if (definesLocalResources) {
       ApplicationManifest applicationManifest = androidSemantics.getManifestForRule(ruleContext);
-      if (applicationManifest == null) {
-        return null;
-      }
       try {
         resourceApk = applicationManifest.packWithDataAndResources(
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK),
@@ -128,7 +125,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     final Aar aar;
     if (definesLocalResources) {
       primaryResources = resourceApk.getPrimaryResource();
-      // applicationManifest has already been checked for nullness above in this method
       ApplicationManifest applicationManifest = androidSemantics.getManifestForRule(ruleContext);
       aar = new Aar(aarOut, applicationManifest.getManifest());
       transitiveAars.add(aar);

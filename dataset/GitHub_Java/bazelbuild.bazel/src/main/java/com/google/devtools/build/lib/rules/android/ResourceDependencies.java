@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -57,8 +56,7 @@ public class ResourceDependencies {
 
     NestedSetBuilder<ResourceContainer> transitiveDependencies = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<ResourceContainer> directDependencies = NestedSetBuilder.naiveLinkOrder();
-    extractFromAttributes(
-        ImmutableList.of("resources"), ruleContext, transitiveDependencies, directDependencies);
+    extractFromAttribute("resources", ruleContext, transitiveDependencies, directDependencies);
     return new ResourceDependencies(neverlink,
         transitiveDependencies.build(), directDependencies.build());
   }
@@ -66,8 +64,7 @@ public class ResourceDependencies {
   public static ResourceDependencies fromRuleDeps(RuleContext ruleContext, boolean neverlink) {
     NestedSetBuilder<ResourceContainer> transitiveDependencies = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<ResourceContainer> directDependencies = NestedSetBuilder.naiveLinkOrder();
-    extractFromAttributes(AndroidCommon.TRANSITIVE_ATTRIBUTES, ruleContext, transitiveDependencies,
-        directDependencies);
+    extractFromAttribute("deps", ruleContext, transitiveDependencies, directDependencies);
     return new ResourceDependencies(neverlink,
         transitiveDependencies.build(), directDependencies.build());
   }
@@ -77,37 +74,29 @@ public class ResourceDependencies {
     NestedSetBuilder<ResourceContainer> transitiveDependencies = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<ResourceContainer> directDependencies = NestedSetBuilder.naiveLinkOrder();
     if (hasResourceAttribute(ruleContext)) {
-      extractFromAttributes(
-          ImmutableList.of("resources"), ruleContext, transitiveDependencies, directDependencies);
+      extractFromAttribute("resources",ruleContext, transitiveDependencies, directDependencies);
     }
     if (directDependencies.isEmpty()) {
       // There are no resources, so this library will forward the direct and transitive dependencies
       // without changes.
-      extractFromAttributes(AndroidCommon.TRANSITIVE_ATTRIBUTES, ruleContext,
-          transitiveDependencies, directDependencies);
+      extractFromAttribute("deps", ruleContext, transitiveDependencies, directDependencies);
     } else {
       // There are resources, so the direct dependencies and the transitive will be merged into
       // the transitive dependencies. This maintains the relationship of the resources being
       // directly on the rule.
-      extractFromAttributes(AndroidCommon.TRANSITIVE_ATTRIBUTES, ruleContext,
-          transitiveDependencies, transitiveDependencies);
+      extractFromAttribute("deps", ruleContext, transitiveDependencies, transitiveDependencies);
     }
     return new ResourceDependencies(neverlink,
         transitiveDependencies.build(), directDependencies.build());
   }
 
-  private static void extractFromAttributes(Iterable<String> attributes,
+  private static void extractFromAttribute(String attribute,
       RuleContext ruleContext, NestedSetBuilder<ResourceContainer> builderForTransitive,
       NestedSetBuilder<ResourceContainer> builderForDirect) {
-    for (String attr : attributes) {
-      if (ruleContext.getAttribute(attr) == null) {
-        continue;
-      }
-      for (AndroidResourcesProvider resources :
-          ruleContext.getPrerequisites(attr, Mode.TARGET, AndroidResourcesProvider.class)) {
-        builderForTransitive.addTransitive(resources.getTransitiveAndroidResources());
-        builderForDirect.addTransitive(resources.getDirectAndroidResources());
-      }
+    for (AndroidResourcesProvider resources :
+        ruleContext.getPrerequisites(attribute, Mode.TARGET, AndroidResourcesProvider.class)) {
+      builderForTransitive.addTransitive(resources.getTransitiveAndroidResources());
+      builderForDirect.addTransitive(resources.getDirectAndroidResources());
     }
   }
 
