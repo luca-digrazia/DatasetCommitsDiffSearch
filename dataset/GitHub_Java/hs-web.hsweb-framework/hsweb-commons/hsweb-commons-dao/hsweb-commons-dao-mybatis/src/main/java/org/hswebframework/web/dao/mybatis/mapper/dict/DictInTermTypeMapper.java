@@ -14,7 +14,6 @@ import org.hswebframework.web.dao.mybatis.mapper.ChangedTermValue;
 import org.hswebframework.web.dict.EnumDict;
 
 import java.sql.JDBCType;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -65,7 +64,7 @@ public class DictInTermTypeMapper extends AbstractSqlTermCustomer {
 
         OptionConverter converter = column.getOptionConverter();
         if (converter == null) {
-            return new ArrayList<>();
+            return Collections.emptyList();
         }
 
         return (List) converter.getOptions();
