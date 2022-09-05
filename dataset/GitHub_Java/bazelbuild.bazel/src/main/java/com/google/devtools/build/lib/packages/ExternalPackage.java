@@ -40,7 +40,7 @@ public class ExternalPackage extends Package {
   private Map<RepositoryName, Rule> repositoryMap;
 
   ExternalPackage() {
-    super(PackageIdentifier.createInDefaultRepo(NAME));
+    super(PackageIdentifier.createInDefaultRepo("external"));
   }
 
   /**
@@ -93,7 +93,7 @@ public class ExternalPackage extends Package {
      * Checks if the label is bound, i.e., starts with {@code //external:}.
      */
     public static boolean isBoundLabel(Label label) {
-      return label.getPackageName().equals(NAME);
+      return label.getPackageName().equals("external");
     }
   }
 
