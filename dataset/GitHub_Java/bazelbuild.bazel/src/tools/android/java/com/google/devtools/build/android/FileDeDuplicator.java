@@ -14,7 +14,6 @@
 package com.google.devtools.build.android;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
@@ -65,7 +64,6 @@ public class FileDeDuplicator implements DirectoryModifier {
       Files.createDirectories(newRoot.resolve(workingDir.relativize(dir)));
       return super.preVisitDirectory(dir, attrs);
     }
-    
     @Override
     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
       Path relativePath = workingDir.relativize(file);
@@ -120,7 +118,8 @@ public class FileDeDuplicator implements DirectoryModifier {
             new ConditionalCopyVisitor(newRoot, root, seen, hashFunction));
         builder.add(newRoot);
       } else {
-        LOGGER.warning(String.format("Duplicated directory %s", root));
+        // Duplicated directories are ok -- multiple files from different libraries
+        // can reside in the same directory, but duplicate files should not be seen mulitple times.
       }
     }
     return builder.build();
@@ -131,7 +130,7 @@ public class FileDeDuplicator implements DirectoryModifier {
     try {
       return conditionallyCopy(directories);
     } catch (IOException e) {
-      throw Throwables.propagate(e);
+      throw new RuntimeException(e);
     }
   }
 }
