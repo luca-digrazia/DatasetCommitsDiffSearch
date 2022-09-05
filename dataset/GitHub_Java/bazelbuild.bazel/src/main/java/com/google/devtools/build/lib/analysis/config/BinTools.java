@@ -139,7 +139,7 @@ public final class BinTools {
     if (!embeddedTools.contains(embedPath)) {
       return null;
     }
-    return PathFragment.create("_bin").getRelative(PathFragment.create(embedPath).getBaseName());
+    return new PathFragment("_bin").getRelative(new PathFragment(embedPath).getBaseName());
   }
 
   public Artifact getEmbeddedArtifact(String embedPath, ArtifactFactory artifactFactory) {
@@ -174,7 +174,7 @@ public final class BinTools {
 
   private void setupTool(String embeddedPath) throws ExecException {
     Path sourcePath = directories.getEmbeddedBinariesRoot().getRelative(embeddedPath);
-    Path linkPath = binDir.getRelative(PathFragment.create(embeddedPath).getBaseName());
+    Path linkPath = binDir.getRelative(new PathFragment(embeddedPath).getBaseName());
     linkTool(sourcePath, linkPath);
   }
 
