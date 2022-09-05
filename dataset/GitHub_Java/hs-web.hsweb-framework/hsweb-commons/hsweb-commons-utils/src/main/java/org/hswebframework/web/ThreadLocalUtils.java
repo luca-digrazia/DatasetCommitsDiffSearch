@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2019 http://www.hswebframework.org
+ *  * Copyright 2016 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -37,18 +37,14 @@ import java.util.function.Supplier;
  * @since 2.0
  */
 @SuppressWarnings("unchecked")
-public final class ThreadLocalUtils {
-
-    private ThreadLocalUtils() {
-    }
-
+public class ThreadLocalUtils {
     private static final ThreadLocal<Map<String, Object>> local = ThreadLocal.withInitial(HashMap::new);
 
     /**
      * @return threadLocal中的全部值
      */
-    public static Map<String, Object> getAll() {
-        return new HashMap<>(local.get());
+    public static Map<String, Object> getAll(){
+        return local.get();
     }
 
     /**
