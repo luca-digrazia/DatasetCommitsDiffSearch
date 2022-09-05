@@ -303,8 +303,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         }
         if (value.hasContainingPackage()) {
           // We have found corresponding root for current execPath.
-          result.put(path, Root.asSourceRoot(value.getContainingPackageRoot(),
-              value.getContainingPackageName().getRepository().isMain()));
+          result.put(path, Root.asSourceRoot(value.getContainingPackageRoot()));
         } else {
           // We haven't found corresponding root for current execPath.
           result.put(path, null);
