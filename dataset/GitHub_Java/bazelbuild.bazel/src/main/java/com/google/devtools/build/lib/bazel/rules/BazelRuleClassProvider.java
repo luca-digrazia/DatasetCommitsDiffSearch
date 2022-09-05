@@ -70,7 +70,6 @@ import com.google.devtools.build.lib.bazel.rules.workspace.NewGitRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewLocalRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.WorkspaceBaseRule;
-import com.google.devtools.build.lib.ideinfo.AndroidStudioInfoAspect;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
@@ -114,7 +113,6 @@ import com.google.devtools.build.lib.rules.objc.ObjcOptionsRule;
 import com.google.devtools.build.lib.rules.objc.ObjcProtoLibraryRule;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses;
 import com.google.devtools.build.lib.rules.objc.ObjcXcodeprojRule;
-import com.google.devtools.build.lib.rules.proto.BazelProtoLibraryRule;
 import com.google.devtools.build.lib.rules.python.PythonConfigurationLoader;
 import com.google.devtools.build.lib.rules.python.PythonOptions;
 import com.google.devtools.build.lib.rules.workspace.BindRule;
@@ -250,7 +248,6 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new BazelShLibraryRule());
     builder.addRuleDefinition(new BazelShBinaryRule());
     builder.addRuleDefinition(new BazelShTestRule());
-    builder.addRuleDefinition(new BazelProtoLibraryRule());
 
     builder.addRuleDefinition(new CcToolchainRule());
     builder.addRuleDefinition(new CcToolchainSuiteRule());
@@ -355,8 +352,6 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new AndroidNdkRepositoryRule());
     builder.addRuleDefinition(new AndroidRepositoryRules.AndroidLocalRepositoryRule());
     builder.addRuleDefinition(new AndroidHttpToolsRepositoryRule());
-
-    builder.addAspectFactory(AndroidStudioInfoAspect.NAME, AndroidStudioInfoAspect.class);
 
     builder.addConfigurationFragment(new BazelConfiguration.Loader());
     builder.addConfigurationFragment(new CppConfigurationLoader(
