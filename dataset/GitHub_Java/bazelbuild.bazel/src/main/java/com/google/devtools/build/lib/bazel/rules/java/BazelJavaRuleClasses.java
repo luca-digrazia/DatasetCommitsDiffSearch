@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleClass.PackageNameConstraint;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
-import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
@@ -77,7 +76,7 @@ public class BazelJavaRuleClasses {
       return builder
           .add(
               attr(":java_toolchain", LABEL)
-                  .mandatoryNativeProviders(JavaToolchainProvider.class)
+                  .allowedRuleClasses("java_toolchain")
                   .value(JavaSemantics.JAVA_TOOLCHAIN))
           .setPreferredDependencyPredicate(JavaSemantics.JAVA_SOURCE)
           .build();
@@ -319,12 +318,9 @@ public class BazelJavaRuleClasses {
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(attr("main_class", STRING))
           /* <!-- #BLAZE_RULE($base_java_binary).ATTRIBUTE(create_executable) -->
-          Whether the binary is executable. Non-executable binaries collect transitive
-          runtime Java dependencies into a deploy jar, but cannot be executed directly.
-
-          No wrapper script is created if this attribute is set. It is an error to set
-          this to 0 if the <code>launcher</code> or <code>main_class</code> attributes
-          are set.
+          Whether to build the executable wrapper script or not.
+          If this option is present, no executable wrapper script is built around the
+          <code>.jar</code> file. Incompatible with <code>main_class</code> attribute.
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(attr("create_executable", BOOLEAN)
               .nonconfigurable("internal")
