@@ -1089,9 +1089,9 @@ public class Parser {
    * Parses the next symbol argument of a load statement and puts it into the output map.
    *
    * <p> The symbol is either "name" (STRING) or name = "declared" (IDENTIFIER EQUALS STRING).
-   * If no alias is used, "name" and "declared" will be identical. "Declared" refers to the
-   * original name in the Bazel file that should be loaded, while "name" will be the key of the
-   * entry in the map.
+   * "Declared" refers to the original name in the bazel file that should be loaded.
+   * Moreover, it will be the key of the entry in the map.
+   * If no alias is used, "name" and "declared" will be identical.
    */
   private void parseLoadSymbol(Map<Identifier, String> symbols) {
     Token nameToken, declaredToken;
@@ -1119,12 +1119,10 @@ public class Parser {
 
       if (symbols.containsKey(identifier)) {
         syntaxError(
-            nameToken, String.format("Identifier '%s' is used more than once",
-                identifier.getName()));
+            nameToken, String.format("Symbol '%s' has already been loaded", identifier.getName()));
       } else {
         symbols.put(
-            setLocation(identifier, nameToken.left, nameToken.right),
-            declaredToken.value.toString());
+            setLocation(identifier, nameToken.left, token.left), declaredToken.value.toString());
       }
     } catch (NullPointerException npe) {
       // This means that the value of at least one token is null. In this case, the previous
