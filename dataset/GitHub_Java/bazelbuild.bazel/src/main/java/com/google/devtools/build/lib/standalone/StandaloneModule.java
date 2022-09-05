@@ -13,8 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.standalone;
 
+import com.google.devtools.build.lib.actions.ExecutorBuilder;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
-import com.google.devtools.build.lib.exec.ExecutorBuilder;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 
@@ -24,8 +24,7 @@ import com.google.devtools.build.lib.runtime.CommandEnvironment;
 public class StandaloneModule extends BlazeModule {
   @Override
   public void executorInit(CommandEnvironment env, BuildRequest request, ExecutorBuilder builder) {
-    builder.addActionContextProvider(new StandaloneActionContextProvider(env));
-    builder.addActionContextProvider(new DummyIncludeScanningContextProvider(env));
+    builder.addActionContextProvider(new StandaloneActionContextProvider(env, request));
     builder.addActionContextConsumer(new StandaloneActionContextConsumer());
   }
 }
