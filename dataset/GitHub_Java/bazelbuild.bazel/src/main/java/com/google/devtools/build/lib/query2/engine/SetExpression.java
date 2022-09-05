@@ -46,9 +46,8 @@ class SetExpression extends QueryExpression {
   }
 
   @Override
-  protected <T> void evalImpl(
-      QueryEnvironment<T> env, VariableContext<T> context, Callback<T> callback)
-          throws QueryException, InterruptedException {
+  public <T> void eval(QueryEnvironment<T> env, VariableContext<T> context, Callback<T> callback)
+      throws QueryException, InterruptedException {
     for (TargetLiteral expr : words) {
       env.eval(expr, context, callback);
     }

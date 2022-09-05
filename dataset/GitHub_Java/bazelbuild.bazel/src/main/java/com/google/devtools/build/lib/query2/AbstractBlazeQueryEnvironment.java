@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllCallback;
 import com.google.devtools.build.lib.query2.engine.VariableContext;
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -164,8 +165,7 @@ public abstract class AbstractBlazeQueryEnvironment<T>
     }
   }
 
-  public abstract Target getTarget(Label label)
-      throws TargetNotFoundException, QueryException, InterruptedException;
+  public abstract Target getTarget(Label label) throws TargetNotFoundException, QueryException;
 
   protected boolean validateScope(Label label, boolean strict) throws QueryException {
     if (!labelFilter.apply(label)) {
@@ -181,7 +181,7 @@ public abstract class AbstractBlazeQueryEnvironment<T>
   }
 
   public Set<T> evalTargetPattern(QueryExpression caller, String pattern)
-      throws QueryException, InterruptedException {
+      throws QueryException {
     try {
       preloadOrThrow(caller, ImmutableList.of(pattern));
     } catch (TargetParsingException e) {
@@ -194,12 +194,12 @@ public abstract class AbstractBlazeQueryEnvironment<T>
   }
 
   /**
-   * Perform any work that should be done ahead of time to resolve the target patterns in the query.
-   * Implementations may choose to cache the results of resolving the patterns, cache intermediate
-   * work, or not cache and resolve patterns on the fly.
+   * Perform any work that should be done ahead of time to resolve the target patterns in the
+   * query. Implementations may choose to cache the results of resolving the patterns, cache
+   * intermediate work, or not cache and resolve patterns on the fly.
    */
   protected abstract void preloadOrThrow(QueryExpression caller, Collection<String> patterns)
-      throws QueryException, TargetParsingException, InterruptedException;
+      throws QueryException, TargetParsingException;
 
   @Override
   public boolean isSettingEnabled(Setting setting) {

@@ -48,6 +48,7 @@ import com.google.devtools.build.lib.query2.engine.Uniquifier;
 import com.google.devtools.build.lib.query2.engine.VariableContext;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -135,8 +136,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
 
   @Override
   public void getTargetsMatchingPattern(
-      QueryExpression caller, String pattern, Callback<Target> callback)
-      throws QueryException, InterruptedException {
+      QueryExpression caller, String pattern, Callback<Target> callback) throws QueryException {
     // We can safely ignore the boolean error flag. The evaluateQuery() method above wraps the
     // entire query computation in an error sensor.
 
@@ -185,22 +185,29 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
             }
           } catch (NoSuchThingException e) {
             /* ignore */
+          } catch (InterruptedException e) {
+            throw new QueryException("interrupted");
           }
         }
       }
     }
-    callback.process(result);
+    try {
+      callback.process(result);
+    } catch (InterruptedException e) {
+      throw new QueryException(caller, e.getMessage());
+    }
   }
 
   @Override
-  public Target getTarget(Label label)
-      throws TargetNotFoundException, QueryException, InterruptedException {
+  public Target getTarget(Label label) throws TargetNotFoundException, QueryException {
     // Can't use strictScope here because we are expecting a target back.
     validateScope(label, true);
     try {
       return getNode(getTargetOrThrow(label)).getLabel();
     } catch (NoSuchThingException e) {
       throw new TargetNotFoundException(e);
+    } catch (InterruptedException e) {
+      throw new QueryException("interrupted");
     }
   }
 
@@ -302,13 +309,16 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     };
   }
 
-  private void preloadTransitiveClosure(Set<Target> targets, int maxDepth)
-      throws QueryException, InterruptedException {
+  private void preloadTransitiveClosure(Set<Target> targets, int maxDepth) throws QueryException {
     if (maxDepth >= MAX_DEPTH_FULL_SCAN_LIMIT && transitivePackageLoader != null) {
       // Only do the full visitation if "maxDepth" is large enough. Otherwise, the benefits of
       // preloading will be outweighed by the cost of doing more work than necessary.
-      transitivePackageLoader.sync(
-          eventHandler, targets, ImmutableSet.<Label>of(), keepGoing, loadingPhaseThreads, -1);
+      try {
+        transitivePackageLoader.sync(eventHandler, targets, ImmutableSet.<Label>of(), keepGoing,
+            loadingPhaseThreads, -1);
+      } catch (InterruptedException e) {
+        throw new QueryException("interrupted");
+      }
     }
   }
 
@@ -416,14 +426,19 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
 
   @Override
   protected void preloadOrThrow(QueryExpression caller, Collection<String> patterns)
-      throws TargetParsingException, InterruptedException {
+      throws TargetParsingException {
     if (!resolvedTargetPatterns.keySet().containsAll(patterns)) {
-      // Note that this may throw a RuntimeException if deps are missing in Skyframe and this is
-      // being called from within a SkyFunction.
-      resolvedTargetPatterns.putAll(
-          Maps.transformValues(
-              targetPatternEvaluator.preloadTargetPatterns(eventHandler, patterns, keepGoing),
-              RESOLVED_TARGETS_TO_TARGETS));
+      try {
+        // Note that this may throw a RuntimeException if deps are missing in Skyframe and this is
+        // being called from within a SkyFunction.
+        resolvedTargetPatterns.putAll(
+            Maps.transformValues(
+                targetPatternEvaluator.preloadTargetPatterns(eventHandler, patterns, keepGoing),
+                RESOLVED_TARGETS_TO_TARGETS));
+      } catch (InterruptedException e) {
+        // TODO(bazel-team): Propagate the InterruptedException from here [skyframe-loading].
+        throw new TargetParsingException("interrupted");
+      }
     }
   }
 

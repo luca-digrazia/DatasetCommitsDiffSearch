@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.query2.engine;
 
 import com.google.common.base.Predicate;
-import java.util.concurrent.ForkJoinPool;
 
 /**
  * The environment of a Blaze query which supports predefined streaming operations.
@@ -30,16 +29,5 @@ public interface StreamableQueryEnvironment<T> extends QueryEnvironment<T> {
       VariableContext<T> context,
       Callback<T> callback,
       int depth)
-      throws QueryException, InterruptedException;
-
-  /**
-   * Similar to {@link #getAllRdeps} but finds all rdeps without a depth bound, making use of the
-   * provided {@code forkJoinPool}.
-   */
-  void getAllRdepsUnboundedParallel(
-      QueryExpression expression,
-      VariableContext<T> context,
-      ThreadSafeCallback<T> callback,
-      ForkJoinPool forkJoinPool)
       throws QueryException, InterruptedException;
 }

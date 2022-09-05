@@ -15,11 +15,11 @@ package com.google.devtools.build.lib.query2.engine;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
-import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Argument;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ArgumentType;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -86,17 +86,6 @@ class TestsFunction implements QueryFunction {
     });
   }
 
-  @Override
-  public <T> void parEval(
-      QueryEnvironment<T> env,
-      VariableContext<T> context,
-      QueryExpression expression,
-      List<Argument> args,
-      ThreadSafeCallback<T> callback,
-      ListeningExecutorService executorService) throws QueryException, InterruptedException {
-    eval(env, context, expression, args, callback);
-  }
-
   /**
    * Decides whether to include a test in a test_suite or not.
    * @param testTags Collection of all tags exhibited by a given test.
@@ -155,7 +144,7 @@ class TestsFunction implements QueryFunction {
    * A closure over the temporary state needed to compute the expression. This makes the evaluation
    * thread-safe, as long as instances of this class are used only within a single thread.
    */
-  private static final class Closure<T> {
+  private final class Closure<T> {
     private final QueryExpression expression;
     /** A dynamically-populated mapping from test_suite rules to their tests. */
     private final Map<T, Set<T>> testsInSuite = new HashMap<>();
@@ -172,12 +161,12 @@ class TestsFunction implements QueryFunction {
     }
 
     /**
-     * Computes and returns the set of test rules in a particular suite. Uses dynamic
-     * programming---a memoized version of {@link #computeTestsInSuite}.
+     * Computes and returns the set of test rules in a particular suite.  Uses
+     * dynamic programming---a memoized version of {@link #computeTestsInSuite}.
      *
      * @precondition env.getAccessor().isTestSuite(testSuite)
      */
-    private Set<T> getTestsInSuite(T testSuite) throws QueryException, InterruptedException {
+    private Set<T> getTestsInSuite(T testSuite) throws QueryException {
       Set<T> tests = testsInSuite.get(testSuite);
       if (tests == null) {
         tests = Sets.newHashSet();
@@ -188,15 +177,14 @@ class TestsFunction implements QueryFunction {
     }
 
     /**
-     * Populates 'result' with all the tests associated with the specified 'testSuite'. Throws an
-     * exception if any target is missing.
+     * Populates 'result' with all the tests associated with the specified
+     * 'testSuite'.  Throws an exception if any target is missing.
      *
-     * <p>CAUTION! Keep this logic consistent with {@code TestsSuiteConfiguredTarget}!
+     * <p>CAUTION!  Keep this logic consistent with {@code TestsSuiteConfiguredTarget}!
      *
      * @precondition env.getAccessor().isTestSuite(testSuite)
      */
-    private void computeTestsInSuite(T testSuite, Set<T> result)
-        throws QueryException, InterruptedException {
+    private void computeTestsInSuite(T testSuite, Set<T> result) throws QueryException {
       List<T> testsAndSuites = new ArrayList<>();
       // Note that testsAndSuites can contain input file targets; the test_suite rule does not
       // restrict the set of targets that can appear in tests or suites.
@@ -243,8 +231,7 @@ class TestsFunction implements QueryFunction {
      *
      * @precondition env.getAccessor().isTestSuite(testSuite)
      */
-    private List<T> getPrerequisites(T testSuite, String attrName)
-        throws QueryException, InterruptedException {
+    private List<T> getPrerequisites(T testSuite, String attrName) throws QueryException {
       return env.getAccessor().getLabelListAttr(expression, testSuite, attrName,
           "couldn't expand '" + attrName
           + "' attribute of test_suite " + env.getAccessor().getLabel(testSuite) + ": ");

@@ -15,10 +15,10 @@
 package com.google.devtools.build.lib.query2.engine;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Argument;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ArgumentType;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
+
 import java.util.List;
 import java.util.Set;
 
@@ -71,20 +71,11 @@ public class VisibleFunction implements QueryFunction {
     });
   }
 
-  @Override
-  public <T> void parEval(
-      QueryEnvironment<T> env,
-      VariableContext<T> context,
-      QueryExpression expression,
-      List<Argument> args,
-      ThreadSafeCallback<T> callback,
-      ListeningExecutorService executorService) throws QueryException, InterruptedException {
-    eval(env, context, expression, args, callback);
-  }
-
-  /** Returns true if {@code target} is visible to all targets in {@code toSet}. */
-  private static <T> boolean visibleToAll(QueryEnvironment<T> env, Set<T> toSet, T target)
-      throws QueryException, InterruptedException {
+  /**
+   * Returns true if {@code target} is visible to all targets in {@code toSet}.
+   */
+  private static <T> boolean visibleToAll(
+      QueryEnvironment<T> env, Set<T> toSet, T target) throws QueryException {
     for (T to : toSet) {
       if (!visible(env, to, target)) {
         return false;
@@ -93,9 +84,10 @@ public class VisibleFunction implements QueryFunction {
     return true;
   }
 
-  /** Returns true if the target {@code from} is visible to the target {@code to}. */
-  public static <T> boolean visible(QueryEnvironment<T> env, T to, T from)
-      throws QueryException, InterruptedException {
+  /**
+   * Returns true if the target {@code from} is visible to the target {@code to}.
+   */
+  public static <T> boolean visible(QueryEnvironment<T> env, T to, T from) throws QueryException {
     Set<QueryVisibility<T>> visiblePackages = env.getAccessor().getVisibility(from);
     for (QueryVisibility<T> spec : visiblePackages) {
       if (spec.contains(to)) {

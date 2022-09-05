@@ -45,9 +45,8 @@ public class FunctionExpression extends QueryExpression {
   }
 
   @Override
-  protected <T> void evalImpl(
-      QueryEnvironment<T> env, VariableContext<T> context, Callback<T> callback)
-          throws QueryException, InterruptedException {
+  public <T> void eval(QueryEnvironment<T> env, VariableContext<T> context, Callback<T> callback)
+      throws QueryException, InterruptedException {
     function.eval(env, context, this, args, callback);
   }
 
