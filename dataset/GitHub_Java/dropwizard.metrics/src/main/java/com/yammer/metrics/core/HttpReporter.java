@@ -1,15 +1,10 @@
 package com.yammer.metrics.core;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -28,7 +23,7 @@ import org.codehaus.jackson.JsonGenerator;
  */
 public class HttpReporter {
 	private final JsonFactory factory = new JsonFactory();
-	private final ExecutorService serverThread = Executors.newSingleThreadExecutor(new NamedThreadFactory("http-metric-reporter"));
+	private final ExecutorService serverThread = Executors.newSingleThreadExecutor(new NamedThreadFactory("metrics-http-reporter"));
 	private final Map<MetricName, Metric> metrics;
 	private final int port;
 	private ServerSocket serverSocket;
@@ -37,30 +32,40 @@ public class HttpReporter {
 	private class ServerThread implements Runnable {
 		@Override
 		public void run() {
-			try {
-				while (serverSocket.isBound()) {
-					final Socket client = serverSocket.accept();
-					final BufferedReader reader = new BufferedReader(new InputStreamReader(client.getInputStream()));
-					while (!reader.readLine().equals("")) { /* I don't care */ }
-					final OutputStreamWriter writer = new OutputStreamWriter(client.getOutputStream());
-					writer.write("HTTP/1.1 200 OK\n");
-					writer.write("Server: Metrics\n");
-					writer.write("Content-Type: application/json\n");
-					writer.write("Connection: close\n");
-					writer.write("\n");
+			while (serverSocket.isBound()) {
+				try {
 
-					final JsonGenerator json = factory.createJsonGenerator(writer).useDefaultPrettyPrinter();
-					json.writeStartObject();
-					{
-						writeVmMetrics(json);
-						writeRegularMetrics(json);
+					final Socket client = serverSocket.accept();
+					try {
+						final BufferedReader reader = new BufferedReader(new InputStreamReader(client.getInputStream()));
+						while (!reader.readLine().equals("")) { /* I don't care */ }
+						final OutputStreamWriter writer = new OutputStreamWriter(client.getOutputStream());
+						writer.write("HTTP/1.1 200 OK\n");
+						writer.write("Server: Metrics\n");
+						writer.write("Content-Type: application/json\n");
+						writer.write("Connection: close\n");
+						writer.write("\n");
+
+						final JsonGenerator json = factory.createJsonGenerator(writer);
+						json.writeStartObject();
+						{
+							writeVmMetrics(json);
+							writeRegularMetrics(json);
+						}
+						json.writeEndObject();
+						json.close();
+					} catch (Throwable e) {
+						if (e instanceof IOException) {
+							client.close();
+							throw (IOException) e;
+						} else {
+							e.printStackTrace(System.out);
+						}
 					}
-					json.writeEndObject();
-					json.close();
 					client.close();
+				} catch (IOException ignored) {
+//						ignored.printStackTrace();
 				}
-			} catch (IOException ignored) {
-//					ignored.printStackTrace();
 			}
 		}
 	}
@@ -72,6 +77,8 @@ public class HttpReporter {
 
 	/**
 	 * Begins listening on the specified port.
+	 *
+	 * @throws IOException if there is an error listening on the port
 	 */
 	public void start() throws IOException {
 		this.serverSocket = new ServerSocket(port);
@@ -80,6 +87,8 @@ public class HttpReporter {
 
 	/**
 	 * Stops listening if the server thread is running.
+	 *
+	 * @throws IOException if there is an error stopping the HTTP server
 	 */
 	public void stop() throws IOException {
 		if (future != null) {
@@ -91,7 +100,7 @@ public class HttpReporter {
 	}
 
 	private void writeRegularMetrics(JsonGenerator json) throws IOException {
-		for (Entry<String, SortedMap<String, Metric>> entry : sortedMetrics().entrySet()) {
+		for (Entry<String, Map<String, Metric>> entry : Utils.sortMetrics(metrics).entrySet()) {
 			json.writeFieldName(entry.getKey());
 			json.writeStartObject();
 			{
@@ -103,26 +112,13 @@ public class HttpReporter {
 		}
 	}
 
-	private SortedMap<String, SortedMap<String, Metric>> sortedMetrics() {
-		final SortedMap<String, SortedMap<String, Metric>> sortedMetrics =
-				new TreeMap<String, SortedMap<String, Metric>>();
-		for (Entry<MetricName, Metric> entry : metrics.entrySet()) {
-			final String packageName = entry.getKey().getKlass().getCanonicalName();
-			SortedMap<String, Metric> submetrics = sortedMetrics.get(packageName);
-			if (submetrics == null) {
-				submetrics = new TreeMap<String, Metric>();
-				sortedMetrics.put(packageName, submetrics);
-			}
-			submetrics.put(entry.getKey().getName(), entry.getValue());
-		}
-		return sortedMetrics;
-	}
-
 	private void writeMetric(JsonGenerator json, String key, Metric metric) throws IOException {
-		if (metric instanceof ValueMetric<?>) {
-			json.writeStringField(key, ((ValueMetric) metric).value().toString());
+		if (metric instanceof GaugeMetric<?>) {
+			json.writeFieldName(key);
+			writeGauge(json, (GaugeMetric) metric);
 		} else if (metric instanceof CounterMetric) {
-			json.writeNumberField(key, ((CounterMetric) metric).count());
+			json.writeFieldName(key);
+			writeCounter(json, (CounterMetric) metric);
 		} else if (metric instanceof MeterMetric) {
 			json.writeFieldName(key);
 			writeMeter(json, (MeterMetric) metric);
@@ -130,6 +126,29 @@ public class HttpReporter {
 			json.writeFieldName(key);
 			writeTimer(json, (TimerMetric) metric);
 		}
+	}
+
+	private void writeCounter(JsonGenerator json, CounterMetric counter) throws IOException {
+		json.writeStartObject();
+		{
+			json.writeStringField("type", "counter");
+			json.writeNumberField("count", counter.count());
+		}
+		json.writeEndObject();
+	}
+
+	private void writeGauge(JsonGenerator json, GaugeMetric gauge) throws IOException {
+		json.writeStartObject();
+		{
+			json.writeStringField("type", "gauge");
+			final Object value = gauge.value();
+			if (value == null) {
+				json.writeNullField("value");
+			} else {
+				json.writeStringField("value", gauge.value().toString());
+			}
+		}
+		json.writeEndObject();
 	}
 
 	private void writeVmMetrics(JsonGenerator json) throws IOException {
@@ -190,6 +209,7 @@ public class HttpReporter {
 	private void writeMeter(JsonGenerator json, MeterMetric meter) throws IOException {
 		json.writeStartObject();
 		{
+			json.writeStringField("type", "meter");
 			json.writeStringField("event_type", meter.getEventType());
 			json.writeStringField("unit", meter.getScaleUnit().toString().toLowerCase());
 			json.writeNumberField("count", meter.count());
@@ -204,10 +224,11 @@ public class HttpReporter {
 	private void writeTimer(JsonGenerator json, TimerMetric timer) throws IOException {
 		json.writeStartObject();
 		{
-			json.writeFieldName("latency");
+			json.writeStringField("type", "timer");
+			json.writeFieldName("duration");
 			json.writeStartObject();
 			{
-				json.writeStringField("unit", timer.getLatencyUnit().toString().toLowerCase());
+				json.writeStringField("unit", timer.getDurationUnit().toString().toLowerCase());
 				json.writeNumberField("min", timer.min());
 				json.writeNumberField("max", timer.max());
 				json.writeNumberField("mean", timer.mean());
