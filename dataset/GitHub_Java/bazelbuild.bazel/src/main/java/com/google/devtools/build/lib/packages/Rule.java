@@ -26,7 +26,6 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
-import com.google.common.collect.SetMultimap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -320,9 +319,6 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
 
   /**
    * Returns true iff the rule class has an attribute with the given name and type.
-   *
-   * <p>Note: RuleContext also has isAttrDefined(), which takes Aspects into account. Whenever
-   * possible, use RuleContext.isAttrDefined() instead of this method.
    */
   public boolean isAttrDefined(String attrName, Type<?> type) {
     return ruleClass.hasAttr(attrName, type);
@@ -696,7 +692,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
    * can require from its direct dependencies.
    */
   public Collection<? extends Label> getAspectLabelsSuperset(DependencyFilter predicate) {
-    SetMultimap<Attribute, Label> labels = LinkedHashMultimap.create();
+    LinkedHashMultimap<Attribute, Label> labels = LinkedHashMultimap.create();
     for (Attribute attribute : this.getAttributes()) {
       for (Aspect candidateClass : attribute.getAspects(this)) {
         AspectDefinition.addAllAttributesOfAspect(Rule.this, labels, candidateClass, predicate);
