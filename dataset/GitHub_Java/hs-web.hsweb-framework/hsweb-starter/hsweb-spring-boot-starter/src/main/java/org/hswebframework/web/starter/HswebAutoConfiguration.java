@@ -172,6 +172,7 @@ public class HswebAutoConfiguration {
     public MapperEntityFactory mapperEntityFactory() {
         MapperEntityFactory entityFactory = new MapperEntityFactory(entityProperties.createMappers());
         FastBeanCopier.setBeanFactory(entityFactory);
+        ;
         return entityFactory;
     }
 

@@ -117,7 +117,7 @@ public class DefaultLogicPrimaryKeyValidator implements LogicPrimaryKeyValidator
         }
 
         if (keys.isEmpty()) {
-            return new java.util.HashMap<>();
+            return Collections.emptyMap();
         }
         return keys.entrySet()
                 .stream()
