@@ -17,7 +17,7 @@ package com.google.devtools.build.lib.analysis;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -42,7 +42,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
@@ -66,11 +65,12 @@ public final class Runfiles {
         }
       };
 
-  private static final EmptyFilesSupplier DUMMY_EMPTY_FILES_SUPPLIER =
-      new EmptyFilesSupplier() {
+  private static final Function<Map<PathFragment, Artifact>, Map<PathFragment, Artifact>>
+      DUMMY_SYMLINK_EXPANDER =
+      new Function<Map<PathFragment, Artifact>, Map<PathFragment, Artifact>>() {
         @Override
-        public Iterable<PathFragment> getExtraPaths(Set<PathFragment> manifestPaths) {
-          return ImmutableList.of();
+        public Map<PathFragment, Artifact> apply(Map<PathFragment, Artifact> input) {
+          return ImmutableMap.of();
         }
       };
 
@@ -152,16 +152,10 @@ public final class Runfiles {
   private final NestedSet<SymlinkEntry> rootSymlinks;
 
   /**
-   * Interface used for adding empty files to the runfiles at the last minute. Mainly to support
-   * python-related rules adding __init__.py files.
+   * A function to generate extra manifest entries.
    */
-  public interface EmptyFilesSupplier {
-    /** Calculate additional empty files to add based on the existing manifest paths. */
-    Iterable<PathFragment> getExtraPaths(Set<PathFragment> manifestPaths);
-  }
-
-  /** Generates extra (empty file) inputs. */
-  private final EmptyFilesSupplier emptyFilesSupplier;
+  private final Function<Map<PathFragment, Artifact>, Map<PathFragment, Artifact>>
+      manifestExpander;
 
   /**
    * Defines a set of artifacts that may or may not be included in the runfiles directory and
@@ -218,13 +212,13 @@ public final class Runfiles {
       NestedSet<SymlinkEntry> symlinks,
       NestedSet<SymlinkEntry> rootSymlinks,
       NestedSet<PruningManifest> pruningManifests,
-      EmptyFilesSupplier emptyFilesSupplier) {
+      Function<Map<PathFragment, Artifact>, Map<PathFragment, Artifact>> expander) {
     this.suffix = suffix == null ? Constants.DEFAULT_RUNFILES_PREFIX : suffix;
     this.unconditionalArtifacts = Preconditions.checkNotNull(artifacts);
     this.symlinks = Preconditions.checkNotNull(symlinks);
     this.rootSymlinks = Preconditions.checkNotNull(rootSymlinks);
     this.pruningManifests = Preconditions.checkNotNull(pruningManifests);
-    this.emptyFilesSupplier = Preconditions.checkNotNull(emptyFilesSupplier);
+    this.manifestExpander = Preconditions.checkNotNull(expander);
   }
 
   /**
@@ -366,11 +360,7 @@ public final class Runfiles {
     }
 
     manifest = filterListForObscuringSymlinks(eventHandler, location, manifest);
-
-    // TODO(bazel-team): Create /dev/null-like Artifact to avoid nulls?
-    for (PathFragment extraPath : emptyFilesSupplier.getExtraPaths(manifest.keySet())) {
-      manifest.put(extraPath, null);
-    }
+    manifest.putAll(manifestExpander.apply(manifest));
 
     PathFragment path = new PathFragment(suffix);
     Map<PathFragment, Artifact> result = new HashMap<>();
@@ -417,10 +407,10 @@ public final class Runfiles {
   }
 
   /**
-   * Returns the manifest expander specified for this runfiles tree.
+   * Returns the symlinks expander specified for this runfiles tree.
    */
-  private EmptyFilesSupplier getEmptyFilesProvider() {
-    return emptyFilesSupplier;
+  private Function<Map<PathFragment, Artifact>, Map<PathFragment, Artifact>> getSymlinkExpander() {
+    return manifestExpander;
   }
 
   /**
@@ -478,7 +468,8 @@ public final class Runfiles {
         NestedSetBuilder.stableOrder();
     private NestedSetBuilder<PruningManifest> pruningManifestsBuilder =
         NestedSetBuilder.stableOrder();
-    private EmptyFilesSupplier emptyFilesSupplier = DUMMY_EMPTY_FILES_SUPPLIER;
+    private Function<Map<PathFragment, Artifact>, Map<PathFragment, Artifact>>
+        manifestExpander = DUMMY_SYMLINK_EXPANDER;
 
     /**
      * Builds a new Runfiles object.
@@ -486,7 +477,7 @@ public final class Runfiles {
     public Runfiles build() {
       return new Runfiles(suffix, artifactsBuilder.build(), symlinksBuilder.build(),
           rootSymlinksBuilder.build(), pruningManifestsBuilder.build(),
-          emptyFilesSupplier);
+          manifestExpander);
     }
 
     /**
@@ -592,11 +583,11 @@ public final class Runfiles {
     }
 
     /**
-     * Specify a function that can create additional manifest entries based on the input entries,
-     * see {@link EmptyFilesSupplier} for more details.
+     * Specify a function that can create additional manifest entries based on the input entries.
      */
-    public Builder setEmptyFilesSupplier(EmptyFilesSupplier supplier) {
-      emptyFilesSupplier = Preconditions.checkNotNull(supplier);
+    public Builder setManifestExpander(
+        Function<Map<PathFragment, Artifact>, Map<PathFragment, Artifact>> expander) {
+      manifestExpander = Preconditions.checkNotNull(expander);
       return this;
     }
 
@@ -757,12 +748,13 @@ public final class Runfiles {
       if (includePruningManifests) {
         pruningManifestsBuilder.addTransitive(runfiles.getPruningManifests());
       }
-      if (emptyFilesSupplier == DUMMY_EMPTY_FILES_SUPPLIER) {
-        emptyFilesSupplier = runfiles.getEmptyFilesProvider();
+      if (manifestExpander == DUMMY_SYMLINK_EXPANDER) {
+        manifestExpander = runfiles.getSymlinkExpander();
       } else {
-        EmptyFilesSupplier otherSupplier = runfiles.getEmptyFilesProvider();
-        Preconditions.checkState((otherSupplier == DUMMY_EMPTY_FILES_SUPPLIER)
-          || emptyFilesSupplier.equals(otherSupplier));
+        Function<Map<PathFragment, Artifact>, Map<PathFragment, Artifact>> otherExpander =
+            runfiles.getSymlinkExpander();
+        Preconditions.checkState((otherExpander == DUMMY_SYMLINK_EXPANDER)
+          || manifestExpander.equals(otherExpander));
       }
       return this;
     }
