@@ -15,10 +15,6 @@
 package com.google.devtools.build.lib.skylark;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -45,11 +41,6 @@ import com.google.devtools.build.lib.syntax.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.SkylarkSignature.Param;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +49,6 @@ import java.util.regex.Pattern;
 /**
  * Tests for SkylarkRuleImplementationFunctions.
  */
-@RunWith(JUnit4.class)
 public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @SkylarkSignature(
@@ -78,8 +68,9 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   @SkylarkSignature(name = "throw", documented = false)
   BuiltinFunction throwFunction;
 
-  @Before
-  public final void createBuildFile() throws Exception  {
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
     scratch.file(
         "foo/BUILD",
         "genrule(name = 'foo',",
@@ -150,7 +141,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     }
   }
 
-  @Test
   public void testSkylarkFunctionPosArgs() throws Exception {
     setupSkylarkFunction("a = mock('a', 'b', mandatory_key='c')");
     Map<?, ?> params = (Map<?, ?>) lookup("a");
@@ -160,7 +150,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertEquals("x", params.get("optional_key"));
   }
 
-  @Test
   public void testSkylarkFunctionKwArgs() throws Exception {
     setupSkylarkFunction("a = mock(optional='b', mandatory='a', mandatory_key='c')");
     Map<?, ?> params = (Map<?, ?>) lookup("a");
@@ -170,7 +159,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertEquals("x", params.get("optional_key"));
   }
 
-  @Test
   public void testSkylarkFunctionTooFewArguments() throws Exception {
     checkSkylarkFunctionError(
         "insufficient arguments received by mock("
@@ -179,7 +167,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "mock()");
   }
 
-  @Test
   public void testSkylarkFunctionTooManyArguments() throws Exception {
     checkSkylarkFunctionError(
         "too many (3) positional arguments in call to "
@@ -187,7 +174,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "mock('a', 'b', 'c')");
   }
 
-  @Test
   public void testSkylarkFunctionAmbiguousArguments() throws Exception {
     checkSkylarkFunctionError(
         "argument 'mandatory' passed both by position and by name "
@@ -196,13 +182,11 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   }
 
   @SuppressWarnings("unchecked")
-  @Test
   public void testListComprehensionsWithNestedSet() throws Exception {
     Object result = eval("[x + x for x in set([1, 2, 3])]");
     assertThat((Iterable<Object>) result).containsExactly(2, 4, 6).inOrder();
   }
 
-  @Test
   public void testNestedSetGetsConvertedToSkylarkNestedSet() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result =
@@ -214,7 +198,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertEquals(Artifact.class, nset.getContentType().getType());
   }
 
-  @Test
   public void testCreateSpawnActionCreatesSpawnAction() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     createTestSpawnAction(ruleContext);
@@ -224,7 +207,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertThat(action).isInstanceOf(SpawnAction.class);
   }
 
-  @Test
   public void testCreateSpawnActionArgumentsWithCommand() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     createTestSpawnAction(ruleContext);
@@ -240,7 +222,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertEquals(targetConfig.getDefaultShellEnvironment(), action.getEnvironment());
   }
 
-  @Test
   public void testCreateSpawnActionArgumentsWithExecutable() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     evalRuleContextCode(
@@ -259,7 +240,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     MoreAsserts.assertContainsSublist(action.getArguments(), "foo/t.exe", "--a", "--b");
   }
 
-  @Test
   public void testCreateSpawnActionArgumentsBadExecutable() throws Exception {
     checkErrorContains(
         createRuleContext("//foo:foo"),
@@ -271,7 +251,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "  executable = 'xyz.exe')");
   }
 
-  @Test
   public void testCreateSpawnActionShellCommandList() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     evalRuleContextCode(
@@ -291,7 +270,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         .inOrder();
   }
 
-  @Test
   public void testCreateSpawnActionEnvAndExecInfo() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     evalRuleContextCode(
@@ -313,7 +291,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertEquals(ImmutableMap.of("a", "b"), action.getExecutionInfo());
   }
 
-  @Test
   public void testCreateSpawnActionUnknownParam() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     checkErrorContains(
@@ -322,7 +299,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "ruleContext.action(outputs=[], bad_param = 'some text')");
   }
 
-  @Test
   public void testCreateSpawnActionNoExecutable() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     checkErrorContains(
@@ -344,7 +320,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "  use_default_shell_env = True)");
   }
 
-  @Test
   public void testCreateSpawnActionBadGenericArg() throws Exception {
     checkErrorContains(
         createRuleContext("//foo:foo"),
@@ -355,7 +330,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "  command = 'dummy_command')");
   }
 
-  @Test
   public void testCreateSpawnActionCommandsListTooShort() throws Exception {
     checkErrorContains(
         createRuleContext("//foo:foo"),
@@ -365,7 +339,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "  command = ['dummy_command', '--arg'])");
   }
 
-  @Test
   public void testCreateFileAction() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     FileWriteAction action =
@@ -381,7 +354,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertFalse(action.makeExecutable());
   }
 
-  @Test
   public void testEmptyAction() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
 
@@ -401,7 +373,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         .isEqualTo(Runtime.NONE);
   }
 
-  @Test
   public void testEmptyActionWithExtraAction() throws Exception {
     scratch.file(
         "test/empty.bzl",
@@ -434,7 +405,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     getPseudoActionViaExtraAction("//test:my_empty_action", "//test:listener");
   }
 
-  @Test
   public void testExpandLocation() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:bar");
 
@@ -493,7 +463,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         Pattern.matches(expectedPattern, computedValue));
   }
 
-  @Test
   public void testResolveCommandMakeVariables() throws Exception {
     evalRuleContextCode(
         createRuleContext("//foo:resolve_me"),
@@ -508,7 +477,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertThat(argv.get(2)).isEqualTo("I got the World on a string");
   }
 
-  @Test
   public void testResolveCommandInputs() throws Exception {
     evalRuleContextCode(
         createRuleContext("//foo:resolve_me"),
@@ -521,7 +489,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertThat(manifests).hasSize(1);
   }
 
-  @Test
   public void testResolveCommandExpandLocations() throws Exception {
     evalRuleContextCode(
         createRuleContext("//foo:resolve_me"),
@@ -543,7 +510,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertMatches("argv[2]", "A.*/mytool .*/mytool.sh B.*file3.dat", argv.get(2));
   }
 
-  @Test
   public void testResolveCommandScript() throws Exception {
     evalRuleContextCode(
         createRuleContext("//foo:resolve_me"),
@@ -560,7 +526,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertMatches("argv[1]", "^.*/resolve_me[.]script[.]sh$", argv.get(1));
   }
 
-  @Test
   public void testBadParamTypeErrorMessage() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     checkErrorContains(
@@ -573,7 +538,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "  executable = False)");
   }
 
-  @Test
   public void testCreateTemplateAction() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     TemplateExpansionAction action =
@@ -598,7 +562,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
    * Once {@link
    * com.google.devtools.build.lib.syntax.ParserInputSource#create(com.google.devtools.build.lib.vfs.Path)} parses files using UTF-8, this test will fail.
    */
-  @Test
   public void testCreateTemplateActionWithWrongEncoding() throws Exception {
     String value = "Š©±½";
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
@@ -624,7 +587,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     return new String(input.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
   }
 
-  @Test
   public void testGetProviderNotTransitiveInfoCollection() throws Exception {
     checkErrorContains(
         createRuleContext("//foo:foo"),
@@ -633,7 +595,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "provider('some string', 'FileProvider')");
   }
 
-  @Test
   public void testGetProviderNonExistingClassType() throws Exception {
     checkErrorContains(
         createRuleContext("//foo:foo"),
@@ -644,7 +605,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "func()");
   }
 
-  @Test
   public void testGetProviderNotTransitiveInfoProviderClassType() throws Exception {
     checkErrorContains(
         createRuleContext("//foo:foo"),
@@ -655,7 +615,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "func()");
   }
 
-  @Test
   public void testRunfilesAddFromDependencies() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:bar");
     Object result =
@@ -664,7 +623,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         .contains("libjl.jar");
   }
 
-  @Test
   public void testRunfilesStatelessWorksAsOnlyPosArg() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:bar");
     Object result =
@@ -673,14 +631,12 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         .contains("libjl.jar");
   }
 
-  @Test
   public void testRunfilesBadListGenericType() throws Exception {
     checkErrorContains(
         "Illegal argument: expected type File for 'files' element but got type string instead",
         "ruleContext.runfiles(files = ['some string'])");
   }
 
-  @Test
   public void testRunfilesBadSetGenericType() throws Exception {
     checkErrorContains(
         "expected set of Files or NoneType for 'transitive_files' while calling runfiles "
@@ -688,7 +644,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "ruleContext.runfiles(transitive_files=set([1, 2, 3]))");
   }
 
-  @Test
   public void testRunfilesArtifactsFromArtifact() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result =
@@ -699,7 +654,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertThat(ActionsTestUtil.baseArtifactNames(getRunfileArtifacts(result))).contains("t.exe");
   }
 
-  @Test
   public void testRunfilesArtifactsFromIterableArtifacts() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result =
@@ -712,7 +666,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         ImmutableList.of("a.txt", "b.img"));
   }
 
-  @Test
   public void testRunfilesArtifactsFromNestedSetArtifacts() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result =
@@ -725,7 +678,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         ImmutableList.of("a.txt", "b.img"));
   }
 
-  @Test
   public void testRunfilesArtifactsFromDefaultAndFiles() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:bar");
     Object result =
@@ -745,7 +697,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     return ((Runfiles) runfiles).getAllArtifacts();
   }
 
-  @Test
   public void testRunfilesBadKeywordArguments() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     checkErrorContains(
@@ -754,13 +705,11 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "ruleContext.runfiles(bad_keyword = '')");
   }
 
-  @Test
   public void testNsetContainsList() throws Exception {
     checkErrorContains(
         "sets cannot contain items of type 'list'", "set() + [ruleContext.files.srcs]");
   }
 
-  @Test
   public void testCmdJoinPaths() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result =
@@ -769,7 +718,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertEquals("foo/a.txt:foo/b.img", result);
   }
 
-  @Test
   public void testStructPlusArtifactErrorMessage() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     checkErrorContains(
@@ -778,7 +726,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "ruleContext.files.tools[0] + struct(a = 1)");
   }
 
-  @Test
   public void testNoSuchProviderErrorMessage() throws Exception {
     checkErrorContains(
         createRuleContext("//foo:bar"),
@@ -786,7 +733,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "ruleContext.attr.srcs[0].my_provider");
   }
 
-  @Test
   public void testFilesForRuleConfiguredTarget() throws Exception {
     Object result =
         evalRuleContextCode(createRuleContext("//foo:foo"), "ruleContext.attr.srcs[0].files");
@@ -794,7 +740,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "a.txt", ActionsTestUtil.baseNamesOf(((SkylarkNestedSet) result).getSet(Artifact.class)));
   }
 
-  @Test
   public void testFilesForFileConfiguredTarget() throws Exception {
     Object result =
         evalRuleContextCode(createRuleContext("//foo:bar"), "ruleContext.attr.srcs[0].files");
@@ -803,7 +748,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         ActionsTestUtil.baseNamesOf(((SkylarkNestedSet) result).getSet(Artifact.class)));
   }
 
-  @Test
   public void testCtxStructFieldsCustomErrorMessages() throws Exception {
     checkErrorContains("No attribute 'foo' in attr.", "ruleContext.attr.foo");
     checkErrorContains("No attribute 'foo' in outputs.", "ruleContext.outputs.foo");
@@ -812,21 +756,18 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     checkErrorContains("No attribute 'foo' in executable.", "ruleContext.executable.foo");
   }
 
-  @Test
   public void testBinDirPath() throws Exception {
     SkylarkRuleContext ctx = createRuleContext("//foo:bar");
     Object result = evalRuleContextCode(ctx, "ruleContext.configuration.bin_dir.path");
     assertEquals(ctx.getConfiguration().getBinFragment().getPathString(), result);
   }
 
-  @Test
   public void testEmptyLabelListTypeAttrInCtx() throws Exception {
     SkylarkRuleContext ctx = createRuleContext("//foo:baz");
     Object result = evalRuleContextCode(ctx, "ruleContext.attr.srcs");
     assertEquals(MutableList.EMPTY, result);
   }
 
-  @Test
   public void testDefinedMakeVariable() throws Exception {
     SkylarkRuleContext ctx = createRuleContext("//foo:baz");
     String javac = (String) evalRuleContextCode(ctx, "ruleContext.var['JAVAC']");
@@ -835,7 +776,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertEquals("/javac", javac);
   }
 
-  @Test
   public void testCodeCoverageConfigurationAccess() throws Exception {
     SkylarkRuleContext ctx = createRuleContext("//foo:baz");
     boolean coverage =
@@ -892,7 +832,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     }
   }
 
-  @Test
   public void testStackTraceWithoutOriginalMessage() throws Exception {
     setupThrowFunction(
         new BuiltinFunction("throw") {
@@ -909,7 +848,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "throw()");
   }
 
-  @Test
   public void testNoStackTraceOnInterrupt() throws Exception {
     setupThrowFunction(
         new BuiltinFunction("throw") {
@@ -926,7 +864,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     }
   }
 
-  @Test
   public void testGlobInImplicitOutputs() throws Exception {
     scratch.file("test/glob.bzl",
         "def _impl(ctx):",
