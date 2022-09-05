@@ -420,14 +420,17 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
         .build().getCompileTimeJars();
   }
 
-  static void addDependencyArtifactsToAttributes(
-      JavaTargetAttributes.Builder attributes,
-      Iterable<? extends JavaCompilationArgsProvider> deps) {
-    NestedSetBuilder<Artifact> result = NestedSetBuilder.stableOrder();
-    for (JavaCompilationArgsProvider provider : deps) {
-      result.addTransitive(provider.getCompileTimeJavaDependencyArtifacts());
+  private void addDependencyArtifactsToAttributes(
+      Iterable<? extends TransitiveInfoCollection> deps) {
+    NestedSetBuilder<Artifact> compileTimeBuilder = NestedSetBuilder.stableOrder();
+    NestedSetBuilder<Artifact> runTimeBuilder = NestedSetBuilder.stableOrder();
+    for (JavaCompilationArgsProvider provider : AnalysisUtils.getProviders(
+        deps, JavaCompilationArgsProvider.class)) {
+      compileTimeBuilder.addTransitive(provider.getCompileTimeJavaDependencyArtifacts());
+      runTimeBuilder.addTransitive(provider.getRunTimeJavaDependencyArtifacts());
     }
-    attributes.addCompileTimeDependencyArtifacts(result.build());
+    attributes.addCompileTimeDependencyArtifacts(compileTimeBuilder.build());
+    attributes.addRuntimeDependencyArtifacts(runTimeBuilder.build());
   }
 
   /**
@@ -446,8 +449,7 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
 
     JavaClasspathMode classpathMode = getJavaConfiguration().getReduceJavaClasspath();
     if (isStrict() && classpathMode != JavaClasspathMode.OFF) {
-      addDependencyArtifactsToAttributes(
-          attributes, AnalysisUtils.getProviders(deps, JavaCompilationArgsProvider.class));
+      addDependencyArtifactsToAttributes(deps);
     }
   }
 

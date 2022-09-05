@@ -136,7 +136,6 @@ public class AndroidCommon {
   private Artifact resourceClassJar;
   private Artifact resourceIJar;
   private Artifact resourceSourceJar;
-  private Artifact outputDepsProto;
 
   private Artifact manifestProtoOutput;
   private AndroidIdlHelper idlHelper;
@@ -424,13 +423,6 @@ public class AndroidCommon {
       }
     }
 
-    if (disallowDepsWithoutSrcs(ruleContext.getRule().getRuleClass())
-        && ruleContext.attributes().get("srcs", BuildType.LABEL_LIST).isEmpty()
-        && ruleContext.attributes().get("idl_srcs", BuildType.LABEL_LIST).isEmpty()
-        && !ruleContext.attributes().get("deps", BuildType.LABEL_LIST).isEmpty()) {
-      ruleContext.attributeError("deps", "deps not allowed without srcs; move to exports?");
-    }
-
     JavaCompilationHelper helper = initAttributes(attributes, javaSemantics);
     if (ruleContext.hasErrors()) {
       return null;
@@ -454,11 +446,6 @@ public class AndroidCommon {
       return null;
     }
     return helper.getAttributes();
-  }
-
-  private boolean disallowDepsWithoutSrcs(String ruleClass) {
-    return ruleClass.equals("android_library")
-        && !ruleContext.getFragment(AndroidConfiguration.class).allowSrcsLessAndroidLibraryDeps();
   }
 
   private JavaCompilationHelper initAttributes(
@@ -543,7 +530,7 @@ public class AndroidCommon {
     srcJar = ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_SOURCE_JAR);
     helper.createSourceJarAction(srcJar, genSourceJar);
 
-    outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
+    Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
     helper.createCompileActionWithInstrumentation(classJar, manifestProtoOutput, genSourceJar,
         outputDepsProto, javaArtifactsBuilder);
 
@@ -588,8 +575,7 @@ public class AndroidCommon {
     idlHelper.addTransitiveInfoProviders(builder, classJar, manifestProtoOutput);
 
     JavaRuleOutputJarsProvider.Builder outputJarsBuilder = JavaRuleOutputJarsProvider.builder()
-        .addOutputJar(classJar, iJar, srcJar)
-        .setJdeps(outputDepsProto);
+        .addOutputJar(classJar, iJar, srcJar);
     if (resourceClassJar != null && resourceIJar != null && resourceSourceJar != null) {
       outputJarsBuilder.addOutputJar(resourceClassJar, resourceIJar, resourceSourceJar);
     }
