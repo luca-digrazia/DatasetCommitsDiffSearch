@@ -16,7 +16,7 @@ import java.util.Set;
 public class SimpleFieldFilterDataAccessConfig extends AbstractDataAccessConfig implements FieldFilterDataAccessConfig {
     private Set<String> fields;
 
-    private String type = DefaultType.DENY_FIELDS;
+    private String type;
 
     public SimpleFieldFilterDataAccessConfig() {
     }
