@@ -1,9 +1,7 @@
 package org.hswebframework.web.authorization.oauth2.client.simple.provider;
 
-import com.alibaba.fastjson.JSON;
 import org.hswebframework.web.BusinessException;
 import org.hswebframework.web.authorization.oauth2.client.exception.OAuth2RequestException;
-import org.hswebframework.web.authorization.simple.SimpleUser;
 import org.hswebframework.web.authorization.simple.builder.SimpleAuthenticationBuilderFactory;
 import org.hswebframework.web.authorization.simple.builder.SimpleDataAccessConfigBuilderFactory;
 import org.hswebframework.web.controller.message.ResponseMessage;
@@ -61,16 +59,6 @@ public class HswebResponseConvertSupportTest {
 
         str = ResponseMessage.ok("999999999999999999").toString();
         Assert.assertEquals(convertSupport.convert(new MockOAuth2Response(str), BigDecimal.class), new BigDecimal("999999999999999999"));
-
-        SimpleUser user = SimpleUser.builder()
-                .id("test").name("test").type("test").username("test")
-                .build();
-
-        str = ResponseMessage.ok(user).toString();
-        SimpleUser resp = convertSupport.convert(new MockOAuth2Response(str), SimpleUser.class);
-
-        Assert.assertEquals(JSON.toJSON(user), JSON.toJSON(resp));
-
 
     }
 
