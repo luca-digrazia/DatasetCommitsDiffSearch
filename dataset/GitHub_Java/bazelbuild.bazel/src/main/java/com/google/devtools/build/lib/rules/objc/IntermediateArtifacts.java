@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
-import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -78,13 +77,6 @@ public final class IntermediateArtifacts {
                 addOutputPrefix(entitlementsDirectory.getBaseName(), extension)),
             buildConfiguration.getBinDirectory(ruleContext.getRule().getRepository()));
     return artifact;
-  }
-
-  /**
-   * Returns the archive file name suffix.
-   */
-  public String archiveFileNameSuffix() {
-    return archiveFileNameSuffix;
   }
 
   /**
@@ -251,7 +243,7 @@ public final class IntermediateArtifacts {
    * The {@code .a} file which contains all the compiled sources for a rule.
    */
   public Artifact archive() {
-    // The path will be {RULE_PACKAGE}/lib{RULEBASENAME}{SUFFIX}.a
+    // The path will be RULE_PACKAGE/libRULEBASENAME.a
     String basename = new PathFragment(ruleContext.getLabel().getName()).getBaseName();
     return scopedArtifact(new PathFragment(String.format(
         "lib%s%s.a", basename, archiveFileNameSuffix)));
@@ -271,15 +263,11 @@ public final class IntermediateArtifacts {
    */
   public Artifact objFile(Artifact source) {
     if (source.isTreeArtifact()) {
-      return CppHelper.getCompileOutputTreeArtifact(ruleContext, source);
+      PathFragment rootRelativePath = source.getRootRelativePath().replaceName("obj_files");
+      return ruleContext.getTreeArtifact(rootRelativePath, ruleContext.getBinOrGenfilesDirectory());
     } else {
       return inUniqueObjsDir(source, ".o");
     }
-  }
-
-  /** The artifact for the .headers file output by the header thinning action for this source. */
-  public Artifact headersListFile(Artifact source) {
-    return inUniqueObjsDir(source, ".headers_list");
   }
 
   /**

@@ -18,9 +18,8 @@ import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.ClassObjectConstructor;
-import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
 import java.util.HashMap;
 import java.util.Map.Entry;
 
@@ -56,8 +55,8 @@ public final class AppleDebugOutputsProvider extends SkylarkClassObject
     }
   }
 
-  public static final ClassObjectConstructor SKYLARK_PROVIDER =
-      new NativeClassObjectConstructor("AppleDebugOutputs") { };
+  public static final SkylarkClassObjectConstructor SKYLARK_PROVIDER =
+      SkylarkClassObjectConstructor.createNative("AppleDebugOutputs");
 
   /**
    * Creates a new provider instance.
