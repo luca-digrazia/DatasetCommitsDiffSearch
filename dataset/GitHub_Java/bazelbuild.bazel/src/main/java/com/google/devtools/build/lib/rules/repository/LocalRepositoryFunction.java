@@ -21,9 +21,11 @@ import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
+import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
+import com.google.devtools.build.skyframe.SkyValue;
+
 import java.io.IOException;
-import java.util.Map;
 
 /**
  * Access a repository on the local filesystem.
@@ -36,9 +38,9 @@ public class LocalRepositoryFunction extends RepositoryFunction {
   }
 
   @Override
-  public RepositoryDirectoryValue.Builder fetch(Rule rule, Path outputDirectory,
-      BlazeDirectories directories, Environment env, Map<String, String> markerData)
-      throws InterruptedException, RepositoryFunctionException {
+  public SkyValue fetch(
+      Rule rule, Path outputDirectory, BlazeDirectories directories, Environment env)
+      throws SkyFunctionException {
     PathFragment pathFragment = RepositoryFunction.getTargetPath(rule, directories.getWorkspace());
     try {
       outputDirectory.createSymbolicLink(pathFragment);
@@ -59,7 +61,7 @@ public class LocalRepositoryFunction extends RepositoryFunction {
           new IOException(rule + " must specify an existing directory"), Transience.TRANSIENT);
     }
 
-    return RepositoryDirectoryValue.builder().setPath(outputDirectory);
+    return RepositoryDirectoryValue.create(outputDirectory);
   }
 
   @Override
