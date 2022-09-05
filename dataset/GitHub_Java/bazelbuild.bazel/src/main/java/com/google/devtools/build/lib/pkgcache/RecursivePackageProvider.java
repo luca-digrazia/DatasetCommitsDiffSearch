@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 
@@ -29,6 +28,6 @@ public interface RecursivePackageProvider extends PackageProvider {
    * @param excludedSubdirectories a set of {@link PathFragment}s, all of which are beneath
    *     {@code directory}, specifying transitive subdirectories to exclude
    */
-  Iterable<PathFragment> getPackagesUnderDirectory(RepositoryName repository, RootedPath directory,
+  Iterable<PathFragment> getPackagesUnderDirectory(RootedPath directory,
       ImmutableSet<PathFragment> excludedSubdirectories);
 }

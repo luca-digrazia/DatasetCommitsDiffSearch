@@ -13,16 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.RecursivePackageProvider;
 import com.google.devtools.build.lib.syntax.Label;
@@ -48,32 +46,27 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
   public Package getPackage(EventHandler eventHandler, PackageIdentifier packageName)
       throws NoSuchPackageException, MissingDepException {
     SkyKey pkgKey = PackageValue.key(packageName);
-    PackageValue pkgValue =
-        (PackageValue) env.getValueOrThrow(pkgKey, NoSuchPackageException.class);
-    if (pkgValue == null) {
-      throw new MissingDepException();
-    }
-    Package pkg = pkgValue.getPackage();
-    if (pkg.containsErrors()) {
-      // If this is a nokeep_going build, we must shut the build down by throwing an exception. To
-      // do that, we request a node that will throw an exception, and then try to catch it and
-      // continue. This gives the framework notification to shut down the build if it should.
-      try {
-        env.getValueOrThrow(
-            PackageErrorFunction.key(packageName), BuildFileContainsErrorsException.class);
-        Preconditions.checkState(env.valuesMissing(), "Should have thrown for %s", packageName);
+    Package pkg;
+    try {
+      PackageValue pkgValue =
+          (PackageValue) env.getValueOrThrow(pkgKey, NoSuchPackageException.class);
+      if (pkgValue == null) {
         throw new MissingDepException();
-      } catch (BuildFileContainsErrorsException e) {
-        // Expected.
+      }
+      pkg = pkgValue.getPackage();
+    } catch (NoSuchPackageException e) {
+      pkg = e.getPackage();
+      if (pkg == null) {
+        throw e;
       }
     }
-    return pkgValue.getPackage();
+    return pkg;
   }
 
   @Override
-  public boolean isPackage(EventHandler eventHandler, PackageIdentifier packageId)
+  public boolean isPackage(EventHandler eventHandler, String packageName)
       throws MissingDepException {
-    SkyKey packageLookupKey = PackageLookupValue.key(packageId);
+    SkyKey packageLookupKey = PackageLookupValue.key(new PathFragment(packageName));
     try {
       PackageLookupValue packageLookupValue =
           (PackageLookupValue) env.getValueOrThrow(packageLookupKey, NoSuchPackageException.class,
