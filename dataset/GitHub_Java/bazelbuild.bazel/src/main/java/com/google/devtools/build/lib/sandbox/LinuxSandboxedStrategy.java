@@ -13,11 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.sandbox;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Predicates;
 import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableSetMultimap;
+import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.SetMultimap;
 import com.google.common.io.Files;
 import com.google.devtools.build.lib.Constants;
@@ -52,9 +51,11 @@ import com.google.devtools.build.lib.vfs.SearchPath;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -114,7 +115,7 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
     Path sandboxPath =
         execRoot.getRelative(Constants.PRODUCT_NAME + "-sandbox").getRelative(execId);
 
-    ImmutableSetMultimap<Path, Path> mounts;
+    ImmutableMultimap<Path, Path> mounts;
     try {
       // Gather all necessary mounts for the sandbox.
       mounts = getMounts(spawn, sandboxPath, actionExecutionContext);
@@ -186,117 +187,76 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
     return -1;
   }
 
-  private ImmutableSetMultimap<Path, Path> getMounts(
-      Spawn spawn, Path sandboxPath, ActionExecutionContext executionContext) throws IOException {
-    return validateMounts(
-        sandboxPath,
-        withResolvedSymlinks(
-            sandboxPath,
-            ImmutableSetMultimap.<Path, Path>builder()
-                .putAll(mountUsualUnixDirs(sandboxPath))
-                .putAll(withRecursedDirs(setupBlazeUtils(sandboxPath)))
-                .putAll(withRecursedDirs(mountRunfilesFromManifests(spawn, sandboxPath)))
-                .putAll(withRecursedDirs(mountRunfilesFromSuppliers(spawn, sandboxPath)))
-                .putAll(withRecursedDirs(mountRunfilesForTests(spawn, sandboxPath)))
-                .putAll(withRecursedDirs(mountInputs(spawn, sandboxPath, executionContext)))
-                .putAll(withRecursedDirs(mountRunUnderCommand(spawn, sandboxPath)))
-                .build()));
-  }
-
-  /**
-   * Validates all mounts against a set of criteria and throws an exception on error.
-   *
-   * @return the unmodified multimap of mounts.
-   */
-  @VisibleForTesting
-  static ImmutableSetMultimap<Path, Path> validateMounts(
-      Path sandboxPath, SetMultimap<Path, Path> mounts) {
-    for (Entry<Path, Path> mount : mounts.entries()) {
-      Path source = mount.getKey();
-      Path target = mount.getValue();
-
-      // The source must exist.
-      Preconditions.checkArgument(source.exists(), source.toString() + " does not exist");
-
-      // We cannot mount two different things onto the same target.
-      if (!mounts.containsEntry(source, target) && mounts.containsValue(target)) {
-        // There is a conflicting entry, find it and error out.
-        for (Entry<Path, Path> otherMount : mounts.entries()) {
-          if (otherMount.getValue().equals(target)) {
-            throw new IllegalStateException(
-                String.format(
-                    "Cannot mount both '%s' and '%s' onto '%s'",
-                    otherMount.getKey(),
-                    source,
-                    target));
-          }
-        }
-      }
-
-      // Mounts must always mount into the sandbox, otherwise they might corrupt the host system.
-      Preconditions.checkArgument(
-          target.startsWith(sandboxPath),
-          String.format("(%s -> %s) does not mount into sandbox", source, target));
-    }
-    return ImmutableSetMultimap.copyOf(mounts);
-  }
-
-  /**
-   * Checks for each mount if the source refers to a symbolic link and if yes, adds another mount
-   * for the target of that symlink to ensure that it keeps working inside the sandbox.
-   *
-   * @return a new mounts multimap with the added mounts.
-   */
-  @VisibleForTesting
-  static ImmutableSetMultimap<Path, Path> withResolvedSymlinks(
-      Path sandboxPath, SetMultimap<Path, Path> mounts) throws IOException {
-    ImmutableSetMultimap.Builder<Path, Path> fixedMounts = ImmutableSetMultimap.builder();
-    for (Entry<Path, Path> mount : mounts.entries()) {
-      Path source = mount.getKey();
-      Path target = mount.getValue();
-      fixedMounts.put(source, target);
-
-      if (source.isSymbolicLink()) {
-        source = source.resolveSymbolicLinks();
-        target = sandboxPath.getRelative(source.asFragment().relativeTo("/"));
-        fixedMounts.put(source, target);
-      }
-    }
-    return fixedMounts.build();
-  }
-
-  /**
-   * Checks for each mount if the source refers to a directory and if yes, replaces that mount with
-   * mounts of all files inside that directory.
-   *
-   * @return a new mounts multimap with the added mounts.
-   */
-  @VisibleForTesting
-  static ImmutableSetMultimap<Path, Path> withRecursedDirs(SetMultimap<Path, Path> mounts)
+  private ImmutableMultimap<Path, Path> getMounts(
+      Spawn spawn, Path sandboxPath, ActionExecutionContext actionExecutionContext)
       throws IOException {
-    ImmutableSetMultimap.Builder<Path, Path> fixedMounts = ImmutableSetMultimap.builder();
-    for (Entry<Path, Path> mount : mounts.entries()) {
+    ImmutableMultimap.Builder<Path, Path> mounts = ImmutableMultimap.builder();
+    mounts.putAll(mountUsualUnixDirs(sandboxPath));
+    mounts.putAll(setupBlazeUtils(sandboxPath));
+    mounts.putAll(mountRunfilesFromManifests(spawn, sandboxPath));
+    mounts.putAll(mountRunfilesFromSuppliers(spawn, sandboxPath));
+    mounts.putAll(mountRunfilesForTests(spawn, sandboxPath));
+    mounts.putAll(mountInputs(spawn, sandboxPath, actionExecutionContext));
+    mounts.putAll(mountRunUnderCommand(spawn, sandboxPath));
+
+    SetMultimap<Path, Path> fixedMounts = LinkedHashMultimap.create();
+    for (Entry<Path, Path> mount : mounts.build().entries()) {
       Path source = mount.getKey();
       Path target = mount.getValue();
+      validateAndAddMount(sandboxPath, fixedMounts, source, target);
 
-      if (source.isDirectory()) {
-        for (Path subSource : FileSystemUtils.traverseTree(source, Predicates.alwaysTrue())) {
-          Path subTarget = target.getRelative(subSource.relativeTo(source));
-          fixedMounts.put(subSource, subTarget);
-        }
-      } else {
-        fixedMounts.put(source, target);
+      // Iteratively resolve symlinks and mount the whole chain. Take care not to run into a cyclic
+      // symlink - when we already processed the source once, we can exit the loop. Skyframe will
+      // catch cyclic symlinks for declared inputs, but this won't help if there is one in the parts
+      // of the host system that we mount.
+      Set<Path> seenSources = new HashSet<>();
+      while (source.isSymbolicLink() && seenSources.add(source)) {
+        source = source.getParentDirectory().getRelative(source.readSymbolicLink());
+        target = sandboxPath.getRelative(source.asFragment().relativeTo("/"));
+
+        validateAndAddMount(sandboxPath, fixedMounts, source, target);
       }
     }
-    return fixedMounts.build();
+    return ImmutableMultimap.copyOf(fixedMounts);
+  }
+
+  /**
+   * Adds the new mount ("source" -> "target") to "mounts" after doing some validations on it.
+   *
+   * @return true if the mount was added to the multimap, or false if the multimap already contained
+   *         the mount.
+   */
+  private static boolean validateAndAddMount(
+      Path sandboxPath, SetMultimap<Path, Path> mounts, Path source, Path target) {
+    // The source must exist.
+    Preconditions.checkArgument(source.exists(), source.toString() + " does not exist");
+
+    // We cannot mount two different things onto the same target.
+    if (!mounts.containsEntry(source, target) && mounts.containsValue(target)) {
+      // There is a conflicting entry, find it and error out.
+      for (Entry<Path, Path> mount : mounts.entries()) {
+        if (mount.getValue().equals(target)) {
+          throw new IllegalStateException(
+              String.format(
+                  "Cannot mount both '%s' and '%s' onto '%s'", mount.getKey(), source, target));
+        }
+      }
+    }
+
+    // Mounts must always mount into the sandbox, otherwise they might corrupt the host system.
+    Preconditions.checkArgument(
+        target.startsWith(sandboxPath),
+        String.format("(%s -> %s) does not mount into sandbox", source, target));
+
+    return mounts.put(source, target);
   }
 
   /**
    * Mount a certain set of unix directories to make the usual tools and libraries available to the
    * spawn that runs.
    */
-  private ImmutableSetMultimap<Path, Path> mountUsualUnixDirs(Path sandboxPath) throws IOException {
-    ImmutableSetMultimap.Builder<Path, Path> mounts = ImmutableSetMultimap.builder();
+  private ImmutableMultimap<Path, Path> mountUsualUnixDirs(Path sandboxPath) throws IOException {
+    ImmutableMultimap.Builder<Path, Path> mounts = ImmutableMultimap.builder();
     FileSystem fs = blazeDirs.getFileSystem();
     mounts.put(fs.getPath("/bin"), sandboxPath.getRelative("bin"));
     mounts.put(fs.getPath("/etc"), sandboxPath.getRelative("etc"));
@@ -318,8 +278,8 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
   /**
    * Mount the embedded tools.
    */
-  private ImmutableSetMultimap<Path, Path> setupBlazeUtils(Path sandboxPath) throws IOException {
-    ImmutableSetMultimap.Builder<Path, Path> mounts = ImmutableSetMultimap.builder();
+  private ImmutableMultimap<Path, Path> setupBlazeUtils(Path sandboxPath) throws IOException {
+    ImmutableMultimap.Builder<Path, Path> mounts = ImmutableMultimap.builder();
     Path source = blazeDirs.getEmbeddedBinariesRoot().getRelative("build-runfiles");
     Path target = sandboxPath.getRelative(source.asFragment().relativeTo("/"));
     mounts.put(source, target);
@@ -329,38 +289,23 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
   /**
    * Mount all runfiles that the spawn needs as specified in its runfiles manifests.
    */
-  private ImmutableSetMultimap<Path, Path> mountRunfilesFromManifests(Spawn spawn, Path sandboxPath)
+  private ImmutableMultimap<Path, Path> mountRunfilesFromManifests(Spawn spawn, Path sandboxPath)
       throws IOException {
-    ImmutableSetMultimap.Builder<Path, Path> mounts = ImmutableSetMultimap.builder();
+    ImmutableMultimap.Builder<Path, Path> mounts = ImmutableMultimap.builder();
+    FileSystem fs = blazeDirs.getFileSystem();
     for (Entry<PathFragment, Artifact> manifest : spawn.getRunfilesManifests().entrySet()) {
       String manifestFilePath = manifest.getValue().getPath().getPathString();
       Preconditions.checkState(!manifest.getKey().isAbsolute());
       Path targetDirectory = execRoot.getRelative(manifest.getKey());
-
-      mounts.putAll(parseManifestFile(sandboxPath, targetDirectory, new File(manifestFilePath)));
-    }
-    return mounts.build();
-  }
-
-  static ImmutableSetMultimap<Path, Path> parseManifestFile(
-      Path sandboxPath, Path targetDirectory, File manifestFile) throws IOException {
-    ImmutableSetMultimap.Builder<Path, Path> mounts = ImmutableSetMultimap.builder();
-    for (String line : Files.readLines(manifestFile, Charset.defaultCharset())) {
-      String[] fields = line.trim().split(" ");
-      Path source;
-      Path targetPath = targetDirectory.getRelative(fields[0]);
-      Path targetInSandbox = sandboxPath.getRelative(targetPath.asFragment().relativeTo("/"));
-      switch (fields.length) {
-        case 1:
-          source = sandboxPath.getFileSystem().getPath("/dev/null");
-          break;
-        case 2:
-          source = sandboxPath.getFileSystem().getPath(fields[1]);
-          break;
-        default:
-          throw new IllegalStateException("'" + line + "' splits into more than 2 parts");
+      for (String line : Files.readLines(new File(manifestFilePath), Charset.defaultCharset())) {
+        String[] fields = line.split(" ");
+        Preconditions.checkState(
+            fields.length == 2, "'" + line + "' does not split into exactly 2 parts");
+        Path source = fs.getPath(fields[1]);
+        Path targetPath = targetDirectory.getRelative(fields[0]);
+        Path targetInSandbox = sandboxPath.getRelative(targetPath.asFragment().relativeTo("/"));
+        mounts.put(source, targetInSandbox);
       }
-      mounts.put(source, targetInSandbox);
     }
     return mounts.build();
   }
@@ -368,9 +313,9 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
   /**
    * Mount all runfiles that the spawn needs as specified via its runfiles suppliers.
    */
-  private ImmutableSetMultimap<Path, Path> mountRunfilesFromSuppliers(Spawn spawn, Path sandboxPath)
+  private ImmutableMultimap<Path, Path> mountRunfilesFromSuppliers(Spawn spawn, Path sandboxPath)
       throws IOException {
-    ImmutableSetMultimap.Builder<Path, Path> mounts = ImmutableSetMultimap.builder();
+    ImmutableMultimap.Builder<Path, Path> mounts = ImmutableMultimap.builder();
     FileSystem fs = blazeDirs.getFileSystem();
     Map<PathFragment, Map<PathFragment, Artifact>> rootsAndMappings =
         spawn.getRunfilesSupplier().getMappings();
@@ -396,9 +341,9 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
    * Tests are a special case and we have to mount the TEST_SRCDIR where the test expects it to be
    * and also provide a TEST_TMPDIR to the test where it can store temporary files.
    */
-  private ImmutableSetMultimap<Path, Path> mountRunfilesForTests(Spawn spawn, Path sandboxPath)
+  private ImmutableMultimap<Path, Path> mountRunfilesForTests(Spawn spawn, Path sandboxPath)
       throws IOException {
-    ImmutableSetMultimap.Builder<Path, Path> mounts = ImmutableSetMultimap.builder();
+    ImmutableMultimap.Builder<Path, Path> mounts = ImmutableMultimap.builder();
     FileSystem fs = blazeDirs.getFileSystem();
     if (spawn.getEnvironment().containsKey("TEST_TMPDIR")) {
       Path source = fs.getPath(spawn.getEnvironment().get("TEST_TMPDIR"));
@@ -411,10 +356,10 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
   /**
    * Mount all inputs of the spawn.
    */
-  private ImmutableSetMultimap<Path, Path> mountInputs(
+  private ImmutableMultimap<Path, Path> mountInputs(
       Spawn spawn, Path sandboxPath, ActionExecutionContext actionExecutionContext)
       throws IOException {
-    ImmutableSetMultimap.Builder<Path, Path> mounts = ImmutableSetMultimap.builder();
+    ImmutableMultimap.Builder<Path, Path> mounts = ImmutableMultimap.builder();
 
     List<ActionInput> inputs =
         ActionInputHelper.expandMiddlemen(
@@ -446,8 +391,8 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
    * <p>If --run_under= refers to a label, it is automatically provided in the spawn's input files,
    * so mountInputs() will catch that case.
    */
-  private ImmutableSetMultimap<Path, Path> mountRunUnderCommand(Spawn spawn, Path sandboxPath) {
-    ImmutableSetMultimap.Builder<Path, Path> mounts = ImmutableSetMultimap.builder();
+  private ImmutableMultimap<Path, Path> mountRunUnderCommand(Spawn spawn, Path sandboxPath) {
+    ImmutableMultimap.Builder<Path, Path> mounts = ImmutableMultimap.builder();
 
     if (spawn.getResourceOwner() instanceof TestRunnerAction) {
       TestRunnerAction testRunnerAction = ((TestRunnerAction) spawn.getResourceOwner());
