@@ -30,13 +30,33 @@ import java.security.NoSuchAlgorithmException;
  * @author zhouhao
  * @since 3.0
  */
+@FunctionalInterface
 public interface IDGenerator<T> {
     T generate();
 
-    IDGenerator<String> UUID = java.util.UUID.randomUUID()::toString;
+    /**
+     * 空ID生成器
+     */
+    IDGenerator<?> NULL = () -> null;
 
+    @SuppressWarnings("unchecked")
+    static <T> IDGenerator<T> getNullGenerator() {
+        return (IDGenerator) NULL;
+    }
+
+    /**
+     * 使用UUID生成id
+     */
+    IDGenerator<String> UUID = () -> java.util.UUID.randomUUID().toString();
+
+    /**
+     * 随机字符
+     */
     IDGenerator<String> RANDOM = RandomUtil::randomChar;
 
+    /**
+     * md5(uuid()+random())
+     */
     IDGenerator<String> MD5 = () -> {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -46,4 +66,19 @@ public interface IDGenerator<T> {
             throw new RuntimeException(e);
         }
     };
+
+    /**
+     * 雪花算法
+     */
+    IDGenerator<Long> SNOW_FLAKE = SnowflakeIdGenerator.getInstance()::nextId;
+
+    /**
+     * 雪花算法转String
+     */
+    IDGenerator<String> SNOW_FLAKE_STRING = () -> String.valueOf(SNOW_FLAKE.generate());
+
+    /**
+     * 雪花算法的16进制
+     */
+    IDGenerator<String> SNOW_FLAKE_HEX = () -> Long.toHexString(SNOW_FLAKE.generate());
 }
