@@ -205,7 +205,6 @@ public class MaterialCalendarView extends ViewGroup {
     private OnDateSelectedListener listener;
     private OnMonthChangedListener monthListener;
 
-    CharSequence calendarContentDescription;
     private int accentColor = 0;
     private int arrowColor = Color.BLACK;
     private Drawable leftArrowMask;
@@ -235,10 +234,8 @@ public class MaterialCalendarView extends ViewGroup {
         }
 
         buttonPast = new DirectionButton(getContext());
-        buttonPast.setContentDescription(getContext().getString(R.string.previous));
         title = new TextView(getContext());
         buttonFuture = new DirectionButton(getContext());
-        buttonFuture.setContentDescription(getContext().getString(R.string.next));
         pager = new CalendarPager(getContext());
 
         title.setOnClickListener(onClickListener);
@@ -498,7 +495,6 @@ public class MaterialCalendarView extends ViewGroup {
             adapter = adapter.migrateStateAndReturn(newAdapter);
         }
         pager.setAdapter(adapter);
-        setRangeDates(minDate, maxDate);
         calendarMode = mode;
 
         // Reset height params after mode change
@@ -684,44 +680,6 @@ public class MaterialCalendarView extends ViewGroup {
         buttonPast.setColor(color);
         buttonFuture.setColor(color);
         invalidate();
-    }
-
-    /**
-     * Set content description for button past
-     *
-     * @param description String to use as content description
-     */
-    public void setContentDescriptionArrowPast(final CharSequence description) {
-        buttonPast.setContentDescription(description);
-    }
-
-    /**
-     * Set content description for button future
-     *
-     * @param description String to use as content description
-     */
-    public void setContentDescriptionArrowFuture(final CharSequence description) {
-        buttonFuture.setContentDescription(description);
-    }
-
-    /**
-     * Set content description for calendar
-     *
-     * @param description String to use as content description
-     */
-    public void setContentDescriptionCalendar(final CharSequence description) {
-        calendarContentDescription = description;
-    }
-
-    /**
-     * Get content description for calendar
-     *
-     * @return calendar's content description
-     */
-    public CharSequence getCalendarContentDescription() {
-        return calendarContentDescription != null
-                ? calendarContentDescription
-                : getContext().getString(R.string.calendar);
     }
 
     /**
@@ -1278,7 +1236,6 @@ public class MaterialCalendarView extends ViewGroup {
             adapter = adapter.migrateStateAndReturn(newAdapter);
         }
         pager.setAdapter(adapter);
-        setRangeDates(minDate, maxDate);
 
         setCurrentDate(
                 selectionMode == SELECTION_MODE_SINGLE && !adapter.getSelectedDates().isEmpty()
