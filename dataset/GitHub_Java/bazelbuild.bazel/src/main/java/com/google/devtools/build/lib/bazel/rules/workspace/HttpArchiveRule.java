@@ -42,7 +42,7 @@ public class HttpArchiveRule implements RuleDefinition {
         A URL to an archive file containing a Bazel repository.
         ${SYNOPSIS}
 
-        <p>This must be an HTTP URL that ends with .zip. There is no support for authentication or
+        <p>This must be an http URL that ends with .zip. There is no support for authentication or
           redirection.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("url", STRING).mandatory())
