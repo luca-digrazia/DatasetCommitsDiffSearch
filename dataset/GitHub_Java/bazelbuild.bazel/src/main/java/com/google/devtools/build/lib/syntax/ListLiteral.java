@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.syntax;
 
 import static com.google.devtools.build.lib.syntax.compiler.ByteCodeUtils.append;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
@@ -25,7 +26,6 @@ import com.google.devtools.build.lib.syntax.compiler.DebugInfo;
 import com.google.devtools.build.lib.syntax.compiler.DebugInfo.AstAccessors;
 import com.google.devtools.build.lib.syntax.compiler.NewObject;
 import com.google.devtools.build.lib.syntax.compiler.VariableScope;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import net.bytebuddy.implementation.bytecode.ByteCodeAppender;
 import net.bytebuddy.implementation.bytecode.Duplication;
@@ -94,7 +94,7 @@ public final class ListLiteral extends Expression {
 
   @Override
   Object doEval(Environment env) throws EvalException, InterruptedException {
-    List<Object> result = new ArrayList<>(exprs.size());
+    List<Object> result = new ArrayList<>();
     for (Expression expr : exprs) {
       // Convert NPEs to EvalExceptions.
       if (expr == null) {

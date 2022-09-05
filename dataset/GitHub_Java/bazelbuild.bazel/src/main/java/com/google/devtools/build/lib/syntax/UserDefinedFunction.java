@@ -79,12 +79,10 @@ public class UserDefinedFunction extends BaseFunction {
   private static File debugFolder;
   public static boolean enableCompiler = false;
 
-  protected UserDefinedFunction(
-      Identifier function,
+  protected UserDefinedFunction(Identifier function,
       FunctionSignature.WithValues<Object, SkylarkType> signature,
-      ImmutableList<Statement> statements,
-      Environment.Frame definitionGlobals)
-      throws EvalException {
+      ImmutableList<Statement> statements, Environment.Frame definitionGlobals)
+    throws EvalException {
     super(function.getName(), signature, function.getLocation());
     this.statements = statements;
     this.definitionGlobals = definitionGlobals;
@@ -153,8 +151,6 @@ public class UserDefinedFunction extends BaseFunction {
   private Object callCompiledFunction(Object[] arguments, FuncallExpression ast, Environment env) {
     compilerDebug("Calling compiled function " + getLocationPathAndLine() + " " + getName());
     try {
-      Profiler.instance().startTask(ProfilerTask.SKYLARK_USER_COMPILED_FN,
-          getLocationPathAndLine() + "#" + getName());
       env.enterScope(this, ast, definitionGlobals);
 
       return method
@@ -169,7 +165,6 @@ public class UserDefinedFunction extends BaseFunction {
       compilerDebug("Error running compiled version", e.getCause());
       return null;
     } finally {
-      Profiler.instance().completeTask(ProfilerTask.SKYLARK_USER_COMPILED_FN);
       env.exitScope();
     }
   }

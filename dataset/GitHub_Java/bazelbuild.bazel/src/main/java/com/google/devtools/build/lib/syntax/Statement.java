@@ -35,8 +35,8 @@ public abstract class Statement extends ASTNode {
   final void exec(Environment env) throws EvalException, InterruptedException   {
     try {
       doExec(env);
-    } catch (EvalException ex) {
-      throw maybeTransformException(ex);
+    } catch (EvalException | RuntimeException ex)  {
+      throw handleException(ex);
     }
   }
 
@@ -78,7 +78,7 @@ public abstract class Statement extends ASTNode {
    */
   ByteCodeAppender compile(
       VariableScope scope, Optional<LoopLabels> loopLabels, DebugInfo debugInfo)
-      throws EvalException {
+          throws EvalException {
     throw new UnsupportedOperationException(this.getClass().getSimpleName() + " unsupported.");
   }
 }

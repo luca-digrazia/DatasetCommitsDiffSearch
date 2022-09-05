@@ -46,8 +46,8 @@ public abstract class Expression extends ASTNode {
   final Object eval(Environment env) throws EvalException, InterruptedException {
     try {
       return doEval(env);
-    } catch (EvalException ex) {
-      throw maybeTransformException(ex);
+    } catch (EvalException | RuntimeException ex) {
+      throw handleException(ex);
     }
   }
 
@@ -79,7 +79,8 @@ public abstract class Expression extends ASTNode {
    * @throws EvalException for any error that would have occurred during evaluation of the
    *    function definition that contains this statement, e.g. type errors.
    */
-  ByteCodeAppender compile(VariableScope scope, DebugInfo debugInfo) throws EvalException {
+  ByteCodeAppender compile(VariableScope scope, DebugInfo debugInfo)
+      throws EvalException {
     throw new UnsupportedOperationException(this.getClass().getSimpleName() + " unsupported.");
   }
 }

@@ -18,6 +18,7 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.compiler.DebugInfo;
 import com.google.devtools.build.lib.syntax.compiler.LoopLabels;
 import com.google.devtools.build.lib.syntax.compiler.VariableScope;
+
 import net.bytebuddy.implementation.bytecode.ByteCodeAppender;
 import net.bytebuddy.implementation.bytecode.member.MethodReturn;
 
@@ -29,12 +30,11 @@ public class ReturnStatement extends Statement {
   /**
    * Exception sent by the return statement, to be caught by the function body.
    */
-  public static class ReturnException extends EvalException {
+  public class ReturnException extends EvalException {
     Object value;
 
     public ReturnException(Location location, Object value) {
-      super(location, "Return statements must be inside a function",
-          /*dueToIncompleteAST=*/ false, /*fillInJavaStackTrace=*/ false);
+      super(location, "Return statements must be inside a function");
       this.value = value;
     }
 
@@ -84,7 +84,7 @@ public class ReturnStatement extends Statement {
   @Override
   ByteCodeAppender compile(
       VariableScope scope, Optional<LoopLabels> loopLabels, DebugInfo debugInfo)
-      throws EvalException {
+          throws EvalException {
     ByteCodeAppender compiledExpression = returnExpression.compile(scope, debugInfo);
     return new ByteCodeAppender.Compound(
         compiledExpression, new ByteCodeAppender.Simple(MethodReturn.REFERENCE));
