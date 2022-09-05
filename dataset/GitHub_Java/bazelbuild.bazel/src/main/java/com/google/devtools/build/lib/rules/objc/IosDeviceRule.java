@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
@@ -29,36 +28,22 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
  * Rule definition for ios_device.
  */
 public final class IosDeviceRule implements RuleDefinition {
-  static final String IOS_VERSION_ATTR_NAME = "ios_version";
-  static final String XCODE_ATTR_NAME = "xcode";
-  static final String TYPE_ATTR_NAME = "type";
-  static final String LOCALE_ATTR_NAME = "locale";
-
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
     return builder
         .requiresConfigurationFragments(AppleConfiguration.class)
         /* <!-- #BLAZE_RULE(ios_device).ATTRIBUTE(ios_version) -->
         The operating system version of the device. This corresponds to the
-        <code>simctl</code> runtime. Defaults to the default ios sdk version for the xcode
-        version defined in the <code>xcode</code> attribute, or uses the ios sdk version
-        configuration value, if <code>xcode</code> is unspecified.
+        <code>simctl</code> runtime. Defaults to the ios sdk version configuration value.
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-        .add(attr(IOS_VERSION_ATTR_NAME, STRING))
-        /* <!-- #BLAZE_RULE(ios_device).ATTRIBUTE(xcode) -->
-        The version of xcode to use to run the simulator. Defaults to the xcode version build
-        configuration value.
-        <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-        .add(attr(XCODE_ATTR_NAME, LABEL)
-            .allowedRuleClasses("xcode_version")
-            .allowedFileTypes())
+        .add(attr("ios_version", STRING))
         /* <!-- #BLAZE_RULE(ios_device).ATTRIBUTE(type) -->
         The hardware type. This corresponds to the <code>simctl</code> device
         type.
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-        .add(attr(TYPE_ATTR_NAME, STRING)
+        .add(attr("type", STRING)
             .mandatory())
-        .add(attr(LOCALE_ATTR_NAME, STRING)
+        .add(attr("locale", STRING)
             .undocumented("this is not yet supported by any test runner")
             .value("en"))
         .build();

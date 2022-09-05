@@ -18,7 +18,6 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 
 import com.google.common.base.Strings;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
@@ -26,7 +25,6 @@ import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.apple.Platform;
-import com.google.devtools.build.lib.rules.apple.XcodeVersionProperties;
 
 /**
  * Implementation for the "ios_device" rule.
@@ -34,34 +32,20 @@ import com.google.devtools.build.lib.rules.apple.XcodeVersionProperties;
 public final class IosDevice implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext context) throws InterruptedException {
-    AppleConfiguration appleConfiguration = context.getFragment(AppleConfiguration.class);
-    String iosVersionAttribute =
-        context.attributes().get(IosDeviceRule.IOS_VERSION_ATTR_NAME, STRING);
-    XcodeVersionProperties xcodeVersionProperties = context.getPrerequisite(
-        IosDeviceRule.XCODE_ATTR_NAME, Mode.TARGET, XcodeVersionProperties.class);
-
-    DottedVersion xcodeVersion = null;
-    if (xcodeVersionProperties != null && xcodeVersionProperties.getXcodeVersion().isPresent()) {
-      xcodeVersion = xcodeVersionProperties.getXcodeVersion().get();
-    } else if (appleConfiguration.getXcodeVersion().isPresent()) {
-      xcodeVersion = appleConfiguration.getXcodeVersion().get();
-    }
-
+    String iosVersionAttribute = context.attributes().get("ios_version", STRING);
     DottedVersion iosVersion;
     if (!Strings.isNullOrEmpty(iosVersionAttribute)) {
       iosVersion = DottedVersion.fromString(iosVersionAttribute);
-    } else if (xcodeVersionProperties != null) {
-      iosVersion = xcodeVersionProperties.getDefaultIosSdkVersion();
     } else {
-      iosVersion = appleConfiguration.getSdkVersionForPlatform(Platform.IOS_SIMULATOR);
+      iosVersion = context.getFragment(AppleConfiguration.class)
+          .getSdkVersionForPlatform(Platform.IOS_SIMULATOR);
     }
 
     IosDeviceProvider provider =
         new IosDeviceProvider.Builder()
-            .setType(context.attributes().get(IosDeviceRule.TYPE_ATTR_NAME, STRING))
+            .setType(context.attributes().get("type", STRING))
             .setIosVersion(iosVersion)
-            .setLocale(context.attributes().get(IosDeviceRule.LOCALE_ATTR_NAME, STRING))
-            .setXcodeVersion(xcodeVersion)
+            .setLocale(context.attributes().get("locale", STRING))
             .build();
 
     return new RuleConfiguredTargetBuilder(context)
