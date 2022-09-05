@@ -209,24 +209,23 @@
 
 package com.taobao.android.builder.tasks.app;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.concurrent.Callable;
-
 import com.alibaba.fastjson.JSON;
-
+import com.android.build.gradle.api.BaseVariantOutput;
 import com.android.build.gradle.internal.api.ApContext;
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.android.build.gradle.internal.api.AppVariantOutputContext;
 import com.android.build.gradle.internal.scope.ConventionMappingHelper;
 import com.android.build.gradle.internal.tasks.DefaultAndroidTask;
-import com.android.build.gradle.internal.variant.BaseVariantOutputData;
 import com.taobao.android.builder.tasks.manager.MtlBaseTaskAction;
 import com.taobao.android.builder.tools.zip.BetterZip;
 import org.apache.commons.io.FileUtils;
 import org.gradle.api.GradleException;
 import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.TaskAction;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.concurrent.Callable;
 
 /**
  * APTask to package files
@@ -238,7 +237,7 @@ public class ApBuildTask extends DefaultAndroidTask {
 
     protected AppVariantContext appVariantContext;
 
-    protected BaseVariantOutputData baseVariantOutputData;
+    protected BaseVariantOutput baseVariantOutputData;
 
     private AppVariantOutputContext.AppBuildInfo appBuildInfo;
 
@@ -265,19 +264,19 @@ public class ApBuildTask extends DefaultAndroidTask {
     }
 
     private File createAP(File apkFile,
-                          BaseVariantOutputData variantOutputData,
+                          BaseVariantOutput variantOutputData,
                           AppVariantContext appVariantContext) throws IOException {
 
         File jarshrinkLog = new File(variantOutputData.getOutputFile()
                                          .getParentFile()
                                          .getParentFile(), "jar-shrink.log");
 
-        File proguardOut = new File(String.valueOf(variantOutputData.getScope()
+        File proguardOut = new File(String.valueOf(appVariantContext.getScope()
                                                        .getGlobalScope()
                                                        .getBuildDir()) +
                                         "/outputs/mapping/" +
-                                        variantOutputData.getScope()
-                                            .getVariantScope()
+                                        appVariantContext
+                                            .getScope()
                                             .getVariantConfiguration()
                                             .getDirName());
 
@@ -289,10 +288,15 @@ public class ApBuildTask extends DefaultAndroidTask {
         int index = path.lastIndexOf(".apk");
         File APFile = new File(path.substring(0, index) + ".ap");
 
-        addFile(variantOutputData.manifestProcessorTask.getManifestOutputFile(),
+        addFile(new File(baseVariantOutputData.getProcessManifest().getManifestOutputDirectory(),"AndroidManifest.xml"),
                 "AndroidManifest.xml");
         addFile(apkFile, ApContext.AP_INLINE_APK_FILENAME);
-        addFile(new File(variantOutputData.processResourcesTask.getTextSymbolOutputDir(), "R.txt"),
+        addFile(new File(
+                appVariantContext.getScope().getGlobalScope().getIntermediatesDir().getAbsolutePath()+"/"+
+                "symbols/"
+                        + appVariantContext.getScope().getVariantData()
+                        .getVariantConfiguration()
+                        .getDirName(), "R.txt"),
                 "R.txt");
 
         addFile(appBuildInfo.getPackageIdFile());
@@ -300,6 +304,7 @@ public class ApBuildTask extends DefaultAndroidTask {
         addFile(appBuildInfo.getBuildInfoFile());
         addFile(appBuildInfo.getVersionPropertiesFile());
         addFile(new File(this.getProject().getBuildDir(),"outputs/atlasFrameworkProperties.json"));
+        addFile(new File(this.getProject().getBuildDir(), "outputs/public.txt"));
         //addFile( appBuildInfo.getBundleInfoFile());
 
         for (File file : appBuildInfo.getOtherFiles()) {
@@ -316,34 +321,28 @@ public class ApBuildTask extends DefaultAndroidTask {
             addFile(getApkFiles(APFile.getParentFile().getParentFile(), appVariantContext),
                     ApContext.APK_FILE_LIST);
         }catch (Throwable e){
+            throw new RuntimeException(e);
 
         }
 
+        // If there is a proguard file, add the result information
         if (null != proguardOut &&
-                proguardOut.exists() &&
-                (new File(proguardOut, "mapping.txt").exists() ||
-                        new File(proguardOut, "full-mapping.txt").exists())) {
+            proguardOut.exists() &&
+            (new File(proguardOut, "mapping.txt").exists() ||
+                new File(proguardOut, "full-mapping.txt").exists())) {
             File usageFile = new File(proguardOut, "usage.txt");
             File mappingFile = new File(proguardOut, "mapping.txt");
-            File dexCocoMap = new File(proguardOut,"dexcocomap.data");
-            File j2cMap = new File(proguardOut,"j2cmap.data");
             addFile(usageFile, "usage.txt");
             addFile(mappingFile, "mapping.txt");
-            addFile(dexCocoMap,"dexcocomap.data");
-            addFile(j2cMap,"j2cmap.data");
             addFile(new File(proguardOut, "full-mapping.txt"), "full-mapping.txt");
             addFile(new File(proguardOut, "mapping.data"), "mapping.data");
         } else if (null != appVariantContext.apContext.getApExploredFolder() &&
-                appVariantContext.apContext.getApExploredFolder().exists()) {
+            appVariantContext.apContext.getApExploredFolder().exists()) {
             File lastApDir = appVariantContext.apContext.getApExploredFolder();
             File usageFile = new File(lastApDir, "usage.txt");
             File mappingFile = new File(lastApDir, "mapping.txt");
-            File dexCocoMap = new File(lastApDir,"dexcocomap.data");
-            File j2cMap = new File(lastApDir,"j2cmap.data");
             addFile(usageFile, "usage.txt");
             addFile(mappingFile, "mapping.txt");
-            addFile(dexCocoMap,"dexcocomap.data");
-            addFile(j2cMap,"j2cmap.data");
             addFile(new File(lastApDir, "full-mapping.txt"), "full-mapping.txt");
             addFile(new File(lastApDir, "mapping.data"), "mapping.data");
         }
@@ -391,10 +390,10 @@ public class ApBuildTask extends DefaultAndroidTask {
      */
     public static class ConfigAction extends MtlBaseTaskAction<ApBuildTask> {
 
-        private AppVariantContext appVariantContext;
+        private final AppVariantContext appVariantContext;
 
         public ConfigAction(AppVariantContext appVariantContext,
-                            BaseVariantOutputData baseVariantOutputData) {
+                            BaseVariantOutput baseVariantOutputData) {
             super(appVariantContext, baseVariantOutputData);
             this.appVariantContext = appVariantContext;
         }
@@ -423,16 +422,10 @@ public class ApBuildTask extends DefaultAndroidTask {
                 return;
             }
 
-            ConventionMappingHelper.map(apBuildTask, "apkFile", new Callable<File>() {
-
-                @Override
-                public File call() {
-                    return getAppVariantOutputContext().getApkOutputFile(true);
-                }
-            });
+            ConventionMappingHelper.map(apBuildTask, "apkFile", (Callable<File>) () -> getAppVariantOutputContext().getApkOutputFile(true));
 
             apBuildTask.appVariantContext = appVariantContext;
-            apBuildTask.baseVariantOutputData = scope.getVariantOutputData();
+            apBuildTask.baseVariantOutputData = baseVariantOutput;
             apBuildTask.appBuildInfo = getAppVariantOutputContext().appBuildInfo;
         }
     }
