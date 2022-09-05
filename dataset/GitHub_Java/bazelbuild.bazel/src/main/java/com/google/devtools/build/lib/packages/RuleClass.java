@@ -476,7 +476,6 @@ public final class RuleClass {
     private String name;
     private final RuleClassType type;
     private final boolean skylark;
-    private boolean skylarkTestable = false;
     private boolean documented;
     private boolean publicByDefault = false;
     private boolean binaryOutput = true;
@@ -590,7 +589,6 @@ public final class RuleClass {
           name,
           skylark,
           skylarkExecutable,
-          skylarkTestable,
           documented,
           publicByDefault,
           binaryOutput,
@@ -661,12 +659,6 @@ public final class RuleClass {
         Collection<String> configurationFragmentNames) {
       configurationFragmentPolicy
           .requiresHostConfigurationFragmentsBySkylarkModuleName(configurationFragmentNames);
-      return this;
-    }
-
-    public Builder setSkylarkTestable() {
-      Preconditions.checkState(skylark, "Cannot set skylarkTestable on a non-Skylark rule");
-      skylarkTestable = true;
       return this;
     }
 
@@ -961,7 +953,6 @@ public final class RuleClass {
 
   private final boolean isSkylark;
   private final boolean skylarkExecutable;
-  private final boolean skylarkTestable;
   private final boolean documented;
   private final boolean publicByDefault;
   private final boolean binaryOutput;
@@ -1072,7 +1063,6 @@ public final class RuleClass {
       String name,
       boolean isSkylark,
       boolean skylarkExecutable,
-      boolean skylarkTestable,
       boolean documented,
       boolean publicByDefault,
       boolean binaryOutput,
@@ -1096,7 +1086,6 @@ public final class RuleClass {
     this.isSkylark = isSkylark;
     this.targetKind = name + " rule";
     this.skylarkExecutable = skylarkExecutable;
-    this.skylarkTestable = skylarkTestable;
     this.documented = documented;
     this.publicByDefault = publicByDefault;
     this.binaryOutput = binaryOutput;
@@ -1897,7 +1886,7 @@ public final class RuleClass {
     return ruleDefinitionEnvironmentHashCode;
   }
 
-  /** Returns true if this RuleClass is a Skylark-defined RuleClass. */
+  /** Returns true if this RuleClass is a skylark-defined RuleClass. */
   public boolean isSkylark() {
     return isSkylark;
   }
@@ -1908,14 +1897,6 @@ public final class RuleClass {
    */
   public boolean isSkylarkExecutable() {
     return skylarkExecutable;
-  }
-
-  /**
-   * Returns true if this RuleClass is Skylark-defined and is subject to analysis-time
-   * tests.
-   */
-  public boolean isSkylarkTestable() {
-    return skylarkTestable;
   }
 
   /**
