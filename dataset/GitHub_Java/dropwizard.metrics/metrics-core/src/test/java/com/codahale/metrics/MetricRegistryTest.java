@@ -319,7 +319,7 @@ public class MetricRegistryTest {
     @Test
     @SuppressWarnings("NullArgumentToVariableArgMethod")
     public void elidesNullValuesFromNamesWhenOnlyOneNullPassedIn() throws Exception {
-        assertThat(name("one", (String)null))
+        assertThat(name("one", null))
                 .isEqualTo("one");
     }
 
