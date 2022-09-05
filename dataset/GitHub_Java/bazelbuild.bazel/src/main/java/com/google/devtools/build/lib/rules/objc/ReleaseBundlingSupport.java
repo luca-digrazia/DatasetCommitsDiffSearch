@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fromTemplates;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_SWIFT;
 import static com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.UI_DEVICE_FAMILY_VALUES;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -204,7 +203,6 @@ public final class ReleaseBundlingSupport {
 
     registerCombineArchitecturesAction();
     registerTransformAndCopyBreakpadFilesAction();
-    registerSwiftStdlibActionsIfNecessary();
 
     ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     Artifact ipaOutput = ruleContext.getImplicitOutputArtifact(IPA);
@@ -217,7 +215,7 @@ public final class ReleaseBundlingSupport {
     } else {
       maybeSignedIpa = registerBundleSigningActions(ipaOutput);
     }
-
+    
     registerEmbedLabelPlistAction();
 
     BundleMergeControlBytes bundleMergeControlBytes = new BundleMergeControlBytes(
@@ -417,8 +415,8 @@ public final class ReleaseBundlingSupport {
     } else {
       extraBundleFiles = ImmutableList.of();
     }
-
-    String primaryBundleId = null;
+    
+    String primaryBundleId = null; 
     String fallbackBundleId = null;
 
     if (ruleContext.attributes().isAttributeValueExplicitlySpecified("bundle_id")) {
@@ -463,7 +461,7 @@ public final class ReleaseBundlingSupport {
     NestedSetBuilder<Artifact> linkedBinariesBuilder = NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(attributes.dependentLinkedBinaries());
     if (linkedBinary == LinkedBinary.LOCAL_AND_DEPENDENCIES) {
-      linkedBinariesBuilder.add(intermediateArtifacts.strippedSingleArchitectureBinary());
+      linkedBinariesBuilder.add(intermediateArtifacts.singleArchitectureBinary());
     }
     return linkedBinariesBuilder.build();
   }
@@ -507,38 +505,23 @@ public final class ReleaseBundlingSupport {
   private ReleaseBundlingSupport registerSignBundleAction(
       Artifact entitlements, Artifact ipaOutput, Artifact ipaUnsigned) {
     // TODO(bazel-team): Support variable substitution
-
-    ImmutableList.Builder<String> dirsToSign = new ImmutableList.Builder<>();
-
-    // Explicitly sign Swift frameworks. Unfortunately --deep option on codesign doesn't do this
-    // automatically.
-    // The order here is important. The innermost code must singed first.
-    if (objcProvider.is(USES_SWIFT)) {
-      dirsToSign.add(bundling.getBundleDir() + "/Frameworks/*");
-    }
-    dirsToSign.add(bundling.getBundleDir());
-
-    StringBuilder codesignCommandLineBuilder = new StringBuilder();
-    for (String dir : dirsToSign.build()) {
-      codesignCommandLineBuilder
-          .append(codesignCommand(attributes.provisioningProfile(), entitlements, "${t}/" + dir))
-          .append(" && ");
-    }
-
     ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
         .setMnemonic("IosSignBundle")
         .setProgressMessage("Signing iOS bundle: " + ruleContext.getLabel())
         .setExecutable(new PathFragment("/bin/bash"))
         .addArgument("-c")
-        // TODO(bazel-team): Support nested code signing.
+        // TODO(bazel-team): Support --resource-rules for resources
         .addArgument("set -e && "
             + "t=$(mktemp -d -t signing_intermediate) && "
             // Get an absolute path since we need to cd into the temp directory for zip.
             + "signed_ipa=${PWD}/" + ipaOutput.getExecPathString() + " && "
             + "unzip -qq " + ipaUnsigned.getExecPathString() + " -d ${t} && "
-            + codesignCommandLineBuilder.toString()
+            + codesignCommand(
+                attributes.provisioningProfile(),
+                entitlements,
+                "${t}/" + bundling.getBundleDir())
             // Using zip since we need to preserve permissions
-            + "cd \"${t}\" && /usr/bin/zip -q -r \"${signed_ipa}\" .")
+            + " && cd \"${t}\" && /usr/bin/zip -q -r \"${signed_ipa}\" .")
         .addInput(ipaUnsigned)
         .addInput(attributes.provisioningProfile())
         .addInput(entitlements)
@@ -685,31 +668,6 @@ public final class ReleaseBundlingSupport {
         .build(ruleContext));
   }
 
-  /**
-   * Registers an action to copy Swift standard library dylibs into app bundle.
-   */
-  private void registerSwiftStdlibActionsIfNecessary() {
-    if (!objcProvider.is(USES_SWIFT)) {
-      return;
-    }
-
-    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
-
-    CustomCommandLine.Builder commandLine = CustomCommandLine.builder()
-        .addPath(intermediateArtifacts.swiftFrameworksFileZip().getExecPath())
-        .add("Frameworks")
-        .addPath(ObjcRuleClasses.SWIFT_STDLIB_TOOL)
-        .add("--platform").add(IosSdkCommands.swiftPlatform(objcConfiguration))
-        .addExecPath("--scan-executable", intermediateArtifacts.strippedSingleArchitectureBinary());
-
-    ruleContext.registerAction(
-        ObjcRuleClasses.spawnJavaOnDarwinActionBuilder(attributes.swiftStdlibToolDeployJar())
-            .setMnemonic("SwiftStdlibCopy")
-            .setCommandLine(commandLine.build())
-            .addOutput(intermediateArtifacts.swiftFrameworksFileZip())
-            .addInput(intermediateArtifacts.strippedSingleArchitectureBinary())
-            .build(ruleContext));
-  }
 
   private String extractPlistCommand(Artifact provisioningProfile) {
     return "security cms -D -i " + ShellUtils.shellEscape(provisioningProfile.getExecPathString());
@@ -797,13 +755,6 @@ public final class ReleaseBundlingSupport {
     Artifact runnerScriptTemplate() {
       return checkNotNull(
           ruleContext.getPrerequisiteArtifact("$runner_script_template", Mode.HOST));
-    }
-
-    /**
-     * Returns the location of the swiftstdlibtoolzip deploy jar.
-     */
-    Artifact swiftStdlibToolDeployJar() {
-      return ruleContext.getPrerequisiteArtifact("$swiftstdlibtoolzip_deploy", Mode.HOST);
     }
 
     String bundleId() {
