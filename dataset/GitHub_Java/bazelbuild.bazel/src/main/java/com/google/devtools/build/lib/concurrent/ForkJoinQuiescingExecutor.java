@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.concurrent;
 
-import com.google.devtools.build.lib.util.Preconditions;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 
@@ -24,71 +23,15 @@ import java.util.concurrent.ForkJoinTask;
 // maintaining AQV.remainingTasks.
 public class ForkJoinQuiescingExecutor extends AbstractQueueVisitor {
 
-  private ForkJoinQuiescingExecutor(
-      ForkJoinPool forkJoinPool, ErrorClassifier errorClassifier, boolean shutdownOnCompletion) {
+  public ForkJoinQuiescingExecutor(ForkJoinPool forkJoinPool, ErrorClassifier errorClassifier,
+      ErrorHandler errorHandler) {
     super(
         /*concurrent=*/ true,
         forkJoinPool,
-        shutdownOnCompletion,
+        /*shutdownOnCompletion=*/ true,
         /*failFastOnException=*/ true,
-        errorClassifier);
-  }
-
-  /** Builder for {@link ForkJoinQuiescingExecutor}. */
-  public static class Builder {
-    private ForkJoinPool forkJoinPool = null;
-    private boolean owned = false;
-    private ErrorClassifier errorClassifier = ErrorClassifier.DEFAULT;
-
-    private Builder() {
-    }
-
-    /**
-     * Sets the {@link ForkJoinPool} that will be used by the to-be-built
-     * {@link ForkJoinQuiescingExecutor}. The given {@link ForkJoinPool} will _not_ be shut down on
-     * completion of the {@link ForkJoinQuiescingExecutor}.
-     */
-    public Builder withoutOwnershipOf(ForkJoinPool forkJoinPool) {
-      Preconditions.checkState(this.forkJoinPool == null);
-      this.forkJoinPool = forkJoinPool;
-      this.owned = false;
-      return this;
-    }
-
-    /**
-     * Sets the {@link ForkJoinPool} that will be used by the to-be-built
-     * {@link ForkJoinQuiescingExecutor}. The given {@link ForkJoinPool} will be shut down on
-     * completion of the {@link ForkJoinQuiescingExecutor}.
-     */
-    public Builder withOwnershipOf(ForkJoinPool forkJoinPool) {
-      Preconditions.checkState(this.forkJoinPool == null);
-      this.forkJoinPool = forkJoinPool;
-      this.owned = true;
-      return this;
-    }
-
-    /**
-     * Sets the {@link ErrorClassifier} that will be used by the to-be-built
-     * {@link ForkJoinQuiescingExecutor}.
-     */
-    public Builder setErrorClassifier(ErrorClassifier errorClassifier) {
-      this.errorClassifier = errorClassifier;
-      return this;
-    }
-
-    /**
-     * Returns a fresh {@link ForkJoinQuiescingExecutor} using the previously given options.
-     */
-    public ForkJoinQuiescingExecutor build() {
-      Preconditions.checkNotNull(forkJoinPool);
-      return new ForkJoinQuiescingExecutor(
-          forkJoinPool, errorClassifier, /*shutdownOnCompletion=*/ owned);
-    }
-  }
-
-  /** Returns a fresh {@link Builder}. */
-  public static Builder newBuilder() {
-    return new Builder();
+        errorClassifier,
+        errorHandler);
   }
 
   @Override

@@ -62,7 +62,7 @@ import javax.annotation.Nullable;
  *
  * <p>This is intended only for use in alternative {@code MemoizingEvaluator} implementations.
  */
-public abstract class InvalidatingNodeVisitor<TGraph extends InvalidatableGraph> {
+public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGraph> {
 
   // Default thread count is equal to the number of cores to exploit
   // that level of hardware parallelism, since invalidation should be CPU-bound.
@@ -236,13 +236,13 @@ public abstract class InvalidatingNodeVisitor<TGraph extends InvalidatableGraph>
   }
 
   /** A node-deleting implementation. */
-  static class DeletingNodeVisitor extends InvalidatingNodeVisitor<InMemoryGraph> {
+  static class DeletingNodeVisitor extends InvalidatingNodeVisitor<DirtiableGraph> {
 
     private final Set<SkyKey> visited = Sets.newConcurrentHashSet();
     private final boolean traverseGraph;
 
     DeletingNodeVisitor(
-        InMemoryGraph graph,
+        DirtiableGraph graph,
         EvaluationProgressReceiver invalidationReceiver,
         InvalidationState state,
         boolean traverseGraph,
@@ -269,7 +269,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends InvalidatableGraph>
       for (SkyKey key : unvisitedKeys) {
         pendingVisitations.add(Pair.of(key, InvalidationType.DELETED));
       }
-      final Map<SkyKey, NodeEntry> entries = graph.getBatchForInvalidation(unvisitedKeys);
+      final Map<SkyKey, NodeEntry> entries = graph.getBatch(unvisitedKeys);
       for (final SkyKey key : unvisitedKeys) {
         executor.execute(
             new Runnable() {
@@ -305,7 +305,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends InvalidatableGraph>
                       entry.isDone()
                           ? entry.getDirectDeps()
                           : entry.getAllDirectDepsForIncompleteNode();
-                  Map<SkyKey, NodeEntry> depMap = graph.getBatchForInvalidation(directDeps);
+                  Map<SkyKey, NodeEntry> depMap = graph.getBatch(directDeps);
                   for (Map.Entry<SkyKey, NodeEntry> directDepEntry : depMap.entrySet()) {
                     NodeEntry dep = directDepEntry.getValue();
                     if (dep != null) {
@@ -338,7 +338,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends InvalidatableGraph>
   }
 
   /** A node-dirtying implementation. */
-  static class DirtyingNodeVisitor extends InvalidatingNodeVisitor<InvalidatableGraph> {
+  static class DirtyingNodeVisitor extends InvalidatingNodeVisitor<ThinNodeQueryableGraph> {
 
     private final Set<SkyKey> changed =
         Collections.newSetFromMap(
@@ -351,7 +351,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends InvalidatableGraph>
     private final boolean supportInterruptions;
 
     protected DirtyingNodeVisitor(
-        InvalidatableGraph graph,
+        ThinNodeQueryableGraph graph,
         EvaluationProgressReceiver invalidationReceiver,
         InvalidationState state,
         DirtyKeyTracker dirtyKeyTracker,
@@ -365,7 +365,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends InvalidatableGraph>
      * passing {@code false} for {@param supportInterruptions}.
      */
     protected DirtyingNodeVisitor(
-        InvalidatableGraph graph,
+        ThinNodeQueryableGraph graph,
         EvaluationProgressReceiver invalidationReceiver,
         InvalidationState state,
         DirtyKeyTracker dirtyKeyTracker,
@@ -432,7 +432,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends InvalidatableGraph>
           pendingVisitations.add(Pair.of(key, invalidationType));
         }
       }
-      final Map<SkyKey, ? extends ThinNodeEntry> entries = graph.getBatchForInvalidation(keysToGet);
+      final Map<SkyKey, ? extends ThinNodeEntry> entries = graph.getBatch(keysToGet);
       if (enqueueingKeyForExistenceCheck != null && entries.size() != keysToGet.size()) {
         Set<SkyKey> missingKeys = Sets.difference(ImmutableSet.copyOf(keysToGet), entries.keySet());
         throw new IllegalStateException(
