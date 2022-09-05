@@ -46,7 +46,7 @@ public class DictionaryEntity extends GenericEntity<String> implements RecordCre
     @Column(length = 32,name = "classified")
     private String                     classified;
     //说明
-    @Column
+    @Column(nullable = false)
     private String                     describe;
     //创建时间
     @Column(name = "create_time")
