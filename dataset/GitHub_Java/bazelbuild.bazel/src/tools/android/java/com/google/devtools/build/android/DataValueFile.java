@@ -42,8 +42,9 @@ public class DataValueFile implements DataResource, DataAsset {
   public static DataValueFile of(DataSource source) {
     return new DataValueFile(source);
   }
-
-  /** Creates a {@link DataValueFile} from a {@link SerializeFormat#DataValue}. */
+  /**
+   * Creates a {@link DataValueFile} from a {@link SerializeFormat.DataValue}.
+   */
   public static DataValueFile from(Path source) {
     return of(source);
   }
@@ -80,7 +81,7 @@ public class DataValueFile implements DataResource, DataAsset {
 
   @Override
   public void writeResource(FullyQualifiedName key, AndroidDataWritingVisitor mergedDataWriter)
-      throws MergingException {
+      throws IOException, MergingException {
     mergedDataWriter.copyResource(source.getPath(), key.toPathString(source.getPath()));
   }
 
@@ -100,29 +101,9 @@ public class DataValueFile implements DataResource, DataAsset {
   }
 
   @Override
-  public DataResource overwrite(DataResource resource) {
-    if (equals(resource)) {
-      return this;
-    }
-    return of(source.overwrite(resource.source()));
-  }
-
-  @Override
-  public DataAsset overwrite(DataAsset asset) {
-    if (equals(asset)) {
-      return this;
-    }
-    return of(source.overwrite(asset.source()));
-  }
-
-  @Override
   public void writeResourceToClass(FullyQualifiedName key,
       AndroidResourceClassWriter resourceClassWriter) {
     resourceClassWriter.writeSimpleResource(key.type(), key.name());
   }
 
-  @Override
-  public DataValue update(DataSource source) {
-    return of(source);
-  }
 }

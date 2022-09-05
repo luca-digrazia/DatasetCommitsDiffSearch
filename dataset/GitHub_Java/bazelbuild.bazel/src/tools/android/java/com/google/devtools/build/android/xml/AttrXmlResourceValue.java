@@ -756,9 +756,4 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     public void writeToClass(AndroidResourceClassWriter writer) {
     }
   }
-
-  @Override
-  public String asConflictStringWith(DataSource source) {
-    return source.asConflictString();
-  }
 }

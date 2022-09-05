@@ -215,9 +215,4 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
       throw new XMLStreamException(e.getMessage(), start.getLocation());
     }
   }
-
-  @Override
-  public String asConflictStringWith(DataSource source) {
-    return source.asConflictString();
-  }
 }

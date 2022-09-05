@@ -45,19 +45,11 @@ public interface AndroidDataWritingVisitor extends Flushable {
    *
    * @param source The source file to copy.
    * @param relativeDestinationPath The relative destination path to write the resource to.
-   * @throws MergingException for errors during copying.
+   * @throws IOException if there are errors during copying.
+   * @throws MergingException for errors during png crunching.
    */
-  void copyResource(Path source, String relativeDestinationPath) throws MergingException;
-
-  /**
-   * Adds the provided attribute to the root &lt;resources&gt; tag.
-   *
-   * @param fqn The fully qualified name of the attribute indicating both the name of the attribute
-   *     and which qualified values.xml file to be associated with.
-   * @param name The simple name of the attribute given as {@code [prefix:]name}.
-   * @param value The value of the attribute.
-   */
-  void defineAttribute(FullyQualifiedName fqn, String name, String value);
+  void copyResource(Path source, String relativeDestinationPath)
+      throws IOException, MergingException;
 
   /**
    * Adds the namespaces associated with a {@link FullyQualifiedName}.

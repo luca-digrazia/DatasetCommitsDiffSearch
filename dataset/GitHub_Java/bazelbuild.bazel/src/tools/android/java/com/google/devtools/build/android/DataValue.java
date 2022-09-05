@@ -33,6 +33,4 @@ public interface DataValue {
    */
   int serializeTo(
       DataKey key, DataSourceTable sourceTable, OutputStream output) throws IOException;
-  
-  DataValue update(DataSource source);
 }
