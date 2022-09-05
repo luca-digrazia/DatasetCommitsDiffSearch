@@ -10,8 +10,6 @@ import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.expr.SQLIdentifierExpr;
 import com.alibaba.druid.sql.ast.expr.SQLMethodInvokeExpr;
 import com.google.common.collect.ImmutableSet;
-import org.apache.lucene.search.join.ScoreMode;
-import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.geo.ShapeRelation;
 import org.elasticsearch.common.geo.builders.ShapeBuilder;
 import org.elasticsearch.common.xcontent.ToXContent;
@@ -106,7 +104,7 @@ public abstract class Maker {
 		case "match_phrase":
 		case "matchphrase":
 			paramer = Paramer.parseParamer(value);
-			MatchPhraseQueryBuilder matchPhraseQuery = QueryBuilders.matchPhraseQuery(name, paramer.value);
+			MatchQueryBuilder matchPhraseQuery = QueryBuilders.matchPhraseQuery(name, paramer.value);
 			bqb = Paramer.fullParamer(matchPhraseQuery, paramer);
 			break;
 		default:
@@ -125,9 +123,8 @@ public abstract class Maker {
 		case N:
 		case EQ:
 			if (value == null || value instanceof SQLIdentifierExpr) {
-                //todo: change to exists
 				if(value == null || ((SQLIdentifierExpr) value).getName().equalsIgnoreCase("missing")) {
-                    x = QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(name));
+                    x = QueryBuilders.missingQuery(name);
 				}
 				else {
 					throw new SqlParseException(String.format("Cannot recoginze Sql identifer %s", ((SQLIdentifierExpr) value).getName()));
@@ -164,13 +161,13 @@ public abstract class Maker {
 		case IN:
             //todo: value is subquery? here or before
 			Object[] values = (Object[]) value;
-			MatchPhraseQueryBuilder[] matchQueries = new MatchPhraseQueryBuilder[values.length];
+			MatchQueryBuilder[] matchQueries = new MatchQueryBuilder[values.length];
 			for(int i = 0; i < values.length; i++) {
 				matchQueries[i] = QueryBuilders.matchPhraseQuery(name, values[i]);
 			}
 
             BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
-            for(MatchPhraseQueryBuilder matchQuery : matchQueries) {
+            for(MatchQueryBuilder matchQuery : matchQueries) {
                 boolQuery.should(matchQuery);
             }
             x = boolQuery;
@@ -183,7 +180,7 @@ public abstract class Maker {
             String wkt = cond.getValue().toString();
             try {
                 ShapeBuilder shapeBuilder = getShapeBuilderFromString(wkt);
-                x = QueryBuilders.geoShapeQuery(cond.getName(), shapeBuilder);
+                x = QueryBuilders.geoShapeQuery(cond.getName(), shapeBuilder,ShapeRelation.INTERSECTS);
             } catch (IOException e) {
                 e.printStackTrace();
                 throw new SqlParseException("couldn't create shapeBuilder from wkt: " + wkt);
@@ -193,50 +190,44 @@ public abstract class Maker {
             BoundingBoxFilterParams boxFilterParams = (BoundingBoxFilterParams) cond.getValue();
             Point topLeft = boxFilterParams.getTopLeft();
             Point bottomRight = boxFilterParams.getBottomRight();
-            x = QueryBuilders.geoBoundingBoxQuery(cond.getName()).setCorners(topLeft.getLat(), topLeft.getLon(),bottomRight.getLat(), bottomRight.getLon());
+            x = QueryBuilders.geoBoundingBoxQuery(cond.getName()).topLeft(topLeft.getLat(), topLeft.getLon()).bottomRight(bottomRight.getLat(), bottomRight.getLon());
             break;
         case GEO_DISTANCE:
             DistanceFilterParams distanceFilterParams = (DistanceFilterParams) cond.getValue();
             Point fromPoint = distanceFilterParams.getFrom();
             String distance = trimApostrophes(distanceFilterParams.getDistance());
-            x = QueryBuilders.geoDistanceQuery(cond.getName()).distance(distance).point(fromPoint.getLat(),fromPoint.getLon());
+            x = QueryBuilders.geoDistanceQuery(cond.getName()).distance(distance).lon(fromPoint.getLon()).lat(fromPoint.getLat());
             break;
         case GEO_DISTANCE_RANGE:
             RangeDistanceFilterParams rangeDistanceFilterParams = (RangeDistanceFilterParams) cond.getValue();
             fromPoint = rangeDistanceFilterParams.getFrom();
             String distanceFrom = trimApostrophes(rangeDistanceFilterParams.getDistanceFrom());
             String distanceTo = trimApostrophes(rangeDistanceFilterParams.getDistanceTo());
-            x = QueryBuilders.geoDistanceRangeQuery(cond.getName(), fromPoint.getLat(), fromPoint.getLon()).from(distanceFrom).to(distanceTo);
+            x = QueryBuilders.geoDistanceRangeQuery(cond.getName()).from(distanceFrom).to(distanceTo).lon(fromPoint.getLon()).lat(fromPoint.getLat());
             break;
         case GEO_POLYGON:
             PolygonFilterParams polygonFilterParams = (PolygonFilterParams) cond.getValue();
-            ArrayList<GeoPoint> geoPoints = new ArrayList<GeoPoint>();
+            GeoPolygonQueryBuilder polygonFilterBuilder = QueryBuilders.geoPolygonQuery(cond.getName());
             for(Point p : polygonFilterParams.getPolygon())
-                geoPoints.add(new GeoPoint(p.getLat(), p.getLon()));
-            GeoPolygonQueryBuilder polygonFilterBuilder = QueryBuilders.geoPolygonQuery(cond.getName(),geoPoints);
+                polygonFilterBuilder.addPoint(p.getLat(),p.getLon());
             x = polygonFilterBuilder;
             break;
         case GEO_CELL:
             CellFilterParams cellFilterParams = (CellFilterParams) cond.getValue();
             Point geoHashPoint = cellFilterParams.getGeohashPoint();
-            GeoPoint geoPoint = new GeoPoint(geoHashPoint.getLat(),geoHashPoint.getLon());
-            x = QueryBuilders.geoHashCellQuery(cond.getName(),geoPoint).precision(cellFilterParams.getPrecision()).neighbors(cellFilterParams.isNeighbors());
+            x = QueryBuilders.geoHashCellQuery(cond.getName()).point(geoHashPoint.getLat(),geoHashPoint.getLon()).precision(cellFilterParams.getPrecision()).neighbors(cellFilterParams.isNeighbors());
             break;
         case NIN_TERMS:
         case IN_TERMS:
             Object[] termValues = (Object[]) value;
             if(termValues.length == 1 && termValues[0] instanceof SubQueryExpression)
                 termValues = ((SubQueryExpression) termValues[0]).getValues();
-            String[] termValuesStrings = new String[termValues.length];
-            for (int i=0;i<termValues.length;i++){
-                termValuesStrings[i] = termValues[i].toString();
-            }
-            x = QueryBuilders.termsQuery(name,termValuesStrings);
+            x = QueryBuilders.termsQuery(name,termValues);
         break;
         case NTERM:
         case TERM:
             Object term  =( (Object[]) value)[0];
-            x = QueryBuilders.termQuery(name,term.toString());
+            x = QueryBuilders.termQuery(name,term);
             break;
         case IDS_QUERY:
             Object[] idsParameters = (Object[]) value;
@@ -258,7 +249,7 @@ public abstract class Maker {
             Where whereNested = (Where) value;
             BoolQueryBuilder nestedFilter = QueryMaker.explan(whereNested);
 
-            x = QueryBuilders.nestedQuery(name, nestedFilter, ScoreMode.None);
+            x = QueryBuilders.nestedQuery(name, nestedFilter);
         break;
         case CHILDREN_COMPLEX:
             if(value == null || ! (value instanceof Where) )
@@ -266,8 +257,8 @@ public abstract class Maker {
 
             Where whereChildren = (Where) value;
             BoolQueryBuilder childrenFilter = QueryMaker.explan(whereChildren);
-            //todo: pass score mode
-            x = QueryBuilders.hasChildQuery(name, childrenFilter,ScoreMode.None);
+
+            x = QueryBuilders.hasChildQuery(name, childrenFilter);
 
         break;
         case SCRIPT:
