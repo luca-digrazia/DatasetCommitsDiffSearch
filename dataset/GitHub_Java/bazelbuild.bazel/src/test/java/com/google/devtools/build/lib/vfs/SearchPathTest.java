@@ -38,7 +38,6 @@ public class SearchPathTest {
     fs.getPath("/bin").createDirectory();
     List<Path> searchPath = ImmutableList.of(fs.getPath("/"), fs.getPath("/bin"));
     assertThat(SearchPath.parse(fs, "/:/bin")).isEqualTo(searchPath);
-    assertThat(SearchPath.parse(fs, ".:/:/bin")).isEqualTo(searchPath);
 
     fs.getOutputStream(fs.getPath("/bin/exe")).write(new byte[5]);
 
