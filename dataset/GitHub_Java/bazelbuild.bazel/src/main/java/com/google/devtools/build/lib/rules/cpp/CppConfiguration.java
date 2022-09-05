@@ -139,7 +139,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   /**
    * This enumeration is used for the --strip option.
    */
-  public enum StripMode {
+  public static enum StripMode {
 
     ALWAYS("always"),       // Always strip.
     SOMETIMES("sometimes"), // Strip iff compilationMode == FASTBUILD.
@@ -1923,10 +1923,10 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
       }
     }
     try {
-      getFdoSupport().prepareToBuild(execRoot);
+      getFdoSupport().prepareToBuild(execRoot, artifactFactory, resolver);
     } catch (ZipException e) {
       throw new ViewCreationFailedException("Error reading provided FDO zip file", e);
-    } catch (FdoException | IOException e) {
+    } catch (FdoException | IOException | PackageRootResolutionException e) {
       throw new ViewCreationFailedException("Error while initializing FDO support", e);
     }
   }
