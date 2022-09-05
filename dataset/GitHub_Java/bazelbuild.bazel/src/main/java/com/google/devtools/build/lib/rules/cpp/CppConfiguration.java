@@ -1526,13 +1526,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   public boolean skipStaticOutputs() {
     return cppOptions.skipStaticOutputs;
   }
-  
-  /**
-   * Returns whether we are processing headers in dependencies of built C++ targets.
-   */
-  public boolean processHeadersInDependencies() {
-    return cppOptions.processHeadersInDependencies;
-  }
 
   /**
    * Returns true if Fission is specified for this build and supported by the crosstool.

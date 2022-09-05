@@ -84,7 +84,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
       return;
     }
 
-    Map<String, String> env = create().getLocalShellEnvironment();
+    Map<String, String> env = create().getDefaultShellEnvironment();
     assertThat(env).containsEntry("LANG", "en_US");
     assertThat(env).containsKey("PATH");
     assertThat(env.get("PATH")).contains("/bin:/usr/bin");

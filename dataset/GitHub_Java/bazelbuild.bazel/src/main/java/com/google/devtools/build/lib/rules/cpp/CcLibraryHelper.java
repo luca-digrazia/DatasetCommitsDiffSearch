@@ -617,8 +617,23 @@ public final class CcLibraryHelper {
       }
     }
 
-    CppModel model = initializeCppModel();
-    CppCompilationContext cppCompilationContext = initializeCppCompilationContext(model);
+    CppModel model = new CppModel(ruleContext, semantics)
+        .addSources(sources)
+        .addCopts(copts)
+        .setLinkTargetType(linkType)
+        .setNeverLink(neverlink)
+        .setFake(fake)
+        .setAllowInterfaceSharedObjects(emitInterfaceSharedObjects)
+        .setCreateDynamicLibrary(emitDynamicLibrary)
+        // Note: this doesn't actually save the temps, it just makes the CppModel use the
+        // configurations --save_temps setting to decide whether to actually save the temps.
+        .setSaveTemps(true)
+        .setNoCopts(nocopts)
+        .setDynamicLibrary(dynamicLibrary)
+        .addLinkopts(linkopts)
+        .setFeatureConfiguration(featureConfiguration);
+    CppCompilationContext cppCompilationContext =
+        initializeCppCompilationContext(model, featureConfiguration);
     model.setContext(cppCompilationContext);
     boolean compileHeaderModules = featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES);
     Preconditions.checkState(
@@ -709,30 +724,10 @@ public final class CcLibraryHelper {
   }
 
   /**
-   * Creates the C/C++ compilation action creator.
-   */
-  private CppModel initializeCppModel() {
-    return new CppModel(ruleContext, semantics)
-        .addSources(sources)
-        .addCopts(copts)
-        .setLinkTargetType(linkType)
-        .setNeverLink(neverlink)
-        .setFake(fake)
-        .setAllowInterfaceSharedObjects(emitInterfaceSharedObjects)
-        .setCreateDynamicLibrary(emitDynamicLibrary)
-        // Note: this doesn't actually save the temps, it just makes the CppModel use the
-        // configurations --save_temps setting to decide whether to actually save the temps.
-        .setSaveTemps(true)
-        .setNoCopts(nocopts)
-        .setDynamicLibrary(dynamicLibrary)
-        .addLinkopts(linkopts)
-        .setFeatureConfiguration(featureConfiguration);
-  }
-
-  /**
    * Create context for cc compile action from generated inputs.
    */
-  private CppCompilationContext initializeCppCompilationContext(CppModel model) {
+  private CppCompilationContext initializeCppCompilationContext(CppModel model,
+      FeatureConfiguration featureConfiguration) {
     CppCompilationContext.Builder contextBuilder =
         new CppCompilationContext.Builder(ruleContext);
 
@@ -825,23 +820,14 @@ public final class CcLibraryHelper {
     return contextBuilder.build();
   }
 
-  /**
-   * Creates context for cc compile action from generated inputs.
-   */
-  public CppCompilationContext initializeCppCompilationContext() {
-    return initializeCppCompilationContext(initializeCppModel());
-  }
-
   private Iterable<CppModuleMap> collectModuleMaps() {
     // Cpp module maps may be null for some rules. We filter the nulls out at the end.
     List<CppModuleMap> result = new ArrayList<>();
     Iterables.addAll(result, Iterables.transform(deps, CPP_DEPS_TO_MODULES));
-    if (ruleContext.getRule().getAttributeDefinition(":stl") != null) {
-      CppCompilationContext stl =
-          ruleContext.getPrerequisite(":stl", Mode.TARGET, CppCompilationContext.class);
-      if (stl != null) {
-        result.add(stl.getCppModuleMap());
-      }
+    CppCompilationContext stl =
+        ruleContext.getPrerequisite(":stl", Mode.TARGET, CppCompilationContext.class);
+    if (stl != null) {
+      result.add(stl.getCppModuleMap());
     }
 
     CcToolchainProvider toolchain = CppHelper.getToolchain(ruleContext);
