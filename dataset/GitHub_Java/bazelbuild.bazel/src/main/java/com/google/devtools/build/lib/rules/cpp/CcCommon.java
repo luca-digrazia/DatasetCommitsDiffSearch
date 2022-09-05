@@ -162,13 +162,12 @@ public final class CcCommon {
     return ruleContext.attributes().has(name, type);
   }
 
-  /** Collects all .dwo artifacts in this target's transitive closure. */
+  /**
+   * Collects all .dwo artifacts in this target's transitive closure.
+   */
   public static DwoArtifactsCollector collectTransitiveDwoArtifacts(
       RuleContext ruleContext,
-      CcCompilationOutputs compilationOutputs,
-      boolean generateDwo,
-      boolean ltoBackendArtifactsUsePic,
-      Iterable<LTOBackendArtifacts> ltoBackendArtifacts) {
+      CcCompilationOutputs compilationOutputs) {
     ImmutableList.Builder<TransitiveInfoCollection> deps =
         ImmutableList.<TransitiveInfoCollection>builder();
 
@@ -178,15 +177,9 @@ public final class CcCommon {
       deps.add(CppHelper.mallocForTarget(ruleContext));
     }
 
-    return compilationOutputs == null // Possible in LIPO collection mode (see initializationHook).
+    return compilationOutputs == null  // Possible in LIPO collection mode (see initializationHook).
         ? DwoArtifactsCollector.emptyCollector()
-        : DwoArtifactsCollector.transitiveCollector(
-            ruleContext,
-            compilationOutputs,
-            deps.build(),
-            generateDwo,
-            ltoBackendArtifactsUsePic,
-            ltoBackendArtifacts);
+        : DwoArtifactsCollector.transitiveCollector(compilationOutputs, deps.build());
   }
 
   public TransitiveLipoInfoProvider collectTransitiveLipoLabels(CcCompilationOutputs outputs) {

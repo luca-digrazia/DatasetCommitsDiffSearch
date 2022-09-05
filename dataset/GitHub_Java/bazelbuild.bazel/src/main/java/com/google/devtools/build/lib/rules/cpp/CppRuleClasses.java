@@ -198,11 +198,6 @@ public class CppRuleClasses {
   public static final String HEADER_MODULES = "header_modules";
 
   /**
-   * A string constant for the compile_all_modules feature.
-   */
-  public static final String COMPILE_ALL_MODULES = "compile_all_modules";
-
-  /**
    * A string constant for the use_header_modules feature.
    *
    * <p>This feature is only used during rollout; we expect to default enable this once we
@@ -219,6 +214,14 @@ public class CppRuleClasses {
    * with a clang release, we want to be able to switch back and forth easily.
    */
   public static final String GENERATE_SUBMODULES = "generate_submodules";
+
+  /**
+   * A string constant for the transitive_module_maps feature.
+   *
+   * <p>This feature is used temporarily to switch between adding transitive module maps to a
+   * modules enabled build or only adding module maps from direct dependencies.
+   */
+  public static final String TRANSITIVE_MODULE_MAPS = "transitive_module_maps";
 
   /**
    * A string constant for the no_legacy_features feature.
