@@ -138,7 +138,7 @@ public class BinaryOperatorExpression extends QueryExpression {
         }
       });
     }
-    ParallelQueryUtils.executeQueryTasksAndWaitInterruptiblyFailFast(queryTasks, forkJoinPool);
+    ParallelQueryUtils.executeQueryTasksAndWaitInterruptibly(queryTasks, forkJoinPool);
   }
 
   /**
