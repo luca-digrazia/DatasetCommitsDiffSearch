@@ -1,7 +1,5 @@
 package org.hswebframework.web.authorization;
 
-import org.hswebframework.web.authorization.exception.AccessDenyException;
-
 import java.util.Objects;
 import java.util.function.Predicate;
 
@@ -9,7 +7,6 @@ import java.util.function.Predicate;
  * @author zhouhao
  * @since 3.0
  */
-@FunctionalInterface
 public interface AuthenticationPredicate extends Predicate<Authentication> {
 
     static AuthenticationPredicate has(String permissionString) {
@@ -49,17 +46,4 @@ public interface AuthenticationPredicate extends Predicate<Authentication> {
                 .map(this::test)
                 .orElse(false);
     }
-
-    default void assertHas() {
-        if (!test()) {
-            throw new AccessDenyException();
-        }
-    }
-
-    default void assertHas(Authentication authentication) {
-        if (!test(authentication)) {
-            throw new AccessDenyException();
-        }
-    }
-
 }
