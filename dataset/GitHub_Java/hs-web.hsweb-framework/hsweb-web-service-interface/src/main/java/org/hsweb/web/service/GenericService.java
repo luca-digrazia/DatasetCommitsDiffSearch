@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * 通用Service。继承了通用mapper的常用增删改查方法
- * <p>
+ * <p/>
  * Created by zh.sqy@qq.com on 2015-07-20 0020.
  */
 public interface GenericService<Po, Pk> {
@@ -30,20 +30,6 @@ public interface GenericService<Po, Pk> {
      * @throws Exception 异常信息
      */
     Pk insert(Po data) throws Exception;
-
-    default List<Pk> batchInsert(List<Po> data) throws Exception {
-        return batchInsert(data, false);
-    }
-
-    /**
-     * 批量添加数据
-     *
-     * @param data     数据集合
-     * @param skipFail 是否跳过验证失败的的数据
-     * @return 添加后产生的主键集合
-     * @throws Exception 异常信息
-     */
-    List<Pk> batchInsert(List<Po> data, boolean skipFail) throws Exception;
 
     /**
      * 根据主键删除记录
@@ -109,19 +95,5 @@ public interface GenericService<Po, Pk> {
      * @throws Exception 异常信息
      */
     Po selectByPk(Pk pk) throws Exception;
-
-    /**
-     * 查询只返回单个结果
-     *
-     * @param param 查询条件
-     * @return 单个结果
-     * @throws Exception
-     */
-    default Po selectSingle(QueryParam param) throws Exception {
-        param.doPaging(0, 1);
-        List<Po> list = this.select(param);
-        if (list.size() == 0) return null;
-        else return list.get(0);
-    }
 
 }
