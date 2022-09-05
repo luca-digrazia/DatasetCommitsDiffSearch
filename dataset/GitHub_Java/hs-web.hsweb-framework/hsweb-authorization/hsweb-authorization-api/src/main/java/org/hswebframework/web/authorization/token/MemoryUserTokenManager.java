@@ -18,8 +18,8 @@
 
 package org.hswebframework.web.authorization.token;
 
-import org.hswebframework.web.authorization.token.event.UserSignInEvent;
 import org.hswebframework.web.authorization.listener.AuthorizationListenerDispatcher;
+import org.hswebframework.web.authorization.token.event.UserSignInEvent;
 
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -67,9 +67,11 @@ public class MemoryUserTokenManager implements UserTokenManager {
 
     private SimpleUserToken checkTimeout(SimpleUserToken detail) {
         if (null == detail) return null;
-        if (System.currentTimeMillis() - detail.getLastRequestTime() > timeout * 1000) {
+        if (detail.getMaxInactiveInterval() <= 0) {
+            return detail;
+        }
+        if (System.currentTimeMillis() - detail.getLastRequestTime() > detail.getMaxInactiveInterval()) {
             detail.setState(TokenState.expired);
-            // signOutByToken(detail.getToken());
             return detail;
         }
         return detail;
@@ -97,9 +99,8 @@ public class MemoryUserTokenManager implements UserTokenManager {
 
     @Override
     public boolean tokenIsLoggedIn(String token) {
-        UserToken userToken = getByToken(token);
 
-        return userToken != null && userToken.isEffective();
+        return getByToken(token) != null;
     }
 
     @Override
@@ -142,7 +143,19 @@ public class MemoryUserTokenManager implements UserTokenManager {
     }
 
     @Override
-    public UserToken signIn(String token, String userId) {
+    public void changeTokenState(String token, TokenState state) {
+        SimpleUserToken userToken = getByToken(token);
+        if (null != userToken)
+            userToken.setState(state);
+    }
+
+    @Override
+    public void changeUserState(String user, TokenState state) {
+        getByUserId(user).forEach(token -> changeTokenState(token.getToken(), state));
+    }
+
+    @Override
+    public UserToken signIn(String token, String userId, long maxInactiveInterval) {
         SimpleUserToken detail = new SimpleUserToken(userId, token);
         if (null != authorizationListenerDispatcher)
             authorizationListenerDispatcher.doEvent(new UserSignInEvent(detail));
@@ -158,6 +171,7 @@ public class MemoryUserTokenManager implements UserTokenManager {
         } else {
             detail.setState(TokenState.effective);
         }
+        detail.setMaxInactiveInterval(maxInactiveInterval);
         tokenUserStorage.put(token, detail);
         return detail;
     }
