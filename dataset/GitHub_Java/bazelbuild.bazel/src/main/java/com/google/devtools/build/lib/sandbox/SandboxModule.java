@@ -11,26 +11,32 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.Subscribe;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.actions.ActionContextConsumer;
 import com.google.devtools.build.lib.actions.ActionContextProvider;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
+import com.google.devtools.build.lib.concurrent.ExecutorUtil;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.common.options.OptionsBase;
 import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * This module provides the Sandbox spawn strategy.
  */
-public final class SandboxModule extends BlazeModule {
+public class SandboxModule extends BlazeModule {
+  // Per-server state
+  private ExecutorService backgroundWorkers;
+
   // Per-command state
   private CommandEnvironment env;
   private BuildRequest buildRequest;
@@ -39,9 +45,10 @@ public final class SandboxModule extends BlazeModule {
   public Iterable<ActionContextProvider> getActionContextProviders() {
     Preconditions.checkNotNull(env);
     Preconditions.checkNotNull(buildRequest);
+    Preconditions.checkNotNull(backgroundWorkers);
     try {
       return ImmutableList.<ActionContextProvider>of(
-          SandboxActionContextProvider.create(env, buildRequest));
+          SandboxActionContextProvider.create(env, buildRequest, backgroundWorkers));
     } catch (IOException e) {
       throw new IllegalStateException(e);
     }
@@ -62,6 +69,9 @@ public final class SandboxModule extends BlazeModule {
 
   @Override
   public void beforeCommand(Command command, CommandEnvironment env) {
+    backgroundWorkers = Executors.newCachedThreadPool(new ThreadFactoryBuilder()
+        .setNameFormat("linux-sandbox-background-worker-%d")
+        .build());
     this.env = env;
     env.getEventBus().register(this);
   }
@@ -70,6 +80,11 @@ public final class SandboxModule extends BlazeModule {
   public void afterCommand() {
     env = null;
     buildRequest = null;
+
+    // "bazel clean" will also try to delete the sandbox directories, leading to a race condition
+    // if it is run right after a "bazel build". We wait for and shutdown the background worker pool
+    // before continuing to avoid this.
+    ExecutorUtil.interruptibleShutdown(backgroundWorkers);
   }
 
   @Subscribe
