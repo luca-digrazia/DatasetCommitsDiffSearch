@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,8 +20,6 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ComparisonChain;
-import com.google.common.collect.Interner;
-import com.google.common.collect.Interners;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.Canonicalizer;
@@ -46,17 +44,6 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 public final class PackageIdentifier implements Comparable<PackageIdentifier>, Serializable {
-
-  private static final Interner<PackageIdentifier> INTERNER = Interners.newStrongInterner();
-
-  public static PackageIdentifier create(String repository, PathFragment pkgName)
-      throws LabelSyntaxException {
-    return create(RepositoryName.create(repository), pkgName);
-  }
-
-  public static PackageIdentifier create(RepositoryName repository, PathFragment pkgName) {
-    return INTERNER.intern(new PackageIdentifier(repository, pkgName));
-  }
 
   /**
    * A human-readable name for the repository.
@@ -294,7 +281,7 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
 
   public static PackageIdentifier createInDefaultRepo(PathFragment name) {
     try {
-      return create(DEFAULT_REPOSITORY, name);
+      return new PackageIdentifier(DEFAULT_REPOSITORY, name);
     } catch (LabelSyntaxException e) {
       throw new IllegalArgumentException("could not create package identifier for " + name
           + ": " + e.getMessage());
@@ -310,7 +297,11 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
   /** The name of the package. Canonical (i.e. x.equals(y) <=> x==y). */
   private final PathFragment pkgName;
 
-  private PackageIdentifier(RepositoryName repository, PathFragment pkgName) {
+  public PackageIdentifier(String repository, PathFragment pkgName) throws LabelSyntaxException {
+    this(RepositoryName.create(repository), pkgName);
+  }
+
+  public PackageIdentifier(RepositoryName repository, PathFragment pkgName) {
     Preconditions.checkNotNull(repository);
     Preconditions.checkNotNull(pkgName);
     this.repository = repository;
@@ -344,7 +335,7 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
       throw new LabelSyntaxException(error);
     }
 
-    return create(repo, new PathFragment(packageName));
+    return new PackageIdentifier(repo, new PathFragment(packageName));
   }
 
   public RepositoryName getRepository() {
