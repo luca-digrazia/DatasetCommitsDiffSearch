@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.InvalidFamilyNameException;
 import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.RepeatedFamilyNameException;
 import com.google.devtools.build.lib.rules.objc.XcodeProvider.Builder;
@@ -316,8 +315,9 @@ final class BundleSupport {
       Artifact bundled = intermediateArtifacts.convertedStringsFile(strings);
       ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
           .setMnemonic("ConvertStringsPlist")
-          .setExecutable(new PathFragment("/usr/bin/plutil"))
+          .setExecutable(XCRUN)
           .setCommandLine(CustomCommandLine.builder()
+              .add("plutil")
               .add("-convert").add("binary1")
               .addExecPath("-o", bundled)
               .add("--")

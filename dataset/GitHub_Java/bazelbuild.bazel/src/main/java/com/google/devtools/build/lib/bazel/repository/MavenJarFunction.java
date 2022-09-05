@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
+import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.skyframe.RepositoryValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
@@ -109,10 +110,12 @@ public class MavenJarFunction extends HttpArchiveFunction {
 
   SkyValue createOutputTree(MavenDownloader downloader, Environment env)
       throws RepositoryFunctionException {
-    Path outputDirectory = downloader.getOutputDirectory();
-    createDirectory(outputDirectory);
-    Path repositoryJar;
+    FileValue outputDirectoryValue = createDirectory(downloader.getOutputDirectory(), env);
+    if (outputDirectoryValue == null) {
+      return null;
+    }
 
+    Path repositoryJar;
     try {
       repositoryJar = downloader.download();
     } catch (IOException e) {
@@ -127,7 +130,7 @@ public class MavenJarFunction extends HttpArchiveFunction {
               .setTargetKind(MavenJarRule.NAME)
               .setTargetName(downloader.getName())
               .setArchivePath(repositoryJar)
-              .setRepositoryPath(outputDirectory).build()),
+              .setRepositoryPath(outputDirectoryValue.realRootedPath().asPath()).build()),
           IOException.class);
       if (value == null) {
         return null;
@@ -135,7 +138,11 @@ public class MavenJarFunction extends HttpArchiveFunction {
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
-    return RepositoryValue.create(value.getDirectory());
+    FileValue repositoryFileValue = getRepositoryDirectory(value.getDirectory(), env);
+    if (repositoryFileValue == null) {
+      return null;
+    }
+    return RepositoryValue.create(repositoryFileValue);
   }
 
   @Override

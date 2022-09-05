@@ -28,7 +28,9 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
 import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetFactory;
+
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -45,6 +47,21 @@ public class AndroidSdkRepositoryRule implements RuleDefinition {
           String prefix = "@" + rule.getName() + "//:";
           ImmutableMap.Builder<String, Label> builder = ImmutableMap.builder();
           builder.put("android/sdk", Label.parseAbsoluteUnchecked(prefix + "sdk"));
+          builder.put(
+              "android/google_play_services",
+              Label.parseAbsoluteUnchecked(prefix + "google_play_services"));
+          builder.put(
+              "android/appcompat_v4", Label.parseAbsoluteUnchecked(prefix + "appcompat_v4"));
+          builder.put(
+              "android/appcompat_v7", Label.parseAbsoluteUnchecked(prefix + "appcompat_v7"));
+          builder.put(
+              "android/mediarouter_v7", Label.parseAbsoluteUnchecked(prefix + "mediarouter_v7"));
+          builder.put("android/cardview_v7", Label.parseAbsoluteUnchecked(prefix + "cardview_v7"));
+          builder.put(
+              "android/gridlayout_v7", Label.parseAbsoluteUnchecked(prefix + "gridlayout_v7"));
+          builder.put("android/palette_v7", Label.parseAbsoluteUnchecked(prefix + "palette_v7"));
+          builder.put(
+              "android/recyclerview_v7", Label.parseAbsoluteUnchecked(prefix + "recyclerview_v7"));
           return builder.build();
         }
       };
@@ -56,11 +73,6 @@ public class AndroidSdkRepositoryRule implements RuleDefinition {
         .setWorkspaceOnly()
         .setExternalBindingsFunction(BINDINGS_FUNCTION)
         .add(attr("path", STRING).mandatory().nonconfigurable("WORKSPACE rule"))
-        // This is technically the directory for the build tools in $sdk/build-tools. In particular,
-        // preview SDKs are in "$sdk/build-tools/x.y.z-preview", but the version is typically
-        // actually "x.y.z-rcN". E.g., for 24, the directory is "$sdk/build-tools/24.0.0-preview",
-        // but the version is e.g. "24 rc3". The android_sdk rule that is generated from
-        // android_sdk_repository would need the real version ("24 rc3").
         .add(attr("build_tools_version", STRING).mandatory().nonconfigurable("WORKSPACE rule"))
         .add(attr("api_level", INTEGER).mandatory().nonconfigurable("WORKSPACE rule"))
         .build();

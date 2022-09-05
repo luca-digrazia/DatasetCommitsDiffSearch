@@ -139,13 +139,14 @@ public class BazelRepositoryModule extends BlazeModule {
         }
 
         @Override
-        public SkyValue createNewValue(SkyKey key, @Nullable TimestampGranularityMonitor tsgm) {
+        public SkyValue createNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
           throw new UnsupportedOperationException();
         }
 
         @Override
+        @Nullable
         public DirtyResult check(
-            SkyKey skyKey, SkyValue skyValue, @Nullable TimestampGranularityMonitor tsgm) {
+            SkyKey skyKey, SkyValue skyValue, TimestampGranularityMonitor tsgm) {
           HttpDownloadValue httpDownloadValue = (HttpDownloadValue) skyValue;
           Path path = httpDownloadValue.getPath();
           try {

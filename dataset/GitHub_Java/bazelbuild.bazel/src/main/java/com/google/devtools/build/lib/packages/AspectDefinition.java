@@ -132,27 +132,27 @@ public final class AspectDefinition {
     }
     RuleClass ruleClass = ((Rule) to).getRuleClassObject();
     ImmutableSet<Class<?>> providers = ruleClass.getAdvertisedProviders();
-    return visitAspectsIfRequired((Rule) from, attribute, toStringSet(providers));
+    return visitAspectsIfRequired(from, attribute, toStringSet(providers));
   }
 
   /**
    * Returns the attribute -&gt; set of labels that are provided by aspects of attribute.
    */
   public static ImmutableMultimap<Attribute, Label> visitAspectsIfRequired(
-      Rule from, Attribute attribute, Set<String> advertisedProviders) {
+      Target from, Attribute attribute, Set<String> advertisedProviders) {
     if (advertisedProviders.isEmpty()) {
       return ImmutableMultimap.of();
     }
 
     LinkedHashMultimap<Attribute, Label> result = LinkedHashMultimap.create();
-    for (AspectWithParameters candidateClass : attribute.getAspectsWithParameters(from)) {
+    for (AspectClass candidateClass : attribute.getAspects()) {
       // Check if target satisfies condition for this aspect (has to provide all required
       // TransitiveInfoProviders)
       if (!advertisedProviders.containsAll(
           candidateClass.getDefinition().getRequiredProviderNames())) {
         continue;
       }
-      addAllAttributesOfAspect(from, result, candidateClass.getDefinition(), Rule.ALL_DEPS);
+      addAllAttributesOfAspect((Rule) from, result, candidateClass.getDefinition(), Rule.ALL_DEPS);
     }
     return ImmutableMultimap.copyOf(result);
   }

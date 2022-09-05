@@ -76,8 +76,6 @@ import com.google.devtools.build.lib.rules.android.AndroidBinaryOnlyRule;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses;
-import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainRule;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainSuiteRule;
 import com.google.devtools.build.lib.rules.cpp.CppBuildInfo;
@@ -218,7 +216,6 @@ public class BazelRuleClassProvider {
           PythonOptions.class,
           BazelPythonConfiguration.Options.class,
           ObjcCommandLineOptions.class,
-          AppleCommandLineOptions.class,
           J2ObjcCommandLineOptions.class,
           AndroidConfiguration.Options.class
       );
@@ -342,7 +339,6 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new ObjcRuleClasses.SdkFrameworksDependerRule());
     builder.addRuleDefinition(new ObjcRuleClasses.CompileDependencyRule());
     builder.addRuleDefinition(new ObjcRuleClasses.ResourceToolsRule());
-    builder.addRuleDefinition(new ObjcRuleClasses.XcrunRule());
     builder.addRuleDefinition(new IosApplicationRule());
     builder.addRuleDefinition(new IosExtensionBinaryRule());
     builder.addRuleDefinition(new IosExtensionRule());
@@ -378,7 +374,6 @@ public class BazelRuleClassProvider {
     builder.addConfigurationFragment(new JvmConfigurationLoader(false, JAVA_CPU_SUPPLIER));
     builder.addConfigurationFragment(new JavaConfigurationLoader());
     builder.addConfigurationFragment(new ObjcConfigurationLoader());
-    builder.addConfigurationFragment(new AppleConfiguration.Loader());
     builder.addConfigurationFragment(new J2ObjcConfiguration.Loader());
     builder.addConfigurationFragment(new AndroidConfiguration.Loader());
   }

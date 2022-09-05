@@ -77,9 +77,13 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
       return null;
     }
 
-    Path outputDirectory = prepareLocalRepositorySymlinkTree(rule, env);
+    FileValue directoryValue = prepareLocalRepositorySymlinkTree(rule, env);
+    if (directoryValue == null) {
+      return null;
+    }
+
     PathFragment pathFragment = getTargetPath(rule);
-    Path ndkSymlinkTreeDirectory = outputDirectory.getRelative("ndk");
+    Path ndkSymlinkTreeDirectory = directoryValue.realRootedPath().asPath().getRelative("ndk");
     try {
       ndkSymlinkTreeDirectory.createDirectory();
     } catch (IOException e) {
@@ -96,7 +100,7 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
     String apiLevelAttr = attributes.get("api_level", Type.INTEGER).toString();
     ApiLevel apiLevel = new ApiLevel(env.getListener(), ruleName, apiLevelAttr);
 
-    NdkRelease ndkRelease = getNdkRelease(outputDirectory, env);
+    NdkRelease ndkRelease = getNdkRelease(directoryValue, env);
 
     ImmutableList.Builder<CrosstoolStlPair> crosstoolsAndStls = ImmutableList.builder();
     try {
@@ -123,7 +127,7 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
     }
 
     String buildFile = createBuildFile(ruleName, crosstoolsAndStls.build());
-    return writeBuildFile(getOutputBase(), buildFile);
+    return writeBuildFile(directoryValue, buildFile);
   }
 
   @Override
@@ -233,10 +237,10 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
         .replace("%toolchainFileGlobs%", toolchainFileGlobs.toString().trim());
   }
 
-  private static NdkRelease getNdkRelease(Path directory, Environment env)
+  private static NdkRelease getNdkRelease(FileValue directoryValue, Environment env)
       throws RepositoryFunctionException {
 
-    Path releaseFilePath = directory.getRelative("ndk/RELEASE.TXT");
+    Path releaseFilePath = directoryValue.realRootedPath().asPath().getRelative("ndk/RELEASE.TXT");
     
     SkyKey releaseFileKey = FileValue.key(RootedPath.toRootedPath(
         releaseFilePath, PathFragment.EMPTY_FRAGMENT));

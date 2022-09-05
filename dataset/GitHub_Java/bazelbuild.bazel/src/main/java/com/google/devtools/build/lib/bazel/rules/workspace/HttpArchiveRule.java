@@ -59,28 +59,6 @@ public class HttpArchiveRule implements RuleDefinition {
          "tgz" here.</p>
          <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("type", STRING))
-        /* <!-- #BLAZE_RULE(http_archive).ATTRIBUTE(strip_prefix) -->
-         A directory prefix to strip from the extracted files.
-         ${SYNOPSIS}
-
-         <p>Many archives contain a top-level directory that contains all of the useful files in
-         archive. Instead of needing to specify this prefix over and over in the
-         <code>build_file</code>, this field can be used to strip it from all of the extracted
-         files.</p>
-
-         <p>For example, suppose you are using foo-lib-latest.zip, which contains the directory
-         foo-lib-1.2.3/ under which there is a WORKSPACE file and are src/, lib/, and test/
-         directories that contain the actual code you wish to build. Specify
-         <code>strip_prefix = "foo-lib-1.2.3"</code> to use the foo-lib-1.2.3 directory as your
-         top-level directory.</p>
-
-         <p>Note that if there are files outside of this directory, they will be discarded and
-         inaccessible (e.g., a top-level license file). This includes files/directories that
-         start with the prefix but are not in the directory (e.g., foo-lib-1.2.3.release-notes).
-         If the specified prefix does not match a directory in the archive, Bazel will return an
-         error.</p>
-         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("strip_prefix", STRING))
         .setWorkspaceOnly()
         .build();
   }
@@ -98,6 +76,8 @@ public class HttpArchiveRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = http_archive, TYPE = OTHER, FAMILY = Workspace)[GENERIC_RULE] -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>Downloads a Bazel repository as a compressed archive file,
   decompresses it, and makes its targets available for binding. The
   repository should already contain a BUILD file. If it does not, use
@@ -105,6 +85,8 @@ public class HttpArchiveRule implements RuleDefinition {
 
 <p>It supports Zip-formatted archives (with the .zip extension) and
 tarballs (.tar.gz and .tgz extensions).</p>
+
+${ATTRIBUTE_DEFINITION}
 
 <h4 id="http_archive_examples">Examples</h4>
 

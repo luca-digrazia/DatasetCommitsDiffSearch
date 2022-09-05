@@ -32,5 +32,5 @@ public interface AspectClass {
    */
   String getName();
 
-  AspectDefinition getDefinition(AspectParameters aspectParameters);
+  AspectDefinition getDefinition();
 }

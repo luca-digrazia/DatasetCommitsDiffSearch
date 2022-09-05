@@ -29,7 +29,9 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
 import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetFactory;
+
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -59,7 +61,7 @@ public class AndroidNdkRepositoryRule implements RuleDefinition {
         .setUndocumented()
         .setWorkspaceOnly()
         .setExternalBindingsFunction(BINDINGS_FUNCTION)
-        .add(attr("path", STRING).nonconfigurable("WORKSPACE rule"))
+        .add(attr("path", STRING).mandatory().nonconfigurable("WORKSPACE rule"))
         .add(attr("api_level", INTEGER).mandatory().nonconfigurable("WORKSPACE rule"))
         .build();
   }

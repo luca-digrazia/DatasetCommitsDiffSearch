@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
+import com.google.common.base.Objects;
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -33,7 +33,6 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -94,30 +93,31 @@ public class PathPackageLocator implements Serializable {
 
   /**
    * Like #getPackageBuildFile(), but returns null instead of throwing.
-   *  @param packageIdentifier the name of the package.
+   *
+   * @param packageName the name of the package.
    * @param cache a filesystem-level cache of stat() calls.
    */
-  public Path getPackageBuildFileNullable(PackageIdentifier packageIdentifier,
+  public Path getPackageBuildFileNullable(PackageIdentifier packageName,
       AtomicReference<? extends UnixGlob.FilesystemCalls> cache)  {
-    Preconditions.checkArgument(!packageIdentifier.getRepository().isDefault());
-    if (packageIdentifier.getRepository().isMain()) {
-      return getFilePath(packageIdentifier.getPackageFragment().getRelative("BUILD"), cache);
-    } else {
+    if (packageName.getRepository().isDefault()) {
+      return getFilePath(packageName.getPackageFragment().getRelative("BUILD"), cache);
+    } else if (!packageName.getRepository().isDefault()) {
       Verify.verify(outputBase != null, String.format(
           "External package '%s' needs to be loaded but this PathPackageLocator instance does not "
-              + "support external packages", packageIdentifier));
+          + "support external packages",   packageName));
       // This works only to some degree, because it relies on the presence of the repository under
-      // $OUTPUT_BASE/external, which is created by the appropriate RepositoryDirectoryValue. This
-      // is true for the invocation in GlobCache, but not for the locator.getBuildFileForPackage()
+      // $OUTPUT_BASE/external, which is created by the appropriate RepositoryValue. This is true
+      // for the invocation in GlobCache, but not for the locator.getBuildFileForPackage()
       // invocation in Parser#include().
-      Path buildFile = outputBase.getRelative(
-          packageIdentifier.getSourceRoot()).getRelative("BUILD");
+      Path buildFile = outputBase.getRelative(packageName.getPathFragment()).getRelative("BUILD");
       FileStatus stat = cache.get().statNullable(buildFile, Symlinks.FOLLOW);
       if (stat != null && stat.isFile()) {
         return buildFile;
       } else {
         return null;
       }
+    } else {
+      return null;
     }
   }
 
@@ -182,7 +182,6 @@ public class PathPackageLocator implements Serializable {
         resolvedPaths.add(rootPath);
       }
     }
-
     return new PathPackageLocator(outputBase, resolvedPaths);
   }
 
@@ -236,7 +235,7 @@ public class PathPackageLocator implements Serializable {
 
   @Override
   public int hashCode() {
-    return Objects.hash(pathEntries, outputBase);
+    return Objects.hashCode(pathEntries, outputBase);
   }
 
   @Override
@@ -247,12 +246,7 @@ public class PathPackageLocator implements Serializable {
     if (!(other instanceof PathPackageLocator)) {
       return false;
     }
-    PathPackageLocator pathPackageLocator = (PathPackageLocator) other;
-    return Objects.equals(getPathEntries(), pathPackageLocator.getPathEntries())
-        && Objects.equals(outputBase, pathPackageLocator.outputBase);
-  }
-
-  public Path getOutputBase() {
-    return outputBase;
+    return this.getPathEntries().equals(((PathPackageLocator) other).getPathEntries())
+        && Objects.equal(this.outputBase, ((PathPackageLocator) other).outputBase);
   }
 }
