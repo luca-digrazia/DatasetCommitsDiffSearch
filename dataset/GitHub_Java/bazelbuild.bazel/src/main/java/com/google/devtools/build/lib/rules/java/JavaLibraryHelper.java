@@ -181,7 +181,7 @@ public final class JavaLibraryHelper {
             .addTransitiveDependencies(deps, true /* recursive */)
             .build();
 
-    return JavaCompilationArgsProvider.create(
+    return new JavaCompilationArgsProvider(
         isReportedAsStrict ? directArgs : transitiveArgs, transitiveArgs);
   }
 
@@ -204,10 +204,9 @@ public final class JavaLibraryHelper {
   }
 
   private NestedSet<Artifact> getNonRecursiveCompileTimeJarsFromDeps() {
-    return JavaCompilationArgs.builder()
-        .addTransitiveDependencies(deps, false)
-        .build()
-        .getCompileTimeJars();
+    JavaCompilationArgs.Builder builder = JavaCompilationArgs.builder();
+    builder.addTransitiveDependencies(deps, false);
+    return builder.build().getCompileTimeJars();
   }
 
   private boolean isStrict() {
