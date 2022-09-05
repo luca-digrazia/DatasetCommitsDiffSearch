@@ -103,8 +103,7 @@ public class CommonCommandOptions extends OptionsBase {
           category = "misc",
           allowMultiple = true,
           help = "Selects additional config sections from the rc files; for every <command>, it "
-              + "also pulls in the options from <command>:<config> if such a section exists; "
-              + "if the section does not exist, this flag is ignored. "
+              + "also pulls in the options from <command>:<config> if such a section exists. "
               + "Note that it is currently only possible to provide these options on the "
               + "command line, not in the rc files. The config sections and flag combinations "
               + "they are equivalent to are located in the tools/*.blazerc config files.")
