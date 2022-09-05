@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.rules.apple.DottedVersion;
 
 /**
  * Provider that describes a simulator device.
@@ -29,7 +28,7 @@ public final class IosDeviceProvider implements TransitiveInfoProvider {
   /** A builder of {@link IosDeviceProvider}s. */
   public static final class Builder {
     private String type;
-    private DottedVersion iosVersion;
+    private String iosVersion;
     private String locale;
 
     public Builder setType(String type) {
@@ -37,7 +36,7 @@ public final class IosDeviceProvider implements TransitiveInfoProvider {
       return this;
     }
 
-    public Builder setIosVersion(DottedVersion iosVersion) {
+    public Builder setIosVersion(String iosVersion) {
       this.iosVersion = iosVersion;
       return this;
     }
@@ -53,7 +52,7 @@ public final class IosDeviceProvider implements TransitiveInfoProvider {
   }
 
   private final String type;
-  private final DottedVersion iosVersion;
+  private final String iosVersion;
   private final String locale;
 
   private IosDeviceProvider(Builder builder) {
@@ -66,7 +65,7 @@ public final class IosDeviceProvider implements TransitiveInfoProvider {
     return type;
   }
 
-  public DottedVersion getIosVersion() {
+  public String getIosVersion() {
     return iosVersion;
   }
 
@@ -79,10 +78,9 @@ public final class IosDeviceProvider implements TransitiveInfoProvider {
    * test in this particular iOS simulator configuration.
    */
   public IosTestSubstitutionProvider iosTestSubstitutionProvider() {
-    return new IosTestSubstitutionProvider(
-        ImmutableList.of(
-            Substitution.of("%(device_type)s", getType()),
-            Substitution.of("%(simulator_sdk)s", getIosVersion().toString()),
-            Substitution.of("%(locale)s", getLocale())));
+    return new IosTestSubstitutionProvider(ImmutableList.of(
+        Substitution.of("%(device_type)s", getType()),
+        Substitution.of("%(simulator_sdk)s", getIosVersion())
+    ));
   }
 }
