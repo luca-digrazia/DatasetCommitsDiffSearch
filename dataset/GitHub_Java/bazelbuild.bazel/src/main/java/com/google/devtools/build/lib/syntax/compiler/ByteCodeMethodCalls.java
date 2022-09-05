@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax.compiler;
 
-import com.google.common.collect.ImmutableList;
-
 import net.bytebuddy.implementation.bytecode.StackManipulation;
 
 /**
@@ -26,25 +24,6 @@ import net.bytebuddy.implementation.bytecode.StackManipulation;
  * cleaner code in this class.
  */
 public class ByteCodeMethodCalls {
-
-  /**
-   * Byte code invocations for {@link ImmutableList}.
-   */
-  public static class BCImmutableList {
-    public static final StackManipulation builder =
-        ByteCodeUtils.invoke(ImmutableList.class, "builder");
-
-    /**
-     * Byte code invocations for {@link ImmutableList.Builder}.
-     */
-    public static class Builder {
-      public static final StackManipulation build =
-          ByteCodeUtils.invoke(ImmutableList.Builder.class, "build");
-
-      public static final StackManipulation add =
-          ByteCodeUtils.invoke(ImmutableList.Builder.class, "add", Object.class);
-    }
-  }
 
   /**
    * Byte code invocations for {@link Integer}.

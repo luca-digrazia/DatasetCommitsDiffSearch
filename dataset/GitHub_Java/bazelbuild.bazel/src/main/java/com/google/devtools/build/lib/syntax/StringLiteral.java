@@ -13,18 +13,27 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import com.google.devtools.build.lib.syntax.compiler.DebugInfo;
+import com.google.devtools.build.lib.syntax.compiler.VariableScope;
+
+import net.bytebuddy.implementation.bytecode.ByteCodeAppender;
+import net.bytebuddy.implementation.bytecode.constant.TextConstant;
+
 /**
  * Syntax node for a string literal.
  */
 public final class StringLiteral extends Literal<String> {
 
-  public StringLiteral(String value) {
+  private final char quoteChar;
+
+  public StringLiteral(String value, char quoteChar) {
     super(value);
+    this.quoteChar = quoteChar;
   }
 
   @Override
   public String toString() {
-    return Printer.repr(value);
+    return quoteChar + value.replace(Character.toString(quoteChar), "\\" + quoteChar) + quoteChar;
   }
 
   @Override
@@ -32,7 +41,22 @@ public final class StringLiteral extends Literal<String> {
     visitor.visit(this);
   }
 
+  /**
+   * Gets the quote character that was used for this string.  For example, if
+   * the string was 'hello, world!', then this method returns '\''.
+   *
+   * @return the character used to quote the string.
+   */
+  public char getQuoteChar() {
+    return quoteChar;
+  }
+
   @Override
   void validate(ValidationEnvironment env) throws EvalException {
+  }
+
+  @Override
+  ByteCodeAppender compile(VariableScope scope, DebugInfo debugInfo) {
+    return new ByteCodeAppender.Simple(new TextConstant(value));
   }
 }

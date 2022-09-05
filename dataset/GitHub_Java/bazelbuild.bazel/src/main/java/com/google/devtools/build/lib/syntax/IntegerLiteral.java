@@ -13,30 +13,20 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import java.io.IOException;
+import com.google.devtools.build.lib.syntax.compiler.ByteCodeMethodCalls;
+import com.google.devtools.build.lib.syntax.compiler.DebugInfo;
+import com.google.devtools.build.lib.syntax.compiler.VariableScope;
+
+import net.bytebuddy.implementation.bytecode.ByteCodeAppender;
+import net.bytebuddy.implementation.bytecode.constant.IntegerConstant;
 
 /**
  * Syntax node for an integer literal.
  */
-public final class IntegerLiteral extends Expression {
-  private final int value;
+public final class IntegerLiteral extends Literal<Integer> {
 
   public IntegerLiteral(Integer value) {
-    this.value = value;
-  }
-
-  public int getValue() {
-    return value;
-  }
-
-  @Override
-  Object doEval(Environment env) {
-    return value;
-  }
-
-  @Override
-  public void prettyPrint(Appendable buffer) throws IOException {
-    buffer.append(String.valueOf(value));
+    super(value);
   }
 
   @Override
@@ -46,5 +36,12 @@ public final class IntegerLiteral extends Expression {
 
   @Override
   void validate(ValidationEnvironment env) throws EvalException {
+  }
+
+  @Override
+  ByteCodeAppender compile(VariableScope scope, DebugInfo debugInfo) {
+    return new ByteCodeAppender.Simple(
+        IntegerConstant.forValue(value),
+        ByteCodeMethodCalls.BCInteger.valueOf);
   }
 }
