@@ -2,30 +2,35 @@ package com.prolificinteractive.materialcalendarview.sample;
 
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.widget.TextView;
 
 import com.prolificinteractive.materialcalendarview.CalendarDay;
 import com.prolificinteractive.materialcalendarview.DayViewDecorator;
 import com.prolificinteractive.materialcalendarview.DayViewFacade;
 import com.prolificinteractive.materialcalendarview.MaterialCalendarView;
+import com.prolificinteractive.materialcalendarview.OnDateChangedListener;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
-
-import butterknife.Bind;
-import butterknife.ButterKnife;
 
 /**
  * Show off setting min and max dates and disabling individual days
  */
-public class DisableDaysActivity extends AppCompatActivity {
+public class DisableDaysActivity extends AppCompatActivity implements OnDateChangedListener {
 
-    @Bind(R.id.calendarView)
-    MaterialCalendarView widget;
+    private static final DateFormat FORMATTER = SimpleDateFormat.getDateInstance();
+    private TextView textView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_basic);
-        ButterKnife.bind(this);
+
+        textView = (TextView) findViewById(R.id.textView);
+
+        MaterialCalendarView widget = (MaterialCalendarView) findViewById(R.id.calendarView);
+        widget.setOnDateChangedListener(this);
 
         // Add a decorator to disable prime numbered days
         widget.addDecorator(new PrimeDayDisableDecorator());
@@ -36,16 +41,16 @@ public class DisableDaysActivity extends AppCompatActivity {
         Calendar calendar = Calendar.getInstance();
         widget.setSelectedDate(calendar.getTime());
 
-        Calendar instance1 = Calendar.getInstance();
-        instance1.set(instance1.get(Calendar.YEAR), Calendar.JANUARY, 1);
+        calendar.set(calendar.get(Calendar.YEAR), Calendar.JANUARY, 1);
+        widget.setMinimumDate(calendar.getTime());
 
-        Calendar instance2 = Calendar.getInstance();
-        instance2.set(instance2.get(Calendar.YEAR) + 2, Calendar.OCTOBER, 31);
+        calendar.set(calendar.get(Calendar.YEAR) + 2, Calendar.OCTOBER, 31);
+        widget.setMaximumDate(calendar.getTime());
+    }
 
-        widget.state().edit()
-                .setMinimumDate(instance1.getTime())
-                .setMaximumDate(instance2.getTime())
-                .commit();
+    @Override
+    public void onDateChanged(MaterialCalendarView widget, CalendarDay date) {
+        textView.setText(FORMATTER.format(date.getDate()));
     }
 
     private static class PrimeDayDisableDecorator implements DayViewDecorator {
