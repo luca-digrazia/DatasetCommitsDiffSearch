@@ -100,11 +100,4 @@ public class DataValueFile implements DataResource, DataAsset {
   public DataResource combineWith(DataResource resource) {
     throw new IllegalArgumentException(getClass() + " does not combine.");
   }
-
-  @Override
-  public void writeResourceToClass(FullyQualifiedName key,
-      AndroidResourceClassWriter resourceClassWriter) {
-    resourceClassWriter.writeSimpleResource(key.type(), key.name());
-  }
-
 }
