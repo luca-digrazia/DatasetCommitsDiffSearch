@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,10 @@ public class ProcMeminfoParser {
     List<String> lines = Files.readLines(new File(fileName), Charset.defaultCharset());
     ImmutableMap.Builder<String, Long> builder = ImmutableMap.builder();
     for (String line : lines) {
-      int colon = line.indexOf(":");
+      int colon = line.indexOf(':');
+      if (colon == -1) {
+        continue;
+      }
       String keyword = line.substring(0, colon);
       String valString = line.substring(colon + 1);
       try {
