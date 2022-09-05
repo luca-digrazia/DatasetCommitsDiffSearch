@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,16 +18,13 @@ import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
-import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -156,19 +153,8 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testNsetGoodCompositeItem() throws Exception {
-    eval("def func():",
-         "  return set([struct(a='a')])",
-         "s = func()");
-    Collection<Object> result = get("s").toCollection();
-    assertThat(result).hasSize(1);
-    assertThat(result.iterator().next()).isInstanceOf(SkylarkClassObject.class);
-  }
-
-  @Test
-  public void testNsetBadMutableItem() throws Exception {
-    checkEvalError("sets cannot contain mutable items", "set([([],)])");
-    checkEvalError("sets cannot contain mutable items", "set([struct(a=[])])");
+  public void testNsetBadCompositeItem() throws Exception {
+    checkEvalError("sets cannot contain items of type 'struct'", "set([struct(a='a')])");
   }
 
   @Test
@@ -188,6 +174,38 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   @SuppressWarnings("unchecked")
   private SkylarkNestedSet get(String varname) throws Exception {
     return (SkylarkNestedSet) lookup(varname);
+  }
+  
+  @Test
+  public void testSetOuterOrderWins() throws Exception {
+    // The order of the outer set should define the final iteration order,
+    // no matter what the order of nested sets is
+    /*
+     * Set:     {4, 44, {1, 11, {2, 22}}}
+     * PRE:     4, 44, 1, 11, 2, 22     (Link)
+     * POST:    2, 22, 1, 11, 4, 44     (Stable)
+     *
+     */
+    Order[] orders = {Order.STABLE_ORDER, Order.LINK_ORDER};
+    String[] expected = {
+        "set([\"2\", \"22\", \"1\", \"11\", \"4\", \"44\"])",
+        "set([\"4\", \"44\", \"1\", \"11\", \"2\", \"22\"], order = \"link\")"};
+
+    for (int i = 0; i < 2; ++i) {
+      Order outerOrder = orders[i];
+      Order innerOrder = orders[1 - i];
+
+      SkylarkNestedSet inner1 =
+          new SkylarkNestedSet(innerOrder, Tuple.of("1", "11"), null);
+      SkylarkNestedSet inner2 =
+          new SkylarkNestedSet(innerOrder, Tuple.of("2", "22"), null);
+      SkylarkNestedSet innerUnion = new SkylarkNestedSet(inner1, inner2, null);
+      SkylarkNestedSet result =
+          new SkylarkNestedSet(outerOrder, Tuple.of("4", "44"), null);
+      result = new SkylarkNestedSet(result, innerUnion, null);
+
+      assertThat(result.toString()).isEqualTo(expected[i]);
+    }
   }
 
   @Test
@@ -218,7 +236,7 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   private boolean areOrdersCompatible(Order first, Order second) {
     return first == Order.STABLE_ORDER || second == Order.STABLE_ORDER || first == second;
   }
-
+  
   @Test
   public void testSetOrderComplexUnion() throws Exception {
     // {1, 11, {2, 22}, {3, 33}, {4, 44}}

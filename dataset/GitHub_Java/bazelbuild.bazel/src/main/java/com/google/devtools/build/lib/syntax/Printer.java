@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,14 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Formattable;
 import java.util.Formatter;
 import java.util.IllegalFormatException;
@@ -30,8 +30,6 @@ import java.util.MissingFormatWidthException;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * (Pretty) Printing of Skylark values
@@ -39,19 +37,6 @@ import java.util.regex.Pattern;
 public final class Printer {
 
   private static final char SKYLARK_QUOTATION_MARK = '"';
-
-  /*
-   * Maximum number of list elements that should be printed via printList().
-   */
-  @VisibleForTesting
-  static final int CRITICAL_LIST_ELEMENTS_COUNT = 10;
-
-  /*
-   * printList() will start to shorten the values of list elements when their string length reaches
-   * this value.
-   */
-  @VisibleForTesting
-  static final int CRITICAL_LIST_ELEMENTS_STRING_LENGTH = 128;
 
   private Printer() {
   }
@@ -97,19 +82,17 @@ public final class Printer {
    * @param quotationMark The quotation mark to be used (' or ")
    * @return the buffer, in fluent style
    */
-  private static Appendable print(Appendable buffer, Object o, char quotationMark) {
-    if (o instanceof SkylarkPrintableValue) {
-      ((SkylarkPrintableValue) o).print(buffer, quotationMark);
-      return buffer;
+  public static Appendable print(Appendable buffer, Object o, char quotationMark) {
+    if (o instanceof Label) {
+      return append(buffer, o.toString());  // Pretty-print a label like a string
     }
-
     if (o instanceof String) {
       return append(buffer, (String) o);
     }
     return write(buffer, o, quotationMark);
   }
 
-  private static Appendable print(Appendable buffer, Object o) {
+  public static Appendable print(Appendable buffer, Object o) {
     return print(buffer, o, SKYLARK_QUOTATION_MARK);
   }
 
@@ -275,54 +258,21 @@ public final class Printer {
       String after,
       String singletonTerminator,
       char quotationMark) {
-    return printList(buffer, list, before, separator, after, singletonTerminator, quotationMark,
-        CRITICAL_LIST_ELEMENTS_COUNT, CRITICAL_LIST_ELEMENTS_STRING_LENGTH);
-  }
-
-  private static Appendable printList(
-      Appendable buffer,
-      Iterable<?> list,
-      String before,
-      String separator,
-      String after,
-      String singletonTerminator,
-      char quotationMark,
-      int maxItemsToPrint,
-      int criticalItemsStringLength) {
     boolean printSeparator = false; // don't print the separator before the first element
-    boolean skipArgs = false;
-    int items = Iterables.size(list);
     int len = 0;
-    // We don't want to print "1 more arguments", hence we don't skip arguments if there is only one
-    // above the limit.
-    int itemsToPrint = (items - maxItemsToPrint == 1) ? items : maxItemsToPrint;
-
-    LengthLimitedAppendable appendable =
-        LengthLimitedAppendable.create(buffer, criticalItemsStringLength);
-    append(appendable, before);
-    appendable.enforceLimit();
+    append(buffer, before);
     for (Object o : list) {
-      // We don't want to print "1 more arguments", even if we hit the string limit.
-      if (len == itemsToPrint || (appendable.hasHitLimit() && len < items - 1)) {
-        skipArgs = true;
-        break;
-      }
       if (printSeparator) {
-        append(appendable, separator);
+        append(buffer, separator);
       }
-      write(appendable, o, quotationMark);
+      write(buffer, o, quotationMark);
       printSeparator = true;
       len++;
     }
-    appendable.ignoreLimit();
-    if (skipArgs) {
-      append(appendable, separator);
-      append(appendable, String.format("<%d more arguments>", items - len));
-    }
     if (singletonTerminator != null && len == 1) {
-      append(appendable, singletonTerminator);
+      append(buffer, singletonTerminator);
     }
-    return append(appendable, after);
+    return append(buffer, after);
   }
 
   public static Appendable printList(Appendable buffer, Iterable<?> list, String before,
@@ -369,6 +319,21 @@ public final class Printer {
   public static String listString(
       Iterable<?> list, String before, String separator, String after, String singletonTerminator) {
     return listString(list, before, separator, after, singletonTerminator, SKYLARK_QUOTATION_MARK);
+  }
+
+  public static List<?> makeList(Collection<?> list) {
+    return list == null ? Lists.newArrayList() : Lists.newArrayList(list);
+  }
+
+  public static List<String> makeStringList(List<Label> labels) {
+    if (labels == null) {
+      return Collections.emptyList();
+    }
+    List<String> strings = Lists.newArrayListWithCapacity(labels.size());
+    for (Label label : labels) {
+      strings.add(label.toString());
+    }
+    return strings;
   }
 
   /**
@@ -493,135 +458,5 @@ public final class Printer {
           "not all arguments converted during string formatting");
     }
     return buffer;
-  }
-
-  /**
-   * Helper class for {@code Appendable}s that want to limit the length of their input.
-   *
-   * <p>Instances of this class act as a proxy for one {@code Appendable} object and decide whether
-   * the given input (or parts of it) can be written to the underlying {@code Appendable}, depending
-   * on whether the specified maximum length has been met or not.
-   */
-  private static final class LengthLimitedAppendable implements Appendable {
-
-    private static final ImmutableSet<Character> SPECIAL_CHARS =
-        ImmutableSet.of(',', ' ', '"', '\'', ':', '(', ')', '[', ']', '{', '}');
-
-    private static final Pattern ARGS_PATTERN = Pattern.compile("<\\d+ more arguments>");
-
-    private final Appendable original;
-    private int limit;
-    private boolean ignoreLimit;
-    private boolean previouslyShortened;
-    
-    private LengthLimitedAppendable(Appendable original, int limit) {
-      this.original = original;
-      this.limit = limit;
-    }
-
-    public static LengthLimitedAppendable create(Appendable original, int limit) {
-      // We don't want to overwrite the limit if original is already an instance of this class.
-      return (original instanceof LengthLimitedAppendable)
-          ? (LengthLimitedAppendable) original : new LengthLimitedAppendable(original, limit);
-    }
-
-    @Override
-    public Appendable append(CharSequence csq) throws IOException {
-      if (ignoreLimit || hasOnlySpecialChars(csq)) {
-        // Don't update limit.
-        original.append(csq);
-        previouslyShortened = false;
-      } else {
-        int length = csq.length();
-        if (length <= limit) {
-          limit -= length;
-          original.append(csq);
-        } else {
-          original.append(csq, 0, limit);
-          // We don't want to append multiple ellipses.
-          if (!previouslyShortened) {
-            original.append("...");
-          }
-          appendTrailingSpecialChars(csq, limit);
-          previouslyShortened = true;
-          limit = 0;
-        }
-      }
-      return this;
-    }
-
-    /**
-     * Appends any trailing "special characters" (e.g. brackets, quotation marks) in the given
-     * sequence to the output buffer, regardless of the limit.
-     *
-     * <p>For example, let's look at foo(['too long']). Without this method, the shortened result
-     * would be foo(['too...) instead of the prettier foo(['too...']).
-     *
-     * <p>If the input string was already shortened and contains "<x more arguments>", this part
-     * will also be appended.
-     */
-    private void appendTrailingSpecialChars(CharSequence csq, int limit) throws IOException {
-      int length = csq.length();
-      Matcher matcher = ARGS_PATTERN.matcher(csq);
-      // We assume that everything following the "x more arguments" part has to be copied, too.
-      int start = matcher.find() ? matcher.start() : length;
-      // Find the left-most non-arg char that has to be copied.
-      for (int i = start - 1; i > limit; --i) {
-        if (isSpecialChar(csq.charAt(i))) {
-          start = i;
-        } else {
-          break;
-        }
-      }
-      if (start < length) {
-        original.append(csq, start, csq.length());
-      }
-    }
-
-    /**
-     * Returns whether the given sequence denotes characters that are not part of the value of an
-     * argument.
-     *
-     * <p>Examples are brackets, braces and quotation marks.
-     */
-    private boolean hasOnlySpecialChars(CharSequence csq) {
-      for (int i = 0; i < csq.length(); ++i) {
-        if (!isSpecialChar(csq.charAt(i))) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    private boolean isSpecialChar(char c)    {
-      return SPECIAL_CHARS.contains(c);
-    }
-
-    @Override
-    public Appendable append(CharSequence csq, int start, int end) throws IOException {
-      return append(csq.subSequence(start, end));
-    }
-
-    @Override
-    public Appendable append(char c) throws IOException {
-      return append(String.valueOf(c));
-    }
-    
-    public boolean hasHitLimit()  {
-      return limit <= 0;
-    }
-
-    public void enforceLimit()  {
-      ignoreLimit = false;
-    }
-    
-    public void ignoreLimit() {
-      ignoreLimit = true;
-    }
-
-    @Override
-    public String toString() {
-      return original.toString();
-    }
   }
 }

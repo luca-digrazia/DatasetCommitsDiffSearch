@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -659,7 +659,7 @@ public abstract class SkylarkType implements Serializable {
       return ImmutableList.of();
     }
     List<TYPE> results = new ArrayList<>();
-    for (Object object : com.google.devtools.build.lib.syntax.Type.LIST.convert(obj, what)) {
+    for (Object object : com.google.devtools.build.lib.packages.Type.LIST.convert(obj, what)) {
       try {
         results.add(type.cast(object));
       } catch (ClassCastException e) {
@@ -755,7 +755,7 @@ public abstract class SkylarkType implements Serializable {
    */
   public static Object convertFromSkylark(Object value) {
     if (value instanceof SkylarkList) {
-      return new ArrayList<>(((SkylarkList) value).getList());
+      return ((SkylarkList) value).getList();
     }
     return value;
   }

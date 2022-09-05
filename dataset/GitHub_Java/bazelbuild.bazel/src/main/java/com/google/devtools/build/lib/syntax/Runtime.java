@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,15 +14,9 @@
 
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
-import com.google.devtools.build.lib.syntax.compiler.ByteCodeUtils;
-import com.google.devtools.build.lib.util.Preconditions;
-
-import net.bytebuddy.implementation.bytecode.StackManipulation;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -70,15 +64,10 @@ public final class Runtime {
     }
   }
 
-  /**
-   * Load {@link #NONE} on the stack.
-   * <p>Kept close to the definition to avoid reflection errors when changing it.
-   */
-  public static final StackManipulation GET_NONE = ByteCodeUtils.getField(Runtime.class, "NONE");
-
   @SkylarkSignature(name = "None", returnType = NoneType.class,
       doc = "Literal for the None value.")
   public static final NoneType NONE = new NoneType();
+
 
   @SkylarkSignature(name = "PACKAGE_NAME", returnType = String.class,
       doc = "The name of the package the rule or build extension is called from. "
@@ -92,14 +81,6 @@ public final class Runtime {
           + "In this case calling <code>extension()</code> works from the BUILD file (if the "
           + "function is loaded), but not as a top level function call in the extension module.")
   public static final String PKG_NAME = "PACKAGE_NAME";
-
-  @SkylarkSignature(name = "REPOSITORY_NAME", returnType = String.class,
-      doc = "The name of the repository the rule or build extension is called from. "
-          + "For example, in packages that are called into existence by the WORKSPACE stanza "
-          + "<code>local_repository(name='local', path=...)</code> it will be set to "
-          + "<code>@local</code>. In packages in the main repository, it will be empty. "
-          + "It can only be accessed in functions (transitively) called from BUILD files.")
-  public static final String REPOSITORY_NAME = "REPOSITORY_NAME";
 
   /**
    * Set up a given environment for supported class methods.
@@ -141,19 +122,16 @@ public final class Runtime {
    * <p>Currently, this is only necessary for mapping the different subclasses of {@link
    * java.util.Map} to the interface.
    */
-  // TODO(bazel-team): make everything a SkylarkValue, and remove this function.
   public static Class<?> getCanonicalRepresentation(Class<?> clazz) {
-    if (SkylarkValue.class.isAssignableFrom(clazz)) {
-      return clazz;
-    }
     if (Map.class.isAssignableFrom(clazz)) {
       return MethodLibrary.DictModule.class;
     }
     if (String.class.isAssignableFrom(clazz)) {
       return MethodLibrary.StringModule.class;
     }
-    Preconditions.checkArgument(
-        !List.class.isAssignableFrom(clazz), "invalid non-SkylarkList list class");
+    if (List.class.isAssignableFrom(clazz)) {
+      return List.class;
+    }
     return clazz;
   }
 

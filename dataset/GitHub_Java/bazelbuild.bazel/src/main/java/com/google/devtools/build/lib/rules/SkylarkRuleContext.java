@@ -33,26 +33,25 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.shell.ShellUtils.TokenizationException;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression.FuncallException;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkCallable;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
@@ -149,7 +148,7 @@ public final class SkylarkRuleContext {
     for (Attribute a : ruleContext.getRule().getAttributes()) {
       String attrName = a.getName();
       Type<?> type = a.getType();
-      if (type != BuildType.OUTPUT && type != BuildType.OUTPUT_LIST) {
+      if (type != Type.OUTPUT && type != Type.OUTPUT_LIST) {
         continue;
       }
       ImmutableList.Builder<Artifact> artifactsBuilder = ImmutableList.builder();
@@ -160,13 +159,13 @@ public final class SkylarkRuleContext {
       }
       ImmutableList<Artifact> artifacts = artifactsBuilder.build();
 
-      if (type == BuildType.OUTPUT) {
+      if (type == Type.OUTPUT) {
         if (artifacts.size() == 1) {
           addOutput(outputsBuilder, attrName, Iterables.getOnlyElement(artifacts));
         } else {
           addOutput(outputsBuilder, attrName, Runtime.NONE);
         }
-      } else if (type == BuildType.OUTPUT_LIST) {
+      } else if (type == Type.OUTPUT_LIST) {
         addOutput(outputsBuilder, attrName, new MutableList(artifacts));
       } else {
         throw new IllegalArgumentException(
@@ -188,7 +187,7 @@ public final class SkylarkRuleContext {
     for (Attribute a : ruleContext.getRule().getAttributes()) {
       Type<?> type = a.getType();
       Object val = ruleContext.attributes().get(a.getName(), type);
-      if (type != BuildType.LABEL && type != BuildType.LABEL_LIST) {
+      if (type != Type.LABEL && type != Type.LABEL_LIST) {
         attrBuilder.put(a.getPublicName(), val == null ? Runtime.NONE
             // Attribute values should be type safe
             : SkylarkType.convertToSkylark(val, null));
@@ -218,7 +217,7 @@ public final class SkylarkRuleContext {
       }
       filesBuilder.put(skyname, ruleContext.getPrerequisiteArtifacts(a.getName(), mode).list());
       List<?> allPrereq = ruleContext.getPrerequisites(a.getName(), mode);
-      if (type == BuildType.LABEL) {
+      if (type == Type.LABEL) {
         Object prereq = ruleContext.getPrerequisite(a.getName(), mode);
         if (prereq == null) {
           prereq = Runtime.NONE;
@@ -442,8 +441,16 @@ public final class SkylarkRuleContext {
   }
 
   @SkylarkCallable(doc =
+      "Creates a new file object, derived from the given file and suffix. " + DOC_NEW_FILE_TAIL
+      + " Deprecated.")
+  public Artifact newFileSuffix(Artifact baseArtifact, String suffix) {
+    return newFile(baseArtifact, baseArtifact.getRootRelativePath().getBaseName() + suffix);
+  }
+
+  @SkylarkCallable(doc =
       "Creates a new file object in the same directory as the original file. "
       + DOC_NEW_FILE_TAIL)
+
   public Artifact newFile(Artifact baseArtifact, String newBaseName) {
     PathFragment original = baseArtifact.getRootRelativePath();
     PathFragment fragment = original.replaceName(newBaseName);

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -70,10 +70,33 @@ public final class ListLiteral extends Expression {
     return kind == Kind.TUPLE;
   }
 
+  private static char startChar(Kind kind) {
+    switch(kind) {
+    case LIST:  return '[';
+    case TUPLE: return '(';
+    }
+    return '[';
+  }
+
+  private static char endChar(Kind kind) {
+    switch(kind) {
+    case LIST:  return ']';
+    case TUPLE: return ')';
+    }
+    return ']';
+  }
+
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    Printer.printList(sb, exprs, isTuple(), '"');
+    sb.append(startChar(kind));
+    String sep = "";
+    for (Expression e : exprs) {
+      sb.append(sep);
+      sb.append(e);
+      sep = ", ";
+    }
+    sb.append(endChar(kind));
     return sb.toString();
   }
 

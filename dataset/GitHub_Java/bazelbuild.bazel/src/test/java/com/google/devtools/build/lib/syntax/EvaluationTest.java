@@ -430,11 +430,6 @@ public class EvaluationTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testSingleTuple() throws Exception {
-    newTest().setUp("a, = [1]").testLookup("a", 1);
-  }
-
-  @Test
   public void testHeterogeneousDict() throws Exception {
     newTest().setUp("d = {'str': 1, 2: 3}", "a = d['str']", "b = d[2]").testLookup("a", 1)
         .testLookup("b", 3);
@@ -480,13 +475,6 @@ public class EvaluationTest extends EvaluationTestCase {
   @Test
   public void testDictComprehensionOnNonIterable() throws Exception {
     newTest().testIfExactError("type 'int' is not iterable", "{k : k for k in 3}");
-  }
-
-  @Test
-  public void testDictComprehension_ManyClauses() throws Exception {
-    new SkylarkTest().testStatement(
-        "{x : x * y for x in range(1, 10) if x % 2 == 0 for y in range(1, 10) if y == x}",
-        ImmutableMap.of(2, 4, 4, 16, 6, 36, 8, 64));
   }
 
   @Test

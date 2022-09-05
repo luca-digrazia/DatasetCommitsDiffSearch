@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -273,7 +273,15 @@ public final class FuncallExpression extends Expression {
       sb.append(obj).append(".");
     }
     sb.append(func);
-    Printer.printList(sb, args, "(", ", ", ")", /* singletonTerminator */ null);
+    String backup = sb.toString();
+    try {
+      Printer.printList(sb, args, "(", ", ", ")", /* singletonTerminator */ null);
+    } catch (OutOfMemoryError ex) {
+      // export_files might lead to an OOM error (e.g. in
+      // PackageSerializationTest#testMassivePackageDeserializesFine).
+      // TODO(b/23967033): make the Printer limit its own output.
+      return backup + "(<too long>)";
+    }
     return sb.toString();
   }
 

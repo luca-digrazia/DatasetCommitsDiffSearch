@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -114,7 +114,7 @@ public final class EvalUtils {
   /**
    * Checks that an Object is a valid key for a Skylark dict.
    * @param o an Object to validate
-   * @throws EvalException if o is not a valid key
+   * @throws an EvalException if o is not a valid key
    */
   static void checkValidDictKey(Object o) throws EvalException {
     // TODO(bazel-team): check that all recursive elements are both Immutable AND Comparable.
@@ -265,9 +265,6 @@ public final class EvalUtils {
     } else if (object instanceof SkylarkNestedSet) {
       SkylarkNestedSet set = (SkylarkNestedSet) object;
       return "set" + (full ? " of " + set.getContentType() + "s" : "");
-    } else if (object instanceof SelectorList) {
-      SelectorList list = (SelectorList) object;
-      return "select" + (full ? " of " + getDataTypeNameFromClass(list.getType()) : "");
     } else {
       return getDataTypeNameFromClass(object.getClass());
     }

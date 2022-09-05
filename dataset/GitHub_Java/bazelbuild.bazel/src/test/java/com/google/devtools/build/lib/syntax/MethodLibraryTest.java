@@ -20,7 +20,6 @@ import static org.junit.Assert.assertEquals;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -123,8 +122,8 @@ public class MethodLibraryTest extends EvaluationTestCase {
             + "but should be string",
             "'test'.startswith(1)")
         .testIfErrorContains(
-            "expected value of type 'list(object)' for parameter args in dict(), "
-            + "but got \"a\" (string)",
+            "Method dict(args: Iterable, **kwargs) is not applicable for arguments "
+            + "(string, dict): 'args' is string, but should be Iterable",
             "dict('a')");
   }
 
@@ -647,20 +646,6 @@ public class MethodLibraryTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testDictionaryCopy() throws Exception {
-    new SkylarkTest()
-        .setUp("x = {1 : 2}", "y = dict(x)")
-        .testEval("x[1] == 2 and y[1] == 2", "True");
-  }
-
-  @Test
-  public void testDictionaryCopyKeyCollision() throws Exception {
-    new SkylarkTest()
-        .setUp("x = {'test' : 2}", "y = dict(x, test = 3)")
-        .testEval("y['test']", "3");
-  }
-
-  @Test
   public void testDictionaryWithMultipleKeys() throws Exception {
     new BothModesTest().testStatement("{0: 'a', 1: 'b', 0: 'c'}[0]", "c");
   }
@@ -755,18 +740,19 @@ public class MethodLibraryTest extends EvaluationTestCase {
 
   @Test
   public void testDictionaryCreationInvalidPositional() throws Exception {
+    String unexpectedString =
+        "expected value of type 'list(object)' for dict(args), but got \"a\" (string)";
+
     new BothModesTest()
         .testIfErrorContains(
-            "expected value of type 'list(object)' for parameter args in dict(), "
-            + "but got \"a\" (string)",
+            "Method dict(args: Iterable, **kwargs) is not applicable for arguments "
+            + "(string, dict): 'args' is string, but should be Iterable",
             "dict('a')")
-        .testIfErrorContains(
-            "Cannot convert dictionary update sequence element #0 to a sequence", "dict(['a'])")
-        .testIfErrorContains(
-            "Cannot convert dictionary update sequence element #0 to a sequence", "dict([('a')])")
+        .testIfErrorContains(unexpectedString, "dict(['a'])")
+        .testIfErrorContains(unexpectedString, "dict([('a')])")
         .testIfErrorContains("too many (3) positional arguments", "dict((3,4), (3,2), (1,2))")
         .testIfErrorContains(
-            "Sequence #0 has length 3, but exactly two elements are required",
+            "Tuple has length 3, but exactly two elements are required",
             "dict([('a', 'b', 'c')])");
   }
 

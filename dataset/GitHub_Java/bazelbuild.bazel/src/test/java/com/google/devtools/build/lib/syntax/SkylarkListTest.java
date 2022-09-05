@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ import static org.junit.Assert.assertEquals;
 
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
-import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -46,7 +45,6 @@ public class SkylarkListTest extends EvaluationTestCase {
   @Test
   public void testListEmpty() throws Exception {
     assertThat(eval("8 if [1, 2, 3] else 9")).isEqualTo(8);
-    assertThat(eval("8 if [] else 9")).isEqualTo(9);
   }
 
   @Test
