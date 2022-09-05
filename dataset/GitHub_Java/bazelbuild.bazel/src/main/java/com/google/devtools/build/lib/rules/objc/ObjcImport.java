@@ -47,7 +47,7 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
 
     new CompilationSupport(ruleContext)
-        .addXcodeSettings(xcodeProviderBuilder, common)
+        .addXcodeSettings(xcodeProviderBuilder, common, OptionsProvider.DEFAULT)
         .validateAttributes();
 
     new ResourceSupport(ruleContext)
