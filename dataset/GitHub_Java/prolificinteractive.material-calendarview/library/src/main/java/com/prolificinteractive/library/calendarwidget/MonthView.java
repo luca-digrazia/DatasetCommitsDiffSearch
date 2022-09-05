@@ -12,8 +12,7 @@ import static java.util.Calendar.DAY_OF_WEEK;
 import static java.util.Calendar.SUNDAY;
 
 /**
- * Display a month of {@linkplain com.prolificinteractive.library.calendarwidget.DayView}s and
- * seven {@linkplain com.prolificinteractive.library.calendarwidget.WeekDayView}s.
+ * Display a month of days
  */
 class MonthView extends GridLayout implements View.OnClickListener {
 
@@ -35,8 +34,6 @@ class MonthView extends GridLayout implements View.OnClickListener {
     private CalendarDay minDate = null;
     private CalendarDay maxDate = null;
 
-    private boolean showOtherMonths = false;
-
     public MonthView(Context context) {
         this(context, null);
     }
@@ -46,9 +43,6 @@ class MonthView extends GridLayout implements View.OnClickListener {
 
         setColumnCount(7);
         setRowCount(7);
-
-        setClipChildren(false);
-        setClipToPadding(false);
     }
 
     @Override
@@ -69,30 +63,9 @@ class MonthView extends GridLayout implements View.OnClickListener {
         setSelectedDate(new CalendarDay());
     }
 
-    public void setWeekDayTextAppearance(int taId) {
-        for(WeekDayView weekDayView : weekDayViews) {
-            weekDayView.setTextAppearance(getContext(), taId);
-        }
-    }
-
-    public void setDateTextAppearance(int taId) {
+    public void setColor(int color) {
         for(DayView dayView : monthDayViews) {
-            dayView.setTextAppearance(getContext(), taId);
-        }
-    }
-
-    public void setShowOtherMonths(boolean showOtherMonths) {
-        this.showOtherMonths = showOtherMonths;
-        updateUi();
-    }
-
-    public boolean getShowOtherMonths() {
-        return showOtherMonths;
-    }
-
-    public void setSelectionColor(int color) {
-        for(DayView dayView : monthDayViews) {
-            dayView.setSelectionColor(color);
+            dayView.setColor(color);
         }
     }
 
@@ -150,7 +123,7 @@ class MonthView extends GridLayout implements View.OnClickListener {
         for(DayView dayView : monthDayViews) {
             CalendarDay day = new CalendarDay(calendar);
             dayView.setDay(day);
-            dayView.setupSelection(showOtherMonths, day.isInRange(minDate, maxDate), day.getMonth() == ourMonth);
+            dayView.setEnabled(day.isInRange(minDate, maxDate) && day.getMonth() == ourMonth);
             dayView.setChecked(day.equals(selection));
             calendar.add(DATE, 1);
         }
