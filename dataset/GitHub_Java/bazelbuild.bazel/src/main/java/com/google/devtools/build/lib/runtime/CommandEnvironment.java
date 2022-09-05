@@ -73,7 +73,6 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class CommandEnvironment {
   private final BlazeRuntime runtime;
-  private final BlazeDirectories directories;
 
   private final UUID commandId;  // Unique identifier for the command being run
   private final Reporter reporter;
@@ -108,7 +107,6 @@ public final class CommandEnvironment {
 
   public CommandEnvironment(BlazeRuntime runtime, UUID commandId, EventBus eventBus) {
     this.runtime = runtime;
-    this.directories = runtime.getDirectories();
     this.commandId = commandId;
     this.reporter = new Reporter();
     this.eventBus = eventBus;
@@ -122,7 +120,7 @@ public final class CommandEnvironment {
 
     // TODO(ulfjack): We don't call beforeCommand() in tests, but rely on workingDirectory being set
     // in setupPackageCache(). This leads to NPE if we don't set it here.
-    this.workingDirectory = directories.getWorkspace();
+    this.workingDirectory = runtime.getWorkspace();
   }
 
   public BlazeRuntime getRuntime() {
@@ -130,7 +128,7 @@ public final class CommandEnvironment {
   }
 
   public BlazeDirectories getDirectories() {
-    return directories;
+    return runtime.getDirectories();
   }
 
   /**
@@ -210,69 +208,11 @@ public final class CommandEnvironment {
   }
 
   /**
-   * Returns the working directory of the server.
-   *
-   * <p>This is often the first entry on the {@code --package_path}, but not always.
-   * Callers should certainly not make this assumption. The Path returned may be null.
-   */
-  public Path getWorkspace() {
-    return getDirectories().getWorkspace();
-  }
-
-  public String getWorkspaceName() {
-    Path workspace = getDirectories().getWorkspace();
-    if (workspace == null) {
-      return "";
-    }
-    return workspace.getBaseName();
-  }
-
-  /**
-   * Returns if the client passed a valid workspace to be used for the build.
-   */
-  public boolean inWorkspace() {
-    return getDirectories().inWorkspace();
-  }
-
-  /**
-   * Returns the output base directory associated with this Blaze server
-   * process. This is the base directory for shared Blaze state as well as tool
-   * and strategy specific subdirectories.
-   */
-  public Path getOutputBase() {
-    return getDirectories().getOutputBase();
-  }
-
-  /**
-   * Returns the output path associated with this Blaze server process..
-   */
-  public Path getOutputPath() {
-    return getDirectories().getOutputPath();
-  }
-
-  /**
-   * The directory in which blaze stores the server state - that is, the socket
-   * file and a log.
-   */
-  public Path getServerDirectory() {
-    return getOutputBase().getChild("server");
-  }
-
-  /**
-   * Returns the execution root directory associated with this Blaze server
-   * process. This is where all input and output files visible to the actual
-   * build reside.
-   */
-  public Path getExecRoot() {
-    return getDirectories().getExecRoot();
-  }
-
-  /**
    * Returns the working directory of the {@code blaze} client process.
    *
    * <p>This may be equal to {@code BlazeRuntime#getWorkspace()}, or beneath it.
    *
-   * @see #getWorkspace()
+   * @see BlazeRuntime#getWorkspace()
    */
   public Path getWorkingDirectory() {
     return workingDirectory;
@@ -306,7 +246,7 @@ public final class CommandEnvironment {
       throw new InvalidConfigurationException("Configuration creation failed");
     }
     return getSkyframeExecutor().createConfigurations(reporter, runtime.getConfigurationFactory(),
-        buildOptions, getDirectories(), ImmutableSet.<String>of(), keepGoing);
+        buildOptions, runtime.getDirectories(), ImmutableSet.<String>of(), keepGoing);
   }
 
   // TODO(ulfjack): Do we even need this method? With Skyframe, the config creation should
@@ -364,7 +304,7 @@ public final class CommandEnvironment {
     if (!skyframeExecutor.hasIncrementalState()) {
       skyframeExecutor.resetEvaluator();
     }
-    skyframeExecutor.sync(reporter, packageCacheOptions, getOutputBase(),
+    skyframeExecutor.sync(reporter, packageCacheOptions, runtime.getOutputBase(),
         getWorkingDirectory(), defaultsPackageContents, commandId,
         timestampGranularityMonitor);
   }
@@ -425,12 +365,12 @@ public final class CommandEnvironment {
     this.outputFileSystem = determineOutputFileSystem();
 
     // Ensure that the working directory will be under the workspace directory.
-    Path workspace = getWorkspace();
+    Path workspace = runtime.getWorkspace();
     Path workingDirectory;
-    if (inWorkspace()) {
+    if (runtime.inWorkspace()) {
       workingDirectory = workspace.getRelative(options.clientCwd);
     } else {
-      workspace = FileSystemUtils.getWorkingDirectory(getDirectories().getFileSystem());
+      workspace = FileSystemUtils.getWorkingDirectory(runtime.getDirectories().getFileSystem());
       workingDirectory = workspace;
     }
     this.relativeWorkingDirectory = workingDirectory.relativeTo(workspace);
@@ -488,7 +428,7 @@ public final class CommandEnvironment {
       return getOutputService().getFilesSystemName();
     }
     try (AutoProfiler p = profiled("Finding output file system", ProfilerTask.INFO)) {
-      return FileSystemUtils.getFileSystem(getOutputBase());
+      return FileSystemUtils.getFileSystem(runtime.getOutputBase());
     }
   }
 }

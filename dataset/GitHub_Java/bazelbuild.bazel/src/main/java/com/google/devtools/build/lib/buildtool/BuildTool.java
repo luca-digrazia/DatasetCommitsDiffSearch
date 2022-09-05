@@ -473,7 +473,8 @@ public final class BuildTool {
             request.getViewOptions(),
             request.getTopLevelArtifactContext(),
             env.getReporter(),
-            env.getEventBus());
+            env.getEventBus(),
+            isLoadingEnabled(request));
 
     // TODO(bazel-team): Merge these into one event.
     env.getEventBus().post(new AnalysisPhaseCompleteEvent(analysisResult.getTargetsToBuild(),
