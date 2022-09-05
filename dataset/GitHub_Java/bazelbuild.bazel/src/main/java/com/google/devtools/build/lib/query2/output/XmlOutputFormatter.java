@@ -17,7 +17,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.EnvironmentGroup;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.OutputFile;
@@ -25,7 +24,6 @@ import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.query2.FakeSubincludeTarget;
-import com.google.devtools.build.lib.query2.output.AspectResolver.BuildFileDependencyMode;
 import com.google.devtools.build.lib.syntax.FilesetEntry;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.BinaryPredicate;
@@ -41,7 +39,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import javax.annotation.Nullable;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.OutputKeys;
@@ -60,7 +57,6 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
   private boolean xmlLineNumbers;
   private boolean showDefaultValues;
   private boolean relativeLocations;
-  @Nullable private AspectResolver aspectResolver;  // Null if aspect dependencies are not needed
   private BinaryPredicate<Rule, Attribute> dependencyFilter;
 
   @Override
@@ -69,13 +65,12 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
   }
 
   @Override
-  public void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out,
-      AspectResolver aspectResolver) throws InterruptedException {
+  public void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out) {
     this.xmlLineNumbers = options.xmlLineNumbers;
     this.showDefaultValues = options.xmlShowDefaultValues;
     this.relativeLocations = options.relativeLocations;
     this.dependencyFilter = OutputFormatter.getDependencyFilter(options);
-    this.aspectResolver = aspectResolver;
+
     Document doc;
     try {
       DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -102,11 +97,10 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
   }
 
   @Override
-  public void output(QueryOptions options, Digraph<Target> result, PrintStream out,
-      AspectResolver aspectResolver) throws InterruptedException {
+  public void output(QueryOptions options, Digraph<Target> result, PrintStream out) {
     Iterable<Target> ordered = Iterables.transform(
         result.getTopologicalOrder(new TargetOrdering()), OutputFormatter.EXTRACT_NODE_LABEL);
-    outputUnordered(options, ordered, out, aspectResolver);
+    outputUnordered(options, ordered, out);
   }
 
   /**
@@ -119,10 +113,8 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
    * - 'name' attribute is target's label.
    * - 'location' attribute is consistent with output of --output location.
    * - rule attributes are represented in the DOM structure.
-   * @throws InterruptedException 
    */
-  private Element createTargetElement(Document doc, Target target)
-      throws InterruptedException {
+  private Element createTargetElement(Document doc, Target target) {
     Element elem;
     if (target instanceof Rule) {
       Rule rule = (Rule) target;
@@ -145,13 +137,6 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
         Element inputElem = doc.createElement("rule-input");
         inputElem.setAttribute("name", label.toString());
         elem.appendChild(inputElem);
-      }
-      if (aspectResolver != null) {
-        for (Label label : aspectResolver.computeAspectDependencies(target)) {
-          Element inputElem = doc.createElement("rule-input");
-          inputElem.setAttribute("name", label.toString());
-          elem.appendChild(inputElem);
-        }
       }
       for (OutputFile outputFile: rule.getOutputFiles()) {
         Element outputElem = doc.createElement("rule-output");
@@ -192,20 +177,6 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
       }
 
       addPackageGroupsToElement(doc, elem, inputFile);
-    } else if (target instanceof EnvironmentGroup) {
-      EnvironmentGroup envGroup = (EnvironmentGroup) target;
-      elem = doc.createElement("environment-group");
-      elem.setAttribute("name", envGroup.getName());
-      Element environments = createValueElement(doc,
-          com.google.devtools.build.lib.packages.Type.LABEL_LIST,
-          envGroup.getEnvironments());
-      environments.setAttribute("name", "environments");
-      elem.appendChild(environments);
-      Element defaults = createValueElement(doc,
-          com.google.devtools.build.lib.packages.Type.LABEL_LIST,
-          envGroup.getDefaults());
-      defaults.setAttribute("name", "defaults");
-      elem.appendChild(defaults);
     } else if (target instanceof FakeSubincludeTarget) {
       elem = doc.createElement("source-file");
     } else {
@@ -247,28 +218,16 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
     }
   }
 
-  private void addSubincludedFilesToElement(Document doc, Element parent, InputFile inputFile)
-      throws InterruptedException {
-    Iterable<Label> dependencies = aspectResolver == null
-        ? inputFile.getPackage().getSubincludeLabels()
-        : aspectResolver.computeBuildFileDependencies(
-            inputFile.getPackage(), BuildFileDependencyMode.SUBINCLUDE);
-
-    for (Label subinclude : dependencies) {
+  private void addSubincludedFilesToElement(Document doc, Element parent, InputFile inputFile) {
+    for (Label subinclude : inputFile.getPackage().getSubincludeLabels()) {
       Element elem = doc.createElement("subinclude");
       elem.setAttribute("name", subinclude.toString());
       parent.appendChild(elem);
     }
   }
 
-  private void addSkylarkFilesToElement(Document doc, Element parent, InputFile inputFile)
-      throws InterruptedException {
-    Iterable<Label> dependencies = aspectResolver == null
-        ? inputFile.getPackage().getSkylarkFileDependencies()
-        : aspectResolver.computeBuildFileDependencies(
-            inputFile.getPackage(), BuildFileDependencyMode.SKYLARK);
-
-    for (Label skylarkFileDep : dependencies) {
+  private void addSkylarkFilesToElement(Document doc, Element parent, InputFile inputFile) {
+    for (Label skylarkFileDep : inputFile.getPackage().getSkylarkFileDependencies()) {
       Element elem = doc.createElement("load");
       elem.setAttribute("name", skylarkFileDep.toString());
       parent.appendChild(elem);
