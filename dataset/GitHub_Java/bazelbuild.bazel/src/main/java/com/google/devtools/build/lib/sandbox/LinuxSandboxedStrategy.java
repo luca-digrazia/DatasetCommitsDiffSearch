@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -22,7 +23,6 @@ import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
-import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
@@ -39,8 +39,7 @@ import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.fileset.FilesetActionContext;
 import com.google.devtools.build.lib.rules.test.TestRunnerAction;
 import com.google.devtools.build.lib.standalone.StandaloneSpawnStrategy;
-import com.google.devtools.build.lib.unix.NativePosixFiles;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.unix.FilesystemUtils;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -96,23 +95,19 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
   @Override
   public void exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
       throws ExecException {
+    Executor executor = actionExecutionContext.getExecutor();
+
     // Certain actions can't run remotely or in a sandbox - pass them on to the standalone strategy.
     if (!spawn.isRemotable()) {
       standaloneStrategy.exec(spawn, actionExecutionContext);
       return;
     }
 
-    Executor executor = actionExecutionContext.getExecutor();
-
     if (executor.reportsSubcommands()) {
       executor.reportSubcommand(
           Label.print(spawn.getOwner().getLabel()) + " [" + spawn.getResourceOwner().prettyPrint()
               + "]", spawn.asShellCommand(executor.getExecRoot()));
     }
-
-    executor
-        .getEventBus()
-        .post(ActionStatusMessage.runningStrategy(spawn.getResourceOwner(), "sandbox"));
 
     FileOutErr outErr = actionExecutionContext.getFileOutErr();
 
@@ -135,15 +130,6 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
 
     int timeout = getTimeout(spawn);
 
-    ImmutableSet.Builder<PathFragment> outputFiles = ImmutableSet.<PathFragment>builder();
-    for (PathFragment optionalOutput : spawn.getOptionalOutputFiles()) {
-      Preconditions.checkArgument(!optionalOutput.isAbsolute());
-      outputFiles.add(optionalOutput);
-    }
-    for (ActionInput output : spawn.getOutputFiles()) {
-      outputFiles.add(new PathFragment(output.getExecPathString()));
-    }
-
     try {
       final NamespaceSandboxRunner runner =
           new NamespaceSandboxRunner(
@@ -154,7 +140,7 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
             spawn.getEnvironment(),
             execRoot.getPathFile(),
             outErr,
-            outputFiles.build(),
+            spawn.getOutputFiles(),
             timeout,
             !spawn.getExecutionInfo().containsKey("requires-network"));
       } finally {
@@ -305,13 +291,13 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
     mounts.put(fs.getPath("/bin"), fs.getPath("/bin"));
     mounts.put(fs.getPath("/sbin"), fs.getPath("/sbin"));
     mounts.put(fs.getPath("/etc"), fs.getPath("/etc"));
-    for (String entry : NativePosixFiles.readdir("/")) {
+    for (String entry : FilesystemUtils.readdir("/")) {
       if (entry.startsWith("lib")) {
         Path libDir = fs.getRootDirectory().getRelative(entry);
         mounts.put(libDir, libDir);
       }
     }
-    for (String entry : NativePosixFiles.readdir("/usr")) {
+    for (String entry : FilesystemUtils.readdir("/usr")) {
       if (!entry.equals("local")) {
         Path usrDir = fs.getPath("/usr").getRelative(entry);
         mounts.put(usrDir, usrDir);
@@ -497,12 +483,12 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
   }
 
   @Override
-  public boolean isRemotable(String mnemonic, boolean remotable) {
-    return false;
+  public String strategyLocality(String mnemonic, boolean remotable) {
+    return "linux-sandboxing";
   }
 
   @Override
-  public String toString() {
-    return "sandboxed";
+  public boolean isRemotable(String mnemonic, boolean remotable) {
+    return false;
   }
 }

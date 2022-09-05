@@ -80,7 +80,9 @@ public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
       Path customMountPath = workspaceDir.getRelative(customMount);
       mounts.put(customMountPath, customMountPath);
     }
-    return ImmutableMap.copyOf(LinuxSandboxedStrategy.finalizeMounts(mounts.build()));
+    return LinuxSandboxedStrategy.validateMounts(
+        LinuxSandboxedStrategy.withResolvedSymlinks(
+            LinuxSandboxedStrategy.withRecursedDirs(mounts.build())));
   }
 
   /**

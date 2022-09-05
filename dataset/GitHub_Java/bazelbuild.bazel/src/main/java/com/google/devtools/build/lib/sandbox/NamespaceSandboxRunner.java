@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Files;
+import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.config.BinTools;
@@ -47,15 +48,9 @@ import java.util.List;
 public class NamespaceSandboxRunner {
   private static final String NAMESPACE_SANDBOX =
       "namespace-sandbox" + OsUtils.executableExtension();
-  private static final String SANDBOX_TIP =
-      "\n\nSandboxed execution failed, which may be legitimate (e.g. a compiler error), "
-          + "or due to missing dependencies. To enter the sandbox environment for easier debugging,"
-          + " run the following command in parentheses. On command failure, "
-          + "a bash shell running inside the sandbox will then automatically be spawned:\n\n";
   private final Path execRoot;
   private final Path sandboxPath;
   private final Path sandboxExecRoot;
-  private final Path argumentsFilePath;
   private final ImmutableMap<Path, Path> mounts;
   private final ImmutableSet<Path> createDirs;
   private final boolean verboseFailures;
@@ -71,8 +66,6 @@ public class NamespaceSandboxRunner {
     this.execRoot = execRoot;
     this.sandboxPath = sandboxPath;
     this.sandboxExecRoot = sandboxPath.getRelative(execRoot.asFragment().relativeTo("/"));
-    this.argumentsFilePath =
-        sandboxPath.getParentDirectory().getRelative(sandboxPath.getBaseName() + ".params");
     this.mounts = mounts;
     this.createDirs = createDirs;
     this.verboseFailures = verboseFailures;
@@ -83,15 +76,8 @@ public class NamespaceSandboxRunner {
     Path execRoot = runtime.getExecRoot();
     BinTools binTools = runtime.getBinTools();
 
-    PathFragment embeddedTool = binTools.getExecPath(NAMESPACE_SANDBOX);
-    if (embeddedTool == null) {
-      // The embedded tool does not exist, meaning that we don't support sandboxing (e.g., while
-      // bootstrapping).
-      return false;
-    }
-
     List<String> args = new ArrayList<>();
-    args.add(execRoot.getRelative(embeddedTool).getPathString());
+    args.add(execRoot.getRelative(binTools.getExecPath(NAMESPACE_SANDBOX)).getPathString());
     args.add("-C");
 
     ImmutableMap<String, String> env = ImmutableMap.of();
@@ -119,7 +105,6 @@ public class NamespaceSandboxRunner {
    * @param env - environment to run sandbox in
    * @param cwd - current working directory
    * @param outErr - error output to capture sandbox's and command's stderr
-   * @param outputs - files to extract from the sandbox, paths are relative to the exec root
    * @throws ExecException
    */
   public void run(
@@ -127,7 +112,7 @@ public class NamespaceSandboxRunner {
       ImmutableMap<String, String> env,
       File cwd,
       FileOutErr outErr,
-      Collection<PathFragment> outputs,
+      Collection<? extends ActionInput> outputs,
       int timeout,
       boolean blockNetwork)
       throws IOException, ExecException {
@@ -179,6 +164,8 @@ public class NamespaceSandboxRunner {
       }
     }
 
+    Path argumentsFilePath =
+        sandboxPath.getParentDirectory().getRelative(sandboxPath.getBaseName() + ".params");
     FileSystemUtils.writeLinesAs(argumentsFilePath, StandardCharsets.ISO_8859_1, fileArgs);
     commandLineArgs.add("@" + argumentsFilePath.getPathString());
 
@@ -203,28 +190,28 @@ public class NamespaceSandboxRunner {
       }
       String message =
           CommandFailureUtils.describeCommandFailure(
-              verboseFailures, commandLineArgs, env, cwd.getPath());
-      String finalMsg = (sandboxDebug && verboseFailures) ? SANDBOX_TIP + message : message;
-      throw new UserExecException(finalMsg, e, timedOut);
-    } finally {
-      copyOutputs(outputs);
+              verboseFailures, spawnArguments, env, cwd.getPath());
+      throw new UserExecException(message, e, timedOut);
     }
+
+    copyOutputs(outputs);
   }
 
-  private void createFileSystem(Collection<PathFragment> outputs) throws IOException {
+  private void createFileSystem(Collection<? extends ActionInput> outputs) throws IOException {
     FileSystemUtils.createDirectoryAndParents(sandboxPath);
 
     // Prepare the output directories in the sandbox.
-    for (PathFragment output : outputs) {
-      FileSystemUtils.createDirectoryAndParents(
-          sandboxExecRoot.getRelative(output.getParentDirectory()));
+    for (ActionInput output : outputs) {
+      PathFragment parentDirectory =
+          new PathFragment(output.getExecPathString()).getParentDirectory();
+      FileSystemUtils.createDirectoryAndParents(sandboxExecRoot.getRelative(parentDirectory));
     }
   }
 
-  private void copyOutputs(Collection<PathFragment> outputs) throws IOException {
-    for (PathFragment output : outputs) {
-      Path source = sandboxExecRoot.getRelative(output);
-      Path target = execRoot.getRelative(output);
+  private void copyOutputs(Collection<? extends ActionInput> outputs) throws IOException {
+    for (ActionInput output : outputs) {
+      Path source = sandboxExecRoot.getRelative(output.getExecPathString());
+      Path target = execRoot.getRelative(output.getExecPathString());
       FileSystemUtils.createDirectoryAndParents(target.getParentDirectory());
       if (source.isFile() || source.isSymbolicLink()) {
         Files.move(source.getPathFile(), target.getPathFile());
@@ -235,9 +222,6 @@ public class NamespaceSandboxRunner {
   public void cleanup() throws IOException {
     if (sandboxPath.exists()) {
       FileSystemUtils.deleteTree(sandboxPath);
-    }
-    if (!sandboxDebug && argumentsFilePath.exists()) {
-      argumentsFilePath.delete();
     }
   }
 }
