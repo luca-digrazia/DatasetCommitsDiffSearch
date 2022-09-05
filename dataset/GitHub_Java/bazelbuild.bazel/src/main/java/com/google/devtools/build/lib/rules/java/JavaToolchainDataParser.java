@@ -18,15 +18,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.QueryResult;
-import com.google.devtools.build.lib.rules.java.JavaToolchainData.SupportsWorkers;
-import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.protobuf.TextFormat;
 import com.google.protobuf.TextFormat.ParseException;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * A class to parse a {@link JavaToolchainData} from the result of blaze query. It is used by
@@ -82,7 +78,6 @@ public class JavaToolchainDataParser {
     ImmutableList<String> xlint = ImmutableList.of();
     ImmutableList<String> misc = ImmutableList.of();
     ImmutableList<String> jvmOpts = ImmutableList.of();
-    SupportsWorkers javacSupportsWorkers = SupportsWorkers.NO;
     for (Build.Attribute attribute : rule.getAttributeList()) {
       switch (attribute.getName()) {
         case "source_version":
@@ -104,40 +99,14 @@ public class JavaToolchainDataParser {
           xlint = ImmutableList.copyOf(attribute.getStringListValueList());
           break;
         case "misc":
-          {
-            List<String> options = new ArrayList<>();
-            for (String option : attribute.getStringListValueList()) {
-              try {
-                ShellUtils.tokenize(options, option);
-              } catch (ShellUtils.TokenizationException e) {
-                // Tokenization failed; this likely means that the user
-                // did not want tokenization to happen on the argument.
-                // (see JavaHelper.tokenizeJavaOptions)
-                options.add(option);
-              }
-            }
-            misc = ImmutableList.copyOf(options);
-            break;
-          }
+          misc = ImmutableList.copyOf(attribute.getStringListValueList());
+          break;
         case "jvm_opts":
           jvmOpts = ImmutableList.copyOf(attribute.getStringListValueList());
-          break;
-        case "javac_supports_workers":
-          if (attribute.getBooleanValue()) {
-            javacSupportsWorkers = SupportsWorkers.YES;
-          }
           break;
       }
     }
     return new JavaToolchainData(
-        source,
-        target,
-        bootclasspath,
-        extclasspath,
-        encoding,
-        xlint,
-        misc,
-        jvmOpts,
-        javacSupportsWorkers);
+        source, target, bootclasspath, extclasspath, encoding, xlint, misc, jvmOpts);
   }
 }

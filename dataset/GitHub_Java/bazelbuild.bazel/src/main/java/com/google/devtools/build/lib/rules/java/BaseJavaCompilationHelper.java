@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 public class BaseJavaCompilationHelper {
   protected final RuleContext ruleContext;
   private final String implicitAttributesSuffix;
-  protected final JavaToolchainProvider javaToolchain;
 
   public BaseJavaCompilationHelper(RuleContext ruleContext) {
     this(ruleContext, "");
@@ -44,7 +43,6 @@ public class BaseJavaCompilationHelper {
   public BaseJavaCompilationHelper(RuleContext ruleContext, String implicitAttributesSuffix) {
     this.ruleContext = ruleContext;
     this.implicitAttributesSuffix = implicitAttributesSuffix;
-    this.javaToolchain = JavaToolchainProvider.fromRuleContext(ruleContext);
   }
 
   /**
@@ -57,30 +55,22 @@ public class BaseJavaCompilationHelper {
     return AnalysisUtils.getMiddlemanFor(ruleContext, ":host_jdk" + implicitAttributesSuffix);
   }
 
-  /** Returns the langtools jar Artifact. */
+  /**
+   * Returns the langtools jar Artifact.
+   */
   protected final Artifact getLangtoolsJar() {
-    Artifact javac = javaToolchain.getJavac();
-    if (javac != null) {
-      return javac;
-    }
     return ruleContext.getHostPrerequisiteArtifact("$java_langtools" + implicitAttributesSuffix);
   }
 
-  /** Returns the JavaBuilder jar Artifact. */
+  /**
+   * Returns the JavaBuilder jar Artifact.
+   */
   protected final Artifact getJavaBuilderJar() {
-    Artifact javaBuilder = javaToolchain.getJavaBuilder();
-    if (javaBuilder != null) {
-      return javaBuilder;
-    }
     return ruleContext.getPrerequisiteArtifact(
         "$javabuilder" + implicitAttributesSuffix, Mode.HOST);
   }
 
   protected FilesToRunProvider getIJar() {
-    FilesToRunProvider ijar = javaToolchain.getIjar();
-    if (ijar != null) {
-      return ijar;
-    }
     return ruleContext.getExecutablePrerequisite("$ijar" + implicitAttributesSuffix, Mode.HOST);
   }
 
@@ -102,7 +92,8 @@ public class BaseJavaCompilationHelper {
    * Returns the javac bootclasspath artifacts.
    */
   protected final ImmutableList<Artifact> getBootClasspath() {
-    NestedSet<Artifact> toolchainBootclasspath = javaToolchain.getBootclasspath();
+    NestedSet<Artifact> toolchainBootclasspath =
+        JavaToolchainProvider.getDefaultBootclasspath(ruleContext);
     if (toolchainBootclasspath != null) {
       return ImmutableList.copyOf(toolchainBootclasspath);
     }
@@ -114,7 +105,8 @@ public class BaseJavaCompilationHelper {
    * Returns the extdir artifacts.
    */
   protected final ImmutableList<Artifact> getExtdirInputs() {
-    NestedSet<Artifact> toolchainExtclasspath = javaToolchain.getExtclasspath();
+    NestedSet<Artifact> toolchainExtclasspath =
+        JavaToolchainProvider.getDefaultExtclasspath(ruleContext);
     if (toolchainExtclasspath != null) {
       return ImmutableList.copyOf(toolchainExtclasspath);
     }
