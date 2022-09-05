@@ -14,11 +14,6 @@ import reactor.core.publisher.Mono;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * @param <E> TreeSortSupportEntity
- * @param <K> ID
- * @see GenericReactiveTreeSupportCrudService
- */
 public interface ReactiveTreeSortEntityService<E extends TreeSortSupportEntity<K>, K>
         extends ReactiveCrudService<E, K> {
 
@@ -64,8 +59,8 @@ public interface ReactiveTreeSortEntityService<E extends TreeSortSupportEntity<K
         return this.getRepository()
                 .insertBatch(Flux.from(entityPublisher)
                         .flatMap(Flux::fromIterable)
-                        .flatMap(this::applyTreeProperty)
                         .flatMap(e -> Flux.fromIterable(TreeSupportEntity.expandTree2List(e, getIDGenerator())))
+                        .flatMap(this::applyTreeProperty)
                         .collectList());
     }
 
@@ -83,9 +78,9 @@ public interface ReactiveTreeSortEntityService<E extends TreeSortSupportEntity<K
     default Mono<SaveResult> save(Publisher<E> entityPublisher) {
         return this.getRepository()
                 .save(Flux.from(entityPublisher)
-                        .flatMap(this::applyTreeProperty)
                         //把树结构平铺
                         .flatMap(e -> Flux.fromIterable(TreeSupportEntity.expandTree2List(e, getIDGenerator())))
+                        .flatMap(this::applyTreeProperty)
                 );
     }
 
