@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.ideinfo;
 
 import static com.google.common.collect.Iterables.transform;
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
@@ -31,7 +30,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.actions.BinaryFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCaseForJunit4;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.ArtifactLocation;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.LibraryArtifact;
@@ -47,7 +46,7 @@ import javax.annotation.Nullable;
 /**
  * Provides utils for AndroidStudioInfoAspectTest.
  */
-abstract class AndroidStudioInfoAspectTestBase extends BuildViewTestCase {
+abstract class AndroidStudioInfoAspectTestBase extends BuildViewTestCaseForJunit4 {
 
   protected static final Function<ArtifactLocation, String> ARTIFACT_TO_RELATIVE_PATH =
       new Function<ArtifactLocation, String>() {
@@ -82,7 +81,8 @@ abstract class AndroidStudioInfoAspectTestBase extends BuildViewTestCase {
         }
       };
 
-  protected ConfiguredAspect configuredAspect;
+  private AnalysisResult analysisResult;
+  private ConfiguredAspect configuredAspect;
 
   /**
    * Constructs a string that matches OutputJar#toString for comparison testing.
@@ -114,7 +114,7 @@ abstract class AndroidStudioInfoAspectTestBase extends BuildViewTestCase {
   }
 
   protected void buildTarget(String target) throws Exception {
-    AnalysisResult analysisResult =
+    this.analysisResult =
         update(
             ImmutableList.of(target),
             ImmutableList.of(AndroidStudioInfoAspect.NAME),
@@ -165,9 +165,7 @@ abstract class AndroidStudioInfoAspectTestBase extends BuildViewTestCase {
     NestedSet<Artifact> artifacts = outputGroupProvider.getOutputGroup(outputGroup);
 
     for (Artifact artifact : artifacts) {
-      assertWithMessage("Artifact %s has no generating action", artifact)
-          .that(getGeneratingAction(artifact))
-          .isNotNull();
+      assertThat(getGeneratingAction(artifact)).isNotNull();
     }
 
     List<String> artifactRelativePaths = Lists.newArrayList();
