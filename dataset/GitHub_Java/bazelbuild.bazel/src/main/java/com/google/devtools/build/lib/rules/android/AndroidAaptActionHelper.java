@@ -20,8 +20,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
-import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
@@ -46,6 +44,7 @@ public final class AndroidAaptActionHelper {
   private final Artifact manifest;
   private final Collection<Artifact> inputs = new LinkedHashSet<>();
   private final List<ResourceContainer> resourceContainers;
+  private final AndroidTools tools;
 
   /**
    * Constructs an instance of AndroidAaptActionHelper.
@@ -55,12 +54,14 @@ public final class AndroidAaptActionHelper {
    * @param manifest Artifact representing the AndroidManifest.xml that will be
    *        used to package resources.
    * @param resourceContainers The transitive closure of the ResourceContainers.
+   * @param tools AndroidTools used for creating the approriate actions.
    */
   public AndroidAaptActionHelper(RuleContext ruleContext, Artifact manifest,
-      List<ResourceContainer> resourceContainers) {
+      List<ResourceContainer> resourceContainers, AndroidTools tools) {
     this.ruleContext = ruleContext;
     this.manifest = manifest;
     this.resourceContainers = resourceContainers;
+    this.tools = tools;
   }
 
   /**
@@ -68,16 +69,14 @@ public final class AndroidAaptActionHelper {
    */
   private Iterable<Artifact> getInputs() {
     if (inputs.isEmpty()) {
-      FilesToRunProvider toolRunner =
-          ruleContext.getExecutablePrerequisite("$android_tool_runner", Mode.HOST);
       // TODO(bazel-team): When using getFilesToRun(), the middleman is
       // not expanded. Fix by providing code to expand and use getFilesToRun here.
-      RunfilesSupport aaptRunnerRunfiles = toolRunner.getRunfilesSupport();
-      Preconditions.checkState(aaptRunnerRunfiles != null, toolRunner.getLabel());
+      RunfilesSupport aaptRunnerRunfiles = tools.getToolRunner().getRunfilesSupport();
+      Preconditions.checkState(aaptRunnerRunfiles != null, tools.getToolRunner().getLabel());
       // Note the below may be an overapproximation of the actual runfiles, due to "conditional
       // artifacts" (see Runfiles.PruningManifest).
       Iterables.addAll(inputs, aaptRunnerRunfiles.getRunfilesArtifactsWithoutMiddlemen());
-      inputs.add(AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar());
+      inputs.add(tools.getAndroidJar());
       inputs.add(manifest);
       Iterables.addAll(inputs, Iterables.concat(Iterables.transform(resourceContainers,
           new Function<AndroidResourcesProvider.ResourceContainer, Iterable<Artifact>>() {
@@ -120,9 +119,8 @@ public final class AndroidAaptActionHelper {
         javaPackage));
     final Builder builder = new SpawnAction.Builder()
         .addInputs(getInputs())
-        .addTool(AndroidSdkProvider.fromRuleContext(ruleContext).getAapt())
-        .setExecutable(
-            ruleContext.getExecutablePrerequisite("$android_aapt_java_generator", Mode.HOST))
+        .addTool(tools.getAapt())
+        .setExecutable(tools.getAaptJavaGenerator())
         .addOutput(javaSourcesJar)
         .setCommandLine(CommandLine.of(args, false))
         .useParameterFile(ParameterFileType.UNQUOTED)
@@ -160,10 +158,9 @@ public final class AndroidAaptActionHelper {
 
     ruleContext.registerAction(new SpawnAction.Builder()
         .addInputs(getInputs())
-        .addTool(AndroidSdkProvider.fromRuleContext(ruleContext).getAapt())
+        .addTool(tools.getAapt())
         .addOutput(apk)
-        .setExecutable(
-            ruleContext.getExecutablePrerequisite("$android_aapt_apk_generator", Mode.HOST))
+        .setExecutable(tools.getApkGenerator())
         .setCommandLine(CommandLine.of(args, false))
         .useParameterFile(ParameterFileType.UNQUOTED)
         .setProgressMessage("Generating apk resources")
@@ -176,10 +173,8 @@ public final class AndroidAaptActionHelper {
     List<String> args = new ArrayList<>();
     args.addAll(getArgs(output, actionKind, ResourceType.RESOURCES));
     args.addAll(getArgs(output, actionKind, ResourceType.ASSETS));
-    args.add(ruleContext.getExecutablePrerequisite("$android_tool_runner", Mode.HOST)
-        .getExecutable().getExecPathString());
-    args.add(
-        AndroidSdkProvider.fromRuleContext(ruleContext).getAapt().getExecutable().getExecPathString());
+    args.add(tools.getToolRunner().getExecutable().getExecPathString());
+    args.add(tools.getAapt().getExecutable().getExecPathString());
     args.add("package");
     Collections.addAll(args, outputArgs);
     // Allow overlay in case the same resource appears in more than one target,
@@ -197,7 +192,7 @@ public final class AndroidAaptActionHelper {
       args.add("--debug-mode");
     }
     args.add("-I");
-    args.add(AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar().getExecPathString());
+    args.add(tools.getAndroidJar().getExecPathString());
     args.add("-M");
     args.add(manifest.getExecPathString());
     args.addAll(getResourcesDirArg(output, actionKind, "-S", ResourceType.RESOURCES));
@@ -271,10 +266,9 @@ public final class AndroidAaptActionHelper {
         "-G", outputSpec.getExecPathString());
     ruleContext.registerAction(new SpawnAction.Builder()
         .addInputs(getInputs())
-        .addTool(AndroidSdkProvider.fromRuleContext(ruleContext).getAapt())
+        .addTool(tools.getAapt())
         .addOutput(outputSpec)
-        .setExecutable(
-            ruleContext.getExecutablePrerequisite("$android_aapt_apk_generator", Mode.HOST))
+        .setExecutable(tools.getApkGenerator())
         .setCommandLine(CommandLine.of(aaptCommand, false))
         .useParameterFile(ParameterFileType.UNQUOTED)
         .setProgressMessage("Generating Proguard Configuration")
