@@ -101,7 +101,7 @@ public class ExternalPackage extends Package {
    * Given a workspace file path, creates an ExternalPackage.
    */
   public static class Builder
-      extends Package.Builder {
+      extends AbstractBuilder<ExternalPackage, Builder> {
     private Map<Label, Binding> bindMap = Maps.newLinkedHashMap();
     private Map<RepositoryName, Rule> repositoryMap = Maps.newLinkedHashMap();
 
@@ -111,8 +111,9 @@ public class ExternalPackage extends Package {
       setMakeEnv(new MakeEnvironment.Builder());
     }
 
-    protected ExternalPackage externalPackage() {
-      return (ExternalPackage) pkg;
+    @Override
+    protected Builder self() {
+      return this;
     }
 
     @Override
@@ -125,11 +126,9 @@ public class ExternalPackage extends Package {
               + ", which can't happen: " + e.getMessage());
         }
       }
-      externalPackage().bindMap = ImmutableMap.copyOf(bindMap);
-      externalPackage().repositoryMap = ImmutableMap.copyOf(repositoryMap);
-
-      Package base = super.build();
-      return (ExternalPackage) base;
+      pkg.bindMap = ImmutableMap.copyOf(bindMap);
+      pkg.repositoryMap = ImmutableMap.copyOf(repositoryMap);
+      return super.build();
     }
 
     /**
