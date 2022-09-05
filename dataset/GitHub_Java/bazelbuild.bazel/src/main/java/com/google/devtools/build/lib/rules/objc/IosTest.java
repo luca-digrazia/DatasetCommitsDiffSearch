@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
@@ -150,7 +151,7 @@ public final class IosTest implements RuleConfiguredTargetFactory {
             ruleContext.getPrerequisites("deps", Mode.TARGET, J2ObjcEntryClassProvider.class))
         .build();
 
-    CompilationSupport.create(ruleContext)
+    new LegacyCompilationSupport(ruleContext)
         .registerLinkActions(
             common.getObjcProvider(),
             j2ObjcMappingFileProvider,
@@ -201,7 +202,7 @@ public final class IosTest implements RuleConfiguredTargetFactory {
         NestedSetBuilder.<Artifact>stableOrder().addTransitive(filesToBuildSet);
 
     InstrumentedFilesProvider instrumentedFilesProvider =
-        CompilationSupport.create(ruleContext).getInstrumentedFilesProvider(common);
+        new LegacyCompilationSupport(ruleContext).getInstrumentedFilesProvider(common);
 
     TestSupport testSupport =
         new TestSupport(ruleContext)

@@ -31,10 +31,10 @@ public class SkylarkTestingModuleTest extends BuildViewTestCase {
     scratch.file(
         "examples/rule/apple_rules.bzl",
         "def my_rule_impl(ctx):",
-        "  exec_info = testing.ExecutionInfo({'requires-darwin': '1'})",
-        "  return [exec_info]",
+        "   exec_info = testing.ExecutionInfo({'requires-darwin': '1'})",
+        "   return [exec_info]",
         "my_rule = rule(implementation = my_rule_impl,",
-        "  attrs = {},",
+        "   attrs = {},",
         ")");
     scratch.file(
         "examples/apple_skylark/BUILD",
@@ -45,7 +45,9 @@ public class SkylarkTestingModuleTest extends BuildViewTestCase {
         ")");
 
     ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
-    ExecutionInfoProvider provider = skylarkTarget.get(ExecutionInfoProvider.SKYLARK_CONSTRUCTOR);
+    ExecutionInfoProvider provider =
+        (ExecutionInfoProvider)
+            skylarkTarget.get(ExecutionInfoProvider.SKYLARK_CONSTRUCTOR.getKey());
 
     assertThat(provider.getExecutionInfo().get("requires-darwin")).isEqualTo("1");
   }
@@ -56,10 +58,10 @@ public class SkylarkTestingModuleTest extends BuildViewTestCase {
     scratch.file(
         "examples/rule/apple_rules.bzl",
         "def my_rule_impl(ctx):",
-        "  test_env = testing.TestEnvironment({'XCODE_VERSION_OVERRIDE': '7.3.1'})",
-        "  return [test_env]",
+        "   test_env = testing.TestEnvironment({'XCODE_VERSION_OVERRIDE': '7.3.1'})",
+        "   return [test_env]",
         "my_rule = rule(implementation = my_rule_impl,",
-        "  attrs = {},",
+        "   attrs = {},",
         ")");
     scratch.file(
         "examples/apple_skylark/BUILD",
@@ -71,36 +73,9 @@ public class SkylarkTestingModuleTest extends BuildViewTestCase {
 
     ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
     TestEnvironmentProvider provider =
-        skylarkTarget.get(TestEnvironmentProvider.SKYLARK_CONSTRUCTOR);
+        (TestEnvironmentProvider)
+            skylarkTarget.get(TestEnvironmentProvider.SKYLARK_CONSTRUCTOR.getKey());
 
     assertThat(provider.getEnvironment().get("XCODE_VERSION_OVERRIDE")).isEqualTo("7.3.1");
-  }
-
-  @Test
-  public void testExecutionInfoProviderCanMarkTestAsLocal() throws Exception {
-    scratch.file("examples/rule/BUILD");
-    scratch.file(
-        "examples/rule/apple_rules.bzl",
-        "def my_rule_test_impl(ctx):",
-        "  exec_info = testing.ExecutionInfo({'local': ''})",
-        "  ctx.actions.write(ctx.outputs.executable, '', True)",
-        "  return [exec_info]",
-        "my_rule_test = rule(implementation = my_rule_test_impl,",
-        "    test = True,",
-        "    attrs = {},",
-        ")");
-    scratch.file(
-        "examples/apple_skylark/BUILD",
-        "package(default_visibility = ['//visibility:public'])",
-        "load('/examples/rule/apple_rules', 'my_rule_test')",
-        "my_rule_test(",
-        "    name = 'my_target',",
-        ")");
-
-    ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
-    TestRunnerAction testAction = (TestRunnerAction) getGeneratingAction(
-        TestProvider.getTestStatusArtifacts(skylarkTarget).get(0));
-
-    assertThat(testAction.getTestProperties().isLocal()).isTrue();
   }
 }

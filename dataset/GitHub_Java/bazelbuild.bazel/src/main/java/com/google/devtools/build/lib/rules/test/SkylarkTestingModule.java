@@ -13,12 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.test;
 
-import com.google.devtools.build.lib.analysis.test.ExecutionInfo;
-import com.google.devtools.build.lib.analysis.test.TestEnvironmentInfo;
 import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
+import com.google.devtools.build.lib.syntax.BuiltinFunction;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 
 /** A class that exposes testing infrastructure to skylark. */
 @SkylarkModule(
@@ -27,13 +27,17 @@ import com.google.devtools.build.lib.syntax.SkylarkDict;
 )
 public class SkylarkTestingModule {
 
-  // TODO(bazel-team): Change this BuiltinFunction to be the actual ExecutionInfo.PROVIDER.
-  @SkylarkCallable(
+  // TODO(bazel-team): Change this BuiltinFunction to be the actual
+  // ExecutionInfoProvider.SKYLARK_CONSTRUCTOR.
+  @SkylarkSignature(
     name = "ExecutionInfo",
+    objectType = SkylarkTestingModule.class,
+    returnType = ExecutionInfoProvider.class,
     doc =
         "Creates a new execution info provider. Use this provider to specify special"
             + "environments requirements needed to run tests.",
     parameters = {
+      @Param(name = "self", type = SkylarkTestingModule.class, doc = "The 'testing' instance."),
       @Param(
         name = "requirements",
         type = SkylarkDict.class,
@@ -46,17 +50,26 @@ public class SkylarkTestingModule {
       )
     }
   )
-  public ExecutionInfo executionInfo(SkylarkDict<String, String> requirements) {
-    return new ExecutionInfo(requirements);
-  }
+  public static final BuiltinFunction NEW_EXECUTION_INFO_PROVIDER =
+      new BuiltinFunction("ExecutionInfo") {
+        @SuppressWarnings("unused")
+        // This method is registered statically for skylark, and never called directly.
+        public ExecutionInfoProvider invoke(SkylarkTestingModule self, SkylarkDict requirements) {
+          return new ExecutionInfoProvider(requirements);
+        }
+      };
 
-  // TODO(bazel-team): Change this BuiltinFunction to be the actual TestEnvironmentInfo.PROVIDER.
-  @SkylarkCallable(
+  // TODO(bazel-team): Change this BuiltinFunction to be the actual
+  // TestEnvironmentProvider.SKYLARK_CONSTRUCTOR.
+  @SkylarkSignature(
     name = "TestEnvironment",
+    objectType = SkylarkTestingModule.class,
+    returnType = TestEnvironmentProvider.class,
     doc =
         "Creates a new test environment provider. Use this provider to specify extra"
             + "environment variables to be made available during test execution.",
     parameters = {
+      @Param(name = "self", type = SkylarkTestingModule.class, doc = "The 'testing' instance."),
       @Param(
         name = "environment",
         type = SkylarkDict.class,
@@ -68,7 +81,16 @@ public class SkylarkTestingModule {
       )
     }
   )
-  public TestEnvironmentInfo testEnvironment(SkylarkDict<String, String> environment) {
-    return new TestEnvironmentInfo(environment);
+  public static final BuiltinFunction NEW_TEST_ENVIRONMENT_PROVIDER =
+      new BuiltinFunction("TestEnvironment") {
+        @SuppressWarnings("unused")
+        // This method is registered statically for skylark, and never called directly.
+        public TestEnvironmentProvider invoke(SkylarkTestingModule self, SkylarkDict environment) {
+          return new TestEnvironmentProvider(environment);
+        }
+      };
+
+  static {
+    SkylarkSignatureProcessor.configureSkylarkFunctions(SkylarkTestingModule.class);
   }
 }
