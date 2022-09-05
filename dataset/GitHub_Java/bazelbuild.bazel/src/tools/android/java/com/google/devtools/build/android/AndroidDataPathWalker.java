@@ -17,30 +17,10 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 /**
- * Represents an Asset created from a binary file.
+ * Provides a common interface for classes wishing to walk the directories in *AndroidData classes.
  */
-public interface DataAsset {
-  /**
-   * Provides the RelativeAssetPath of the DataAsset.
-   */
-  DataKey dataKey();
+public interface AndroidDataPathWalker {
+  void walkResources(Path path) throws IOException;
 
-  /**
-   * Provides the Path to the file from which the DataResource was derived.
-   */
-  Path source();
-
-  /**
-   * Writes the asset to the given asset directory.
-   * @param newAssetDirectory The new directory for this asset.
-   * @throws IOException if there are issues with writing the asset.
-   */
-  void write(Path newAssetDirectory) throws IOException;
-
-  /**
-   * Compares one data resource to another.
-   *
-   * Not implementing Comparable as it would conflict with DataResource.
-   */
-  int compareTo(DataAsset other);
+  void walkAssets(Path path) throws IOException;
 }

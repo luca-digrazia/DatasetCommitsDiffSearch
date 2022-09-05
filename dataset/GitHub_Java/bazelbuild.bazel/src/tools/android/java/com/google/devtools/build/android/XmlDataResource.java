@@ -13,11 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import static com.android.resources.ResourceType.DECLARE_STYLEABLE;
-import static com.android.resources.ResourceType.ID;
-
 import com.google.common.base.MoreObjects;
-import com.google.devtools.build.android.AndroidDataSet.KeyValueConsumer;
 import com.google.devtools.build.android.FullyQualifiedName.Factory;
 import com.google.devtools.build.android.xml.ArrayXmlResourceValue;
 
@@ -27,6 +23,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Objects;
 
 import javax.xml.stream.FactoryConfigurationError;
@@ -52,8 +49,10 @@ public class XmlDataResource implements DataResource {
    * @param xmlInputFactory Used to create an XMLEventReader from the supplied resource path.
    * @param path The path to the xml resource to be parsed.
    * @param fqnFactory Used to create {@link FullyQualifiedName}s from the resource names.
-   * @param overwritingConsumer A consumer for overwritable {@link XmlDataResource}s.
-   * @param nonOverwritingConsumer  A consumer for nonoverwritable {@link XmlDataResource}s.
+   * @param targetOverwritableResources A collection that will have overwritable
+   *        {@link XmlDataResource}s added to it.
+   * @param targetNonOverwritableResources A collection that will have nonoverwritable
+   *        {@link XmlDataResource}s added to it.
    * @throws XMLStreamException Thrown with the resource format is invalid.
    * @throws FactoryConfigurationError Thrown with the {@link XMLInputFactory} is misconfigured.
    * @throws IOException Thrown when there is an error reading a file.
@@ -62,8 +61,8 @@ public class XmlDataResource implements DataResource {
       XMLInputFactory xmlInputFactory,
       Path path,
       Factory fqnFactory,
-      KeyValueConsumer<DataKey, DataResource> overwritingConsumer,
-      KeyValueConsumer<DataKey, DataResource> nonOverwritingConsumer)
+      List<DataResource> targetOverwritableResources,
+      List<DataResource> targetNonOverwritableResources)
       throws XMLStreamException, FactoryConfigurationError, IOException {
     XMLEventReader eventReader =
         xmlInputFactory.createXMLEventReader(Files.newBufferedReader(path, StandardCharsets.UTF_8));
@@ -72,45 +71,78 @@ public class XmlDataResource implements DataResource {
       for (StartElement start = XmlResourceValues.findNextStart(eventReader);
           start != null;
           start = XmlResourceValues.findNextStart(eventReader)) {
-        ResourceType resourceType = getResourceType(start);
-        if (resourceType == DECLARE_STYLEABLE) {
-          // Styleables are special, as they produce multiple overwrite and non-overwrite values,
-          // so we let the value handle the assignments.
-          XmlResourceValues.parseDeclareStyleable(
-              fqnFactory, path, overwritingConsumer, nonOverwritingConsumer, eventReader, start);
-        } else {
-          // Of simple resources, only IDs are nonOverwriting.
-          KeyValueConsumer<DataKey, DataResource> consumer =
-              resourceType == ID ? nonOverwritingConsumer : overwritingConsumer;
-          FullyQualifiedName key =
-              fqnFactory.create(resourceType, XmlResourceValues.getElementName(start));
-          consumer.consume(
-              key,
-              XmlDataResource.of(key, path, parseXmlElements(resourceType, eventReader, start)));
-        }
+        parseXmlElements(
+            path,
+            fqnFactory,
+            targetOverwritableResources,
+            targetNonOverwritableResources,
+            eventReader,
+            start);
       }
     }
   }
 
-  private static XmlResourceValue parseXmlElements(
-      ResourceType resourceType, XMLEventReader eventReader, StartElement start)
+  private static void parseXmlElements(
+      Path path,
+      Factory fqnFactory,
+      List<DataResource> overwritable,
+      List<DataResource> nonOverwritable,
+      XMLEventReader eventReader,
+      StartElement start)
       throws XMLStreamException {
+    ResourceType resourceType = getResourceType(start);
     switch (resourceType) {
       case STYLE:
-        return XmlResourceValues.parseStyle(eventReader, start);
+        overwritable.add(
+            XmlDataResource.of(
+                fqnFactory.create(ResourceType.STYLE, XmlResourceValues.getElementName(start)),
+                path,
+                XmlResourceValues.parseStyle(eventReader, start)));
+        break;
+      case DECLARE_STYLEABLE:
+        // Styleables are special, as they produce multiple overwrite and non-overwrite values,
+        // so we let the value handle the assignments.
+        XmlResourceValues.parseDeclareStyleable(
+            fqnFactory, path, nonOverwritable, overwritable, eventReader, start);
+        break;
       case ARRAY:
-        return ArrayXmlResourceValue.parseArray(eventReader, start);
+        overwritable.add(
+            XmlDataResource.of(
+                fqnFactory.create(ResourceType.ARRAY, XmlResourceValues.getElementName(start)),
+                path,
+                ArrayXmlResourceValue.parseArray(eventReader, start)));
+        break;
       case PLURALS:
-        return XmlResourceValues.parsePlurals(eventReader);
+        overwritable.add(
+            XmlDataResource.of(
+                fqnFactory.create(ResourceType.PLURALS, XmlResourceValues.getElementName(start)),
+                path,
+                XmlResourceValues.parsePlurals(eventReader)));
+        break;
       case ATTR:
-        return XmlResourceValues.parseAttr(eventReader, start);
+        overwritable.add(
+            XmlDataResource.of(
+                fqnFactory.create(ResourceType.ATTR, XmlResourceValues.getElementName(start)),
+                path,
+                XmlResourceValues.parseAttr(eventReader, start)));
+        break;
       case ID:
-        return XmlResourceValues.parseId();
+        nonOverwritable.add(
+            XmlDataResource.of(
+                fqnFactory.create(ResourceType.ID, XmlResourceValues.getElementName(start)),
+                path,
+                XmlResourceValues.parseId()));
+        break;
       case STRING:
       case BOOL:
       case COLOR:
       case DIMEN:
-        return XmlResourceValues.parseSimple(eventReader, resourceType);
+        overwritable.add(
+            XmlDataResource.of(
+                fqnFactory.create(resourceType, XmlResourceValues.getElementName(start)),
+                path,
+                XmlResourceValues.parseSimple(eventReader, resourceType)));
+        break;
       default:
         throw new XMLStreamException(
             String.format("Unhandled resourceType %s", resourceType), start.getLocation());
