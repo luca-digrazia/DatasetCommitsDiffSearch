@@ -168,7 +168,7 @@ public class QueryParamEntity extends QueryParam {
      */
     public void setOrderBy(String orderBy) {
         this.orderBy = orderBy;
-        if (StringUtils.isEmpty(orderBy)) {
+        if (StringUtils.isEmpty(where)) {
             return;
         }
         setSorts(TermExpressionParser.parseOrder(orderBy));
