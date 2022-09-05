@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -49,7 +50,6 @@ import com.google.devtools.build.skyframe.GraphTester.StringValue;
 import com.google.devtools.build.skyframe.NotifyingInMemoryGraph.EventType;
 import com.google.devtools.build.skyframe.NotifyingInMemoryGraph.Listener;
 import com.google.devtools.build.skyframe.NotifyingInMemoryGraph.Order;
-import com.google.devtools.build.skyframe.ParallelEvaluator.EventFilter;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 
 import org.junit.After;
@@ -101,11 +101,9 @@ public class ParallelEvaluatorTest {
     }
   }
 
-  private ParallelEvaluator makeEvaluator(
-      ProcessableGraph graph,
-      ImmutableMap<SkyFunctionName, ? extends SkyFunction> builders,
-      boolean keepGoing,
-      EventFilter storedEventFilter) {
+  private ParallelEvaluator makeEvaluator(ProcessableGraph graph,
+      ImmutableMap<SkyFunctionName, ? extends SkyFunction> builders, boolean keepGoing,
+      Predicate<Event> storedEventFilter) {
     Version oldGraphVersion = graphVersion;
     graphVersion = graphVersion.next();
     return new ParallelEvaluator(graph,
@@ -516,22 +514,14 @@ public class ParallelEvaluatorTest {
         return null;
       }
     });
-    ParallelEvaluator evaluator =
-        makeEvaluator(
-            graph,
-            ImmutableMap.of(GraphTester.NODE_TYPE, tester.createDelegatingFunction()),
-            /*keepGoing=*/ false,
-            new EventFilter() {
-              @Override
-              public boolean apply(Event event) {
-                return event.getKind() == EventKind.ERROR;
-              }
-
-              @Override
-              public boolean storeEvents() {
-                return true;
-              }
-            });
+    ParallelEvaluator evaluator = makeEvaluator(graph,
+        ImmutableMap.of(GraphTester.NODE_TYPE, tester.createDelegatingFunction()),
+        /*keepGoing=*/false, new Predicate<Event>() {
+            @Override
+            public boolean apply(Event event) {
+              return event.getKind() == EventKind.ERROR;
+            }
+        });
     evaluator.eval(ImmutableList.of(a));
     assertTrue(evaluated.get());
     assertEventCount(2, eventCollector);
