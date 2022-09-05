@@ -38,10 +38,8 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader.CppConfigurationParameters;
-import com.google.devtools.build.lib.rules.cpp.CppLinkActionConfigs.CppLinkPlatform;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -52,6 +50,7 @@ import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoM
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.protobuf.TextFormat;
 import com.google.protobuf.TextFormat.ParseException;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -61,15 +60,12 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * This class represents the C/C++ parts of the {@link BuildConfiguration}, including the host
- * architecture, target architecture, compiler version, and a standard library version. It has
- * information about the tools locations and the flags required for compiling.
+ * This class represents the C/C++ parts of the {@link BuildConfiguration},
+ * including the host architecture, target architecture, compiler version, and
+ * a standard library version. It has information about the tools locations and
+ * the flags required for compiling.
  */
-@SkylarkModule(
-  name = "cpp",
-  doc = "A configuration fragment for C++",
-  category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT
-)
+@SkylarkModule(name = "cpp", doc = "A configuration fragment for C++")
 @Immutable
 public class CppConfiguration extends BuildConfiguration.Fragment {
 
@@ -681,7 +677,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
     return result.build();
   }
-  
 
   // TODO(bazel-team): Remove this once bazel supports all crosstool flags through
   // feature configuration, and all crosstools have been converted.
@@ -697,15 +692,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
       return toolchain;
     }
     try {
-      
-      if (getTargetLibc().equals("macosx")) {
-        TextFormat.merge(
-            CppLinkActionConfigs.getCppLinkActionConfigs(CppLinkPlatform.MAC), toolchainBuilder);
-      } else {
-        TextFormat.merge(
-            CppLinkActionConfigs.getCppLinkActionConfigs(CppLinkPlatform.LINUX), toolchainBuilder);
-      }
-
       if (!features.contains("dependency_file")) {
         // Gcc options:
         //  -MD turns on .d file output as a side-effect (doesn't imply -E)
@@ -850,8 +836,12 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
                 + "  flag_set {"
                 + "    action: 'c-compile'"
                 + "    action: 'c++-compile'"
+                + "    action: 'c++-link-static-library'"
+                + "    action: 'c++-link-pic-static-library'"
                 + "    action: 'c++-link-interface-dynamic-library'"
                 + "    action: 'c++-link-dynamic-library'"
+                + "    action: 'c++-link-alwayslink-static-library'"
+                + "    action: 'c++-link-alwayslink-pic-static-library'"
                 + "    action: 'c++-link-executable'"
                 + "    flag_group {"
                 + "      flag: '-Xgcc-only=-fprofile-generate=%{fdo_instrument_path}'"
@@ -941,8 +931,12 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
                 + "    }"
                 + "  }"
                 + "  flag_set {"
+                + "    action: 'c++-link-static-library'"
+                + "    action: 'c++-link-pic-static-library'"
                 + "    action: 'c++-link-interface-dynamic-library'"
                 + "    action: 'c++-link-dynamic-library'"
+                + "    action: 'c++-link-always-link-static-library'"
+                + "    action: 'c++-link-always-link-pic-static-library'"
                 + "    action: 'c++-link-executable'"
                 + "    flag_group {"
                 + "      flag: '-lgcov'"
@@ -1999,6 +1993,14 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
       env.put("FDO_DIR", fdoInstrument.getPathString());
     }
     return env.build();
+  }
+
+  @Override
+  public ImmutableList<Label> getGcovLabels() {
+    // TODO(bazel-team): Using a gcov-specific crosstool filegroup here could reduce the number of
+    // inputs significantly. We'd also need to add logic in tools/coverage/collect_coverage.sh to
+    // drop crosstool dependency if metadataFiles does not contain *.gcno artifacts.
+    return ImmutableList.of(crosstoolTop);
   }
 
   @Override
