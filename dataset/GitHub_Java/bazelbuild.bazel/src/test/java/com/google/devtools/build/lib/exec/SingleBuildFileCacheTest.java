@@ -111,9 +111,7 @@ public class SingleBuildFileCacheTest {
   public void testBasic() throws Exception {
     ActionInput empty = ActionInputHelper.fromPath("/empty");
     assertEquals(0, underTest.getSizeInBytes(empty));
-    byte[] digestBytes = underTest.getDigest(empty);
-    ByteString digest = ByteString.copyFromUtf8(
-        BaseEncoding.base16().lowerCase().encode(digestBytes));
+    ByteString digest = underTest.getDigest(empty);
 
     assertEquals(EMPTY_MD5, digest.toStringUtf8());
     assertEquals("/empty", underTest.getInputFromDigest(digest).getExecPathString());
@@ -128,14 +126,15 @@ public class SingleBuildFileCacheTest {
   public void testUnreadableFileWhenFileSystemSupportsDigest() throws Exception {
     byte[] expectedDigestRaw = MessageDigest.getInstance("md5").digest(
         "randomtext".getBytes(StandardCharsets.UTF_8));
-    ByteString expectedDigest = ByteString.copyFrom(expectedDigestRaw);
+    ByteString expectedDigestEncoded = ByteString.copyFromUtf8(
+        BaseEncoding.base16().lowerCase().encode(expectedDigestRaw));
     md5Overrides.put("/unreadable", expectedDigestRaw);
 
     ActionInput input = ActionInputHelper.fromPath("/unreadable");
     Path file = fs.getPath("/unreadable");
     file.getOutputStream().close();
     file.chmod(0);
-    ByteString actualDigest = ByteString.copyFrom(underTest.getDigest(input));
-    assertThat(expectedDigest).isEqualTo(actualDigest);
+    ByteString actualDigest = underTest.getDigest(input);
+    assertThat(expectedDigestEncoded).isEqualTo(actualDigest);
   }
 }
