@@ -82,7 +82,7 @@ public final class RuleConfiguredTargetBuilder {
     }
 
     FilesToRunProvider filesToRunProvider = new FilesToRunProvider(ruleContext.getLabel(),
-        getFilesToRun(runfilesSupport, filesToBuild), runfilesSupport, executable);
+        RuleContext.getFilesToRun(runfilesSupport, filesToBuild), runfilesSupport, executable);
     add(FileProvider.class, new FileProvider(ruleContext.getLabel(), filesToBuild));
     add(FilesToRunProvider.class, filesToRunProvider);
     addSkylarkTransitiveInfo(FilesToRunProvider.SKYLARK_NAME, filesToRunProvider);
@@ -126,22 +126,6 @@ public final class RuleConfiguredTargetBuilder {
 
 
     return new RuleConfiguredTarget(ruleContext, skylarkProviders.build(), providers);
-  }
-
-  /**
-   * Like getFilesToBuild(), except that it also includes the runfiles middleman, if any.
-   * Middlemen are expanded in the SpawnStrategy or by the Distributor.
-   */
-  private ImmutableList<Artifact> getFilesToRun(
-      RunfilesSupport runfilesSupport, NestedSet<Artifact> filesToBuild) {
-    if (runfilesSupport == null) {
-      return ImmutableList.copyOf(filesToBuild);
-    } else {
-      ImmutableList.Builder<Artifact> allFilesToBuild = ImmutableList.builder();
-      allFilesToBuild.addAll(filesToBuild);
-      allFilesToBuild.add(runfilesSupport.getRunfilesMiddleman());
-      return allFilesToBuild.build();
-    }
   }
 
   /**
