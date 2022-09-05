@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.buildtool;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -50,7 +51,6 @@ import com.google.devtools.build.lib.skyframe.TargetCompletionValue;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.LoggingUtil;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.skyframe.CycleInfo;
 import com.google.devtools.build.skyframe.ErrorInfo;
@@ -267,8 +267,7 @@ public class SkyframeBuilder implements Builder {
           actionExecutionCause.isCatastrophe(),
           actionExecutionCause.getAction(),
           actionExecutionCause.getRootCauses(),
-          /*errorAlreadyShown=*/ !actionExecutionCause.showError(),
-          actionExecutionCause.getExitCode());
+          /*errorAlreadyShown=*/ !actionExecutionCause.showError());
     } else if (cause instanceof MissingInputFileException) {
       throw new BuildFailedException(cause.getMessage());
     } else if (cause instanceof BuildFileNotFoundException) {
