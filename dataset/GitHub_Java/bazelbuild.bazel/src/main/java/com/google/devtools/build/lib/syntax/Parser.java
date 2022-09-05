@@ -612,13 +612,10 @@ class Parser {
 
     try {
       Label label = Label.parseAbsolute(labelName);
-      // Note that this doesn't really work if the label belongs to a different repository, because
-      // there is no guarantee that its RepositoryValue has been evaluated. In an ideal world, we
-      // could put a Skyframe dependency the appropriate PackageLookupValue, but we can't do that
-      // because package loading is not completely Skyframized.
-      Path packagePath = locator.getBuildFileForPackage(label.getPackageIdentifier());
+      String packageName = label.getPackageFragment().getPathString();
+      Path packagePath = locator.getBuildFileForPackage(packageName);
       if (packagePath == null) {
-        reportError(location, "Package '" + label.getPackageIdentifier() + "' not found");
+        reportError(location, "Package '" + packageName + "' not found");
         list.add(mocksubincludeExpression(labelName, "", location));
         return;
       }
@@ -1076,8 +1073,6 @@ class Parser {
       expect(TokenKind.STRING);
       return;
     }
-    
-    Token pathToken = token;
     String path = (String) token.value;
     
     nextToken();
@@ -1099,19 +1094,7 @@ class Parser {
       expect(TokenKind.STRING);
     }
     expect(TokenKind.RPAREN);
-    
-    LoadStatement stmt = new LoadStatement(path, symbols);
-
-    // Although validateLoadPath() is invoked as part of validate(ValidationEnvironment),
-    // this only happens in Skylark. Consequently, we invoke it here to discover
-    // invalid load paths in BUILD mode, too.
-    try {
-      stmt.validateLoadPath();
-    } catch (EvalException e) {
-      syntaxError(pathToken, e.getMessage());
-    }
-
-    list.add(setLocation(stmt, start, token.left));
+    list.add(setLocation(new LoadStatement(path, symbols), start, token.left));
   }
 
   private void parseTopLevelStatement(List<Statement> list) {
