@@ -10,7 +10,6 @@ import org.hswebframework.web.id.IDGenerator;
 import org.hswebframework.web.system.authorization.api.PasswordEncoder;
 import org.hswebframework.web.system.authorization.api.entity.UserEntity;
 import org.hswebframework.web.system.authorization.api.event.UserCreatedEvent;
-import org.hswebframework.web.system.authorization.api.event.UserDeletedEvent;
 import org.hswebframework.web.system.authorization.api.event.UserModifiedEvent;
 import org.hswebframework.web.system.authorization.api.service.reactive.ReactiveUserService;
 import org.hswebframework.web.validator.CreateGroup;
@@ -166,10 +165,7 @@ public class DefaultReactiveUserService extends GenericReactiveCrudService<UserE
 
     @Override
     public Mono<Boolean> deleteUser(String userId) {
-        return this.findById(userId)
-                .flatMap(user -> this
-                .deleteById(Mono.just(userId))
-                .doOnNext(i -> eventPublisher.publishEvent(new UserDeletedEvent(user)))
-                .thenReturn(true));
+        return deleteById(Mono.just(userId))
+                .map(integer -> integer > 0);
     }
 }
