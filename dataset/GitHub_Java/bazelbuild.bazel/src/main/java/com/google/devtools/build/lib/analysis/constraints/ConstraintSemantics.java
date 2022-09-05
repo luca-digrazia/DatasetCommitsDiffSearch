@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.analysis.constraints;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
@@ -27,13 +28,11 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.EnvironmentGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -530,7 +529,7 @@ public class ConstraintSemantics {
             || attr.equals("visibility")
             // Use the same implicit deps check that query uses. This facilitates running queries to
             // determine exactly which rules need to be constraint-annotated for depot migrations.
-            || !DependencyFilter.NO_IMPLICIT_DEPS.apply(ruleContext.getRule(), attrDef)
+            || !Rule.NO_IMPLICIT_DEPS.apply(ruleContext.getRule(), attrDef)
             // We can't identify host deps by calling BuildConfiguration.isHostConfiguration()
             // because --nodistinct_host_configuration subverts that call.
             || attrDef.getConfigurationTransition() == Attribute.ConfigurationTransition.HOST) {

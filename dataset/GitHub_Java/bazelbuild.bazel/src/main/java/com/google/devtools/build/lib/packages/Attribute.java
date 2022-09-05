@@ -20,11 +20,11 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.NativeAspectClass.NativeAspectFactory;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.StringUtil;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -252,10 +251,6 @@ public final class Attribute implements Comparable<Attribute> {
   public static class AllowedValueSet implements PredicateWithMessage<Object> {
 
     private final Set<Object> allowedValues;
-
-    public <T> AllowedValueSet(T... values) {
-      this(Arrays.asList(values));
-    }
 
     public AllowedValueSet(Iterable<?> values) {
       Preconditions.checkNotNull(values);
@@ -706,7 +701,7 @@ public final class Attribute implements Comparable<Attribute> {
      * Asserts that a particular aspect probably needs to be computed for all direct dependencies
      * through this attribute.
      */
-    public <T extends NativeAspectFactory> Builder<TYPE> aspect(Class<T> aspect) {
+    public Builder<TYPE> aspect(Class<? extends AspectFactory<?, ?, ?>> aspect) {
       Function<Rule, AspectParameters> noParameters = new Function<Rule, AspectParameters>() {
         @Override
         public AspectParameters apply(Rule input) {
@@ -722,9 +717,9 @@ public final class Attribute implements Comparable<Attribute> {
      *
      * @param evaluator function that extracts aspect parameters from rule.
      */
-    public <T extends NativeAspectFactory> Builder<TYPE> aspect(
-        Class<T> aspect, Function<Rule, AspectParameters> evaluator) {
-      this.aspects.add(new RuleAspect(new NativeAspectClass<T>(aspect), evaluator));
+    public Builder<TYPE> aspect(Class<? extends AspectFactory<?, ?, ?>> aspect,
+        Function<Rule, AspectParameters> evaluator) {
+      this.aspects.add(new RuleAspect(new NativeAspectClass(aspect), evaluator));
       return this;
     }
 
@@ -1337,13 +1332,23 @@ public final class Attribute implements Comparable<Attribute> {
   }
 
   /**
-   * Returns the list of aspects required for dependencies through this attribute.
+   * Returns the set of aspects required for dependencies through this attribute.
    */
-  public ImmutableList<Aspect> getAspects(Rule rule) {
-    ImmutableList.Builder<Aspect> builder = ImmutableList.builder();
+  public ImmutableSet<AspectClass> getAspects() {
+    ImmutableSet.Builder<AspectClass> builder = ImmutableSet.builder();
     for (RuleAspect aspect : aspects) {
-      builder.add(
-          new Aspect(aspect.getAspectFactory(), aspect.getParametersExtractor().apply(rule)));
+      builder.add(aspect.getAspectFactory());
+    }
+    return builder.build();
+  }
+
+  /**
+   * Returns set of pairs of aspect factories and corresponding aspect parameters.
+   */
+  public ImmutableMap<AspectClass, AspectParameters> getAspectsWithParameters(Rule rule) {
+    ImmutableMap.Builder<AspectClass, AspectParameters> builder = ImmutableMap.builder();
+    for (RuleAspect aspect : aspects) {
+      builder.put(aspect.getAspectFactory(), aspect.getParametersExtractor().apply(rule));
     }
     return builder.build();
   }
