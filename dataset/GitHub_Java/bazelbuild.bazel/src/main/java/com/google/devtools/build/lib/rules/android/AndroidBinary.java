@@ -253,12 +253,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         javaSemantics, androidSemantics, tools, resourceApk, AndroidIdlProvider.EMPTY,
         ruleContext.getConfiguration().isCodeCoverageEnabled(), true);
 
-    Artifact deployJar = createDeployJar(ruleContext, javaSemantics, androidCommon, resourceClasses,
-        ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_DEPLOY_JAR));
-
     return createAndroidBinary(ruleContext,
         filesBuilder,
-        deployJar,
         javaCommon,
         androidCommon,
         javaSemantics,
@@ -277,7 +273,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
   public static RuleConfiguredTargetBuilder createAndroidBinary(RuleContext ruleContext,
       NestedSetBuilder<Artifact> filesBuilder,
-      Artifact deployJar,
       JavaCommon javaCommon,
       AndroidCommon androidCommon,
       JavaSemantics javaSemantics,
@@ -291,6 +286,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       JavaTargetAttributes resourceClasses,
       ImmutableList<Artifact> apksUnderTest,
       Artifact proguardMapping) {
+    Artifact deployJar = createDeployJar(ruleContext, javaSemantics, androidCommon, resourceClasses,
+        ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_DEPLOY_JAR));
 
     ProguardOutput proguardOutput = applyProguard(ruleContext,
         androidCommon,
@@ -494,7 +491,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .add(ApkProvider.class,
             new ApkProvider(NestedSetBuilder.create(Order.STABLE_ORDER, zipAlignedApk),
                 coverageMetadata))
-        .add(AndroidDeployJarProvider.class, new AndroidDeployJarProvider(deployJar))
         .addOutputGroup("mobile_install_full", fullDeployMarker)
         .addOutputGroup("mobile_install_incremental", incrementalDeployMarker)
         .addOutputGroup("mobile_install_split", splitOutputGroup);
@@ -601,7 +597,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   }
 
   /** Generates an uncompressed _deploy.jar of all the runtime jars. */
-  public static Artifact createDeployJar(
+  private static Artifact createDeployJar(
       RuleContext ruleContext, JavaSemantics javaSemantics, AndroidCommon common,
       JavaTargetAttributes attributes, Artifact deployJar) {
     new DeployArchiveBuilder(javaSemantics, ruleContext)
