@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -119,6 +119,9 @@ public final class JavaLibraryBuildRequest {
     if (optionsParser.getStrictJavaDeps() != null) {
       depsBuilder.setStrictJavaDeps(optionsParser.getStrictJavaDeps());
     }
+    if (optionsParser.getOutputDepsFile() != null) {
+      depsBuilder.setOutputDepsFile(optionsParser.getOutputDepsFile());
+    }
     if (optionsParser.getOutputDepsProtoFile() != null) {
       depsBuilder.setOutputDepsProtoFile(optionsParser.getOutputDepsProtoFile());
     }
@@ -138,10 +141,9 @@ public final class JavaLibraryBuildRequest {
     if (optionsParser.getSourceGenDir() != null) {
       processingBuilder.setSourceGenDir(Paths.get(optionsParser.getSourceGenDir()));
     }
-    if (optionsParser.getManifestProtoPath() != null) {
-      processingBuilder.setManifestProtoPath(Paths.get(optionsParser.getManifestProtoPath()));
+    if (optionsParser.getClassDir() != null) {
+      processingBuilder.setClassDir(Paths.get(optionsParser.getClassDir()));
     }
-    processingBuilder.addAllSourceRoots(optionsParser.getSourceRoots());
     this.processingModule = processingBuilder.build();
 
     ImmutableList.Builder<BlazeJavaCompilerPlugin> pluginsBuilder =
@@ -182,7 +184,7 @@ public final class JavaLibraryBuildRequest {
     this.javacOpts = ImmutableList.copyOf(optionsParser.getJavacOpts());
     this.sourceGenDir = optionsParser.getSourceGenDir();
     this.generatedSourcesOutputJar = optionsParser.getGeneratedSourcesOutputJar();
-    this.generatedClassOutputJar = optionsParser.getManifestProtoPath();
+    this.generatedClassOutputJar = optionsParser.getGeneratedClassOutputJar();
   }
 
   public ImmutableList<String> getJavacOpts() {

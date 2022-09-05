@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ import java.util.Set;
  * command-line flags and options files and provides them via getters.
  */
 public final class OptionsParser {
-  private final List<String> javacOpts = new ArrayList<>();
+  private List<String> javacOpts = new ArrayList<>();
 
   private final Map<String, String> directJarsToTargets = new HashMap<>();
   private final Map<String, String> indirectJarsToTargets = new HashMap<>();
@@ -45,14 +45,13 @@ public final class OptionsParser {
 
   private String outputDepsFile;
   private String outputDepsProtoFile;
-  private final Set<String> depsArtifacts = new HashSet<>();
+  private Set<String> depsArtifacts = new HashSet<>();
 
   private boolean strictClasspathMode;
 
   private String sourceGenDir;
   private String generatedSourcesOutputJar;
-  private String manifestProtoPath;
-  private final Set<String> sourceRoots = new HashSet<>();
+  private String generatedClassOutputJar;
 
   private final List<String> sourceFiles = new ArrayList<>();
   private final List<String> sourceJars = new ArrayList<>();
@@ -61,7 +60,7 @@ public final class OptionsParser {
   private final List<String> resourceJars = new ArrayList<>();
   private final List<String> rootResourceFiles = new ArrayList<>();
 
-  private String classPath = "";
+  private String classPath;
 
   private String extdir;
 
@@ -96,7 +95,8 @@ public final class OptionsParser {
    *
    * @throws InvalidCommandLineException on an invalid option being passed.
    */
-  private void processCommandlineArgs(Deque<String> argQueue) throws InvalidCommandLineException {
+  private void processCommandlineArgs(Deque<String> argQueue)
+      throws InvalidCommandLineException {
     for (String arg = argQueue.pollFirst(); arg != null; arg = argQueue.pollFirst()) {
       switch (arg) {
         case "--javacopts":
@@ -106,20 +106,18 @@ public final class OptionsParser {
           // terminator to the passed arguments.
           collectFlagArguments(javacOpts, argQueue, "--");
           break;
-        case "--direct_dependency":
-          {
-            String jar = getArgument(argQueue, arg);
-            String target = getArgument(argQueue, arg);
-            directJarsToTargets.put(jar, target);
-            break;
-          }
-        case "--indirect_dependency":
-          {
-            String jar = getArgument(argQueue, arg);
-            String target = getArgument(argQueue, arg);
-            indirectJarsToTargets.put(jar, target);
-            break;
-          }
+        case "--direct_dependency": {
+          String jar = getArgument(argQueue, arg);
+          String target = getArgument(argQueue, arg);
+          directJarsToTargets.put(jar, target);
+          break;
+        }
+        case "--indirect_dependency": {
+          String jar = getArgument(argQueue, arg);
+          String target = getArgument(argQueue, arg);
+          indirectJarsToTargets.put(jar, target);
+          break;
+        }
         case "--strict_java_deps":
           strictJavaDeps = getArgument(argQueue, arg);
           break;
@@ -141,11 +139,8 @@ public final class OptionsParser {
         case "--generated_sources_output":
           generatedSourcesOutputJar = getArgument(argQueue, arg);
           break;
-        case "--output_manifest_proto":
-          manifestProtoPath = getArgument(argQueue, arg);
-          break;
-        case "--source_roots":
-          collectFlagArguments(sourceRoots, argQueue, "-");
+        case "--classes_from_generated_sources_output":
+          generatedClassOutputJar = getArgument(argQueue, arg);
           break;
         case "--sources":
           collectFlagArguments(sourceFiles, argQueue, "-");
@@ -232,7 +227,8 @@ public final class OptionsParser {
    * @param arg the argument to pre-process.
    * @throws java.io.IOException if one of the files containing options cannot be read.
    */
-  private static void expandArgument(Deque<String> expanded, String arg) throws IOException {
+  private static void expandArgument(Deque<String> expanded, String arg)
+      throws IOException {
     if (arg.startsWith("@") && !arg.startsWith("@@")) {
       for (String line : Files.readAllLines(Paths.get(arg.substring(1)), UTF_8)) {
         if (line.length() > 0) {
@@ -252,8 +248,8 @@ public final class OptionsParser {
    * @param args
    * @param terminatorPrefix the terminator prefix to stop collecting of argument flags.
    */
-  private static void collectFlagArguments(
-      Collection<String> output, Deque<String> args, String terminatorPrefix) {
+  private static void collectFlagArguments(Collection<String> output, Deque<String> args,
+      String terminatorPrefix) {
     for (String arg = args.pollFirst(); arg != null; arg = args.pollFirst()) {
       if (arg.startsWith(terminatorPrefix)) {
         args.addFirst(arg);
@@ -279,7 +275,8 @@ public final class OptionsParser {
         break;
       }
       if (arg.contains(",")) {
-        throw new InvalidCommandLineException("processor argument may not contain commas: " + arg);
+        throw new InvalidCommandLineException("processor argument may not contain commas: "
+            + arg);
       }
       output.add(arg);
     }
@@ -342,12 +339,8 @@ public final class OptionsParser {
     return generatedSourcesOutputJar;
   }
 
-  public String getManifestProtoPath() {
-    return manifestProtoPath;
-  }
-
-  public Set<String> getSourceRoots() {
-    return sourceRoots;
+  public String getGeneratedClassOutputJar() {
+    return generatedClassOutputJar;
   }
 
   public List<String> getSourceFiles() {
