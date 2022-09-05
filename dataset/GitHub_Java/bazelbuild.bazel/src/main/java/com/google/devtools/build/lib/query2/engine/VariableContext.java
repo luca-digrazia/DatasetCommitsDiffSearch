@@ -14,8 +14,6 @@
 package com.google.devtools.build.lib.query2.engine;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 
 import java.util.Map;
 import java.util.Set;
@@ -23,8 +21,6 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 /** An immutable context of variable bindings for variables introduced by {@link LetExpression}s. */
-@Immutable
-@ThreadSafe
 public class VariableContext<T> {
   private final ImmutableMap<String, Set<T>> context;
 
