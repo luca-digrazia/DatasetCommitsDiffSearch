@@ -17,7 +17,6 @@ import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
 import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.analysis.AnalysisPhaseCompleteEvent;
-import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionProgressReceiverAvailableEvent;
@@ -94,9 +93,7 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
           case ERROR:
           case WARNING:
           case INFO:
-            if (!buildComplete) {
-              clearProgressBar();
-            }
+            clearProgressBar();
             setEventKindColor(event.getKind());
             terminal.writeString(event.getKind() + ": ");
             terminal.resetTerminal();
@@ -107,9 +104,7 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
               terminal.writeString(event.getMessage());
             }
             crlf();
-            if (!buildComplete) {
-              addProgressBar();
-            }
+            addProgressBar();
             terminal.flush();
             break;
         }
@@ -161,11 +156,6 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
   public void buildComplete(BuildCompleteEvent event) {
     stateTracker.buildComplete(event);
     refresh();
-    buildComplete = true;
-  }
-
-  @Subscribe
-  public void noBuild(NoBuildEvent event) {
     buildComplete = true;
   }
 
