@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * A reporter which listens for new metrics and exposes them as namespaced MBeans.
  */
-public class JmxReporter implements Closeable {
+public class JmxReporter implements Reporter, Closeable {
     /**
      * Returns a new {@link Builder} for {@link JmxReporter}.
      *
@@ -618,7 +618,7 @@ public class JmxReporter implements Closeable {
             try {
                 final ObjectName objectName = createName("timers", name);
                 mBeanServer.unregisterMBean(objectName);
-                registered.remove(objectName);
+                registered.add(objectName);
             } catch (InstanceNotFoundException e) {
                 LOGGER.debug("Unable to unregister timer", e);
             } catch (MBeanRegistrationException e) {
