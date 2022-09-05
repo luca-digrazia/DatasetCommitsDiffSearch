@@ -156,7 +156,7 @@ public class AndroidStudioInfoAspect extends NativeAspectClass implements Config
   @Override
   public AspectDefinition getDefinition(AspectParameters aspectParameters) {
     AspectDefinition.Builder builder =
-        new AspectDefinition.Builder(this)
+        new AspectDefinition.Builder(NAME)
             .attributeAspect("runtime_deps", this)
             .attributeAspect("resources", this)
             .add(
@@ -184,7 +184,7 @@ public class AndroidStudioInfoAspect extends NativeAspectClass implements Config
   @Override
   public ConfiguredAspect create(
       ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters) {
-    ConfiguredAspect.Builder builder = new Builder(this, parameters, ruleContext);
+    ConfiguredAspect.Builder builder = new Builder(NAME, ruleContext);
 
     AndroidStudioInfoFilesProvider.Builder providerBuilder =
         new AndroidStudioInfoFilesProvider.Builder();
