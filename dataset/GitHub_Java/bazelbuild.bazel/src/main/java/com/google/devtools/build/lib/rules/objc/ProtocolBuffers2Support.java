@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.common.base.CaseFormat.LOWER_UNDERSCORE;
+import static com.google.common.base.CaseFormat.UPPER_CAMEL;
 import static com.google.devtools.build.lib.rules.objc.XcodeProductType.LIBRARY_STATIC;
 
 import com.google.common.base.Function;
@@ -236,7 +238,8 @@ final class ProtocolBuffers2Support {
       if (attributes.outputsCpp()) {
         generatedOutputName = protoFileName;
       } else {
-        generatedOutputName = attributes.getGeneratedProtoFilename(protoFileName, false);
+        String lowerUnderscoreBaseName = protoFileName.replace('-', '_').toLowerCase();
+        generatedOutputName = LOWER_UNDERSCORE.to(UPPER_CAMEL, lowerUnderscoreBaseName);
       }
 
       PathFragment generatedFilePath =
