@@ -1,7 +1,5 @@
 package com.yammer.metrics.core;
 
-import java.util.Collections;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -128,15 +126,6 @@ public class Metrics {
 	 */
 	public static void registerHealthCheck(String name, HealthCheck healthCheck) {
 		HEALTH_CHECKS.putIfAbsent(name, healthCheck);
-	}
-
-	/**
-	 * Returns an unmodifiable map of all metrics and their names.
-	 *
-	 * @return an unmodifiable map of all metrics and their names
-	 */
-	public static Map<MetricName, Metric> allMetrics() {
-		return Collections.unmodifiableMap(METRICS);
 	}
 
 	@SuppressWarnings("unchecked")
