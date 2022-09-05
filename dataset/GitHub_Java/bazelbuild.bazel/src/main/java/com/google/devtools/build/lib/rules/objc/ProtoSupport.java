@@ -118,7 +118,6 @@ final class ProtoSupport {
   private final RuleContext ruleContext;
   private final Attributes attributes;
   private final TargetType targetType;
-  private final IntermediateArtifacts intermediateArtifacts;
 
   /**
    * Creates a new proto support.
@@ -130,15 +129,6 @@ final class ProtoSupport {
     this.ruleContext = ruleContext;
     this.attributes = new Attributes(ruleContext);
     this.targetType = targetType;
-    if (targetType != TargetType.PROTO_TARGET) {
-      // Use a a prefixed version of the intermediate artifacts to avoid naming collisions, as
-      // the proto compilation step happens in the same context as the linking target.
-      this.intermediateArtifacts =
-          new IntermediateArtifacts(
-              ruleContext, "_protos", "protos", ruleContext.getConfiguration());
-    } else {
-      this.intermediateArtifacts = ObjcRuleClasses.intermediateArtifacts(ruleContext);
-    }
   }
 
   /**
@@ -169,20 +159,8 @@ final class ProtoSupport {
           || attributes.getOptionsFile() != null) {
         ruleContext.ruleError(PORTABLE_PROTO_FILTERS_NOT_EXCLUSIVE_ERROR);
       }
-    } else {
-      if (attributes.outputsCpp()) {
-        ruleContext.ruleWarning("The output_cpp attributes has been deprecated. Please "
-            + "refer to b/29342376 for information on possible alternatives");
-      }
     }
     return this;
-  }
-
-  /**
-   * Returns the intermediate artifacts associated with generated proto compilation.
-   */
-  public IntermediateArtifacts getIntermediateArtifacts() {
-    return intermediateArtifacts;
   }
 
   /**
@@ -199,30 +177,29 @@ final class ProtoSupport {
   }
 
   /**
-   * Returns the common object for a proto specific compilation environment.
+   * Adds required configuration to the ObjcCommon support class for proto compilation.
+   *
+   * @param commonBuilder The builder for the ObjcCommon support class.
+   * @return this proto support
    */
-  public ObjcCommon getCommon() {
-    ObjcCommon.Builder commonBuilder =
-        new ObjcCommon.Builder(ruleContext)
-            .setIntermediateArtifacts(intermediateArtifacts)
-            .setHasModuleMap()
-            .setCompilationArtifacts(getCompilationArtifacts());
+  public ProtoSupport addCommonOptions(ObjcCommon.Builder commonBuilder) {
+    commonBuilder
+        .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
+        .addDepObjcProviders(
+            ruleContext.getPrerequisites(
+                ObjcRuleClasses.PROTO_LIB_ATTR, Mode.TARGET, ObjcProvider.class))
+        .setHasModuleMap();
 
-    if (targetType == TargetType.LINKING_TARGET) {
-      commonBuilder.addDepObjcProviders(
-          ruleContext.getPrerequisites("deps", Mode.TARGET, ObjcProvider.class));
-    } else if (targetType == TargetType.PROTO_TARGET) {
-      commonBuilder.addDepObjcProviders(
-          ruleContext.getPrerequisites(
-              ObjcRuleClasses.PROTO_LIB_ATTR, Mode.TARGET, ObjcProvider.class));
-
-      if (usesProtobufLibrary() && experimentalAutoUnion()) {
-        commonBuilder.addDirectDependencyHeaderSearchPaths(getUserHeaderSearchPaths());
-      } else {
-        commonBuilder.addUserHeaderSearchPaths(getUserHeaderSearchPaths());
-      }
+    if (usesProtobufLibrary() && experimentalAutoUnion() && targetType == TargetType.PROTO_TARGET) {
+      commonBuilder
+          .addDirectDependencyHeaderSearchPaths(getUserHeaderSearchPaths())
+          .setCompilationArtifacts(getCompilationArtifacts());
+    } else {
+      commonBuilder
+          .addUserHeaderSearchPaths(getUserHeaderSearchPaths())
+          .setCompilationArtifacts(getCompilationArtifacts());
     }
-    return commonBuilder.build();
+    return this;
   }
 
   /**
@@ -258,7 +235,7 @@ final class ProtoSupport {
     ImmutableList<Artifact> generatedSources = getGeneratedSources();
     CompilationArtifacts.Builder builder =
         new CompilationArtifacts.Builder()
-            .setIntermediateArtifacts(intermediateArtifacts)
+            .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
             .setPchFile(Optional.<Artifact>absent())
             .addAdditionalHdrs(getGeneratedHeaders());
 
