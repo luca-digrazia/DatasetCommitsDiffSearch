@@ -28,7 +28,7 @@ public class JmxReporter implements Reporter, Closeable {
     }
 
     /**
-     * A builder for {@link JmxReporter} instances. Defaults to using the default MBean server and
+     * A builder for {@link CsvReporter} instances. Defaults to using the default MBean server and
      * not filtering metrics.
      */
     public static class Builder {
@@ -36,7 +36,6 @@ public class JmxReporter implements Reporter, Closeable {
         private MBeanServer mBeanServer;
         private TimeUnit rateUnit;
         private TimeUnit durationUnit;
-        private ObjectNameFactory objectNameFactory;
         private MetricFilter filter = MetricFilter.ALL;
         private String domain;
         private Map<String, TimeUnit> specificDurationUnits;
@@ -47,7 +46,6 @@ public class JmxReporter implements Reporter, Closeable {
             this.rateUnit = TimeUnit.SECONDS;
             this.durationUnit = TimeUnit.MILLISECONDS;
             this.domain = "metrics";
-            this.objectNameFactory = new DefaultObjectNameFactory();
             this.specificDurationUnits = Collections.emptyMap();
             this.specificRateUnits = Collections.emptyMap();
         }
@@ -74,14 +72,6 @@ public class JmxReporter implements Reporter, Closeable {
             return this;
         }
 
-        public Builder createsObjectNamesWith(ObjectNameFactory onFactory) {
-        	if(onFactory == null) {
-        		throw new IllegalArgumentException("null objectNameFactory");
-        	}
-        	this.objectNameFactory = onFactory;
-        	return this;
-        }
-        
         /**
          * Convert durations to the given time unit.
          *
@@ -142,7 +132,7 @@ public class JmxReporter implements Reporter, Closeable {
             if (mBeanServer==null) {
             	mBeanServer = ManagementFactory.getPlatformMBeanServer();
             }
-            return new JmxReporter(mBeanServer, domain, registry, filter, timeUnits, objectNameFactory);
+            return new JmxReporter(mBeanServer, domain, registry, filter, timeUnits);
         }
     }
 
@@ -490,15 +480,13 @@ public class JmxReporter implements Reporter, Closeable {
         private final MetricFilter filter;
         private final MetricTimeUnits timeUnits;
         private final Map<ObjectName, ObjectName> registered;
-        private final ObjectNameFactory objectNameFactory;
 
-        private JmxListener(MBeanServer mBeanServer, String name, MetricFilter filter, MetricTimeUnits timeUnits, ObjectNameFactory objectNameFactory) {
+        private JmxListener(MBeanServer mBeanServer, String name, MetricFilter filter, MetricTimeUnits timeUnits) {
             this.mBeanServer = mBeanServer;
             this.name = name;
             this.filter = filter;
             this.timeUnits = timeUnits;
             this.registered = new ConcurrentHashMap<ObjectName, ObjectName>();
-            this.objectNameFactory = objectNameFactory;
         }
 
         private void registerMBean(Object mBean, ObjectName objectName) throws InstanceAlreadyExistsException, JMException {
@@ -653,7 +641,16 @@ public class JmxReporter implements Reporter, Closeable {
         }
 
         private ObjectName createName(String type, String name) {
-            return objectNameFactory.createName(type, this.name, name);
+            try {
+                return new ObjectName(this.name, "name", name);
+            } catch (MalformedObjectNameException e) {
+                try {
+                    return new ObjectName(this.name, "name", ObjectName.quote(name));
+                } catch (MalformedObjectNameException e1) {
+                    LOGGER.warn("Unable to register {} {}", type, name, e1);
+                    throw new RuntimeException(e1);
+                }
+            }
         }
 
         void unregisterAll() {
@@ -702,10 +699,9 @@ public class JmxReporter implements Reporter, Closeable {
                         String domain,
                         MetricRegistry registry,
                         MetricFilter filter,
-                        MetricTimeUnits timeUnits, 
-                        ObjectNameFactory objectNameFactory) {
+                        MetricTimeUnits timeUnits) {
         this.registry = registry;
-        this.listener = new JmxListener(mBeanServer, domain, filter, timeUnits, objectNameFactory);
+        this.listener = new JmxListener(mBeanServer, domain, filter, timeUnits);
     }
 
     /**
@@ -730,12 +726,4 @@ public class JmxReporter implements Reporter, Closeable {
     public void close() {
         stop();
     }
-
-    /**
-     * Visible for testing
-     */
-    ObjectNameFactory getObjectNameFactory() {
-        return listener.objectNameFactory;
-    }
-
 }
