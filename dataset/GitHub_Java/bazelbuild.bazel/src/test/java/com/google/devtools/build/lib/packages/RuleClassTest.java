@@ -50,6 +50,7 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.Location.LineAndColumn;
 import com.google.devtools.build.lib.packages.Attribute.ValidityPredicate;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
+import com.google.devtools.build.lib.packages.Package.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleClass.Configurator;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory;
@@ -260,8 +261,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
   }
 
   private Package.Builder createDummyPackageBuilder() {
-    return packageFactory.newPackageBuilder(
-        PackageIdentifier.createInMainRepo(TEST_PACKAGE_NAME), "TESTING")
+    return new Builder(PackageIdentifier.createInMainRepo(TEST_PACKAGE_NAME), "TESTING")
         .setFilename(testBuildfilePath)
         .setMakeEnv(new MakeEnvironment.Builder());
   }
@@ -873,10 +873,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
       MissingFragmentPolicy missingFragmentPolicy,
       boolean supportsConstraintChecking,
       Attribute... attributes) {
-    String ruleDefinitionEnvironmentHashCode =
-        ruleDefinitionEnvironment == null
-            ? null
-            : ruleDefinitionEnvironment.getTransitiveContentHashCode();
     return new RuleClass(
         name,
         /*isSkylark=*/ skylarkExecutable,
@@ -896,7 +892,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
         configuredTargetFunction,
         externalBindingsFunction,
         ruleDefinitionEnvironment,
-        ruleDefinitionEnvironmentHashCode,
         new ConfigurationFragmentPolicy.Builder()
             .requiresConfigurationFragments(allowedConfigurationFragments)
             .setMissingFragmentPolicy(missingFragmentPolicy)
