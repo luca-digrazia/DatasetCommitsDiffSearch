@@ -59,6 +59,7 @@ public final class BazelJavaTestRule implements RuleDefinition {
         .add(attr(":extra_proguard_specs", LABEL_LIST).value(JavaSemantics.EXTRA_PROGUARD_SPECS))
         .override(attr("stamp", TRISTATE).value(TriState.NO))
         .override(attr("use_testrunner", BOOLEAN).value(true))
+        .override(attr(":java_launcher", LABEL).value(JavaSemantics.JAVA_LAUNCHER))
         // TODO(dmarting): remove once we drop the legacy bazel java_test behavior.
         .override(attr("main_class", STRING).value(JUNIT4_RUNNER))
         /* <!-- #BLAZE_RULE(java_test).ATTRIBUTE(test_class) -->
@@ -118,8 +119,8 @@ test code. The test runner's main method is invoked instead of the main class be
 ${IMPLICIT_OUTPUTS}
 
 <p>
-See the section on <a href="${link java_binary_args}">java_binary()</a> arguments. This rule also
-supports all <a href="${link common-definitions#common-attributes-tests}">attributes common
+See the section on <a href="#java_binary_args">java_binary()</a> arguments. This rule also
+supports all <a href="common-definitions.html#common-attributes-tests">attributes common
 to all test rules (*_test)</a>.
 </p>
 

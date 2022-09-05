@@ -41,35 +41,11 @@ public class NewLocalRepositoryRule implements RuleDefinition {
         /* <!-- #BLAZE_RULE(new_local_repository).ATTRIBUTE(build_file) -->
         A file to use as a BUILD file for this directory.
 
-        <p>Either build_file or build_file_content must be specified.</p>
-
-        <p>This attribute is a label relative to the main workspace. The file does not need to be
-        named BUILD, but can be. (Something like BUILD.new-repo-name may work well for
-        distinguishing it from the repository's actual BUILD files.)</p>
+        <p>This path is relative to the build's workspace. The file does not need to be named
+        BUILD, but can be (something like BUILD.new-repo-name may work well for distinguishing it
+        from the repository's actual BUILD files.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("build_file", STRING))
-        /* <!-- #BLAZE_RULE(new_local_repository).ATTRIBUTE(build_file_content) -->
-        The content for the BUILD file for this repository.
-
-        <p>Either build_file or build_file_content must be specified.</p>
-        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("build_file_content", STRING))
-        /* <!-- #BLAZE_RULE(new_http_archive).ATTRIBUTE(workspace_file) -->
-        The file to use as the WORKSPACE file for this repository.
-
-         <p>Either workspace_file or workspace_file_content can be specified, but not both.</p>
-
-         <p>This attribute is a label relative to the main workspace. The file does not need to be
-        named WORKSPACE, but can be. (Something like WORKSPACE.new-repo-name may work well for
-        distinguishing it from the repository's actual WORKSPACE files.)</p>
-         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("workspace_file", STRING))
-        /* <!-- #BLAZE_RULE(new_http_archive).ATTRIBUTE(workspace_file_content) -->
-        The content for the WORKSPACE file for this repository.
-
-         <p>Either workspace_file or workspace_file_content can be specified, but not both.</p>
-        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("workspace_file_content", STRING))
+        .add(attr("build_file", STRING).mandatory())
         .setWorkspaceOnly()
         .build();
   }

@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.bazel.rules.java.BazelJavaRuleClasses.JavaR
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
+import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
@@ -40,7 +41,8 @@ public final class BazelJavaLibraryRule implements RuleDefinition {
   public RuleClass build(Builder builder, final RuleDefinitionEnvironment env) {
 
     return builder
-        .requiresConfigurationFragments(JavaConfiguration.class, CppConfiguration.class)
+        .requiresConfigurationFragments(
+            JavaConfiguration.class, CppConfiguration.class, J2ObjcConfiguration.class)
         .requiresHostConfigurationFragments(Jvm.class) // For BaseJavaCompilationHelper
         /* <!-- #BLAZE_RULE(java_library).IMPLICIT_OUTPUTS -->
         <ul>
@@ -54,7 +56,7 @@ public final class BazelJavaLibraryRule implements RuleDefinition {
         /* <!-- #BLAZE_RULE(java_library).ATTRIBUTE(data) -->
         The list of files needed by this library at runtime.
         See general comments about <code>data</code> at
-        <a href="${link common-definitions#common-attributes}">Attributes common to all build rules
+        <a href="common-definitions.html#common-attributes">Attributes common to all build rules
         </a>.
         <p>
           When building a <code>java_library</code>, Bazel doesn't put these files anywhere; if the
@@ -67,7 +69,7 @@ public final class BazelJavaLibraryRule implements RuleDefinition {
         /* <!-- #BLAZE_RULE(java_library).ATTRIBUTE(deps) -->
         The list of libraries to link into this library.
         See general comments about <code>deps</code> at
-        <a href="${link common-definitions#common-attributes}">Attributes common to all build rules
+        <a href="common-definitions.html#common-attributes">Attributes common to all build rules
         </a>.
         <p>
           The jars built by <code>java_library</code> rules listed in <code>deps</code> will be on
@@ -112,10 +114,9 @@ public final class BazelJavaLibraryRule implements RuleDefinition {
           <code>deps</code>.
         </p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(
-            attr("exports", LABEL_LIST)
-                .allowedRuleClasses(BazelJavaRuleClasses.ALLOWED_RULES_IN_DEPS)
-                .allowedFileTypes(/*May not have files in exports!*/ ))
+        .add(attr("exports", LABEL_LIST)
+            .allowedRuleClasses(BazelJavaRuleClasses.ALLOWED_RULES_IN_DEPS)
+            .allowedFileTypes(/*May not have files in exports!*/))
 
         /* <!-- #BLAZE_RULE(java_library).ATTRIBUTE(neverlink) -->
         Whether this library should only be used for compilation and not at runtime.
@@ -138,19 +139,16 @@ public final class BazelJavaLibraryRule implements RuleDefinition {
         .add(attr("neverlink", BOOLEAN).value(false))
         .override(attr("javacopts", STRING_LIST))
         /* <!-- #BLAZE_RULE(java_library).ATTRIBUTE(exported_plugins) -->
-        The list of <code><a href="#${link java_plugin}">java_plugin</a></code>s (e.g. annotation
+        The list of <code><a href="#java_plugin">java_plugin</a></code>s (e.g. annotation
         processors) to export to libraries that directly depend on this library.
         <p>
           The specified list of <code>java_plugin</code>s will be applied to any library which
           directly depends on this library, just as if that library had explicitly declared these
-          labels in <code><a href="${link java_library.plugins}">plugins</a></code>.
+          labels in <code><a href="#java_library.plugins">plugins</a></code>.
         </p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(
-            attr("exported_plugins", LABEL_LIST)
-                .cfg(HOST)
-                .allowedRuleClasses("java_plugin")
-                .allowedFileTypes())
+        .add(attr("exported_plugins", LABEL_LIST).cfg(HOST).allowedRuleClasses("java_plugin")
+            .legacyAllowAnyFileType())
         .advertiseProvider(JavaSourceInfoProvider.class)
         .advertiseProvider(JavaCompilationArgsProvider.class)
         .build();

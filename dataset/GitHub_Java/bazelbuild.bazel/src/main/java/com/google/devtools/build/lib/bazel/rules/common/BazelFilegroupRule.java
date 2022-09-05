@@ -67,8 +67,7 @@ public final class BazelFilegroupRule implements RuleDefinition {
           <code>filegroup</code> to find the name of the directory holding the files.
         </p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-        .add(attr("path", STRING)
-            .undocumented("only used to expose FilegroupPathProvider, which is not currently used"))
+        .add(attr("path", STRING))
         .build();
   }
 

@@ -40,18 +40,15 @@ public class HttpFileRule implements RuleDefinition {
          A URL to a file that will be made available to Bazel.
 
          <p>This must be an http or https URL. Authentication is not support.
-         Redirections are followed, but not from HTTP to HTTPS.</p>
+         Redirections are followed.</p>
          <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("url", STRING).mandatory())
         /* <!-- #BLAZE_RULE(http_file).ATTRIBUTE(sha256) -->
          The expected SHA-256 of the file downloaded.
 
-         <p>This must match the SHA-256 of the file downloaded. <em>It is a security risk to
-         omit the SHA-256 as remote files can change.</em> At best omitting this field will make
-         your build non-hermetic. It is optional to make development easier but should be set
-         before shipping.</p>
+         <p>This must match the SHA-256 of the file downloaded.</p>
          <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("sha256", STRING))
+        .add(attr("sha256", STRING).mandatory())
         /* <!-- #BLAZE_RULE(http_file).ATTRIBUTE(executable) -->
          If the downloaded file should be made executable. Defaults to False.
 

@@ -54,19 +54,11 @@ public class NewGitRepositoryRule implements RuleDefinition {
         /* <!-- #BLAZE_RULE(new_git_repository).ATTRIBUTE(build_file) -->
         The file to use as the BUILD file for this repository.
 
-        <p>Either build_file or build_file_content must be specified.</p>
-
-        <p>This attribute is a label relative to the main workspace. The file does not need to be
-        named BUILD, but can be (something like BUILD.new-repo-name may work well for
-        distinguishing it from the repository's actual BUILD files.</p>
+        <p>This path is relative to the build's workspace. The file does not need to be named
+        BUILD, but can be something like BUILD.new-repo-name to distinguish it
+        from the workspace's actual BUILD files.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("build_file", STRING))
-        /* <!-- #BLAZE_RULE(new_git_repository).ATTRIBUTE(build_file_content) -->
-        The content for the BUILD file for this repository.
-
-        <p>Either build_file or build_file_content must be specified.</p>
-        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("build_file_content", STRING))
+        .add(attr("build_file", STRING).mandatory())
         /* <!-- #BLAZE_RULE(new_git_repository).ATTRIBUTE(init_submodules) -->
         Whether to clone submodules in the repository.
 
@@ -108,6 +100,17 @@ src/
   openssl.h
 </pre>
 
+<p>In the local repository, the user creates a <i>BUILD.ssl</i> file which contains the following
+target definition:</p>
+
+<pre class="code">
+cc_library(
+    name = "openssl-lib",
+    srcs = ["openssl.cc"],
+    hdrs = ["openssl.h"],
+)
+</pre>
+
 <p>Targets in the <i>~/chat-app</i> repository can depend on this target if the following lines are
   added to <i>~/chat-app/WORKSPACE</i>:</p>
 
@@ -116,15 +119,10 @@ new_git_repository(
     name = "my-ssl",
     remote = "http://example.com/openssl/openssl.git",
     tag = "v1.0.2",
-    build_file_content = """
-cc_library(
-    name = "openssl-lib",
-    srcs = ["src/openssl.cc"],
-    hdrs = ["src/openssl.h"],
-)""",
+    build_file = "BUILD.ssl",
 )
 </pre>
 
-<p>Then targets would specify <code>@my-ssl//:openssl-lib</code> as a dependency.</p>
+<p>Then targets would specify <code>@my-ssl//src:openssl-lib</code> as a dependency.</p>
 
 <!-- #END_BLAZE_RULE -->*/

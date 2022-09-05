@@ -37,7 +37,8 @@ public class JavaImportBaseRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
     return builder
-        .requiresConfigurationFragments(JavaConfiguration.class, CppConfiguration.class)
+        .requiresConfigurationFragments(JavaConfiguration.class, CppConfiguration.class,
+            J2ObjcConfiguration.class)
         .add(attr(":host_jdk", LABEL)
             .cfg(HOST)
             .value(JavaSemantics.HOST_JDK))
@@ -46,6 +47,7 @@ public class JavaImportBaseRule implements RuleDefinition {
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("jars", LABEL_LIST)
             .mandatory()
+            .nonEmpty()
             .allowedFileTypes(JavaSemantics.JAR))
         /* <!-- #BLAZE_RULE(java_import).ATTRIBUTE(srcjar) -->
         A JAR file that contains source code for the compiled JAR files.

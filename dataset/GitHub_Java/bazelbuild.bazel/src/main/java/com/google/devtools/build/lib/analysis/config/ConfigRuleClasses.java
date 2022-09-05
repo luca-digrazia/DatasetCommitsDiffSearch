@@ -19,7 +19,6 @@ import static com.google.devtools.build.lib.syntax.Type.STRING_DICT;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
-import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -171,13 +170,36 @@ public class ConfigRuleClasses {
           ImmutableList.builder();
       AttributeMap attributes = NonconfigurableAttributeMapper.of(rule);
       for (String optionName : attributes.get(SETTINGS_ATTRIBUTE, Type.STRING_DICT).keySet()) {
-        Class<? extends BuildConfiguration.Fragment> value = optionsToFragmentMap.get(optionName);
-        // Null values come from BuildConfiguration.Options, which is implicitly included.
-        if (value != null) {
-          builder.add(value);
+        if (optionName.equals("cpu")) {
+          // The "cpu" flag is special: it's defined in BuildConfiguration.Options but its value
+          // is set in CppConfiguration (which reads a CROSSTOOL to determine that value).
+          // So this requires a special mapping.
+          builder.add(getCppConfiguration(optionsToFragmentMap.values()));
+        } else {
+          Class<? extends BuildConfiguration.Fragment> value = optionsToFragmentMap.get(optionName);
+          // Null values come from BuildConfiguration.Options, which is implicitly included.
+          if (value != null) {
+            builder.add(value);
+          }
         }
       }
       return builder.build();
+    }
+
+    /**
+     * We can't directly reference CppConfiguration.class because it's in a different Bazel library.
+     * While we could add that library as a dep, that would bring in a bunch of unnecessary C++ and
+     * crosstool code to what's otherwise a language-agnostic library. So we use a bit of
+     * introspection instead.
+     */
+    private static Class<? extends BuildConfiguration.Fragment> getCppConfiguration(
+        Iterable<Class<? extends BuildConfiguration.Fragment>> configs) {
+      for (Class<? extends BuildConfiguration.Fragment> clazz : configs) {
+        if (clazz.getSimpleName().equals("CppConfiguration")) {
+          return clazz;
+        }
+      }
+      throw new IllegalStateException("Couldn't find the C++ fragment");
     }
   }
 
@@ -185,8 +207,8 @@ public class ConfigRuleClasses {
 
 <p>
   Matches an expected configuration state (expressed as Blaze flags) for the purpose of triggering
-  configurable attributes. See <a href="${link select}">select</a> for how to consume this
-  rule and <a href="${link common-definitions#configurable-attributes}">
+  configurable attributes. See <a href="functions.html#select">select</a> for how to consume this
+  rule and <a href="common-definitions.html#configurable-attributes">
   Configurable attributes</a> for an overview of the general feature.
 
 <h4 id="config_setting_examples">Examples</h4>
@@ -220,7 +242,7 @@ config_setting(
 
 <h4 id="config_setting_notes">Notes</h4>
 
-<p>See <a href="${link select}">select</a> for policies on what happens depending on how
+<p>See <a href="functions.html#select">select</a> for policies on what happens depending on how
    many rules match an invocation.
 </p>
 
@@ -232,7 +254,7 @@ config_setting(
 <p>The currently endorsed method for creating custom conditions that can't be expressed through
   dedicated build flags is through the --define flag. Use this flag with caution: it's not ideal
   and only endorsed for lack of a currently better workaround. See the
-  <a href="${link common-definitions#configurable-attributes}">
+  <a href="common-definitions.html#configurable-attributes">
   Configurable attributes</a> section for more discussion.
 </p>
 
