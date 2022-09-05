@@ -453,7 +453,7 @@ public abstract class ProguardHelper {
           output.getUsage(),
           output.getConstantStringObfuscatedMapping(),
           output.getConfig())
-          .setProgressMessage("Trimming binary with Proguard: Obfuscation and Final Output Pass")
+          .setProgressMessage("Trimming binary with Proguard: Obfuscation and Final Ouput Pass")
           .addArgument("-runtype FINAL")
           .addArgument("-laststageoutput")
           .addInputArgument(lastStageOutput)
