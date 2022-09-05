@@ -2,7 +2,6 @@ package org.hswebframework.web.oauth2.server.code;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.hswebframework.web.oauth2.OAuth2Constants;
 import org.hswebframework.web.oauth2.server.OAuth2Client;
 import org.hswebframework.web.oauth2.server.OAuth2Request;
 
@@ -22,10 +21,10 @@ public class AuthorizationCodeTokenRequest extends OAuth2Request {
     }
 
     public Optional<String> code() {
-        return getParameter(OAuth2Constants.code).map(String::valueOf);
+        return getParameter("code").map(String::valueOf);
     }
 
     public Optional<String> scope() {
-        return getParameter(OAuth2Constants.scope).map(String::valueOf);
+        return getParameter("scope").map(String::valueOf);
     }
 }
