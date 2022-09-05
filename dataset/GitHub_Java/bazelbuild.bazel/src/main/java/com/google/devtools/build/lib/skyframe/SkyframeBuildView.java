@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -67,7 +66,6 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.Configure
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ConflictException;
 import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction.SkylarkImportFailedException;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.CycleInfo;
 import com.google.devtools.build.skyframe.ErrorInfo;
@@ -281,8 +279,6 @@ public final class SkyframeBuildView {
       goodCts.add(ctValue.getConfiguredTarget());
       packages.addTransitive(ctValue.getTransitivePackages());
     }
-    ImmutableMap<PackageIdentifier, Path> packageRoots =
-        LoadingPhaseRunner.collectPackageRoots(packages.build().toCollection());
 
     if (!result.hasError() && badActions.isEmpty()) {
       setDeserializedArtifactOwners();
@@ -291,7 +287,7 @@ public final class SkyframeBuildView {
           ImmutableList.copyOf(goodCts),
           result.getWalkableGraph(),
           ImmutableList.copyOf(goodAspects),
-          packageRoots);
+          LoadingPhaseRunner.collectPackageRoots(packages.build().toCollection()));
     }
 
     // --nokeep_going so we fail with an exception for the first error.
@@ -419,7 +415,7 @@ public final class SkyframeBuildView {
         ImmutableList.copyOf(goodCts),
         result.getWalkableGraph(),
         ImmutableList.copyOf(goodAspects),
-        packageRoots);
+        LoadingPhaseRunner.collectPackageRoots(packages.build().toCollection()));
   }
 
   @Nullable
