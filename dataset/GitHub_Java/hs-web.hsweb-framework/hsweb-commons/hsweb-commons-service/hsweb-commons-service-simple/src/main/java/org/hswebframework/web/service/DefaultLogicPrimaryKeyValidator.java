@@ -118,7 +118,7 @@ public class DefaultLogicPrimaryKeyValidator implements LogicPrimaryKeyValidator
                    .flatMap(entry -> Stream.of(entry.getValue().groups())
                                            .flatMap(group -> Optional.ofNullable(entry.getValue().value())
                                                                      .map(Arrays::asList)
-                                                                     .filter(CollectionUtils::isNotEmpty)
+                                                                     .filter(CollectionUtils::isEmpty)
                                                                      .orElse(Arrays.asList(entry.getKey()))
                                                                      .stream()
                                                                      .map(field -> LogicPrimaryKeyField.builder()
