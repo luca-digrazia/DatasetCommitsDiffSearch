@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
-import com.google.devtools.build.lib.query2.engine.QueryExpressionEvalListener;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.WalkableGraph.WalkableGraphFactory;
 
@@ -43,7 +42,6 @@ public class QueryEnvironmentFactory {
       boolean orderedResults, List<String> universeScope, int loadingPhaseThreads,
       Predicate<Label> labelFilter,
       EventHandler eventHandler, Set<Setting> settings, Iterable<QueryFunction> functions,
-      QueryExpressionEvalListener<Target> evalListener,
       @Nullable PathPackageLocator packagePath) {
     Preconditions.checkNotNull(universeScope);
     if (canUseSkyQuery(orderedResults, universeScope, packagePath, strictScope, labelFilter)) {
@@ -53,7 +51,6 @@ public class QueryEnvironmentFactory {
           eventHandler,
           settings,
           functions,
-          evalListener,
           targetPatternEvaluator.getOffset(),
           graphFactory,
           universeScope,
@@ -61,7 +58,7 @@ public class QueryEnvironmentFactory {
     } else {
       return new BlazeQueryEnvironment(transitivePackageLoader, packageProvider,
           targetPatternEvaluator, keepGoing, strictScope, loadingPhaseThreads, labelFilter,
-          eventHandler, settings, functions, evalListener);
+          eventHandler, settings, functions);
     }
   }
 
