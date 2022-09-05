@@ -291,7 +291,6 @@ public class MetricsServlet extends HttpServlet {
         json.writeStartObject();
         {
             json.writeStringField("type", "histogram");
-            json.writeNumberField("count", histogram.count());
             json.writeNumberField("min", histogram.min());
             json.writeNumberField("max", histogram.max());
             json.writeNumberField("mean", histogram.mean());
