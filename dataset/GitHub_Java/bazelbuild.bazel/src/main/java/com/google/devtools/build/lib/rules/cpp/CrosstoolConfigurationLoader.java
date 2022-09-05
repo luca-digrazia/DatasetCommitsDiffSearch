@@ -41,12 +41,14 @@ import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.Cross
 import com.google.protobuf.TextFormat;
 import com.google.protobuf.TextFormat.ParseException;
 import com.google.protobuf.UninitializedMessageException;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+
 import javax.annotation.Nullable;
 
 /**
@@ -169,7 +171,7 @@ public class CrosstoolConfigurationLoader {
   }
 
   private static CrosstoolProto getCrosstoolProtofromBuildFile(
-      ConfigurationEnvironment env, Label crosstoolTop) throws InterruptedException {
+      ConfigurationEnvironment env, Label crosstoolTop) {
     Target target;
     try {
       target = env.getTarget(crosstoolTop);
@@ -200,7 +202,7 @@ public class CrosstoolConfigurationLoader {
 
   private static CrosstoolProto getCrosstoolProtoFromCrosstoolFile(
       ConfigurationEnvironment env, Label crosstoolTop)
-      throws IOException, InvalidConfigurationException, InterruptedException {
+      throws IOException, InvalidConfigurationException {
     final Path path;
     try {
       Package containingPackage = env.getTarget(crosstoolTop.getLocalTargetLabel("BUILD"))
@@ -232,7 +234,7 @@ public class CrosstoolConfigurationLoader {
 
   private static CrosstoolFile findCrosstoolConfiguration(
       ConfigurationEnvironment env, Label crosstoolTop)
-      throws IOException, InvalidConfigurationException, InterruptedException {
+      throws IOException, InvalidConfigurationException {
 
     CrosstoolProto crosstoolProto = getCrosstoolProtofromBuildFile(env, crosstoolTop);
     if (crosstoolProto == null) {
@@ -265,11 +267,12 @@ public class CrosstoolConfigurationLoader {
     }
   }
 
-  /** Reads a crosstool file. */
+  /**
+   * Reads a crosstool file.
+   */
   @Nullable
   public static CrosstoolConfigurationLoader.CrosstoolFile readCrosstool(
-      ConfigurationEnvironment env, Label crosstoolTop)
-      throws InvalidConfigurationException, InterruptedException {
+      ConfigurationEnvironment env, Label crosstoolTop) throws InvalidConfigurationException {
     crosstoolTop = RedirectChaser.followRedirects(env, crosstoolTop, "crosstool_top");
     if (crosstoolTop == null) {
       return null;
@@ -298,7 +301,7 @@ public class CrosstoolConfigurationLoader {
       Function<String, String> cpuTransformer)
           throws InvalidConfigurationException {
     CrosstoolConfigurationIdentifier config =
-        CrosstoolConfigurationIdentifier.fromOptions(options);
+        CrosstoolConfigurationIdentifier.fromReleaseAndCrosstoolConfiguration(release, options);
     if ((config.getCompiler() != null) || (config.getLibc() != null)) {
       ArrayList<CrosstoolConfig.CToolchain> candidateToolchains = new ArrayList<>();
       for (CrosstoolConfig.CToolchain toolchain : release.getToolchainList()) {
@@ -397,11 +400,9 @@ public class CrosstoolConfigurationLoader {
   }
 
   public static CrosstoolConfig.CrosstoolRelease getCrosstoolReleaseProto(
-      ConfigurationEnvironment env,
-      BuildOptions options,
-      Label crosstoolTop,
-      Function<String, String> cpuTransformer)
-      throws InvalidConfigurationException, InterruptedException {
+      ConfigurationEnvironment env, BuildOptions options,
+      Label crosstoolTop, Function<String, String> cpuTransformer)
+      throws InvalidConfigurationException {
     CrosstoolConfigurationLoader.CrosstoolFile file =
         readCrosstool(env, crosstoolTop);
     // Make sure that we have the requested toolchain in the result. Throw an exception if not.
