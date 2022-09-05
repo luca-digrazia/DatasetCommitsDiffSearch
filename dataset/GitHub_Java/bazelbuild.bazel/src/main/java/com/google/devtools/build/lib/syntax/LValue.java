@@ -42,7 +42,7 @@ public class LValue implements Serializable {
   /**
    * Assign a value to an LValue and update the environment.
    */
-  public void assign(Environment env, Location loc, Object result)
+  public void assign(Environment env, Location loc, Expression rvalue)
       throws EvalException, InterruptedException {
     if (!(expr instanceof Ident)) {
       throw new EvalException(loc,
@@ -50,7 +50,8 @@ public class LValue implements Serializable {
     }
 
     Ident ident = (Ident) expr;
-    Preconditions.checkNotNull(result, "trying to assign null to %s", ident);
+    Object result = rvalue.eval(env);
+    Preconditions.checkNotNull(result, "result of %s is null", rvalue);
 
     if (env.isSkylarkEnabled()) {
       // The variable may have been referenced successfully if a global variable
