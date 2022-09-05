@@ -19,7 +19,9 @@ import static com.google.devtools.build.lib.analysis.ExtraActionUtils.createExtr
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.UnmodifiableIterator;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -170,7 +172,9 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
         providers.put(SkylarkProviders.class, new SkylarkProviders(skylarkProvidersMap));
       }
 
-      addProvider(createExtraActionProvider(ruleContext));
+      addProvider(createExtraActionProvider(
+          ImmutableSet.<Action>of() /* actionsWithoutExtraAction */,
+          ruleContext));
 
       return new ConfiguredAspect(name, ImmutableMap.copyOf(providers));
     }
