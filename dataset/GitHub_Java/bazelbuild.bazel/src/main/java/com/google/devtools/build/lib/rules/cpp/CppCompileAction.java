@@ -27,8 +27,7 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.ArtifactFile;
+import com.google.devtools.build.lib.actions.Artifact.MiddlemanExpander;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
@@ -687,15 +686,15 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   @VisibleForTesting
   public void validateInclusions(
       Iterable<Artifact> inputsForValidation,
-      ArtifactExpander artifactExpander,
+      MiddlemanExpander middlemanExpander,
       EventHandler eventHandler)
       throws ActionExecutionException {
     IncludeProblems errors = new IncludeProblems();
     IncludeProblems warnings = new IncludeProblems();
-    Set<ArtifactFile> allowedIncludes = new HashSet<>();
+    Set<Artifact> allowedIncludes = new HashSet<>();
     for (Artifact input : mandatoryInputs) {
-      if (input.isMiddlemanArtifact() || input.isTreeArtifact()) {
-        artifactExpander.expand(input, allowedIncludes);
+      if (input.isMiddlemanArtifact()) {
+        middlemanExpander.expand(input, allowedIncludes);
       }
       allowedIncludes.add(input);
     }
@@ -1139,7 +1138,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     // hdrs_check: This cannot be switched off, because doing so would allow for incorrect builds.
     validateInclusions(
         discoveredInputs,
-        actionExecutionContext.getArtifactExpander(),
+        actionExecutionContext.getMiddlemanExpander(),
         executor.getEventHandler());
   }
 
@@ -1350,14 +1349,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       addFilteredOptions(options,
           featureConfiguration.getCommandLine(getActionName(), variables));
 
-      // TODO(bazel-team): Move this into a feature; more specifically, create a feature for both
-      // the amount of debug information requested, and whether the debug info is written in a
-      // split out file. Until then, keep this before the user-provided copts so it can be
-      // overwritten.
-      if (cppConfiguration.useFission()) {
-        options.add("-gsplit-dwarf");
-      }
-      
       // Users don't expect the explicit copts to be filtered by coptsFilter, add them verbatim.
       // Make sure these are added after the options from the feature configuration, so that
       // those options can be overriden.
@@ -1409,6 +1400,9 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
         options.add("-E");
       }
 
+      if (cppConfiguration.useFission()) {
+        options.add("-gsplit-dwarf");
+      }
       if (usePic) {
         options.add("-fPIC");
       }
