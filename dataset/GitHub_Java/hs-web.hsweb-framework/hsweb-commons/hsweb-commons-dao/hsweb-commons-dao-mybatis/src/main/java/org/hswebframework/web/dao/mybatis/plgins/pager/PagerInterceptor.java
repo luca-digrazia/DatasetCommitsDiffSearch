@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2019 http://www.hswebframework.org
+ *  * Copyright 2016 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -49,14 +49,8 @@ public class PagerInterceptor implements Interceptor {
             MetaObject metaStatementHandler = SystemMetaObject.forObject(statementHandler);
             String sql = statementHandler.getBoundSql().getSql();
             Pager pager = Pager.getAndReset();
-
-            String lower = sql.trim();
-
-            if (lower.startsWith("select")) {
-                if (lower.contains("count(")) {
-                    return Plugin.wrap(target, this);
-                }
-                String newSql = sql;
+            String newSql = sql;
+            if (sql.trim().toLowerCase().startsWith("select")) {
                 if (pager != null) {
                     newSql = EasyOrmSqlBuilder.getInstance()
                             .getActiveDatabase().getDialect()
