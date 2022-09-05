@@ -32,7 +32,7 @@ public class InstrumentedHttpClientsTest {
             InstrumentedHttpClients.custom(metricRegistry, metricNameStrategy).disableAutomaticRetries().build();
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         metricRegistry.addListener(registryListener);
     }
 
