@@ -399,7 +399,7 @@ public final class ReleaseBundlingSupport {
         new FileWriteAction(
             ruleContext.getActionOwner(),
             getGeneratedAutomaticPlist(),
-            automaticEntries().toGnuStepASCIIPropertyList(),
+            automaticEntries().toASCIIPropertyList(),
             /*makeExecutable=*/ false));
   }
 
