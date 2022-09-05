@@ -295,7 +295,8 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     }
 
     // This may be recreated if we discover inputs.
-    PerActionFileCache perActionFileCache = new PerActionFileCache(state.inputArtifactData);
+    PerActionFileCache perActionFileCache =
+        new PerActionFileCache(state.inputArtifactData, skyframeActionExecutor.getExecRoot());
     ActionExecutionContext actionExecutionContext =
         skyframeActionExecutor.constructActionExecutionContext(perActionFileCache,
             metadataHandler, state.expandedMiddlemen);
@@ -322,7 +323,8 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
             return null;
           }
           state.inputArtifactData = inputArtifactData;
-          perActionFileCache = new PerActionFileCache(state.inputArtifactData);
+          perActionFileCache =
+              new PerActionFileCache(state.inputArtifactData, skyframeActionExecutor.getExecRoot());
           metadataHandler =
               new ActionMetadataHandler(state.inputArtifactData, action.getOutputs(), tsgm);
           actionExecutionContext =
