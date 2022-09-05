@@ -32,6 +32,9 @@ import java.util.List;
  */
 public class IosSdkCommands {
   public static final String DEVELOPER_DIR = "/Applications/Xcode.app/Contents/Developer";
+  public static final String ACTOOL_PATH = DEVELOPER_DIR + "/usr/bin/actool";
+  public static final String IBTOOL_PATH = DEVELOPER_DIR + "/usr/bin/ibtool";
+  public static final String MOMC_PATH = DEVELOPER_DIR + "/usr/bin/momc";
 
   // There is a handy reference to many clang warning flags at
   // http://nshipster.com/clang-diagnostics/
@@ -68,7 +71,7 @@ public class IosSdkCommands {
     return Platform.forArch(configuration.getIosCpu()).getNameInPlist();
   }
 
-  public static String platformDir(ObjcConfiguration configuration) {
+  private static String platformDir(ObjcConfiguration configuration) {
     return DEVELOPER_DIR + "/Platforms/" + getPlatformPlistName(configuration) + ".platform";
   }
 
@@ -79,28 +82,6 @@ public class IosSdkCommands {
 
   public static String frameworkDir(ObjcConfiguration configuration) {
     return platformDir(configuration) + "/Developer/Library/Frameworks";
-  }
-
-  /**
-   * Returns swift libraries path.
-   */
-  public static String swiftLibDir(ObjcConfiguration configuration) {
-    return DEVELOPER_DIR + "/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/"
-        + swiftPlatform(configuration);
-  }
-
-  /**
-   * Returns a platform name string suitable for use in Swift tools.
-   */
-  public static String swiftPlatform(ObjcConfiguration configuration) {
-    return getPlatformPlistName(configuration).toLowerCase();
-  }
-
-  /**
-   * Returns the target string for swift compiler. For example, "x86_64-apple-ios8.2"
-   */
-  public static String swiftTarget(ObjcConfiguration configuration) {
-    return configuration.getIosCpu() + "-apple-" + "ios" + configuration.getIosSdkVersion();
   }
 
   private static Iterable<PathFragment> uniqueParentDirectories(Iterable<PathFragment> paths) {

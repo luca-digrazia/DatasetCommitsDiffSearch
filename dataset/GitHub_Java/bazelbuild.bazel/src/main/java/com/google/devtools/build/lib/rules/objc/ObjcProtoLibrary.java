@@ -153,16 +153,11 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
         .setPchFile(Optional.<Artifact>absent())
         .build();
 
-    ImmutableSet.Builder<PathFragment> searchPathEntriesBuilder =
-        new ImmutableSet.Builder<PathFragment>()
-            .add(workspaceRelativeOutputDir);
-     if (ruleContext.getConfiguration().getFragment(ObjcConfiguration.class).perProtoIncludes()) {
-      searchPathEntriesBuilder
-          .add(generatedProtoDir)
-          .addAll(Iterables.transform(protoGeneratedHeaders, PARENT_PATHFRAGMENT));
-     }    
-    ImmutableSet<PathFragment> searchPathEntries = searchPathEntriesBuilder.build();
-
+    ImmutableSet<PathFragment> searchPathEntries = new ImmutableSet.Builder<PathFragment>()
+        .add(workspaceRelativeOutputDir)
+        .add(generatedProtoDir)
+        .addAll(Iterables.transform(protoGeneratedHeaders, PARENT_PATHFRAGMENT))
+        .build();
     ObjcCommon common = new ObjcCommon.Builder(ruleContext)
         .setCompilationArtifacts(compilationArtifacts)
         .addUserHeaderSearchPaths(searchPathEntries)
