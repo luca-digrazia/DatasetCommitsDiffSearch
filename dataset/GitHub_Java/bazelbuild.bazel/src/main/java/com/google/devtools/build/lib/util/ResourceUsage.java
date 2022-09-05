@@ -20,7 +20,9 @@ import com.google.common.base.CharMatcher;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Iterables;
 import com.google.common.io.Files;
+
 import com.sun.management.OperatingSystemMXBean;
+
 import java.io.File;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
@@ -179,7 +181,7 @@ public final class ResourceUsage {
   private static long getCurrentTotalIdleTimeInJiffies() {
     try {
       File file = new File("/proc/stat");
-      String content = Files.asCharSource(file, US_ASCII).read();
+      String content = Files.toString(file, US_ASCII);
       String value = Iterables.get(WHITESPACE_SPLITTER.split(content), 5);
       return Long.parseLong(value);
     } catch (NumberFormatException | IOException e) {
@@ -203,8 +205,8 @@ public final class ResourceUsage {
       if (file.isDirectory()) {
         return new long[2];
       }
-      Iterator<String> stat =
-          WHITESPACE_SPLITTER.split(Files.asCharSource(file, US_ASCII).read()).iterator();
+      Iterator<String> stat = WHITESPACE_SPLITTER.split(
+          Files.toString(file, US_ASCII)).iterator();
       for (int i = 0; i < 13; ++i) {
         stat.next();
       }
