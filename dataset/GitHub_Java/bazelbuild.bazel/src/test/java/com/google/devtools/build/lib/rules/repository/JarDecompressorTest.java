@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.bazel.repository.JarDecompressor;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -53,7 +54,7 @@ public class JarDecompressorTest {
     Path outputDir = DecompressorValue.decompress(descriptorBuilder.build());
     assertThat(outputDir.exists()).isTrue();
     String buildContent =
-        new String(FileSystemUtils.readContentAsLatin1(outputDir.getRelative("jar/BUILD.bazel")));
+        new String(FileSystemUtils.readContentAsLatin1(outputDir.getRelative("jar/BUILD")));
     assertThat(buildContent).contains("java_import");
     assertThat(buildContent).contains("filegroup");
   }
@@ -66,4 +67,5 @@ public class JarDecompressorTest {
         FileSystemUtils.readContentAsLatin1(outputDir.getRelative("WORKSPACE")));
     assertThat(workspaceContent).contains("workspace(name = \"tester\")");
   }
+
 }
