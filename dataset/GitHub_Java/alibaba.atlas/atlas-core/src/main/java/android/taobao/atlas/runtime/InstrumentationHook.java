@@ -571,8 +571,7 @@ public class InstrumentationHook extends Instrumentation {
 	        	intent.putExtra("android.taobao.atlas.mainAct.wait", false);
 	        }
         }catch (Exception e){
-			e.printStackTrace();
-		}
+        }
 
         try {
 			// BundleListing.BundleInfo info = AtlasBundleInfoManager.instance().getBundleInfo(AtlasBundleInfoManager
