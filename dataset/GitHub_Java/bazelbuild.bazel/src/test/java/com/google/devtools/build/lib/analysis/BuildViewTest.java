@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.FailAction;
-import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
 import com.google.devtools.build.lib.analysis.DependencyResolver.Dependency;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
@@ -179,8 +178,7 @@ public final class BuildViewTest extends BuildViewTestBase {
     EventBus eventBus = new EventBus();
     AnalysisFailureRecorder recorder = new AnalysisFailureRecorder();
     eventBus.register(recorder);
-    AnalysisResult result = update(eventBus, defaultFlags().with(Flag.KEEP_GOING), "//foo");
-    assertThat(result.hasError()).isTrue();
+    update(eventBus, defaultFlags().with(Flag.KEEP_GOING), "//foo");
     assertThat(recorder.events).hasSize(1);
     AnalysisFailureEvent event = recorder.events.get(0);
     assertEquals("//foo:bar", event.getFailureReason().toString());
@@ -199,8 +197,7 @@ public final class BuildViewTest extends BuildViewTestBase {
     LoadingFailureRecorder recorder = new LoadingFailureRecorder();
     eventBus.register(recorder);
     // Note: no need to run analysis for a loading failure.
-    AnalysisResult result = update(eventBus, defaultFlags().with(Flag.KEEP_GOING), "//pkg:foo");
-    assertThat(result.hasError()).isTrue();
+    update(eventBus, defaultFlags().with(Flag.KEEP_GOING), "//pkg:foo");
     assertThat(recorder.events)
         .contains(
             Pair.of(Label.parseAbsolute("//pkg:foo"), Label.parseAbsolute("//nopackage:missing")));
@@ -232,9 +229,8 @@ public final class BuildViewTest extends BuildViewTestBase {
     LoadingFailureRecorder recorder = new LoadingFailureRecorder();
     eventBus.register(recorder);
     // Note: no need to run analysis for a loading failure.
-    AnalysisResult result = update(eventBus, defaultFlags().with(Flag.KEEP_GOING),
+    update(eventBus, defaultFlags().with(Flag.KEEP_GOING),
         "//third_party/first", "//third_party/third");
-    assertThat(result.hasError()).isTrue();
     assertThat(recorder.events).hasSize(2);
     assertTrue(recorder.events.toString(), recorder.events.contains(
         Pair.of(Label.parseAbsolute("//third_party/first"),
@@ -257,8 +253,7 @@ public final class BuildViewTest extends BuildViewTestBase {
     EventBus eventBus = new EventBus();
     LoadingFailureRecorder recorder = new LoadingFailureRecorder();
     eventBus.register(recorder);
-    AnalysisResult result = update(eventBus, defaultFlags().with(Flag.KEEP_GOING), "//gp");
-    assertThat(result.hasError()).isTrue();
+    update(eventBus, defaultFlags().with(Flag.KEEP_GOING), "//gp");
     assertThat(recorder.events).hasSize(2);
     assertTrue(recorder.events.toString(), recorder.events.contains(
         Pair.of(Label.parseAbsolute("//gp"),
@@ -402,8 +397,7 @@ public final class BuildViewTest extends BuildViewTestBase {
   public void testAnalysisErrorMessageWithKeepGoing() throws Exception {
     scratch.file("a/BUILD", "sh_binary(name='a', srcs=['a1.sh', 'a2.sh'])");
     reporter.removeHandler(failFastHandler);
-    AnalysisResult result = update(defaultFlags().with(Flag.KEEP_GOING), "//a");
-    assertThat(result.hasError()).isTrue();
+    update(defaultFlags().with(Flag.KEEP_GOING), "//a");
     assertContainsEvent("errors encountered while analyzing target '//a:a'");
   }
 
@@ -420,9 +414,7 @@ public final class BuildViewTest extends BuildViewTestBase {
         "sh_library(name = 'rec2', srcs = ['rec2.sh'], deps = [':rec1'])"
     );
     reporter.removeHandler(failFastHandler);
-    AnalysisResult result =
-        update(defaultFlags().with(Flag.KEEP_GOING), "//foo:top1", "//foo:top2");
-    assertThat(result.hasError()).isTrue();
+    update(defaultFlags().with(Flag.KEEP_GOING), "//foo:top1", "//foo:top2");
     assertContainsEvent("in sh_library rule //foo:rec1: cycle in dependency graph:\n");
     assertContainsEvent("in sh_library rule //foo:top");
   }
@@ -478,8 +470,7 @@ public final class BuildViewTest extends BuildViewTestBase {
     scratch.file("y/BUILD",
         "cc_library(name='y', srcs=['y.cc'], deps=['//x:z'])");
 
-    AnalysisResult result = update(defaultFlags().with(Flag.KEEP_GOING), "//y:y");
-    assertThat(result.hasError()).isTrue();
+    update(defaultFlags().with(Flag.KEEP_GOING), "//y:y");
     assertContainsEvent("no such target '//x:z': "
         + "target 'z' not declared in package 'x' "
         + "defined by /workspace/x/BUILD and referenced by '//y:y'");
@@ -717,8 +708,7 @@ public final class BuildViewTest extends BuildViewTestBase {
     EventBus eventBus = new EventBus();
     LoadingFailureRecorder recorder = new LoadingFailureRecorder();
     eventBus.register(recorder);
-    AnalysisResult result = update(eventBus, defaultFlags().with(Flag.KEEP_GOING), "//gp");
-    assertThat(result.hasError()).isTrue();
+    update(eventBus, defaultFlags().with(Flag.KEEP_GOING), "//gp");
     assertThat(recorder.events).hasSize(2);
     assertTrue(recorder.events.toString(), recorder.events.contains(
         Pair.of(Label.parseAbsolute("//gp"), Label.parseAbsolute("//cycles1"))));
@@ -826,12 +816,8 @@ public final class BuildViewTest extends BuildViewTestBase {
         "config_setting(name = 'a', values = {'test_arg': 'a'})",
         "cc_library(name='x', srcs=select({':a': ['a.cc'], '//conditions:default': ['foo.cc']}))",
         "cc_binary(name='_objs/x/conflict/foo.pic.o', srcs=['bar.cc'])");
-    AnalysisResult result = update(
-        defaultFlags().with(Flag.KEEP_GOING),
-        "//conflict:_objs/x/conflict/foo.pic.o",
+    update(defaultFlags().with(Flag.KEEP_GOING), "//conflict:_objs/x/conflict/foo.pic.o",
         "//conflict:x");
-    // TODO(ulfjack): We print an error message but don't return an error, apparently.
-    //assertThat(result.hasError()).isTrue();
     // Expect to reach this line without a Precondition-triggered NullPointerException.
     assertContainsEvent(
         "file 'conflict/_objs/x/conflict/foo.pic.o' is generated by these conflicting actions");
