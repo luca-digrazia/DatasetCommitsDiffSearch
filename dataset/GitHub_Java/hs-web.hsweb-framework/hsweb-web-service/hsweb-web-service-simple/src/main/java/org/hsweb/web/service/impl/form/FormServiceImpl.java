@@ -1,21 +1,18 @@
 package org.hsweb.web.service.impl.form;
 
 import com.alibaba.fastjson.JSON;
-import org.hsweb.commons.StringUtils;
-import org.hsweb.ezorm.rdb.meta.RDBTableMetaData;
 import org.hsweb.web.bean.common.InsertParam;
 import org.hsweb.web.bean.common.QueryParam;
 import org.hsweb.web.bean.common.UpdateParam;
 import org.hsweb.web.bean.po.form.Form;
-import org.hsweb.web.bean.po.form.Form.Property;
 import org.hsweb.web.bean.po.history.History;
-import org.hsweb.web.core.utils.RandomUtil;
 import org.hsweb.web.dao.form.FormMapper;
 import org.hsweb.web.service.form.DynamicFormService;
 import org.hsweb.web.service.form.FormParser;
 import org.hsweb.web.service.form.FormService;
 import org.hsweb.web.service.history.HistoryService;
 import org.hsweb.web.service.impl.AbstractServiceImpl;
+import org.hsweb.web.core.utils.RandomUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -23,6 +20,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
+import org.hsweb.commons.StringUtils;
 
 import javax.annotation.Resource;
 import java.sql.SQLException;
@@ -72,7 +70,7 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
         old.setRevision(1);
         old.setRelease(0);
         old.setUsing(false);
-        getMapper().insert(InsertParam.build(old));
+        getMapper().insert(new InsertParam<>(old));
         return old.getId();
     }
 
@@ -101,8 +99,8 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
         data.setUpdateDate(new Date());
         data.setVersion(old.getVersion());
         data.setRevision(old.getRevision() + 1);
-        return createUpdate(data).excludes(Property.createDate, Property.release, Property.version, Property.version)
-                .fromBean().where(Property.id).exec();
+        UpdateParam<Form> param = UpdateParam.build(data).excludes("createDate", "release", "version", "using");
+        return getMapper().update(param);
     }
 
     @Override
@@ -129,40 +127,18 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
     @Override
     @Cacheable(value = CACHE_KEY, key = "#name+':'+#version")
     public Form selectByVersion(String name, int version) {
-        List<Form> formList = this.createQuery()
-                .where(Property.name, name).and(Property.version, version)
-                .list(formMapper::selectLatestList);
+        QueryParam param = QueryParam.build()
+                .where("name", name).where("version", version);
+        List<Form> formList = formMapper.selectLatestList(param);
         return formList.size() > 0 ? formList.get(0) : null;
     }
 
     @Override
     public Form selectLatest(String name) {
-        List<Form> formList = this.createQuery()
-                .where(Property.name, name)
-                .orderByAsc(Property.version)
-                .list(formMapper::selectLatestList);
+        QueryParam param = QueryParam.build()
+                .where("name", name).orderBy("version").asc();
+        List<Form> formList = formMapper.selectLatestList(param);
         return formList.size() > 0 ? formList.get(0) : null;
-    }
-
-    @Override
-    @Caching(evict = {
-            @CacheEvict(value = {CACHE_KEY + ".deploy"}, allEntries = true),
-            @CacheEvict(value = {CACHE_KEY}, allEntries = true)
-    })
-    public void tryDeployAll() {
-        createQuery().where(Form.Property.using, 1).listNoPaging().forEach(form -> {
-            try {
-                Form deployed = selectDeployed(form.getName());
-                if (null != deployed) {
-                    RDBTableMetaData metaData = dynamicFormService.parseMeta(deployed);
-                    dynamicFormService.getDefaultDatabase().reloadTable(metaData);
-                } else {
-                    dynamicFormService.deploy(form);
-                }
-            } catch (Exception e) {
-                logger.error("部署{}:({})失败", form.getName(), form.getRemark(), e);
-            }
-        });
     }
 
     @Override
@@ -185,7 +161,7 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
         old.setUsing(true);
         dynamicFormService.deploy(old);
         old.setRelease(old.getRevision());//发布修订版本
-        createUpdate(old).includes(Property.using, Property.release).where(Property.id, old.getId()).exec();
+        getMapper().update(UpdateParam.build(old).includes("using", "release").where("id", old.getId()));
         //加入发布历史记录
         History history = History.newInstance("form.deploy." + old.getName());
         history.setPrimaryKeyName("id");
@@ -208,7 +184,9 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
         assertNotNull(old, "表单不存在");
         dynamicFormService.unDeploy(old);
         old.setUsing(false);
-        createUpdate(old).includes(Property.using).where(Property.id, old.getId()).exec();
+        UpdateParam param = new UpdateParam<>(old);
+        param.includes("using").where("id", old.getId());
+        getMapper().update(param);
     }
 
     @Override
