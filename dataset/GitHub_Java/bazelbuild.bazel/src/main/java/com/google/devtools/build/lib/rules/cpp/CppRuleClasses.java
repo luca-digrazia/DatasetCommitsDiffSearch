@@ -147,11 +147,6 @@ public class CppRuleClasses {
   public static final String INCLUDE_PATHS = "include_paths";
 
   /**
-   * A string constant for the ThinLTO feature.
-   */
-  public static final String THIN_LTO = "thin_lto";
-
-  /*
    * A string constant for the fdo_instrument feature.
    */
   public static final String FDO_INSTRUMENT = "fdo_instrument";
