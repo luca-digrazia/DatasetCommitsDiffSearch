@@ -37,12 +37,10 @@ import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.CLANG_PLU
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.COMPILABLE_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.DSYMUTIL;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.HEADERS;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.LIBTOOL;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.NON_ARC_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.STRIP;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SWIFT;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.XCRUN;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.intermediateArtifacts;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
@@ -306,8 +304,7 @@ public final class CompilationSupport {
       coverageFlags.addAll(CLANG_COVERAGE_FLAGS);
       gcnoFiles.add(intermediateArtifacts.gcnoFile(sourceFile));
     }
-    CustomCommandLine.Builder commandLine = new CustomCommandLine.Builder()
-        .add(CLANG);
+    CustomCommandLine.Builder commandLine = new CustomCommandLine.Builder();
     if (ObjcRuleClasses.CPP_SOURCES.matches(sourceFile.getExecPath())) {
       commandLine.add("-stdlib=libc++");
     }
@@ -371,7 +368,7 @@ public final class CompilationSupport {
     // TODO(bazel-team): Remote private headers from inputs once they're added to the provider.
     ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
         .setMnemonic("ObjcCompile")
-        .setExecutable(XCRUN)
+        .setExecutable(CLANG)
         .setCommandLine(commandLine.build())
         .addInput(sourceFile)
         .addInputs(additionalInputs.build())
@@ -413,7 +410,6 @@ public final class CompilationSupport {
     ImmutableSet<Artifact> otherSwiftSources = otherSwiftSourcesBuilder.build();
 
     CustomCommandLine.Builder commandLine = new CustomCommandLine.Builder()
-        .add(SWIFT)
         .add("-frontend")
         .add("-emit-object")
         .add("-target").add(IosSdkCommands.swiftTarget(objcConfiguration))
@@ -455,7 +451,7 @@ public final class CompilationSupport {
     ruleContext.registerAction(
         ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
             .setMnemonic("SwiftCompile")
-            .setExecutable(XCRUN)
+            .setExecutable(SWIFT)
             .setCommandLine(commandLine.build())
             .addInput(sourceFile)
             .addInputs(otherSwiftSources)
@@ -483,25 +479,24 @@ public final class CompilationSupport {
       }
     }
 
-    CustomCommandLine.Builder commandLine = new CustomCommandLine.Builder()
-        .add(SWIFT)
-        .add("-frontend")
-        .add("-emit-module")
-        .add("-sdk").add(IosSdkCommands.sdkDir(objcConfiguration))
-        .add("-target").add(IosSdkCommands.swiftTarget(objcConfiguration));
+    CustomCommandLine.Builder commandLine = new CustomCommandLine.Builder();
+    commandLine.add("-frontend");
+    commandLine.add("-emit-module");
+    commandLine.add("-sdk").add(IosSdkCommands.sdkDir(objcConfiguration));
+    commandLine.add("-target").add(IosSdkCommands.swiftTarget(objcConfiguration));
     if (objcConfiguration.generateDebugSymbols()) {
       commandLine.add("-g");
     }
 
-    commandLine.add("-module-name").add(getModuleName())
-        .add("-parse-as-library")
-        .addExecPaths(moduleFiles.build())
-        .addExecPath("-o", intermediateArtifacts.swiftModule())
-        .addExecPath("-emit-objc-header-path", intermediateArtifacts.swiftHeader());
+    commandLine.add("-module-name").add(getModuleName());
+    commandLine.add("-parse-as-library");
+    commandLine.addExecPaths(moduleFiles.build());
+    commandLine.addExecPath("-o", intermediateArtifacts.swiftModule());
+    commandLine.addExecPath("-emit-objc-header-path", intermediateArtifacts.swiftHeader());
 
     ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
         .setMnemonic("SwiftModuleMerge")
-        .setExecutable(XCRUN)
+        .setExecutable(SWIFT)
         .setCommandLine(commandLine.build())
         .addInputs(moduleFiles.build())
         .addOutput(intermediateArtifacts.swiftModule())
@@ -535,9 +530,8 @@ public final class CompilationSupport {
 
     actions.add(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
         .setMnemonic("ObjcLink")
-        .setExecutable(XCRUN)
+        .setExecutable(ObjcRuleClasses.LIBTOOL)
         .setCommandLine(new CustomCommandLine.Builder()
-            .add(LIBTOOL)
             .add("-static")
             .add("-filelist").add(objList.getExecPathString())
             .add("-arch_only").add(objcConfiguration.getIosCpu())
@@ -559,9 +553,8 @@ public final class CompilationSupport {
     ImmutableList<Artifact> ccLibraries = ccLibraries(objcProvider);
     ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
         .setMnemonic("ObjcLink")
-        .setExecutable(XCRUN)
+        .setExecutable(ObjcRuleClasses.LIBTOOL)
         .setCommandLine(new CustomCommandLine.Builder()
-            .add(LIBTOOL)
             .add("-static")
             .add("-arch_only").add(objcConfiguration.getIosCpu())
             .add("-syslibroot").add(IosSdkCommands.sdkDir(objcConfiguration))
@@ -729,7 +722,7 @@ public final class CompilationSupport {
       ruleContext.registerAction(
           ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
               .setMnemonic("ObjcBinarySymbolStrip")
-              .setExecutable(XCRUN)
+              .setExecutable(STRIP)
               .setCommandLine(symbolStripCommandLine(stripArgs, binaryToLink, strippedBinary))
               .addOutput(strippedBinary)
               .addInput(binaryToLink)
@@ -748,7 +741,6 @@ public final class CompilationSupport {
   private static CommandLine symbolStripCommandLine(
       Iterable<String> extraFlags, Artifact unstrippedArtifact, Artifact strippedArtifact) {
     return CustomCommandLine.builder()
-        .add(STRIP)
         .add(extraFlags)
         .addExecPath("-o", strippedArtifact)
         .addPath(unstrippedArtifact.getExecPath())
@@ -760,15 +752,14 @@ public final class CompilationSupport {
       ImmutableList<Artifact> ccLibraries) {
     ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
 
-    CustomCommandLine.Builder commandLine = CustomCommandLine.builder()
-        .addPath(XCRUN);
+    CustomCommandLine.Builder commandLine = CustomCommandLine.builder();
 
     if (objcProvider.is(USES_CPP)) {
       commandLine
-          .add(CLANG_PLUSPLUS)
+          .addPath(CLANG_PLUSPLUS)
           .add("-stdlib=libc++");
     } else {
-      commandLine.add(CLANG);
+      commandLine.addPath(CLANG);
     }
 
     // Do not perform code stripping on tests because XCTest binary is linked not as an executable
@@ -821,8 +812,7 @@ public final class CompilationSupport {
       PathFragment dsymPath = FileSystemUtils.removeExtension(dsymBundle.get().getExecPath());
       commandLine
           .add("&&")
-          .addPath(XCRUN)
-          .add(DSYMUTIL)
+          .addPath(DSYMUTIL)
           .add(linkedBinary.getExecPathString())
           .add("-o " + dsymPath)
           .add("&& zipped_bundle=${PWD}/" + dsymBundle.get().getShellEscapedExecPathString())
