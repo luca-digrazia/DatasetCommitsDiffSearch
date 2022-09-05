@@ -9,7 +9,7 @@ package org.nlpcn.es4sql.domain;
 public class From {
 	private String index;
 	private String type;
-    private String alias;
+
 
 	/**
  	 * Extract index and type from the 'from' string
@@ -22,11 +22,6 @@ public class From {
 			this.type = parts[1].trim();
 		}
 	}
-
-    public From(String from,String alias){
-        this(from);
-        this.alias = alias;
-    }
 
 	public String getIndex() {
 		return index ;
@@ -43,12 +38,4 @@ public class From {
 	public void setType(String type) {
 		this.type = type;
 	}
-
-    public String getAlias() {
-        return alias;
-    }
-
-    public void setAlias(String alias) {
-        this.alias = alias;
-    }
 }

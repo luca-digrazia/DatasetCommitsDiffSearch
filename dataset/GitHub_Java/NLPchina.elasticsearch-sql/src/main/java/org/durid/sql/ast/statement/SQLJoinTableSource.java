@@ -92,7 +92,7 @@ public class SQLJoinTableSource extends SQLTableSourceImpl {
 
 	@Override
 	public String getTablename() {
-		return this.toString().replace(" ", "");
+		return null;
 	}
 
 	public static enum JoinType {
