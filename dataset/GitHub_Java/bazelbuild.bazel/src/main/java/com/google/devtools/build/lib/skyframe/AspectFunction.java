@@ -44,7 +44,7 @@ import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.packages.SkylarkAspectClass;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.rules.AliasProvider;
+import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.ConfiguredValueCreationException;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.DependencyEvaluationException;
@@ -57,6 +57,7 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import javax.annotation.Nullable;
 
 /**
@@ -92,9 +93,9 @@ public final class AspectFunction implements SkyFunction {
    * @return {@code null} if dependencies cannot be satisfied.
    */
   @Nullable
-  static SkylarkAspect loadSkylarkAspect(
+  public static SkylarkAspect loadSkylarkAspect(
       Environment env, Label extensionLabel, String skylarkValueName)
-      throws AspectCreationException, InterruptedException {
+          throws AspectCreationException {
     SkyKey importFileKey = SkylarkImportLookupValue.key(extensionLabel, false);
     try {
       SkylarkImportLookupValue skylarkImportLookupValue =
@@ -165,7 +166,6 @@ public final class AspectFunction implements SkyFunction {
       throw new AspectFunctionException(
           new BuildFileContainsErrorsException(key.getLabel().getPackageIdentifier()));
     }
-
     Target target;
     try {
       target = pkg.getTarget(key.getLabel().getName());
@@ -173,6 +173,11 @@ public final class AspectFunction implements SkyFunction {
       throw new AspectFunctionException(e);
     }
 
+    Label aliasLabel = TargetUtils.getAliasTarget(target);
+    if (aliasLabel != null) {
+      return createAliasAspect(env, target, aliasLabel, aspect, key);
+    }
+    
     if (!(target instanceof Rule)) {
       env.getListener().handle(Event.error(
           target.getLocation(),
@@ -182,7 +187,7 @@ public final class AspectFunction implements SkyFunction {
           "aspects must be attached to rules"));
     }
 
-    ConfiguredTargetValue configuredTargetValue;
+    final ConfiguredTargetValue configuredTargetValue;
     try {
       configuredTargetValue =
           (ConfiguredTargetValue) env.getValueOrThrow(
@@ -198,18 +203,12 @@ public final class AspectFunction implements SkyFunction {
       // precomputed.
       return null;
     }
-
-    if (configuredTargetValue.getConfiguredTarget() == null) {
+    RuleConfiguredTarget associatedTarget =
+        (RuleConfiguredTarget) configuredTargetValue.getConfiguredTarget();
+    if (associatedTarget == null) {
       return null;
     }
 
-    if (configuredTargetValue.getConfiguredTarget().getProvider(AliasProvider.class) != null) {
-      return createAliasAspect(env, target, aspect, key,
-          configuredTargetValue.getConfiguredTarget());
-    }
-
-    RuleConfiguredTarget associatedTarget =
-        (RuleConfiguredTarget) configuredTargetValue.getConfiguredTarget();
     SkyframeDependencyResolver resolver = view.createDependencyResolver(env);
 
     // When getting the dependencies of this hybrid aspect+base target, use the aspect's
@@ -276,27 +275,13 @@ public final class AspectFunction implements SkyFunction {
     }
   }
 
-  private static SkyValue createAliasAspect(
-      Environment env,
-      Target originalTarget,
-      Aspect aspect,
-      AspectKey originalKey,
-      ConfiguredTarget configuredTarget) throws InterruptedException {
-    ImmutableList<Label> aliasChain = configuredTarget.getProvider(AliasProvider.class)
-        .getAliasChain();
-    // Find the next alias in the chain: either the next alias (if there are two) or the name of
-    // the real configured target.
-    Label aliasLabel = aliasChain.size() > 1 ? aliasChain.get(1) : configuredTarget.getLabel();
-
-    SkyKey depKey = AspectValue.key(
-        aliasLabel,
+  private SkyValue createAliasAspect(Environment env, Target originalTarget, Label aliasLabel,
+      Aspect aspect, AspectKey originalKey) {
+    SkyKey depKey = AspectValue.key(aliasLabel,
         originalKey.getAspectConfiguration(),
         originalKey.getBaseConfiguration(),
         originalKey.getAspectClass(),
         originalKey.getParameters());
-
-    // Compute the AspectValue of the target the alias refers to (which can itself be either an
-    // alias or a real target)
     AspectValue real = (AspectValue) env.getValue(depKey);
     if (env.valuesMissing()) {
       return null;
@@ -306,7 +291,6 @@ public final class AspectFunction implements SkyFunction {
         .addTransitive(real.getTransitivePackages())
         .add(originalTarget.getPackage())
         .build();
-
     return new AspectValue(
         originalKey,
         aspect,

@@ -75,6 +75,7 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException;
 import com.google.devtools.build.skyframe.ValueOrException2;
+
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -83,6 +84,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -301,7 +303,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
     // Trim each dep's configuration so it only includes the fragments needed by its transitive
     // closure (only dynamic configurations support this).
     if (useDynamicConfigurations(ctgValue.getConfiguration())) {
-      depValueNames = getDynamicConfigurations(env, ctgValue, depValueNames, hostConfiguration,
+      depValueNames = trimConfigurations(env, ctgValue, depValueNames, hostConfiguration,
           ruleClassProvider);
       if (depValueNames == null) {
         return null;
@@ -327,7 +329,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
   }
 
   /**
-   * Helper class for {@link #getDynamicConfigurations} - encapsulates a set of config fragments and
+   * Helper class for {@link #trimConfigurations} - encapsulates a set of config fragments and
    * a dynamic transition. This can be used to determine the exact build options needed to
    * set a dynamic configuration.
    */
@@ -365,8 +367,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
   }
 
   /**
-   * Helper class for {@link #getDynamicConfigurations} - encapsulates an <attribute, label> pair
-   * that can be used to map from an input dependency to a trimmed dependency.
+   * Helper class for {@link #trimConfigurations} - encapsulates an <attribute, label> pair that
+   * can be used to map from an input dependency to a trimmed dependency.
    */
   @Immutable
   private static final class AttributeAndLabel {
@@ -409,24 +411,20 @@ final class ConfiguredTargetFunction implements SkyFunction {
    *
    * <p>More specifically: given a set of {@link Dependency} instances holding dynamic config
    * transition requests (e.g. {@link Dependency#hasStaticConfiguration()} == false}), returns
-   * equivalent dependencies containing dynamically created configurations applying those
-   * transitions. If {@link BuildConfiguration.Options#trimConfigurations()} is true, these
-   * configurations only contain the fragments needed by the dep and its transitive closure. Else
-   * the configurations unconditionally include all fragments.
+   * equivalent dependencies containing dynamically created configurations that a) apply those
+   * transitions and b) only contain the fragments needed by the dep and everything in its
+   * transitive closure.
    *
    * <p>This method is heavily performance-optimized. Because it, in aggregate, reads over every
-   * edge in the configured target graph, small inefficiencies can have observable impact on build
-   * analysis time. Keep this in mind when making modifications and performance-test any changes you
-   * make.
+   * edge in the configured target graph, small inefficiencies can have observable impact on
+   * build analysis time. Keep this in mind when making modifications and performance-test any
+   * changes you make.
    */
   @Nullable
-  static OrderedSetMultimap<Attribute, Dependency> getDynamicConfigurations(
-      Environment env,
-      TargetAndConfiguration ctgValue,
-      OrderedSetMultimap<Attribute, Dependency> originalDeps,
-      BuildConfiguration hostConfiguration,
-      RuleClassProvider ruleClassProvider)
-      throws DependencyEvaluationException, InterruptedException {
+  static OrderedSetMultimap<Attribute, Dependency> trimConfigurations(Environment env,
+      TargetAndConfiguration ctgValue, OrderedSetMultimap<Attribute, Dependency> originalDeps,
+      BuildConfiguration hostConfiguration, RuleClassProvider ruleClassProvider)
+      throws DependencyEvaluationException {
 
     // Maps each Skyframe-evaluated BuildConfiguration to the dependencies that need that
     // configuration. For cases where Skyframe isn't needed to get the configuration (e.g. when
@@ -471,11 +469,16 @@ final class ConfiguredTargetFunction implements SkyFunction {
       }
 
       // Figure out the required fragments for this dep and its transitive closure.
-      Set<Class<? extends BuildConfiguration.Fragment>> depFragments =
-          getTransitiveFragments(env, dep.getLabel(), ctgValue.getConfiguration());
-      if (depFragments == null) {
+      SkyKey fragmentsKey = TransitiveTargetValue.key(dep.getLabel());
+      TransitiveTargetValue transitiveDepInfo = (TransitiveTargetValue) env.getValue(fragmentsKey);
+      if (transitiveDepInfo == null) {
+        // This should only be possible for tests. In actual runs, this was already called
+        // as a routine part of the loading phase.
+        // TODO(bazel-team): check this only occurs in a test context.
         return null;
       }
+      Set<Class<? extends BuildConfiguration.Fragment>> depFragments =
+          transitiveDepInfo.getTransitiveConfigFragments().toSet();
       // TODO(gregce): remove the below call once we have confidence dynamic configurations always
       // provide needed fragments. This unnecessarily drags performance on the critical path.
       checkForMissingFragments(env, ctgValue, attributeAndLabel.attribute.getName(), dep,
@@ -515,8 +518,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
         ImmutableList.Builder<BuildOptions> toOptionsBuilder = ImmutableList.builder();
         for (BuildOptions options : getDynamicTransitionOptions(ctgOptions, transition)) {
           if (!sameFragments) {
-            options = options.trim(
-                BuildConfiguration.getOptionsClasses(depFragments, ruleClassProvider));
+            options = options.trim(BuildConfiguration.getOptionsClasses(
+                transitiveDepInfo.getTransitiveConfigFragments(), ruleClassProvider));
           }
           toOptionsBuilder.add(options);
         }
@@ -581,32 +584,6 @@ final class ConfiguredTargetFunction implements SkyFunction {
       result.putAll(depsEntry.getKey(), trimmedAttrDeps);
     }
     return result;
-  }
-
-  /**
-   * Returns the configuration fragments required by a dep and its transitive closure.
-   * Returns null if Skyframe dependencies aren't yet available.
-   *
-   * @param env Skyframe evaluation environment
-   * @param dep label of the dep to check
-   * @param parentConfig configuration of the rule depending on the dep
-   */
-  @Nullable
-  private static Set<Class<? extends BuildConfiguration.Fragment>> getTransitiveFragments(
-      Environment env, Label dep, BuildConfiguration parentConfig) throws InterruptedException {
-    Preconditions.checkArgument(parentConfig.useDynamicConfigurations());
-    if (!parentConfig.trimConfigurations()) {
-      return parentConfig.getAllFragments().keySet();
-    }
-    SkyKey fragmentsKey = TransitiveTargetValue.key(dep);
-    TransitiveTargetValue transitiveDepInfo = (TransitiveTargetValue) env.getValue(fragmentsKey);
-    if (transitiveDepInfo == null) {
-      // This should only be possible for tests. In actual runs, this was already called
-      // as a routine part of the loading phase.
-      // TODO(bazel-team): check this only occurs in a test context.
-      return null;
-    }
-    return transitiveDepInfo.getTransitiveConfigFragments().toSet();
   }
 
   /**
@@ -707,7 +684,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
       Map<SkyKey, ConfiguredTarget> configuredTargetMap,
       Iterable<Dependency> deps,
       NestedSetBuilder<Package> transitivePackages)
-      throws AspectCreationException, InterruptedException {
+      throws AspectCreationException {
     OrderedSetMultimap<SkyKey, ConfiguredAspect> result = OrderedSetMultimap.create();
     Set<SkyKey> aspectKeys = new HashSet<>();
     for (Dependency dep : deps) {
@@ -789,21 +766,18 @@ final class ConfiguredTargetFunction implements SkyFunction {
   }
 
   /**
-   * Returns the set of {@link ConfigMatchingProvider}s that key the configurable attributes used by
-   * this rule.
+   * Returns the set of {@link ConfigMatchingProvider}s that key the configurable attributes
+   * used by this rule.
    *
-   * <p>>If the configured targets supplying those providers aren't yet resolved by the dependency
-   * resolver, returns null.
+   * <p>>If the configured targets supplying those providers aren't yet resolved by the
+   * dependency resolver, returns null.
    */
   @Nullable
-  static ImmutableMap<Label, ConfigMatchingProvider> getConfigConditions(
-      Target target,
-      Environment env,
-      SkyframeDependencyResolver resolver,
-      TargetAndConfiguration ctgValue,
+  static ImmutableMap<Label, ConfigMatchingProvider> getConfigConditions(Target target,
+      Environment env, SkyframeDependencyResolver resolver, TargetAndConfiguration ctgValue,
       NestedSetBuilder<Package> transitivePackages,
       NestedSetBuilder<Label> transitiveLoadingRootCauses)
-      throws DependencyEvaluationException, InterruptedException {
+      throws DependencyEvaluationException {
     if (!(target instanceof Rule)) {
       return NO_CONFIG_CONDITIONS;
     }
@@ -873,19 +847,15 @@ final class ConfiguredTargetFunction implements SkyFunction {
     return ImmutableMap.copyOf(configConditions);
   }
 
-  /**
-   * * Resolves the targets referenced in depValueNames and returns their ConfiguredTarget
-   * instances.
+  /***
+   * Resolves the targets referenced in depValueNames and returns their ConfiguredTarget instances.
    *
    * <p>Returns null if not all instances are available yet.
    */
   @Nullable
   private static Map<SkyKey, ConfiguredTarget> resolveConfiguredTargetDependencies(
-      Environment env,
-      Collection<Dependency> deps,
-      NestedSetBuilder<Package> transitivePackages,
-      NestedSetBuilder<Label> transitiveLoadingRootCauses)
-      throws DependencyEvaluationException, InterruptedException {
+      Environment env, Collection<Dependency> deps, NestedSetBuilder<Package> transitivePackages,
+      NestedSetBuilder<Label> transitiveLoadingRootCauses) throws DependencyEvaluationException {
     boolean missedValues = env.valuesMissing();
     boolean failed = false;
     Iterable<SkyKey> depKeys = Iterables.transform(deps, TO_KEYS);

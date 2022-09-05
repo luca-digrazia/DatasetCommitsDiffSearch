@@ -38,10 +38,12 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -108,8 +110,8 @@ public class PostConfiguredTargetFunction implements SkyFunction {
           resolver.dependentNodeMap(
               ctgValue, hostConfiguration, /*aspect=*/ null, configConditions);
       if (ct.getConfiguration() != null && ct.getConfiguration().useDynamicConfigurations()) {
-        deps = ConfiguredTargetFunction.getDynamicConfigurations(env, ctgValue, deps,
-            hostConfiguration, ruleClassProvider);
+        deps = ConfiguredTargetFunction.trimConfigurations(env, ctgValue, deps, hostConfiguration,
+            ruleClassProvider);
       }
     } catch (EvalException e) {
       throw new PostConfiguredTargetFunctionException(e);
@@ -132,8 +134,8 @@ public class PostConfiguredTargetFunction implements SkyFunction {
    * target, or null if not all dependencies have yet been SkyFrame-evaluated.
    */
   @Nullable
-  private static ImmutableMap<Label, ConfigMatchingProvider> getConfigurableAttributeConditions(
-      TargetAndConfiguration ctg, Environment env) throws InterruptedException {
+  private ImmutableMap<Label, ConfigMatchingProvider> getConfigurableAttributeConditions(
+      TargetAndConfiguration ctg, Environment env) {
     if (!(ctg.getTarget() instanceof Rule)) {
       return ImmutableMap.of();
     }

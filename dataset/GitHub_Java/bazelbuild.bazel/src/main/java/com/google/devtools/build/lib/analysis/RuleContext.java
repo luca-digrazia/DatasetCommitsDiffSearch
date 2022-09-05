@@ -391,7 +391,7 @@ public final class RuleContext extends TargetContext
     return getAnalysisEnvironment().getOwner();
   }
 
-  public ImmutableList<Artifact> getBuildInfo(BuildInfoKey key) throws InterruptedException {
+  public ImmutableList<Artifact> getBuildInfo(BuildInfoKey key) {
     return getAnalysisEnvironment().getBuildInfo(this, key, getConfiguration());
   }
 
@@ -1540,7 +1540,7 @@ public final class RuleContext extends TargetContext
         String attributeName = attr.getName();
         Map<Label, ConfiguredTarget> ctMap = new HashMap<>();
         for (ConfiguredTarget prerequisite : prerequisiteMap.get(attr)) {
-          ctMap.put(AliasProvider.getDependencyLabel(prerequisite), prerequisite);
+          ctMap.put(prerequisite.getLabel(), prerequisite);
         }
         List<FilesetEntry> entries = ConfiguredAttributeMapper.of(rule, configConditions)
             .get(attributeName, BuildType.FILESET_ENTRY_LIST);

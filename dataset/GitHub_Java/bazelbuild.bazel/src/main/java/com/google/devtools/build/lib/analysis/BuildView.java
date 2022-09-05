@@ -56,6 +56,7 @@ import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.pkgcache.LoadedPackageProvider;
 import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.rules.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.rules.test.CoverageReportActionFactory.CoverageReportActionsWrapper;
@@ -80,6 +81,7 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -566,26 +568,19 @@ public class BuildView {
     String error = createErrorMessage(loadingResult, skyframeAnalysisResult);
 
     final WalkableGraph graph = skyframeAnalysisResult.getWalkableGraph();
-    final ActionGraph actionGraph =
-        new ActionGraph() {
-          @Nullable
-          @Override
-          public ActionAnalysisMetadata getGeneratingAction(Artifact artifact) {
-            ArtifactOwner artifactOwner = artifact.getArtifactOwner();
-            if (artifactOwner instanceof ActionLookupValue.ActionLookupKey) {
-              SkyKey key = ActionLookupValue.key((ActionLookupValue.ActionLookupKey) artifactOwner);
-              ActionLookupValue val;
-              try {
-                val = (ActionLookupValue) graph.getValue(key);
-              } catch (InterruptedException e) {
-                throw new IllegalStateException(
-                    "Interruption not expected from this graph: " + key, e);
-              }
-              return val == null ? null : val.getGeneratingAction(artifact);
-            }
-            return null;
-          }
-        };
+    final ActionGraph actionGraph = new ActionGraph() {
+      @Nullable
+      @Override
+      public ActionAnalysisMetadata getGeneratingAction(Artifact artifact) {
+        ArtifactOwner artifactOwner = artifact.getArtifactOwner();
+        if (artifactOwner instanceof ActionLookupValue.ActionLookupKey) {
+          SkyKey key = ActionLookupValue.key((ActionLookupValue.ActionLookupKey) artifactOwner);
+          ActionLookupValue val = (ActionLookupValue) graph.getValue(key);
+          return val == null ? null : val.getGeneratingAction(artifact);
+        }
+        return null;
+      }
+    };
     return new AnalysisResult(
         configuredTargets,
         aspects,
@@ -907,10 +902,10 @@ public class BuildView {
       }
 
       @Override
-      protected Target getTarget(Target from, Label label, NestedSetBuilder<Label> rootCauses)
-          throws InterruptedException {
+      protected Target getTarget(Target from, Label label, NestedSetBuilder<Label> rootCauses) {
         try {
-          return skyframeExecutor.getPackageManager().getTarget(eventHandler, label);
+          return LoadedPackageProvider.getLoadedTarget(
+              skyframeExecutor.getPackageManager(), eventHandler, label);
         } catch (NoSuchThingException e) {
           throw new IllegalStateException(e);
         }

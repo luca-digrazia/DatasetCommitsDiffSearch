@@ -73,11 +73,13 @@ import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
+
 import javax.annotation.Nullable;
 
 /**
@@ -129,8 +131,7 @@ public final class SkyframeBuildView {
       SkyframeExecutor skyframeExecutor, BinTools binTools,
       ConfiguredRuleClassProvider ruleClassProvider) {
     this.factory = new ConfiguredTargetFactory(ruleClassProvider);
-    this.artifactFactory = new ArtifactFactory(
-        directories.getExecRoot().getParentDirectory(), directories.getRelativeOutputPath());
+    this.artifactFactory = new ArtifactFactory(directories.getExecRoot());
     this.skyframeExecutor = skyframeExecutor;
     this.binTools = binTools;
     this.ruleClassProvider = ruleClassProvider;
@@ -429,8 +430,7 @@ public final class SkyframeBuildView {
    */
   // TODO(bazel-team): Allow analysis to return null so the value builder can exit and wait for a
   // restart deps are not present.
-  private static boolean getWorkspaceStatusValues(Environment env, BuildConfiguration config)
-      throws InterruptedException {
+  private boolean getWorkspaceStatusValues(Environment env, BuildConfiguration config) {
     env.getValue(WorkspaceStatusValue.SKY_KEY);
     Map<BuildInfoKey, BuildInfoFactory> buildInfoFactories =
         PrecomputedValue.BUILD_INFO_FACTORIES.get(env);
@@ -451,13 +451,9 @@ public final class SkyframeBuildView {
 
   /** Returns null if any build-info values are not ready. */
   @Nullable
-  CachingAnalysisEnvironment createAnalysisEnvironment(
-      ArtifactOwner owner,
-      boolean isSystemEnv,
-      EventHandler eventHandler,
-      Environment env,
-      BuildConfiguration config)
-      throws InterruptedException {
+  CachingAnalysisEnvironment createAnalysisEnvironment(ArtifactOwner owner,
+      boolean isSystemEnv, EventHandler eventHandler,
+      Environment env, BuildConfiguration config) {
     if (config != null && !getWorkspaceStatusValues(env, config)) {
       return null;
     }
