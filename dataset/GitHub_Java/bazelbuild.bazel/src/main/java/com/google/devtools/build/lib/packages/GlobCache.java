@@ -19,11 +19,11 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.lib.vfs.UnixGlob;
 
@@ -107,6 +107,7 @@ public class GlobCache {
     this.syscalls = syscalls == null ? new AtomicReference<>(UnixGlob.DEFAULT_SYSCALLS) : syscalls;
 
     Preconditions.checkNotNull(locator);
+    final PathFragment pkgNameFrag = packageId.getPackageFragment();
     childDirectoryPredicate = new Predicate<Path>() {
       @Override
       public boolean apply(Path directory) {
@@ -114,9 +115,7 @@ public class GlobCache {
           return true;
         }
 
-        PackageIdentifier subPackageId = new PackageIdentifier(
-            packageId.getRepository(),
-            packageId.getPackageFragment().getRelative(directory.relativeTo(packageDirectory)));
+        PathFragment pkgName = pkgNameFrag.getRelative(directory.relativeTo(packageDirectory));
         UnixGlob.FilesystemCalls syscalls = GlobCache.this.syscalls.get();
         if (syscalls != UnixGlob.DEFAULT_SYSCALLS) {
           // This is needed because in case the BUILD file exists, we do not call readdir() on its
@@ -135,7 +134,7 @@ public class GlobCache {
           syscalls.statNullable(directory.getChild("BUILD"), Symlinks.FOLLOW);
         }
 
-        return locator.getBuildFileForPackage(subPackageId) == null;
+        return locator.getBuildFileForPackage(pkgName.getPathString()) == null;
       }
     };
   }
@@ -293,7 +292,7 @@ public class GlobCache {
       getGlobAsync(pattern, excludeDirs);
     }
 
-    LinkedHashSet<String> results = Sets.newLinkedHashSetWithExpectedSize(includes.size());
+    Set<String> results = new LinkedHashSet<>();
     for (String pattern : includes) {
       results.addAll(getGlob(pattern, excludeDirs));
     }

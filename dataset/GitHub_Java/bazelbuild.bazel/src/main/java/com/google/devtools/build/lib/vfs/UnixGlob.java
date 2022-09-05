@@ -25,7 +25,6 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ForwardingListenableFuture;
 import com.google.common.util.concurrent.Futures;
@@ -506,7 +505,7 @@ public final class UnixGlob {
       delegate.setException(exception);
     }
 
-    public void set(List<Path> paths) {
+    public void set(ArrayList<Path> paths) {
       delegate.set(paths);
     }
 
@@ -528,7 +527,8 @@ public final class UnixGlob {
    */
   private static final class GlobVisitor {
     // These collections are used across workers and must therefore be thread-safe.
-    private final Collection<Path> results = Sets.newConcurrentHashSet();
+    private final Collection<Path> results =
+        Collections.synchronizedSet(Sets.<Path>newTreeSet());
     private final Cache<String, Pattern> cache = CacheBuilder.newBuilder().build(
         new CacheLoader<String, Pattern>() {
             @Override
@@ -683,7 +683,7 @@ public final class UnixGlob {
         } else if (failure.get() != null) {
           result.setException(failure.get());
         } else {
-          result.set(Ordering.<Path>natural().immutableSortedCopy(results));
+          result.set(new ArrayList<>(results));
         }
       }
     }
