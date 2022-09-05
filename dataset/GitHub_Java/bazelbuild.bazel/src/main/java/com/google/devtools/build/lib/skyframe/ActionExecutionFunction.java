@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCacheChecker.Token;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
+import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.AlreadyReportedActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
@@ -608,12 +609,13 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
             }
             expandedArtifacts.put(input, expansionBuilder.build());
           } else if (value instanceof TreeArtifactValue) {
-            TreeArtifactValue treeValue = (TreeArtifactValue) value;
-            expandedArtifacts.put(input, ImmutableSet.copyOf(treeValue.getChildren()));
-            inputArtifactData.putAll(treeValue.getChildValues());
+            TreeArtifactValue setValue = (TreeArtifactValue) value;
+            ImmutableSet<Artifact> expandedTreeArtifacts = ImmutableSet.<Artifact>copyOf(
+                ActionInputHelper.asTreeFileArtifacts(input, setValue.getChildPaths()));
 
+            expandedArtifacts.put(input, expandedTreeArtifacts);
             // Again, we cache the "digest" of the value for cache checking.
-            inputArtifactData.put(input, treeValue.getSelfData());
+            inputArtifactData.put(input, setValue.getSelfData());
           } else {
             Preconditions.checkState(value instanceof FileArtifactValue, depsEntry);
             inputArtifactData.put(input, (FileArtifactValue) value);

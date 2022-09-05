@@ -15,13 +15,9 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.devtools.build.skyframe.SkyValue;
-import java.util.Objects;
 import javax.annotation.Nullable;
 
-/**
- * The value of an environmental variable from the client environment. These are invalidated and
- * injected by {@link SequencedSkyframeExecutor}.
- */
+/** An aspect in the context of the Skyframe graph. */
 public final class ClientEnvironmentValue implements SkyValue {
   private final String value;
 
@@ -33,16 +29,5 @@ public final class ClientEnvironmentValue implements SkyValue {
   @Nullable
   public String getValue() {
     return value;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    return (o instanceof ClientEnvironmentValue)
-        && Objects.equals(((ClientEnvironmentValue) o).value, value);
-  }
-
-  @Override
-  public int hashCode() {
-    return (value != null) ? value.hashCode() : 0;
   }
 }
