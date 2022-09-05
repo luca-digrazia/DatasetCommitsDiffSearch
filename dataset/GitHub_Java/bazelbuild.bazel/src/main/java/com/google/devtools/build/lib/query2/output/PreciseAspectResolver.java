@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.query2.output;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.Multimap;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectFactory;
@@ -25,6 +23,7 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
@@ -120,7 +119,7 @@ public class PreciseAspectResolver implements AspectResolver {
         // If the package is not found, just add its BUILD file, which is already done above.
         // Hopefully this error is not raised when there is a syntax error in a subincluded file
         // or something.
-      } catch (LabelSyntaxException e) {
+      } catch (Label.SyntaxException e) {
         throw new IllegalStateException(e);
       }
     }
