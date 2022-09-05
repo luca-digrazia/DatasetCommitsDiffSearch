@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.util;
 
-import com.google.common.base.MoreObjects;
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -144,8 +144,9 @@ public class GroupedList<T> implements Iterable<Iterable<T>> {
   }
 
   @Override
+  @SuppressWarnings("deprecation")
   public String toString() {
-    return MoreObjects.toStringHelper(this)
+    return Objects.toStringHelper(this)
         .add("elements", elements)
         .add("size", size).toString();
 
@@ -324,8 +325,9 @@ public class GroupedList<T> implements Iterable<Iterable<T>> {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public String toString() {
-      return MoreObjects.toStringHelper(this)
+      return Objects.toStringHelper(this)
           .add("groupedList", groupedList)
           .add("elements", elements)
           .add("currentGroup", currentGroup).toString();
