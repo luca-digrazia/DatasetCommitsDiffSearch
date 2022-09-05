@@ -2,8 +2,9 @@ package com.codahale.metrics;
 
 import java.lang.ref.SoftReference;
 import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.ListIterator;
 
 import static java.lang.System.arraycopy;
 import static java.util.Arrays.binarySearch;
@@ -22,7 +23,17 @@ class ChunkedAssociativeLongArray {
      */
     private final ArrayDeque<SoftReference<Chunk>> chunksCache = new ArrayDeque<>();
 
-    private final Deque<Chunk> chunks = new ArrayDeque<>();
+    /*
+     * Why LinkedList if we are creating fast data structure with low GC overhead?
+     *
+     * First of all LinkedList here has relatively small size countOfStoredMeasurements / DEFAULT_CHUNK_SIZE.
+     * And we are heavily rely on LinkedList implementation because:
+     * 1. Now we deleting chunks from both sides of the list  in trim(long startKey, long endKey)
+     * 2. Deleting from and inserting chunks into the middle in clear(long startKey, long endKey)
+     *
+     * LinkedList gives us O(1) complexity for all this operations and that is not the case with ArrayList.
+     */
+    private final LinkedList<Chunk> chunks = new LinkedList<>();
 
     ChunkedAssociativeLongArray() {
         this(DEFAULT_CHUNK_SIZE);
@@ -132,9 +143,9 @@ class ChunkedAssociativeLongArray {
          *       |5______________________________23|                    :: trim(5, 23)
          *       [5, 9] -> [10, 13, 14, 15] -> [21]                     :: result layout
          */
-        Iterator<Chunk> fromHeadIterator = chunks.descendingIterator();
-        while (fromHeadIterator.hasNext()) {
-            Chunk currentHead = fromHeadIterator.next();
+        ListIterator<Chunk> fromHeadIterator = chunks.listIterator(chunks.size());
+        while (fromHeadIterator.hasPrevious()) {
+            Chunk currentHead = fromHeadIterator.previous();
             if (isFirstElementIsEmptyOrGreaterEqualThanKey(currentHead, endKey)) {
                 freeChunk(currentHead);
                 fromHeadIterator.remove();
@@ -147,7 +158,7 @@ class ChunkedAssociativeLongArray {
             }
         }
 
-        Iterator<Chunk> fromTailIterator = chunks.iterator();
+        ListIterator<Chunk> fromTailIterator = chunks.listIterator();
         while (fromTailIterator.hasNext()) {
             Chunk currentTail = fromTailIterator.next();
             if (isLastElementIsLessThanKey(currentTail, startKey)) {
