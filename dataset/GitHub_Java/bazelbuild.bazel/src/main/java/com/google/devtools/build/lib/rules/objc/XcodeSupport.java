@@ -30,11 +30,11 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
-import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.objc.XcodeProvider.Builder;
 import com.google.devtools.build.lib.rules.objc.XcodeProvider.Project;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.XcodeprojBuildSetting;
+
 import java.io.InputStream;
 import java.util.List;
 
@@ -87,10 +87,7 @@ public final class XcodeSupport {
    */
   XcodeSupport addFilesToBuild(NestedSetBuilder<Artifact> filesToBuild)
       throws InterruptedException {
-    if (ObjcRuleClasses.objcConfiguration(ruleContext).generateXcodeProject()) {
-      filesToBuild.add(ruleContext.getImplicitOutputArtifact(PBXPROJ));
-    }
-
+    filesToBuild.add(ruleContext.getImplicitOutputArtifact(PBXPROJ));
     return this;
   }
 
@@ -276,7 +273,7 @@ public final class XcodeSupport {
       this.workspaceRoot = objcConfiguration.getXcodeWorkspaceRoot();
       this.appleCpus = appleConfiguration.getMultiArchitectures(
           appleConfiguration.getSingleArchPlatform().getType());
-      this.minimumOs = appleConfiguration.getMinimumOsForPlatformType(PlatformType.IOS).toString();
+      this.minimumOs = objcConfiguration.getMinimumOs().toString();
       this.generateDebugSymbols = objcConfiguration.generateDsym();
     }
 

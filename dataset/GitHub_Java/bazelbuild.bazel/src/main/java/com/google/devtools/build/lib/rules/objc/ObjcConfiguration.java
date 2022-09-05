@@ -24,18 +24,15 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 
 import javax.annotation.Nullable;
 
-/** A compiler configuration containing flags required for Objective-C compilation. */
-@SkylarkModule(
-  name = "objc",
-  category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT,
-  doc = "A configuration fragment for Objective-C"
-)
+/**
+ * A compiler configuration containing flags required for Objective-C compilation.
+ */
+@SkylarkModule(name = "objc", doc = "A configuration fragment for Objective-C")
 @Immutable
 public class ObjcConfiguration extends BuildConfiguration.Fragment {
   @VisibleForTesting
@@ -112,14 +109,10 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   /**
    * Returns the type of device (e.g. 'iPhone 6') to simulate when running on the simulator.
    */
-  @SkylarkCallable(name = "ios_simulator_device", structField = true,
-      doc = "The type of device (e.g. 'iPhone 6') to use when running on the simulator.")
   public String getIosSimulatorDevice() {
     return iosSimulatorDevice;
   }
 
-  @SkylarkCallable(name = "ios_simulator_version", structField = true,
-      doc = "The SDK version of the iOS simulator to use when running on the simulator.")
   public DottedVersion getIosSimulatorVersion() {
     return iosSimulatorVersion;
   }

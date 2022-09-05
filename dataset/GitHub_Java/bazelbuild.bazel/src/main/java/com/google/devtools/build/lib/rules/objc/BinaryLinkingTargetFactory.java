@@ -75,38 +75,12 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
   @Override
   public final ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
-    ObjcProvider protosObjcProvider = null;
-    XcodeProvider protosXcodeProvider = null;
-
-    ProtoSupport protoSupport = new ProtoSupport(ruleContext, TargetType.LINKING_TARGET);
-    if (protoSupport.hasProtos()) {
-      XcodeProvider.Builder protosXcodeProviderBuilder = new XcodeProvider.Builder();
-      protoSupport
-          .registerActions()
-          .addXcodeProviderOptions(protosXcodeProviderBuilder);
-
-      ObjcCommon protoCommon = protoSupport.getCommon();
-      protosObjcProvider = protoCommon.getObjcProvider();
-
-      new CompilationSupport(
-              ruleContext,
-              protoSupport.getIntermediateArtifacts(),
-              new CompilationAttributes.Builder().build())
-          .registerCompileAndArchiveActions(protoCommon, protoSupport.getUserHeaderSearchPaths())
-          .addXcodeSettings(protosXcodeProviderBuilder, protoCommon);
-      protosXcodeProvider = protosXcodeProviderBuilder.build();
-    }
-
-    ObjcCommon common = common(ruleContext, protosObjcProvider);
+    ObjcCommon common = common(ruleContext);
 
     ObjcProvider objcProvider = common.getObjcProvider();
     assertLibraryOrSources(objcProvider, ruleContext);
 
     XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
-    if (protosXcodeProvider != null) {
-      xcodeProviderBuilder.addPropagatedDependencies(
-          ImmutableList.of(protosXcodeProvider));
-    }
 
     IntermediateArtifacts intermediateArtifacts =
         ObjcRuleClasses.intermediateArtifacts(ruleContext);
@@ -128,6 +102,21 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
             ruleContext.getPrerequisites("deps", Mode.TARGET, J2ObjcEntryClassProvider.class))
         .build();
 
+    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
+    if (objcConfiguration.experimentalAutoTopLevelUnionObjCProtos()) {
+      ProtoSupport protoSupport =
+          new ProtoSupport(ruleContext, TargetType.LINKING_TARGET)
+              .registerActions()
+              .addXcodeProviderOptions(xcodeProviderBuilder);
+
+      ObjcCommon protoCommon = protoSupport.getCommon();
+      new CompilationSupport(
+              ruleContext,
+              protoSupport.getIntermediateArtifacts(),
+              new CompilationAttributes.Builder().build())
+          .registerCompileAndArchiveActions(protoCommon, protoSupport.getUserHeaderSearchPaths());
+    }
+
     CompilationSupport compilationSupport =
         new CompilationSupport(ruleContext)
             .registerCompileAndArchiveActions(common)
@@ -142,7 +131,6 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
                 DsymOutputType.APP)
             .validateAttributes();
 
-    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     Optional<XcTestAppProvider> xcTestAppProvider;
     Optional<RunfilesSupport> maybeRunfilesSupport = Optional.absent();
     switch (hasReleaseBundlingSupport) {
@@ -222,7 +210,7 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
     }
   }
 
-  private ObjcCommon common(RuleContext ruleContext, ObjcProvider protosObjcProvider) {
+  private ObjcCommon common(RuleContext ruleContext) {
     IntermediateArtifacts intermediateArtifacts =
         ObjcRuleClasses.intermediateArtifacts(ruleContext);
     CompilationArtifacts compilationArtifacts =
@@ -254,8 +242,9 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
       builder.setLinkmapFile(intermediateArtifacts.linkmap());
     }
 
-    if (protosObjcProvider != null) {
-      builder.addDepObjcProviders(ImmutableList.of(protosObjcProvider));
+    if (ObjcRuleClasses.objcConfiguration(ruleContext).experimentalAutoTopLevelUnionObjCProtos()) {
+      ProtoSupport protoSupport = new ProtoSupport(ruleContext, TargetType.LINKING_TARGET);
+      builder.addExtraImportLibraries(protoSupport.getCommon().getCompiledArchive().asSet());
     }
 
     return builder.build();
