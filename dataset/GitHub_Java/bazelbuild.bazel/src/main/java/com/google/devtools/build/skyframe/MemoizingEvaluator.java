@@ -14,13 +14,16 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetVisitor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadHostile;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
+
 import java.io.PrintStream;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -49,8 +52,8 @@ public interface MemoizingEvaluator {
       Version version,
       boolean keepGoing,
       int numThreads,
-      ExtendedEventHandler reporter)
-      throws InterruptedException;
+      EventHandler reporter)
+          throws InterruptedException;
 
   /**
    * Ensures that after the next completed {@link #evaluate} call the current values of any value
@@ -116,25 +119,26 @@ public interface MemoizingEvaluator {
    */
   @VisibleForTesting
   @Nullable
-  ErrorInfo getExistingErrorForTesting(SkyKey key) throws InterruptedException;
+  ErrorInfo getExistingErrorForTesting(SkyKey key);
 
   @Nullable
   NodeEntry getExistingEntryForTesting(SkyKey key);
 
   /**
    * Tests that want finer control over the graph being used may provide a {@code transformer} here.
-   * This {@code transformer} will be applied to the graph for each invalidation/evaluation.
-   */
-  void injectGraphTransformerForTesting(GraphTransformerForTesting transformer);
-
-  /** Transforms a graph, possibly injecting other functionality. */
-  interface GraphTransformerForTesting {
-    InMemoryGraph transform(InMemoryGraph graph);
-
-    QueryableGraph transform(QueryableGraph graph);
-
-    ProcessableGraph transform(ProcessableGraph graph);
-  }
+   * This {@code transformer} will be applied to the graph for each invalidation/evaluation. While
+   * the graph returned by {@code transformer#apply} must technically be a {@link ProcessableGraph},
+   * if a {@link ThinNodeQueryableGraph} was given as the argument to {@code transformer#apply},
+   * then only the methods in {@link ThinNodeQueryableGraph} will be called on the returned graph,
+   * in other words it will be treated as a {@link ThinNodeQueryableGraph}. Thus, the returned graph
+   * is free not to actually implement the remaining methods in {@link ProcessableGraph} in that
+   * case.
+   *
+   * <p>Similarly, if the argument to {@code transformer#apply} is an {@link InMemoryGraph}, then
+   * the resulting graph must be an {@link InMemoryGraph}.
+   * */
+  void injectGraphTransformerForTesting(
+      Function<ThinNodeQueryableGraph, ProcessableGraph> transformer);
 
   /**
    * Write the graph to the output stream. Not necessarily thread-safe. Use only for debugging
@@ -148,7 +152,7 @@ public interface MemoizingEvaluator {
     MemoizingEvaluator create(
         ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions,
         Differencer differencer,
-        @Nullable EvaluationProgressReceiver progressReceiver,
+        @Nullable EvaluationProgressReceiver invalidationReceiver,
         EmittedEventState emittedEventState,
         boolean keepEdges);
   }
