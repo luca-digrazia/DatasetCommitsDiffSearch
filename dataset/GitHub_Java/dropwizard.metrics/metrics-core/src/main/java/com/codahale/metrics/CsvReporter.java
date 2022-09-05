@@ -3,11 +3,7 @@ package com.codahale.metrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
+import java.io.*;
 import java.util.Locale;
 import java.util.Map;
 import java.util.SortedMap;
@@ -20,8 +16,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * A reporter which creates a comma-separated values file of the measurements for each metric.
  */
 public class CsvReporter extends ScheduledReporter {
-    private static final String DEFAULT_SEPARATOR = ",";
-    
     /**
      * Returns a new {@link Builder} for {@link CsvReporter}.
      *
@@ -39,7 +33,6 @@ public class CsvReporter extends ScheduledReporter {
     public static class Builder {
         private final MetricRegistry registry;
         private Locale locale;
-        private String separator;
         private TimeUnit rateUnit;
         private TimeUnit durationUnit;
         private Clock clock;
@@ -51,7 +44,6 @@ public class CsvReporter extends ScheduledReporter {
         private Builder(MetricRegistry registry) {
             this.registry = registry;
             this.locale = Locale.getDefault();
-            this.separator = DEFAULT_SEPARATOR;
             this.rateUnit = TimeUnit.SECONDS;
             this.durationUnit = TimeUnit.MILLISECONDS;
             this.clock = Clock.defaultClock();
@@ -121,17 +113,6 @@ public class CsvReporter extends ScheduledReporter {
         }
 
         /**
-         * Use the given string to use as the separator for values.
-         * 
-         * @param separator the string to use for the separator.
-         * @return {@code this}
-         */
-        public Builder withSeparator(String separator) {
-            this.separator = separator;
-            return this;
-        }
-
-        /**
          * Use the given {@link Clock} instance for the time.
          *
          * @param clock a {@link Clock} instance
@@ -167,16 +148,15 @@ public class CsvReporter extends ScheduledReporter {
          */
         public CsvReporter build(File directory) {
             return new CsvReporter(registry,
-                    directory,
-                    locale,
-                    separator,
-                    rateUnit,
-                    durationUnit,
-                    clock,
-                    filter,
-                    executor,
-                    shutdownExecutorOnStop,
-                    csvFileProvider);
+                                   directory,
+                                   locale,
+                                   rateUnit,
+                                   durationUnit,
+                                   clock,
+                                   filter,
+                                   executor,
+                                   shutdownExecutorOnStop,
+                                   csvFileProvider);
         }
     }
 
@@ -184,18 +164,12 @@ public class CsvReporter extends ScheduledReporter {
 
     private final File directory;
     private final Locale locale;
-    private final String separator;
     private final Clock clock;
     private final CsvFileProvider csvFileProvider;
-
-    private final String histogramFormat;
-    private final String meterFormat;
-    private final String timerFormat;
 
     private CsvReporter(MetricRegistry registry,
                         File directory,
                         Locale locale,
-                        String separator,
                         TimeUnit rateUnit,
                         TimeUnit durationUnit,
                         Clock clock,
@@ -206,13 +180,8 @@ public class CsvReporter extends ScheduledReporter {
         super(registry, "csv-reporter", filter, rateUnit, durationUnit, executor, shutdownExecutorOnStop);
         this.directory = directory;
         this.locale = locale;
-        this.separator = separator;
         this.clock = clock;
         this.csvFileProvider = csvFileProvider;
-
-        this.histogramFormat = String.join(separator, "%d","%d","%f","%d","%f","%f","%f","%f","%f","%f","%f");
-        this.meterFormat = String.join(separator, "%d", "%f", "%f", "%f", "%f", "events/%s");
-        this.timerFormat = String.join(separator, "%d","%f","%f","%f","%f","%f","%f","%f","%f","%f","%f","%f","%f","%f","%f","calls/%s","%s");
     }
 
     @Override
@@ -249,59 +218,59 @@ public class CsvReporter extends ScheduledReporter {
         final Snapshot snapshot = timer.getSnapshot();
 
         report(timestamp,
-                name,
-                "count,max,mean,min,stddev,p50,p75,p95,p98,p99,p999,mean_rate,m1_rate,m5_rate,m15_rate,rate_unit,duration_unit",
-                timerFormat,
-                timer.getCount(),
-                convertDuration(snapshot.getMax()),
-                convertDuration(snapshot.getMean()),
-                convertDuration(snapshot.getMin()),
-                convertDuration(snapshot.getStdDev()),
-                convertDuration(snapshot.getMedian()),
-                convertDuration(snapshot.get75thPercentile()),
-                convertDuration(snapshot.get95thPercentile()),
-                convertDuration(snapshot.get98thPercentile()),
-                convertDuration(snapshot.get99thPercentile()),
-                convertDuration(snapshot.get999thPercentile()),
-                convertRate(timer.getMeanRate()),
-                convertRate(timer.getOneMinuteRate()),
-                convertRate(timer.getFiveMinuteRate()),
-                convertRate(timer.getFifteenMinuteRate()),
-                getRateUnit(),
-                getDurationUnit());
+               name,
+               "count,max,mean,min,stddev,p50,p75,p95,p98,p99,p999,mean_rate,m1_rate,m5_rate,m15_rate,rate_unit,duration_unit",
+               "%d,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,calls/%s,%s",
+               timer.getCount(),
+               convertDuration(snapshot.getMax()),
+               convertDuration(snapshot.getMean()),
+               convertDuration(snapshot.getMin()),
+               convertDuration(snapshot.getStdDev()),
+               convertDuration(snapshot.getMedian()),
+               convertDuration(snapshot.get75thPercentile()),
+               convertDuration(snapshot.get95thPercentile()),
+               convertDuration(snapshot.get98thPercentile()),
+               convertDuration(snapshot.get99thPercentile()),
+               convertDuration(snapshot.get999thPercentile()),
+               convertRate(timer.getMeanRate()),
+               convertRate(timer.getOneMinuteRate()),
+               convertRate(timer.getFiveMinuteRate()),
+               convertRate(timer.getFifteenMinuteRate()),
+               getRateUnit(),
+               getDurationUnit());
     }
 
     private void reportMeter(long timestamp, String name, Meter meter) {
         report(timestamp,
-                name,
-                "count,mean_rate,m1_rate,m5_rate,m15_rate,rate_unit",
-                meterFormat,
-                meter.getCount(),
-                convertRate(meter.getMeanRate()),
-                convertRate(meter.getOneMinuteRate()),
-                convertRate(meter.getFiveMinuteRate()),
-                convertRate(meter.getFifteenMinuteRate()),
-                getRateUnit());
+               name,
+               "count,mean_rate,m1_rate,m5_rate,m15_rate,rate_unit",
+               "%d,%f,%f,%f,%f,events/%s",
+               meter.getCount(),
+               convertRate(meter.getMeanRate()),
+               convertRate(meter.getOneMinuteRate()),
+               convertRate(meter.getFiveMinuteRate()),
+               convertRate(meter.getFifteenMinuteRate()),
+               getRateUnit());
     }
 
     private void reportHistogram(long timestamp, String name, Histogram histogram) {
         final Snapshot snapshot = histogram.getSnapshot();
 
         report(timestamp,
-                name,
-                "count,max,mean,min,stddev,p50,p75,p95,p98,p99,p999",
-                histogramFormat,
-                histogram.getCount(),
-                snapshot.getMax(),
-                snapshot.getMean(),
-                snapshot.getMin(),
-                snapshot.getStdDev(),
-                snapshot.getMedian(),
-                snapshot.get75thPercentile(),
-                snapshot.get95thPercentile(),
-                snapshot.get98thPercentile(),
-                snapshot.get99thPercentile(),
-                snapshot.get999thPercentile());
+               name,
+               "count,max,mean,min,stddev,p50,p75,p95,p98,p99,p999",
+               "%d,%d,%f,%d,%f,%f,%f,%f,%f,%f,%f",
+               histogram.getCount(),
+               snapshot.getMax(),
+               snapshot.getMean(),
+               snapshot.getMin(),
+               snapshot.getStdDev(),
+               snapshot.getMedian(),
+               snapshot.get75thPercentile(),
+               snapshot.get95thPercentile(),
+               snapshot.get98thPercentile(),
+               snapshot.get99thPercentile(),
+               snapshot.get999thPercentile());
     }
 
     private void reportCounter(long timestamp, String name, Counter counter) {
@@ -322,7 +291,7 @@ public class CsvReporter extends ScheduledReporter {
                     if (!fileAlreadyExists) {
                         out.println("t," + header);
                     }
-                    out.printf(locale, String.format(locale, "%d" + separator + "%s%n", timestamp, line), values);
+                    out.printf(locale, String.format(locale, "%d,%s%n", timestamp, line), values);
                 }
             }
         } catch (IOException e) {

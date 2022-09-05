@@ -3,17 +3,16 @@ package com.codahale.metrics;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Collection;
 
 import static java.lang.Math.floor;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * A statistical snapshot of a {@link UniformSnapshot}.
  */
 public class UniformSnapshot extends Snapshot {
-    private static final Charset UTF_8 = Charset.forName("UTF-8");
 
     private final long[] values;
 
@@ -34,7 +33,7 @@ public class UniformSnapshot extends Snapshot {
     /**
      * Create a new {@link Snapshot} with the given values.
      *
-     * @param values    an unordered set of values in the reservoir
+     * @param values    an unordered set of values in the reservoir that can be used by this class directly
      */
     public UniformSnapshot(long[] values) {
         this.values = Arrays.copyOf(values, values.length);
@@ -169,13 +168,10 @@ public class UniformSnapshot extends Snapshot {
      */
     @Override
     public void dump(OutputStream output) {
-        final PrintWriter out = new PrintWriter(new OutputStreamWriter(output, UTF_8));
-        try {
+        try (PrintWriter out = new PrintWriter(new OutputStreamWriter(output, UTF_8))) {
             for (long value : values) {
                 out.printf("%d%n", value);
             }
-        } finally {
-            out.close();
         }
     }
 }
