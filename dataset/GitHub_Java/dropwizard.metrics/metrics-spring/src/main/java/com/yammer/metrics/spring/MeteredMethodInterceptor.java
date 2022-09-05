@@ -1,53 +1,70 @@
 package com.yammer.metrics.spring;
 
-import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.Map;
-
+import com.yammer.metrics.annotation.Metered;
+import com.yammer.metrics.core.Meter;
+import com.yammer.metrics.core.MetricName;
+import com.yammer.metrics.core.MetricsRegistry;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
-import org.springframework.core.Ordered;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.util.ReflectionUtils.MethodCallback;
 import org.springframework.util.ReflectionUtils.MethodFilter;
 
-import com.yammer.metrics.annotation.Metered;
-import com.yammer.metrics.core.Meter;
-import com.yammer.metrics.core.MetricsRegistry;
+import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.Map;
 
-public class MeteredMethodInterceptor implements MethodInterceptor, MethodCallback, Ordered {
+public class MeteredMethodInterceptor implements MethodInterceptor, MethodCallback {
 
-	private static final MethodFilter filter = new AnnotationMethodFilter(Metered.class);
+    private static final Log log = LogFactory.getLog(MeteredMethodInterceptor.class);
 
-	protected final MetricsRegistry metrics;
-	protected final Class<?> targetClass;
-	protected final Map<String, Meter> meters;
+    private static final MethodFilter filter = new AnnotationFilter(Metered.class);
 
-	public MeteredMethodInterceptor(MetricsRegistry metrics, Class<?> targetClass) {
-		this.metrics = metrics;
-		this.targetClass = targetClass;
-		this.meters = new HashMap<String, Meter>();
+    protected final MetricsRegistry metrics;
+    protected final Class<?> targetClass;
+    protected final Map<String, Meter> meters;
+    protected final String scope;
 
-		ReflectionUtils.doWithMethods(targetClass, this, filter);
-	}
+    public MeteredMethodInterceptor(final MetricsRegistry metrics, final Class<?> targetClass, final String scope) {
+        this.metrics = metrics;
+        this.targetClass = targetClass;
+        this.meters = new HashMap<String, Meter>();
+        this.scope = scope;
 
-	@Override
-	public Object invoke(MethodInvocation invocation) throws Throwable {
-		meters.get(invocation.getMethod().getName()).mark();
-		return invocation.proceed();
-	}
+        if (log.isDebugEnabled()) {
+            log.debug("Creating method interceptor for class " + targetClass.getCanonicalName());
+            log.debug("Scanning for @Metered annotated methods");
+        }
 
-	@Override
-	public void doWith(Method method) throws IllegalArgumentException, IllegalAccessException {
-		Metered metered = method.getAnnotation(Metered.class);
-		String name = metered.name().isEmpty() ? method.getName() : metered.name();
-		Meter meter = metrics.newMeter(targetClass, name, metered.eventType(), metered.rateUnit());
-		meters.put(method.getName(), meter);
-	}
+        ReflectionUtils.doWithMethods(targetClass, this, filter);
+    }
 
-	@Override
-	public int getOrder() {
-		return 0;
-	}
+    @Override
+    public Object invoke(MethodInvocation invocation) throws Throwable {
+        Meter meter = meters.get(invocation.getMethod().getName());
+        if (meter != null) {
+            meter.mark();
+        }
+        return invocation.proceed();
+    }
+
+    @Override
+    public void doWith(Method method) throws IllegalArgumentException, IllegalAccessException {
+        final Metered metered = method.getAnnotation(Metered.class);
+
+        final String group = MetricName.chooseGroup(metered.group(), targetClass);
+        final String type = MetricName.chooseType(metered.type(), targetClass);
+        final String name = MetricName.chooseName(metered.name(), method);
+        final MetricName metricName = new MetricName(group, type, name, scope);
+        final Meter meter = metrics.newMeter(metricName, metered.eventType(), metered.rateUnit());
+
+        meters.put(method.getName(), meter);
+
+        if (log.isDebugEnabled()) {
+            log.debug("Created metric " + metricName + " for method " + method.getName());
+        }
+    }
 
 }
