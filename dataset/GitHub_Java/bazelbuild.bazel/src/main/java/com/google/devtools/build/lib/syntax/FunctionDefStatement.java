@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.collect.ImmutableList;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -24,23 +25,20 @@ import java.util.List;
 public class FunctionDefStatement extends Statement {
 
   private final Identifier ident;
-  private final FunctionSignature.WithValues<Expression, Expression> signature;
+  private final FunctionSignature.WithValues<Expression, Expression> args;
   private final ImmutableList<Statement> statements;
-  private final ImmutableList<Parameter<Expression, Expression>> parameters;
 
   public FunctionDefStatement(Identifier ident,
-      Iterable<Parameter<Expression, Expression>> parameters,
-      FunctionSignature.WithValues<Expression, Expression> signature,
-      Iterable<Statement> statements) {
+      FunctionSignature.WithValues<Expression, Expression> args,
+      Collection<Statement> statements) {
     this.ident = ident;
-    this.signature = signature;
+    this.args = args;
     this.statements = ImmutableList.copyOf(statements);
-    this.parameters = ImmutableList.copyOf(parameters);
   }
 
   @Override
   void exec(Environment env) throws EvalException, InterruptedException {
-    List<Expression> defaultExpressions = signature.getDefaultValues();
+    List<Expression> defaultExpressions = args.getDefaultValues();
     ArrayList<Object> defaultValues = null;
     ArrayList<SkylarkType> types = null;
 
@@ -52,13 +50,13 @@ public class FunctionDefStatement extends Statement {
     }
     env.update(ident.getName(), new UserDefinedFunction(
         ident, FunctionSignature.WithValues.<Object, SkylarkType>create(
-            signature.getSignature(), defaultValues, types),
+            args.getSignature(), defaultValues, types),
         statements, (SkylarkEnvironment) env));
   }
 
   @Override
   public String toString() {
-    return "def " + ident + "(" + signature + "):\n";
+    return "def " + ident + "(" + args + "):\n";
   }
 
   public Identifier getIdent() {
@@ -69,12 +67,8 @@ public class FunctionDefStatement extends Statement {
     return statements;
   }
 
-  public ImmutableList<Parameter<Expression, Expression>> getParameters() {
-    return parameters;
-  }
-
-  public FunctionSignature.WithValues<Expression, Expression> getSignature() {
-    return signature;
+  public FunctionSignature.WithValues<Expression, Expression> getArgs() {
+    return args;
   }
 
   @Override
@@ -85,10 +79,10 @@ public class FunctionDefStatement extends Statement {
   @Override
   void validate(final ValidationEnvironment env) throws EvalException {
     ValidationEnvironment localEnv = new ValidationEnvironment(env);
-    FunctionSignature sig = signature.getSignature();
+    FunctionSignature sig = args.getSignature();
     FunctionSignature.Shape shape = sig.getShape();
     ImmutableList<String> names = sig.getNames();
-    List<Expression> defaultExpressions = signature.getDefaultValues();
+    List<Expression> defaultExpressions = args.getDefaultValues();
 
     int positionals = shape.getPositionals();
     int mandatoryPositionals = shape.getMandatoryPositionals();
