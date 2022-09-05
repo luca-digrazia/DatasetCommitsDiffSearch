@@ -615,7 +615,7 @@ public class BazelCppRuleClasses {
       return RuleDefinition.Metadata.builder()
           .name("$cc_binary_base")
           .type(RuleClassType.ABSTRACT)
-          .ancestors(CcRule.class, RequiresXcodeConfigRule.class)
+          .ancestors(CcRule.class)
           .build();
     }
   }
@@ -675,7 +675,8 @@ public class BazelCppRuleClasses {
     public Metadata getMetadata() {
       return RuleDefinition.Metadata.builder()
           .name("cc_binary")
-          .ancestors(CcBinaryBaseRule.class, BazelBaseRuleClasses.BinaryBaseRule.class)
+          .ancestors(CcBinaryBaseRule.class, BazelBaseRuleClasses.BinaryBaseRule.class,
+              RequiresXcodeConfigRule.class)
           .factoryClass(BazelCcBinary.class)
           .build();
     }
