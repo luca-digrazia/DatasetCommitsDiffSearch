@@ -332,18 +332,6 @@ public class SqlParserTests {
         Field field = fields.get(0);
         Assert.assertEquals(field.getName(),"@field");
     }
-
-    @Test
-    public void fieldWithATcharAtSelectOnAgg() throws SqlParseException {
-        String query = "SELECT max(@field) FROM index/type where field2 = 6 ";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        List<Field> fields = select.getFields();
-        Assert.assertEquals(1,fields.size());
-        Field field = fields.get(0);
-        Assert.assertEquals("MAX(@field)",field.toString());
-    }
-
     @Test
     public void fieldWithColonCharAtSelect() throws SqlParseException {
         String query = "SELECT a:b FROM index/type where field2 = 6 ";
@@ -406,14 +394,7 @@ public class SqlParserTests {
         Assert.assertEquals(2,select.getSubQueries().size());
     }
 
-    @Test
-    public void indexWithDotsAndHyphen() throws SqlParseException {
-        String query = "select * from data-2015.08.22";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Assert.assertEquals(1,select.getFrom().size());
-        Assert.assertEquals("data-2015.08.22",select.getFrom().get(0).getIndex());
-    }
+
 
     private SQLExpr queryToExpr(String query) {
         return new ElasticSqlExprParser(query).expr();
@@ -429,7 +410,8 @@ public class SqlParserTests {
             boolean fromIsEqual = condition.getName().equals(from);
             if(!fromIsEqual) continue;
 
-            String[] valueAliasAndField = condition.getValue().toString().split("\\.",2);
+            SQLPropertyExpr value = (SQLPropertyExpr) condition.getValue();
+            String[] valueAliasAndField = value.toString().split("\\.",2);
             boolean toFieldNameIsEqual = valueAliasAndField[1].equals(toField);
             boolean toAliasIsEqual =  valueAliasAndField[0].equals(toAlias);
             boolean toIsEqual = toAliasIsEqual && toFieldNameIsEqual;
