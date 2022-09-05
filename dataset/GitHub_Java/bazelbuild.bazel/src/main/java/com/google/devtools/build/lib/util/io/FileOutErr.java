@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -106,22 +106,23 @@ public class FileOutErr extends OutErr {
   }
 
   /**
-   * Returns the {@link Path} this OutErr uses to buffer stdout
+   * Returns the file this OutErr uses to buffer stdout
    *
-   * <p>The user must ensure that no other process is writing to the files at time of creation.
+   * The user must ensure that no other process is writing to the
+   * files at time of creation.
    *
    * @return the path object with the contents of stdout
    */
-  public Path getOutputPath() {
+  public Path getOutputFile() {
     return getFileOutputStream().getFile();
   }
 
   /**
-   * Returns the {@link Path} this OutErr uses to buffer stderr.
+   * Returns the file this OutErr uses to buffer stderr.
    *
    * @return the path object with the contents of stderr
    */
-  public Path getErrorPath() {
+  public Path getErrorFile() {
     return getFileErrorStream().getFile();
   }
 
