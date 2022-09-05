@@ -113,7 +113,7 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
     ruleContext.registerAction(new FileWriteAction(
         ruleContext.getActionOwner(),
         inputFileList,
-        Artifact.joinExecPaths("\n", protos),
+        ObjcActionsBuilder.joinExecPaths(protos),
         false));
 
     CustomCommandLine.Builder commandLineBuilder = new CustomCommandLine.Builder()
@@ -184,8 +184,10 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
         .build();
 
     ObjcActionsBuilder actionsBuilder = ObjcRuleClasses.actionsBuilder(ruleContext);
-    new CompilationSupport(ruleContext)
-        .registerCompileAndArchiveActions(common, OptionsProvider.DEFAULT);
+    actionsBuilder
+        .registerCompileAndArchiveActions(
+            compilationArtifacts, common.getObjcProvider(), OptionsProvider.DEFAULT,
+            ruleContext.getConfiguration().isCodeCoverageEnabled());
     actionsBuilder.registerXcodegenActions(
         new ObjcRuleClasses.Tools(ruleContext),
         ruleContext.getImplicitOutputArtifact(XcodeSupport.PBXPROJ),

@@ -28,13 +28,10 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCDATAMODEL;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
-import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -43,6 +40,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.xcode.util.Interspersing;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.DependencyControl;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.TargetControl;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.XcodeprojBuildSetting;
@@ -135,7 +133,7 @@ public final class XcodeProvider implements TransitiveInfoProvider {
      */
     public Builder addDependencies(
         Iterable<XcodeProvider> dependencies, ObjcConfiguration configuration) {
-      String architecture = configuration.getDependencySingleArchitecture();
+      String architecture = getDependencyArchitecture(configuration);
       for (XcodeProvider dependency : dependencies) {
         // TODO(bazel-team): This is messy. Maybe we should make XcodeProvider be able to specify
         // how to depend on it rather than require this method to choose based on the dependency's
@@ -150,6 +148,22 @@ public final class XcodeProvider implements TransitiveInfoProvider {
         }
       }
       return this;
+    }
+
+    /**
+     * Returns the architecture for which we keep dependencies.
+     *
+     * <p>When building with multiple architectures we want to avoid duplicating the same target for
+     * each architecture. Instead we pick one architecture for which to keep all dependencies and
+     * discard any others.
+     */
+    private String getDependencyArchitecture(ObjcConfiguration configuration) {
+      List<String> iosMultiCpus = configuration.getIosMultiCpus();
+      String architecture = configuration.getIosCpu();
+      if (!iosMultiCpus.isEmpty()) {
+        architecture = iosMultiCpus.get(0);
+      }
+      return architecture;
     }
 
     /**
@@ -385,25 +399,12 @@ public final class XcodeProvider implements TransitiveInfoProvider {
       XcodeProductType.APPLICATION, XcodeProductType.BUNDLE, XcodeProductType.UNIT_TEST,
       XcodeProductType.EXTENSION);
 
-  /**
-   * Returns the name of the Xcode target that corresponds to a build target with the given name.
-   * This changes the label to make it a legal Xcode target name (which means removing slashes and
-   * the colon). It also makes the label more readable in the Xcode UI by putting the target name
-   * first and the package elements in reverse. This means the "important" part is visible even if
-   * the project navigator is too narrow to show the entire name.
-   */
-  static String xcodeTargetName(Label label) {
-    String pathFromWorkspaceRoot =  label.toString().replace("//", "").replace(':', '/');
-    List<String> components = Splitter.on('/').splitToList(pathFromWorkspaceRoot);
-    return Joiner.on('_').join(Lists.reverse(components));
-  }
-
   private TargetControl targetControl() {
     String buildFilePath = label.getPackageFragment().getSafePathString() + "/BUILD";
     // TODO(bazel-team): Add provisioning profile information when Xcodegen supports it.
     TargetControl.Builder targetControl = TargetControl.newBuilder()
         .setName(label.getName())
-        .setLabel(xcodeTargetName(label))
+        .setLabel(label.toString())
         .setProductType(productType.getIdentifier())
         .addAllImportedLibrary(Artifact.toExecPaths(objcProvider.get(IMPORTED_LIBRARY)))
         .addAllUserHeaderSearchPath(userHeaderSearchPaths)
@@ -446,20 +447,20 @@ public final class XcodeProvider implements TransitiveInfoProvider {
             && dependency.compilationArtifacts.get().getArchive().isPresent();
         if (hasSources || (dependency.productType == XcodeProductType.BUNDLE)) {
             targetControl.addDependency(DependencyControl.newBuilder()
-                .setTargetLabel(xcodeTargetName(dependency.label))
+                .setTargetLabel(dependency.label.toString())
                 .build());
         }
       }
     }
     for (XcodeProvider justTestHost : testHost.asSet()) {
       targetControl.addDependency(DependencyControl.newBuilder()
-          .setTargetLabel(xcodeTargetName(justTestHost.label))
+          .setTargetLabel(justTestHost.label.toString())
           .setTestHost(true)
           .build());
     }
     for (XcodeProvider extension : extensions) {
       targetControl.addDependency(DependencyControl.newBuilder()
-          .setTargetLabel(xcodeTargetName(extension.label))
+          .setTargetLabel(extension.label.toString())
           .build());
     }
 

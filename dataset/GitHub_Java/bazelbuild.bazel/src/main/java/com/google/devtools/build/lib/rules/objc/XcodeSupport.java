@@ -107,26 +107,11 @@ public final class XcodeSupport {
    * @return this xcode support
    */
   XcodeSupport addDependencies(Builder xcodeProviderBuilder, Attribute attribute) {
-    xcodeProviderBuilder.addPropagatedDependencies(
-        ruleContext.getPrerequisites(
-            attribute.getName(), attribute.getAccessMode(), XcodeProvider.class),
-        ObjcRuleClasses.objcConfiguration(ruleContext));
-    return this;
-  }
+    Iterable<XcodeProvider> dependencies = ruleContext.getPrerequisites(
+        attribute.getName(), attribute.getAccessMode(), XcodeProvider.class);
 
-  /**
-   * Adds non-propagated dependencies to the given provider builder from the given attribute.
-   *
-   * <p>A non-propagated dependency will not be linked into the final app bundle and can only serve
-   * as a compile-only dependency for its direct dependent.
-   *
-   * @return this xcode support
-   */
-  XcodeSupport addNonPropagatedDependencies(Builder xcodeProviderBuilder, Attribute attribute) {
-    xcodeProviderBuilder.addNonPropagatedDependencies(
-        ruleContext.getPrerequisites(
-            attribute.getName(), attribute.getAccessMode(), XcodeProvider.class),
-        ObjcRuleClasses.objcConfiguration(ruleContext));
+    xcodeProviderBuilder
+        .addDependencies(dependencies, ObjcRuleClasses.objcConfiguration(ruleContext));
     return this;
   }
 }
