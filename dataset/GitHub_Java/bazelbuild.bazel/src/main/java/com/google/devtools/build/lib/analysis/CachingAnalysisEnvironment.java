@@ -17,7 +17,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
@@ -90,7 +90,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
    * The list of actions registered by the configured target this analysis environment is
    * responsible for. May get cleared out at the end of the analysis of said target.
    */
-  final List<ActionAnalysisMetadata> actions = new ArrayList<>();
+  final List<Action> actions = new ArrayList<>();
 
   public CachingAnalysisEnvironment(ArtifactFactory artifactFactory,
       ArtifactOwner owner, boolean isSystemEnv, boolean extendedSanityChecks,
@@ -119,7 +119,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
     skyframeEnv = null;
   }
 
-  private static StringBuilder shortDescription(ActionAnalysisMetadata action) {
+  private static StringBuilder shortDescription(Action action) {
     if (action == null) {
       return new StringBuilder("null Action");
     }
@@ -138,7 +138,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
     List<String> checkedActions = null;
     if (!orphanArtifacts.isEmpty()) {
       checkedActions = Lists.newArrayListWithCapacity(actions.size());
-      for (ActionAnalysisMetadata action : actions) {
+      for (Action action : actions) {
         StringBuilder sb = shortDescription(action);
         for (Artifact o : action.getOutputs()) {
           sb.append("\n    ");
@@ -166,7 +166,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   private Map<Artifact, String> getOrphanArtifactMap() {
     // Construct this set to avoid poor performance under large --runs_per_test.
     Set<Artifact> artifactsWithActions = new HashSet<>();
-    for (ActionAnalysisMetadata action : actions) {
+    for (Action action : actions) {
       // Don't bother checking that every Artifact only appears once; that test is performed
       // elsewhere (see #testNonUniqueOutputs in ActionListenerIntegrationTest).
       artifactsWithActions.addAll(action.getOutputs());
@@ -231,14 +231,6 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public Artifact getTreeArtifact(PathFragment rootRelativePath, Root root) {
-    Preconditions.checkState(enabled);
-    return trackArtifactAndOrigin(
-        artifactFactory.getTreeArtifact(rootRelativePath, root, getOwner()),
-        extendedSanityChecks ? new Throwable() : null);
-  }
-
-  @Override
   public Artifact getFilesetArtifact(PathFragment rootRelativePath, Root root) {
     Preconditions.checkState(enabled);
     return trackArtifactAndOrigin(
@@ -258,7 +250,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public void registerAction(ActionAnalysisMetadata... actions) {
+  public void registerAction(Action... actions) {
     Preconditions.checkState(enabled);
     if (allowRegisteringActions) {
       Collections.addAll(this.actions, actions);
@@ -266,9 +258,9 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public ActionAnalysisMetadata getLocalGeneratingAction(Artifact artifact) {
+  public Action getLocalGeneratingAction(Artifact artifact) {
     Preconditions.checkState(allowRegisteringActions);
-    for (ActionAnalysisMetadata action : actions) {
+    for (Action action : actions) {
       if (action.getOutputs().contains(artifact)) {
         return action;
       }
@@ -277,7 +269,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public Collection<ActionAnalysisMetadata> getRegisteredActions() {
+  public Collection<Action> getRegisteredActions() {
     return Collections.unmodifiableCollection(actions);
   }
 
@@ -313,14 +305,14 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public ImmutableList<Artifact> getBuildInfo(
-      RuleContext ruleContext, BuildInfoKey key, BuildConfiguration config) {
-    boolean stamp = AnalysisUtils.isStampingEnabled(ruleContext, config);
+  public ImmutableList<Artifact> getBuildInfo(RuleContext ruleContext, BuildInfoKey key) {
+    boolean stamp = AnalysisUtils.isStampingEnabled(ruleContext);
     BuildInfoCollectionValue collectionValue =
         (BuildInfoCollectionValue) skyframeEnv.getValue(BuildInfoCollectionValue.key(
-            new BuildInfoCollectionValue.BuildInfoKeyAndConfig(key, config)));
+            new BuildInfoCollectionValue.BuildInfoKeyAndConfig(
+                key, ruleContext.getConfiguration())));
     if (collectionValue == null) {
-      throw collectDebugInfoAndCrash(key, config);
+      throw collectDebugInfoAndCrash(key, ruleContext.getConfiguration());
     }
     BuildInfoCollection collection = collectionValue.getCollection();
    return stamp ? collection.getStampedBuildInfo() : collection.getRedactedBuildInfo();
