@@ -59,9 +59,8 @@ public class SimpleMonitorCache extends ConcurrentMapCache implements MonitorCac
         Object value = super.lookup(key);
         if (value != null && value instanceof Reference) {
             Reference reference = (Reference) value;
-            value = reference.get();
-            if (value == null)
-                evict(key);
+            if (reference != null) return reference.get();
+            evict(key);
         }
         return value;
     }
