@@ -35,7 +35,9 @@ import org.junit.runners.JUnit4;
 public class MethodLibraryTest extends EvaluationTestCase {
 
   @Before
-  public final void setFailFast() throws Exception {
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
     setFailFast(true);
   }
 
