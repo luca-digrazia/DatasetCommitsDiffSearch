@@ -27,11 +27,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class SimpleMonitorCache extends ConcurrentMapCache implements MonitorCache {
 
     private final AtomicInteger totalTimes = new AtomicInteger(0);
-    private final AtomicInteger hitTimes   = new AtomicInteger(0);
-    private final AtomicInteger putTimes   = new AtomicInteger(0);
+    private final AtomicInteger hitTimes = new AtomicInteger(0);
+    private final AtomicInteger putTimes = new AtomicInteger(0);
 
     public SimpleMonitorCache(String name) {
-        super(name, true);
+        super(name, false);
     }
 
     @Override
@@ -87,20 +87,19 @@ public class SimpleMonitorCache extends ConcurrentMapCache implements MonitorCac
     }
 
     protected Object buildValue(Object value) {
-        if (null == value) return null;
         return new SoftReference(value);
     }
 
     @Override
     public void put(Object key, Object value) {
-        if (key == null) return;
+        if (key == null || value == null) return;
         putTimes.addAndGet(1);
         super.put(key, buildValue(value));
     }
 
     @Override
     public ValueWrapper putIfAbsent(Object key, Object value) {
-        if (key == null) return null;
+        if (key == null || value == null) return null;
         putTimes.addAndGet(1);
         return super.putIfAbsent(key, buildValue(value));
     }
