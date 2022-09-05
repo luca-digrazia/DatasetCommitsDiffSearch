@@ -640,11 +640,10 @@ public class JavaCompileAction extends AbstractAction {
           : "--indirect_dependency");
       builder.add(jar.getExecPathString());
       Label label = getTargetName(jar);
-      builder.add(
-          label.getPackageIdentifier().getRepository().isDefault()
-              ? label.toString()
-              // Escape '@' prefix for .params file.
-              : "@" + label);
+      builder.add(label.getPackageIdentifier().getRepository().isDefault()
+          ? label.toString()
+          // Escape '@' prefix for .params file.
+          : "@" + label.toString());
     }
     return builder.build();
   }

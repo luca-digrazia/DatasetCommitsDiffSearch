@@ -179,7 +179,7 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
     Artifact instrumentationMetadata = null;
     if (shouldInstrumentJar()) {
       instrumentationMetadata = semantics.createInstrumentationMetadataArtifact(
-          getRuleContext(), outputJar);
+          getAnalysisEnvironment(), outputJar);
 
       if (instrumentationMetadata != null) {
         javaArtifactsBuilder.addInstrumentationMetadata(instrumentationMetadata);
