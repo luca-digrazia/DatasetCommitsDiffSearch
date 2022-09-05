@@ -55,8 +55,6 @@ public class BazelPythonSemantics implements PythonSemantics {
       FileTypeSet.of(BazelPyRuleClasses.PYTHON_SOURCE),
       "srcs", "deps", "data");
 
-  public static final PathFragment ZIP_RUNFILES_DIRECTORY_NAME = new PathFragment("runfiles");
-
   @Override
   public void validate(RuleContext ruleContext, PyCommon common) {
   }
@@ -83,7 +81,8 @@ public class BazelPythonSemantics implements PythonSemantics {
   @Override
   public List<PathFragment> getImports(RuleContext ruleContext) {
     List<PathFragment> result = new ArrayList<>();
-    PathFragment packageFragment = ruleContext.getLabel().getPackageIdentifier().getRunfilesPath();
+    PathFragment packageFragment = ruleContext.getLabel().getPackageIdentifier()
+        .getPathUnderExecRoot();
     // Python scripts start with x.runfiles/ as the module space, so everything must be manually
     // adjusted to be relative to the workspace name.
     packageFragment = new PathFragment(ruleContext.getWorkspaceName())
@@ -149,6 +148,16 @@ public class BazelPythonSemantics implements PythonSemantics {
     } else {
       Artifact zipFile = getPythonZipArtifact(ruleContext, executable);
       Artifact templateMain = getPythonTemplateMainArtifact(ruleContext, executable);
+      PathFragment workspaceName = getWorkspaceNameForPythonZip(ruleContext.getWorkspaceName());
+      main = workspaceName.getRelative(common.determineMainExecutableSource(false)).toString();
+      PathFragment defaultWorkspacename = new PathFragment(Label.DEFAULT_REPOSITORY_DIRECTORY);
+      List<PathFragment> importPaths = new ArrayList<>();
+      for (PathFragment path : imports) {
+        if (path.startsWith(defaultWorkspacename)) {
+          path = new PathFragment(workspaceName, path.subFragment(1, path.segmentCount()));
+        }
+        importPaths.add(path);
+      }
       // The executable zip file will unzip itself into a tmp directory and then run from there
       ruleContext.registerAction(
           new TemplateExpansionAction(
@@ -158,7 +167,7 @@ public class BazelPythonSemantics implements PythonSemantics {
               ImmutableList.of(
                   Substitution.of("%main%", main),
                   Substitution.of("%python_binary%", pythonBinary),
-                  Substitution.of("%imports%", Joiner.on(":").join(imports)),
+                  Substitution.of("%imports%", Joiner.on(":").join(importPaths)),
                   Substitution.of("%workspace_name%", ruleContext.getWorkspaceName()),
                   Substitution.of("%is_zipfile%", "True")),
               true));
@@ -196,27 +205,31 @@ public class BazelPythonSemantics implements PythonSemantics {
     }
   }
 
+  // TODO(pcloudy): This is a temporary workaround
+  private static PathFragment getWorkspaceNameForPythonZip(String workspaceName) {
+    // Currently, the default workspace name "__main__" will causing python can't find __main__.py
+    // in executable zip file. Rename it to "main"
+    if (workspaceName.equals(Label.DEFAULT_REPOSITORY_DIRECTORY)) {
+      return new PathFragment("__default__");
+    }
+    return new PathFragment(workspaceName);
+  }
+
   private static boolean isUnderWorkspace(PathFragment path) {
     return !path.startsWith(Label.EXTERNAL_PACKAGE_NAME);
   }
 
-  private static String getZipRunfilesPath(PathFragment path, PathFragment workspaceName) {
-    String zipRunfilesPath;
+  private static String getRunfilesPath(PathFragment path, PathFragment workspaceName) {
     if (isUnderWorkspace(path)) {
       // If the file is under workspace, add workspace name as prefix
-      zipRunfilesPath = workspaceName.getRelative(path).normalize().toString();
-    } else {
-      // If the file is in external package, strip "external"
-      zipRunfilesPath = path.relativeTo(Label.EXTERNAL_PACKAGE_NAME).normalize().toString();
+      return workspaceName.getRelative(path).normalize().toString();
     }
-    // We put the whole runfiles tree under the ZIP_RUNFILES_DIRECTORY_NAME directory, by doing this
-    // , we avoid the conflict between default workspace name "__main__" and __main__.py file.
-    // Note: This name has to be the same with the one in stub_template.txt.
-    return ZIP_RUNFILES_DIRECTORY_NAME.getRelative(zipRunfilesPath).toString();
+    // If the file is in external package, strip "external"
+    return path.relativeTo(Label.EXTERNAL_PACKAGE_NAME).normalize().toString();
   }
 
-  private static String getZipRunfilesPath(String path, PathFragment workspaceName) {
-    return getZipRunfilesPath(new PathFragment(path), workspaceName);
+  private static String getRunfilesPath(String path, PathFragment workspaceName) {
+    return getRunfilesPath(new PathFragment(path), workspaceName);
   }
 
   private static void createPythonZipAction(
@@ -228,16 +241,16 @@ public class BazelPythonSemantics implements PythonSemantics {
       RunfilesSupport runfilesSupport) {
 
     NestedSetBuilder<Artifact> inputsBuilder = NestedSetBuilder.stableOrder();
-    PathFragment workspaceName = runfilesSupport.getWorkspaceName();
+    PathFragment workspaceName = getWorkspaceNameForPythonZip(ruleContext.getWorkspaceName());
     CustomCommandLine.Builder argv = new CustomCommandLine.Builder();
     inputsBuilder.add(templateMain);
     argv.add("__main__.py=" + templateMain.getExecPathString());
 
     // Creating __init__.py files under each directory
     argv.add("__init__.py=");
-    argv.add(getZipRunfilesPath("__init__.py", workspaceName) + "=");
+    argv.add(getRunfilesPath("__init__.py", workspaceName) + "=");
     for (String path : runfilesSupport.getRunfiles().getEmptyFilenames()) {
-      argv.add(getZipRunfilesPath(path, workspaceName) + "=");
+      argv.add(getRunfilesPath(path, workspaceName) + "=");
     }
 
     // Read each runfile from execute path, add them into zip file at the right runfiles path.
@@ -245,7 +258,7 @@ public class BazelPythonSemantics implements PythonSemantics {
     for (Artifact artifact : runfilesSupport.getRunfiles().getArtifacts()) {
       if (!artifact.equals(executable)) {
         argv.add(
-            getZipRunfilesPath(artifact.getRunfilesPath(), workspaceName)
+            getRunfilesPath(artifact.getRunfilesPath(), workspaceName)
                 + "="
                 + artifact.getExecPathString());
         inputsBuilder.add(artifact);
