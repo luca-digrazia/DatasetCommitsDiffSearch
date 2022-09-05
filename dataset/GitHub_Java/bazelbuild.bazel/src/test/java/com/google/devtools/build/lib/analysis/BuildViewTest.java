@@ -1083,7 +1083,7 @@ public class BuildViewTest extends BuildViewTestBase {
         "filegroup(name = 'jdk', srcs = [",
         "    '//does/not/exist:a-piii', '//does/not/exist:b-k8', '//does/not/exist:c-default'])");
     scratch.file("does/not/exist/BUILD");
-    useConfigurationFactory(AnalysisMock.get().createConfigurationFactory());
+    useConfigurationFactory(AnalysisMock.get().createFullConfigurationFactory());
     useConfiguration("--javabase=//jdk");
     reporter.removeHandler(failFastHandler);
     try {

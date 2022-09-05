@@ -16,16 +16,15 @@ package com.google.devtools.build.lib.analysis.select;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static org.junit.Assert.assertNull;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -36,9 +35,11 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.UnknownRuleConfiguredTarget;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -71,7 +72,7 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "sh_binary(name = 'myrule',",
         "          srcs = ['a.sh'])");
     assertThat(AggregatingAttributeMapper.of(rule).visitAttribute("srcs", BuildType.LABEL_LIST))
-        .containsExactly(ImmutableList.of(Label.create("@//a", "a.sh")));
+        .containsExactlyElementsIn(ImmutableList.of(ImmutableList.of(Label.create("@//a", "a.sh"))));
   }
 
   /**
@@ -88,10 +89,11 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "              '" + BuildType.Selector.DEFAULT_CONDITION_KEY + "': ['default.sh'],",
         "          }))");
     assertThat(AggregatingAttributeMapper.of(rule).visitAttribute("srcs", BuildType.LABEL_LIST))
-        .containsExactly(
-            ImmutableList.of(Label.create("@//a", "a.sh")),
-            ImmutableList.of(Label.create("@//a", "b.sh")),
-            ImmutableList.of(Label.create("@//a", "default.sh")));
+        .containsExactlyElementsIn(
+            ImmutableList.of(
+                ImmutableList.of(Label.create("@//a", "a.sh")),
+                ImmutableList.of(Label.create("@//a", "b.sh")),
+                ImmutableList.of(Label.create("@//a", "default.sh"))));
   }
 
   @Test
@@ -106,11 +108,12 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "                  '//conditions:b2': ['b2.sh']})",
         "          )");
     assertThat(AggregatingAttributeMapper.of(rule).visitAttribute("srcs", BuildType.LABEL_LIST))
-        .containsExactly(
-            ImmutableList.of(Label.create("@//a", "a1.sh"), Label.create("@//a", "a2.sh")),
-            ImmutableList.of(Label.create("@//a", "a1.sh"), Label.create("@//a", "b2.sh")),
-            ImmutableList.of(Label.create("@//a", "b1.sh"), Label.create("@//a", "a2.sh")),
-            ImmutableList.of(Label.create("@//a", "b1.sh"), Label.create("@//a", "b2.sh")));
+        .containsExactlyElementsIn(
+            ImmutableList.of(
+                ImmutableList.of(Label.create("@//a", "a1.sh"), Label.create("@//a", "a2.sh")),
+                ImmutableList.of(Label.create("@//a", "a1.sh"), Label.create("@//a", "b2.sh")),
+                ImmutableList.of(Label.create("@//a", "b1.sh"), Label.create("@//a", "a2.sh")),
+                ImmutableList.of(Label.create("@//a", "b1.sh"), Label.create("@//a", "b2.sh"))));
   }
 
   /**
@@ -146,7 +149,9 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "              '" + BuildType.Selector.DEFAULT_CONDITION_KEY + "': ['default.sh'],",
         "          }))");
 
-    assertThat(getLabelsForAttribute(AggregatingAttributeMapper.of(rule), "srcs"))
+    VisitationRecorder recorder = new VisitationRecorder("srcs");
+    AggregatingAttributeMapper.of(rule).visitLabels(recorder);
+    assertThat(recorder.labelsVisited)
         .containsExactlyElementsIn(
             ImmutableList.of(
                 "//a:a.sh", "//a:b.sh", "//a:default.sh", "//conditions:a", "//conditions:b"));
@@ -161,8 +166,11 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "        '//conditions:a': None,",
         "    }))");
 
-    assertThat(getLabelsForAttribute(AggregatingAttributeMapper.of(rule), "malloc"))
-        .containsExactly("//conditions:a", getDefaultMallocLabel(rule).toString());
+    VisitationRecorder recorder = new VisitationRecorder("malloc");
+    AggregatingAttributeMapper.of(rule).visitLabels(recorder);
+    assertThat(recorder.labelsVisited)
+        .containsExactlyElementsIn(
+            ImmutableList.of("//conditions:a", getDefaultMallocLabel(rule).toString()));
   }
 
 
@@ -223,8 +231,9 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "    srcs = ['main.java'])");
     AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
     Attribute launcherAttribute = mapper.getAttributeDefinition("launcher");
-    assertThat(mapper.get(launcherAttribute.getName(), launcherAttribute.getType())).isNull();
-    assertThat(mapper.checkForDuplicateLabels(launcherAttribute)).isEmpty();
+    assertNull(mapper.get(launcherAttribute.getName(), launcherAttribute.getType()));
+    assertThat(mapper.checkForDuplicateLabels(launcherAttribute))
+        .containsExactlyElementsIn(ImmutableList.of());
   }
 
   /**
@@ -269,8 +278,7 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
     }
 
     @Override
-    public ConfiguredTarget create(RuleContext ruleContext)
-        throws InterruptedException, RuleErrorException, ActionConflictException {
+    public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
       throw new UnsupportedOperationException();
     }
   }

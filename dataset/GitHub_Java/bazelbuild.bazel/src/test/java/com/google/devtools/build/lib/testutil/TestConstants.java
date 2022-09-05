@@ -33,7 +33,7 @@ public class TestConstants {
   public static final ImmutableList<String> EMBEDDED_TOOLS = ImmutableList.of(
       "build_interface_so",
       "build-runfiles",
-      "linux-sandbox",
+      "namespace-sandbox",
       "process-wrapper",
       "xcode-locator");
 
@@ -63,9 +63,6 @@ public class TestConstants {
       "com.google.devtools.build.lib.bazel.rules.BazelRuleClassProvider";
   public static final String TEST_RULE_MODULE =
         "com.google.devtools.build.lib.bazel.rules.BazelRulesModule";
-  public static final String TEST_REAL_UNIX_FILE_SYSTEM =
-      "com.google.devtools.build.lib.vfs.UnixFileSystem";
-
   public static final ImmutableList<String> IGNORED_MESSAGE_PREFIXES = ImmutableList.<String>of();
 
   public static final String GCC_INCLUDE_PATH = "external/bazel_tools/tools/cpp/gcc3";
@@ -76,10 +73,6 @@ public class TestConstants {
 
   public static final ImmutableList<String> DOCS_RULES_PATHS = ImmutableList.of(
       "src/main/java/com/google/devtools/build/lib/rules");
-
-  // Constants used to determine how genrule pulls in the setup script.
-  public static final String GENRULE_SETUP = "@bazel_tools//tools/genrule:genrule-setup.sh";
-  public static final String GENRULE_SETUP_PATH = "genrule-setup.sh";
 
   public static final InvocationPolicy TEST_INVOCATION_POLICY =
       InvocationPolicy.getDefaultInstance();

@@ -20,22 +20,26 @@ import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.baseArt
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.baseNamesOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
+import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.FileType;
+import com.google.devtools.build.lib.util.OsUtils;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
+import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 
@@ -112,14 +116,15 @@ public class CcCommonConfiguredTargetTest extends BuildViewTestCase {
             .isEmpty());
   }
 
-  protected static boolean emptyShouldOutputStaticLibrary() {
-    return !TestConstants.THIS_IS_BAZEL;
+  protected boolean emptyShouldOutputStaticLibrary() {
+    return !getAnalysisMock().isThisBazel();
   }
 
   @Test
   public void testEmptyBinary() throws Exception {
     ConfiguredTarget emptybin = getConfiguredTarget("//empty:emptybinary");
-    assertEquals("emptybinary", baseNamesOf(getFilesToBuild(emptybin)));
+    assertEquals(
+        "emptybinary" + OsUtils.executableExtension(), baseNamesOf(getFilesToBuild(emptybin)));
   }
 
   private List<String> getCopts(String target) throws Exception {
@@ -289,8 +294,8 @@ public class CcCommonConfiguredTargetTest extends BuildViewTestCase {
     assertThat(temps).hasSize(2);
 
     // Assert that the two temps are the .i and .s files we expect.
-    getOnlyElement(filter(temps, fileTypePredicate(CppFileTypes.PIC_PREPROCESSED_CPP)));
-    getOnlyElement(filter(temps, fileTypePredicate(CppFileTypes.PIC_ASSEMBLER)));
+    assertThat(filter(temps, fileTypePredicate(CppFileTypes.PIC_PREPROCESSED_CPP))).hasSize(1);
+    assertThat(filter(temps, fileTypePredicate(CppFileTypes.PIC_ASSEMBLER))).hasSize(1);
   }
 
   @Test
@@ -302,8 +307,8 @@ public class CcCommonConfiguredTargetTest extends BuildViewTestCase {
     assertThat(temps).hasSize(2);
 
     // Assert that the two temps are the .i and .s files we expect.
-    getOnlyElement(filter(temps, fileTypePredicate(CppFileTypes.PREPROCESSED_CPP)));
-    getOnlyElement(filter(temps, fileTypePredicate(CppFileTypes.ASSEMBLER)));
+    assertThat(filter(temps, fileTypePredicate(CppFileTypes.PREPROCESSED_CPP))).hasSize(1);
+    assertThat(filter(temps, fileTypePredicate(CppFileTypes.ASSEMBLER))).hasSize(1);
   }
 
   @Test
@@ -317,8 +322,8 @@ public class CcCommonConfiguredTargetTest extends BuildViewTestCase {
     assertThat(cTemps).hasSize(2);
 
     // Assert that the two temps are the .ii and .s files we expect.
-    getOnlyElement(filter(cTemps, fileTypePredicate(CppFileTypes.PIC_PREPROCESSED_C)));
-    getOnlyElement(filter(cTemps, fileTypePredicate(CppFileTypes.PIC_ASSEMBLER)));
+    assertThat(filter(cTemps, fileTypePredicate(CppFileTypes.PIC_PREPROCESSED_C))).hasSize(1);
+    assertThat(filter(cTemps, fileTypePredicate(CppFileTypes.PIC_ASSEMBLER))).hasSize(1);
   }
 
   @Test
@@ -393,6 +398,18 @@ public class CcCommonConfiguredTargetTest extends BuildViewTestCase {
     assertThat(getCppCompileAction("//a:nopiclib").getArgv()).doesNotContain("-fPIC");
   }
 
+  @Test
+  public void testPicModeAssembly() throws Exception {
+    CrosstoolConfigurationHelper.overwriteCrosstoolWithToolchain(
+        directories.getWorkspace(),
+        CrosstoolConfig.CToolchain.newBuilder().setNeedsPic(true).buildPartial());
+
+    scratch.file("a/BUILD",
+        "cc_library(name='preprocess', srcs=['preprocess.S'])");
+
+    assertThat(getCppCompileAction("//a:preprocess").getArgv()).contains("-fPIC");
+  }
+
   private CppCompileAction getCppCompileAction(String label) throws Exception {
     ConfiguredTarget target = getConfiguredTarget(label);
     List<CppCompileAction> compilationSteps =
@@ -407,8 +424,6 @@ public class CcCommonConfiguredTargetTest extends BuildViewTestCase {
     // Tests the (immediate) effect of declaring the includes attribute on a
     // cc_library.
 
-    useConfiguration("--use_isystem_for_includes=false");
-
     scratch.file(
         "bang/BUILD",
         "cc_library(name = 'bang',",
@@ -418,11 +433,9 @@ public class CcCommonConfiguredTargetTest extends BuildViewTestCase {
     ConfiguredTarget foo = getConfiguredTarget("//bang:bang");
 
     String includesRoot = "bang/bang_includes";
-    List<PathFragment> expected =
-        ImmutableList.of(
-            new PathFragment(includesRoot),
-            targetConfig.getGenfilesFragment().getRelative(includesRoot));
-    assertEquals(expected, foo.getProvider(CppCompilationContext.class).getIncludeDirs());
+    assertThat(foo.getProvider(CppCompilationContext.class).getSystemIncludeDirs()).containsAllOf(
+        new PathFragment(includesRoot),
+        targetConfig.getGenfilesFragment().getRelative(includesRoot));
   }
 
   @Test
@@ -466,9 +479,26 @@ public class CcCommonConfiguredTargetTest extends BuildViewTestCase {
         "       deps = [':lib1'],",
         "       alwayslink=1)");
     reporter.removeHandler(failFastHandler);
-    getPackageManager().getPackage(reporter, PackageIdentifier.createInDefaultRepo("cc/common"));
+    getPackageManager().getPackage(reporter, PackageIdentifier.createInMainRepo("cc/common"));
     assertContainsEvent(
         "//cc/common:testlib: no such attribute 'alwayslink'" + " in 'cc_test' rule");
+  }
+
+  @Test
+  public void testCcTestBuiltWithFissionHasDwp() throws Exception {
+    // Tests that cc_tests built statically and with Fission will have the .dwp file
+    // in their runfiles.
+
+    useConfiguration("--build_test_dwp", "--dynamic_mode=off", "--fission=yes");
+    ConfiguredTarget target =
+        scratchConfiguredTarget(
+            "mypackage",
+            "mytest",
+            "cc_test(name = 'mytest', ",
+            "         srcs = ['mytest.cc'])");
+
+    Iterable<Artifact> runfiles = collectRunfiles(target);
+    assertThat(baseArtifactNames(runfiles)).contains("mytest.dwp");
   }
 
   @Test
@@ -483,6 +513,96 @@ public class CcCommonConfiguredTargetTest extends BuildViewTestCase {
         "cc_library(name = 'flaky_lib',",
         "   srcs = [ 'ok.cc' ],",
         "   includes = [ '//third_party/procps/proc' ])");
+  }
+
+  @Test
+  public void testCcLibraryUplevelIncludesWarned() throws Exception {
+    checkWarning(
+        "third_party/uplevel",
+        "lib",
+        // message:
+        "in includes attribute of cc_library rule //third_party/uplevel:lib: '../bar' resolves to "
+            + "'third_party/bar' not below the relative path of its package 'third_party/uplevel'. "
+            + "This will be an error in the future",
+        // build file:
+        "licenses(['unencumbered'])",
+        "cc_library(name = 'lib',",
+        "           srcs = ['foo.cc'],",
+        "           includes = ['../bar'])");
+  }
+
+  @Test
+  public void testCcLibraryNonThirdPartyIncludesWarned() throws Exception {
+    checkWarning(
+        "topdir",
+        "lib",
+        // message:
+        "in includes attribute of cc_library rule //topdir:lib: './' resolves to 'topdir' not "
+            + "in 'third_party'. This will be an error in the future",
+        // build file:
+        "cc_library(name = 'lib',",
+        "           srcs = ['foo.cc'],",
+        "           includes = ['./'])");
+  }
+
+  @Test
+  public void testCcLibraryThirdPartyIncludesNotWarned() throws Exception {
+    eventCollector.clear();
+    ConfiguredTarget target =
+        scratchConfiguredTarget(
+            "third_party/pkg",
+            "lib",
+            "licenses(['unencumbered'])",
+            "cc_library(name = 'lib',",
+            "           srcs = ['foo.cc'],",
+            "           includes = ['./'])");
+    assertThat(view.hasErrors(target)).isFalse();
+    assertNoEvents();
+  }
+
+  @Test
+  public void testCcLibraryExternalIncludesNotWarned() throws Exception {
+    eventCollector.clear();
+    FileSystemUtils.appendIsoLatin1(
+        scratch.resolve("WORKSPACE"),
+        "local_repository(",
+        "    name = 'pkg',",
+        "    path = '/foo')");
+    getSkyframeExecutor()
+        .invalidateFilesUnderPathForTesting(
+            eventCollector,
+            new ModifiedFileSet.Builder().modify(new PathFragment("WORKSPACE")).build(),
+            rootDirectory);
+    FileSystemUtils.createDirectoryAndParents(scratch.resolve("/foo/bar"));
+    scratch.file("/foo/WORKSPACE", "workspace(name = 'pkg')");
+    scratch.file(
+        "/foo/bar/BUILD",
+        "cc_library(name = 'lib',",
+        "           srcs = ['foo.cc'],",
+        "           includes = ['./'])");
+    Target target = getTarget("@pkg//bar:lib");
+    ensureTargetsVisited(target.getLabel());
+    assertThat(
+            view.hasErrors(
+                view.getConfiguredTargetForTesting(reporter, target.getLabel(), targetConfig)))
+        .isFalse();
+    assertNoEvents();
+  }
+
+  @Test
+  public void testCcLibraryRootIncludesError() throws Exception {
+    checkError(
+        "third_party/root",
+        "lib",
+        // message:
+        "in includes attribute of cc_library rule //third_party/root:lib: '../..' resolves to the "
+            + "workspace root, which would allow this rule and all of its transitive dependents to "
+            + "include any file in your workspace. Please include only what you need",
+        // build file:
+        "licenses(['unencumbered'])",
+        "cc_library(name = 'lib',",
+        "           srcs = ['foo.cc'],",
+        "           includes = ['../..'])");
   }
 
   @Test
@@ -542,7 +662,7 @@ public class CcCommonConfiguredTargetTest extends BuildViewTestCase {
     // make sure we did not print warnings about the linkopt
     assertNoEvents();
     // make sure the binary is dependent on the static lib
-    Action linkAction = getGeneratingAction(Iterables.getOnlyElement(getFilesToBuild(theApp)));
+    Action linkAction = getGeneratingAction(getOnlyElement(getFilesToBuild(theApp)));
     ImmutableList<Artifact> filesToBuild = ImmutableList.copyOf(getFilesToBuild(theLib));
     assertTrue(ImmutableSet.copyOf(linkAction.getInputs()).containsAll(filesToBuild));
   }
@@ -718,5 +838,35 @@ public class CcCommonConfiguredTargetTest extends BuildViewTestCase {
         "cc_library(name = 'foo',",
         "    srcs = [],",
         "    hdrs = ['foo.a'])");
+  }
+
+  @Test
+  public void testExplicitBadStl() throws Exception {
+    scratch.file("x/BUILD");
+
+    reporter.removeHandler(failFastHandler);
+    try {
+      createConfigurations("--experimental_stl=//x:blah");
+      fail("found non-existing target");
+    } catch (InvalidConfigurationException expected) {
+      assertThat(expected.getMessage()).contains("Failed to load required STL target: '//x:blah'");
+    }
+
+    try {
+      createConfigurations("--experimental_stl=//blah");
+      fail("found non-existing target");
+    } catch (InvalidConfigurationException expected) {
+      assertThat(expected.getMessage())
+          .contains("Failed to load required STL target: '//blah:blah'");
+    }
+
+    // Without -k.
+    try {
+      createConfigurations("--experimental_stl=//blah");
+      fail("found non-existing target");
+    } catch (InvalidConfigurationException expected) {
+      assertThat(expected.getMessage())
+          .contains("Failed to load required STL target: '//blah:blah'");
+    }
   }
 }
