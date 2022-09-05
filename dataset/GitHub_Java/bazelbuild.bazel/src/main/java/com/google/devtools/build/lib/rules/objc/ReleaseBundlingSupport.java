@@ -261,7 +261,7 @@ public final class ReleaseBundlingSupport {
 
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
     if (releaseBundling.getProvisioningProfile() == null
-        && appleConfiguration.getMultiArchPlatform(PlatformType.IOS) != Platform.IOS_SIMULATOR) {
+        && appleConfiguration.getBundlingPlatform() != Platform.IOS_SIMULATOR) {
       ruleContext.attributeError(releaseBundling.getProvisioningProfileAttrName(),
           DEVICE_NO_PROVISIONING_PROFILE);
     }
@@ -373,7 +373,7 @@ public final class ReleaseBundlingSupport {
     String platformWithVersion =
         String.format(
             "%s%s",
-            configuration.getMultiArchPlatform(PlatformType.IOS).getLowerCaseNameInPlist(),
+            configuration.getBundlingPlatform().getLowerCaseNameInPlist(),
             configuration.getIosSdkVersion());
     ruleContext.registerAction(
         ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext)
@@ -402,7 +402,7 @@ public final class ReleaseBundlingSupport {
     List<Integer> uiDeviceFamily =
         TargetDeviceFamily.UI_DEVICE_FAMILY_VALUES.get(bundleSupport.targetDeviceFamilies());
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
-    Platform platform = appleConfiguration.getMultiArchPlatform(PlatformType.IOS);
+    Platform platform = appleConfiguration.getBundlingPlatform();
 
     NSDictionary result = new NSDictionary();
 
@@ -457,7 +457,7 @@ public final class ReleaseBundlingSupport {
     }
 
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
-    if (appleConfiguration.getMultiArchPlatform(PlatformType.IOS) == Platform.IOS_DEVICE) {
+    if (appleConfiguration.getBundlingPlatform() == Platform.IOS_DEVICE) {
       processingNeeded = true;
       registerEntitlementsActions();
       actionCommandLine += signingCommandLine();
@@ -766,7 +766,7 @@ public final class ReleaseBundlingSupport {
       DottedVersion minimumOsVersion) {
     ImmutableList<BundleableFile> extraBundleFiles;
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
-    if (appleConfiguration.getMultiArchPlatform(PlatformType.IOS) == Platform.IOS_DEVICE) {
+    if (appleConfiguration.getBundlingPlatform() == Platform.IOS_DEVICE) {
       extraBundleFiles = ImmutableList.of(new BundleableFile(
           releaseBundling.getProvisioningProfile(), PROVISIONING_PROFILE_BUNDLE_FILE));
     } else {
@@ -820,7 +820,7 @@ public final class ReleaseBundlingSupport {
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
     new LipoSupport(ruleContext).registerCombineArchitecturesAction(linkedBinaries(),
-        resultingLinkedBinary, appleConfiguration.getMultiArchPlatform(PlatformType.IOS));
+        resultingLinkedBinary, appleConfiguration.getPlatform(PlatformType.IOS));
   }
 
   private NestedSet<Artifact> linkedBinaries() {

@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -38,8 +37,10 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration.Configuratio
 import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
+import com.google.devtools.build.lib.rules.objc.ObjcCommon.CompilationAttributes;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
 import com.google.devtools.build.lib.rules.objc.ProtoSupport.TargetType;
+import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.List;
 import java.util.Set;
@@ -112,21 +113,18 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
       archivesToLipo.add(common.getCompilationArtifacts().get().getArchive().get());
       binariesToLipo.add(intermediateArtifacts.strippedSingleArchitectureBinary());
 
+      ProtoSupport protoSupport = new ProtoSupport(ruleContext, TargetType.LINKING_TARGET);
+      Iterable<PathFragment> priorityHeaders;
       ObjcConfiguration objcConfiguration = childConfig.getFragment(ObjcConfiguration.class);
       if (objcConfiguration.experimentalAutoTopLevelUnionObjCProtos()) {
-        ProtoSupport protoSupport =
-            new ProtoSupport(ruleContext, TargetType.LINKING_TARGET).registerActions();
-
-        ObjcCommon protoCommon = protoSupport.getCommon();
-        new CompilationSupport(
-                ruleContext,
-                protoSupport.getIntermediateArtifacts(),
-                new CompilationAttributes.Builder().build())
-            .registerCompileAndArchiveActions(protoCommon, protoSupport.getUserHeaderSearchPaths());
+        protoSupport.registerActions();
+        priorityHeaders = protoSupport.getUserHeaderSearchPaths();
+      } else {
+        priorityHeaders = ImmutableList.of();
       }
 
       new CompilationSupport(ruleContext, childConfig)
-          .registerCompileAndArchiveActions(common)
+          .registerCompileAndArchiveActions(common, priorityHeaders)
           .registerLinkActions(
               common.getObjcProvider(),
               j2ObjcMappingFileProvider,
@@ -164,31 +162,32 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     CompilationArtifacts compilationArtifacts =
         CompilationSupport.compilationArtifacts(ruleContext, intermediateArtifacts);
 
-    Optional<Artifact> protoLib;
     ObjcConfiguration objcConfiguration = buildConfiguration.getFragment(ObjcConfiguration.class);
     if (objcConfiguration.experimentalAutoTopLevelUnionObjCProtos()) {
       ProtoSupport protoSupport = new ProtoSupport(ruleContext, TargetType.LINKING_TARGET);
-      protoLib = protoSupport.getCommon().getCompiledArchive();
-    } else {
-      protoLib = Optional.absent();
+      compilationArtifacts =
+          new CompilationArtifacts.Builder()
+              .setPchFile(compilationArtifacts.getPchFile())
+              .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
+              .addAllSources(compilationArtifacts)
+              .addAllSources(protoSupport.getCompilationArtifacts())
+              .build();
     }
 
     return new ObjcCommon.Builder(ruleContext, buildConfiguration)
-        .setCompilationAttributes(
-            CompilationAttributes.Builder.fromRuleContext(ruleContext).build())
-        .setCompilationArtifacts(compilationArtifacts)
-        .setResourceAttributes(new ResourceAttributes(ruleContext))
-        .addDefines(ruleContext.getTokenizedStringListAttr("defines"))
-        .addDeps(propagatedDeps)
-        .addDepObjcProviders(
-            ruleContext.getPrerequisites("bundles", Mode.TARGET, ObjcProvider.class))
-        .addNonPropagatedDepObjcProviders(nonPropagatedObjcDeps)
-        .setIntermediateArtifacts(intermediateArtifacts)
-        .setAlwayslink(false)
-        .setHasModuleMap()
-        .setLinkedBinary(intermediateArtifacts.strippedSingleArchitectureBinary())
-        .addExtraImportLibraries(protoLib.asSet())
-        .build();
+            .setCompilationAttributes(new CompilationAttributes(ruleContext))
+            .setCompilationArtifacts(compilationArtifacts)
+            .setResourceAttributes(new ResourceAttributes(ruleContext))
+            .addDefines(ruleContext.getTokenizedStringListAttr("defines"))
+            .addDeps(propagatedDeps)
+            .addDepObjcProviders(
+                ruleContext.getPrerequisites("bundles", Mode.TARGET, ObjcProvider.class))
+            .addNonPropagatedDepObjcProviders(nonPropagatedObjcDeps)
+            .setIntermediateArtifacts(intermediateArtifacts)
+            .setAlwayslink(false)
+            .setHasModuleMap()
+            .setLinkedBinary(intermediateArtifacts.strippedSingleArchitectureBinary())
+            .build();
   }
 
   private <T> List<T> nullToEmptyList(List<T> inputList) {
