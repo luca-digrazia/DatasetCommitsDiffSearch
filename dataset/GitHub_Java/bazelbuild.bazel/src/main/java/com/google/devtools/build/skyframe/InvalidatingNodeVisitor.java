@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.util.Pair;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
@@ -72,22 +71,13 @@ public abstract class InvalidatingNodeVisitor extends AbstractQueueVisitor {
   protected InvalidatingNodeVisitor(
       DirtiableGraph graph, @Nullable EvaluationProgressReceiver invalidationReceiver,
       InvalidationState state, DirtyKeyTracker dirtyKeyTracker) {
-    this(graph, invalidationReceiver, state, dirtyKeyTracker, EXECUTOR_FACTORY);
-  }
-
-  protected InvalidatingNodeVisitor(
-      DirtiableGraph graph, @Nullable EvaluationProgressReceiver invalidationReceiver,
-      InvalidationState state, DirtyKeyTracker dirtyKeyTracker,
-      Function<ThreadPoolExecutorParams, ThreadPoolExecutor> executorFactory) {
-    super(/*concurrent=*/true,
-        /*corePoolSize=*/DEFAULT_THREAD_COUNT,
-        /*maxPoolSize=*/DEFAULT_THREAD_COUNT,
-        /*keepAliveTime=*/1,
-        /*units=*/TimeUnit.SECONDS,
-        /*failFastOnException=*/true,
-        /*failFastOnInterrupt=*/true,
-        "skyframe-invalidator",
-        executorFactory);
+    super(/*concurrent*/true,
+        /*corePoolSize*/DEFAULT_THREAD_COUNT,
+        /*maxPoolSize*/DEFAULT_THREAD_COUNT,
+        1, TimeUnit.SECONDS,
+        /*failFastOnException*/true,
+        /*failFastOnInterrupt*/true,
+        "skyframe-invalidator");
     this.graph = Preconditions.checkNotNull(graph);
     this.invalidationReceiver = invalidationReceiver;
     this.dirtyKeyTracker = Preconditions.checkNotNull(dirtyKeyTracker);
@@ -284,9 +274,8 @@ public abstract class InvalidatingNodeVisitor extends AbstractQueueVisitor {
 
     protected DirtyingNodeVisitor(DirtiableGraph graph,
         EvaluationProgressReceiver invalidationReceiver, InvalidationState state,
-        DirtyKeyTracker dirtyKeyTracker,
-        Function<ThreadPoolExecutorParams, ThreadPoolExecutor> executorFactory) {
-      super(graph, invalidationReceiver, state, dirtyKeyTracker, executorFactory);
+        DirtyKeyTracker dirtyKeyTracker) {
+      super(graph, invalidationReceiver, state, dirtyKeyTracker);
     }
 
     @Override
