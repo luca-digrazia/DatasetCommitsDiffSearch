@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
-import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
@@ -56,7 +55,6 @@ import org.junit.Before;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -67,31 +65,16 @@ import java.util.UUID;
 public abstract class PackageLoadingTestCase extends FoundationTestCase {
 
   private static final int GLOBBING_THREADS = 7;
-
+  
   protected ConfiguredRuleClassProvider ruleClassProvider;
   protected SkyframeExecutor skyframeExecutor;
 
   @Before
   public final void initializeSkyframeExecutor() throws Exception {
-    List<RuleDefinition> extraRules = getExtraRules();
-    if (!extraRules.isEmpty()) {
-      ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
-      TestRuleClassProvider.addStandardRules(builder);
-      for (RuleDefinition def : extraRules) {
-        builder.addRuleDefinition(def);
-      }
-      ruleClassProvider = builder.build();
-    } else {
-      ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
-    }
+    ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
     skyframeExecutor = createSkyframeExecutor(getEnvironmentExtensions(),
         Preprocessor.Factory.Supplier.NullSupplier.INSTANCE, ConstantRuleVisibility.PUBLIC, "");
     setUpSkyframe(parsePackageCacheOptions());
-  }
-
-  /** Allows subclasses to augment the {@link RuleDefinition}s available in this test. */
-  protected List<RuleDefinition> getExtraRules() {
-    return ImmutableList.of();
   }
 
   protected SkyframeExecutor createSkyframeExecutor(
