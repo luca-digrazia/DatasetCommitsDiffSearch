@@ -365,6 +365,7 @@ public class JavacTurbineTest {
             "7",
             "-target",
             "7",
+            "-extra_checks:off",
             "-Xep:GuardedBy:ERROR"));
     assertThat(output.build())
         .containsExactly(
