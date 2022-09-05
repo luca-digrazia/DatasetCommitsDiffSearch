@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.buildjar;
 
+import com.sun.tools.javac.main.Main.Result;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,6 +24,18 @@ import java.util.List;
  * involved in compiling and processing java code.
  */
 public abstract class CommonJavaLibraryProcessor {
+
+  /**
+   * Exception used to represent failed javac invocation.
+   */
+  static final class JavacException extends Exception {
+    public JavacException(Result result) {
+      super("java compilation returned status " + result);
+      if (result.isOK()) {
+        throw new IllegalArgumentException();
+      }
+    }
+  }
 
   /**
    * Creates the initial set of arguments to javac from the Build
