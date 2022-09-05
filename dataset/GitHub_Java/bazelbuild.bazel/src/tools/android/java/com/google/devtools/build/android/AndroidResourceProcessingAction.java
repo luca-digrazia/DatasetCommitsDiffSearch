@@ -292,14 +292,7 @@ public class AndroidResourceProcessingAction {
       expandedOut.toFile().deleteOnExit();
       Path deduplicatedOut = Files.createTempDirectory("tmp-deduplicated");
       deduplicatedOut.toFile().deleteOnExit();
-
-      Path generatedSources = null;
-      if (options.srcJarOutput != null || options.rOutput != null
-          || options.symbolsTxtOut != null) {
-        generatedSources = Files.createTempDirectory("generated_resources");
-        generatedSources.toFile().deleteOnExit();
-      }
-
+      
       LOGGER.fine(String.format("Setup finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       final ImmutableList<DirectoryModifier> modifiers = ImmutableList.of(
@@ -339,18 +332,18 @@ public class AndroidResourceProcessingAction {
           filteredData,
           options.data,
           working.resolve("manifest"),
-          generatedSources,
+          options.generatedSourcePath,
           options.packagePath,
           options.proguardOutput);
       LOGGER.fine(String.format("appt finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
       if (options.srcJarOutput != null) {
-        resourceProcessor.createSrcJar(generatedSources, options.srcJarOutput);
+        resourceProcessor.createSrcJar(options.generatedSourcePath, options.srcJarOutput);
       }
       if (options.rOutput != null) {
-        resourceProcessor.copyRToOutput(generatedSources, options.rOutput);
+        resourceProcessor.copyRToOutput(options.generatedSourcePath, options.rOutput);
       }
       if (options.symbolsTxtOut != null) {
-        resourceProcessor.copyRToOutput(generatedSources, options.symbolsTxtOut);
+        resourceProcessor.copyRToOutput(options.generatedSourcePath, options.symbolsTxtOut);
       }
       LOGGER.fine(String.format("Packaging finished at %sms",
           timer.elapsed(TimeUnit.MILLISECONDS)));
