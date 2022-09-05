@@ -208,8 +208,7 @@
 
 package android.taobao.atlas.runtime;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
+import java.io.File;
 import java.util.List;
 
 import android.content.ComponentName;
@@ -225,22 +224,10 @@ import org.osgi.framework.Bundle;
 import android.taobao.atlas.framework.Framework;
 import android.util.Log;
 
-import dalvik.system.PathClassLoader;
-
-public class DelegateClassLoader extends PathClassLoader {
+public class DelegateClassLoader extends ClassLoader {
     
     public DelegateClassLoader(ClassLoader cl){
-        super(".",cl);
-    }
-
-    public void addDexPath(String dexPath) {
-        try {
-            Method addDexMethod = findMethod(getParent(),"addDexPath",new Class[]{String.class});
-            addDexMethod.setAccessible(true);
-            addDexMethod.invoke(getParent(),dexPath);
-        } catch (Throwable e) {
-            e.printStackTrace();
-        }
+        super(cl);
     }
 
     @Override
@@ -405,22 +392,6 @@ public class DelegateClassLoader extends PathClassLoader {
         }
 
         return false;
-    }
-
-    public static Method findMethod(Object instance, String methodName,Class[] args) throws NoSuchMethodException {
-        for (Class<?> clazz = instance.getClass(); clazz != null; clazz = clazz.getSuperclass()) {
-            try {
-                Method method = clazz.getDeclaredMethod(methodName,args);
-                if (!method.isAccessible()) {
-                    method.setAccessible(true);
-                }
-                return method;
-            } catch (NoSuchMethodException e) {
-                // ignore and search next
-            }
-        }
-
-        throw new NoSuchMethodException("Field " + methodName + " not found in " + instance.getClass());
     }
 
 }

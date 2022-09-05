@@ -209,6 +209,7 @@
 package android.taobao.atlas.framework;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Properties;
@@ -224,6 +225,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.content.res.Resources;
@@ -232,7 +234,9 @@ import android.os.Build;
 import android.os.Looper;
 import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
 import android.taobao.atlas.bundleInfo.BundleListing;
+import android.taobao.atlas.patch.PatchReceiver;
 import android.taobao.atlas.runtime.ActivityTaskMgr;
+import android.taobao.atlas.runtime.PackageManagerDelegater;
 import android.taobao.atlas.runtime.SecurityHandler;
 import android.taobao.atlas.util.ApkUtils;
 import android.taobao.atlas.util.DexLoadBooster;
@@ -242,13 +246,13 @@ import android.util.Log;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleException;
 import org.osgi.framework.BundleListener;
-
+import org.osgi.framework.FrameworkListener;
 import android.taobao.atlas.hack.AndroidHack;
 import android.taobao.atlas.hack.AssertionArrayException;
 import android.taobao.atlas.hack.AtlasHacks;
-import android.taobao.atlas.runtime.ActivityManagerDelegate;
+import android.taobao.atlas.runtime.ActivityManagrHook;
 import android.taobao.atlas.runtime.BundleLifecycleHandler;
-import android.taobao.atlas.runtime.newcomponent.AdditionalPackageManager;
+import android.taobao.atlas.runtime.newcomponent.BundlePackageManager;
 import android.taobao.atlas.runtime.ClassNotFoundInterceptorCallback;
 import android.taobao.atlas.runtime.DelegateClassLoader;
 import android.taobao.atlas.runtime.FrameworkLifecycleHandler;
@@ -264,9 +268,13 @@ import static android.taobao.atlas.runtime.InstrumentationHook.sOnIntentRedirect
 
 public class Atlas {
 
+    public static final String ATLAS_NEW_ACTIVITY_SUPPORT = "new_activity_support";
+    public static final String ATLAS_NEW_ACTIVITY_BUNDLE  = "new_activity_bundle";
+
     public static String sAPKSource ;
     protected static Atlas instance;
     public static boolean Downgrade_H5 = false;
+    public static Map<String,String> sConfig = new HashMap<String,String>();
     public static boolean isDebug;
 
     private Atlas(){
@@ -320,18 +328,22 @@ public class Atlas {
         Framework.syncBundleListeners.add(bundleLifecycleHandler);
         frameworkLifecycleHandler = new FrameworkLifecycleHandler();
         Framework.frameworkListeners.add(frameworkLifecycleHandler);
-
+        /**
+         * TODO NEED CHECK
+         * 解决某些自带LBE机制无法hook execstartactivity以及service start service的hook
+         */
         try {
-            ActivityManagerDelegate activityManagerProxy = new ActivityManagerDelegate();
+            ActivityManagrHook activityManagerProxy = new ActivityManagrHook();
 
             Object gDefault = null;
-            if(Build.VERSION.SDK_INT>25 || (Build.VERSION.SDK_INT==25&&Build.VERSION.PREVIEW_SDK_INT>0)){
-                gDefault=AtlasHacks.ActivityManager_IActivityManagerSingleton.get(AtlasHacks.ActivityManager.getmClass());
-            }else{
+            if(Build.VERSION.SDK_INT<25) {
                 gDefault=AtlasHacks.ActivityManagerNative_gDefault.get(AtlasHacks.ActivityManagerNative.getmClass());
+            }else{
+                gDefault=AtlasHacks.ActivityManagerNative_getDefault.invoke(AtlasHacks.ActivityManagerNative.getmClass());
             }
             AtlasHacks.Singleton_mInstance.hijack(gDefault, activityManagerProxy);
         }catch(Throwable e){}
+
         AndroidHack.hackH();
     }
 
@@ -371,8 +383,46 @@ public class Atlas {
         SharedPreferences.Editor editor = prefs.edit();
         editor.putInt("last_version_code", packageInfo.versionCode);
         editor.putString("last_version_name", packageInfo.versionName);
-        editor.putLong("lastupdatetime",packageInfo.lastUpdateTime);
         editor.commit();
+    }
+
+    public boolean restoreBundle(final String[] location){
+        return Framework.restoreBundle(location);
+    }
+
+    public void installOrUpdate(final String[] locations, final File[] files,String[] newVersion,long dexPatchVersion) throws BundleException {
+        Framework.installOrUpdate(locations, files,newVersion,dexPatchVersion);
+    }
+
+    @Deprecated
+    public void installOrUpdate(final String[] locations, final File[] files,String[] newVersion) throws BundleException {
+        Framework.installOrUpdate(locations, files,newVersion,123);
+    }
+
+//    private Resources getResources(Application application) throws Exception{
+//    	Resources res = null;
+//
+//    	res = application.getResources();
+//    	if (res != null){
+//    		return res;
+//    	}
+//
+//		PackageManager pm = application.getPackageManager();
+//		res = pm.getResourcesForApplication(application.getApplicationInfo());
+//
+//		return res;
+//    }
+
+    public List<ResolveInfo> queryNewIntentActivities(Intent intent,String resolvedType, int flags, int userId){
+        return BundlePackageManager.queryIntentActivities(intent,resolvedType,flags,userId);
+    }
+
+//    public List<ResolveInfo> queryNewIntentServices(Intent intent,String resolveType,int flags,int userId){
+//        return BundlePackageManager.queryIntentService(intent,resolveType,flags,userId);
+//    }
+
+    public ActivityInfo getNewActivityInfo(ComponentName componentName, int flags){
+        return BundlePackageManager.getNewActivityInfo(componentName,flags);
     }
 
     public void checkDownGradeToH5(Intent intent) {
@@ -401,6 +451,19 @@ public class Atlas {
                 Log.w("Atlas","can not install bundle in ui thread");
             }
         }
+    }
+
+    public void onConfigUpdate(String key,String value){
+        sConfig.put(key,value);
+    }
+
+    public String getConfig(String key){
+        String value = sConfig.get(key);
+        return value!=null ? value : "";
+    }
+
+    public void startPatch(){
+        Framework.checkInstallDebugBundle();
     }
 
     public boolean isBundleNeedUpdate(String bundleName,String version){
@@ -466,6 +529,7 @@ public class Atlas {
                 if(soFile.canWrite()){
                     soFile.delete();
                 }
+                b.getArchive().purge();
                 delDir = b.getArchive().getCurrentRevision().getRevisionDir();
                 bundle.uninstall();
                 if(delDir !=null ){
@@ -679,8 +743,8 @@ public class Atlas {
         RuntimeVariables.sBundleVerifier = checker;
     }
 
-    public void forceStopSelf(){
-//        setPackageStoppedState
+    public void cacheOldBundles(){
+
     }
 
     /*************************************************↑↑↑↑↑↑for public use↑↑↑↑↑↑*************************************************************
