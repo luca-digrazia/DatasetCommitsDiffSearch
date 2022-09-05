@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.vfs;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.*;
 
+import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.vfs.FileSystem.NotASymlinkException;
 
 import org.junit.Before;
@@ -409,7 +410,7 @@ public abstract class SymlinkAwareFileSystemTest extends FileSystemTest {
         xChildOfMissingDir.createSymbolicLink(xFile);
         fail();
       } catch (FileNotFoundException e) {
-        assertThat(e.getMessage()).endsWith(" (No such file or directory)");
+        MoreAsserts.assertEndsWith(" (No such file or directory)", e.getMessage());
       }
     }
   }
