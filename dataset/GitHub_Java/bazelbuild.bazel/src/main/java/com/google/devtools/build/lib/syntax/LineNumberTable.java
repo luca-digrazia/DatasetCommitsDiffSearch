@@ -14,11 +14,11 @@
 
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location.LineAndColumn;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -26,7 +26,6 @@ import java.io.Serializable;
 import java.nio.CharBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -234,8 +233,8 @@ public abstract class LineNumberTable implements Serializable {
       if (offset < 0) {
         throw new IllegalStateException("Illegal position: " + offset);
       }
-      int binarySearchIndex =
-          Collections.binarySearch(table, new SingleHashLine(offset, -1, null), hashOrdering);
+      int binarySearchIndex = hashOrdering.binarySearch(
+          table, new SingleHashLine(offset, -1, null));
       if (binarySearchIndex >= 0) {
         // An exact match in the binary search. Return it.
         return table.get(binarySearchIndex);
