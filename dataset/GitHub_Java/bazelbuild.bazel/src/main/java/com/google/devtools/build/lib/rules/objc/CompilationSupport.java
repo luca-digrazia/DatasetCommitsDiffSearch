@@ -173,19 +173,20 @@ public final class CompilationSupport {
         }
       };
 
-  /** Predicate that matches all artifacts that can be used in a Clang module map. */
-  private static final Predicate<Artifact> MODULE_MAP_HEADER =
+  /**
+   * Predicate to remove '.inc' files from an iterable.
+   */
+  private static final Predicate<Artifact> NON_INC_FILES =
       new Predicate<Artifact>() {
         @Override
         public boolean apply(Artifact artifact) {
-          // The current clang (clang-600.0.57) on Darwin doesn't support 'textual', so we can't
-          // have '.inc' files in the module map (since they're implictly textual).
-          // TODO(bazel-team): Use HEADERS file type once clang-700 is the base clang we support.
-          return artifact.getFilename().endsWith(".h");
+          return !artifact.getFilename().endsWith(".inc");
         }
       };
 
-  /** Selects cc libraries that have alwayslink=1. */
+  /**
+   * Selects cc libraries that have alwayslink=1.
+   */
   private static final Predicate<Artifact> ALWAYS_LINKED_CC_LIBRARY =
       new Predicate<Artifact>() {
         @Override
@@ -976,8 +977,11 @@ public final class CompilationSupport {
    */
   private void registerGenerateModuleMapAction(
       CppModuleMap moduleMap, Iterable<Artifact> publicHeaders, Iterable<Artifact> privateHeaders) {
-    publicHeaders = Iterables.filter(publicHeaders, MODULE_MAP_HEADER);
-    privateHeaders = Iterables.filter(privateHeaders, MODULE_MAP_HEADER);
+    // The current clang (clang-600.0.57) on Darwin doesn't support 'textual', so we can't have
+    // '.inc' files in the module map (since they're implictly textual).
+    // TODO(bazel-team): Remove filtering once clang-700 is the base clang we support.
+    publicHeaders = Iterables.filter(publicHeaders, NON_INC_FILES);
+    privateHeaders = Iterables.filter(privateHeaders, NON_INC_FILES);
     ruleContext.registerAction(
         new CppModuleMapAction(
             ruleContext.getActionOwner(),
