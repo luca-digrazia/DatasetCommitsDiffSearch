@@ -81,7 +81,7 @@ public class ZipOutputFileManager extends JavacFileManager {
       return super.getJavaFileForOutput(location, className, kind, sibling);
     }
     // The classname parameter will be something like
-    // "java.util.Map$Entry"; nested classes are delimited with
+    // "com.google.common.base.Flag$String"; nested classes are delimited with
     // dollar signs, so the following transformation works as intended.
     return getOutput(className.replace('.', '/') + kind.extension, kind, location);
   }
