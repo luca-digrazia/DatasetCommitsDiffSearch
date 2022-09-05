@@ -27,14 +27,9 @@ public class DynamicDataSourceProxy implements DynamicDataSource {
         this.proxy = proxy;
     }
 
-    public DynamicDataSourceProxy(String id, DataSource proxy) {
+    public DynamicDataSourceProxy(String id, DataSource proxy) throws SQLException {
         this.id = id;
         this.proxy = proxy;
-    }
-
-    @Override
-    public DataSource getNative() {
-        return proxy;
     }
 
     @Override
@@ -52,12 +47,57 @@ public class DynamicDataSourceProxy implements DynamicDataSource {
                             databaseType = DatabaseType.fromJdbcUrl(connection.getMetaData().getURL());
                         }
                     } catch (SQLException e) {
-                        throw new RuntimeException(e);
+                        e.printStackTrace();
                     }
                 }
             }
         }
 
         return databaseType;
+    }
+
+    @Override
+    public Connection getConnection() throws SQLException {
+        return proxy.getConnection();
+    }
+
+    @Override
+    public Connection getConnection(String username, String password) throws SQLException {
+        return proxy.getConnection(username, password);
+    }
+
+    @Override
+    public <T> T unwrap(Class<T> iface) throws SQLException {
+        return proxy.unwrap(iface);
+    }
+
+    @Override
+    public boolean isWrapperFor(Class<?> iface) throws SQLException {
+        return proxy.isWrapperFor(iface);
+    }
+
+    @Override
+    public PrintWriter getLogWriter() throws SQLException {
+        return proxy.getLogWriter();
+    }
+
+    @Override
+    public void setLogWriter(PrintWriter out) throws SQLException {
+        proxy.setLogWriter(out);
+    }
+
+    @Override
+    public void setLoginTimeout(int seconds) throws SQLException {
+        proxy.setLoginTimeout(seconds);
+    }
+
+    @Override
+    public int getLoginTimeout() throws SQLException {
+        return proxy.getLoginTimeout();
+    }
+
+    @Override
+    public Logger getParentLogger() throws SQLFeatureNotSupportedException {
+        return proxy.getParentLogger();
     }
 }
