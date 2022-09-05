@@ -16,8 +16,6 @@ import org.hswebframework.ezorm.rdb.render.dialect.OracleRDBDatabaseMetaData;
 import org.hswebframework.ezorm.rdb.simple.SimpleDatabase;
 import org.hswebframework.web.datasource.DataSourceHolder;
 import org.hswebframework.web.datasource.DatabaseType;
-import org.hswebframework.web.datasource.annotation.UseDataSource;
-import org.hswebframework.web.datasource.exception.DataSourceNotFoundException;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -65,9 +63,9 @@ public class SimpleAtomikosTests extends AbstractTransactionalJUnit4SpringContex
         }
 
         public class DynDatabaseMeta extends RDBDatabaseMetaData {
-            private Map<DatabaseType, Dialect>             dialectMap;
+            private Map<DatabaseType, Dialect> dialectMap;
             private Map<DatabaseType, RDBDatabaseMetaData> metaDataMap;
-            private Map<DatabaseType, TableMetaParser>     parserMap;
+            private Map<DatabaseType, TableMetaParser> parserMap;
 
             public DynDatabaseMeta(SqlExecutor sqlExecutor) {
                 dialectMap = new HashMap<>();
@@ -152,36 +150,14 @@ public class SimpleAtomikosTests extends AbstractTransactionalJUnit4SpringContex
         Assert.assertNull(DataSourceHolder.switcher().currentDataSourceId());
         Assert.assertTrue(dynDsTest.testQuery().size() > 0);
 
-        dynDsTest.findAll();
-
-        dynDsTest.query();
-
-        dynDsTest.query();
-
-        try {
-            dynDsTest.query("test123");
-            Assert.assertTrue(false);
-        } catch (DataSourceNotFoundException e) {
-        }
-
         jmsTemplate.convertAndSend("test", "hello");
         Thread.sleep(1000);
     }
 
-    public interface TestService {
-        List findAll() throws SQLException;
-    }
-
-    public static class AbstractTest implements TestService {
-        RDBDatabase database;
-
-        public List findAll() throws SQLException {
-            return database.getTable("s_user").createQuery().list();
-        }
-    }
 
     @Transactional
-    public static class DynDsTest extends AbstractTest {
+    public static class DynDsTest {
+        private RDBDatabase database;
 
         @Transactional(propagation = Propagation.NOT_SUPPORTED)
         public void testCreateTable() throws SQLException {
@@ -201,18 +177,8 @@ public class SimpleAtomikosTests extends AbstractTransactionalJUnit4SpringContex
                     .exec();
         }
 
+
         public List testQuery() throws SQLException {
-            return database.getTable("s_user").createQuery().list();
-        }
-
-
-        @UseDataSource("test_ds")
-        public List query() throws SQLException {
-            return database.getTable("s_user").createQuery().list();
-        }
-
-        @UseDataSource("${#dataSourceId}")
-        public List query(String dataSourceId) throws SQLException {
             return database.getTable("s_user").createQuery().list();
         }
     }
