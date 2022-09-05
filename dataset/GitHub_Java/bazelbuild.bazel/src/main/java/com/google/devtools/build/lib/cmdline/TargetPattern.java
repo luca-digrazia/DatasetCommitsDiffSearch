@@ -19,7 +19,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.LabelValidator.BadLabelException;
 import com.google.devtools.build.lib.cmdline.LabelValidator.PackageAndTarget;
 
@@ -120,20 +119,7 @@ public abstract class TargetPattern implements Serializable {
   /**
    * Evaluates the current target pattern and returns the result.
    */
-  public <T> ResolvedTargets<T> eval(TargetPatternResolver<T> resolver)
-      throws TargetParsingException, InterruptedException {
-    return eval(resolver, ImmutableSet.<String>of());
-  }
-
-  /**
-   * Evaluates the current target pattern, excluding targets under directories in
-   * {@code excludedSubdirectories}, and returns the result.
-   *
-   * @throws IllegalArgumentException if {@code excludedSubdirectories} is nonempty and this
-   *      pattern does not have type {@code Type.TARGETS_BELOW_DIRECTORY}.
-   */
-  public abstract <T> ResolvedTargets<T> eval(TargetPatternResolver<T> resolver,
-      ImmutableSet<String> excludedSubdirectories)
+  public abstract <T> ResolvedTargets<T> eval(TargetPatternResolver<T> resolver)
       throws TargetParsingException, InterruptedException;
 
   /**
@@ -167,12 +153,8 @@ public abstract class TargetPattern implements Serializable {
     }
 
     @Override
-    public <T> ResolvedTargets<T> eval(TargetPatternResolver<T> resolver,
-        ImmutableSet<String> excludedSubdirectories)
+    public <T> ResolvedTargets<T> eval(TargetPatternResolver<T> resolver)
         throws TargetParsingException, InterruptedException {
-      Preconditions.checkArgument(excludedSubdirectories.isEmpty(),
-          "Target pattern \"%s\" of type %s cannot be evaluated with excluded subdirectories: %s.",
-          targetName, getType(), excludedSubdirectories);
       return resolver.getExplicitTarget(targetName);
     }
 
@@ -214,12 +196,8 @@ public abstract class TargetPattern implements Serializable {
     }
 
     @Override
-    public <T> ResolvedTargets<T> eval(TargetPatternResolver<T> resolver,
-        ImmutableSet<String> excludedSubdirectories)
+    public <T> ResolvedTargets<T> eval(TargetPatternResolver<T> resolver)
         throws TargetParsingException, InterruptedException {
-      Preconditions.checkArgument(excludedSubdirectories.isEmpty(),
-          "Target pattern \"%s\" of type %s cannot be evaluated with excluded subdirectories: %s.",
-          path, getType(), excludedSubdirectories);
       if (resolver.isPackage(path)) {
         // User has specified a package name. lookout for default target.
         return resolver.getExplicitTarget("//" + path);
@@ -290,12 +268,8 @@ public abstract class TargetPattern implements Serializable {
     }
 
     @Override
-    public <T> ResolvedTargets<T> eval(TargetPatternResolver<T> resolver,
-        ImmutableSet<String> excludedSubdirectories)
+    public <T> ResolvedTargets<T> eval(TargetPatternResolver<T> resolver)
         throws TargetParsingException, InterruptedException {
-      Preconditions.checkArgument(excludedSubdirectories.isEmpty(),
-          "Target pattern \"%s\" of type %s cannot be evaluated with excluded subdirectories: %s.",
-          originalPattern, getType(), excludedSubdirectories);
       if (checkWildcardConflict) {
         ResolvedTargets<T> targets = getWildcardConflict(resolver);
         if (targets != null) {
@@ -385,11 +359,9 @@ public abstract class TargetPattern implements Serializable {
     }
 
     @Override
-    public <T> ResolvedTargets<T> eval(TargetPatternResolver<T> resolver,
-        ImmutableSet<String> excludedSubdirectories)
+    public <T> ResolvedTargets<T> eval(TargetPatternResolver<T> resolver)
         throws TargetParsingException, InterruptedException {
-      return resolver.findTargetsBeneathDirectory(originalPattern, directory, rulesOnly,
-          excludedSubdirectories);
+      return resolver.findTargetsBeneathDirectory(originalPattern, directory, rulesOnly);
     }
 
     @Override
