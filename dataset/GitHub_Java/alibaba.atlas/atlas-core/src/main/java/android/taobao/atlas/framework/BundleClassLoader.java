@@ -271,12 +271,7 @@ public final class BundleClassLoader extends BaseDexClassLoader {
             try {
                 Class PatchClassLoaderFactory = Class.forName("com.android.internal.os.ClassLoaderFactory");
                 Method method = PatchClassLoaderFactory.getDeclaredMethod("createClassloaderNamespace",
-                    ClassLoader.class,
-                    int.class,
-                    String.class,
-                    String.class,
-                    boolean.class,
-                    boolean.class);
+                    ClassLoader.class, int.class, String.class, String.class, boolean.class, boolean.class);
                 method.setAccessible(true);
                 method.invoke(PatchClassLoaderFactory, this, 24, nativeLibPath, nativeLibPath, true, false);
             } catch (Throwable e) {
@@ -286,11 +281,7 @@ public final class BundleClassLoader extends BaseDexClassLoader {
             try {
                 Class PatchClassLoaderFactory = Class.forName("com.android.internal.os.PathClassLoaderFactory");
                 Method method = PatchClassLoaderFactory.getDeclaredMethod("createClassloaderNamespace",
-                    ClassLoader.class,
-                    int.class,
-                    String.class,
-                    String.class,
-                    boolean.class);
+                    ClassLoader.class, int.class, String.class, String.class, boolean.class);
                 method.setAccessible(true);
                 method.invoke(PatchClassLoaderFactory, this, 24, nativeLibPath, nativeLibPath, true);
             } catch (Throwable e) {
@@ -318,7 +309,6 @@ public final class BundleClassLoader extends BaseDexClassLoader {
             BundleImpl dependencyBundle = (BundleImpl)Atlas.getInstance().getBundle(bundleName);
             if (dependencyBundle == null || dependencyBundle.getArchive() == null || !dependencyBundle.getArchive()
                 .isDexOpted()) {
-                Log.e("BundleClassLoader", "dexopt is failed: " + dependencyBundle);
                 return false;
             }
         }
