@@ -11,7 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.converter.AbstractHttpMessageConverter;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.converter.HttpMessageNotWritableException;
-import org.webbuilder.utils.common.StringUtils;
+import org.hsweb.commons.StringUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -33,8 +33,7 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
 
     public FastJsonHttpMessageConverter() {
         super(new MediaType("application", "json", UTF8),
-                new MediaType("application", "*+json", UTF8),
-                MediaType.APPLICATION_JSON);
+                new MediaType("application", "*+json", UTF8));
     }
 
     @Override
@@ -74,28 +73,33 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
                 baos.write(buf, 0, len);
             }
         }
-
         byte[] bytes = baos.toByteArray();
+        if (clazz == String.class) return new String(bytes, charset);
         return JSON.parseObject(bytes, 0, bytes.length, charset.newDecoder(), clazz);
     }
 
     public String converter(Object obj) {
+        if (obj instanceof String) return (String) obj;
         String text;
+        String callback = ThreadLocalUtils.get("jsonp-callback");
+        ThreadLocalUtils.remove("jsonp-callback");
         if (obj instanceof ResponseMessage) {
             ResponseMessage message = (ResponseMessage) obj;
             if (message.isSuccess() && message.isOnlyData())
                 obj = message.getData();
-            text = JSON.toJSONString(obj, parseFilter(message), features);
-            String callback = ThreadLocalUtils.get("jsonp-callback");
-            if (callback == null) message.getCallback();
-            if (!StringUtils.isNullOrEmpty(callback)) {
-                text = new StringBuilder()
-                        .append(callback)
-                        .append("(").append(text).append(")")
-                        .toString();
-            }
+            if (obj instanceof String)
+                text = ((String) obj);
+            else
+                text = JSON.toJSONString(obj, parseFilter(message), features);
+            if (callback == null) callback = message.getCallback();
         } else {
             text = JSON.toJSONString(obj, features);
+        }
+        if (!StringUtils.isNullOrEmpty(callback)) {
+            text = new StringBuilder()
+                    .append(callback)
+                    .append("(").append(text).append(")")
+                    .toString();
         }
         return text;
     }
@@ -126,4 +130,5 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
             }
         return filters.toArray(new PropertyPreFilter[filters.size()]);
     }
+
 }
