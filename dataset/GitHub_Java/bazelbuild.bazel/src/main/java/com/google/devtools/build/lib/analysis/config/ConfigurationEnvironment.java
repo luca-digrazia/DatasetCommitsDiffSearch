@@ -24,7 +24,9 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.LoadedPackageProvider;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
+import com.google.devtools.build.lib.pkgcache.TargetProvider;
 import com.google.devtools.build.lib.vfs.Path;
+
 import javax.annotation.Nullable;
 
 /**
@@ -35,30 +37,23 @@ import javax.annotation.Nullable;
 public interface ConfigurationEnvironment {
 
   /**
-   * Returns an event handler to report errors to. Note that reporting an error does not cause the
-   * computation to abort - you also need to throw an exception.
-   */
-  EventHandler getEventHandler();
-
-  /**
    * Returns a target for the given label, loading it if necessary, and throwing an exception if it
    * does not exist.
    *
    * @see TargetProvider#getTarget
    */
-  Target getTarget(Label label)
-      throws NoSuchPackageException, NoSuchTargetException, InterruptedException;
+  Target getTarget(Label label) throws NoSuchPackageException, NoSuchTargetException;
 
   /** Returns a path for the given file within the given package. */
-  Path getPath(Package pkg, String fileName) throws InterruptedException;
-
+  Path getPath(Package pkg, String fileName);
+  
   /** Returns fragment based on fragment class and build options. */
-  <T extends Fragment> T getFragment(BuildOptions buildOptions, Class<T> fragmentType)
-      throws InvalidConfigurationException, InterruptedException;
+  <T extends Fragment> T getFragment(BuildOptions buildOptions, Class<T> fragmentType) 
+      throws InvalidConfigurationException;
 
   /** Returns global value of BlazeDirectories. */
   @Nullable
-  BlazeDirectories getBlazeDirectories() throws InterruptedException;
+  BlazeDirectories getBlazeDirectories();
 
   /**
    * An implementation backed by a {@link PackageProvider} instance.
@@ -79,13 +74,8 @@ public interface ConfigurationEnvironment {
     }
 
     @Override
-    public EventHandler getEventHandler() {
-      return packageProvider.getEventHandler();
-    }
-
-    @Override
     public Target getTarget(final Label label)
-        throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
+        throws NoSuchPackageException, NoSuchTargetException {
       return packageProvider.getLoadedTarget(label);
     }
 
