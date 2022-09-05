@@ -1170,9 +1170,8 @@ public final class PackageFactory {
     Environment pkgEnv = new Environment(globalEnv, eventHandler);
 
     Package.LegacyBuilder pkgBuilder =
-        new Package.LegacyBuilder(packageId);
-
-    pkgBuilder.setGlobber(globber)
+        new Package.LegacyBuilder(packageId)
+        .setGlobber(globber)
         .setFilename(buildFilePath)
         .setMakeEnv(pkgMakeEnv)
         .setDefaultVisibility(defaultVisibility)
@@ -1240,9 +1239,8 @@ public final class PackageFactory {
     Environment pkgEnv = new Environment();
 
     Package.LegacyBuilder pkgBuilder =
-        new Package.LegacyBuilder(packageId);
-
-    pkgBuilder.setFilename(buildFilePath)
+        new Package.LegacyBuilder(packageId)
+        .setFilename(buildFilePath)
         .setMakeEnv(pkgMakeEnv)
         .setDefaultVisibility(defaultVisibility)
         // "defaultVisibility" comes from the command line. Let's give the BUILD file a chance to
