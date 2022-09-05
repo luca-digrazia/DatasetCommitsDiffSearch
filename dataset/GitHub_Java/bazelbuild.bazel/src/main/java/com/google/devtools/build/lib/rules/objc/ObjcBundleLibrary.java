@@ -17,6 +17,8 @@ package com.google.devtools.build.lib.rules.objc;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.NESTED_BUNDLE;
 import static com.google.devtools.build.lib.rules.objc.XcodeProductType.BUNDLE;
 
+import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -24,7 +26,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
-
 
 /**
  * Implementation for {@code objc_bundle_library}.
@@ -40,8 +41,11 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
 
     XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
-
-    new BundleSupport(ruleContext, bundling)
+    
+    // TODO(bazel-team): Figure out if the target device is important, and what to set it to. It may
+    // have to inherit this from the binary being built. As of this writing, this is only used for
+    // asset catalogs compilation (actool).
+    new BundleSupport(ruleContext, ImmutableSet.of(TargetDeviceFamily.IPHONE), bundling)
         .registerActions(common.getObjcProvider())
         .validateResources(common.getObjcProvider())
         .addXcodeSettings(xcodeProviderBuilder);
@@ -60,10 +64,12 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
         .add(NESTED_BUNDLE, bundling)
         .build();
 
-    return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
-        .addProvider(XcodeProvider.class, xcodeProviderBuilder.build())
-        .addProvider(ObjcProvider.class, nestedBundleProvider)
-        .build();
+    return common.configuredTarget(
+        filesToBuild.build(),
+        Optional.of(xcodeProviderBuilder.build()),
+        Optional.of(nestedBundleProvider),
+        Optional.<XcTestAppProvider>absent(),
+        Optional.<J2ObjcSrcsProvider>absent());
   }
 
   private OptionsProvider optionsProvider(RuleContext ruleContext) {
