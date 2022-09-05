@@ -645,10 +645,10 @@ public class TPatchTool extends AbstractTool {
                     patchBundleInfo.setNewBundle(DiffType.ADD.equals(artifactBundleInfo.getDiffType()));
                     patchBundleInfo.setMainBundle(true);
                     patchBundleInfo.setVersion(artifactBundleInfo.getVersion());
-                    patchBundleInfo.setName(((TpatchInput)input).mainBundleName);
+                        patchBundleInfo.setName(((TpatchInput)input).mainBundleName);
                     patchBundleInfo.setSrcUnitTag(artifactBundleInfo.getSrcUnitTag());
                     patchBundleInfo.setUnitTag(artifactBundleInfo.getUnitTag());
-                    patchBundleInfo.setPatchType(bundleTypes.get(((TpatchInput)input).mainBundleName) == null? 0:bundleTypes.get(((TpatchInput)input).mainBundleName));
+                    patchBundleInfo.setBuildPatchType(bundleTypes.get(artifactBundleInfo.getPkgName()) == null? 0:bundleTypes.get(artifactBundleInfo.getPkgName()));
                     patchBundleInfo.setApplicationName(artifactBundleInfo.getApplicationName());
                     patchBundleInfo.setArtifactId(artifactBundleInfo.getArtifactId());
                     patchBundleInfo.setPkgName(artifactBundleInfo.getPkgName());
@@ -665,9 +665,9 @@ public class TPatchTool extends AbstractTool {
                 patchBundleInfo.setSrcUnitTag(artifactBundleInfo.getSrcUnitTag());
                 patchBundleInfo.setUnitTag(artifactBundleInfo.getUnitTag());
                 patchBundleInfo.setVersion(artifactBundleInfo.getVersion());
-                patchBundleInfo.setPatchType(bundleTypes.get(artifactBundleInfo.getPkgName()) == null? 0:bundleTypes.get(artifactBundleInfo.getPkgName()));
+                patchBundleInfo.setBuildPatchType(bundleTypes.get(artifactBundleInfo.getPkgName()) == null? 0:bundleTypes.get(artifactBundleInfo.getPkgName()));
                 patchBundleInfo.setName(artifactBundleInfo.getPkgName());
-                if (!modifyBundles.contains(artifactBundleInfo.getPkgName().replace("_","."))){
+                if (!modifyBundles.contains(artifactBundleInfo.getPkgName())){
                     patchBundleInfo.setInherit(true);
                 }
                 patchBundleInfo.setApplicationName(artifactBundleInfo.getApplicationName());
@@ -676,11 +676,11 @@ public class TPatchTool extends AbstractTool {
                 patchBundleInfo.setDependency(artifactBundleInfo.getDependency());
                 patchBundleInfo.setBaseVersion(artifactBundleInfo.getBaseVersion());
                 patchInfo.getBundles().add(patchBundleInfo);
-            } else if (modifyBundles.contains(artifactBundleInfo.getPkgName().replace("_","."))) {
+            } else if (modifyBundles.contains(artifactBundleInfo.getPkgName())) {
                 PatchBundleInfo patchBundleInfo = new PatchBundleInfo();
                 patchBundleInfo.setNewBundle(false);
                 patchBundleInfo.setMainBundle(false);
-                patchBundleInfo.setPatchType(bundleTypes.get(artifactBundleInfo.getPkgName()) == null? 0:bundleTypes.get(artifactBundleInfo.getPkgName()));
+                patchBundleInfo.setBuildPatchType(bundleTypes.get(artifactBundleInfo.getPkgName()) == null? 0:bundleTypes.get(artifactBundleInfo.getPkgName()));
                 patchBundleInfo.setSrcUnitTag(artifactBundleInfo.getSrcUnitTag());
                 patchBundleInfo.setUnitTag(artifactBundleInfo.getUnitTag());
                 patchBundleInfo.setVersion(artifactBundleInfo.getVersion());
@@ -1040,14 +1040,10 @@ public class TPatchTool extends AbstractTool {
         //process remote bumdle
         if ((((TpatchInput) input).splitDiffBundle != null)) {
             for (final Pair<BundleBO, BundleBO> bundle : ((TpatchInput) input).splitDiffBundle) {
-                if (bundle.getFirst() == null || bundle.getSecond() == null){
-                    logger.warning("remote bundle is not set to splitDiffBundles");
-                    continue;
-                }
                 executorServicesHelper.submitTask(taskName, new Callable<Boolean>() {
                     @Override
                     public Boolean call() throws Exception {
-                        TPatchTool.this.processBundleFiles(bundle.getSecond().getBundleFile(), bundle.getFirst().getBundleFile(), patchTmpDir);
+                        processBundleFiles(bundle.getSecond().getBundleFile(), bundle.getFirst().getBundleFile(), patchTmpDir);
                         return true;
                     }
                 });
@@ -1057,23 +1053,26 @@ public class TPatchTool extends AbstractTool {
 
         Profiler.enter("awbspatch");
 
-        executorServicesHelper.submitTask(taskName, () -> {
-            // 得到主bundle的dex diff文件
-            File mianDiffDestDex = new File(mainDiffFolder, DEX_NAME);
-            File tmpDexFile = new File(patchTmpDir, ((TpatchInput)input).mainBundleName + "-dex");
-            createBundleDexPatch(newApkUnzipFolder,
-                    baseApkUnzipFolder,
-                    mianDiffDestDex,
-                    tmpDexFile,
-                    true);
-
-            // 是否保留主bundle的资源文件
-            if (isRetainMainBundleRes()) {
-                copyMainBundleResources(newApkUnzipFolder,
+        executorServicesHelper.submitTask(taskName, new Callable<Boolean>() {
+            @Override
+            public Boolean call() throws Exception {
+                // 得到主bundle的dex diff文件
+                File mianDiffDestDex = new File(mainDiffFolder, DEX_NAME);
+                File tmpDexFile = new File(patchTmpDir, ((TpatchInput)input).mainBundleName + "-dex");
+                createBundleDexPatch(newApkUnzipFolder,
                         baseApkUnzipFolder,
-                        new File(patchTmpDir, ((TpatchInput)input).mainBundleName));
+                        mianDiffDestDex,
+                        tmpDexFile,
+                        true);
+
+                // 是否保留主bundle的资源文件
+                if (isRetainMainBundleRes()) {
+                    copyMainBundleResources(newApkUnzipFolder,
+                            baseApkUnzipFolder,
+                            new File(patchTmpDir, ((TpatchInput)input).mainBundleName));
+                }
+                return true;
             }
-            return true;
         });
 
         for (final File soFile : soFiles) {

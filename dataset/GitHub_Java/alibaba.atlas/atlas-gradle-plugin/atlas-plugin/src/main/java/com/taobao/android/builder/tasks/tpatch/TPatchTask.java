@@ -210,14 +210,13 @@
 package com.taobao.android.builder.tasks.tpatch;
 
 import com.alibaba.fastjson.JSON;
-import com.android.build.gradle.api.BaseVariantOutput;
-import com.android.build.gradle.internal.ApkDataUtils;
-import com.android.build.gradle.internal.TaskContainerAdaptor;
 import com.android.build.gradle.internal.api.ApContext;
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.android.build.gradle.internal.api.AppVariantOutputContext;
 import com.android.build.gradle.internal.scope.ConventionMappingHelper;
 import com.android.build.gradle.internal.tasks.BaseTask;
+import com.android.build.gradle.internal.variant.ApkVariantOutputData;
+import com.android.build.gradle.internal.variant.BaseVariantOutputData;
 import com.android.builder.signing.DefaultSigningConfig;
 import com.android.builder.signing.SigningException;
 import com.android.utils.Pair;
@@ -228,6 +227,7 @@ import com.taobao.android.builder.dependency.model.AwbBundle;
 import com.taobao.android.builder.extension.TBuildType;
 import com.taobao.android.builder.tasks.manager.MtlBaseTaskAction;
 import com.taobao.android.builder.tools.BuildHelper;
+import com.taobao.android.builder.tools.VersionUtils;
 import com.taobao.android.builder.tools.manifest.ManifestFileUtils;
 import com.taobao.android.inputs.BaseInput;
 import com.taobao.android.inputs.DexPatchInput;
@@ -356,8 +356,6 @@ public class TPatchTask extends BaseTask {
             if (tpatchInput instanceof HotPatchInput){
                 ((HotPatchInput) tpatchInput).hotClassListFile = patchContext.hotClassListFile;
                 ((HotPatchInput) tpatchInput).patchType = PatchType.HOTFIX;
-                ((HotPatchInput)tpatchInput).excludeClasses = patchContext.excludeClasses;
-
             }else {
                 tpatchInput.patchType = PatchType.DEXPATCH;
                 ((DexPatchInput)tpatchInput).excludeClasses = patchContext.excludeClasses;
@@ -366,7 +364,6 @@ public class TPatchTask extends BaseTask {
         }else {
             tpatchInput.patchType = PatchType.TPATCH;
             tpatchInput.createHisPatch = true;
-            tpatchInput.diffNativeSo = patchContext.diffNativeSo;
             tpatchInput.bundleWhiteList = appVariantContext.bundleListCfg;
             tpatchInput.createAll = StringUtils.isEmpty(patchContext.tpatchHistoryUrl);
             tpatchInput.LAST_PATCH_URL = patchContext.LAST_PATCH_URL;
@@ -460,7 +457,7 @@ public class TPatchTask extends BaseTask {
         private AppVariantContext appVariantContext;
 
         public ConfigAction(AppVariantContext appVariantContext,
-                            BaseVariantOutput baseVariantOutputData) {
+                            BaseVariantOutputData baseVariantOutputData) {
             super(appVariantContext, baseVariantOutputData);
             this.appVariantContext = appVariantContext;
         }
@@ -489,6 +486,7 @@ public class TPatchTask extends BaseTask {
                 return;
             }
 
+            final ApkVariantOutputData variantOutputData = (ApkVariantOutputData)scope.getVariantOutputData();
 
             tPatchTask.appVariantContext = appVariantContext;
 
@@ -523,9 +521,11 @@ public class TPatchTask extends BaseTask {
                     tPatchContext.diffApkFile = appVariantOutputContext.getDiffApk();
                     tPatchContext.newApk = appVariantOutputContext.getApkOutputFile(true);
                     tPatchContext.outPatchFolder = appVariantOutputContext.getTPatchFolder();
-                    tPatchContext.manifestFile = new File(scope.getManifestProcessorTask().get(new TaskContainerAdaptor(scope.getGlobalScope().getProject().getTasks())).getManifestOutputDirectory(),"AndroidManifest.xml");
+                    tPatchContext.manifestFile = variantOutputData.manifestProcessorTask.getManifestOutputFile();
                     tPatchContext.apExplodeFolder = appVariantContext.apContext.getApExploredFolder();
-                    tPatchContext.versionName = ApkDataUtils.get(baseVariantOutput).getVersionName();
+                    tPatchContext.versionName = VersionUtils.getVersionName((ApkVariantOutputData)baseVariantOutputData,
+                                                                            variantOutputData.manifestProcessorTask
+                                                                                .getManifestOutputFile());
                     tPatchContext.tpatchHistoryUrl = tBuildType.getPatchConfig()
                         .getTpatchHistoryUrl();
                     tPatchContext.hotClassListFile = tBuildType.getPatchConfig().getHotClassListFile();
@@ -534,7 +534,6 @@ public class TPatchTask extends BaseTask {
                         .getOnlyBuildModifyAwb();
                     tPatchContext.artifactBundleInfos = appVariantOutputContext.artifactBundleInfos;
                     tPatchContext.notPatchBundles = tBuildType.getPatchConfig().getNoPatchBundles();
-                    tPatchContext.diffNativeSo = tBuildType.getPatchConfig().isDiffNativeSo();
                     tPatchContext.mainBundleName = tBuildType.getPatchConfig()
                         .getTpatchMainBundleName();
                     tPatchContext.excludeFiles = tBuildType.getPatchConfig()
@@ -585,8 +584,6 @@ public class TPatchTask extends BaseTask {
         public String notPatchBundles;
 
         public String buildId;
-
-        public boolean diffNativeSo;
 
         public boolean writeBuildInfo;
 
