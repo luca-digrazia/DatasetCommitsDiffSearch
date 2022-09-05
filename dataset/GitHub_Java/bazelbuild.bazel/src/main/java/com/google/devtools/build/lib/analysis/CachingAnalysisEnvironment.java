@@ -103,7 +103,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
     this.errorEventListener = errorEventListener;
     this.skyframeEnv = env;
     this.allowRegisteringActions = allowRegisteringActions;
-    this.binTools = Preconditions.checkNotNull(binTools);
+    this.binTools = binTools;
     middlemanFactory = new MiddlemanFactory(artifactFactory, this);
     artifacts = new HashMap<>();
   }
