@@ -1,9 +1,11 @@
 package com.yammer.metrics;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.util.*;
+import java.nio.charset.Charset;
+import java.util.Arrays;
+import java.util.Collection;
 
 import static java.lang.Math.floor;
 
@@ -11,19 +13,14 @@ import static java.lang.Math.floor;
  * A statistical snapshot of a {@link Snapshot}.
  */
 public class Snapshot {
-    private static final double MEDIAN_Q = 0.5;
-    private static final double P75_Q = 0.75;
-    private static final double P95_Q = 0.95;
-    private static final double P98_Q = 0.98;
-    private static final double P99_Q = 0.99;
-    private static final double P999_Q = 0.999;
+    private static final Charset UTF_8 = Charset.forName("UTF-8");
 
     private final long[] values;
 
     /**
      * Create a new {@link Snapshot} with the given values.
      *
-     * @param values    an unordered set of values in the sample
+     * @param values    an unordered set of values in the reservoir
      */
     public Snapshot(Collection<Long> values) {
         final Object[] copy = values.toArray();
@@ -37,7 +34,7 @@ public class Snapshot {
     /**
      * Create a new {@link Snapshot} with the given values.
      *
-     * @param values    an unordered set of values in the sample
+     * @param values    an unordered set of values in the reservoir
      */
     public Snapshot(long[] values) {
         this.values = Arrays.copyOf(values, values.length);
@@ -77,7 +74,7 @@ public class Snapshot {
     /**
      * Returns the number of values in the snapshot.
      *
-     * @return the number of values in the snapshot
+     * @return the number of values
      */
     public int size() {
         return values.length;
@@ -86,80 +83,144 @@ public class Snapshot {
     /**
      * Returns the median value in the distribution.
      *
-     * @return the median value in the distribution
+     * @return the median value
      */
     public double getMedian() {
-        return getValue(MEDIAN_Q);
+        return getValue(0.5);
     }
 
     /**
      * Returns the value at the 75th percentile in the distribution.
      *
-     * @return the value at the 75th percentile in the distribution
+     * @return the value at the 75th percentile
      */
     public double get75thPercentile() {
-        return getValue(P75_Q);
+        return getValue(0.75);
     }
 
     /**
      * Returns the value at the 95th percentile in the distribution.
      *
-     * @return the value at the 95th percentile in the distribution
+     * @return the value at the 95th percentile
      */
     public double get95thPercentile() {
-        return getValue(P95_Q);
+        return getValue(0.95);
     }
 
     /**
      * Returns the value at the 98th percentile in the distribution.
      *
-     * @return the value at the 98th percentile in the distribution
+     * @return the value at the 98th percentile
      */
     public double get98thPercentile() {
-        return getValue(P98_Q);
+        return getValue(0.98);
     }
 
     /**
      * Returns the value at the 99th percentile in the distribution.
      *
-     * @return the value at the 99th percentile in the distribution
+     * @return the value at the 99th percentile
      */
     public double get99thPercentile() {
-        return getValue(P99_Q);
+        return getValue(0.99);
     }
 
     /**
      * Returns the value at the 99.9th percentile in the distribution.
      *
-     * @return the value at the 99.9th percentile in the distribution
+     * @return the value at the 99.9th percentile
      */
     public double get999thPercentile() {
-        return getValue(P999_Q);
+        return getValue(0.999);
     }
 
     /**
      * Returns the entire set of values in the snapshot.
      *
-     * @return the entire set of values in the snapshot
+     * @return the entire set of values
      */
     public long[] getValues() {
         return Arrays.copyOf(values, values.length);
     }
 
     /**
-     * Writes the values of the sample to the given file.
+     * Returns the highest value in the snapshot.
      *
-     * @param output the file to which the values will be written
-     * @throws IOException if there is an error writing the values
+     * @return the highest value
      */
-    public void dump(File output) throws IOException {
-        final PrintWriter writer = new PrintWriter(output);
+    public long getMax() {
+        if (values.length == 0) {
+            return 0;
+        }
+        return values[values.length - 1];
+    }
+
+    /**
+     * Returns the lowest value in the snapshot.
+     *
+     * @return the lowest value
+     */
+    public long getMin() {
+        if (values.length == 0) {
+            return 0;
+        }
+        return values[0];
+    }
+
+    /**
+     * Returns the arithmetic mean of the values in the snapshot.
+     *
+     * @return the arithmetic mean
+     */
+    public double getMean() {
+        if (values.length == 0) {
+            return 0;
+        }
+
+        double sum = 0;
+        for (long value : values) {
+            sum += value;
+        }
+        return sum / values.length;
+    }
+
+    /**
+     * Returns the standard deviation of the values in the snapshot.
+     *
+     * @return the standard value
+     */
+    public double getStdDev() {
+        // two-pass algorithm for variance, avoids numeric overflow
+
+        if (values.length <= 1) {
+            return 0;
+        }
+
+        final double mean = getMean();
+        double sum = 0;
+
+        for (long value : values) {
+            final double diff = value - mean;
+            sum += diff * diff;
+        }
+
+        final double variance = sum / (values.length - 1);
+        return Math.sqrt(variance);
+    }
+
+    /**
+     * Writes the values of the snapshot to the given stream.
+     *
+     * @param output an output stream
+     */
+    public void dump(OutputStream output) {
+        final PrintWriter out = new PrintWriter(new OutputStreamWriter(output, UTF_8));
         try {
-            for (double value : values) {
-                writer.printf("%f\n", value);
+            for (long value : values) {
+                out.printf("%d%n", value);
             }
         } finally {
-            writer.close();
+            out.close();
         }
     }
 }
