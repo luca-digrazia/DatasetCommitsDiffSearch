@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -34,10 +35,8 @@ import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.Reso
 import com.google.devtools.build.lib.rules.cpp.LinkerInput;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaNeverlinkInfoProvider;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
-import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
@@ -79,13 +78,12 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     JavaCommon javaCommon = new JavaCommon(ruleContext, javaSemantics);
     AndroidCommon androidCommon = new AndroidCommon(ruleContext, javaCommon);
 
-
-    boolean definesLocalResources =
+    boolean definesLocalResources = 
       LocalResourceContainer.definesAndroidResources(ruleContext.attributes());
     if (definesLocalResources && !LocalResourceContainer.validateRuleContext(ruleContext)) {
       return null;
     }
-
+        
     final ResourceApk resourceApk;
     if (definesLocalResources) {
       ApplicationManifest applicationManifest = androidSemantics.getManifestForRule(ruleContext);
@@ -103,7 +101,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
             null /* versionName */,
             false,
             null /* proguardCfgOut */);
-
       } catch (RuleConfigurationException e) {
         // RuleConfigurations exceptions will only be thrown after the RuleContext is updated.
         // So, exit.
@@ -120,7 +117,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         transitiveIdlImportData,
         false /* addCoverageSupport */,
         true /* collectJavaCompilationArgs */,
-        AndroidRuleClasses.ANDROID_LIBRARY_GEN_JAR);
+        AndroidRuleClasses.ANDROID_LIBRARY_GEN_JAR); 
     if (javaTargetAttributes == null) {
       return null;
     }
@@ -150,7 +147,17 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       Artifact apk = ruleContext.getImplicitOutputArtifact(
           AndroidRuleClasses.ANDROID_RESOURCES_APK);
 
-      String javaPackage = AndroidCommon.getJavaPackage(ruleContext);
+      String javaPackage;
+      if (apk.getExecPath().getFirstSegment(ImmutableSet.of("java", "javatests"))
+          != PathFragment.INVALID_SEGMENT) {
+        javaPackage = JavaUtil.getJavaPackageName(apk.getExecPath());
+      } else {
+        // This is a workaround for libraries that don't follow the standard Bazel package format
+        javaPackage = apk.getRootRelativePath().getPathString().replace('/', '.');
+      }
+      if (ruleContext.attributes().isAttributeValueExplicitlySpecified("custom_package")) {
+        javaPackage = ruleContext.attributes().get("custom_package", Type.STRING);
+      }
 
       ResourceContainer resourceContainer = new ResourceContainer(ruleContext.getLabel(),
           javaPackage, null /* renameManifestPackage */, false /* inlinedConstants */,
@@ -170,6 +177,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
               .withDependencies(transitiveResources)
               .setDebug(
                   ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT)
+              .setWorkingDirectory(ruleContext.getUniqueDirectory("_resources"))
               .build(ruleContext);
     }
 
@@ -182,10 +190,11 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       .build(ruleContext);
 
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
-    androidCommon.addTransitiveInfoProviders(builder, androidSemantics,
-        definesLocalResources ? resourceApk : null, null, ImmutableList.<Artifact>of());
+    androidCommon.addTransitiveInfoProviders(builder);
     androidSemantics.addTransitiveInfoProviders(
-        builder, ruleContext, javaCommon, androidCommon, null);
+            builder, ruleContext, javaCommon, androidCommon,
+            null, definesLocalResources ? resourceApk : null, 
+            null, ImmutableList.<Artifact>of());
 
     return builder
       .add(AndroidNativeLibraryProvider.class,
@@ -193,15 +202,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, new JavaSkylarkApiProvider())
       .add(JavaNeverlinkInfoProvider.class,
           new JavaNeverlinkInfoProvider(androidCommon.isNeverLink()))
-      // TODO(ahumesky): The gensrcJar is passed in for the srcJar -- is this a mistake?
-      .add(JavaRuleOutputJarsProvider.class,
-          new JavaRuleOutputJarsProvider(
-              classesJar,
-              androidCommon.getGensrcJar(),
-              androidCommon.getGenJar(),
-              androidCommon.getGensrcJar()))
-      .add(JavaSourceInfoProvider.class,
-           JavaSourceInfoProvider.fromJavaTargetAttributes(javaTargetAttributes, javaSemantics))
       .add(JavaSourceJarsProvider.class, androidCommon.getJavaSourceJarsProvider())
       .add(AndroidCcLinkParamsProvider.class,
           new AndroidCcLinkParamsProvider(androidCommon.getCcLinkParamsStore()))
@@ -367,4 +367,3 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     return ruleContext.getPrerequisiteArtifacts("proguard_specs", Mode.TARGET).list();
   }
 }
-
