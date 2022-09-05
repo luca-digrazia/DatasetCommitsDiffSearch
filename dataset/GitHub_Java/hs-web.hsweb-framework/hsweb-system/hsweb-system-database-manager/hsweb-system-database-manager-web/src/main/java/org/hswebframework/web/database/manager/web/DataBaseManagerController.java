@@ -4,10 +4,8 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.hswebframework.web.Sqls;
-import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.Permission;
 import org.hswebframework.web.authorization.annotation.Authorize;
-import org.hswebframework.web.authorization.exception.AccessDenyException;
 import org.hswebframework.web.controller.message.ResponseMessage;
 import org.hswebframework.web.database.manager.DatabaseManagerService;
 import org.hswebframework.web.database.manager.SqlExecuteRequest;
@@ -57,9 +55,9 @@ public class DataBaseManagerController {
     public ResponseMessage<List<SqlExecuteResult>> execute(
             @PathVariable @ApiParam("数据源ID") String datasourceId,
             @RequestBody @ApiParam("SQL脚本") String sqlLines) throws Exception {
-        DataSourceHolder.switcher().use(datasourceId);
+
         return ResponseMessage.ok(databaseManagerService.execute(SqlExecuteRequest.builder()
-                .sql(parseSql(sqlLines, datasourceId))
+                .sql(parseSql(sqlLines,datasourceId))
                 .build()));
 
     }
@@ -71,7 +69,7 @@ public class DataBaseManagerController {
                                                            @ApiParam("SQL脚本") String sqlLines) throws Exception {
         return ResponseMessage.ok(databaseManagerService
                 .execute(SqlExecuteRequest.builder()
-                        .sql(parseSql(sqlLines, null))
+                        .sql(parseSql(sqlLines,null))
                         .build()));
     }
 
@@ -81,7 +79,7 @@ public class DataBaseManagerController {
     public ResponseMessage<List<SqlExecuteResult>> executeTransactional(@PathVariable @ApiParam("事务ID") String transactionalId,
                                                                         @ApiParam("SQL脚本") @RequestBody String sqlLines) throws Exception {
         return ResponseMessage.ok(databaseManagerService.execute(transactionalId, SqlExecuteRequest.builder()
-                .sql(parseSql(sqlLines, null))
+                .sql(parseSql(sqlLines,null))
                 .build()));
     }
 
@@ -91,9 +89,8 @@ public class DataBaseManagerController {
     public ResponseMessage<List<SqlExecuteResult>> executeTransactional(@PathVariable @ApiParam("事务ID") String transactionalId,
                                                                         @PathVariable @ApiParam("数据源ID") String dataSourceId,
                                                                         @ApiParam("SQL脚本") @RequestBody String sqlLines) throws Exception {
-        DataSourceHolder.switcher().use(dataSourceId);
         return ResponseMessage.ok(databaseManagerService.execute(transactionalId, SqlExecuteRequest.builder()
-                .sql(parseSql(sqlLines, dataSourceId))
+                .sql(parseSql(sqlLines,dataSourceId))
                 .build()));
     }
 
@@ -102,14 +99,6 @@ public class DataBaseManagerController {
     @ApiOperation("新建事务")
     public ResponseMessage<String> newTransaction() throws Exception {
         return ResponseMessage.ok(databaseManagerService.newTransaction());
-    }
-
-    @GetMapping("/transactional/new/{dataSourceId}")
-    @Authorize(action = "execute", description = "执行SQL")
-    @ApiOperation("指定数据源新建事务")
-    public ResponseMessage<String> newTransaction(@PathVariable String dataSourceId) throws Exception {
-        DataSourceHolder.switcher().use(dataSourceId);
-        return ResponseMessage.ok(databaseManagerService.newTransaction(dataSourceId));
     }
 
 
@@ -136,22 +125,13 @@ public class DataBaseManagerController {
         return ResponseMessage.ok();
     }
 
-
-    private List<SqlInfo> parseSql(String sqlText, String datasourceId) {
-      //  Authentication authentication = Authentication.current().orElse(null);
-
+    private List<SqlInfo> parseSql(String sqlText,String datasourceId) {
         List<String> sqlList = Sqls.parse(sqlText);
         return sqlList.stream().map(sql -> {
             SqlInfo sqlInfo = new SqlInfo();
             sqlInfo.setSql(sql);
             sqlInfo.setDatasourceId(datasourceId);
             sqlInfo.setType(sql.split("[ ]")[0].toLowerCase());
-//            if (authentication != null) {
-//                if (!authentication.hasPermission("database-manager", sqlInfo.getType())) {
-//
-//                   // throw new AccessDenyException("权限不足");
-//                }
-//            }
             return sqlInfo;
         }).collect(Collectors.toList());
     }
