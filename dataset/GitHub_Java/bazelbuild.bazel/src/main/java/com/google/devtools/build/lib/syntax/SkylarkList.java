@@ -403,8 +403,7 @@ public abstract class SkylarkList implements Iterable<Object>, SkylarkValue {
      * Creates a Tuple from an Iterable.
      */
     public static Tuple copyOf(Iterable<?> contents) {
-      // Do not remove <Object>: workaround for Java 7 type inference.
-      return create(ImmutableList.<Object>copyOf(contents));
+      return create(ImmutableList.copyOf(contents));
     }
 
     /**

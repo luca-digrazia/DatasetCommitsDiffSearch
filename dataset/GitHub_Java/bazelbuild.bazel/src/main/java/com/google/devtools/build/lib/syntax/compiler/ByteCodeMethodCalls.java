@@ -28,14 +28,6 @@ import net.bytebuddy.implementation.bytecode.StackManipulation;
 public class ByteCodeMethodCalls {
 
   /**
-   * Byte code invocations for {@link Boolean}.
-   */
-  public static class BCBoolean {
-    public static final StackManipulation valueOf =
-        ByteCodeUtils.invoke(Boolean.class, "valueOf", boolean.class);
-  }
-
-  /**
    * Byte code invocations for {@link ImmutableList}.
    */
   public static class BCImmutableList {

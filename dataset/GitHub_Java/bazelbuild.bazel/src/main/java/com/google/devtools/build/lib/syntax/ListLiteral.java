@@ -118,7 +118,7 @@ public final class ListLiteral extends Expression {
   }
 
   @Override
-  ByteCodeAppender compile(VariableScope scope, DebugInfo debugInfo) throws EvalException {
+  ByteCodeAppender compile(VariableScope scope, DebugInfo debugInfo) {
     AstAccessors debugAccessors = debugInfo.add(this);
     List<ByteCodeAppender> listConstruction = new ArrayList<>();
     if (isTuple()) {
