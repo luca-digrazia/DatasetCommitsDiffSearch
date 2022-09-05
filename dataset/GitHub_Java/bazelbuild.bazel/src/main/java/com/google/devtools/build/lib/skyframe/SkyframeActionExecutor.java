@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.MiddlemanExpander;
 import com.google.devtools.build.lib.actions.ArtifactPrefixConflictException;
 import com.google.devtools.build.lib.actions.CachedActionEvent;
-import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.MapBasedActionGraph;
 import com.google.devtools.build.lib.actions.MutableActionGraph;
@@ -60,7 +59,6 @@ import com.google.devtools.build.lib.concurrent.Sharder;
 import com.google.devtools.build.lib.concurrent.ThrowableRecordingRunnableWrapper;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.util.Pair;
@@ -132,7 +130,6 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
   private ProgressSupplier progressSupplier;
   private ActionCompletedReceiver completionReceiver;
   private final AtomicReference<ActionExecutionStatusReporter> statusReporterRef;
-  private OutputService outputService;
 
   SkyframeActionExecutor(ResourceManager resourceManager,
       AtomicReference<EventBus> eventBus,
@@ -334,7 +331,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
   }
 
   void prepareForExecution(Reporter reporter, Executor executor, boolean keepGoing,
-      boolean explain, ActionCacheChecker actionCacheChecker, OutputService outputService) {
+      boolean explain, ActionCacheChecker actionCacheChecker) {
     this.reporter = Preconditions.checkNotNull(reporter);
     this.executorEngine = Preconditions.checkNotNull(executor);
 
@@ -345,7 +342,6 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     this.actionCacheChecker = Preconditions.checkNotNull(actionCacheChecker);
     // Don't cache possibly stale data from the last build.
     this.explain = explain;
-    this.outputService = outputService;
   }
 
   public void setActionLogBufferPathGenerator(
@@ -358,7 +354,6 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     // This transitively holds a bunch of heavy objects, so it's important to clear it at the
     // end of a build.
     this.executorEngine = null;
-    this.outputService = null;
   }
 
   boolean probeActionExecution(Action action) {
@@ -815,15 +810,6 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
       } finally {
         profiler.completeTask(ProfilerTask.ACTION_COMPLETE);
       }
-
-      if (outputService != null) {
-        try {
-          outputService.finalizeAction(action, metadataHandler);
-        } catch (EnvironmentalExecException | IOException e) {
-          reportError("unable to finalize action: " + e.getMessage(), e, action, fileOutErr);
-        }
-      }
-
       reportActionExecution(action, null, fileOutErr);
     } catch (ActionExecutionException actionException) {
       // Success in execution but failure in completion.
