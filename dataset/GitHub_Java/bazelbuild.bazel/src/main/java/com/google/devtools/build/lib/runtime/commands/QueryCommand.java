@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.runtime.commands;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
@@ -41,7 +40,6 @@ import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.channels.ClosedByInterruptException;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -85,9 +83,8 @@ public final class QueryCommand implements BlazeCommand {
     }
 
     if (options.getResidue().isEmpty()) {
-      runtime.getReporter().handle(Event.error(String.format(
-          "missing query expression. Type '%s help query' for syntax and help",
-          Constants.PRODUCT_NAME)));
+      runtime.getReporter().handle(Event.error(
+          "missing query expression. Type 'blaze help query' for syntax and help"));
       return ExitCode.COMMAND_LINE_ERROR;
     }
 
@@ -108,7 +105,7 @@ public final class QueryCommand implements BlazeCommand {
         runtime,
         queryOptions.keepGoing,
         QueryOutputUtils.orderResults(queryOptions, formatter),
-        queryOptions.universeScope, queryOptions.loadingPhaseThreads,
+        queryOptions.loadingPhaseThreads,
         settings);
 
     // 1. Parse query:
@@ -153,15 +150,7 @@ public final class QueryCommand implements BlazeCommand {
 
   @VisibleForTesting // for com.google.devtools.deps.gquery.test.QueryResultTestUtil
   public static AbstractBlazeQueryEnvironment<Target> newQueryEnvironment(BlazeRuntime runtime,
-      boolean keepGoing, boolean orderedResults, int loadingPhaseThreads,
-      Set<Setting> settings) {
-    return newQueryEnvironment(runtime, keepGoing, orderedResults, ImmutableList.<String>of(),
-        loadingPhaseThreads, settings);
-  }
-
-  public static AbstractBlazeQueryEnvironment<Target> newQueryEnvironment(BlazeRuntime runtime,
-      boolean keepGoing, boolean orderedResults, List<String> universeScope,
-      int loadingPhaseThreads,
+      boolean keepGoing, boolean orderedResults,  int loadingPhaseThreads,
       Set<Setting> settings) {
     ImmutableList.Builder<QueryFunction> functions = ImmutableList.builder();
     for (BlazeModule module : runtime.getBlazeModules()) {
@@ -169,11 +158,9 @@ public final class QueryCommand implements BlazeCommand {
     }
     return AbstractBlazeQueryEnvironment.newQueryEnvironment(
         runtime.getPackageManager().newTransitiveLoader(),
-        runtime.getSkyframeExecutor(),
         runtime.getPackageManager(),
         runtime.getTargetPatternEvaluator(),
-        keepGoing, orderedResults, universeScope, loadingPhaseThreads, runtime.getReporter(),
-        settings,
+        keepGoing, orderedResults, loadingPhaseThreads, runtime.getReporter(), settings,
         functions.build());
   }
 }
