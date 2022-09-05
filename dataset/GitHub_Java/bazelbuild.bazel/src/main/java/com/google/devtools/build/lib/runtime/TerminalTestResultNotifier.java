@@ -194,10 +194,9 @@ public class TerminalTestResultNotifier implements TestResultNotifier {
       addFailureToErrorList(results, "locally", stats.failedLocallyCount);
       addFailureToErrorList(results, "remotely", stats.failedRemotelyCount);
       addToErrorList(results, "was", "were", "skipped", stats.noStatusCount);
-      printer.print(String.format("\nExecuted %d out of %d %s: %s.\n",
+      printer.print(String.format("\nExecuted %d out of %d tests: %s.\n",
               stats.numberOfExecutedTargets,
               stats.numberOfTargets,
-              stats.numberOfTargets == 1 ? "test" : "tests",
               StringUtil.joinEnglishList(results, "and")));
     } else {
       int failingUpToDateCount = stats.failedCount - stats.noStatusCount;
