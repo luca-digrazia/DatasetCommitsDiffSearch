@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.NESTED_BUNDLE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.BundlingRule.FAMILIES_ATTR;
+import static com.google.devtools.build.lib.rules.objc.XcodeProductType.BUNDLE;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -25,12 +26,13 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
+import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.objc.BundleSupport.ExtraActoolArgs;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
 import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.InvalidFamilyNameException;
 import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.RepeatedFamilyNameException;
 import com.google.devtools.build.lib.syntax.Type;
+
 import java.util.List;
 
 /**
@@ -44,9 +46,12 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
     ObjcCommon common = common(ruleContext);
     Bundling bundling = bundling(ruleContext, common);
 
+    XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
 
-    new ResourceSupport(ruleContext).validateAttributes();
+    new ResourceSupport(ruleContext)
+        .validateAttributes()
+        .addXcodeSettings(xcodeProviderBuilder);
 
     if (ruleContext.hasErrors()) {
       return null;
@@ -54,28 +59,34 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
 
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
-    // ApplePlatform is purposefully not validated on this BundleSupport. Multi-arch validation and
+    // Platform is purposefully not validated on this BundleSupport. Multi-arch validation and
     // resource de-duplication should only take place at the level of the bundling rule.
-    new BundleSupport(
-            ruleContext,
+    new BundleSupport(ruleContext,
             appleConfiguration,
             appleConfiguration.getMultiArchPlatform(PlatformType.IOS),
             bundling,
             new ExtraActoolArgs())
         .validateResources(common.getObjcProvider())
-        .registerActions(common.getObjcProvider());
+        .registerActions(common.getObjcProvider())
+        .addXcodeSettings(xcodeProviderBuilder);
 
     if (ruleContext.hasErrors()) {
       return null;
     }
+
+    new XcodeSupport(ruleContext)
+        .addFilesToBuild(filesToBuild)
+        .addXcodeSettings(xcodeProviderBuilder, common.getObjcProvider(), BUNDLE)
+        .addDependencies(xcodeProviderBuilder, new Attribute("bundles", Mode.TARGET))
+        .registerActions(xcodeProviderBuilder.build());
 
     ObjcProvider nestedBundleProvider = new ObjcProvider.Builder()
         .add(NESTED_BUNDLE, bundling)
         .build();
 
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
+        .addProvider(XcodeProvider.class, xcodeProviderBuilder.build())
         .addProvider(ObjcProvider.class, nestedBundleProvider)
-        .addNativeDeclaredProvider(nestedBundleProvider)
         .build();
   }
 

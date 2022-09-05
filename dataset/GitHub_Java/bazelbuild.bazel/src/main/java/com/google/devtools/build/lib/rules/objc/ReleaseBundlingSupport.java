@@ -20,14 +20,17 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_SW
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.ReleaseBundlingRule.APP_ICON_ATTR;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.ReleaseBundlingRule.DEBUG_ENTITLEMENTS_ATTR;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.ReleaseBundlingRule.EXTRA_ENTITLEMENTS_ATTR;
+import static com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.UI_DEVICE_FAMILY_VALUES;
 
 import com.dd.plist.NSArray;
 import com.dd.plist.NSDictionary;
 import com.dd.plist.NSObject;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.BuildInfo;
@@ -44,7 +47,6 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -55,13 +57,13 @@ import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplic
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
-import com.google.devtools.build.lib.rules.apple.XcodeConfig;
+import com.google.devtools.build.lib.rules.apple.Platform;
+import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.objc.BundleSupport.ExtraActoolArgs;
 import com.google.devtools.build.lib.rules.objc.Bundling.Builder;
 import com.google.devtools.build.lib.shell.ShellUtils;
+import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.XcodeprojBuildSetting;
 import java.util.List;
 import java.util.Map.Entry;
 import javax.annotation.Nullable;
@@ -74,11 +76,7 @@ import javax.annotation.Nullable;
  * <p>Contains actions, validation logic and provider value generation.
  *
  * <p>Methods on this class can be called in any order without impacting the result.
- *
- * @deprecated The native bundling rules have been deprecated. This class will be removed in the
- *     future.
  */
-@Deprecated
 public final class ReleaseBundlingSupport {
 
   /**
@@ -124,7 +122,7 @@ public final class ReleaseBundlingSupport {
   private final LinkedBinary linkedBinary;
   private final IntermediateArtifacts intermediateArtifacts;
   private final ReleaseBundling releaseBundling;
-  private final ApplePlatform platform;
+  private final Platform platform;
 
   /**
    * Indicator as to whether this rule generates a binary directly or whether only dependencies
@@ -148,17 +146,17 @@ public final class ReleaseBundlingSupport {
    *
    * @param ruleContext context for the application-generating rule
    * @param objcProvider provider containing all dependencies' information as well as some of this
-   *     rule's
+   *    rule's
    * @param linkedBinary whether to look for a linked binary from this rule and dependencies or just
-   *     the latter
+   *    the latter
    * @param bundleDirFormat format string representing the bundle's directory with a single
-   *     placeholder for the target name (e.g. {@code "Payload/%s.app"})
+   *    placeholder for the target name (e.g. {@code "Payload/%s.app"})
    * @param bundleName name of the bundle, used with bundleDirFormat
    * @param bundleMinimumOsVersion the minimum OS version this bundle's plist should be generated
-   *     for (<b>not</b> the minimum OS version its binary is compiled with, that needs to be set
-   *     through the configuration)
+   *    for (<b>not</b> the minimum OS version its binary is compiled with, that needs to be set
+   *    through the configuration)
    * @param releaseBundling the {@link ReleaseBundling} containing information for creating a
-   *     releaseable bundle.
+   *    releaseable bundle.
    * @param platform the platform that bundles will be created for using this support
    */
   ReleaseBundlingSupport(
@@ -169,7 +167,7 @@ public final class ReleaseBundlingSupport {
       String bundleName,
       DottedVersion bundleMinimumOsVersion,
       ReleaseBundling releaseBundling,
-      ApplePlatform platform) {
+      Platform platform) {
     this.platform = platform;
     this.linkedBinary = linkedBinary;
     this.attributes = new Attributes(ruleContext);
@@ -190,11 +188,11 @@ public final class ReleaseBundlingSupport {
    *
    * @param ruleContext context for the application-generating rule
    * @param objcProvider provider containing all dependencies' information as well as some of this
-   *     rule's
+   *    rule's
    * @param linkedBinary whether to look for a linked binary from this rule and dependencies or just
-   *     the latter
+   *    the latter
    * @param bundleDirFormat format string representing the bundle's directory with a single
-   *     placeholder for the target name (e.g. {@code "Payload/%s.app"})
+   *    placeholder for the target name (e.g. {@code "Payload/%s.app"})
    * @param bundleName name of the bundle, used with bundleDirFormat
    * @param platform the platform that bundles will be created for using this support
    */
@@ -205,8 +203,7 @@ public final class ReleaseBundlingSupport {
       String bundleDirFormat,
       String bundleName,
       DottedVersion bundleMinimumOsVersion,
-      ApplePlatform platform)
-      throws InterruptedException {
+      Platform platform) throws InterruptedException {
     this(
         ruleContext,
         objcProvider,
@@ -221,18 +218,18 @@ public final class ReleaseBundlingSupport {
   /**
    * Creates a new application support within the given rule context.
    *
-   * <p>{@code bundleName} defaults to label name
+   * {@code bundleName} defaults to label name
    *
    * @param ruleContext context for the application-generating rule
    * @param objcProvider provider containing all dependencies' information as well as some of this
-   *     rule's
+   *    rule's
    * @param linkedBinary whether to look for a linked binary from this rule and dependencies or just
-   *     the latter
+   *    the latter
    * @param bundleDirFormat format string representing the bundle's directory with a single
-   *     placeholder for the target name (e.g. {@code "Payload/%s.app"})
+   *    placeholder for the target name (e.g. {@code "Payload/%s.app"})
    * @param bundleMinimumOsVersion the minimum OS version this bundle's plist should be generated
-   *     for (<b>not</b> the minimum OS version its binary is compiled with, that needs to be set
-   *     through the configuration)
+   *    for (<b>not</b> the minimum OS version its binary is compiled with, that needs to be set
+   *    through the configuration)
    * @param platform the platform that bundles will be created for using this support
    * @throws InterruptedException
    */
@@ -242,8 +239,7 @@ public final class ReleaseBundlingSupport {
       LinkedBinary linkedBinary,
       String bundleDirFormat,
       DottedVersion bundleMinimumOsVersion,
-      ApplePlatform platform)
-      throws InterruptedException {
+      Platform platform) throws InterruptedException {
     this(ruleContext, objcProvider, linkedBinary, bundleDirFormat, ruleContext.getLabel().getName(),
         bundleMinimumOsVersion, platform);
   }
@@ -384,7 +380,7 @@ public final class ReleaseBundlingSupport {
         String.format(
             "%s%s",
             platform.getLowerCaseNameInPlist(),
-            XcodeConfig.getSdkVersionForPlatform(ruleContext, platform));
+            configuration.getSdkVersionForPlatform(platform));
     ruleContext.registerAction(
         ObjcRuleClasses.spawnAppleEnvActionBuilder(configuration, platform)
             .setMnemonic("EnvironmentPlist")
@@ -411,6 +407,8 @@ public final class ReleaseBundlingSupport {
   private NSDictionary automaticEntries() {
     List<Integer> uiDeviceFamily =
         TargetDeviceFamily.UI_DEVICE_FAMILY_VALUES.get(bundleSupport.targetDeviceFamilies());
+    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+
     NSDictionary result = new NSDictionary();
 
     if (uiDeviceFamily != null) {
@@ -419,8 +417,7 @@ public final class ReleaseBundlingSupport {
     result.put("DTPlatformName", platform.getLowerCaseNameInPlist());
     result.put(
         "DTSDKName",
-        platform.getLowerCaseNameInPlist()
-            + XcodeConfig.getSdkVersionForPlatform(ruleContext, platform));
+        platform.getLowerCaseNameInPlist() + appleConfiguration.getSdkVersionForPlatform(platform));
     result.put("CFBundleSupportedPlatforms", new NSArray(NSObject.wrap(platform.getNameInPlist())));
     result.put("MinimumOSVersion", bundling.getMinimumOsVersion().toString());
 
@@ -511,7 +508,7 @@ public final class ReleaseBundlingSupport {
   }
 
   private ImmutableList<String> getDirsToSign() {
-    // The order here is important. The innermost code must signed first.
+    // The order here is important. The innermost code must singed first.
     ImmutableList.Builder<String> dirsToSign = new ImmutableList.Builder<>();
     String bundleDir = ShellUtils.shellEscape(bundling.getBundleDir());
 
@@ -608,6 +605,20 @@ public final class ReleaseBundlingSupport {
             .addTransitiveInputs(entitlements)
             .addOutput(intermediateArtifacts.entitlements())
             .build(ruleContext));
+  }
+
+  /**
+   * Adds bundle- and application-related settings to the given Xcode provider builder.
+   *
+   * @return this application support
+   */
+  ReleaseBundlingSupport addXcodeSettings(XcodeProvider.Builder xcodeProviderBuilder) {
+    bundleSupport.addXcodeSettings(xcodeProviderBuilder);
+    // Add application-related Xcode build settings to the main target only. The companion library
+    // target does not need them.
+    xcodeProviderBuilder.addMainTargetXcodeprojBuildSettings(buildSettings());
+
+    return this;
   }
 
   /**
@@ -830,6 +841,47 @@ public final class ReleaseBundlingSupport {
     return linkedBinariesBuilder.build();
   }
 
+  /** Returns this target's Xcode build settings. */
+  private Iterable<XcodeprojBuildSetting> buildSettings() {
+    ImmutableList.Builder<XcodeprojBuildSetting> buildSettings = new ImmutableList.Builder<>();
+    if (releaseBundling.getAppIcon() != null) {
+      buildSettings.add(XcodeprojBuildSetting.newBuilder()
+          .setName("ASSETCATALOG_COMPILER_APPICON_NAME")
+          .setValue(releaseBundling.getAppIcon())
+          .build());
+    }
+    if (releaseBundling.getLaunchImage() != null) {
+      buildSettings.add(XcodeprojBuildSetting.newBuilder()
+          .setName("ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME")
+          .setValue(releaseBundling.getLaunchImage())
+          .build());
+    }
+
+    // Convert names to a sequence containing "1" and/or "2" for iPhone and iPad, respectively.
+    ImmutableSet<TargetDeviceFamily> families;
+    if (bundleSupport.isBuildingForWatch()) {
+      families = ImmutableSet.of(TargetDeviceFamily.WATCH);
+    } else {
+      families = bundleSupport.targetDeviceFamilies();
+    }
+    Iterable<Integer> familyIndexes =
+        families.isEmpty() ? ImmutableList.<Integer>of() : UI_DEVICE_FAMILY_VALUES.get(families);
+    buildSettings.add(XcodeprojBuildSetting.newBuilder()
+        .setName("TARGETED_DEVICE_FAMILY")
+        .setValue(Joiner.on(',').join(familyIndexes))
+        .build());
+
+    Artifact entitlements = releaseBundling.getEntitlements();
+    if (entitlements != null) {
+      buildSettings.add(XcodeprojBuildSetting.newBuilder()
+          .setName("CODE_SIGN_ENTITLEMENTS")
+          .setValue("$(WORKSPACE_ROOT)/" + entitlements.getExecPathString())
+          .build());
+    }
+
+    return buildSettings.build();
+  }
+
   private void registerBundleMergeActions() {
     Artifact bundleMergeControlArtifact = ObjcRuleClasses.artifactByAppendingToBaseName(ruleContext,
         artifactName(".ipa-control"));
@@ -838,9 +890,7 @@ public final class ReleaseBundlingSupport {
         new BundleMergeControlBytes(
             bundling,
             intermediateArtifacts.unprocessedIpa(),
-            XcodeConfig.getSdkVersionForPlatform(ruleContext, ApplePlatform.IOS_DEVICE),
-            ruleContext.getFragment(AppleConfiguration.class)
-                .getMultiArchPlatform(PlatformType.IOS));
+            ruleContext.getFragment(AppleConfiguration.class));
 
     ruleContext.registerAction(
         new BinaryFileWriteAction(
@@ -1298,7 +1348,7 @@ public final class ReleaseBundlingSupport {
       ImmutableList.Builder<BuildOptions> splitBuildOptions = ImmutableList.builder();
       for (String iosCpu : iosMultiCpus) {
         BuildOptions splitOptions = buildOptions.clone();
-        setIosArchitectureOptions(splitOptions, buildOptions, iosCpu);
+        setArchitectureOptions(splitOptions, buildOptions, iosCpu);
         setAdditionalOptions(splitOptions, buildOptions);
         splitOptions.get(AppleCommandLineOptions.class).configurationDistinguisher =
             getConfigurationDistinguisher();
@@ -1326,11 +1376,10 @@ public final class ReleaseBundlingSupport {
      */
     protected void setAdditionalOptions(BuildOptions splitOptions, BuildOptions originalOptions) {}
 
-    private static void setIosArchitectureOptions(
-        BuildOptions splitOptions, BuildOptions originalOptions, String iosCpu) {
+    private static void setArchitectureOptions(BuildOptions splitOptions, 
+        BuildOptions originalOptions, String iosCpu) {
       splitOptions.get(AppleCommandLineOptions.class).applePlatformType = PlatformType.IOS;
       splitOptions.get(AppleCommandLineOptions.class).appleSplitCpu = iosCpu;
-      splitOptions.get(Options.class).cpu = AppleConfiguration.IOS_CPU_PREFIX + iosCpu;
       splitOptions.get(AppleCommandLineOptions.class).iosCpu = iosCpu;
      if (splitOptions.get(ObjcCommandLineOptions.class).enableCcDeps) {
         // Only set the (CC-compilation) CPU for dependencies if explicitly required by the user.
