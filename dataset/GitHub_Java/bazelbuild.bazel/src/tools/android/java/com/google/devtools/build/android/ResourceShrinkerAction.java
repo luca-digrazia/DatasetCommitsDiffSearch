@@ -211,14 +211,12 @@ public class ResourceShrinkerAction {
           null /* packageForR */,
           new FlagAaptOptions(aaptConfigOptions),
           aaptConfigOptions.resourceConfigs,
-          ImmutableList.<String>of() /* splits */,
           new MergedAndroidData(
               shrunkResources, resourceFiles.resolve("assets"), options.primaryManifest),
           ImmutableList.<DependencyAndroidData>of() /* libraries */,
           null /* sourceOutputDir */,
           options.shrunkApk,
           null /* proguardOutput */,
-          null /* mainDexProguardOutput */,
           null /* publicResourcesOut */);
       if (options.shrunkResources != null) {
         resourceProcessor.createResourcesZip(shrunkResources, resourceFiles.resolve("assets"),
