@@ -37,7 +37,7 @@ public class WindowsSubprocessFactory implements Subprocess.Factory {
   @Override
   public Subprocess create(SubprocessBuilder builder) throws IOException {
     WindowsJniLoader.loadJni();
-
+    
     String commandLine = WindowsProcesses.quoteCommandLine(builder.getArgv());
     byte[] env = builder.getEnv() == null ? null : convertEnvToNative(builder.getEnv());
 
@@ -46,14 +46,13 @@ public class WindowsSubprocessFactory implements Subprocess.Factory {
 
     long nativeProcess = WindowsProcesses.nativeCreateProcess(
         commandLine, env, builder.getWorkingDirectory().getPath(), stdoutPath, stderrPath);
-    String error = WindowsProcesses.nativeProcessGetLastError(nativeProcess);
+    String error = WindowsProcesses.nativeGetLastError(nativeProcess);
     if (!error.isEmpty()) {
-      WindowsProcesses.nativeDeleteProcess(nativeProcess);
+      WindowsProcesses.nativeDelete(nativeProcess);
       throw new IOException(error);
     }
 
-    return new WindowsSubprocess(nativeProcess, commandLine, stdoutPath != null,
-        stderrPath != null, builder.getTimeoutMillis());
+    return new WindowsSubprocess(nativeProcess, stdoutPath != null, stderrPath != null);
   }
 
   private String getRedirectPath(StreamAction action, File file) {
@@ -109,10 +108,7 @@ public class WindowsSubprocessFactory implements Subprocess.Factory {
     StringBuilder result = new StringBuilder();
     for (Map.Entry<String, String> entry : realEnv.entrySet()) {
       if (entry.getKey().contains("=")) {
-        // lpEnvironment requires no '=' in environment variable name, but on Windows,
-        // System.getenv() returns environment variables like '=C:' or '=ExitCode', so it can't
-        // be an error, we have ignore them here.
-        continue;
+        throw new IOException("Environment variable names must not contain '='");
       }
       result.append(entry.getKey() + "=" + entry.getValue() + "\0");
     }
