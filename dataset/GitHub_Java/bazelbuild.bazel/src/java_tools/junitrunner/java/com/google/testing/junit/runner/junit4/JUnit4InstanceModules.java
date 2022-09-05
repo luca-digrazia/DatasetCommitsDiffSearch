@@ -14,27 +14,21 @@
 
 package com.google.testing.junit.runner.junit4;
 
-import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
-
-import dagger.Module;
-import dagger.Provides;
-
-import java.nio.file.Path;
-
+import java.util.Arrays;
+import java.util.List;
 import javax.inject.Singleton;
 
 /**
- * Dagger modules which hold state or are, for testing purposes, implemented with non-static
+ * Utility classes which hold state or are, for testing purposes, implemented with non-static
  * provider methods.  These types are collected here so they can be cleanly named in the
  * component builder, but still be obvious in module includes and component declarations.
+ * These are Dagger legacy modules.
  */
 public final class JUnit4InstanceModules {
 
   /**
    * A stateful dagger module that holds the supplied test suite class.
    */
-  @Module
   public static final class SuiteClass {
     private final Class<?> suiteClass;
 
@@ -42,13 +36,11 @@ public final class JUnit4InstanceModules {
       this.suiteClass = suiteClass;
     }
 
-    @Provides
     @TopLevelSuite
     Class<?> topLevelSuite() {
       return suiteClass;
     }
 
-    @Provides
     @TopLevelSuite
     static String topLevelSuiteName(@TopLevelSuite Class<?> suite) {
       return suite.getCanonicalName();
@@ -58,29 +50,25 @@ public final class JUnit4InstanceModules {
   /**
    * A module which supplies a JUnit4Config object, which can be overridden at test-time.
    */
-  @Module
   public static final class Config {
-    private final ImmutableList<String> args;
+    private final List<String> args;
 
     /**
      * Creates a module that can provide a {@link JUnit4Config} from supplied command-line
      * arguments
      */
     public Config(String... args) {
-      this.args = ImmutableList.copyOf(args);
+      this.args = Arrays.asList(args);
     }
 
-    @Provides
     @Singleton
     JUnit4Options options() {
       return JUnit4Options.parse(System.getenv(), args);
     }
 
-    @Provides
     @Singleton
     static JUnit4Config config(JUnit4Options options) {
-      return new JUnit4Config(
-          options.getTestIncludeFilter(), options.getTestExcludeFilter(), Optional.<Path>absent());
+      return new JUnit4Config(options.getTestIncludeFilter(), options.getTestExcludeFilter());
     }
   }
 
