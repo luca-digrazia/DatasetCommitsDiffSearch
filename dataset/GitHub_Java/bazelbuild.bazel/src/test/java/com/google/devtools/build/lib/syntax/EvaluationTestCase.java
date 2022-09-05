@@ -367,15 +367,13 @@ public class EvaluationTestCase {
         @Override
         public void run() throws Exception {
           Object actual = eval(statement);
-          Object realExpected = expected;
 
-          // We could also print the actual object and compare the string to the expected
-          // expression, but then the order of elements would matter.
+          // Prints the actual object instead of evaluating the expected expression
           if (expectedIsExpression) {
-            realExpected = eval((String) expected);
+            actual = Printer.repr(actual, '\'');
           }
 
-          assertThat(actual).isEqualTo(realExpected);
+          assertThat(actual).isEqualTo(expected);
         }
       };
     }

@@ -856,7 +856,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testGetattrNoAttr() throws Exception {
-    new SkylarkTest().testIfExactError("Object of type 'struct' has no attribute \"b\"",
+    new SkylarkTest().testIfExactError("Object of type 'struct' has no field \"b\"",
         "s = struct(a='val')", "getattr(s, 'b')");
   }
 
