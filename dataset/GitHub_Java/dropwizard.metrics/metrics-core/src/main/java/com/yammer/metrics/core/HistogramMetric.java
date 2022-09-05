@@ -4,8 +4,6 @@ import com.yammer.metrics.stats.ExponentiallyDecayingSample;
 import com.yammer.metrics.stats.Sample;
 import com.yammer.metrics.stats.UniformSample;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -17,6 +15,7 @@ import static java.lang.Math.sqrt;
 /**
  * A metric which calculates the distribution of a value.
  *
+ * @author coda
  * @see <a href="http://www.johndcook.com/standard_deviation.html">Accurately
  * computing running variance</a>
  */
@@ -173,16 +172,6 @@ public class HistogramMetric implements Metric {
     }
 
     /**
-     * Returns the value at the given percentile.
-     *
-     * @param percentile    a percentile ({@code 0..1})
-     * @return the value at the given percentile
-     */
-    public double percentile(double percentile) {
-        return percentiles(percentile)[0];
-    }
-
-    /**
      * Returns an array of values at the given percentiles.
      *
      * @param percentiles one or more percentiles ({@code 0..1})
@@ -226,16 +215,6 @@ public class HistogramMetric implements Metric {
         return sample.values();
     }
 
-    /**
-     * Writes the values of the histogram's sample to the given file.
-     *
-     * @param output the file to which the values will be written
-     * @throws IOException if there is an error writing the values
-     */
-    public void dump(File output) throws IOException {
-        sample.dump(output);
-    }
-
     private double variance() {
         if (count() <= 1) {
             return 0.0;
@@ -259,21 +238,11 @@ public class HistogramMetric implements Metric {
         }
     }
 
-    /**
-     * Cache arrays for the variance calculation, so as to avoid memory allocation.
-     */
-    private final ThreadLocal<double[]> arrayCache =
-        new ThreadLocal<double[]>() {
-            @Override protected double[] initialValue() {
-                return new double [2];
-            }
-        };       
-
     private void updateVariance(long value) {
         boolean done = false;
         while (!done) {
             final double[] oldValues = variance.get();
-            final double[] newValues = arrayCache.get();
+            final double[] newValues = new double[2];
             if (oldValues[0] == -1) {
                 newValues[0] = value;
                 newValues[1] = 0;
@@ -288,10 +257,6 @@ public class HistogramMetric implements Metric {
                 newValues[1] = newS;
             }
             done = variance.compareAndSet(oldValues, newValues);
-            if (done) {
-                // recycle the old array into the cache
-                arrayCache.set(oldValues);
-            }
         }
     }
 }
