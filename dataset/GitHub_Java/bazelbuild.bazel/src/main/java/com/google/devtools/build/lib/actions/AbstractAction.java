@@ -112,8 +112,7 @@ public abstract class AbstractAction implements Action {
   @Nullable
   @Override
   public Iterable<Artifact> resolveInputsFromCache(ArtifactResolver artifactResolver,
-      PackageRootResolver resolver, Collection<PathFragment> inputPaths)
-          throws PackageRootResolutionException {
+      PackageRootResolver resolver, Collection<PathFragment> inputPaths) {
     throw new IllegalStateException(
         "Method must be overridden for actions that may have unknown inputs.");
   }
