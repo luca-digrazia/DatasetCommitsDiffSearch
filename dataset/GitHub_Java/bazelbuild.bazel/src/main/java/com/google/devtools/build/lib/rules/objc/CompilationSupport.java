@@ -85,6 +85,7 @@ import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
+import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
 import com.google.devtools.build.lib.rules.objc.XcodeProvider.Builder;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.InstrumentationSpec;
@@ -1018,8 +1019,8 @@ public final class CompilationSupport {
       throws InterruptedException {
     Artifact outputArchive =
         ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB);
-    ImmutableList<Artifact> objcLibraries = objcProvider.getObjcLibraries();
-    ImmutableList<Artifact> ccLibraries = objcProvider.getCcLibraries();
+    ImmutableList<Artifact> objcLibraries = objcLibraries(objcProvider);
+    ImmutableList<Artifact> ccLibraries = ccLibraries(objcProvider);
     ruleContext.registerAction(ObjcRuleClasses.spawnAppleEnvActionBuilder(
             appleConfiguration, appleConfiguration.getSingleArchPlatform())
         .setMnemonic("ObjcLink")
@@ -1213,8 +1214,8 @@ public final class CompilationSupport {
             ? intermediateArtifacts.unstrippedSingleArchitectureBinary()
             : intermediateArtifacts.strippedSingleArchitectureBinary();
 
-    ImmutableList<Artifact> objcLibraries = objcProvider.getObjcLibraries();
-    ImmutableList<Artifact> ccLibraries = objcProvider.getCcLibraries();
+    ImmutableList<Artifact> objcLibraries = objcLibraries(objcProvider);
+    ImmutableList<Artifact> ccLibraries = ccLibraries(objcProvider);
     ImmutableList<Artifact> bazelBuiltLibraries = Iterables.isEmpty(prunedJ2ObjcArchives)
         ? objcLibraries : substituteJ2ObjcPrunedLibraries(objcProvider);
     CommandLine commandLine =
@@ -1273,6 +1274,24 @@ public final class CompilationSupport {
     }
   }
 
+  private ImmutableList<Artifact> objcLibraries(ObjcProvider objcProvider) {
+    ImmutableList.Builder<Artifact> objcLibraryBuilder = ImmutableList.builder();
+    // JRE libraries must be ordered after all regular objc libraries.
+    NestedSet<Artifact> jreLibs = objcProvider.get(ObjcProvider.JRE_LIBRARY);
+    objcLibraryBuilder.addAll(Iterables.filter(
+        objcProvider.get(LIBRARY), Predicates.not(Predicates.in(jreLibs.toSet()))));
+    objcLibraryBuilder.addAll(jreLibs);
+    return objcLibraryBuilder.build();
+  }
+
+  private ImmutableList<Artifact> ccLibraries(ObjcProvider objcProvider) {
+    ImmutableList.Builder<Artifact> ccLibraryBuilder = ImmutableList.builder();
+    for (LinkerInputs.LibraryToLink libraryToLink : objcProvider.get(ObjcProvider.CC_LIBRARY)) {
+      ccLibraryBuilder.add(libraryToLink.getArtifact());
+    }
+    return ccLibraryBuilder.build();
+  }
+
   private ImmutableList<Artifact> j2objcPrunedLibraries(ObjcProvider objcProvider) {
     ImmutableList.Builder<Artifact> j2objcPrunedLibraryBuilder = ImmutableList.builder();
     for (Artifact j2objcLibrary : objcProvider.get(ObjcProvider.J2OBJC_LIBRARY)) {
@@ -1299,7 +1318,7 @@ public final class CompilationSupport {
     ImmutableList.Builder<Artifact> libraries = new ImmutableList.Builder<>();
 
     Set<Artifact> unprunedJ2ObjcLibs = objcProvider.get(ObjcProvider.J2OBJC_LIBRARY).toSet();
-    for (Artifact library : objcProvider.getObjcLibraries()) {
+    for (Artifact library : objcLibraries(objcProvider)) {
       // If we match an unpruned J2ObjC library, add the pruned version of the J2ObjC static library
       // instead.
       if (unprunedJ2ObjcLibs.contains(library)) {
