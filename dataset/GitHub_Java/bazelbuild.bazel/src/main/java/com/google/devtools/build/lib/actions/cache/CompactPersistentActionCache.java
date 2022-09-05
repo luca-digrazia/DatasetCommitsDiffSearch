@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,12 +15,12 @@ package com.google.devtools.build.lib.actions.cache;
 
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ConditionallyThreadSafe;
 import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.util.CompactStringIndexer;
 import com.google.devtools.build.lib.util.PersistentMap;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringIndexer;
 import com.google.devtools.build.lib.util.VarInt;
 import com.google.devtools.build.lib.vfs.Path;
@@ -56,9 +56,7 @@ public class CompactPersistentActionCache implements ActionCache {
   // cache records.
   private static final int VALIDATION_KEY = -10;
 
-  private static final int NO_INPUT_DISCOVERY_COUNT = -1;
-
-  private static final int VERSION = 11;
+  private static final int VERSION = 10;
 
   private final class ActionMap extends PersistentMap<Integer, byte[]> {
     private final Clock clock;
@@ -138,7 +136,7 @@ public class CompactPersistentActionCache implements ActionCache {
 
   private final PersistentMap<Integer, byte[]> map;
   private final PersistentStringIndexer indexer;
-  static final ActionCache.Entry CORRUPTED = new ActionCache.Entry(null, false);
+  static final ActionCache.Entry CORRUPTED = new ActionCache.Entry(null);
 
   public CompactPersistentActionCache(Path cacheRoot, Clock clock) throws IOException {
     Path cacheFile = cacheFile(cacheRoot);
@@ -224,8 +222,8 @@ public class CompactPersistentActionCache implements ActionCache {
   }
 
   @Override
-  public ActionCache.Entry createEntry(String key, boolean discoversInputs) {
-    return new ActionCache.Entry(key, discoversInputs);
+  public ActionCache.Entry createEntry(String key) {
+    return new ActionCache.Entry(key);
   }
 
   @Override
@@ -351,7 +349,7 @@ public class CompactPersistentActionCache implements ActionCache {
 
       entry.getFileDigest().write(sink);
 
-      VarInt.putVarInt(entry.discoversInputs() ? files.size() : NO_INPUT_DISCOVERY_COUNT, sink);
+      VarInt.putVarInt(files.size(), sink);
       for (String file : files) {
         VarInt.putVarInt(indexer.getOrCreateIndex(file), sink);
       }
@@ -390,8 +388,7 @@ public class CompactPersistentActionCache implements ActionCache {
       if (source.remaining() > 0) {
         throw new IOException("serialized entry data has not been fully decoded");
       }
-      return new Entry(actionKey,
-          count == NO_INPUT_DISCOVERY_COUNT ? null : builder.build(), digest);
+      return new Entry(actionKey, builder.build(), digest);
     } catch (BufferUnderflowException e) {
       throw new IOException("encoded entry data is incomplete", e);
     }
