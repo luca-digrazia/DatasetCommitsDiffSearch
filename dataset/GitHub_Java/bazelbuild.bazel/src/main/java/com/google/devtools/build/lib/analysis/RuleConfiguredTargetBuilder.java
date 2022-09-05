@@ -13,15 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import static com.google.devtools.build.lib.analysis.ExtraActionUtils.createExtraActionProvider;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.ExtraActionArtifactsProvider.ExtraArtifactSet;
 import com.google.devtools.build.lib.analysis.LicensesProvider.TargetLicense;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.constraints.ConstraintSemantics;
@@ -112,17 +109,9 @@ public final class RuleConfiguredTargetBuilder {
       Preconditions.checkState(runfilesSupport != null);
       add(TestProvider.class, initializeTestProvider(filesToRunProvider));
     }
-
-    ExtraActionArtifactsProvider extraActionsProvider =
-        createExtraActionProvider(actionsWithoutExtraAction, ruleContext);
-    if (mandatoryStampFiles != null && !mandatoryStampFiles.isEmpty()) {
-      extraActionsProvider = ExtraActionArtifactsProvider.create(
-          extraActionsProvider.getExtraActionArtifacts(),
-          NestedSetBuilder.fromNestedSet(extraActionsProvider.getTransitiveExtraActionArtifacts())
-              .add(ExtraArtifactSet.of(ruleContext.getLabel(), mandatoryStampFiles)).build());
-    }
-    add(ExtraActionArtifactsProvider.class, extraActionsProvider);
-
+    add(ExtraActionArtifactsProvider.class, ExtraActionUtils.createExtraActionProvider(
+        actionsWithoutExtraAction,
+        mandatoryStampFiles, ruleContext));
     if (!outputGroupBuilders.isEmpty()) {
       ImmutableMap.Builder<String, NestedSet<Artifact>> outputGroups = ImmutableMap.builder();
       for (Map.Entry<String, NestedSetBuilder<Artifact>> entry : outputGroupBuilders.entrySet()) {
@@ -252,17 +241,6 @@ public final class RuleConfiguredTargetBuilder {
     for (Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> provider :
         providers.entrySet()) {
       addProvider(provider.getKey(), provider.getValue());
-    }
-    return this;
-  }
-
-  /**
-   * Add multiple providers with given values.
-   */
-  public RuleConfiguredTargetBuilder addProviders(
-      Iterable<? extends TransitiveInfoProvider> providers) {
-    for (TransitiveInfoProvider provider : providers) {
-      addProvider(provider);
     }
     return this;
   }
