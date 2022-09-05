@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019 http://www.hswebframework.org
+ *  Copyright 2016 http://www.hswebframework.org
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,17 +18,14 @@
 
 package org.hswebframework.web.authorization;
 
-import org.hswebframework.web.authorization.simple.SimpleAuthentication;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
+import org.hswebframework.web.ThreadLocalUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.Objects;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * 权限获取器,用于静态方式获取当前登录用户的权限信息.
@@ -48,24 +45,30 @@ import java.util.stream.Collectors;
 public final class AuthenticationHolder {
     private static final List<AuthenticationSupplier> suppliers = new ArrayList<>();
 
+    private static final String CURRENT_USER_ID_KEY = Authentication.class.getName() + "_current_id";
+
     private static final ReadWriteLock lock = new ReentrantReadWriteLock();
 
-    private static Optional<Authentication> get(Function<AuthenticationSupplier, Optional<Authentication>> function) {
-
-        return Flux.fromStream(suppliers.stream().map(function))
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .reduceWith(SimpleAuthentication::new, SimpleAuthentication::merge)
-                .filter(auth->auth.getUser()!=null)
-                .map(Authentication.class::cast)
-                .blockOptional();
+    private static Authentication get(Function<AuthenticationSupplier, Authentication> function) {
+        lock.readLock().lock();
+        try {
+            return suppliers.stream()
+                    .map(function)
+                    .filter(Objects::nonNull)
+                    .findFirst().orElse(null);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     /**
      * @return 当前登录的用户权限信息
      */
-    public static Optional<Authentication> get() {
-
+    public static Authentication get() {
+        String currentId = ThreadLocalUtils.get(CURRENT_USER_ID_KEY);
+        if (currentId != null) {
+            return get(currentId);
+        }
         return get(AuthenticationSupplier::get);
     }
 
@@ -75,7 +78,7 @@ public final class AuthenticationHolder {
      * @param userId 用户ID
      * @return 权限信息
      */
-    public static Optional<Authentication> get(String userId) {
+    public static Authentication get(String userId) {
         return get(supplier -> supplier.get(userId));
     }
 
@@ -93,4 +96,7 @@ public final class AuthenticationHolder {
         }
     }
 
+    public static void setCurrentUserId(String id) {
+        ThreadLocalUtils.put(AuthenticationHolder.CURRENT_USER_ID_KEY, id);
+    }
 }
