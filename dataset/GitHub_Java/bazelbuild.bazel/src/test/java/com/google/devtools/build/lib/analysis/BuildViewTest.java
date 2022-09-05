@@ -48,6 +48,7 @@ import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
 import com.google.devtools.build.lib.testutil.Suite;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.Pair;
@@ -1090,7 +1091,7 @@ public class BuildViewTest extends BuildViewTestBase {
       update(defaultFlags().with(Flag.KEEP_GOING));
       fail();
     } catch (LoadingFailedException | InvalidConfigurationException e) {
-      if (getAnalysisMock().isThisBazel()) {
+      if (TestConstants.THIS_IS_BAZEL) {
         // TODO(ulfjack): Bazel ignores the --cpu setting and just uses "default" instead. This
         // means all cross-platform Java builds are broken for checked-in JDKs.
         assertContainsEvent(
