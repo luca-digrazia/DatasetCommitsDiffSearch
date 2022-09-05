@@ -257,9 +257,6 @@ public abstract class ProguardHelper {
       proguardOutputMap = null;
     }
 
-    Artifact proguardConfigOutput =
-        ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_PROGUARD_CONFIG); 
-    
     if (optimizationPasses == null) {
       // Run proguard as a single step.
       Builder builder = makeBuilder(
@@ -269,8 +266,7 @@ public abstract class ProguardHelper {
           proguardMapping,
           libraryJars,
           proguardOutputJar,
-          proguardOutputMap,
-          proguardConfigOutput)
+          proguardOutputMap)
           .setProgressMessage("Trimming binary with Proguard")
           .addOutput(proguardOutputJar);
 
@@ -288,8 +284,7 @@ public abstract class ProguardHelper {
               proguardMapping,
               libraryJars,
               proguardOutputJar,
-              /* proguardOutputMap */ null,
-              /* proguardConfigOutput */ null)
+              /* proguardOutputMap */ null)
               .setProgressMessage("Trimming binary with Proguard: Verification/Shrinking Pass")
               .addArgument("-runtype INITIAL")
               .addArgument("-nextstageoutput")
@@ -307,8 +302,7 @@ public abstract class ProguardHelper {
                 proguardMapping,
                 libraryJars,
                 proguardOutputJar,
-                /* proguardOutputMap */ null,
-                /* proguardConfigOutput */ null)
+                /* proguardOutputMap */ null)
                 .setProgressMessage("Trimming binary with Proguard: Optimization Pass " + (i + 1))
                 .addArgument("-runtype OPTIMIZATION")
                 .addArgument("-laststageoutput")
@@ -326,8 +320,7 @@ public abstract class ProguardHelper {
           proguardMapping,
           libraryJars,
           proguardOutputJar,
-          proguardOutputMap,
-          proguardConfigOutput)
+          proguardOutputMap)
           .setProgressMessage("Trimming binary with Proguard: Obfuscation and Final Ouput Pass")
           .addArgument("-runtype FINAL")
           .addArgument("-laststageoutput")
@@ -347,8 +340,7 @@ public abstract class ProguardHelper {
       @Nullable Artifact proguardMapping,
       Iterable<Artifact> libraryJars,
       Artifact proguardOutputJar,
-      @Nullable Artifact proguardOutputMap,
-      @Nullable Artifact proguardConfigOutput) {
+      @Nullable Artifact proguardOutputMap) {
 
     Builder builder = new SpawnAction.Builder()
         .addInputs(libraryJars)
@@ -386,12 +378,6 @@ public abstract class ProguardHelper {
       builder
           .addArgument("-printmapping")
           .addOutputArgument(proguardOutputMap);
-    }
-
-    if (proguardConfigOutput != null) {
-      builder
-          .addArgument("-printconfiguration")
-          .addOutputArgument(proguardConfigOutput);
     }
 
     return builder;

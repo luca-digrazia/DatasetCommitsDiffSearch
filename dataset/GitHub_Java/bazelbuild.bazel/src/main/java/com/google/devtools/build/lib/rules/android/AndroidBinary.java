@@ -857,9 +857,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   
   private static ProguardOutput createEmptyProguardAction(RuleContext ruleContext,
       Artifact proguardOutputJar, Artifact deployJarArtifact) throws InterruptedException {
-    ImmutableList.Builder<Artifact> failures = ImmutableList.<Artifact>builder()
-        .add(proguardOutputJar)
-        .add(ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_PROGUARD_CONFIG));
+    ImmutableList.Builder<Artifact> failures =
+        ImmutableList.<Artifact>builder().add(proguardOutputJar);
     if (ruleContext.attributes().get("proguard_generate_mapping", Type.BOOLEAN)) {
       failures.add(ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_PROGUARD_MAP));
     }
