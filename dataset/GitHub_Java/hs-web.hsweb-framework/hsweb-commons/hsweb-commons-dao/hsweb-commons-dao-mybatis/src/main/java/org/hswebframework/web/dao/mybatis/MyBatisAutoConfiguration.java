@@ -68,7 +68,6 @@ public class MyBatisAutoConfiguration {
     @Autowired(required = false)
     private DatabaseIdProvider databaseIdProvider;
 
-
     @Bean
     @Primary
     @ConfigurationProperties(prefix = MybatisProperties.MYBATIS_PREFIX)

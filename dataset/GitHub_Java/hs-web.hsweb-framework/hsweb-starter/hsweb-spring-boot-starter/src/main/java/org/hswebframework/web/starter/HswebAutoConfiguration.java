@@ -24,18 +24,22 @@ import com.alibaba.fastjson.parser.ParserConfig;
 import com.alibaba.fastjson.parser.deserializer.JavaBeanDeserializer;
 import com.alibaba.fastjson.parser.deserializer.ObjectDeserializer;
 import com.alibaba.fastjson.serializer.SerializerFeature;
+import org.hsweb.ezorm.rdb.executor.AbstractJdbcSqlExecutor;
+import org.hsweb.ezorm.rdb.executor.SqlExecutor;
 import org.hswebframework.web.ThreadLocalUtils;
 import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
 import org.hswebframework.web.commons.entity.factory.MapperEntityFactory;
+import org.hswebframework.web.commons.entity.factory.PropertyCopier;
 import org.hswebframework.web.commons.model.Model;
+import org.hswebframework.web.dao.datasource.DataSourceHolder;
+import org.hswebframework.web.dao.datasource.DatabaseType;
 import org.hswebframework.web.starter.convert.FastJsonHttpMessageConverter;
-import org.hswebframework.web.starter.entity.EntityFactoryInitConfiguration;
-import org.hswebframework.web.starter.entity.EntityProperties;
 import org.hswebframework.web.starter.resolver.AuthorizationArgumentResolver;
 import org.hswebframework.web.starter.resolver.JsonParamResolver;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -52,11 +56,14 @@ import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.sql.DataSource;
 import javax.validation.Validation;
 import javax.validation.Validator;
 import javax.validation.ValidatorFactory;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.List;
 
 /**
@@ -67,7 +74,6 @@ import java.util.List;
 @Configuration
 @ComponentScan("org.hswebframework.web")
 @EnableConfigurationProperties(EntityProperties.class)
-@ImportAutoConfiguration(EntityFactoryInitConfiguration.class)
 public class HswebAutoConfiguration {
 
     @Autowired
@@ -152,13 +158,30 @@ public class HswebAutoConfiguration {
 
     @Bean(name = "entityFactory")
     @ConditionalOnMissingBean(EntityFactory.class)
-    public MapperEntityFactory mapperEntityFactory() {
+    public EntityFactory entityFactory() {
         return new MapperEntityFactory(entityProperties.createMappers());
     }
 
-    @Bean
+
+    @Configuration
     @ConditionalOnBean(MapperEntityFactory.class)
-    public EntityFactoryInitConfiguration entityFactoryInitConfiguration() {
-        return new EntityFactoryInitConfiguration();
+    public class EntityFactoryInitConfiguration implements BeanPostProcessor {
+
+        @Autowired
+        private MapperEntityFactory mapperEntityFactory;
+
+
+        @Override
+        public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+            return bean;
+        }
+
+        @Override
+        public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+            if (bean instanceof PropertyCopier) {
+                mapperEntityFactory.addCopier(((PropertyCopier) bean));
+            }
+            return bean;
+        }
     }
 }
