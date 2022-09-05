@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.AspectDefinition;
-import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
@@ -89,8 +88,7 @@ public class J2ObjcAspect implements ConfiguredAspectFactory {
   }
 
   @Override
-  public Aspect create(ConfiguredTarget base, RuleContext ruleContext,
-      AspectParameters parameters) {
+  public Aspect create(ConfiguredTarget base, RuleContext ruleContext) {
     Aspect.Builder builder = new Aspect.Builder(NAME);
 
     JavaCompilationArgsProvider compilationArgsProvider =

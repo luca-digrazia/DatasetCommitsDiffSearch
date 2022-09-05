@@ -248,7 +248,7 @@ public final class CompilationSupport {
         .addExecPath("-o", objFile);
 
     // TODO(bazel-team): Remote private headers from inputs once they're added to the provider.
-    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
+    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
         .setMnemonic("ObjcCompile")
         .setExecutable(CLANG)
         .setCommandLine(commandLine.build())
@@ -318,7 +318,7 @@ public final class CompilationSupport {
       inputHeaders.add(bridgingHeader.get());
     }
 
-    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
+    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
         .setMnemonic("SwiftCompile")
         .setExecutable(SWIFT)
         .setCommandLine(commandLine.build())
@@ -361,7 +361,7 @@ public final class CompilationSupport {
     commandLine.addExecPath("-o", intermediateArtifacts.swiftModule());
     commandLine.addExecPath("-emit-objc-header-path", intermediateArtifacts.swiftHeader());
 
-    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
+    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
         .setMnemonic("SwiftModuleMerge")
         .setExecutable(SWIFT)
         .setCommandLine(commandLine.build())
@@ -380,7 +380,7 @@ public final class CompilationSupport {
     }
   }
 
-  private Iterable<Action> archiveActions(
+  private static Iterable<Action> archiveActions(
       ActionConstructionContext context,
       Iterable<Artifact> objFiles,
       Artifact archive,
@@ -395,7 +395,7 @@ public final class CompilationSupport {
         Artifact.joinExecPaths("\n", objFiles),
         /*makeExecutable=*/ false));
 
-    actions.add(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
+    actions.add(ObjcRuleClasses.spawnOnDarwinActionBuilder()
         .setMnemonic("ObjcLink")
         .setExecutable(ObjcRuleClasses.LIBTOOL)
         .setCommandLine(new CustomCommandLine.Builder()
@@ -464,7 +464,7 @@ public final class CompilationSupport {
 
     ImmutableList<Artifact> ccLibraries = ccLibraries(objcProvider);
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
+        ObjcRuleClasses.spawnOnDarwinActionBuilder()
             .setMnemonic("ObjcLink")
             .setShellCommand(ImmutableList.of("/bin/bash", "-c"))
             .setCommandLine(
@@ -487,7 +487,7 @@ public final class CompilationSupport {
       Artifact strippedBinary = intermediateArtifacts.strippedSingleArchitectureBinary();
 
       ruleContext.registerAction(
-          ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
+          ObjcRuleClasses.spawnOnDarwinActionBuilder()
               .setMnemonic("ObjcBinarySymbolStrip")
               .setExecutable(STRIP)
               .setCommandLine(symbolStripCommandLine(stripArgs, binaryToLink, strippedBinary))
@@ -828,7 +828,7 @@ public final class CompilationSupport {
 
     Artifact dumpsyms = ruleContext.getPrerequisiteArtifact(":dumpsyms", Mode.HOST);
     Artifact breakpadFile = intermediateArtifacts.breakpadSym();
-    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
+    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
         .setMnemonic("GenBreakpad")
         .setProgressMessage("Generating breakpad file: " + ruleContext.getLabel())
         .setShellCommand(ImmutableList.of("/bin/bash", "-c"))
