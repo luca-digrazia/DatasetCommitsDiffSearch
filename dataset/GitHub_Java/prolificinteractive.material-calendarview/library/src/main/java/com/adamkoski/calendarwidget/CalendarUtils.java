@@ -1,7 +1,6 @@
 package com.adamkoski.calendarwidget;
 
 import java.util.Calendar;
-import java.util.Date;
 
 import static java.util.Calendar.DATE;
 import static java.util.Calendar.MONTH;
@@ -45,11 +44,5 @@ public class CalendarUtils {
         calendar.clear();
         calendar.set(year, month, 1);
         calendar.getTimeInMillis();
-    }
-
-    public static Calendar fromDate(Date date) {
-        Calendar calendar = Calendar.getInstance();
-        calendar.setTime(date);
-        return calendar;
     }
 }
