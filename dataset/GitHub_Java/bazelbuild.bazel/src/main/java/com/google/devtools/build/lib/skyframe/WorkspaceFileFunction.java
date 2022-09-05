@@ -16,8 +16,9 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.Package.LegacyBuilder;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
@@ -43,7 +44,6 @@ public class WorkspaceFileFunction implements SkyFunction {
   private final PackageFactory packageFactory;
   private final BlazeDirectories directories;
   private final RuleClassProvider ruleClassProvider;
-  private static final PackageIdentifier rootPackage = PackageIdentifier.createInMainRepo("");
 
   public WorkspaceFileFunction(
       RuleClassProvider ruleClassProvider,
@@ -67,7 +67,7 @@ public class WorkspaceFileFunction implements SkyFunction {
     }
 
     Path repoWorkspace = workspaceRoot.getRoot().getRelative(workspaceRoot.getRelativePath());
-    Package.Builder builder =
+    LegacyBuilder builder =
         Package.newExternalPackageBuilder(repoWorkspace, ruleClassProvider.getRunfilesPrefix());
 
     if (workspaceASTValue.getASTs().isEmpty()) {
@@ -87,7 +87,6 @@ public class WorkspaceFileFunction implements SkyFunction {
               ruleClassProvider,
               packageFactory.getEnvironmentExtensions(),
               mutability,
-              key.getIndex() == 0,
               directories.getEmbeddedBinariesRoot(),
               directories.getWorkspace());
       if (key.getIndex() > 0) {
@@ -105,10 +104,12 @@ public class WorkspaceFileFunction implements SkyFunction {
       BuildFileAST ast = workspaceASTValue.getASTs().get(key.getIndex());
       PackageFunction.SkylarkImportResult importResult =
           PackageFunction.fetchImportsFromBuildFile(
-              repoWorkspace, rootPackage, ast, env, null);
+              repoWorkspace, Label.EXTERNAL_PACKAGE_IDENTIFIER, ast, env, null);
       if (importResult == null) {
         return null;
       }
+      // TODO(dmarting): give a nice error message when redefining a repository name and
+      // getIndex() > 0.
       parser.execute(ast, importResult.importMap);
     } catch (PackageFunctionException | NameConflictException e) {
       throw new WorkspaceFileFunctionException(e, Transience.PERSISTENT);

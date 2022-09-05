@@ -339,9 +339,14 @@ public abstract class RepositoryFunction {
       throws RepositoryFunctionException {
     try {
       FileSystemUtils.createDirectoryAndParents(repositoryDirectory);
-      for (Path target : targetDirectory.getDirectoryEntries()) {
-        Path symlinkPath = repositoryDirectory.getRelative(target.getBaseName());
-        createSymbolicLink(symlinkPath, target);
+      if (repositoryDirectory.getFileSystem().supportsSymbolicLinksNatively()) {
+        for (Path target : targetDirectory.getDirectoryEntries()) {
+          Path symlinkPath =
+              repositoryDirectory.getRelative(target.getBaseName());
+          createSymbolicLink(symlinkPath, target);
+        }
+      } else {
+        FileSystemUtils.copyTreesBelow(targetDirectory, repositoryDirectory);
       }
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);

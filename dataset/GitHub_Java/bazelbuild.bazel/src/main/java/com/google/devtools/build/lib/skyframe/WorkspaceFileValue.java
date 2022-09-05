@@ -14,19 +14,16 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.RootedPath;
-import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.util.Map;
 import java.util.Objects;
 
@@ -37,24 +34,22 @@ import java.util.Objects;
  */
 public class WorkspaceFileValue implements SkyValue {
 
-  /** Argument for the SkyKey to request a WorkspaceFileValue. */
+  /**
+   * Argument for the SkyKey to request a WorkspaceFileValue.
+   */
   @Immutable
-  @AutoCodec
-  public static class WorkspaceFileKey implements SkyKey {
-    private static final Interner<WorkspaceFileKey> interner = BlazeInterners.newWeakInterner();
-
+  public static class WorkspaceFileKey {
     private final RootedPath path;
     private final int idx;
 
-    private WorkspaceFileKey(RootedPath path, int idx) {
+    /**
+     * Creates a Key for the WorkspaceFileFunction. The path to the workspace file is specified
+     * by {@code path}. This key will ask WorkspaceFileFunction to get the {@code idx+1}-th part of
+     * the workspace file (so idx = 0 represents the first part, idx = 1, the second part, etc...).
+     */
+    public WorkspaceFileKey(RootedPath path, int idx) {
       this.path = path;
       this.idx = idx;
-    }
-
-    @AutoCodec.VisibleForSerialization
-    @AutoCodec.Instantiator
-    static WorkspaceFileKey create(RootedPath path, int idx) {
-      return interner.intern(new WorkspaceFileKey(path, idx));
     }
 
     public RootedPath getPath() {
@@ -63,11 +58,6 @@ public class WorkspaceFileValue implements SkyValue {
 
     public int getIndex() {
       return idx;
-    }
-
-    @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.WORKSPACE_FILE;
     }
 
     @Override
@@ -101,29 +91,24 @@ public class WorkspaceFileValue implements SkyValue {
   // type in the Environment class (that would ease the serialization of this object).
   private final ImmutableMap<String, Object> bindings;
   private final ImmutableMap<String, Extension> importMap;
-  private final ImmutableMap<String, Integer> importToChunkMap;
 
   /**
    * Create a WorkspaceFileValue containing the various values necessary to compute the split
    * WORKSPACE file.
-   *
    * @param pkg Package built by agreggating all parts of the split WORKSPACE file up to this one.
    * @param importMap List of imports (i.e., load statements) present in all parts of the split
-   *     WORKSPACE file up to this one.
-   * @param importToChunkMap Map of all load statements encountered so far to the chunk they
-   *     initially appeared in.
-   * @param bindings List of top-level variable bindings from the all parts of the split WORKSPACE
-   *     file up to this one. The key is the name of the bindings and the value is the actual
-   *     object.
+   * WORKSPACE file up to this one.
+   * @param bindings List of top-level variable bindings from the all parts of the split
+   * WORKSPACE file up to this one. The key is the name of the bindings and the value is the actual
+   * object.
    * @param path The rooted path to workspace file to parse.
    * @param idx The index of this part of the split WORKSPACE file (0 for the first one, 1 for the
-   *     second one and so on).
+   * second one and so on).
    * @param hasNext Is there a next part in the WORKSPACE file or this part the last one?
    */
   public WorkspaceFileValue(
       Package pkg,
       Map<String, Extension> importMap,
-      Map<String, Integer> importToChunkMap,
       Map<String, Object> bindings,
       RootedPath path,
       int idx,
@@ -134,7 +119,6 @@ public class WorkspaceFileValue implements SkyValue {
     this.hasNext = hasNext;
     this.bindings = ImmutableMap.copyOf(bindings);
     this.importMap = ImmutableMap.copyOf(importMap);
-    this.importToChunkMap = ImmutableMap.copyOf(importToChunkMap);
   }
 
   /**
@@ -150,13 +134,8 @@ public class WorkspaceFileValue implements SkyValue {
     return "<WorkspaceFileValue path=" + path + " idx=" + idx + ">";
   }
 
-  /**
-   * Creates a Key for the WorkspaceFileFunction. The path to the workspace file is specified by
-   * {@code path}. This key will ask WorkspaceFileFunction to get the {@code idx+1}-th part of the
-   * workspace file (so idx = 0 represents the first part, idx = 1, the second part, etc...).
-   */
-  static WorkspaceFileKey key(RootedPath path, int idx) {
-    return WorkspaceFileKey.create(path, idx);
+  static SkyKey key(RootedPath path, int idx) {
+    return new SkyKey(SkyFunctions.WORKSPACE_FILE, new WorkspaceFileKey(path, idx));
   }
 
   public static SkyKey key(RootedPath path) {
@@ -206,9 +185,5 @@ public class WorkspaceFileValue implements SkyValue {
 
   public ImmutableMap<String, Extension> getImportMap() {
     return importMap;
-  }
-
-  public ImmutableMap<String, Integer> getImportToChunkMap() {
-    return importToChunkMap;
   }
 }
