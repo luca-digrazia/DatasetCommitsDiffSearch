@@ -70,7 +70,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.AliasProvider;
@@ -89,7 +88,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -1790,17 +1788,16 @@ public final class RuleContext extends TargetContext
     }
 
     private String getMissingMandatoryProviders(ConfiguredTarget prerequisite, Attribute attribute){
-      ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> mandatoryProvidersList
-          = attribute.getMandatoryProvidersList();
+      List<ImmutableSet<String>> mandatoryProvidersList = attribute.getMandatoryProvidersList();
       if (mandatoryProvidersList.isEmpty()) {
         return null;
       }
       List<List<String>> missingProvidersList = new ArrayList<>();
-      for (ImmutableSet<SkylarkProviderIdentifier> providers : mandatoryProvidersList) {
+      for (ImmutableSet<String> providers : mandatoryProvidersList) {
         List<String> missing = new ArrayList<>();
-        for (SkylarkProviderIdentifier provider : providers) {
+        for (String provider : providers) {
           if (prerequisite.get(provider) == null) {
-            missing.add(provider.toString());
+            missing.add(provider);
           }
         }
         if (missing.isEmpty()) {
@@ -1867,36 +1864,30 @@ public final class RuleContext extends TargetContext
     private void validateRuleDependency(ConfiguredTarget prerequisite, Attribute attribute) {
       Target prerequisiteTarget = prerequisite.getTarget();
       RuleClass ruleClass = ((Rule) prerequisiteTarget).getRuleClassObject();
-      String notAllowedRuleClassesMessage = null;
+      HashSet<String> unfulfilledRequirements = new HashSet<>();
 
       if (attribute.getAllowedRuleClassesPredicate() != Predicates.<RuleClass>alwaysTrue()) {
         if (attribute.getAllowedRuleClassesPredicate().apply(ruleClass)) {
-          // prerequisite has an allowed rule class => accept.
           return;
         }
-        // remember that the rule class that was not allowed;
-        // but maybe prerequisite provides required providers? do not reject yet.
-        notAllowedRuleClassesMessage =
-            badPrerequisiteMessage(
-                prerequisiteTarget.getTargetKind(),
-                prerequisite,
-                "expected " + attribute.getAllowedRuleClassesPredicate(),
-                false);
+        unfulfilledRequirements.add(badPrerequisiteMessage(prerequisiteTarget.getTargetKind(),
+            prerequisite, "expected " + attribute.getAllowedRuleClassesPredicate(), false));
       }
 
-      if (attribute.getAllowedRuleClassesWarningPredicate() != Predicates.<RuleClass>alwaysTrue()) {
+      if (attribute.getAllowedRuleClassesWarningPredicate()
+          != Predicates.<RuleClass>alwaysTrue()) {
         Predicate<RuleClass> warningPredicate = attribute.getAllowedRuleClassesWarningPredicate();
         if (warningPredicate.apply(ruleClass)) {
           reportBadPrerequisite(attribute, prerequisiteTarget.getTargetKind(), prerequisite,
               "expected " + attribute.getAllowedRuleClassesPredicate(), true);
-          // prerequisite has a rule class allowed with a warning => accept, emitting a warning.
           return;
         }
       }
 
-      // If we got there, we have no allowed rule class.
-      // If mandatory providers are specified, try them.
-      Set<String> unfulfilledRequirements = new LinkedHashSet<>();
+      // This condition is required; getMissingMandatory[Native]Providers() would be vacuously true
+      // if no providers were mandatory (thus, none are missing), which would cause an early return
+      // below without emitting the error message about the not-allowed rule class if that
+      // requirement was unfulfilled.
       if (!attribute.getMandatoryNativeProvidersList().isEmpty()
           || !attribute.getMandatoryProvidersList().isEmpty()) {
         boolean hadAllMandatoryProviders = true;
@@ -1918,14 +1909,8 @@ public final class RuleContext extends TargetContext
         }
 
         if (hadAllMandatoryProviders) {
-          // all mandatory providers are present => accept.
           return;
         }
-      }
-
-      // not allowed rule class and some mandatory providers missing => reject.
-      if (notAllowedRuleClassesMessage != null) {
-        unfulfilledRequirements.add(notAllowedRuleClassesMessage);
       }
 
       if (!unfulfilledRequirements.isEmpty()) {
