@@ -22,8 +22,6 @@ import java.lang.Thread.State;
 import java.text.MessageFormat;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import static com.yammer.metrics.core.VirtualMachineMetrics.*;
 
@@ -322,19 +320,28 @@ public class MetricsServlet extends HttpServlet {
             }
             json.writeEndObject();
 
-            json.writeFieldName("garbage-collectors");
+            json.writeFieldName("gc");
             json.writeStartObject();
             {
-                for (Entry<String, GarbageCollector> entry : garbageCollectors().entrySet()) {
-                    json.writeFieldName(entry.getKey());
-                    json.writeStartObject();
-                    {
-                        final GarbageCollector gc = entry.getValue();
-                        json.writeNumberField("runs", gc.getRuns());
-                        json.writeNumberField("time", gc.getTime(TimeUnit.MILLISECONDS));
+                json.writeFieldName("duration");
+                json.writeStartObject();
+                {
+                    for (Entry<String, TimerMetric> entry : gcDurations().entrySet()) {
+                        json.writeFieldName(entry.getKey());
+                        writeTimer(json, entry.getValue(), showFullSamples);
                     }
-                    json.writeEndObject();
                 }
+                json.writeEndObject();
+
+                json.writeFieldName("throughput");
+                json.writeStartObject();
+                {
+                    for (Entry<String, MeterMetric> entry : gcThroughputs().entrySet()) {
+                        json.writeFieldName(entry.getKey());
+                        writeMeter(json, entry.getValue());
+                    }
+                }
+                json.writeEndObject();
             }
             json.writeEndObject();
 
