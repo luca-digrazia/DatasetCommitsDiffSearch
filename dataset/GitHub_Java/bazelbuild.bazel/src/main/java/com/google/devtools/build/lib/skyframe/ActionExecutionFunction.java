@@ -32,10 +32,10 @@ import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
 import com.google.devtools.build.lib.actions.PackageRootResolutionException;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.Root;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -276,8 +276,10 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
           ValueOrException2<NoSuchPackageException, InconsistentFilesystemException>> values =
               env.getValuesOrThrow(depKeys.values(), NoSuchPackageException.class,
                   InconsistentFilesystemException.class);
-      // Check values even if some are missing so that we can throw an appropriate exception if
-      // needed.
+      if (env.valuesMissing()) {
+        // Some values are not computed yet.
+        return null;
+      }
 
       Map<PathFragment, Root> result = new HashMap<>();
       for (PathFragment path : execPaths) {
@@ -289,10 +291,6 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
               + path, e);
         }
 
-        if (value == null) {
-          Preconditions.checkState(env.valuesMissing(), path);
-          continue;
-        }
         if (value.hasContainingPackage()) {
           // We have found corresponding root for current execPath.
           result.put(path, Root.asSourceRoot(value.getContainingPackageRoot()));
@@ -301,9 +299,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
           result.put(path, null);
         }
       }
-
-      // If some values are missing, return null.
-      return env.valuesMissing() ? null : result;
+      return result;
     }
   }
 
