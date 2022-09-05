@@ -8,9 +8,6 @@ import org.apache.logging.log4j.core.Filter;
 import org.apache.logging.log4j.core.Layout;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
-import org.apache.logging.log4j.core.config.plugins.Plugin;
-import org.apache.logging.log4j.core.config.plugins.PluginAttribute;
-import org.apache.logging.log4j.core.config.plugins.PluginFactory;
 
 import java.io.Serializable;
 
@@ -21,27 +18,26 @@ import static com.codahale.metrics.MetricRegistry.name;
  * number of statements being logged. The meter names are the logging level names appended to the
  * name of the appender.
  */
-@Plugin(name = "MetricsAppender", category = "Core", elementType = "appender")
 public class InstrumentedAppender extends AbstractAppender {
+    private final MetricRegistry registry;
 
-    private transient final MetricRegistry registry;
-
-    private transient Meter all;
-    private transient Meter trace;
-    private transient Meter debug;
-    private transient Meter info;
-    private transient Meter warn;
-    private transient Meter error;
-    private transient Meter fatal;
+    private Meter all;
+    private Meter trace;
+    private Meter debug;
+    private Meter info;
+    private Meter warn;
+    private Meter error;
+    private Meter fatal;
 
     /**
      * Create a new instrumented appender using the given registry name.
      *
-     * @param registryName     the name of the registry in {@link SharedMetricRegistries}
-     * @param filter           The Filter to associate with the Appender.
-     * @param layout           The layout to use to format the event.
+     * @param registryName the name of the registry in {@link SharedMetricRegistries}
+     * @param filter The Filter to associate with the Appender.
+     * @param layout The layout to use to format the event.
      * @param ignoreExceptions If true, exceptions will be logged and suppressed. If false errors will be
-     *                         logged and then passed to the application.
+     * logged and then passed to the application.
+     *
      */
     public InstrumentedAppender(String registryName, Filter filter, Layout<? extends Serializable> layout, boolean ignoreExceptions) {
         this(SharedMetricRegistries.getOrCreate(registryName), filter, layout, ignoreExceptions);
@@ -68,33 +64,15 @@ public class InstrumentedAppender extends AbstractAppender {
     /**
      * Create a new instrumented appender using the given registry.
      *
-     * @param registry         the metric registry
-     * @param filter           The Filter to associate with the Appender.
-     * @param layout           The layout to use to format the event.
+     * @param registry the metric registry
+     * @param filter The Filter to associate with the Appender.
+     * @param layout The layout to use to format the event.
      * @param ignoreExceptions If true, exceptions will be logged and suppressed. If false errors will be
-     *                         logged and then passed to the application.
+     * logged and then passed to the application.
      */
     public InstrumentedAppender(MetricRegistry registry, Filter filter, Layout<? extends Serializable> layout, boolean ignoreExceptions) {
         super(name(Appender.class), filter, layout, ignoreExceptions);
         this.registry = registry;
-    }
-
-    /**
-     * Create a new instrumented appender using the given appender name and registry.
-     *
-     * @param appenderName The name of the appender.
-     * @param registry     the metric registry
-     */
-    public InstrumentedAppender(String appenderName, MetricRegistry registry) {
-        super(appenderName, null, null, true);
-        this.registry = registry;
-    }
-
-    @PluginFactory
-    public static InstrumentedAppender createAppender(
-            @PluginAttribute("name") String name,
-            @PluginAttribute(value = "registryName", defaultString = "log4j2Metrics") String registry) {
-        return new InstrumentedAppender(name, SharedMetricRegistries.getOrCreate(registry));
     }
 
     @Override

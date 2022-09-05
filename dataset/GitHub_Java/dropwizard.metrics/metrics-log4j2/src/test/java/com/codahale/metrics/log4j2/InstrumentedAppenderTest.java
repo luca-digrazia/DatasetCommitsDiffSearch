@@ -2,6 +2,7 @@ package com.codahale.metrics.log4j2;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
+import com.codahale.metrics.log4j2.InstrumentedAppender;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.LogEvent;
@@ -9,7 +10,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -22,17 +23,17 @@ public class InstrumentedAppenderTest {
     private final LogEvent event = mock(LogEvent.class);
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         appender.start();
     }
 
     @After
-    public void tearDown() {
+    public void tearDown() throws Exception {
         SharedMetricRegistries.clear();
     }
 
     @Test
-    public void metersTraceEvents() {
+    public void metersTraceEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.TRACE);
 
         appender.append(event);
@@ -45,7 +46,7 @@ public class InstrumentedAppenderTest {
     }
 
     @Test
-    public void metersDebugEvents() {
+    public void metersDebugEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.DEBUG);
 
         appender.append(event);
@@ -58,7 +59,7 @@ public class InstrumentedAppenderTest {
     }
 
     @Test
-    public void metersInfoEvents() {
+    public void metersInfoEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.INFO);
 
         appender.append(event);
@@ -71,7 +72,7 @@ public class InstrumentedAppenderTest {
     }
 
     @Test
-    public void metersWarnEvents() {
+    public void metersWarnEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.WARN);
 
         appender.append(event);
@@ -84,7 +85,7 @@ public class InstrumentedAppenderTest {
     }
 
     @Test
-    public void metersErrorEvents() {
+    public void metersErrorEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.ERROR);
 
         appender.append(event);
@@ -97,7 +98,7 @@ public class InstrumentedAppenderTest {
     }
 
     @Test
-    public void metersFatalEvents() {
+    public void metersFatalEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.FATAL);
 
         appender.append(event);
@@ -110,7 +111,7 @@ public class InstrumentedAppenderTest {
     }
 
     @Test
-    public void usesSharedRegistries() {
+    public void usesSharedRegistries() throws Exception {
 
         String registryName = "registry";
 
