@@ -18,13 +18,12 @@ package com.google.devtools.build.lib.packages;
  * A class of aspects that are implemented natively in Bazel.
  *
  * <p>This class just wraps a {@link java.lang.Class} implementing the
- * aspect factory. All wrappers of the same class are equal.
+ * aspect factory. All wrappers of the same class are
  */
-public final class NativeAspectClass<T extends NativeAspectClass.NativeAspectFactory>
-    implements AspectClass {
-  private final Class<? extends T> nativeClass;
+public final class NativeAspectClass implements AspectClass {
+  private final Class<? extends AspectFactory<?, ?, ?>> nativeClass;
 
-  public NativeAspectClass(Class<? extends T> nativeClass) {
+  public NativeAspectClass(Class<? extends AspectFactory<?, ?, ?>> nativeClass) {
     this.nativeClass = nativeClass;
   }
 
@@ -34,11 +33,7 @@ public final class NativeAspectClass<T extends NativeAspectClass.NativeAspectFac
   }
 
   @Override
-  public AspectDefinition getDefinition(AspectParameters aspectParameters) {
-    return newInstance().getDefinition(aspectParameters);
-  }
-
-  public T newInstance() {
+  public AspectFactory<?, ?, ?> newInstance() {
     try {
       return nativeClass.newInstance();
     } catch (Exception e) {
@@ -56,16 +51,6 @@ public final class NativeAspectClass<T extends NativeAspectClass.NativeAspectFac
     if (!(obj instanceof NativeAspectClass)) {
       return false;
     }
-    return nativeClass.equals(((NativeAspectClass<?>) obj).nativeClass);
-  }
-
-  /**
-   * Every native aspect should implement this interface.
-   */
-  public interface NativeAspectFactory {
-    /**
-     * Returns the definition of the aspect.
-     */
-    AspectDefinition getDefinition(AspectParameters aspectParameters);
+    return nativeClass.equals(((NativeAspectClass) obj).nativeClass);
   }
 }

@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertNotNull;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ListMultimap;
@@ -23,17 +22,20 @@ import com.google.common.testing.NullPointerTester;
 import com.google.devtools.build.lib.analysis.DependencyResolver.Dependency;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.analysis.util.AnalysisTestCaseForJunit4;
+import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
 import com.google.devtools.build.lib.analysis.util.TestAspects;
 import com.google.devtools.build.lib.analysis.util.TestAspects.AspectRequiringRule;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.Aspect;
+import com.google.devtools.build.lib.packages.AspectDefinition;
+import com.google.devtools.build.lib.packages.AspectFactory;
+import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -52,11 +54,14 @@ import javax.annotation.Nullable;
  * easier this way.
  */
 @RunWith(JUnit4.class)
-public class DependencyResolverTest extends AnalysisTestCaseForJunit4 {
+public class DependencyResolverTest extends AnalysisTestCase {
   private DependencyResolver dependencyResolver;
 
+  @Override
   @Before
-  public final void createResolver() throws Exception {
+  public void setUp() throws Exception {
+    super.setUp();
+
     dependencyResolver = new DependencyResolver() {
       @Override
       protected void invalidVisibilityReferenceHook(TargetAndConfiguration node, Label label) {
@@ -80,6 +85,12 @@ public class DependencyResolverTest extends AnalysisTestCaseForJunit4 {
     };
   }
 
+  @Override
+  @After
+  public void tearDown() throws Exception {
+    super.tearDown();
+  }
+
   private void pkg(String name, String... contents) throws Exception {
     scratch.file("" + name + "/BUILD", contents);
   }
@@ -97,14 +108,18 @@ public class DependencyResolverTest extends AnalysisTestCaseForJunit4 {
     update();
   }
 
-  private <T extends ConfiguredNativeAspectFactory>
-    ListMultimap<Attribute, Dependency> dependentNodeMap(
-      String targetName, Class<T> aspect) throws Exception {
+  private ListMultimap<Attribute, Dependency> dependentNodeMap(
+      String targetName, Class<? extends ConfiguredAspectFactory> aspect) throws Exception {
+    AspectDefinition aspectDefinition =
+        aspect == null
+            ? null
+            : AspectFactory.Util.create(new NativeAspectClass(aspect)).getDefinition();
     Target target = packageManager.getTarget(reporter, Label.parseAbsolute(targetName));
     return dependencyResolver.dependentNodeMap(
         new TargetAndConfiguration(target, getTargetConfiguration()),
         getHostConfiguration(),
-        aspect != null ? new Aspect(new NativeAspectClass<T>(aspect)) : null,
+        aspectDefinition,
+        AspectParameters.EMPTY,
         ImmutableSet.<ConfigMatchingProvider>of());
   }
 
@@ -113,7 +128,7 @@ public class DependencyResolverTest extends AnalysisTestCaseForJunit4 {
       ListMultimap<Attribute, Dependency> dependentNodeMap,
       String attrName,
       String dep,
-      Aspect... aspects) {
+      AspectWithParameters... aspects) {
     Attribute attr = null;
     for (Attribute candidate : dependentNodeMap.keySet()) {
       if (candidate.getName().equals(attrName)) {
@@ -143,7 +158,10 @@ public class DependencyResolverTest extends AnalysisTestCaseForJunit4 {
         "aspect(name='b', foo=[])");
     ListMultimap<Attribute, Dependency> map = dependentNodeMap("//a:a", null);
     assertDep(
-        map, "foo", "//a:b", new Aspect(new NativeAspectClass(TestAspects.SimpleAspect.class)));
+        map,
+        "foo",
+        "//a:b",
+        new AspectWithParameters(new NativeAspectClass(TestAspects.SimpleAspect.class)));
   }
 
   @Test
@@ -155,7 +173,10 @@ public class DependencyResolverTest extends AnalysisTestCaseForJunit4 {
     ListMultimap<Attribute, Dependency> map =
         dependentNodeMap("//a:a", TestAspects.AttributeAspect.class);
     assertDep(
-        map, "foo", "//a:b", new Aspect(new NativeAspectClass(TestAspects.AttributeAspect.class)));
+        map,
+        "foo",
+        "//a:b",
+        new AspectWithParameters(new NativeAspectClass(TestAspects.AttributeAspect.class)));
   }
 
   @Test
@@ -190,18 +211,18 @@ public class DependencyResolverTest extends AnalysisTestCaseForJunit4 {
     BuildConfiguration host = getHostConfiguration();
     BuildConfiguration target = getTargetConfiguration();
 
-    ImmutableSet<Aspect> twoAspects =
+    ImmutableSet<AspectWithParameters> twoAspects =
         ImmutableSet.of(
-            new Aspect(new NativeAspectClass(TestAspects.SimpleAspect.class)),
-            new Aspect(new NativeAspectClass(TestAspects.AttributeAspect.class)));
-    ImmutableSet<Aspect> inverseAspects =
+            new AspectWithParameters(new NativeAspectClass(TestAspects.SimpleAspect.class)),
+            new AspectWithParameters(new NativeAspectClass(TestAspects.AttributeAspect.class)));
+    ImmutableSet<AspectWithParameters> inverseAspects =
         ImmutableSet.of(
-            new Aspect(new NativeAspectClass(TestAspects.AttributeAspect.class)),
-            new Aspect(new NativeAspectClass(TestAspects.SimpleAspect.class)));
-    ImmutableSet<Aspect> differentAspects =
+            new AspectWithParameters(new NativeAspectClass(TestAspects.AttributeAspect.class)),
+            new AspectWithParameters(new NativeAspectClass(TestAspects.SimpleAspect.class)));
+    ImmutableSet<AspectWithParameters> differentAspects =
         ImmutableSet.of(
-            new Aspect(new NativeAspectClass(TestAspects.AttributeAspect.class)),
-            new Aspect(new NativeAspectClass(TestAspects.ErrorAspect.class)));
+            new AspectWithParameters(new NativeAspectClass(TestAspects.AttributeAspect.class)),
+            new AspectWithParameters(new NativeAspectClass(TestAspects.ErrorAspect.class)));
 
     new EqualsTester()
         .addEqualityGroup(

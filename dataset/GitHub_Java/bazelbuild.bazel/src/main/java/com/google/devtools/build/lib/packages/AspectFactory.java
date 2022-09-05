@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,11 @@ public interface AspectFactory<TConfiguredTarget, TRuleContext, TAspect> {
    * @param base the configured target of the associated rule
    * @param context the context of the associated configured target plus all the attributes the
    *     aspect itself has defined
+   * @param parameters information from attributes of the rule that have requested this
+   *     aspect
    */
-  TAspect create(TConfiguredTarget base, TRuleContext context);
+  TAspect create(TConfiguredTarget base, TRuleContext context, AspectParameters parameters)
+      throws InterruptedException;
 
   /**
    * Returns the definition of the aspect.
@@ -42,13 +45,10 @@ public interface AspectFactory<TConfiguredTarget, TRuleContext, TAspect> {
       // Should never be instantiated
     }
 
-    public static AspectFactory create(Class<? extends AspectFactory<?, ?, ?>> clazz) {
+    public static AspectFactory<?, ?, ?> create(AspectClass aspectClass) {
       // TODO(bazel-team): This should be cached somehow, because this method is invoked quite often
-      try {
-        return clazz.newInstance();
-      } catch (Exception e) {
-        throw new IllegalStateException(e);
-      }
+
+      return aspectClass.newInstance();
     }
   }
 }

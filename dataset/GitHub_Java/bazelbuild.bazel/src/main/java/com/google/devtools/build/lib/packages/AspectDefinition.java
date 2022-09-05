@@ -22,7 +22,6 @@ import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.NativeAspectClass.NativeAspectFactory;
 import com.google.devtools.build.lib.util.BinaryPredicate;
 
 import java.util.LinkedHashMap;
@@ -146,13 +145,14 @@ public final class AspectDefinition {
 
     LinkedHashMultimap<Attribute, Label> result = LinkedHashMultimap.create();
     for (AspectClass candidateClass : attribute.getAspects()) {
+      AspectFactory<?, ?, ?> candidate = AspectFactory.Util.create(candidateClass);
       // Check if target satisfies condition for this aspect (has to provide all required
       // TransitiveInfoProviders)
       if (!advertisedProviders.containsAll(
-          candidateClass.getDefinition().getRequiredProviderNames())) {
+            candidate.getDefinition().getRequiredProviderNames())) {
         continue;
       }
-      addAllAttributesOfAspect((Rule) from, result, candidateClass.getDefinition(), Rule.ALL_DEPS);
+      addAllAttributesOfAspect((Rule) from, result, candidate.getDefinition(), Rule.ALL_DEPS);
     }
     return ImmutableMultimap.copyOf(result);
   }
@@ -214,34 +214,17 @@ public final class AspectDefinition {
      * by direct dependencies through attribute {@code attribute} on the target associated with this
      * aspect.
      *
-     * <p>Note that {@code ConfiguredAspectFactory} instances are expected in the second argument,
-     * but we cannot reference that interface here.
+     * <p>Note that {@code AspectFactory} instances are expected in the second argument, but we
+     * cannot reference that interface here.
      */
     @SafeVarargs
     public final Builder attributeAspect(
-        String attribute, Class<? extends NativeAspectFactory>... aspectFactories) {
+        String attribute, Class<? extends AspectFactory<?, ?, ?>>... aspectFactories) {
       Preconditions.checkNotNull(attribute);
-      for (Class<? extends NativeAspectFactory> aspectFactory : aspectFactories) {
-        this
-            .attributeAspect(
-                attribute, new NativeAspectClass<>(Preconditions.checkNotNull(aspectFactory)));
+      for (Class<? extends AspectFactory<?, ?, ?>> aspectFactory : aspectFactories) {
+        this.attributeAspects.put(
+                attribute, new NativeAspectClass(Preconditions.checkNotNull(aspectFactory)));
       }
-      return this;
-    }
-
-    /**
-     * Declares that this aspect depends on the given {@link AspectClass} provided
-     * by direct dependencies through attribute {@code attribute} on the target associated with this
-     * aspect.
-     *
-     * <p>Note that {@code ConfiguredAspectFactory} instances are expected in the second argument,
-     * but we cannot reference that interface here.
-     */
-    public final Builder attributeAspect(String attribute, AspectClass aspectClass) {
-      Preconditions.checkNotNull(attribute);
-
-      this.attributeAspects.put(attribute, Preconditions.checkNotNull(aspectClass));
-
       return this;
     }
 

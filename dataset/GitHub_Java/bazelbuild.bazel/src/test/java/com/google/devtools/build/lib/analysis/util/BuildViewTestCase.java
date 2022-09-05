@@ -100,10 +100,8 @@ import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
-import com.google.devtools.build.lib.pkgcache.LegacyLoadingPhaseRunner;
-import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
-import com.google.devtools.build.lib.pkgcache.LoadingResult;
+import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
@@ -210,8 +208,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             getPrecomputedValues(),
             ImmutableList.<SkyValueDirtinessChecker>of());
     skyframeExecutor.preparePackageLoading(
-        new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
-        ConstantRuleVisibility.PUBLIC, true, 7, "",
+        new PathPackageLocator(rootDirectory), ConstantRuleVisibility.PUBLIC, true, 7, "",
         UUID.randomUUID());
     useConfiguration();
     setUpSkyframe();
@@ -1297,13 +1294,14 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       EventBus eventBus)
       throws Exception {
 
-    LoadingOptions loadingOptions = Options.getDefaults(LoadingOptions.class);
+    LoadingPhaseRunner.Options loadingOptions =
+        Options.getDefaults(LoadingPhaseRunner.Options.class);
     loadingOptions.loadingPhaseThreads = loadingPhaseThreads;
 
     BuildView.Options viewOptions = Options.getDefaults(BuildView.Options.class);
     viewOptions.keepGoing = keepGoing;
 
-    LoadingPhaseRunner runner = new LegacyLoadingPhaseRunner(getPackageManager(),
+    LoadingPhaseRunner runner = new LoadingPhaseRunner(getPackageManager(),
         Collections.unmodifiableSet(ruleClassProvider.getRuleClassMap().keySet()));
     LoadingResult loadingResult = runner.execute(reporter, eventBus, targets, loadingOptions,
         getTargetConfiguration().getAllLabels(), viewOptions.keepGoing,

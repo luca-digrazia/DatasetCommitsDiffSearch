@@ -26,8 +26,9 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
+import com.google.devtools.build.lib.analysis.Aspect;
+import com.google.devtools.build.lib.analysis.AspectWithParameters;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
-import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.DependencyResolver.Dependency;
 import com.google.devtools.build.lib.analysis.LabelAndConfiguration;
@@ -44,8 +45,10 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.StoredEventHandler;
-import com.google.devtools.build.lib.packages.Aspect;
+import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectDefinition;
+import com.google.devtools.build.lib.packages.AspectFactory;
+import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -184,16 +187,9 @@ final class ConfiguredTargetFunction implements SkyFunction {
         return null;
       }
 
-      ListMultimap<Attribute, ConfiguredTarget> depValueMap =
-          computeDependencies(
-              env,
-              resolver,
-              ctgValue,
-              null,
-              configConditions,
-              ruleClassProvider,
-              view.getHostConfiguration(configuration),
-              transitivePackages);
+      ListMultimap<Attribute, ConfiguredTarget> depValueMap = computeDependencies(env, resolver,
+          ctgValue, null, AspectParameters.EMPTY, configConditions, ruleClassProvider,
+          view.getHostConfiguration(configuration), transitivePackages);
       ConfiguredTargetValue ans = createConfiguredTarget(
           view, env, target, configuration, depValueMap, configConditions, transitivePackages);
       return ans;
@@ -211,33 +207,34 @@ final class ConfiguredTargetFunction implements SkyFunction {
    *
    * <p>Returns null if Skyframe hasn't evaluated the required dependencies yet. In this case, the
    * caller should also return null to Skyframe.
-   *  @param env the Skyframe environment
+   *
+   * @param env the Skyframe environment
    * @param resolver The dependency resolver
    * @param ctgValue The label and the configuration of the node
-   * @param aspect
+   * @param aspectDefinition the aspect of the node (if null, the node is a configured target,
+   *     otherwise it's an aspect)
+   * @param aspectParameters additional parameters for aspect construction
    * @param configConditions the configuration conditions for evaluating the attributes of the node
    * @param ruleClassProvider rule class provider for determining the right configuration fragments
    *   to apply to deps
    * @param hostConfiguration the host configuration. There's a noticeable performance hit from
    *     instantiating this on demand for every dependency that wants it, so it's best to compute
    *     the host configuration as early as possible and pass this reference to all consumers
-   * */
+   *     without involving Skyframe.
+   * @return an attribute -&gt; direct dependency multimap
+   */
   @Nullable
   static ListMultimap<Attribute, ConfiguredTarget> computeDependencies(
-      Environment env,
-      SkyframeDependencyResolver resolver,
-      TargetAndConfiguration ctgValue,
-      Aspect aspect,
-      Set<ConfigMatchingProvider> configConditions,
-      RuleClassProvider ruleClassProvider,
-      BuildConfiguration hostConfiguration,
-      NestedSetBuilder<Package> transitivePackages)
+      Environment env, SkyframeDependencyResolver resolver, TargetAndConfiguration ctgValue,
+      AspectDefinition aspectDefinition, AspectParameters aspectParameters, 
+      Set<ConfigMatchingProvider> configConditions, RuleClassProvider ruleClassProvider,
+      BuildConfiguration hostConfiguration, NestedSetBuilder<Package> transitivePackages)
       throws DependencyEvaluationException, AspectCreationException, InterruptedException {
     // Create the map from attributes to list of (target, configuration) pairs.
     ListMultimap<Attribute, Dependency> depValueNames;
     try {
-      depValueNames =
-          resolver.dependentNodeMap(ctgValue, hostConfiguration, aspect, configConditions);
+      depValueNames = resolver.dependentNodeMap(ctgValue, hostConfiguration, aspectDefinition,
+          aspectParameters, configConditions);
     } catch (EvalException e) {
       env.getListener().handle(Event.error(e.getLocation(), e.getMessage()));
       throw new DependencyEvaluationException(new ConfiguredValueCreationException(e.print()));
@@ -262,8 +259,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
     }
 
     // Resolve required aspects.
-    ListMultimap<SkyKey, ConfiguredAspect> depAspects =
-        resolveAspectDependencies(env, depValues, depValueNames.values(), transitivePackages);
+    ListMultimap<SkyKey, Aspect> depAspects = resolveAspectDependencies(
+        env, depValues, depValueNames.values(), transitivePackages);
     if (depAspects == null) {
       return null;
     }
@@ -403,15 +400,15 @@ final class ConfiguredTargetFunction implements SkyFunction {
         Verify.verify(transition == Attribute.ConfigurationTransition.NONE
             || transition instanceof PatchTransition);
         BuildOptions fromOptions = ctgOptions;
+        if (!sameFragments) {
+          // TODO(bazel-team): pre-compute getOptionsClasses in the constructor.
+          fromOptions = fromOptions.trim(BuildConfiguration.getOptionsClasses(
+              transitiveDepInfo.getTransitiveConfigFragments(), ruleClassProvider));
+        }
         // TODO(bazel-team): safety-check that the below call never mutates fromOptions.
         toOptions = transition == Attribute.ConfigurationTransition.NONE
             ? fromOptions
             : ((PatchTransition) transition).apply(fromOptions);
-        if (!sameFragments) {
-          // TODO(bazel-team): pre-compute getOptionsClasses in the constructor.
-          toOptions = toOptions.trim(BuildConfiguration.getOptionsClasses(
-              transitiveDepInfo.getTransitiveConfigFragments(), ruleClassProvider));
-        }
         transitionsMap.put(transitionKey, toOptions);
       }
 
@@ -466,7 +463,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
   private static ListMultimap<Attribute, ConfiguredTarget> mergeAspects(
       ListMultimap<Attribute, Dependency> depValueNames,
       Map<SkyKey, ConfiguredTarget> depConfiguredTargetMap,
-      ListMultimap<SkyKey, ConfiguredAspect> depAspectMap) {
+      ListMultimap<SkyKey, Aspect> depAspectMap) {
     ListMultimap<Attribute, ConfiguredTarget> result = ArrayListMultimap.create();
 
     for (Map.Entry<Attribute, Dependency> entry : depValueNames.entries()) {
@@ -482,21 +479,19 @@ final class ConfiguredTargetFunction implements SkyFunction {
 
   /**
    * Given a list of {@link Dependency} objects, returns a multimap from the {@link SkyKey} of the
-   * dependency to the {@link ConfiguredAspect} instances that should be merged into it.
+   * dependency to the {@link Aspect} instances that should be merged into it.
    *
    * <p>Returns null if the required aspects are not computed yet.
    */
   @Nullable
-  private static ListMultimap<SkyKey, ConfiguredAspect> resolveAspectDependencies(
-      Environment env,
-      Map<SkyKey, ConfiguredTarget> configuredTargetMap,
-      Iterable<Dependency> deps,
+  private static ListMultimap<SkyKey, Aspect> resolveAspectDependencies(Environment env,
+      Map<SkyKey, ConfiguredTarget> configuredTargetMap, Iterable<Dependency> deps,
       NestedSetBuilder<Package> transitivePackages)
       throws AspectCreationException {
-    ListMultimap<SkyKey, ConfiguredAspect> result = ArrayListMultimap.create();
+    ListMultimap<SkyKey, Aspect> result = ArrayListMultimap.create();
     Set<SkyKey> aspectKeys = new HashSet<>();
     for (Dependency dep : deps) {
-      for (Aspect depAspect : dep.getAspects()) {
+      for (AspectWithParameters depAspect : dep.getAspects()) {
         aspectKeys.add(createAspectKey(dep.getLabel(), dep.getConfiguration(), depAspect));
       }
     }
@@ -514,8 +509,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
         continue;
       }
       ConfiguredTarget depConfiguredTarget = configuredTargetMap.get(depKey);
-      for (Aspect depAspect : dep.getAspects()) {
-        if (!aspectMatchesConfiguredTarget(depConfiguredTarget, depAspect)) {
+      for (AspectWithParameters depAspect : dep.getAspects()) {
+        if (!aspectMatchesConfiguredTarget(depConfiguredTarget, depAspect.getAspectClass())) {
           continue;
         }
 
@@ -527,35 +522,35 @@ final class ConfiguredTargetFunction implements SkyFunction {
           // The configured target should have been created in resolveConfiguredTargetDependencies()
           throw new IllegalStateException(e);
         } catch (NoSuchThingException e) {
+          AspectFactory<?, ?, ?> depAspectFactory =
+              AspectFactory.Util.create(depAspect.getAspectClass());
           throw new AspectCreationException(
-              String.format(
-                  "Evaluation of aspect %s on %s failed: %s",
-                  depAspect.getDefinition().getName(),
-                  dep.getLabel(),
-                  e.toString()));
+              String.format("Evaluation of aspect %s on %s failed: %s",
+                  depAspectFactory.getDefinition().getName(), dep.getLabel(), e.toString()));
         }
 
         if (aspectValue == null) {
           // Dependent aspect has either not been computed yet or is in error.
           return null;
         }
-        result.put(depKey, aspectValue.getConfiguredAspect());
+        result.put(depKey, aspectValue.getAspect());
         transitivePackages.addTransitive(aspectValue.getTransitivePackages());
       }
     }
     return result;
   }
 
-  public static SkyKey createAspectKey(
-      Label label, BuildConfiguration buildConfiguration, Aspect depAspect) {
+  public static SkyKey createAspectKey(Label label, BuildConfiguration buildConfiguration,
+      AspectWithParameters depAspect) {
     return AspectValue.key(label,
         buildConfiguration,
         depAspect.getAspectClass(),
         depAspect.getParameters());
   }
 
-  private static boolean aspectMatchesConfiguredTarget(ConfiguredTarget dep, Aspect aspectClass) {
-    AspectDefinition aspectDefinition = aspectClass.getDefinition();
+  private static boolean aspectMatchesConfiguredTarget(
+      ConfiguredTarget dep, AspectClass aspectClass) {
+    AspectDefinition aspectDefinition = AspectFactory.Util.create(aspectClass).getDefinition();
     for (Class<?> provider : aspectDefinition.getRequiredProviders()) {
       if (dep.getProvider(provider.asSubclass(TransitiveInfoProvider.class)) == null) {
         return false;

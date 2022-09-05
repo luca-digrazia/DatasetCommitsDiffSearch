@@ -18,10 +18,10 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.Aspect;
+import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectDefinition;
+import com.google.devtools.build.lib.packages.AspectFactory;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 
@@ -39,13 +39,15 @@ public class ConservativeAspectResolver implements AspectResolver {
     if (!(target instanceof Rule)) {
       return ImmutableMultimap.of();
     }
-    Rule rule = (Rule) target;
 
     Multimap<Attribute, Label> result = LinkedHashMultimap.create();
-    for (Attribute attribute : rule.getAttributes()) {
-      for (Aspect aspect : attribute.getAspects(rule)) {
+    for (Attribute attribute : ((Rule) target).getAttributes()) {
+      for (AspectClass aspectFactory : attribute.getAspects()) {
         AspectDefinition.addAllAttributesOfAspect(
-            rule, result, aspect.getDefinition(), DependencyFilter.ALL_DEPS);
+            (Rule) target,
+            result,
+            AspectFactory.Util.create(aspectFactory).getDefinition(),
+            Rule.ALL_DEPS);
       }
     }
 
