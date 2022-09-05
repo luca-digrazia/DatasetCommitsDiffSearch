@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.
 import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.HashMap;
 import java.util.Set;
 
@@ -237,7 +238,8 @@ final class ProtobufSupport {
       return Optional.absent();
     }
 
-    Iterable<PathFragment> includes = ImmutableList.of(getWorkspaceRelativeOutputDir());
+    Iterable<PathFragment> userHeaderSearchPaths =
+        ImmutableList.of(getWorkspaceRelativeOutputDir());
     ObjcCommon.Builder commonBuilder = new ObjcCommon.Builder(ruleContext);
 
     if (!isLinkingTarget()) {
@@ -258,9 +260,9 @@ final class ProtobufSupport {
     }
 
     if (isLinkingTarget()) {
-      commonBuilder.addIncludes(includes);
+      commonBuilder.addUserHeaderSearchPaths(userHeaderSearchPaths);
     } else {
-      commonBuilder.addDirectDependencyIncludes(includes);
+      commonBuilder.addDirectDependencyHeaderSearchPaths(userHeaderSearchPaths);
     }
 
     return Optional.of(commonBuilder.build().getObjcProvider());
@@ -451,7 +453,7 @@ final class ProtobufSupport {
             .setIntermediateArtifacts(intermediateArtifacts)
             .setCompilationArtifacts(compilationArtifacts);
     if (isLinkingTarget()) {
-      commonBuilder.addIncludes(getProtobufHeaderSearchPaths());
+      commonBuilder.addUserHeaderSearchPaths(getProtobufHeaderSearchPaths());
     } else {
       commonBuilder.addDepObjcProviders(
           ruleContext.getPrerequisites(

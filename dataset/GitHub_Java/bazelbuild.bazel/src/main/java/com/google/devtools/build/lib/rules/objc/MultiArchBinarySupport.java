@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.apple.Platform;
-import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
 
@@ -147,7 +146,8 @@ public class MultiArchBinarySupport {
       ImmutableListMultimap<BuildConfiguration, TransitiveInfoCollection> configToDepsCollectionMap,
       ImmutableListMultimap<BuildConfiguration, ObjcProvider> configurationToNonPropagatedObjcMap,
       Iterable<ObjcProvider> dylibObjcProviders,
-      Iterable<ObjcProtoProvider> dylibProtoProviders)
+      Iterable<ObjcProtoProvider> dylibProtoProviders,
+      Optional<ObjcProvider> bundleLoaderObjcProvider)
       throws RuleErrorException, InterruptedException {
     ImmutableMap.Builder<BuildConfiguration, ObjcProvider> configurationToObjcProviderBuilder =
         ImmutableMap.builder();
@@ -172,7 +172,8 @@ public class MultiArchBinarySupport {
           Iterables.concat(
               dylibObjcProviders,
               ruleContext.getPrerequisites("bundles", Mode.TARGET, ObjcProvider.class),
-              protosObjcProvider.asSet());
+              protosObjcProvider.asSet(),
+              bundleLoaderObjcProvider.asSet());
 
       ObjcCommon common =
           common(
@@ -182,8 +183,7 @@ public class MultiArchBinarySupport {
               nullToEmptyList(configToDepsCollectionMap.get(childConfig)),
               nullToEmptyList(configurationToNonPropagatedObjcMap.get(childConfig)),
               additionalDepProviders);
-      ObjcProvider objcProvider = common.getObjcProvider().subtractSubtrees(dylibObjcProviders,
-          ImmutableList.<CcLinkParamsProvider>of());
+      ObjcProvider objcProvider = common.getObjcProvider().subtractSubtrees(dylibObjcProviders);
 
       configurationToObjcProviderBuilder.put(childConfig, objcProvider);
     }

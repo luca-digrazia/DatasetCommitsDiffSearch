@@ -214,15 +214,6 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   )
   public boolean deviceDebugEntitlements;
 
-  @Option(
-      name = "deprecated_generate_xcode_project",
-      defaultValue = "true",
-      category = "flags",
-      help =
-          "If set, will generate xcode project for targets that support this. Will be removed soon."
-  )
-  public boolean generateXcodeProject;
-
   /**
    * Specifies the circumstances under which a CROSSTOOL is used for objc in this configuration.
    */
@@ -283,35 +274,6 @@ public class ObjcCommandLineOptions extends FragmentOptions {
         "If set, apple_binary will generate and link objc protos into the output binary."
   )
   public boolean enableAppleBinaryNativeProtos;
-
-  @Option(
-    name = "experimental_objc_header_thinning",
-    defaultValue = "false",
-    category = "flags",
-    help =
-        "If set then ObjcCompile actions will have their action inputs reduced by running a tool "
-            + "to detect which headers are actually required for compilation."
-  )
-  public boolean experimentalObjcHeaderThinning;
-
-  @Option(
-    name = "objc_header_scanner_tool",
-    defaultValue = "@bazel_tools//tools/objc:header_scanner",
-    category = "undocumented",
-    converter = LabelConverter.class,
-    help =
-        "Location of tool to scan Objective-C code for inclusions and output a .headers_list "
-            + "file."
-  )
-  public Label objcHeaderScannerTool;
-
-  @Override
-  public FragmentOptions getHost(boolean fallback) {
-    ObjcCommandLineOptions host = (ObjcCommandLineOptions) super.getHost(fallback);
-    // This should have the same value in both target and host configurations
-    host.objcHeaderScannerTool = this.objcHeaderScannerTool;
-    return host;
-  }
 
   @SuppressWarnings("unchecked")
   @Override

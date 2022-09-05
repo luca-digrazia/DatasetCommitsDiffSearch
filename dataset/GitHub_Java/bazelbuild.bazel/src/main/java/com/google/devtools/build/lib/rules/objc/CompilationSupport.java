@@ -65,7 +65,6 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
-import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
 import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions.ObjcCrosstoolMode;
@@ -175,6 +174,25 @@ public abstract class CompilationSupport {
         @Override
         public boolean apply(String copt) {
           return copt.startsWith("-I") && copt.length() > 2;
+        }
+      };
+
+  /** Predicate that matches all artifacts that can be used in a Clang module map. */
+  private static final Predicate<Artifact> MODULE_MAP_HEADER =
+      new Predicate<Artifact>() {
+        @Override
+        public boolean apply(Artifact artifact) {
+          if (artifact.isTreeArtifact()) {
+            // Tree artifact is basically a directory, which does not have any information about
+            // the contained files and their extensions. Here we assume the passed in tree artifact
+            // contains proper header files with .h extension.
+            return true;
+          } else {
+            // The current clang (clang-600.0.57) on Darwin doesn't support 'textual', so we can't
+            // have '.inc' files in the module map (since they're implictly textual).
+            // TODO(bazel-team): Use HEADERS file type once clang-700 is the base clang we support.
+            return artifact.getFilename().endsWith(".h");
+          }
         }
       };
 
@@ -846,8 +864,7 @@ public abstract class CompilationSupport {
               j2objcArchive.getOwner().toPathFragment(), ".param.j2objc");
       Artifact paramFile =
           ruleContext.getUniqueDirectoryArtifact(
-              "_j2objc_pruned", paramFilePath,
-              buildConfiguration.getBinDirectory(ruleContext.getRule().getRepository()));
+              "_j2objc_pruned", paramFilePath, ruleContext.getBinOrGenfilesDirectory());
       Artifact prunedJ2ObjcArchive = intermediateArtifacts.j2objcPrunedArchive(j2objcArchive);
       Artifact dummyArchive =
           Iterables.getOnlyElement(
@@ -960,7 +977,7 @@ public abstract class CompilationSupport {
    */
   public CompilationSupport registerGenerateModuleMapAction(
       CppModuleMap moduleMap, Iterable<Artifact> publicHeaders) {
-    publicHeaders = Iterables.filter(publicHeaders, CppFileTypes.MODULE_MAP_HEADER);
+    publicHeaders = Iterables.filter(publicHeaders, MODULE_MAP_HEADER);
     ruleContext.registerAction(
         new CppModuleMapAction(
             ruleContext.getActionOwner(),
@@ -1004,26 +1021,4 @@ public abstract class CompilationSupport {
     }
     return parents.build();
   }
-
-  /**
-   * Returns true when ObjC header thinning is enabled via configuration and an a valid
-   * header_scanner executable target is provided.
-   */
-  protected boolean isHeaderThinningEnabled() {
-    if (objcConfiguration.useExperimentalHeaderThinning()
-        && ruleContext.isAttrDefined(ObjcRuleClasses.HEADER_SCANNER_ATTRIBUTE, BuildType.LABEL)) {
-      FilesToRunProvider tool = getHeaderThinningToolExecutable();
-      // Additional here to ensure that an Executable Artifact exists to disable where the tool
-      // is an empty filegroup
-      return tool != null && tool.getExecutable() != null;
-    }
-    return false;
-  }
-
-  protected FilesToRunProvider getHeaderThinningToolExecutable() {
-    return ruleContext
-        .getPrerequisite(ObjcRuleClasses.HEADER_SCANNER_ATTRIBUTE, Mode.HOST)
-        .getProvider(FilesToRunProvider.class);
-  }
-
 }
