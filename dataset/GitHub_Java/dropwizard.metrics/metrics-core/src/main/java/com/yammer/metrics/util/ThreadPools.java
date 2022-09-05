@@ -21,7 +21,7 @@ public class ThreadPools {
             // instead of just doing the usual putIfAbsent dance, we lock the
             // damn thing, check to see if anyone else put a thread pool in
             // there while we weren't watching.
-            synchronized (this) {
+            synchronized (threadPools) {
                 final ScheduledExecutorService lastChance = threadPools.get(name);
                 if (lastChance == null) {
                     final ScheduledExecutorService service =
@@ -42,7 +42,7 @@ public class ThreadPools {
      * Shuts down all thread pools created by this class in an orderly fashion.
      */
     public void shutdown() {
-        synchronized (this) {
+        synchronized (threadPools) {
             for (ExecutorService executor : threadPools.values()) {
                 executor.shutdown();
             }
