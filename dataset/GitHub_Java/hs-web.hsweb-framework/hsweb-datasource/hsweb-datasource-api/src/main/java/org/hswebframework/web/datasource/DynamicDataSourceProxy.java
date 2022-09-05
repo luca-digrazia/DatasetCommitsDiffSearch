@@ -1,24 +1,33 @@
 package org.hswebframework.web.datasource;
 
+import lombok.Setter;
+import lombok.SneakyThrows;
+
 import javax.sql.DataSource;
 import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 
 /**
- * TODO 完成注释
+ * 动态数据源代理,将数据源代理为动态数据源
  *
  * @author zhouhao
+ * @since 3.0
  */
 public class DynamicDataSourceProxy implements DynamicDataSource {
 
     private String id;
 
-    private DatabaseType databaseType;
+    @Setter
+    private volatile DatabaseType databaseType;
 
     private DataSource proxy;
+
+    private Lock lock = new ReentrantLock();
 
     public DynamicDataSourceProxy(String id, DatabaseType databaseType, DataSource proxy) {
         this.id = id;
@@ -26,9 +35,14 @@ public class DynamicDataSourceProxy implements DynamicDataSource {
         this.proxy = proxy;
     }
 
-    public DynamicDataSourceProxy(String id, DataSource proxy) throws SQLException {
+    public DynamicDataSourceProxy(String id, DataSource proxy) {
         this.id = id;
         this.proxy = proxy;
+    }
+
+    @Override
+    public DataSource getNative() {
+        return proxy;
     }
 
     @Override
@@ -37,66 +51,22 @@ public class DynamicDataSourceProxy implements DynamicDataSource {
     }
 
     @Override
+    @SneakyThrows
     public DatabaseType getType() {
         if (databaseType == null) {
-            synchronized (this) {
-                if (databaseType == null) {
-                    try {
-                        try (Connection connection = proxy.getConnection()) {
-                            databaseType = DatabaseType.fromJdbcUrl(connection.getMetaData().getURL());
-                        }
-                    } catch (SQLException e) {
-                        e.printStackTrace();
-                    }
+            lock.lock();
+            try {
+                if (databaseType != null) {
+                    return databaseType;
                 }
+                try (Connection connection = proxy.getConnection()) {
+                    databaseType = DatabaseType.fromJdbcUrl(connection.getMetaData().getURL());
+                }
+            } finally {
+                lock.unlock();
             }
         }
-
         return databaseType;
     }
 
-    @Override
-    public Connection getConnection() throws SQLException {
-        return proxy.getConnection();
-    }
-
-    @Override
-    public Connection getConnection(String username, String password) throws SQLException {
-        return proxy.getConnection(username, password);
-    }
-
-    @Override
-    public <T> T unwrap(Class<T> iface) throws SQLException {
-        return proxy.unwrap(iface);
-    }
-
-    @Override
-    public boolean isWrapperFor(Class<?> iface) throws SQLException {
-        return proxy.isWrapperFor(iface);
-    }
-
-    @Override
-    public PrintWriter getLogWriter() throws SQLException {
-        return proxy.getLogWriter();
-    }
-
-    @Override
-    public void setLogWriter(PrintWriter out) throws SQLException {
-        proxy.setLogWriter(out);
-    }
-
-    @Override
-    public void setLoginTimeout(int seconds) throws SQLException {
-        proxy.setLoginTimeout(seconds);
-    }
-
-    @Override
-    public int getLoginTimeout() throws SQLException {
-        return proxy.getLoginTimeout();
-    }
-
-    @Override
-    public Logger getParentLogger() throws SQLFeatureNotSupportedException {
-        return proxy.getParentLogger();
-    }
 }
