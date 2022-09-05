@@ -15,8 +15,6 @@ import org.junit.Test;
 import org.mockito.InOrder;
 
 import java.net.UnknownHostException;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Locale;
@@ -184,45 +182,20 @@ public class GraphiteReporterTest {
     @Test
     public void reportsDoubleGaugeValuesWithCustomFormat() throws Exception {
         try (final GraphiteReporter graphiteReporter = getReporterWithCustomFormat()) {
-            reportGaugeValue(graphiteReporter, 1.13574);
-            verifyGraphiteSentCorrectMetricValue("prefix.gauge", "1.1357", timestamp);
-            verifyNoMoreInteractions(graphite);
-        }
-    }
-
-    @Test
-    public void reportDoubleGaugeValuesUsingCustomFormatter() throws Exception {
-        DecimalFormat formatter = new DecimalFormat("##.##########", DecimalFormatSymbols.getInstance(Locale.US));
-
-        try (GraphiteReporter graphiteReporter = GraphiteReporter.forRegistry(registry)
-                .withClock(clock)
-                .prefixedWith("prefix")
-                .convertRatesTo(TimeUnit.SECONDS)
-                .convertDurationsTo(TimeUnit.MILLISECONDS)
-                .filter(MetricFilter.ALL)
-                .disabledMetricAttributes(Collections.emptySet())
-                .withFloatingPointFormatter(formatter::format)
-                .build(graphite)) {
-            reportGaugeValue(graphiteReporter, 0.000045322);
-            verifyGraphiteSentCorrectMetricValue("prefix.gauge", "0.000045322", timestamp);
-            verifyNoMoreInteractions(graphite);
-        }
-    }
-
-    private void reportGaugeValue(GraphiteReporter graphiteReporter, double value) {
-        graphiteReporter.report(map("gauge", gauge(value)),
+            graphiteReporter.report(map("gauge", gauge(1.13574)),
                 map(),
                 map(),
                 map(),
                 map());
-    }
 
-    private void verifyGraphiteSentCorrectMetricValue(String metricName, String value, long timestamp) throws Exception {
-        final InOrder inOrder = inOrder(graphite);
-        inOrder.verify(graphite).connect();
-        inOrder.verify(graphite).send(metricName, value, timestamp);
-        inOrder.verify(graphite).flush();
-        inOrder.verify(graphite).close();
+            final InOrder inOrder = inOrder(graphite);
+            inOrder.verify(graphite).connect();
+            inOrder.verify(graphite).send("prefix.gauge", "1.1357", timestamp);
+            inOrder.verify(graphite).flush();
+            inOrder.verify(graphite).close();
+
+            verifyNoMoreInteractions(graphite);
+        }
     }
 
     @Test
