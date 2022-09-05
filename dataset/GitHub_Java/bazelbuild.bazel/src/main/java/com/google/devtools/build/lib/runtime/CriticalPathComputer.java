@@ -20,6 +20,7 @@ import com.google.common.collect.Maps;
 import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
+import com.google.devtools.build.lib.actions.ActionMetadata;
 import com.google.devtools.build.lib.actions.ActionMiddlemanEvent;
 import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.actions.Actions;
@@ -99,7 +100,12 @@ public abstract class CriticalPathComputer<C extends AbstractCriticalPathCompone
   @Subscribe
   public void actionStarted(ActionStartedEvent event) {
     Action action = event.getAction();
-    tryAddComponent(createComponent(action, event.getNanoTimeStart()));
+    C component = createComponent(action, event.getNanoTimeStart());
+    for (Artifact output : action.getOutputs()) {
+      C old = outputArtifactToComponent.put(output, component);
+      Preconditions.checkState(old == null, "Duplicate output artifact found. This could happen"
+          + " if a previous event registered the action %s. Artifact: %s", action, output);
+    }
   }
 
   /**
@@ -112,46 +118,24 @@ public abstract class CriticalPathComputer<C extends AbstractCriticalPathCompone
   @Subscribe
   public void middlemanAction(ActionMiddlemanEvent event) {
     Action action = event.getAction();
-    C component = tryAddComponent(createComponent(action, event.getNanoTimeStart()));
-    finalizeActionStat(event.getNanoTimeStart(), action, component);
-  }
-
-  /**
-   * Try to add the component to the map of critical path components. If there is an existing
-   * component for its primary output it uses that to update the rest of the outputs.
-   *
-   * @return The component to be used for updating the time stats.
-   */
-  private C tryAddComponent(C newComponent) {
-    Action newAction = newComponent.getAction();
-    Artifact primaryOutput = newAction.getPrimaryOutput();
-    C storedComponent = outputArtifactToComponent.putIfAbsent(primaryOutput, newComponent);
-
-    if (storedComponent != null) {
-      if (!Actions.canBeShared(newAction, storedComponent.getAction())) {
-        throw new IllegalStateException("Duplicate output artifact found for unsharable actions."
-            + "This could happen  if a previous event registered the action.\n"
-            + "Old action: " + storedComponent.getAction() + "\n\n"
-            + "New action: " + newAction + "\n\n"
-            + "Artifact: " + primaryOutput + "\n");
+    C component = createComponent(action, event.getNanoTimeStart());
+    boolean duplicate = false;
+    for (Artifact output : action.getOutputs()) {
+      C old = outputArtifactToComponent.putIfAbsent(output, component);
+      if (old != null) {
+        if (!Actions.canBeShared(action, old.getAction())) {
+          throw new IllegalStateException("Duplicate output artifact found for middleman."
+              + "This could happen  if a previous event registered the action.\n"
+              + "Old action: " + old.getAction() + "\n\n"
+              + "New action: " + action + "\n\n"
+              + "Artifact: " + output + "\n");
+        }
+        duplicate = true;
       }
-    } else {
-      storedComponent = newComponent;
     }
-    // Try to insert the existing component for the rest of the outputs even if we failed to be
-    // the ones inserting the component so that at the end of this method we guarantee that all the
-    // outputs have a component.
-    for (Artifact output : newAction.getOutputs()) {
-      if (output == primaryOutput) {
-        continue;
-      }
-      C old = outputArtifactToComponent.putIfAbsent(output, storedComponent);
-      // If two actions run concurrently maybe we find a component by primary output but we are
-      // the first updating the rest of the outputs.
-      Preconditions.checkState(old == null || old == storedComponent,
-          "Inconsistent state for %s", newAction);
+    if (!duplicate) {
+      finalizeActionStat(action, component);
     }
-    return storedComponent;
   }
 
   /**
@@ -162,8 +146,11 @@ public abstract class CriticalPathComputer<C extends AbstractCriticalPathCompone
   @Subscribe
   public void actionCached(CachedActionEvent event) {
     Action action = event.getAction();
-    C component = tryAddComponent(createComponent(action, event.getNanoTimeStart()));
-    finalizeActionStat(event.getNanoTimeStart(), action, component);
+    C component = createComponent(action, event.getNanoTimeStart());
+    for (Artifact output : action.getOutputs()) {
+      outputArtifactToComponent.put(output, component);
+    }
+    finalizeActionStat(action, component);
   }
 
   /**
@@ -172,10 +159,10 @@ public abstract class CriticalPathComputer<C extends AbstractCriticalPathCompone
    */
   @Subscribe
   public void actionComplete(ActionCompletionEvent event) {
-    Action action = event.getAction();
+    ActionMetadata action = event.getActionMetadata();
     C component = Preconditions.checkNotNull(
         outputArtifactToComponent.get(action.getPrimaryOutput()));
-    finalizeActionStat(event.getRelativeActionStartTime(), action, component);
+    finalizeActionStat(action, component);
   }
 
   /** Maximum critical path component found during the build. */
@@ -197,9 +184,8 @@ public abstract class CriticalPathComputer<C extends AbstractCriticalPathCompone
     return ImmutableList.copyOf(list).reverse();
   }
 
-  private void finalizeActionStat(long startTimeNanos, Action action, C component) {
-    boolean updated = component.finishActionExecution(startTimeNanos, clock.nanoTime());
-
+  private void finalizeActionStat(ActionMetadata action, C component) {
+    component.setRelativeStartNanos(clock.nanoTime());
     for (Artifact input : action.getInputs()) {
       addArtifactDependency(component, input);
     }
@@ -209,24 +195,15 @@ public abstract class CriticalPathComputer<C extends AbstractCriticalPathCompone
         maxCriticalPath = component;
       }
 
-      // We do not want to fill slow components list with the same component.
-      //
-      // This might still insert a second copy of the component but only if the new self elapsed
-      // time is greater than the old time. That said, in practice this is not important, since
-      // this would happen when we have two concurrent shared actions and one is a cache hit
-      // because of the other one. In this case, the cache hit would not appear in the 30 slowest
-      // actions or we had a very fast build, so we do not care :).
-      if (updated) {
-        if (slowestComponents.size() == SLOWEST_COMPONENTS_SIZE) {
-          // The new component is faster than any of the slow components, avoid insertion.
-          if (slowestComponents.peek().getElapsedTimeNanos() >= component.getElapsedTimeNanos()) {
-            return;
-          }
-          // Remove the head element to make space (The fastest component in the queue).
-          slowestComponents.remove();
+      if (slowestComponents.size() == SLOWEST_COMPONENTS_SIZE) {
+        // The new component is faster than any of the slow components, avoid insertion.
+        if (slowestComponents.peek().getElapsedTimeNanos() >= component.getElapsedTimeNanos()) {
+          return;
         }
-        slowestComponents.add(component);
+        // Remove the head element to make space (The fastest component in the queue).
+        slowestComponents.remove();
       }
+      slowestComponents.add(component);
     }
   }
 
