@@ -5,6 +5,7 @@ import com.codahale.metrics.Counter;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
+import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.ScheduledReporter;
@@ -37,9 +38,6 @@ public class CollectdReporter extends ScheduledReporter {
      * <li>rateUnit: TimeUnit.SECONDS</li>
      * <li>durationUnit: TimeUnit.MILLISECONDS</li>
      * <li>filter: MetricFilter.ALL</li>
-     * <li>securityLevel: NONE</li>
-     * <li>username: ""</li>
-     * <li>password: ""</li>
      * </ul>
      */
     public static Builder forRegistry(MetricRegistry registry) {
@@ -54,9 +52,6 @@ public class CollectdReporter extends ScheduledReporter {
         private TimeUnit rateUnit = TimeUnit.SECONDS;
         private TimeUnit durationUnit = TimeUnit.MILLISECONDS;
         private MetricFilter filter = MetricFilter.ALL;
-        private SecurityLevel securityLevel = SecurityLevel.NONE;
-        private String username = "";
-        private String password = "";
 
         private Builder(MetricRegistry registry) {
             this.registry = registry;
@@ -87,32 +82,9 @@ public class CollectdReporter extends ScheduledReporter {
             return this;
         }
 
-        public Builder withUsername(String username) {
-            this.username = username;
-            return this;
-        }
-
-        public Builder withPassword(String password) {
-            this.password = password;
-            return this;
-        }
-
-        public Builder withSecurityLevel(SecurityLevel securityLevel) {
-            this.securityLevel = securityLevel;
-            return this;
-        }
-
         public CollectdReporter build(Sender sender) {
-            if (securityLevel != SecurityLevel.NONE) {
-                if (username.isEmpty()) {
-                    throw new IllegalArgumentException("username is required for securityLevel: " + securityLevel);
-                }
-                if (password.isEmpty()) {
-                    throw new IllegalArgumentException("password is required for securityLevel: " + securityLevel);
-                }
-            }
-            return new CollectdReporter(registry, hostName, sender, clock, rateUnit, durationUnit, filter,
-                    username, password, securityLevel);
+            return new CollectdReporter(
+                    registry, hostName, sender, clock, rateUnit, durationUnit, filter);
         }
     }
 
@@ -127,14 +99,13 @@ public class CollectdReporter extends ScheduledReporter {
     private long period;
     private final PacketWriter writer;
 
-    private CollectdReporter(MetricRegistry registry, String hostname, Sender sender, Clock clock, TimeUnit rateUnit,
-                             TimeUnit durationUnit, MetricFilter filter, String username, String password,
-                             SecurityLevel securityLevel) {
+    private CollectdReporter(MetricRegistry registry, String hostname, Sender sender, Clock clock,
+            TimeUnit rateUnit, TimeUnit durationUnit, MetricFilter filter) {
         super(registry, REPORTER_NAME, filter, rateUnit, durationUnit);
         this.hostName = (hostname != null) ? hostname : resolveHostName();
         this.sender = sender;
         this.clock = clock;
-        writer = new PacketWriter(sender, username, password, securityLevel);
+        writer = new PacketWriter(sender);
     }
 
     private String resolveHostName() {
