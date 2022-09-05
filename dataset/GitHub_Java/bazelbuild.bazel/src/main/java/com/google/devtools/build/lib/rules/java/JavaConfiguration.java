@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,37 +48,6 @@ public final class JavaConfiguration extends Fragment {
     BLAZE
   }
 
-  /**
-   * Values for the --java_optimization_mode option, which controls how Proguard is run over binary
-   * and test targets.  Note that for the moment this has no effect when building library targets.
-   */
-  public static enum JavaOptimizationMode {
-    /** Proguard is used iff top-level target has {@code proguard_specs} attribute. */
-    LEGACY,
-    /** No link-time optimizations are applied, regardless of the top-level target's attributes. */
-    NOOP,
-    /** Produce fully optimized binary with short symbol names and unreachable code removed. */
-    OPTIMIZE_MINIMIZE;
-
-    /**
-     * Returns true if all affected targets should produce mappings from original to renamed symbol
-     * names, regardless of the proguard_generate_mapping attribute.  This should be the case for
-     * all modes that force symbols to be renamed.  By contrast, the {@link #NOOP} mode will never
-     * produce a mapping file since no symbols are ever renamed.
-     */
-    public boolean alwaysGenerateOutputMapping() {
-      switch (this) {
-        case LEGACY:
-        case NOOP:
-          return false;
-        case OPTIMIZE_MINIMIZE:
-          return true;
-        default:
-          throw new AssertionError("Unexpected mode: " + this);
-      }
-    }
-  }
-
   private final ImmutableList<String> commandLineJavacFlags;
   private final Label javaLauncherLabel;
   private final Label javaBuilderTop;
@@ -98,9 +67,8 @@ public final class JavaConfiguration extends Fragment {
   private final ImmutableList<Label> translationTargets;
   private final String javaCpu;
   private final boolean allowPrecompiledJarsInSrcs;
-  private final JavaOptimizationMode javaOptimizationMode;
 
-  private final Label javaToolchain;
+  private Label javaToolchain;
 
   JavaConfiguration(boolean generateJavaDeps,
       List<String> defaultJvmFlags, JavaOptions javaOptions, Label javaToolchain, String javaCpu,
@@ -125,7 +93,6 @@ public final class JavaConfiguration extends Fragment {
     this.javaCpu = javaCpu;
     this.javaToolchain = javaToolchain;
     this.allowPrecompiledJarsInSrcs = javaOptions.allowPrecompiledJarsInSrcs;
-    this.javaOptimizationMode = javaOptions.javaOptimizationMode;
 
     ImmutableList.Builder<Label> translationsBuilder = ImmutableList.builder();
     for (String s : javaOptions.translationTargets) {
@@ -281,10 +248,5 @@ public final class JavaConfiguration extends Fragment {
   /** Returns whether pre-compiled jar files should be allowed in srcs. */
   public boolean allowPrecompiledJarsInSrcs() {
     return allowPrecompiledJarsInSrcs;
-  }
-
-  /** Returns the --java_optimization_mode flag setting. */
-  public JavaOptimizationMode getJavaOptimizationMode() {
-    return javaOptimizationMode;
   }
 }

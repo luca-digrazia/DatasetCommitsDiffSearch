@@ -111,7 +111,6 @@ public class JavaCommon {
 
   private final RuleContext ruleContext;
   private final JavaSemantics semantics;
-  private JavaCompilationHelper javaCompilationHelper;
 
   public JavaCommon(RuleContext ruleContext, JavaSemantics semantics) {
     this(ruleContext, semantics,
@@ -333,35 +332,6 @@ public class JavaCommon {
     return builder.build();
   }
 
-  /**
-   * Collects transitive gen jars for the current rule.
-   */
-  private JavaGenJarsProvider collectTransitiveGenJars(
-          boolean usesAnnotationProcessing,
-          @Nullable Artifact genClassJar,
-          @Nullable Artifact genSourceJar) {
-    NestedSetBuilder<Artifact> classJarsBuilder = NestedSetBuilder.stableOrder();
-    NestedSetBuilder<Artifact> sourceJarsBuilder = NestedSetBuilder.stableOrder();
-
-    if (genClassJar != null) {
-      classJarsBuilder.add(genClassJar);
-    }
-    if (genSourceJar != null) {
-      sourceJarsBuilder.add(genSourceJar);
-    }
-    for (JavaGenJarsProvider dep : getDependencies(JavaGenJarsProvider.class)) {
-      classJarsBuilder.addTransitive(dep.getTransitiveGenClassJars());
-      sourceJarsBuilder.addTransitive(dep.getTransitiveGenSourceJars());
-    }
-    return new JavaGenJarsProvider(
-        usesAnnotationProcessing,
-        genClassJar, 
-        genSourceJar,
-        classJarsBuilder.build(), 
-        sourceJarsBuilder.build()
-    );
-  }
-
  /**
    * Collects transitive C++ dependencies.
    */
@@ -492,10 +462,7 @@ public class JavaCommon {
     activePlugins = collectPlugins();
 
     JavaTargetAttributes.Builder javaTargetAttributes = new JavaTargetAttributes.Builder(semantics);
-    javaCompilationHelper = new JavaCompilationHelper(
-        ruleContext, semantics, javacOpts, javaTargetAttributes);
-
-    processSrcs(javaCompilationHelper, javaTargetAttributes);
+    processSrcs(javaTargetAttributes, javacOpts);
     javaTargetAttributes.addSourceArtifacts(extraSrcs);
     processRuntimeDeps(javaTargetAttributes);
 
@@ -575,28 +542,12 @@ public class JavaCommon {
         .addOutputGroup(OutputGroupProvider.FILES_TO_COMPILE, getFilesToCompile(classJar));
   }
 
-  public void addGenJarsProvider(RuleConfiguredTargetBuilder builder,
-      @Nullable Artifact genClassJar, @Nullable Artifact genSourceJar) {
-    JavaGenJarsProvider genJarsProvider = collectTransitiveGenJars(
-        javaCompilationHelper.usesAnnotationProcessing(),
-        genClassJar, genSourceJar);
-
-    NestedSetBuilder<Artifact> genJarsBuilder = NestedSetBuilder.stableOrder();
-    genJarsBuilder.addTransitive(genJarsProvider.getTransitiveGenClassJars());
-    genJarsBuilder.addTransitive(genJarsProvider.getTransitiveGenSourceJars());
-
-    builder
-        .add(JavaGenJarsProvider.class, genJarsProvider)
-        .addOutputGroup(JavaSemantics.GENERATED_JARS_OUTPUT_GROUP, genJarsBuilder.build());
-  }
-
-
   /**
    * Processes the sources of this target, adding them as messages, proper
    * sources or to the list of targets treated as deps as required.
    */
-  private void processSrcs(JavaCompilationHelper helper,
-      JavaTargetAttributes.Builder attributes) {
+  private void processSrcs(JavaTargetAttributes.Builder attributes,
+      ImmutableList<String> javacOpts) {
     for (MessageBundleProvider srcItem : ruleContext.getPrerequisites(
         "srcs", Mode.TARGET, MessageBundleProvider.class)) {
       attributes.addMessages(srcItem.getMessages());
@@ -604,7 +555,7 @@ public class JavaCommon {
 
     attributes.addSourceArtifacts(sources);
 
-    addCompileTimeClassPathEntriesMaybeThroughIjar(helper, attributes);
+    addCompileTimeClassPathEntriesMaybeThroughIjar(attributes, javacOpts);
   }
 
   /**
@@ -630,8 +581,9 @@ public class JavaCommon {
    * using ijar to create jar interfaces for the generated jars.
    */
   private void addCompileTimeClassPathEntriesMaybeThroughIjar(
-      JavaCompilationHelper helper,
-      JavaTargetAttributes.Builder attributes) {
+      JavaTargetAttributes.Builder attributes, ImmutableList<String> javacOpts) {
+    JavaCompilationHelper helper = new JavaCompilationHelper(
+        ruleContext, semantics, javacOpts, attributes);
     for (FileProvider provider : ruleContext
         .getPrerequisites("srcs", Mode.TARGET, FileProvider.class)) {
       Iterable<Artifact> jarFiles = helper.filterGeneratedJarsThroughIjar(
