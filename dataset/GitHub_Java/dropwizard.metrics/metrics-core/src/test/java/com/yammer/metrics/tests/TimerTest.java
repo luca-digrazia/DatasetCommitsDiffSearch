@@ -1,8 +1,9 @@
 package com.yammer.metrics.tests;
 
-import com.yammer.metrics.Clock;
+import com.yammer.metrics.MetricRegistry;
 import com.yammer.metrics.Snapshot;
 import com.yammer.metrics.Timer;
+import com.yammer.metrics.Clock;
 import org.junit.Test;
 
 import java.util.concurrent.Callable;
@@ -12,7 +13,7 @@ import static org.fest.assertions.api.Assertions.assertThat;
 import static org.fest.assertions.api.Assertions.offset;
 
 public class TimerTest {
-    private final Clock clock = new Clock() {
+    private final MetricRegistry registry = new MetricRegistry("test", new Clock() {
         // a mock clock that increments its ticker by 50msec per call
         private long val = 0;
 
@@ -20,8 +21,8 @@ public class TimerTest {
         public long getTick() {
             return val += 50000000;
         }
-    };
-    private final Timer timer = new Timer(clock);
+    });
+    private final Timer timer = registry.timer("timer");
 
     @Test
     public void aBlankTimer() throws Exception {

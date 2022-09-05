@@ -27,6 +27,14 @@ public class Timer implements Metered, Sampling, Summarizable {
     Timer(Clock clock) {
         this.meter = new Meter(clock);
         this.clock = clock;
+        clear();
+    }
+
+    /**
+     * Clears all recorded durations.
+     */
+    public void clear() {
+        histogram.clear();
     }
 
     /**

@@ -13,13 +13,14 @@ import static java.lang.Math.sqrt;
  */
 public class Histogram implements Metric, Sampling, Summarizable {
     private final Sample sample;
-    private final AtomicLong min;
-    private final AtomicLong max;
-    private final AtomicLong sum;
+    private final AtomicLong min = new AtomicLong();
+    private final AtomicLong max = new AtomicLong();
+    private final AtomicLong sum = new AtomicLong();
     // These are for the Welford algorithm for calculating running variance
     // without floating-point doom.
-    private final AtomicReference<double[]> variance; // M, S
-    private final AtomicLong count;
+    private final AtomicReference<double[]> variance =
+            new AtomicReference<double[]>(new double[]{-1, 0}); // M, S
+    private final AtomicLong count = new AtomicLong();
 
     /**
      * Creates a new {@link Histogram} with the given sample type.
@@ -37,11 +38,19 @@ public class Histogram implements Metric, Sampling, Summarizable {
      */
     public Histogram(Sample sample) {
         this.sample = sample;
-        this.min = new AtomicLong(Long.MAX_VALUE);
-        this.max = new AtomicLong(Long.MIN_VALUE);
-        this.sum = new AtomicLong(0);
-        this.variance = new AtomicReference<double[]>(new double[]{-1, 0});
-        this.count = new AtomicLong(0);
+        clear();
+    }
+
+    /**
+     * Clears all recorded values.
+     */
+    public void clear() {
+        sample.clear();
+        count.set(0);
+        max.set(Long.MIN_VALUE);
+        min.set(Long.MAX_VALUE);
+        sum.set(0);
+        variance.set(new double[]{ -1, 0 });
     }
 
     /**
