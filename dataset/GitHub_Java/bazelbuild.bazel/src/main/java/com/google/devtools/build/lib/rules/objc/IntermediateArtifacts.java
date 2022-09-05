@@ -17,10 +17,8 @@ package com.google.devtools.build.lib.rules.objc;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -30,7 +28,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
  */
 // TODO(bazel-team): This should really be named DerivedArtifacts as it contains methods for
 // final as well as intermediate artifacts.
-public final class IntermediateArtifacts {
+final class IntermediateArtifacts {
 
   /**
    * Extension used on the temporary zipped dsym bundle location. Must contain {@code .dSYM} for
@@ -102,16 +100,6 @@ public final class IntermediateArtifacts {
   }
 
   /**
-   * Returns a derived artifact in the genfiles directory obtained by appending some extension to
-   * the end of the {@link PathFragment} corresponding to the owner {@link Label}.
-   */
-  private Artifact appendExtensionInGenfiles(String extension) {
-    PathFragment name = new PathFragment(ruleContext.getLabel().getName());
-    return scopedArtifact(
-        name.replaceName(name.getBaseName() + extension), /* inGenfiles = */ true);
-  }
-
-  /**
    * The output of using {@code actoolzip} to run {@code actool} for a given bundle which is
    * merged under the {@code .app} or {@code .bundle} directory root.
    */
@@ -173,32 +161,21 @@ public final class IntermediateArtifacts {
     return appendExtension("_lipobin");
   }
 
-  private Artifact scopedArtifact(PathFragment scopeRelative, boolean inGenfiles) {
-    Root root =
-        inGenfiles
-            ? ruleContext.getConfiguration().getGenfilesDirectory()
-            : ruleContext.getConfiguration().getBinDirectory();
+  private Artifact scopedArtifact(PathFragment scopeRelative) {
     if (scopingLabel.isPresent()) {
       // The path of this artifact will be
       // RULE_PACKAGE/_intermediate_scoped/RULE_LABEL/SCOPING_PACKAGE/SCOPING_LABEL/SCOPERELATIVE
-      return ruleContext.getUniqueDirectoryArtifact(
-          "_intermediate_scoped",
-          scopingLabel
-              .get()
-              .getPackageIdentifier()
-              .getPathFragment()
+      return ruleContext.getUniqueDirectoryArtifact("_intermediate_scoped",
+          scopingLabel.get().getPackageIdentifier().getPathFragment()
               .getRelative(scopingLabel.get().getName())
               .getRelative(scopeRelative),
-          root);
+          ruleContext.getConfiguration().getBinDirectory());
     } else {
       // The path of this artifact will be
       // RULE_PACKAGE/SCOPERELATIVE
-      return ruleContext.getPackageRelativeArtifact(scopeRelative, root);
+      return ruleContext.getPackageRelativeArtifact(scopeRelative,
+          ruleContext.getConfiguration().getBinDirectory());
     }
-  }
-
-  private Artifact scopedArtifact(PathFragment scopeRelative) {
-    return scopedArtifact(scopeRelative, /* inGenfiles = */ false);
   }
 
   /**
@@ -361,24 +338,5 @@ public final class IntermediateArtifacts {
    */
   public Artifact dotdFile(Artifact source) {
      return inUniqueObjsDir(source, ".d");
-  }
-
-  /**
-   * {@link CppModuleMap} that provides the clang module map for this target.
-   */
-  public CppModuleMap moduleMap() {
-    if (!ObjcRuleClasses.objcConfiguration(ruleContext).moduleMapsEnabled()) {
-      throw new IllegalStateException();
-    }
-    String moduleName =
-        ruleContext
-            .getLabel()
-            .toString()
-            .replace("//", "")
-            .replace("/", "_")
-            .replace(":", "_");
-    // To get Swift to pick up module maps, we need to name them "module.modulemap" and have their
-    // parent directory in the module map search paths.
-    return new CppModuleMap(appendExtensionInGenfiles(".modulemaps/module.modulemap"), moduleName);
   }
 }
