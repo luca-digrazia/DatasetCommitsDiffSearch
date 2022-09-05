@@ -25,17 +25,11 @@ import java.util.Map;
  * This provides a view over the actions that were created during the analysis of a rule
  * (not including actions for its transitive dependencies).
  */
-public final class ActionsProvider {
+public final class ActionsProvider{
 
-  /**
-   * The Actions provider type itself. 
-   */
-  public static final SkylarkClassObjectConstructor SKYLARK_CONSTRUCTOR =
+  public static final SkylarkClassObjectConstructor ACTIONS_PROVIDER =
       SkylarkClassObjectConstructor.createNative("Actions");
 
-  /**
-   * Factory method for creating instances of the Actions provider.
-   */
   public static SkylarkClassObject create(Iterable<ActionAnalysisMetadata> actions) {
     Map<Artifact, ActionAnalysisMetadata> map = new HashMap<>();
     for (ActionAnalysisMetadata action : actions) {
@@ -48,6 +42,6 @@ public final class ActionsProvider {
       }
     }
     ImmutableMap<String, Object> fields = ImmutableMap.<String, Object>of("by_file", map);
-    return new SkylarkClassObject(SKYLARK_CONSTRUCTOR, fields);
+    return new SkylarkClassObject(ACTIONS_PROVIDER, fields);
   }
 }
