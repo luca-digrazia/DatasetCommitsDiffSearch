@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.analysis.util.ActionTester;
 import com.google.devtools.build.lib.analysis.util.ActionTester.ActionCombinationFactory;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestUtil;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.Arrays;
@@ -167,7 +166,7 @@ public class SpawnActionTest extends BuildViewTestCase {
         ImmutableList.copyOf(
             ((ParameterFileWriteAction) getGeneratingAction(paramFile)).getContents()))
         .containsExactly("-X");
-    MoreAsserts.assertContainsSublist(actionInputsToPaths(action.getSpawn().getInputFiles()),
+    assertContainsSublist(actionInputsToPaths(action.getSpawn().getInputFiles()),
         "pkg/exe.jar");
   }
 
@@ -198,7 +197,7 @@ public class SpawnActionTest extends BuildViewTestCase {
     assertEquals(Arrays.asList("-X"),
         ImmutableList.copyOf(
             ((ParameterFileWriteAction) getGeneratingAction(paramFile)).getContents()));
-    MoreAsserts.assertContainsSublist(actionInputsToPaths(action.getSpawn().getInputFiles()),
+    assertContainsSublist(actionInputsToPaths(action.getSpawn().getInputFiles()),
         "pkg/exe.jar");
   }
 
