@@ -1,10 +1,24 @@
 package org.nlpcn.es4sql.parse;
 
-import com.alibaba.druid.sql.ast.expr.*;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
 import com.alibaba.druid.sql.ast.SQLExpr;
+import com.alibaba.druid.sql.ast.expr.SQLBetweenExpr;
+import com.alibaba.druid.sql.ast.expr.SQLBinaryOpExpr;
+import com.alibaba.druid.sql.ast.expr.SQLBinaryOperator;
+import com.alibaba.druid.sql.ast.expr.SQLCharExpr;
+import com.alibaba.druid.sql.ast.expr.SQLIdentifierExpr;
+import com.alibaba.druid.sql.ast.expr.SQLInListExpr;
+import com.alibaba.druid.sql.ast.expr.SQLInSubQueryExpr;
+import com.alibaba.druid.sql.ast.expr.SQLMethodInvokeExpr;
+import com.alibaba.druid.sql.ast.expr.SQLNotExpr;
+import com.alibaba.druid.sql.ast.expr.SQLNullExpr;
+import com.alibaba.druid.sql.ast.expr.SQLNumericLiteralExpr;
+import com.alibaba.druid.sql.ast.expr.SQLPropertyExpr;
+import com.alibaba.druid.sql.ast.expr.SQLQueryExpr;
+import com.alibaba.druid.sql.ast.expr.SQLTextLiteralExpr;
+import com.alibaba.druid.sql.ast.expr.SQLVariantRefExpr;
 import com.alibaba.druid.sql.ast.statement.SQLDeleteStatement;
 import com.alibaba.druid.sql.dialect.mysql.ast.statement.MySqlSelectQueryBlock;
 
@@ -21,7 +35,6 @@ import org.nlpcn.es4sql.spatial.SpatialParamsFactory;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -67,11 +80,7 @@ public class WhereParser {
 
     public void parseWhere(SQLExpr expr, Where where) throws SqlParseException {
 
-        /*
-        zhongshu-comment SQLBinaryOpExpr举例：
-            eg1：a = 1
-            eg2：a = 1 AND b = 2 OR c = 3
-         */
+
         if (expr instanceof SQLBinaryOpExpr) {
             SQLBinaryOpExpr bExpr = (SQLBinaryOpExpr) expr;
             if (explanSpecialCondWithBothSidesAreLiterals(bExpr, where)) {
@@ -166,7 +175,7 @@ public class WhereParser {
         return false;
     }
 
-    //zhongshu-comment isCondition的意思吗？判断是不是一个判断条件，例如：a=1 或者 floor(a)=1这种最小的单元
+
     private boolean isCond(SQLBinaryOpExpr expr) {
         SQLExpr leftSide = expr.getLeft();
         if (leftSide instanceof SQLMethodInvokeExpr) {
@@ -174,8 +183,7 @@ public class WhereParser {
         }
         return leftSide instanceof SQLIdentifierExpr ||
                 leftSide instanceof SQLPropertyExpr ||
-                leftSide instanceof SQLVariantRefExpr ||
-                leftSide instanceof SQLCastExpr;
+                leftSide instanceof SQLVariantRefExpr;
     }
 
     private boolean isAllowedMethodOnConditionLeft(SQLMethodInvokeExpr method, SQLBinaryOperator operator) {
@@ -193,14 +201,14 @@ public class WhereParser {
             if (binarySub.getOperator().priority != bExpr.getOperator().priority) {
                 Where subWhere = new Where(bExpr.getOperator().name);
                 where.addWhere(subWhere);
-                parseWhere(binarySub, subWhere);//zhongshu-comment 递归调用parseWhere()，解析出where子句中的多个条件
+                parseWhere(binarySub, subWhere);
             } else {
-                parseWhere(binarySub, where);//zhongshu-comment 递归调用parseWhere()，解析出where子句中的多个条件
+                parseWhere(binarySub, where);
             }
         } else if (sub instanceof SQLNotExpr) {
             Where subWhere = new Where(bExpr.getOperator().name);
             where.addWhere(subWhere);
-            parseWhere(((SQLNotExpr) sub).getExpr(), subWhere);//zhongshu-comment 递归调用parseWhere()，解析出where子句中的多个条件
+            parseWhere(((SQLNotExpr) sub).getExpr(), subWhere);
             negateWhere(subWhere);
         } else {
             explanCond(bExpr.getOperator().name, sub, where);
@@ -275,7 +283,7 @@ public class WhereParser {
                 }
                 where.addWhere(condition);
             }
-        } else if (expr instanceof SQLInListExpr) { //zhongshu-comment 解析in和not in语句
+        } else if (expr instanceof SQLInListExpr) {
             SQLInListExpr siExpr = (SQLInListExpr) expr;
             String leftSide = siExpr.getExpr().toString();
 
@@ -302,24 +310,9 @@ public class WhereParser {
                 condition = new Condition(Where.CONN.valueOf(opear), leftSide, null, siExpr.isNot() ? "NOT IN" : "IN", parseValue(siExpr.getTargetList()), null, nestedType);
             else if (isChildren)
                 condition = new Condition(Where.CONN.valueOf(opear), leftSide, null, siExpr.isNot() ? "NOT IN" : "IN", parseValue(siExpr.getTargetList()), null, childrenType);
-            else if (siExpr.getExpr() instanceof SQLCaseExpr) {
-                //zhongshu-comment todo 增加代码
+            else
+                condition = new Condition(Where.CONN.valueOf(opear), leftSide, null, siExpr.isNot() ? "NOT IN" : "IN", parseValue(siExpr.getTargetList()), null);
 
-                condition = new Condition(Where.CONN.valueOf(opear),
-                        leftSide, //zhongshu-comment 这个参数传过去也没有，只是SQLCaseExpr对象的地址
-                        siExpr.getExpr(), //zhongshu-comment 这个才是有用的参数，是SQLCaseExpr对象
-                        siExpr.isNot() ? "NOT IN" : "IN",
-                        parseValue(siExpr.getTargetList()),
-                        null);
-            }
-            else {
-                condition = new Condition(Where.CONN.valueOf(opear),
-                        leftSide,
-                        null,
-                        siExpr.isNot() ? "NOT IN" : "IN",
-                        parseValue(siExpr.getTargetList()),
-                        null);
-            }
             where.addWhere(condition);
         } else if (expr instanceof SQLBetweenExpr) {
             SQLBetweenExpr between = ((SQLBetweenExpr) expr);
@@ -411,13 +404,6 @@ public class WhereParser {
 
                 where.addWhere(condition);
             } else if (methodName.toLowerCase().equals("script")) {
-                /*
-                zhongshu-comment 这里也是Script Query，但是貌似没见过有走这个分支的sql
-                1、文档
-                    https://www.elastic.co/guide/en/elasticsearch/reference/6.1/query-dsl-script-query.html
-                2、java api
-                    https://www.elastic.co/guide/en/elasticsearch/client/java-api/6.1/java-specialized-queries.html
-                 */
                 ScriptFilter scriptFilter = new ScriptFilter();
                 if (!scriptFilter.tryParseFromMethodExpr(methodExpr)) {
                     throw new SqlParseException("could not parse script filter");
@@ -482,62 +468,47 @@ public class WhereParser {
         return methodField;
     }
 
-    private MethodField parseSQLCastExprInWhere(SQLCastExpr soExpr) throws SqlParseException {
-        MethodField methodField = FieldMaker.makeMethodField("cast",
-            Collections.singletonList(soExpr),
-            null,
-            null,
-            query != null ? query.getFrom().getAlias() : null,
-            true);
-        List<KVValue> params = methodField.getParams();
-        KVValue param = params.get(0);
-        params.clear();
-        params.add(new KVValue(param.key));
-        params.add(new KVValue(param.value));
-        return methodField;
-    }
-
     private SQLMethodInvokeExpr parseSQLBinaryOpExprWhoIsConditionInWhere(SQLBinaryOpExpr soExpr) throws SqlParseException {
 
-        if (!(soExpr.getLeft() instanceof SQLCastExpr || soExpr.getRight() instanceof SQLCastExpr)) {
-            if (!(soExpr.getLeft() instanceof SQLMethodInvokeExpr ||
+        if (!(soExpr.getLeft() instanceof SQLMethodInvokeExpr ||
                 soExpr.getRight() instanceof SQLMethodInvokeExpr)) {
+            return null;
+        }
+
+        if (soExpr.getLeft() instanceof SQLMethodInvokeExpr) {
+            if (!SQLFunctions.buildInFunctions.contains(((SQLMethodInvokeExpr) soExpr.getLeft()).getMethodName())) {
                 return null;
             }
+        }
 
-            if (soExpr.getLeft() instanceof SQLMethodInvokeExpr) {
-                if (!SQLFunctions.buildInFunctions.contains(((SQLMethodInvokeExpr) soExpr.getLeft()).getMethodName())) {
-                    return null;
-                }
-            }
-
-            if (soExpr.getRight() instanceof SQLMethodInvokeExpr) {
-                if (!SQLFunctions.buildInFunctions.contains(((SQLMethodInvokeExpr) soExpr.getRight()).getMethodName())) {
-                    return null;
-                }
+        if (soExpr.getRight() instanceof SQLMethodInvokeExpr) {
+            if (!SQLFunctions.buildInFunctions.contains(((SQLMethodInvokeExpr) soExpr.getRight()).getMethodName())) {
+                return null;
             }
         }
+
 
         MethodField leftMethod = new MethodField(null, Lists.newArrayList(new KVValue("", Util.expr2Object(soExpr.getLeft(), "'"))), null, null);
+        MethodField rightMethod = new MethodField(null, Lists.newArrayList(new KVValue("", Util.expr2Object(soExpr.getRight(), "'"))), null, null);
+
         if (soExpr.getLeft() instanceof SQLIdentifierExpr || soExpr.getLeft() instanceof SQLPropertyExpr) {
             leftMethod = new MethodField(null, Lists.newArrayList(new KVValue("", "doc['" + Util.expr2Object(soExpr.getLeft(), "'") + "'].value")), null, null);
-        } else if (soExpr.getLeft() instanceof SQLMethodInvokeExpr) {
-            leftMethod = parseSQLMethodInvokeExprWithFunctionInWhere((SQLMethodInvokeExpr) soExpr.getLeft());
-        } else if (soExpr.getLeft() instanceof SQLCastExpr) {
-            leftMethod = parseSQLCastExprInWhere((SQLCastExpr) soExpr.getLeft());
         }
 
-        MethodField rightMethod = new MethodField(null, Lists.newArrayList(new KVValue("", Util.expr2Object(soExpr.getRight(), "'"))), null, null);
         if (soExpr.getRight() instanceof SQLIdentifierExpr || soExpr.getRight() instanceof SQLPropertyExpr) {
             rightMethod = new MethodField(null, Lists.newArrayList(new KVValue("", "doc['" + Util.expr2Object(soExpr.getRight(), "'") + "'].value")), null, null);
-        } else if (soExpr.getRight() instanceof SQLMethodInvokeExpr) {
+        }
+
+        if (soExpr.getLeft() instanceof SQLMethodInvokeExpr) {
+            leftMethod = parseSQLMethodInvokeExprWithFunctionInWhere((SQLMethodInvokeExpr) soExpr.getLeft());
+        }
+        if (soExpr.getRight() instanceof SQLMethodInvokeExpr) {
             rightMethod = parseSQLMethodInvokeExprWithFunctionInWhere((SQLMethodInvokeExpr) soExpr.getRight());
-        } else if (soExpr.getRight() instanceof SQLCastExpr) {
-            rightMethod = parseSQLCastExprInWhere((SQLCastExpr) soExpr.getRight());
         }
 
         String v1 = leftMethod.getParams().get(0).value.toString();
         String v1Dec = leftMethod.getParams().size() == 2 ? leftMethod.getParams().get(1).value.toString() + ";" : "";
+
 
         String v2 = rightMethod.getParams().get(0).value.toString();
         String v2Dec = rightMethod.getParams().size() == 2 ? rightMethod.getParams().get(1).value.toString() + ";" : "";
@@ -572,12 +543,6 @@ public class WhereParser {
         return values.toArray();
     }
 
-    /**
-     * zhongshu-comment 该放方法只用于解析in、not in括号中的列表，将括号中的多个值转为数组Object[]
-     * @param targetList
-     * @return
-     * @throws SqlParseException
-     */
     private Object[] parseValue(List<SQLExpr> targetList) throws SqlParseException {
         Object[] value = new Object[targetList.size()];
         for (int i = 0; i < targetList.size(); i++) {
@@ -607,10 +572,6 @@ public class WhereParser {
         } else if (expr instanceof SQLPropertyExpr) {
             return expr;
         } else {
-            /*
-            zhongshu-comment 解析where子查询时会抛出这样的异常：
-            Failed to parse SqlExpression of type class com.alibaba.druid.sql.ast.expr.SQLQueryExpr. expression value: com.alibaba.druid.sql.ast.statement.SQLSelect@1d60737e
-             */
             throw new SqlParseException(
                     String.format("Failed to parse SqlExpression of type %s. expression value: %s", expr.getClass(), expr)
             );
