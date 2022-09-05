@@ -81,6 +81,8 @@ public final class CommandEnvironment {
   private final Map<String, String> clientEnv = new HashMap<>();
   private final TimestampGranularityMonitor timestampGranularityMonitor;
 
+  private BuildView view;
+
   private PathFragment relativeWorkingDirectory = PathFragment.EMPTY_FRAGMENT;
   private long commandStartTime;
   private OutputService outputService;
@@ -184,6 +186,10 @@ public final class CommandEnvironment {
     TargetPatternEvaluator result = getPackageManager().newTargetPatternEvaluator();
     result.updateOffset(relativeWorkingDirectory);
     return result;
+  }
+
+  public BuildView getView() {
+    return view;
   }
 
   public PackageRootResolver getPackageRootResolver() {
@@ -329,6 +335,12 @@ public final class CommandEnvironment {
     return outputFileSystem;
   }
 
+  @VisibleForTesting
+  public void initViewForTesting() {
+    this.view = new BuildView(runtime.getDirectories(), runtime.getRuleClassProvider(),
+        runtime.getSkyframeExecutor(), runtime.getCoverageReportActionFactory());
+  }
+
   /**
    * Hook method called by the BlazeCommandDispatcher prior to the dispatch of
    * each command.
@@ -384,6 +396,8 @@ public final class CommandEnvironment {
     skyframeExecutor.decideKeepIncrementalState(
         runtime.getStartupOptionsProvider().getOptions(BlazeServerStartupOptions.class).batch,
         optionsParser.getOptions(BuildView.Options.class));
+
+    initViewForTesting();
 
     // Start the performance and memory profilers.
     runtime.beforeCommand(this, options, execStartTimeNanos);
