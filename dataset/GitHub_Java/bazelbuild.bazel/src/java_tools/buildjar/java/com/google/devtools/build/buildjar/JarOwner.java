@@ -15,8 +15,8 @@
 package com.google.devtools.build.buildjar;
 
 import com.google.auto.value.AutoValue;
-import java.nio.file.Path;
-import java.util.Optional;
+import com.google.common.base.Function;
+import javax.annotation.Nullable;
 
 /**
  * Holds information about the Bazel rule that created a certain jar.
@@ -27,21 +27,26 @@ import java.util.Optional;
 @AutoValue
 public abstract class JarOwner {
 
-  public abstract Path jar();
+  /** A long way to say 'JarOwner::label'. */
+  public static final Function<JarOwner, String> LABEL =
+      new Function<JarOwner, String>() {
+        @Nullable
+        @Override
+        public String apply(@Nullable JarOwner jarOwner) {
+          return jarOwner == null ? null : jarOwner.label();
+        }
+      };
 
-  public abstract Optional<String> label();
+  public abstract String label();
 
-  public abstract Optional<String> aspect();
+  @Nullable
+  public abstract String aspect();
 
-  public static JarOwner create(Path jar) {
-    return new AutoValue_JarOwner(jar, Optional.empty(), Optional.empty());
+  public static JarOwner create(String label) {
+    return new AutoValue_JarOwner(label, null);
   }
 
-  public static JarOwner create(Path jar, String label, Optional<String> aspect) {
-    return new AutoValue_JarOwner(jar, Optional.of(label), aspect);
-  }
-
-  public JarOwner withLabel(Optional<String> label) {
-    return new AutoValue_JarOwner(jar(), label, aspect());
+  public static JarOwner create(String label, String aspect) {
+    return new AutoValue_JarOwner(label, aspect);
   }
 }
