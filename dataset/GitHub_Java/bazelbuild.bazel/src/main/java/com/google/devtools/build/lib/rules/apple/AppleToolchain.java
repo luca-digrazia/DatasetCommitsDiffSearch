@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.XcodeprojBuildSetting;
@@ -87,7 +86,7 @@ public class AppleToolchain {
    */
   // TODO(bazel-team): Support non-ios platforms.
   public static String getPlatformPlistName(AppleConfiguration configuration) {
-    return configuration.getPlatform(PlatformType.IOS).getNameInPlist();
+    return Platform.forIosArch(configuration.getIosCpu()).getNameInPlist();
   }
 
   /**
