@@ -110,7 +110,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
 
   @Override
   public AspectDefinition getDefinition(AspectParameters params) {
-    AspectDefinition.Builder result = new AspectDefinition.Builder(this)
+    AspectDefinition.Builder result = new AspectDefinition.Builder(NAME)
         // Actually we care about JavaRuntimeJarProvider, but rules don't advertise that provider.
         .requireProvider(JavaCompilationArgsProvider.class)
         // Parse labels since we don't have RuleDefinitionEnvironment.getLabel like in a rule
@@ -136,7 +136,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
   @Override
   public ConfiguredAspect create(ConfiguredTarget base, RuleContext ruleContext,
       AspectParameters params) throws InterruptedException {
-    ConfiguredAspect.Builder result = new ConfiguredAspect.Builder(this, params, ruleContext);
+    ConfiguredAspect.Builder result = new ConfiguredAspect.Builder(NAME, ruleContext);
     Function<Artifact, Artifact> desugaredJars =
         desugarJarsIfRequested(base, ruleContext, result);
 
