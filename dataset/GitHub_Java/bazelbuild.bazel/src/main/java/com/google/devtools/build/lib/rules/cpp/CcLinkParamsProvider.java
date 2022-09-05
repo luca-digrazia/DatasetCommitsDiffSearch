@@ -33,7 +33,6 @@ public final class CcLinkParamsProvider extends SkylarkClassObject
       new Function<TransitiveInfoCollection, CcLinkParamsStore>() {
         @Override
         public CcLinkParamsStore apply(TransitiveInfoCollection input) {
-
           // Try native first...
           CcLinkParamsProvider provider = input.getProvider(CcLinkParamsProvider.class);
           if (provider != null) {
@@ -54,20 +53,6 @@ public final class CcLinkParamsProvider extends SkylarkClassObject
   public CcLinkParamsProvider(CcLinkParamsStore store) {
     super(CC_LINK_PARAMS, ImmutableMap.<String, Object>of());
     this.store = new CcLinkParamsStoreImpl(store);
-  }
-
-  public static CcLinkParamsProvider merge(final Iterable<CcLinkParamsProvider> providers) {
-    CcLinkParamsStore ccLinkParamsStore =
-        new CcLinkParamsStore() {
-          @Override
-          protected void collect(
-              CcLinkParams.Builder builder, boolean linkingStatically, boolean linkShared) {
-            for (CcLinkParamsProvider provider : providers) {
-              builder.add(provider.getCcLinkParamsStore());
-            }
-          }
-        };
-    return new CcLinkParamsProvider(ccLinkParamsStore);
   }
 
   /** Returns the link params store. */
