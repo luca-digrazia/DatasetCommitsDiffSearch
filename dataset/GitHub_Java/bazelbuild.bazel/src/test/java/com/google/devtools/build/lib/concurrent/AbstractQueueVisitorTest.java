@@ -55,8 +55,6 @@ public class AbstractQueueVisitorTest {
     counter.enqueue();
     counter.awaitQuiescence(/*interruptWorkers=*/ false);
     assertSame(10, counter.getCount());
-    assertSame(0, counter.activeParallelTasks());
-    assertSame(1, counter.getMaxRunningConcurrently());
   }
 
   @Test
@@ -192,19 +190,16 @@ public class AbstractQueueVisitorTest {
           }
         });
 
-    TestThread interrupterThread =
-        new TestThread() {
-          @Override
-          public void runTest() throws Exception {
-            latch1.await();
-            mainThread.interrupt();
-            assertTrue(
-                visitor
-                    .getInterruptionLatchForTestingOnly()
-                    .await(TestUtils.WAIT_TIMEOUT_MILLISECONDS, TimeUnit.MILLISECONDS));
-            latch2.countDown();
-          }
-        };
+    TestThread interrupterThread = new TestThread() {
+      @Override
+      public void runTest() throws Exception {
+        latch1.await();
+        mainThread.interrupt();
+        assertTrue(visitor.awaitInterruptionForTestingOnly(TestUtils.WAIT_TIMEOUT_MILLISECONDS,
+            TimeUnit.MILLISECONDS));
+        latch2.countDown();
+      }
+    };
 
     interrupterThread.start();
 
@@ -466,7 +461,7 @@ public class AbstractQueueVisitorTest {
         try {
           assertTrue(
               interrupt
-                  ? visitor.getInterruptionLatchForTestingOnly().await(1, TimeUnit.MINUTES)
+                  ? visitor.awaitInterruptionForTestingOnly(1, TimeUnit.MINUTES)
                   : visitor.getExceptionLatchForTestingOnly().await(1, TimeUnit.MINUTES));
         } catch (InterruptedException e) {
           // Unexpected.
@@ -485,7 +480,6 @@ public class AbstractQueueVisitorTest {
     private final static String THREAD_NAME = "BlazeTest CountingQueueVisitor";
 
     private int theInt = 0;
-    private int maxRunningConcurrently = 0;
     private final Object lock = new Object();
 
     public CountingQueueVisitor() {
@@ -506,10 +500,6 @@ public class AbstractQueueVisitorTest {
                   theInt++;
                   enqueue();
                 }
-                int concurrentTasks = activeParallelTasks();
-                if (concurrentTasks > maxRunningConcurrently) {
-                  maxRunningConcurrently = concurrentTasks;
-                }
               }
             }
           });
@@ -517,10 +507,6 @@ public class AbstractQueueVisitorTest {
 
     public int getCount() {
       return theInt;
-    }
-
-    public int getMaxRunningConcurrently() {
-      return maxRunningConcurrently;
     }
   }
 

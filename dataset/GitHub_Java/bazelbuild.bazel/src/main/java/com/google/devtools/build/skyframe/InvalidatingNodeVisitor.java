@@ -23,16 +23,12 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
 import com.google.devtools.build.lib.concurrent.ErrorClassifier;
 import com.google.devtools.build.lib.concurrent.ExecutorParams;
-import com.google.devtools.build.lib.concurrent.ForkJoinQuiescingExecutor;
-import com.google.devtools.build.lib.concurrent.QuiescingExecutor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Pair;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
@@ -56,7 +52,8 @@ import javax.annotation.Nullable;
  *
  * <p>This is intended only for use in alternative {@code MemoizingEvaluator} implementations.
  */
-public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGraph> {
+public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGraph>
+    extends AbstractQueueVisitor {
 
   // Default thread count is equal to the number of cores to exploit
   // that level of hardware parallelism, since invalidation should be CPU-bound.
@@ -80,15 +77,13 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
   protected final DirtyKeyTracker dirtyKeyTracker;
   // Aliased to InvalidationState.pendingVisitations.
   protected final Set<Pair<SkyKey, InvalidationType>> pendingVisitations;
-  protected final QuiescingExecutor executor;
 
   protected InvalidatingNodeVisitor(
       TGraph graph,
       @Nullable EvaluationProgressReceiver invalidationReceiver,
       InvalidationState state,
       DirtyKeyTracker dirtyKeyTracker) {
-    this(
-        graph, invalidationReceiver, state, dirtyKeyTracker, AbstractQueueVisitor.EXECUTOR_FACTORY);
+    this(graph, invalidationReceiver, state, dirtyKeyTracker, EXECUTOR_FACTORY);
   }
 
   protected InvalidatingNodeVisitor(
@@ -97,30 +92,16 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
       InvalidationState state,
       DirtyKeyTracker dirtyKeyTracker,
       Function<ExecutorParams, ? extends ExecutorService> executorFactory) {
-    this.executor =
-        new AbstractQueueVisitor(
-            /*concurrent=*/ true,
-            /*parallelism=*/ DEFAULT_THREAD_COUNT,
-            /*keepAliveTime=*/ 1,
-            /*units=*/ TimeUnit.SECONDS,
-            /*failFastOnException=*/ true,
-            /*failFastOnInterrupt=*/ true,
-            "skyframe-invalidator",
-            executorFactory,
-            errorClassifier);
-    this.graph = Preconditions.checkNotNull(graph);
-    this.invalidationReceiver = invalidationReceiver;
-    this.dirtyKeyTracker = Preconditions.checkNotNull(dirtyKeyTracker);
-    this.pendingVisitations = state.pendingValues;
-  }
-
-  protected InvalidatingNodeVisitor(
-      TGraph graph,
-      @Nullable EvaluationProgressReceiver invalidationReceiver,
-      InvalidationState state,
-      DirtyKeyTracker dirtyKeyTracker,
-      ForkJoinPool forkJoinPool) {
-    this.executor = new ForkJoinQuiescingExecutor(forkJoinPool, errorClassifier);
+    super(
+        /*concurrent=*/ true,
+        /*parallelism=*/ DEFAULT_THREAD_COUNT,
+        /*keepAliveTime=*/ 1,
+        /*units=*/ TimeUnit.SECONDS,
+        /*failFastOnException=*/ true,
+        /*failFastOnInterrupt=*/ true,
+        "skyframe-invalidator",
+        executorFactory,
+        errorClassifier);
     this.graph = Preconditions.checkNotNull(graph);
     this.invalidationReceiver = invalidationReceiver;
     this.dirtyKeyTracker = Preconditions.checkNotNull(dirtyKeyTracker);
@@ -140,14 +121,9 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
       // exist in the graph, so we must be tolerant of that case.
       visit(visitData.first, visitData.second, !MUST_EXIST);
     }
-    executor.awaitQuiescence(/*interruptWorkers=*/ true);
+    awaitQuiescence(/*interruptWorkers=*/ true);
     Preconditions.checkState(pendingVisitations.isEmpty(),
         "All dirty nodes should have been processed: %s", pendingVisitations);
-  }
-
-  @VisibleForTesting
-  public CountDownLatch getInterruptionLatchForTestingOnly() {
-    return executor.getInterruptionLatchForTestingOnly();
   }
 
   protected abstract long count();
@@ -256,7 +232,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
       }
       final Pair<SkyKey, InvalidationType> invalidationPair = Pair.of(key, invalidationType);
       pendingVisitations.add(invalidationPair);
-      executor.execute(
+      execute(
           new Runnable() {
             @Override
             public void run() {
@@ -333,15 +309,6 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
       super(graph, invalidationReceiver, state, dirtyKeyTracker, executorFactory);
     }
 
-    protected DirtyingNodeVisitor(
-        ThinNodeQueryableGraph graph,
-        EvaluationProgressReceiver invalidationReceiver,
-        InvalidationState state,
-        DirtyKeyTracker dirtyKeyTracker,
-        ForkJoinPool forkJoinPool) {
-      super(graph, invalidationReceiver, state, dirtyKeyTracker, forkJoinPool);
-    }
-
     @Override
     protected long count() {
       return visited.size();
@@ -384,7 +351,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
         return;
       }
       pendingVisitations.add(invalidationPair);
-      executor.execute(
+      execute(
           new Runnable() {
             @Override
             public void run() {
