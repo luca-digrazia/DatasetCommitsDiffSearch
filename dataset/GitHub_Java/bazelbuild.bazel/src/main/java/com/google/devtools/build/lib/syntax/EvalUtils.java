@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.compiler.ByteCodeUtils;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -121,6 +122,17 @@ public final class EvalUtils {
   // NB: This is used as the basis for accepting objects in SkylarkNestedSet-s,
   // as well as for accepting objects as keys for Skylark dict-s.
   public static boolean isImmutable(Object o) {
+    if (o instanceof Tuple) {
+      for (Object item : (Tuple) o) {
+        if (!isImmutable(item)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (o instanceof SkylarkMutable) {
+      return false;
+    }
     if (o instanceof SkylarkValue) {
       return ((SkylarkValue) o).isImmutable();
     }

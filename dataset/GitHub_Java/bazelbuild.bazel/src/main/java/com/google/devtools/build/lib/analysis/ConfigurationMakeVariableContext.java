@@ -18,6 +18,7 @@ import com.google.devtools.build.lib.analysis.MakeVariableExpander.ExpansionExce
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -34,7 +35,7 @@ public class ConfigurationMakeVariableContext implements MakeVariableExpander.Co
 
   public ConfigurationMakeVariableContext(Package pkg, BuildConfiguration configuration) {
     this.pkg = pkg;
-    commandLineEnv = configuration.getCommandLineBuildVariables();
+    commandLineEnv = configuration.getCommandLineDefines();
     globalEnv = configuration.getGlobalMakeEnvironment();
     platform = configuration.getPlatformName();
   }

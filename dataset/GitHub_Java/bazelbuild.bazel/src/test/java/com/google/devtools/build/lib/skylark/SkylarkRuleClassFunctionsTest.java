@@ -180,7 +180,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     Attribute attr =
         evalAttributeDefinition("attr.label_list(allow_files = True, providers = ['a', 'b'])")
         .build("a1");
-    assertThat(attr.getMandatoryProvidersList()).containsExactly(ImmutableSet.of("a", "b"));
+    assertEquals(ImmutableSet.of("a", "b"), attr.getMandatoryProviders());
   }
 
   @Test

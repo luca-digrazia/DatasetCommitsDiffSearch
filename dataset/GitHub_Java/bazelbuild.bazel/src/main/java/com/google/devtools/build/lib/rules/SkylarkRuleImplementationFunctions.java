@@ -94,10 +94,7 @@ public class SkylarkRuleImplementationFunctions {
     name = "action",
     doc =
         "Creates an action that runs an executable or a shell command. You must specify either "
-            + "<code>command</code> or <code>executable</code>.\n"
-            + "Actions and genrules are very similar, but have different use cases. Actions are "
-            + "used inside rules, and genrules are used inside macros. Genrules also have make "
-            + "variable expansion.",
+            + "<code>command</code> or <code>executable</code>.",
     objectType = SkylarkRuleContext.class,
     returnType = Runtime.NoneType.class,
     mandatoryPositionals = {
@@ -552,19 +549,13 @@ public class SkylarkRuleImplementationFunctions {
             + "runfiles from the dependencies in srcs, data and deps attributes."),
         @Param(name = "collect_default", type = Boolean.class, defaultValue = "False",
             doc = "Whether to collect the default "
-            + "runfiles from the dependencies in srcs, data and deps attributes."),
-        @Param(name = "symlinks", type = SkylarkDict.class, defaultValue = "{}",
-            doc = "The map of symlinks to be added to the runfiles, prefixed by workspace name."),
-        @Param(name = "root_symlinks", type = SkylarkDict.class, defaultValue = "{}",
-            doc = "The map of symlinks to be added to the runfiles.")},
+            + "runfiles from the dependencies in srcs, data and deps attributes.")},
       useLocation = true)
   private static final BuiltinFunction runfiles = new BuiltinFunction("runfiles") {
     public Runfiles invoke(SkylarkRuleContext ctx, SkylarkList files, Object transitiveFiles,
         Boolean collectData, Boolean collectDefault,
-        SkylarkDict<?, ?> symlinks, SkylarkDict<?, ?> rootSymlinks,
         Location loc) throws EvalException, ConversionException {
       Runfiles.Builder builder = new Runfiles.Builder(ctx.getRuleContext().getWorkspaceName());
-      boolean checkConflicts = false;
       if (EvalUtils.toBoolean(collectData)) {
         builder.addRunfiles(ctx.getRuleContext(), RunfilesProvider.DATA_RUNFILES);
       }
@@ -577,26 +568,7 @@ public class SkylarkRuleImplementationFunctions {
       if (transitiveFiles != Runtime.NONE) {
         builder.addTransitiveArtifacts(((SkylarkNestedSet) transitiveFiles).getSet(Artifact.class));
       }
-      if (!symlinks.isEmpty()) {
-        // If Skylark code directly manipulates symlinks, activate more stringent validity checking.
-        checkConflicts = true;
-        for (Map.Entry<String, Artifact> entry : symlinks.getContents(
-            String.class, Artifact.class, "symlinks").entrySet()) {
-          builder.addSymlink(new PathFragment(entry.getKey()), entry.getValue());
-        }
-      }
-      if (!rootSymlinks.isEmpty()) {
-        checkConflicts = true;
-        for (Map.Entry<String, Artifact> entry : rootSymlinks.getContents(
-            String.class, Artifact.class, "root_symlinks").entrySet()) {
-          builder.addRootSymlink(new PathFragment(entry.getKey()), entry.getValue());
-        }
-      }
-      Runfiles runfiles = builder.build();
-      if (checkConflicts) {
-        runfiles.setConflictPolicy(Runfiles.ConflictPolicy.ERROR);
-      }
-      return runfiles;
+      return builder.build();
     }
   };
 

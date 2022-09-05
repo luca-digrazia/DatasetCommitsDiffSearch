@@ -29,7 +29,7 @@ import javax.annotation.Nullable;
 /**
  * Base class for data structures that are only mutable with a proper Mutability.
  */
-public abstract class SkylarkMutable implements Freezable, SkylarkValue {
+abstract class SkylarkMutable implements Freezable, SkylarkValue {
 
   protected SkylarkMutable() {}
 
@@ -53,20 +53,6 @@ public abstract class SkylarkMutable implements Freezable, SkylarkValue {
   @Override
   public String toString() {
     return Printer.repr(this);
-  }
-
-  /**
-   * Add a new lock at {@code loc}. No effect if frozen.
-   */
-  public void lock(Location loc) {
-    mutability().lock(this, loc);
-  }
-
-  /**
-   * Remove the lock at {@code loc}; such a lock must already exist. No effect if frozen.
-   */
-  public void unlock(Location loc) {
-    mutability().unlock(this, loc);
   }
 
   abstract static class MutableCollection<E> extends SkylarkMutable implements Collection<E> {

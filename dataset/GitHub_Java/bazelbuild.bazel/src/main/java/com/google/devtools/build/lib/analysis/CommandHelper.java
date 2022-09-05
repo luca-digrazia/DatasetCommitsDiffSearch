@@ -25,18 +25,20 @@ import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.AliasProvider;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+
 import javax.annotation.Nullable;
 
 /**
@@ -113,7 +115,7 @@ public final class CommandHelper {
     }
 
     for (TransitiveInfoCollection dep : tools) { // (Note: host configuration)
-      Label label = AliasProvider.getDependencyLabel(dep);
+      Label label = dep.getLabel();
       FilesToRunProvider tool = dep.getProvider(FilesToRunProvider.class);
       if (tool == null) {
         continue;
@@ -137,7 +139,7 @@ public final class CommandHelper {
       }
     }
 
-    this.resolvedTools = SkylarkList.createImmutable(resolvedToolsBuilder.build());
+    this.resolvedTools = new MutableList<>(resolvedToolsBuilder.build());
     this.remoteRunfileManifestMap = SkylarkDict.copyOf(null, remoteRunfileManifestBuilder.build());
     ImmutableMap.Builder<Label, ImmutableCollection<Artifact>> labelMapBuilder =
         ImmutableMap.builder();

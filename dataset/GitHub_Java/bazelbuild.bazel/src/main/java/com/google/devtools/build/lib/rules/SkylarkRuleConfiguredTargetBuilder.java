@@ -69,7 +69,6 @@ public final class SkylarkRuleConfiguredTargetBuilder {
       SkylarkRuleContext skylarkRuleContext = new SkylarkRuleContext(ruleContext, Kind.RULE);
       Environment env = Environment.builder(mutability)
           .setSkylark()
-          .setCallerLabel(ruleContext.getLabel())
           .setGlobals(
               ruleContext.getRule().getRuleClassObject().getRuleDefinitionEnvironment().getGlobals())
           .setEventHandler(ruleContext.getAnalysisEnvironment().getEventHandler())
@@ -334,9 +333,7 @@ public final class SkylarkRuleConfiguredTargetBuilder {
     if (executable == null) {
       return runfiles;
     }
-    return new Runfiles.Builder(
-        ruleContext.getWorkspaceName(), ruleContext.getConfiguration().legacyExternalRunfiles())
-        .addArtifact(executable)
+    return new Runfiles.Builder(ruleContext.getWorkspaceName()).addArtifact(executable)
         .merge(runfiles).build();
   }
 }

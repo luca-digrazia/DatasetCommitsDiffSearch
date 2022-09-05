@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.Environment.NoSuchVariableException;
-import com.google.devtools.build.lib.syntax.Environment.Phase;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Expression;
@@ -331,19 +330,19 @@ public final class PackageFactory {
    */
   @VisibleForTesting
   public PackageFactory(RuleClassProvider ruleClassProvider) {
-    this(ruleClassProvider, null, ImmutableList.<EnvironmentExtension>of(), "test");
+    this(ruleClassProvider, null, ImmutableList.<EnvironmentExtension>of());
   }
 
   @VisibleForTesting
   public PackageFactory(RuleClassProvider ruleClassProvider,
       EnvironmentExtension environmentExtension) {
-    this(ruleClassProvider, null, ImmutableList.of(environmentExtension), "test");
+    this(ruleClassProvider, null, ImmutableList.of(environmentExtension));
   }
 
   @VisibleForTesting
   public PackageFactory(RuleClassProvider ruleClassProvider,
       Iterable<EnvironmentExtension> environmentExtensions) {
-    this(ruleClassProvider, null, environmentExtensions, "test");
+    this(ruleClassProvider, null, environmentExtensions);
   }
 
   /**
@@ -352,8 +351,7 @@ public final class PackageFactory {
    */
   public PackageFactory(RuleClassProvider ruleClassProvider,
       Map<String, String> platformSetRegexps,
-      Iterable<EnvironmentExtension> environmentExtensions,
-      String version) {
+      Iterable<EnvironmentExtension> environmentExtensions) {
     this.platformSetRegexps = platformSetRegexps;
     this.ruleFactory = new RuleFactory(ruleClassProvider);
     this.ruleClassProvider = ruleClassProvider;
@@ -365,7 +363,7 @@ public final class PackageFactory {
     this.environmentExtensions = ImmutableList.copyOf(environmentExtensions);
     this.packageArguments = createPackageArguments();
     this.nativeModule = newNativeModule();
-    this.workspaceNativeModule = WorkspaceFactory.newNativeModule(ruleClassProvider, version);
+    this.workspaceNativeModule = WorkspaceFactory.newNativeModule(ruleClassProvider);
   }
 
   /**
@@ -700,7 +698,7 @@ public final class PackageFactory {
                   inputFile.getName()));
         }
         if (license == null && pkgBuilder.getDefaultLicense() == License.NO_LICENSE
-            && RuleClass.isThirdPartyPackage(pkgBuilder.getPackageIdentifier())) {
+            && pkgBuilder.getBuildFileLabel().toString().startsWith("//third_party/")) {
           throw new EvalException(ast.getLocation(),
               "third-party file '" + inputFile.getName() + "' lacks a license declaration "
               + "with one of the following types: notice, reciprocal, permissive, "
@@ -1400,13 +1398,6 @@ public final class PackageFactory {
     public MakeEnvironment.Builder getMakeEnvironment() {
       return pkgBuilder.getMakeEnvironment();
     }
-
-    /**
-     * Returns the builder of this Package.
-     */
-    public Package.Builder getBuilder() {
-      return pkgBuilder;
-    }
   }
 
   private final ClassObject nativeModule;
@@ -1505,8 +1496,7 @@ public final class PackageFactory {
           .setGlobals(Environment.BUILD)
           .setEventHandler(eventHandler)
           .setImportedExtensions(imports)
-          .setToolsRepository(ruleClassProvider.getToolsRepository())
-          .setPhase(Phase.LOADING)
+          .setLoadingPhase()
           .build();
 
       pkgBuilder.setFilename(buildFilePath)
@@ -1578,8 +1568,7 @@ public final class PackageFactory {
       Environment pkgEnv = Environment.builder(mutability)
           .setGlobals(Environment.BUILD)
           .setEventHandler(NullEventHandler.INSTANCE)
-          .setToolsRepository(ruleClassProvider.getToolsRepository())
-          .setPhase(Phase.LOADING)
+          .setLoadingPhase()
           .build();
 
       Package.LegacyBuilder pkgBuilder = new Package.LegacyBuilder(packageId,

@@ -21,7 +21,6 @@ import static org.junit.Assert.assertTrue;
 
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
-import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -34,14 +33,10 @@ import java.util.TreeMap;
  *  without actually creating any parse trees.
  */
 @RunWith(JUnit4.class)
-public class EvalUtilsTest extends EvaluationTestCase {
+public class EvalUtilsTest {
 
-  private static MutableList<Object> makeList(Environment env) {
-    return MutableList.<Object>of(env, 1, 2, 3);
-  }
-
-  private static SkylarkDict<Object, Object> makeDict(Environment env) {
-    return SkylarkDict.<Object, Object>of(env, 1, 1, 2, 2);
+  private static SkylarkDict<Object, Object> makeDict() {
+    return SkylarkDict.<Object, Object>of(null);
   }
 
   @Test
@@ -59,8 +54,8 @@ public class EvalUtilsTest extends EvaluationTestCase {
     assertEquals("string", EvalUtils.getDataTypeName("foo"));
     assertEquals("int", EvalUtils.getDataTypeName(3));
     assertEquals("tuple", EvalUtils.getDataTypeName(Tuple.of(1, 2, 3)));
-    assertEquals("list",  EvalUtils.getDataTypeName(makeList(null)));
-    assertEquals("dict",  EvalUtils.getDataTypeName(makeDict(null)));
+    assertEquals("list",  EvalUtils.getDataTypeName(MutableList.of(null, 1, 2, 3)));
+    assertEquals("dict",  EvalUtils.getDataTypeName(makeDict()));
     assertEquals("NoneType", EvalUtils.getDataTypeName(Runtime.NONE));
   }
 
@@ -69,12 +64,8 @@ public class EvalUtilsTest extends EvaluationTestCase {
     assertTrue(EvalUtils.isImmutable("foo"));
     assertTrue(EvalUtils.isImmutable(3));
     assertTrue(EvalUtils.isImmutable(Tuple.of(1, 2, 3)));
-
-    // Mutability depends on the environment.
-    assertTrue(EvalUtils.isImmutable(makeList(null)));
-    assertTrue(EvalUtils.isImmutable(makeDict(null)));
-    assertFalse(EvalUtils.isImmutable(makeList(env)));
-    assertFalse(EvalUtils.isImmutable(makeDict(env)));
+    assertFalse(EvalUtils.isImmutable(MutableList.of(null, 1, 2, 3)));
+    assertFalse(EvalUtils.isImmutable(makeDict()));
   }
 
   @Test

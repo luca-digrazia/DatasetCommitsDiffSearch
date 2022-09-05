@@ -43,7 +43,6 @@ import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.OutputFile;
-import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.shell.ShellUtils.TokenizationException;
@@ -401,6 +400,7 @@ public final class SkylarkRuleContext {
       return ruleClassName;
     }
 
+
     public ImmutableMap<Artifact, FilesToRunProvider> getExecutableRunfilesMap() {
       return executableRunfilesMap;
     }
@@ -557,23 +557,13 @@ public final class SkylarkRuleContext {
     }
   }
 
-  private boolean isForAspect() {
-    return ruleAttributesCollection != null;
-  }
-
   @SkylarkCallable(
     doc =
         "Creates a file object with the given filename, in the current package. "
             + DOC_NEW_FILE_TAIL
   )
   public Artifact newFile(String filename) {
-    return newFile(newFileRoot(), filename);
-  }
-
-  private Root newFileRoot() {
-    return isForAspect()
-        ? getConfiguration().getBinDirectory()
-        : ruleContext.getBinOrGenfilesDirectory();
+    return newFile(ruleContext.getBinOrGenfilesDirectory(), filename);
   }
 
   // Kept for compatibility with old code.
@@ -588,7 +578,8 @@ public final class SkylarkRuleContext {
   public Artifact newFile(Artifact baseArtifact, String newBaseName) {
     PathFragment original = baseArtifact.getRootRelativePath();
     PathFragment fragment = original.replaceName(newBaseName);
-    return ruleContext.getDerivedArtifact(fragment, newFileRoot());
+    Root root = ruleContext.getBinOrGenfilesDirectory();
+    return ruleContext.getDerivedArtifact(fragment, root);
   }
 
   // Kept for compatibility with old code.
@@ -669,14 +660,5 @@ public final class SkylarkRuleContext {
           + "current build request.")
   public Artifact getVolatileWorkspaceStatus() {
     return ruleContext.getAnalysisEnvironment().getVolatileWorkspaceStatusArtifact();
-  }
-
-  @SkylarkCallable(name = "build_file_path", structField = true, documented = true,
-      doc = "Returns path to the BUILD file for this rule, relative to the source root"
-  )
-  public String getBuildFileRelativePath() {
-    Package pkg = ruleContext.getRule().getPackage();
-    Root root = Root.asSourceRoot(pkg.getSourceRoot());
-    return pkg.getBuildFile().getPath().relativeTo(root.getPath()).getPathString();
   }
 }
