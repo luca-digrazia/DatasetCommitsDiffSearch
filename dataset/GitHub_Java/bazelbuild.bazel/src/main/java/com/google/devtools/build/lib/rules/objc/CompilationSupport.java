@@ -31,14 +31,11 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_FRAMEWOR
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.WEAK_SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.CLANG;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.CLANG_PLUSPLUS;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.COMPILABLE_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.DSYMUTIL;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.HEADERS;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.NON_ARC_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.STRIP;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SWIFT;
-import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
@@ -47,34 +44,26 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ParameterFile;
-import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
-import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
 import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.CompilationAttributes;
 import com.google.devtools.build.lib.rules.objc.XcodeProvider.Builder;
 import com.google.devtools.build.lib.shell.ShellUtils;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Support for rules that compile sources. Provides ways to determine files that should be output,
@@ -83,7 +72,7 @@ import java.util.Set;
  *
  * <p>Methods on this class can be called in any order without impacting the result.
  */
-public final class CompilationSupport {
+final class CompilationSupport {
 
   @VisibleForTesting
   static final String ABSOLUTE_INCLUDES_PATH_FORMAT =
@@ -109,23 +98,18 @@ public final class CompilationSupport {
     }
   }
 
-  @VisibleForTesting
-  static final String FILE_IN_SRCS_AND_HDRS_WARNING_FORMAT =
-      "File '%s' is in both srcs and hdrs.";
-
   /**
    * Returns information about the given rule's compilation artifacts.
    */
   // TODO(bazel-team): Remove this information from ObjcCommon and move it internal to this class.
   static CompilationArtifacts compilationArtifacts(RuleContext ruleContext) {
-    PrerequisiteArtifacts srcs = ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET)
-        .errorsForNonMatching(SRCS_TYPE);
     return new CompilationArtifacts.Builder()
-        .addSrcs(srcs.filter(COMPILABLE_SRCS_TYPE).list())
+        .addSrcs(ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET)
+            .errorsForNonMatching(SRCS_TYPE)
+            .list())
         .addNonArcSrcs(ruleContext.getPrerequisiteArtifacts("non_arc_srcs", Mode.TARGET)
             .errorsForNonMatching(NON_ARC_SRCS_TYPE)
             .list())
-        .addPrivateHdrs(srcs.filter(HEADERS).list())
         .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
         .setPchFile(Optional.fromNullable(ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET)))
         .build();
@@ -137,7 +121,7 @@ public final class CompilationSupport {
   /**
    * Creates a new compilation support for the given rule.
    */
-  public CompilationSupport(RuleContext ruleContext) {
+  CompilationSupport(RuleContext ruleContext) {
     this.ruleContext = ruleContext;
     this.attributes = new CompilationAttributes(ruleContext);
   }
@@ -232,7 +216,8 @@ public final class CompilationSupport {
 
     commandLine
         .add(IosSdkCommands.compileFlagsForClang(objcConfiguration))
-        .add(IosSdkCommands.commonLinkAndCompileFlagsForClang(objcProvider, objcConfiguration))
+        .add(IosSdkCommands.commonLinkAndCompileFlagsForClang(
+            objcProvider, objcConfiguration))
         .add(objcConfiguration.getCoptsForCompilationMode())
         .addBeforeEachPath(
             "-iquote", ObjcCommon.userHeaderSearchPaths(ruleContext.getConfiguration()))
@@ -247,7 +232,6 @@ public final class CompilationSupport {
         .addExecPath("-c", sourceFile)
         .addExecPath("-o", objFile);
 
-    // TODO(bazel-team): Remote private headers from inputs once they're added to the provider.
     ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
         .setMnemonic("ObjcCompile")
         .setExecutable(CLANG)
@@ -257,7 +241,6 @@ public final class CompilationSupport {
         .addOutput(objFile)
         .addOutputs(gcnoFiles.build())
         .addTransitiveInputs(objcProvider.get(HEADER))
-        .addInputs(compilationArtifacts.getPrivateHdrs())
         .addTransitiveInputs(objcProvider.get(FRAMEWORK_FILE))
         .addInputs(compilationArtifacts.getPchFile().asSet())
         .build(ruleContext));
@@ -692,37 +675,21 @@ public final class CompilationSupport {
         Iterable<Artifact> sourceArtifacts = j2ObjcSource.getObjcSrcs();
         Iterable<Artifact> prunedSourceArtifacts =
             j2ObjcSource.toPrunedSource(ruleContext).getObjcSrcs();
-        PathFragment paramFilePath = FileSystemUtils.replaceExtension(
-            j2ObjcSource.getTargetLabel().toPathFragment(), ".param.j2objc");
-        Artifact paramFile = ruleContext.getUniqueDirectoryArtifact(
-            "_j2objc_pruned",
-            paramFilePath,
-            ruleContext.getBinOrGenfilesDirectory());
         PathFragment objcFilePath = j2ObjcSource.getObjcFilePath();
-        CustomCommandLine commandLine = CustomCommandLine.builder()
-            .addJoinExecPaths("--input_files", ",", sourceArtifacts)
-            .addJoinExecPaths("--output_files", ",", prunedSourceArtifacts)
-            .addJoinExecPaths("--dependency_mapping_files", ",", j2ObjcDependencyMappingFiles)
-            .addJoinExecPaths("--header_mapping_files", ",", j2ObjcHeaderMappingFiles)
-            .add("--entry_classes").add(Joiner.on(",").join(entryClasses))
-            .add("--objc_file_path").add(objcFilePath.getPathString())
-            .build();
-
-        ruleContext.registerAction(new ParameterFileWriteAction(
-            ruleContext.getActionOwner(),
-            paramFile,
-            commandLine,
-            ParameterFile.ParameterFileType.UNQUOTED, ISO_8859_1));
         ruleContext.registerAction(new SpawnAction.Builder()
             .setMnemonic("DummyPruner")
             .setExecutable(pruner)
             .addInput(pruner)
-            .addInput(paramFile)
             .addInputs(sourceArtifacts)
             .addTransitiveInputs(j2ObjcDependencyMappingFiles)
             .addTransitiveInputs(j2ObjcHeaderMappingFiles)
             .setCommandLine(CustomCommandLine.builder()
-                .addPaths("@%s", paramFile.getExecPath())
+                .addJoinExecPaths("--input_files", ",", sourceArtifacts)
+                .addJoinExecPaths("--output_files", ",", prunedSourceArtifacts)
+                .addJoinExecPaths("--dependency_mapping_files", ",", j2ObjcDependencyMappingFiles)
+                .addJoinExecPaths("--header_mapping_files", ",", j2ObjcHeaderMappingFiles)
+                .add("--entry_classes").add(Joiner.on(",").join(entryClasses))
+                .add("--objc_file_path").add(objcFilePath.getPathString())
                 .build())
             .addOutputs(prunedSourceArtifacts)
             .build(ruleContext));
@@ -765,17 +732,6 @@ public final class CompilationSupport {
           "includes", String.format(ABSOLUTE_INCLUDES_PATH_FORMAT, absoluteInclude));
     }
 
-    // Check for overlap between srcs and hdrs.
-    if (ruleContext.attributes().has("srcs", Type.LABEL_LIST)) {
-      Set<Artifact> hdrsSet = new HashSet<>(attributes.hdrs());
-      Set<Artifact> srcsSet =
-          new HashSet<>(ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET).list());
-      for (Artifact header : Sets.intersection(hdrsSet, srcsSet)) {
-        String path = header.getRootRelativePath().toString();
-        ruleContext.attributeWarning(
-            "srcs", String.format(FILE_IN_SRCS_AND_HDRS_WARNING_FORMAT, path));
-      }
-    }
     return this;
   }
 
