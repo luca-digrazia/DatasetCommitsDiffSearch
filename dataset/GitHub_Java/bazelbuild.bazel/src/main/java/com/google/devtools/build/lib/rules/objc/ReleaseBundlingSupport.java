@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -657,7 +657,7 @@ public final class ReleaseBundlingSupport {
               .setShellCommand(String.format(
                   // This sed command replaces the last word of the first line with the application
                   // name.
-                  "sed \"1 s/^\\(MODULE \\w* \\w* \\w*\\).*$/\\1 %s/\" < %s > %s",
+                  "sed -r \"1 s/^(MODULE \\w* \\w* \\w*).*$/\\1 %s/\" < %s > %s",
                   ruleContext.getLabel().getName(), breakpadFiles.getKey().getExecPathString(),
                   breakpadFiles.getValue().getExecPathString()))
               .addInput(breakpadFiles.getKey())
@@ -739,7 +739,9 @@ public final class ReleaseBundlingSupport {
         .build(ruleContext));
   }
 
-  /** Registers an action to copy Swift standard library dylibs into app bundle. */
+  /**
+   * Registers an action to copy Swift standard library dylibs into app bundle.
+   */
   private void registerSwiftStdlibActionsIfNecessary() {
     if (!objcProvider.is(USES_SWIFT)) {
       return;
@@ -749,19 +751,18 @@ public final class ReleaseBundlingSupport {
 
     CustomCommandLine.Builder commandLine = CustomCommandLine.builder()
         .addPath(intermediateArtifacts.swiftFrameworksFileZip().getExecPath())
+        .add("Frameworks")
+        .addPath(ObjcRuleClasses.SWIFT_STDLIB_TOOL)
         .add("--platform").add(IosSdkCommands.swiftPlatform(objcConfiguration))
         .addExecPath("--scan-executable", intermediateArtifacts.combinedArchitectureBinary());
 
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
+        ObjcRuleClasses.spawnJavaOnDarwinActionBuilder(
+                ruleContext, attributes.swiftStdlibToolDeployJar())
             .setMnemonic("SwiftStdlibCopy")
-            .setExecutable(attributes.swiftStdlibToolWrapper())
             .setCommandLine(commandLine.build())
             .addOutput(intermediateArtifacts.swiftFrameworksFileZip())
             .addInput(intermediateArtifacts.combinedArchitectureBinary())
-            // TODO(dmaclach): Adding realpath here should not be required once
-            // https://github.com/google/bazel/issues/285 is fixed.
-            .addInput(attributes.realpath())
             .build(ruleContext));
   }
 
@@ -858,18 +859,11 @@ public final class ReleaseBundlingSupport {
           ruleContext.getPrerequisiteArtifact("$runner_script_template", Mode.HOST));
     }
 
-    /** Returns the location of the swiftstdlibtoolwrapper. */
-    FilesToRunProvider swiftStdlibToolWrapper() {
-      return ruleContext.getExecutablePrerequisite("$swiftstdlibtoolwrapper", Mode.HOST);
-    }
-
     /**
-     * Returns the location of the realpath tool.
-     * TODO(dmaclach): Should not be required once https://github.com/google/bazel/issues/285
-     * is fixed.
+     * Returns the location of the swiftstdlibtoolzip deploy jar.
      */
-    Artifact realpath() {
-      return ruleContext.getPrerequisiteArtifact("$realpath", Mode.HOST);
+    Artifact swiftStdlibToolDeployJar() {
+      return ruleContext.getPrerequisiteArtifact("$swiftstdlibtoolzip_deploy", Mode.HOST);
     }
 
     /**
@@ -972,7 +966,9 @@ public final class ReleaseBundlingSupport {
       return true;
     }
 
-    /** Returns the configuration distinguisher for this transition instance. */
+    /**
+     * Returns the configuration distinguisher for this transition instance.
+     */
     protected ConfigurationDistinguisher getConfigurationDistinguisher() {
       return ConfigurationDistinguisher.APPLICATION;
     }
