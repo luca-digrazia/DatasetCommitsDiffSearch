@@ -138,8 +138,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   public final void createMocks() throws Exception {
     analysisMock = AnalysisMock.get();
     pkgLocator = new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory));
-    directories = new BlazeDirectories(outputBase, outputBase, rootDirectory,
-        TestConstants.PRODUCT_NAME);
+    directories = new BlazeDirectories(outputBase, outputBase, rootDirectory);
     workspaceStatusActionFactory =
         new AnalysisTestUtil.DummyWorkspaceStatusActionFactory(directories);
 
@@ -171,8 +170,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             Preprocessor.Factory.Supplier.NullSupplier.INSTANCE,
             analysisMock.getSkyFunctions(),
             getPrecomputedValues(),
-            ImmutableList.<SkyValueDirtinessChecker>of(),
-            TestConstants.PRODUCT_NAME);
+            ImmutableList.<SkyValueDirtinessChecker>of());
     skyframeExecutor.preparePackageLoading(
         pkgLocator,
         Options.getDefaults(PackageCacheOptions.class).defaultVisibility,
@@ -411,7 +409,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   }
 
   /**
-   * Makes {@code rules} available in tests, in addition to all the rules available to Blaze at
+   * Makes {@code rules} available in tests, in addition to all the rules available to Blaze at 
    * running time (e.g., java_library).
    */
   protected final void setRulesAvailableInTests(RuleDefinition... rules) throws Exception {
