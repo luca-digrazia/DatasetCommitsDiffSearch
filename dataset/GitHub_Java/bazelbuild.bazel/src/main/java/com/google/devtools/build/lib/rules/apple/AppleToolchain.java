@@ -139,6 +139,13 @@ public class AppleToolchain {
     return sdkDir() + relativePath;
   }
 
+  /** Returns swift libraries path. */
+  public static String swiftLibDir(Platform platform) {
+    return DEVELOPER_DIR
+        + "/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/"
+        + platform.getLowerCaseNameInPlist();
+  }
+
   /**
    * Returns a series of xcode build settings which configure compilation warnings to
    * "recommended settings". Without these settings, compilation might result in some spurious

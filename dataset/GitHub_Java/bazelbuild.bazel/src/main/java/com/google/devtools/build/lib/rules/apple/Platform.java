@@ -213,7 +213,7 @@ public enum Platform {
     /** Returns a Skylark struct that contains the instances of this enum. */
     public static SkylarkClassObject getSkylarkStruct() {
       SkylarkClassObjectConstructor constructor =
-          SkylarkClassObjectConstructor.createNative("platform_types");
+          new SkylarkClassObjectConstructor("platform_types");
       HashMap<String, Object> fields = new HashMap<>();
       for (PlatformType type : values()) {
         fields.put(type.skylarkKey, type);
