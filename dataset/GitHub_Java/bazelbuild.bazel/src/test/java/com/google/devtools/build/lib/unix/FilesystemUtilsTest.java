@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ public class FilesystemUtilsTest {
   private Path testFile;
 
   @Before
-  public final void createFileSystem() throws Exception  {
+  public void setUp() throws Exception {
     testFS = new UnixFileSystem();
     workingDir = testFS.getPath(new File(TestUtils.tmpDir()).getCanonicalPath());
     testFile = workingDir.getRelative("test");
