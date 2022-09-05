@@ -1171,12 +1171,10 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
         "          malloc = '//base:system_malloc')");
   }
 
-  @Override
   protected PackageFactoryApparatus createPackageFactoryApparatus() {
     return new PackageFactoryApparatus(events.reporter());
   }
 
-  @Override
   protected String getPathPrefix() {
     return "";
   }
