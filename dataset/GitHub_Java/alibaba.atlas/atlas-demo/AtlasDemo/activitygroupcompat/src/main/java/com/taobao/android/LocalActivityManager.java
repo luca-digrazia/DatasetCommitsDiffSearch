@@ -503,14 +503,7 @@ public class LocalActivityManager {
         }
         if (localLOGV) Log.v(TAG, r.id + ": destroying");
         try {
-            if (Build.VERSION.SDK_INT >= 28) {
-                ActivityThread_performDestroyActivity.invoke(mActivityThread, r, finish, 0, false,
-                        "destroy");
-            } else {
-                ActivityThread_performDestroyActivity.invoke(mActivityThread, r, finish);
-
-            }
-
+            ActivityThread_performDestroyActivity.invoke(mActivityThread, r,finish);
         }catch (InvocationTargetException e){
             throw new RuntimeException(e.getTargetException());
         }
@@ -826,14 +819,7 @@ public class LocalActivityManager {
             if (localLOGV) Log.v(TAG, r.id + ": destroying");
 //            mActivityThread.performDestroyActivity(r, finishing);
             try {
-                if (Build.VERSION.SDK_INT >= 28) {
-                    ActivityThread_performDestroyActivity.invoke(mActivityThread, r, finishing, 0,
-                            false, "destroy");
-                } else {
-                    ActivityThread_performDestroyActivity.invoke(mActivityThread, r, finishing);
-
-                }
-
+                ActivityThread_performDestroyActivity.invoke(mActivityThread, r,finishing);
             }catch (InvocationTargetException e){
                 throw new RuntimeException(e.getTargetException());
             }
