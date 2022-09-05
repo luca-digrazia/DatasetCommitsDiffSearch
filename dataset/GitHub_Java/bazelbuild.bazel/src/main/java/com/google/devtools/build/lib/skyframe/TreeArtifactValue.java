@@ -14,42 +14,35 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Function;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
+import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
+import com.google.devtools.build.lib.actions.ArtifactFile;
 import com.google.devtools.build.lib.actions.cache.Digest;
 import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.skyframe.SkyValue;
+
 import java.io.IOException;
+
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
- * Value for TreeArtifacts, which contains a digest and the {@link FileArtifactValue}s of its child
- * {@link TreeFileArtifact}s.
+ * Value for TreeArtifacts, which contains a digest and the {@link FileArtifactValue}s
+ * of its child {@link ArtifactFile}s.
  */
-public class TreeArtifactValue implements SkyValue {
-  private static final Function<Artifact, PathFragment> PARENT_RELATIVE_PATHS =
-      new Function<Artifact, PathFragment>() {
-        @Override
-        public PathFragment apply(Artifact artifact) {
-            return artifact.getParentRelativePath();
-        }
-      };
-
+public class TreeArtifactValue extends ArtifactValue {
   private final byte[] digest;
-  private final Map<TreeFileArtifact, FileArtifactValue> childData;
+  private final Map<PathFragment, FileArtifactValue> childData;
 
-  private TreeArtifactValue(byte[] digest, Map<TreeFileArtifact, FileArtifactValue> childData) {
+  private TreeArtifactValue(byte[] digest, Map<PathFragment, FileArtifactValue> childData) {
     this.digest = digest;
     this.childData = ImmutableMap.copyOf(childData);
   }
@@ -59,13 +52,11 @@ public class TreeArtifactValue implements SkyValue {
    * and their corresponding FileArtifactValues.
    */
   @VisibleForTesting
-  public static TreeArtifactValue create(Map<TreeFileArtifact, FileArtifactValue> childFileValues) {
+  public static TreeArtifactValue create(Map<PathFragment, FileArtifactValue> childFileValues) {
     Map<String, Metadata> digestBuilder =
         Maps.newHashMapWithExpectedSize(childFileValues.size());
-    for (Map.Entry<TreeFileArtifact, FileArtifactValue> e : childFileValues.entrySet()) {
-      digestBuilder.put(
-          e.getKey().getParentRelativePath().getPathString(),
-          new Metadata(e.getValue().getDigest()));
+    for (Map.Entry<PathFragment, FileArtifactValue> e : childFileValues.entrySet()) {
+      digestBuilder.put(e.getKey().getPathString(), new Metadata(e.getValue().getDigest()));
     }
 
     return new TreeArtifactValue(
@@ -77,25 +68,22 @@ public class TreeArtifactValue implements SkyValue {
     return FileArtifactValue.createProxy(digest);
   }
 
+  /** Returns the inputs that this artifact expands to, in no particular order. */
+  Iterable<ArtifactFile> getChildren(final Artifact base) {
+    return ActionInputHelper.asArtifactFiles(base, childData.keySet());
+  }
+
   public Metadata getMetadata() {
     return new Metadata(digest.clone());
   }
 
   public Set<PathFragment> getChildPaths() {
-    return ImmutableSet.copyOf(Iterables.transform(childData.keySet(), PARENT_RELATIVE_PATHS));
+    return childData.keySet();
   }
 
   @Nullable
   public byte[] getDigest() {
     return digest.clone();
-  }
-
-  public Iterable<TreeFileArtifact> getChildren() {
-    return childData.keySet();
-  }
-
-  public FileArtifactValue getChildValue(TreeFileArtifact artifact) {
-    return childData.get(artifact);
   }
 
   @Override
@@ -114,7 +102,7 @@ public class TreeArtifactValue implements SkyValue {
     }
 
     TreeArtifactValue that = (TreeArtifactValue) other;
-    if (!Arrays.equals(digest, that.digest)) {
+    if (that.digest != digest) {
       return false;
     }
 
@@ -134,19 +122,14 @@ public class TreeArtifactValue implements SkyValue {
    * This is occasionally useful because Java's concurrent collections disallow null members.
    */
   static final TreeArtifactValue MISSING_TREE_ARTIFACT = new TreeArtifactValue(null,
-      ImmutableMap.<TreeFileArtifact, FileArtifactValue>of()) {
+      ImmutableMap.<PathFragment, FileArtifactValue>of()) {
     @Override
     public FileArtifactValue getSelfData() {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public Iterable<TreeFileArtifact> getChildren() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public FileArtifactValue getChildValue(TreeFileArtifact artifact) {
+    Iterable<ArtifactFile> getChildren(Artifact base) {
       throw new UnsupportedOperationException();
     }
 
