@@ -34,13 +34,15 @@ import java.util.*;
 public class ResponseMessage<T> implements Serializable {
     private static final long serialVersionUID = 8992436576262574064L;
 
-    private String message;
+    protected String message;
 
-    private T result;
+    protected T result;
 
-    private int status;
+    protected int status;
 
     private Long timestamp;
+
+    private String code;
 
     @ApiModelProperty("调用结果消息")
     public String getMessage() {
@@ -60,6 +62,11 @@ public class ResponseMessage<T> implements Serializable {
     @ApiModelProperty(value = "时间戳", required = true, dataType = "Long")
     public Long getTimestamp() {
         return timestamp;
+    }
+
+    @ApiModelProperty(value = "业务代码")
+    public String getCode() {
+        return code;
     }
 
     public static <T> ResponseMessage<T> error(String message) {
@@ -82,20 +89,15 @@ public class ResponseMessage<T> implements Serializable {
         return this;
     }
 
-    public static <T> ResponseMessage<T> ok(T data) {
+    public static <T> ResponseMessage<T> ok(T result) {
         return new ResponseMessage<T>()
-                .data(data)
+                .result(result)
                 .putTimeStamp()
                 .status(200);
     }
 
-//    public ResponseMessage and(String key, Object value) {
-//        put(key, value);
-//        return this;
-//    }
-
-    public ResponseMessage<T> data(T data) {
-        this.result = data;
+    public ResponseMessage<T> result(T result) {
+        this.result = result;
         return this;
     }
 
@@ -118,9 +120,12 @@ public class ResponseMessage<T> implements Serializable {
     }
 
     public ResponseMessage<T> include(Class<?> type, Collection<String> fields) {
-        if (includes == null)
+        if (includes == null) {
             includes = new HashMap<>();
-        if (fields == null || fields.isEmpty()) return this;
+        }
+        if (fields == null || fields.isEmpty()) {
+            return this;
+        }
         fields.forEach(field -> {
             if (field.contains(".")) {
                 String tmp[] = field.split("[.]", 2);
@@ -139,9 +144,12 @@ public class ResponseMessage<T> implements Serializable {
     }
 
     public ResponseMessage<T> exclude(Class type, Collection<String> fields) {
-        if (excludes == null)
+        if (excludes == null) {
             excludes = new HashMap<>();
-        if (fields == null || fields.isEmpty()) return this;
+        }
+        if (fields == null || fields.isEmpty()) {
+            return this;
+        }
         fields.forEach(field -> {
             if (field.contains(".")) {
                 String tmp[] = field.split("[.]", 2);
@@ -160,23 +168,35 @@ public class ResponseMessage<T> implements Serializable {
     }
 
     public ResponseMessage<T> exclude(Collection<String> fields) {
-        if (excludes == null)
+        if (excludes == null) {
             excludes = new HashMap<>();
-        if (fields == null || fields.isEmpty()) return this;
+        }
+        if (fields == null || fields.isEmpty()) {
+            return this;
+        }
         Class type;
-        if (getResult() != null) type = getResult().getClass();
-        else return this;
+        if (getResult() != null) {
+            type = getResult().getClass();
+        } else {
+            return this;
+        }
         exclude(type, fields);
         return this;
     }
 
     public ResponseMessage<T> include(Collection<String> fields) {
-        if (includes == null)
+        if (includes == null) {
             includes = new HashMap<>();
-        if (fields == null || fields.isEmpty()) return this;
+        }
+        if (fields == null || fields.isEmpty()) {
+            return this;
+        }
         Class type;
-        if (getResult() != null) type = getResult().getClass();
-        else return this;
+        if (getResult() != null) {
+            type = getResult().getClass();
+        } else {
+            return this;
+        }
         include(type, fields);
         return this;
     }
@@ -215,6 +235,22 @@ public class ResponseMessage<T> implements Serializable {
     @ApiModelProperty(hidden = true)
     public Map<Class<?>, Set<String>> getIncludes() {
         return includes;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
+
+    public void setResult(T result) {
+        this.result = result;
+    }
+
+    public void setStatus(int status) {
+        this.status = status;
+    }
+
+    public void setTimestamp(Long timestamp) {
+        this.timestamp = timestamp;
     }
 
 }
