@@ -56,6 +56,7 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
    */
   private static final String GENCLASS_MAX_MEMORY = "-Xmx64m";
 
+  private Artifact outputDepsProtoArtifact;
   private JavaTargetAttributes.Builder attributes;
   private JavaTargetAttributes builtAttributes;
   private final ImmutableList<String> customJavacOpts;
@@ -280,13 +281,11 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
       return null;
     }
 
-    Artifact outputDepsProtoArtifact =
-        getRuleContext()
-            .getDerivedArtifact(
-                FileSystemUtils.replaceExtension(outputJar.getRootRelativePath(), ".jdeps"),
-                outputJar.getRoot());
+    outputDepsProtoArtifact = getRuleContext().getDerivedArtifact(
+          FileSystemUtils.replaceExtension(outputJar.getRootRelativePath(), ".jdeps"),
+          outputJar.getRoot());
 
-    builder.setCompileTimeDependencies(outputDepsProtoArtifact);
+    builder.setRunTimeDependencies(outputDepsProtoArtifact);
     return outputDepsProtoArtifact;
   }
 
@@ -360,11 +359,15 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
    *
    * @return The ijar (if requested), or class jar (if not)
    */
-  public Artifact createCompileTimeJarAction(
-      Artifact runtimeJar, JavaCompilationArtifacts.Builder builder) {
-    Artifact jar =
-        getJavaConfiguration().getUseIjars() ? createIjarAction(runtimeJar, false) : runtimeJar;
+  public Artifact createCompileTimeJarAction(Artifact runtimeJar,
+      @Nullable Artifact runtimeDeps, JavaCompilationArtifacts.Builder builder) {
+    Artifact jar = getJavaConfiguration().getUseIjars()
+        ? createIjarAction(runtimeJar, false)
+        : runtimeJar;
+    Artifact deps = runtimeDeps;
+
     builder.addCompileTimeJar(jar);
+    builder.setCompileTimeDependencies(deps);
     return jar;
   }
 
