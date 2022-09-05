@@ -2,13 +2,15 @@ package org.hswebframework.web.service.datasource.simple;
 
 import com.alibaba.fastjson.JSON;
 import org.hswebframework.web.bean.FastBeanCopier;
-import org.hswebframework.web.datasource.DatabaseType;
 import org.hswebframework.web.datasource.DynamicDataSource;
 import org.hswebframework.web.datasource.config.DynamicDataSourceConfigRepository;
 import org.hswebframework.web.datasource.jta.AtomikosDataSourceConfig;
 import org.hswebframework.web.datasource.jta.JtaDynamicDataSourceService;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 /**
@@ -52,8 +54,7 @@ public class InDBJtaDynamicDataSourceService extends JtaDynamicDataSourceService
         target.setName(entity.getName());
         target.setDescribe(entity.getDescribe());
         target.setXaProperties(properties);
-        target.setDatabaseType(Optional.ofNullable(properties.getProperty("databaseType"))
-                .map(DatabaseType::valueOf).orElse(null));
+
         return target;
     }
 

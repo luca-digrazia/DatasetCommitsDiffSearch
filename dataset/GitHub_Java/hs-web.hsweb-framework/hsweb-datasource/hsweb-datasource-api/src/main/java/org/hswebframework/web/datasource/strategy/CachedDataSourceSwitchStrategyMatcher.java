@@ -44,22 +44,24 @@ public abstract class CachedDataSourceSwitchStrategyMatcher implements DataSourc
     @AllArgsConstructor
     public static class CacheKey {
 
-        private Class target;
+        private Class<?> target;
 
         private Method method;
 
         @Override
-        public boolean equals(Object obj) {
-            if (!(obj instanceof CacheKey)) {
+        public boolean equals(Object targetObject) {
+            if (!(targetObject instanceof CacheKey)) {
                 return false;
             }
-            CacheKey target = ((CacheKey) obj);
-            return target.target == this.target && target.method == method;
+            CacheKey targetCacheKey = ((CacheKey) targetObject);
+            return targetCacheKey.target.isAssignableFrom(this.target)
+                    && targetCacheKey.method.getName().equals(method.getName())
+                    && targetCacheKey.method.getParameterCount() == method.getParameterCount();
         }
 
         public int hashCode() {
-            int result = this.target != null ? this.target.hashCode() : 0;
-            result = 31 * result + (this.method != null ? this.method.hashCode() : 0);
+            int result = this.target != null ? this.target.getName().hashCode() : 0;
+            result = 31 * result + (this.method != null ? this.method.getName().hashCode() : 0);
             return result;
         }
     }
