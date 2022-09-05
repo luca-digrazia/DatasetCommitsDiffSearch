@@ -19,6 +19,8 @@ import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -26,12 +28,12 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
 import com.google.devtools.build.lib.concurrent.Sharder;
 import com.google.devtools.build.lib.concurrent.ThrowableRecordingRunnableWrapper;
-import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker.DirtyResult;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.BatchStat;
 import com.google.devtools.build.lib.vfs.FileStatusWithDigest;
+import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.Differencer;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyFunctionName;
@@ -63,6 +65,9 @@ class FilesystemValueChecker {
   private static final int DIRTINESS_CHECK_THREADS = 50;
   private static final Logger LOG = Logger.getLogger(FilesystemValueChecker.class.getName());
 
+  private static final Predicate<SkyKey> FILE_STATE_AND_DIRECTORY_LISTING_STATE_FILTER =
+      SkyFunctionName.functionIsIn(ImmutableSet.of(SkyFunctions.FILE_STATE,
+          SkyFunctions.DIRECTORY_LISTING_STATE));
   private static final Predicate<SkyKey> ACTION_FILTER =
       SkyFunctionName.functionIs(SkyFunctions.ACTION_EXECUTION);
 
@@ -71,13 +76,6 @@ class FilesystemValueChecker {
   private final Supplier<Map<SkyKey, SkyValue>> valuesSupplier;
   private AtomicInteger modifiedOutputFilesCounter = new AtomicInteger(0);
   private AtomicInteger modifiedOutputFilesIntraBuildCounter = new AtomicInteger(0);
-
-  FilesystemValueChecker(Supplier<Map<SkyKey, SkyValue>> valuesSupplier,
-      TimestampGranularityMonitor tsgm, Range<Long> lastExecutionTimeRange) {
-    this.valuesSupplier = valuesSupplier;
-    this.tsgm = tsgm;
-    this.lastExecutionTimeRange = lastExecutionTimeRange;
-  }
 
   FilesystemValueChecker(final MemoizingEvaluator evaluator, TimestampGranularityMonitor tsgm,
       Range<Long> lastExecutionTimeRange) {
@@ -96,31 +94,43 @@ class FilesystemValueChecker {
     });
   }
 
-  /**
-   * Returns a {@link Differencer.DiffWithDelta} containing keys from the backing graph (of the
-   * {@link MemoizingEvaluator} given at construction time) that are dirty according to the
-   * passed-in {@code dirtinessChecker}.
-   */
-  Differencer.DiffWithDelta getDirtyKeys(SkyValueDirtinessChecker dirtinessChecker)
-      throws InterruptedException {
-    return getDirtyValues(valuesSupplier.get().keySet(), dirtinessChecker,
-        /*checkMissingValues=*/false);
+  Iterable<SkyKey> getFilesystemSkyKeys() {
+    return Iterables.filter(valuesSupplier.get().keySet(),
+        FILE_STATE_AND_DIRECTORY_LISTING_STATE_FILTER);
+  }
+
+  Differencer.Diff getDirtyFilesystemSkyKeys() throws InterruptedException {
+    return getDirtyFilesystemValues(getFilesystemSkyKeys());
   }
 
   /**
-   * Returns a {@link Differencer.DiffWithDelta} containing keys that are dirty according to the
-   * passed-in {@code dirtinessChecker}.
+   * Check the given file and directory values for modifications. {@code values} is assumed to only
+   * have {@link FileValue}s and {@link DirectoryListingStateValue}s.
    */
-  Differencer.DiffWithDelta getNewAndOldValues(Iterable<SkyKey> keys,
-      SkyValueDirtinessChecker dirtinessChecker) throws InterruptedException {
-    return getDirtyValues(keys, dirtinessChecker, /*checkMissingValues=*/true);
+  Differencer.Diff getDirtyFilesystemValues(Iterable<SkyKey> values)
+      throws InterruptedException {
+    return getDirtyValues(values, FILE_STATE_AND_DIRECTORY_LISTING_STATE_FILTER,
+        new DirtyChecker() {
+      @Override
+      public DirtyResult check(SkyKey key, SkyValue oldValue, TimestampGranularityMonitor tsgm) {
+        if (key.functionName() == SkyFunctions.FILE_STATE) {
+          return checkFileStateValue((RootedPath) key.argument(), (FileStateValue) oldValue,
+              tsgm);
+        } else if (key.functionName() == SkyFunctions.DIRECTORY_LISTING_STATE) {
+          return checkDirectoryListingStateValue((RootedPath) key.argument(),
+              (DirectoryListingStateValue) oldValue);
+        } else {
+          throw new IllegalStateException("Unexpected key type " + key);
+        }
+      }
+    });
   }
 
   /**
    * Return a collection of action values which have output files that are not in-sync with
    * the on-disk file value (were modified externally).
    */
-  Collection<SkyKey> getDirtyActionValues(@Nullable final BatchStat batchStatter)
+  public Collection<SkyKey> getDirtyActionValues(@Nullable final BatchStat batchStatter)
       throws InterruptedException {
     // CPU-bound (usually) stat() calls, plus a fudge factor.
     LOG.info("Accumulating dirty actions");
@@ -252,8 +262,10 @@ class FilesystemValueChecker {
     return modifiedOutputFilesCounter.get();
   }
 
-  /** Returns the number of modified output files that occur during the previous build. */
-  int getNumberOfModifiedOutputFilesDuringPreviousBuild() {
+  /**
+   * Returns the number of modified output files that occur during the previous build.
+   */
+  public int getNumberOfModifiedOutputFilesDuringPreviousBuild() {
     return modifiedOutputFilesIntraBuildCounter.get();
   }
 
@@ -281,32 +293,29 @@ class FilesystemValueChecker {
     return isDirty;
   }
 
-  private BatchDirtyResult getDirtyValues(
-      Iterable<SkyKey> values, final SkyValueDirtinessChecker checker,
-      final boolean checkMissingValues) throws InterruptedException {
-    ExecutorService executor =
-        Executors.newFixedThreadPool(
-            DIRTINESS_CHECK_THREADS,
-            new ThreadFactoryBuilder().setNameFormat("FileSystem Value Invalidator %d").build());
+  private BatchDirtyResult getDirtyValues(Iterable<SkyKey> values,
+                                         Predicate<SkyKey> keyFilter,
+                                         final DirtyChecker checker) throws InterruptedException {
+    ExecutorService executor = Executors.newFixedThreadPool(DIRTINESS_CHECK_THREADS,
+        new ThreadFactoryBuilder().setNameFormat("FileSystem Value Invalidator %d").build());
 
     final BatchDirtyResult batchResult = new BatchDirtyResult();
     ThrowableRecordingRunnableWrapper wrapper =
         new ThrowableRecordingRunnableWrapper("FilesystemValueChecker#getDirtyValues");
     for (final SkyKey key : values) {
+      Preconditions.checkState(keyFilter.apply(key), key);
       final SkyValue value = valuesSupplier.get().get(key);
-      executor.execute(
-          wrapper.wrap(
-              new Runnable() {
-                @Override
-                public void run() {
-                  if (value != null || checkMissingValues) {
-                    DirtyResult result = checker.maybeCheck(key, value, tsgm);
-                    if (result != null && result.isDirty()) {
-                      batchResult.add(key, value, result.getNewValue());
-                    }
-                  }
-                }
-              }));
+      executor.execute(wrapper.wrap(new Runnable() {
+        @Override
+        public void run() {
+          if (value != null) {
+            DirtyResult result = checker.check(key, value, tsgm);
+            if (result.isDirty()) {
+              batchResult.add(key, result.getNewValue());
+            }
+          }
+        }
+      }));
     }
 
     boolean interrupted = ExecutorUtil.interruptibleShutdown(executor);
@@ -317,26 +326,47 @@ class FilesystemValueChecker {
     return batchResult;
   }
 
+  private static DirtyResult checkFileStateValue(RootedPath rootedPath,
+      FileStateValue fileStateValue, TimestampGranularityMonitor tsgm) {
+    try {
+      FileStateValue newValue = FileStateValue.create(rootedPath, tsgm);
+      return newValue.equals(fileStateValue)
+          ? DirtyResult.NOT_DIRTY : DirtyResult.dirtyWithNewValue(newValue);
+    } catch (InconsistentFilesystemException | IOException e) {
+      // TODO(bazel-team): An IOException indicates a failure to get a file digest or a symlink
+      // target, not a missing file. Such a failure really shouldn't happen, so failing early
+      // may be better here.
+      return DirtyResult.DIRTY;
+    }
+  }
+
+  private static DirtyResult checkDirectoryListingStateValue(RootedPath dirRootedPath,
+      DirectoryListingStateValue directoryListingStateValue) {
+    try {
+      DirectoryListingStateValue newValue = DirectoryListingStateValue.create(dirRootedPath);
+      return newValue.equals(directoryListingStateValue)
+          ? DirtyResult.NOT_DIRTY : DirtyResult.dirtyWithNewValue(newValue);
+    } catch (IOException e) {
+      return DirtyResult.DIRTY;
+    }
+  }
+
   /**
-   * Result of a batch call to {@link SkyValueDirtinessChecker#maybeCheck}. Partitions the dirty
-   * values based on whether we have a new value available for them or not.
+   * Result of a batch call to {@link DirtyChecker#check}. Partitions the dirty values based on
+   * whether we have a new value available for them or not.
    */
-  private static class BatchDirtyResult implements Differencer.DiffWithDelta {
+  private static class BatchDirtyResult implements Differencer.Diff {
 
     private final Set<SkyKey> concurrentDirtyKeysWithoutNewValues =
         Collections.newSetFromMap(new ConcurrentHashMap<SkyKey, Boolean>());
-    private final ConcurrentHashMap<SkyKey, Delta> concurrentDirtyKeysWithNewAndOldValues =
+    private final ConcurrentHashMap<SkyKey, SkyValue> concurrentDirtyKeysWithNewValues =
         new ConcurrentHashMap<>();
 
-    private void add(SkyKey key, @Nullable SkyValue oldValue, @Nullable SkyValue newValue) {
+    private void add(SkyKey key, @Nullable SkyValue newValue) {
       if (newValue == null) {
         concurrentDirtyKeysWithoutNewValues.add(key);
       } else {
-        if (oldValue == null) {
-          concurrentDirtyKeysWithNewAndOldValues.put(key, new Delta(newValue));
-        } else {
-          concurrentDirtyKeysWithNewAndOldValues.put(key, new Delta(oldValue, newValue));
-        }
+        concurrentDirtyKeysWithNewValues.put(key, newValue);
       }
     }
 
@@ -346,14 +376,46 @@ class FilesystemValueChecker {
     }
 
     @Override
-    public Map<SkyKey, Delta> changedKeysWithNewAndOldValues() {
-      return concurrentDirtyKeysWithNewAndOldValues;
-    }
-
-    @Override
-    public Map<SkyKey, SkyValue> changedKeysWithNewValues() {
-      return Delta.newValues(concurrentDirtyKeysWithNewAndOldValues);
+    public Map<SkyKey, ? extends SkyValue> changedKeysWithNewValues() {
+      return concurrentDirtyKeysWithNewValues;
     }
   }
 
+  private static class DirtyResult {
+
+    static final DirtyResult NOT_DIRTY = new DirtyResult(false, null);
+    static final DirtyResult DIRTY = new DirtyResult(true, null);
+
+    private final boolean isDirty;
+    @Nullable private final SkyValue newValue;
+
+    private DirtyResult(boolean isDirty, @Nullable SkyValue newValue) {
+      this.isDirty = isDirty;
+      this.newValue = newValue;
+    }
+
+    boolean isDirty() {
+      return isDirty;
+    }
+
+    /**
+     * If {@code isDirty()}, then either returns the new value for the value or {@code null} if
+     * the new value wasn't computed. In the case where the value is dirty and a new value is
+     * available, then the new value can be injected into the skyframe graph. Otherwise, the value
+     * should simply be invalidated.
+     */
+    @Nullable
+    SkyValue getNewValue() {
+      Preconditions.checkState(isDirty());
+      return newValue;
+    }
+
+    static DirtyResult dirtyWithNewValue(SkyValue newValue) {
+      return new DirtyResult(true, newValue);
+    }
+  }
+
+  private static interface DirtyChecker {
+    DirtyResult check(SkyKey key, SkyValue oldValue, TimestampGranularityMonitor tsgm);
+  }
 }
