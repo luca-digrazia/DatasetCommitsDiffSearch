@@ -14,17 +14,13 @@
 
 package com.google.devtools.build.lib.rules.proto;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.common.options.Option;
 
 import java.util.List;
@@ -32,7 +28,6 @@ import java.util.List;
 /**
  * Configuration for Protocol Buffer Libraries.
  */
-@Immutable
 public class ProtoConfiguration extends Fragment {
 
   /**
@@ -53,16 +48,6 @@ public class ProtoConfiguration extends Fragment {
       help = "Run extra actions for alternative Java api versions in a proto_library."
     )
     public boolean experimentalProtoExtraActions;
-
-    @Option(
-      name = "proto_compiler",
-      defaultValue = "null",
-      category = "version",
-      converter = BuildConfiguration.LabelConverter.class,
-      help = "The label of the proto-compiler."
-    )
-    public Label protoCompiler;
-
   }
 
   /**
@@ -86,19 +71,16 @@ public class ProtoConfiguration extends Fragment {
     }
   }
 
-  private final boolean experimentalProtoExtraActions;
-  private final ImmutableList<String> protocOpts;
-  private final Label protoCompiler;
+  private final Options options;
 
   public ProtoConfiguration(Options options) {
-    this.experimentalProtoExtraActions = options.experimentalProtoExtraActions;
-    this.protocOpts = ImmutableList.copyOf(options.protocOpts);
-    this.protoCompiler = options.protoCompiler;
+    this.options = options;
   }
 
-  public ImmutableList<String> protocOpts() {
-    return protocOpts;
+  public List<String> protocOpts() {
+    return options.protocOpts;
   }
+
 
   /**
    * Returns true if we will run extra actions for actions that are not run by default. If this
@@ -106,10 +88,6 @@ public class ProtoConfiguration extends Fragment {
    * proto_library target are run.
    */
   public boolean runExperimentalProtoExtraActions() {
-    return experimentalProtoExtraActions;
-  }
-
-  public Label protoCompiler() {
-    return protoCompiler;
+    return options.experimentalProtoExtraActions;
   }
 }
