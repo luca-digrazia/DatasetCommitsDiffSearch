@@ -14,7 +14,7 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.MoreObjects;
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -408,8 +408,9 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   @Override
+  @SuppressWarnings("deprecation")
   public String toString() {
-    return MoreObjects.toStringHelper(this)
+    return Objects.toStringHelper(this)  // MoreObjects is not in Guava
         .add("value", value)
         .add("version", version)
         .add("directDeps", directDeps == null ? null : GroupedList.create(directDeps))
