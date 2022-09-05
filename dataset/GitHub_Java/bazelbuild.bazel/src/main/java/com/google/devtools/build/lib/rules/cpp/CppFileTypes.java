@@ -107,7 +107,7 @@ public final class CppFileTypes {
     };
 
 
-  public static final FileType SHARED_LIBRARY = FileType.of(".so", ".dylib");
+  public static final FileType SHARED_LIBRARY = FileType.of(".so");
   public static final FileType INTERFACE_SHARED_LIBRARY = FileType.of(".ifso");
   public static final FileType LINKER_SCRIPT = FileType.of(".ld", ".lds");
   // Matches shared libraries with version names in the extension, i.e.
@@ -132,7 +132,6 @@ public final class CppFileTypes {
   public static final FileType COVERAGE_DATA = FileType.of(".gcda");
   public static final FileType COVERAGE_DATA_IMPORTS = FileType.of(".gcda.imports");
   public static final FileType GCC_AUTO_PROFILE = FileType.of(".afdo");
-  public static final FileType LLVM_PROFILE = FileType.of(".profdata");
 
   public static final FileType CPP_MODULE_MAP = FileType.of(".cppmap");
   public static final FileType CPP_MODULE = FileType.of(".pcm");
