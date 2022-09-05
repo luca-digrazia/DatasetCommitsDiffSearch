@@ -45,9 +45,7 @@ public final class NativeLibraryNestedSetBuilder {
    */
   public NativeLibraryNestedSetBuilder addAll(Iterable<Artifact> deps) {
     for (Artifact dep : deps) {
-      builder.add(
-          new LinkerInputs.SimpleLinkerInput(
-              dep, ArtifactCategory.DYNAMIC_LIBRARY, /* disableWholeArchive= */ false));
+      builder.add(new LinkerInputs.SimpleLinkerInput(dep, ArtifactCategory.DYNAMIC_LIBRARY));
     }
     return this;
   }
@@ -114,9 +112,7 @@ public final class NativeLibraryNestedSetBuilder {
     for (Artifact artifact : FileType.filterList(
         dep.getProvider(FileProvider.class).getFilesToBuild(),
         CppFileTypes.SHARED_LIBRARY)) {
-      builder.add(
-          new LinkerInputs.SimpleLinkerInput(
-              artifact, ArtifactCategory.DYNAMIC_LIBRARY, /* disableWholeArchive= */ false));
+      builder.add(new LinkerInputs.SimpleLinkerInput(artifact, ArtifactCategory.DYNAMIC_LIBRARY));
     }
   }
 }

@@ -823,9 +823,8 @@ public final class CppModel {
    *
    * @throws RuleErrorException
    */
-  public CcLinkingOutputs createCcLinkActions(
-      CcCompilationOutputs ccOutputs, Iterable<Artifact> nonCodeLinkerInputs)
-      throws RuleErrorException, InterruptedException {
+  public CcLinkingOutputs createCcLinkActions(CcCompilationOutputs ccOutputs,
+      Iterable<Artifact> nonCodeLinkerInputs) throws RuleErrorException {
     // For now only handle static links. Note that the dynamic library link below ignores linkType.
     // TODO(bazel-team): Either support non-static links or move this check to setLinkType().
     Preconditions.checkState(
@@ -872,7 +871,7 @@ public final class CppModel {
             .setLinkStaticness(LinkStaticness.FULLY_STATIC)
             .addActionInputs(linkActionInputs)
             .setLibraryIdentifier(libraryIdentifier)
-            .addVariablesExtensions(variablesExtensions)
+            .addVariablesExtension(variablesExtensions)
             .setFeatureConfiguration(featureConfiguration)
             .build();
     env.registerAction(maybePicAction);
@@ -901,7 +900,7 @@ public final class CppModel {
               .setLinkStaticness(LinkStaticness.FULLY_STATIC)
               .addActionInputs(linkActionInputs)
               .setLibraryIdentifier(libraryIdentifier)
-              .addVariablesExtensions(variablesExtensions)
+              .addVariablesExtension(variablesExtensions)
               .setFeatureConfiguration(featureConfiguration)
               .build();
       env.registerAction(picAction);
@@ -961,7 +960,7 @@ public final class CppModel {
                 CppHelper.getToolchain(ruleContext).getDynamicRuntimeLinkMiddleman(),
                 CppHelper.getToolchain(ruleContext).getDynamicRuntimeLinkInputs())
             .setFeatureConfiguration(featureConfiguration)
-            .addVariablesExtensions(variablesExtensions);
+            .addVariablesExtension(variablesExtensions);
 
     if (!ccOutputs.getLtoBitcodeFiles().isEmpty()
         && featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)) {

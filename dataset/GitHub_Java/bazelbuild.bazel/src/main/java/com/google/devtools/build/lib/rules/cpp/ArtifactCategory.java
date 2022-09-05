@@ -32,10 +32,7 @@ public enum ArtifactCategory {
   GENERATED_HEADER("%{output_name}.h"),
   PREPROCESSED_C_SOURCE("%{output_name}.i"),
   PREPROCESSED_CPP_SOURCE("%{output_name}.ii"),
-  COVERAGE_DATA_FILE("%{output_name}.gcno"),
-  // A matched-clif protobuf. Typically in binary format, but could be text depending on
-  // the options passed to the clif_matcher.
-  CLIF_OUTPUT_PROTO("%{output_name}.opb");
+  COVERAGE_DATA_FILE("%{output_name}.gcno");
 
   private final String defaultPattern;
 

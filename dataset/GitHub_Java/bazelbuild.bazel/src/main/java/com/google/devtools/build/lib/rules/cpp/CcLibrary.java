@@ -92,8 +92,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
   }
 
   @Override
-  public ConfiguredTarget create(RuleContext context)
-      throws RuleErrorException, InterruptedException {
+  public ConfiguredTarget create(RuleContext context) throws RuleErrorException {
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(context);
     LinkTargetType linkType = getStaticLinkType(context);
     boolean linkStatic = context.attributes().get("linkstatic", Type.BOOLEAN);
@@ -114,7 +113,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
       boolean linkStatic,
       boolean collectLinkstamp,
       boolean addDynamicRuntimeInputArtifactsToRunfiles)
-      throws RuleErrorException, InterruptedException {
+      throws RuleErrorException {
     FeatureConfiguration featureConfiguration = CcCommon.configureFeatures(ruleContext);
     final CcCommon common = new CcCommon(ruleContext);
     PrecompiledFiles precompiledFiles = new PrecompiledFiles(ruleContext);
@@ -221,18 +220,9 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
      */
     Iterable<LibraryToLink> staticLibrariesFromSrcs = LinkerInputs.opaqueLibrariesToLink(
         ArtifactCategory.STATIC_LIBRARY, precompiledFiles.getStaticLibraries());
-    Iterable<LibraryToLink> alwayslinkLibrariesFromSrcs = LinkerInputs.opaqueLibrariesToLink(
-        ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY,
-        precompiledFiles.getAlwayslinkStaticLibraries());
-    Iterable<LibraryToLink> picStaticLibrariesFromSrcs = LinkerInputs.opaqueLibrariesToLink(
-        ArtifactCategory.STATIC_LIBRARY, precompiledFiles.getPicStaticLibraries());
-    Iterable<LibraryToLink> picAlwayslinkLibrariesFromSrcs = LinkerInputs.opaqueLibrariesToLink(
-        ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY, precompiledFiles.getPicAlwayslinkLibraries());
-
     helper.addStaticLibraries(staticLibrariesFromSrcs);
-    helper.addStaticLibraries(alwayslinkLibrariesFromSrcs);
-    helper.addPicStaticLibraries(picStaticLibrariesFromSrcs);
-    helper.addPicStaticLibraries(picAlwayslinkLibrariesFromSrcs);
+    helper.addPicStaticLibraries(Iterables.filter(staticLibrariesFromSrcs, PIC_STATIC_FILTER));
+    helper.addPicStaticLibraries(precompiledFiles.getPicStaticLibraries());
     helper.addDynamicLibraries(Iterables.transform(precompiledFiles.getSharedLibraries(),
         new Function<Artifact, LibraryToLink>() {
       @Override

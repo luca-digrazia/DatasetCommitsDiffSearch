@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ResourceSet;
@@ -57,12 +56,11 @@ import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
-/** 
- * Action that represents a linking step. 
+/**
+ * Action that represents a linking step.
  */
 @ThreadCompatible
-public final class CppLinkAction extends AbstractAction
-    implements ExecutionInfoSpecifier, CommandAction {
+public final class CppLinkAction extends AbstractAction implements ExecutionInfoSpecifier {
   /**
    * An abstraction for creating intermediate and output artifacts for C++ linking.
    *
@@ -95,7 +93,6 @@ public final class CppLinkAction extends AbstractAction
   private static final String LINK_GUID = "58ec78bd-1176-4e36-8143-439f656b181d";
   private static final String FAKE_LINK_GUID = "da36f819-5a15-43a9-8a45-e01b60e10c8b";
   
-  @Nullable private final String mnemonic;
   private final CppConfiguration cppConfiguration;
   private final LibraryToLink outputLibrary;
   private final Artifact linkOutput;
@@ -139,7 +136,6 @@ public final class CppLinkAction extends AbstractAction
    */
   CppLinkAction(
       ActionOwner owner,
-      String mnemonic,
       Iterable<Artifact> inputs,
       ImmutableList<Artifact> outputs,
       CppConfiguration cppConfiguration,
@@ -153,11 +149,6 @@ public final class CppLinkAction extends AbstractAction
       Map<String, String> toolchainEnv,
       ImmutableSet<String> executionRequirements) {
     super(owner, inputs, outputs);
-    if (mnemonic == null) {
-      this.mnemonic = (isLTOIndexing) ? "CppLTOIndexing" : "CppLink";
-    } else {
-      this.mnemonic = mnemonic;
-    }
     this.mandatoryInputs = inputs;
     this.cppConfiguration = cppConfiguration;
     this.outputLibrary = outputLibrary;
@@ -184,7 +175,6 @@ public final class CppLinkAction extends AbstractAction
     return getCppConfiguration().getHostSystemName();
   }
 
-  @Override
   public ImmutableMap<String, String> getEnvironment() {
     ImmutableMap.Builder<String, String> result = ImmutableMap.<String, String>builder();
 
@@ -264,11 +254,6 @@ public final class CppLinkAction extends AbstractAction
   @VisibleForTesting
   public List<String> getArgv() {
     return linkCommandLine.arguments();
-  }
-  
-  @Override
-  public List<String> getArguments() {
-    return getArgv();
   }
 
   /**
@@ -411,7 +396,7 @@ public final class CppLinkAction extends AbstractAction
     info.addAllLinkStamp(Artifact.toExecPaths(getLinkCommandLine().getLinkstamps().values()));
     info.addAllBuildInfoHeaderArtifact(
         Artifact.toExecPaths(getLinkCommandLine().getBuildInfoHeaderArtifacts()));
-    info.addAllLinkOpt(getLinkCommandLine().getRawLinkArgv());
+    info.addAllLinkOpt(getLinkCommandLine().getLinkopts());
 
     return super.getExtraActionInfo()
         .setExtension(CppLinkInfo.cppLinkInfo, info.build());
@@ -464,7 +449,7 @@ public final class CppLinkAction extends AbstractAction
 
   @Override
   public String getMnemonic() {
-    return mnemonic;
+    return (isLTOIndexing) ? "CppLTOIndexing" : "CppLink";
   }
 
   @Override

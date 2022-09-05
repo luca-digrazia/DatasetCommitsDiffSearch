@@ -35,19 +35,6 @@ import java.util.Iterator;
  */
 public abstract class Link {
 
-  /**
-   * Categories of link action that must be defined with action_configs in any toolchain. 
-   */
-  static final Iterable<LinkTargetType> MANDATORY_LINK_TARGET_TYPES =
-      ImmutableList.of(
-          LinkTargetType.STATIC_LIBRARY,
-          LinkTargetType.PIC_STATIC_LIBRARY,
-          LinkTargetType.ALWAYS_LINK_STATIC_LIBRARY,
-          LinkTargetType.ALWAYS_LINK_PIC_STATIC_LIBRARY,
-          LinkTargetType.DYNAMIC_LIBRARY,
-          LinkTargetType.EXECUTABLE,
-          LinkTargetType.INTERFACE_DYNAMIC_LIBRARY);
-
   private Link() {} // uninstantiable
 
   /**
@@ -118,14 +105,6 @@ public abstract class Link {
         ".a",
         Staticness.STATIC,
         "c++-link-static-library",
-        Picness.NOPIC,
-        ArtifactCategory.STATIC_LIBRARY),
-    
-    /** An objc static archive. */
-    OBJC_ARCHIVE(
-        ".a", 
-        Staticness.STATIC, 
-        "objc-archive", 
         Picness.NOPIC,
         ArtifactCategory.STATIC_LIBRARY),
 
@@ -247,7 +226,7 @@ public abstract class Link {
     // TODO(bazel-team): Figure out if PicArchives are actually used. For it to be used, both
     // linkingStatically and linkShared must me true, we must be in opt mode and cpu has to be k8.
     return archiveType == ArchiveType.START_END_LIB
-        && linkerInput.getArtifactCategory() == ArtifactCategory.STATIC_LIBRARY
+        && ARCHIVE_FILETYPES.matches(linkerInput.getArtifact().getFilename())
         && linkerInput.containsObjectFiles();
   }
 
@@ -327,8 +306,7 @@ public abstract class Link {
         // files - otherwise getObjectFiles returns null, which would lead to an NPE in
         // simpleLinkerInputs.
         boolean needMembersForLink = archiveType != ArchiveType.FAT
-            && inputLibrary.getArtifactCategory() == ArtifactCategory.STATIC_LIBRARY
-            && inputLibrary.containsObjectFiles();
+            && ARCHIVE_LIBRARY_FILETYPES.matches(name) && inputLibrary.containsObjectFiles();
 
         // True if we will pass the members instead of the original archive.
         boolean passMembersToLinkCmd = needMembersForLink
