@@ -218,8 +218,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
 
       new CompilationSupport(ruleContext)
           .registerCompileAndArchiveActions(common, EXTRA_COMPILE_ARGS)
-          .registerFullyLinkAction(common.getObjcProvider(),
-              ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB));
+          .registerFullyLinkAction(common.getObjcProvider());
     } else {
       common = common(
           ruleContext,

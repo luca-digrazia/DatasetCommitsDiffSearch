@@ -26,8 +26,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.AspectClass;
-import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor.Key;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -55,11 +53,11 @@ import javax.annotation.Nullable;
  */
 @Immutable
 public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> {
+  private final String name;
   private final TransitiveInfoProviderMap providers;
-  private final AspectDescriptor descriptor;
 
-  private ConfiguredAspect(AspectDescriptor descriptor, TransitiveInfoProviderMap providers) {
-    this.descriptor = descriptor;
+  private ConfiguredAspect(String name, TransitiveInfoProviderMap providers) {
+    this.name = name;
     this.providers = providers;
   }
 
@@ -67,14 +65,7 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
    * Returns the aspect name.
    */
   public String getName() {
-    return descriptor.getAspectClass().getName();
-  }
-
-  /**
-   *  The aspect descriptor originating this ConfiguredAspect.
-   */
-  public AspectDescriptor getDescriptor() {
-    return descriptor;
+    return name;
   }
 
   /** Returns the providers created by the aspect. */
@@ -94,7 +85,7 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
   }
 
   public static ConfiguredAspect forAlias(ConfiguredAspect real) {
-    return new ConfiguredAspect(real.descriptor, real.getProviders());
+    return new ConfiguredAspect(real.getName(), real.getProviders());
   }
 
   /**
@@ -105,18 +96,11 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
     private final Map<String, NestedSetBuilder<Artifact>> outputGroupBuilders = new TreeMap<>();
     private final ImmutableMap.Builder<String, Object> skylarkProviderBuilder =
         ImmutableMap.builder();
+    private final String name;
     private final RuleContext ruleContext;
-    private final AspectDescriptor descriptor;
 
-    public Builder(
-        AspectClass aspectClass,
-        AspectParameters parameters,
-        RuleContext context) {
-      this(new AspectDescriptor(aspectClass, parameters), context);
-    }
-
-    public Builder(AspectDescriptor descriptor, RuleContext ruleContext) {
-      this.descriptor = descriptor;
+    public Builder(String name, RuleContext ruleContext) {
+      this.name = name;
       this.ruleContext = ruleContext;
     }
 
@@ -209,7 +193,7 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
               ImmutableSet.<ActionAnalysisMetadata>of() /* actionsWithoutExtraAction */,
               ruleContext));
 
-      return new ConfiguredAspect(descriptor, providers.build());
+      return new ConfiguredAspect(name, providers.build());
     }
   }
 }
