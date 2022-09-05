@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,13 +16,12 @@ package com.google.devtools.build.lib.packages;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.pkgcache.TargetProvider;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.Pair;
 
 import java.util.ArrayList;
@@ -144,6 +143,31 @@ public final class TestTargetUtils {
   }
 
   /**
+   * Returns a predicate to be used for test tag filtering, i.e., that only accepts tests that match
+   * all of the required tags and none of the excluded tags.
+   */
+  // TODO(bazel-team): This also applies to non-test rules, so should probably be moved to
+  // TargetUtils.
+  public static Predicate<Target> tagFilter(List<String> tagFilterList) {
+    Pair<Collection<String>, Collection<String>> tagLists = sortTagsBySense(tagFilterList);
+    final Collection<String> requiredTags = tagLists.first;
+    final Collection<String> excludedTags = tagLists.second;
+    return new Predicate<Target>() {
+      @Override
+      public boolean apply(Target input) {
+        if (!(input instanceof Rule)) {
+          return false;
+        }
+        // Note that test_tags are those originating from the XX_test rule,
+        // whereas the requiredTags and excludedTags originate from the command
+        // line or test_suite rule.
+        return testMatchesFilters(((Rule) input).getRuleTags(),
+            requiredTags, excludedTags, false);
+      }
+    };
+  }
+
+  /**
    * Separates a list of text "tags" into a Pair of Collections, where
    * the first element are the required or positive tags and the second element
    * are the excluded or negative tags.
@@ -257,7 +281,7 @@ public final class TestTargetUtils {
       // Note that testsAndSuites can contain input file targets; the test_suite rule does not
       // restrict the set of targets that can appear in tests or suites.
       testsAndSuites.addAll(getPrerequisites(testSuite, "tests"));
-      if (testSuite.getRuleClassObject().hasAttr("suites", BuildType.LABEL_LIST)) {
+      if (testSuite.getRuleClassObject().hasAttr("suites", Type.LABEL_LIST)) {
         testsAndSuites.addAll(getPrerequisites(testSuite, "suites"));
       }
 
@@ -310,7 +334,7 @@ public final class TestTargetUtils {
         // TODO(bazel-team): This serializes package loading in some cases. We might want to make
         // this multi-threaded.
         for (Label label :
-            NonconfigurableAttributeMapper.of(testSuite).get(attrName, BuildType.LABEL_LIST)) {
+            NonconfigurableAttributeMapper.of(testSuite).get(attrName, Type.LABEL_LIST)) {
           targets.add(targetProvider.getTarget(eventHandler, label));
         }
         return targets;
