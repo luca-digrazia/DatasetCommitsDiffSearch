@@ -41,6 +41,21 @@ import com.google.devtools.build.lib.syntax.Type;
 public class ObjcLibrary implements RuleConfiguredTargetFactory {
 
   /**
+   * An {@link IterableWrapper} containing extra library {@link Artifact}s to be linked into the
+   * final ObjC application bundle.
+   */
+  static final class ExtraImportLibraries extends IterableWrapper<Artifact> {
+
+    ExtraImportLibraries(Artifact... extraImportLibraries) {
+      super(extraImportLibraries);
+    }
+
+    ExtraImportLibraries(Iterable<Artifact> extraImportLibraries) {
+      super(extraImportLibraries);
+    }
+  }
+
+  /**
    * A {@link CcLinkParamsStore} to be propagated to dependent cc_{library, binary} targets.
    */
   private static class ObjcLibraryCcLinkParamsStore extends CcLinkParamsStore {
@@ -72,7 +87,8 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
    * should inherit from {@link ObjcLibraryRule}..
    */
   static ObjcCommon common(RuleContext ruleContext, Iterable<SdkFramework> extraSdkFrameworks,
-      boolean alwayslink, Iterable<ObjcProvider> extraDepObjcProviders) {
+      boolean alwayslink, ExtraImportLibraries extraImportLibraries,
+      Iterable<ObjcProvider> extraDepObjcProviders) {
     CompilationArtifacts compilationArtifacts =
         CompilationSupport.compilationArtifacts(ruleContext);
 
@@ -93,6 +109,7 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
         .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
         .setAlwayslink(alwayslink)
         .setHasModuleMap()
+        .addExtraImportLibraries(extraImportLibraries)
         .addDepObjcProviders(extraDepObjcProviders)
         .build();
   }
@@ -104,6 +121,7 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
             ruleContext,
             ImmutableList.<SdkFramework>of(),
             ruleContext.attributes().get("alwayslink", Type.BOOLEAN),
+            new ExtraImportLibraries(),
             ImmutableList.<ObjcProvider>of());
 
     XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
@@ -132,8 +150,7 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
         .addProvider(XcodeProvider.class, xcodeProviderBuilder.build())
         .addProvider(ObjcProvider.class, common.getObjcProvider())
-        .addProvider(
-            J2ObjcEntryClassProvider.class, J2ObjcEntryClassProvider.buildFrom(ruleContext))
+        .addProvider(J2ObjcSrcsProvider.class, J2ObjcSrcsProvider.buildFrom(ruleContext))
         .addProvider(
             J2ObjcMappingFileProvider.class, ObjcRuleClasses.j2ObjcMappingFileProvider(ruleContext))
         .addProvider(
@@ -142,8 +159,6 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
         .addProvider(
             CcLinkParamsProvider.class,
             new CcLinkParamsProvider(new ObjcLibraryCcLinkParamsStore(common)))
-        .addSkylarkTransitiveInfo(
-            ObjcProvider.OBJC_SKYLARK_PROVIDER_NAME, common.getObjcProvider().toSkylarkProvider())
         .build();
   }
 }
