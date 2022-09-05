@@ -24,14 +24,9 @@ public class BadgeIntentService extends IntentService {
     private NotificationManager mNotificationManager;
 
     @Override
-    public void onCreate() {
-        super.onCreate();
-        mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-    }
-    
-    @Override
     public void onStart(Intent intent, int startId) {
         super.onStart(intent, startId);
+        mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
     }
 
     @Override
