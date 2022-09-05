@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.bazel.rules.workspace;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -37,19 +36,13 @@ public class HttpArchiveRule implements RuleDefinition {
   public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
     return builder
         /* <!-- #BLAZE_RULE(http_archive).ATTRIBUTE(url) -->
-         (Deprecated) A URL referencing an archive file containing a Bazel repository.
+         A URL referencing an archive file containing a Bazel repository.
 
-         <p>This value has the same meaning as a <code>urls</code> list with a single item. This
-         must not be specified if <code>urls</code> is also specified.</p>
+         <p>This must be a file, http, or https URL. Archives of the following types are allowed:
+         `"zip"`, `"jar"`, `"war"`, `"tar.gz"`, `"tgz"`, `"tar.xz"`, and `tar.bz2`. Redirects
+         are followed. There is no support for authentication.</p>
          <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("url", STRING))
-        /* <!-- #BLAZE_RULE(http_archive).ATTRIBUTE(urls) -->
-        List of mirror URLs referencing the same archive file containing a Bazel repository.
-
-        <p>This must be an http, https, or file URL. Archives of type .zip, .jar, .war, .tar.gz,
-        .tgz, tar.bz2, or tar.xz are supported. There is no support for authentication.</p>
-        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("urls", STRING_LIST))
+        .add(attr("url", STRING).mandatory())
         /* <!-- #BLAZE_RULE(http_archive).ATTRIBUTE(sha256) -->
          The expected SHA-256 hash of the file downloaded.
 
@@ -110,8 +103,8 @@ public class HttpArchiveRule implements RuleDefinition {
   repository should already contain a BUILD file. If it does not, use
   <a href="${link new_http_archive}">new_http_archive</a> instead.</p>
 
-<p>It supports Zip-formatted archives and tarballs. The full set of extensions supported is
-.zip, .jar, .war, .tar.gz, .tgz, .tar.xz, or .tar.bz2.</p>
+<p>It supports Zip-formatted archives (with the .zip extension) and
+tarballs (.tar.gz and .tgz extensions).</p>
 
 <h4 id="http_archive_examples">Examples</h4>
 

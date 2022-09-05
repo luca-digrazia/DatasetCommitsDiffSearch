@@ -20,6 +20,7 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
 import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetFactory;
@@ -32,12 +33,13 @@ public class HttpJarRule implements RuleDefinition {
   public static final String NAME = "http_jar";
 
   @Override
-  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
+  public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
     return builder
         /* <!-- #BLAZE_RULE(http_jar).ATTRIBUTE(url) -->
         A URL to an archive file containing a Bazel repository.
 
-        <p>This must be an http or https URL that ends with .jar.</p>
+        <p>This must be a file, http or https URL that ends with .jar. Redirections are
+        followed. There is no support for authentication.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("url", STRING).mandatory())
         /* <!-- #BLAZE_RULE(http_jar).ATTRIBUTE(sha256) -->
