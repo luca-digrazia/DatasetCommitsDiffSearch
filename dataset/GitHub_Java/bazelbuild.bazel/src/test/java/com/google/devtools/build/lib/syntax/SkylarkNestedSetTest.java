@@ -36,17 +36,17 @@ import org.junit.runners.JUnit4;
 public class SkylarkNestedSetTest extends EvaluationTestCase {
 
   @Test
-  public void testLegacyConstructor() throws Exception {
-    eval("s = set([1, 2, 3], order='compile')");
-    SkylarkNestedSet s = get("s");
-    assertThat(s.getOrder().getName()).isEqualTo("compile");
-    assertThat(s.getSet(Object.class)).containsExactly(1, 2, 3);
+  public void testLegacySetConstructor() throws Exception {
+    eval("ds = set([1, 2, 3], order='compile')");
+    SkylarkNestedSet ds = get("ds");
+    assertThat(ds.getOrder().getName()).isEqualTo("compile");
+    assertThat(ds.getSet(Object.class)).containsExactly(1, 2, 3);
   }
 
   @Test
-  public void testConstructor() throws Exception {
-    eval("s = depset(order='stable')");
-    assertThat(lookup("s")).isInstanceOf(SkylarkNestedSet.class);
+  public void testNsetBuilder() throws Exception {
+    eval("n = depset(order='stable')");
+    assertThat(lookup("n")).isInstanceOf(SkylarkNestedSet.class);
   }
 
   @Test
@@ -62,43 +62,30 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testOrder() throws Exception {
-    eval("s = depset(['a', 'b'], order='compile')");
-    assertThat(get("s").getSet(String.class).getOrder()).isEqualTo(Order.COMPILE_ORDER);
+  public void testNsetOrder() throws Exception {
+    eval("n = depset(['a', 'b'], order='compile')");
+    assertThat(get("n").getSet(String.class).getOrder()).isEqualTo(Order.COMPILE_ORDER);
   }
 
   @Test
-  public void testBadOrder() throws Exception {
-    new BothModesTest().testIfExactError(
-        "Invalid order: non_existing",
-        "depset(['a'], order='non_existing')");
+  public void testEmptyNsetGenericType() throws Exception {
+    eval("n = depset()");
+    assertThat(get("n").getContentType()).isEqualTo(SkylarkType.TOP);
   }
 
   @Test
-  public void testEmptyGenericType() throws Exception {
-    eval("s = depset()");
-    assertThat(get("s").getContentType()).isEqualTo(SkylarkType.TOP);
+  public void testNsetHomogeneousGenericType() throws Exception {
+    eval("n = depset(['a', 'b', 'c'])");
+    assertThat(get("n").getContentType()).isEqualTo(SkylarkType.of(String.class));
   }
 
   @Test
-  public void testHomogeneousGenericType() throws Exception {
-    eval("s = depset(['a', 'b', 'c'])");
-    assertThat(get("s").getContentType()).isEqualTo(SkylarkType.of(String.class));
+  public void testDepsetBadOrder() throws Exception {
+    new BothModesTest().testIfExactError("Invalid order: bad", "depset(['a'], order='bad')");
   }
 
   @Test
-  public void testBadGenericType() throws Exception {
-    new BothModesTest()
-        .testIfExactError(
-            "cannot add an item of type 'int' to a depset of 'string'",
-            "depset(['a', 5])")
-        .testIfExactError(
-            "cannot add value of type 'string' to a depset",
-            "depset() + 'a'");
-  }
-
-  @Test
-  public void testUnionWithList() throws Exception {
+  public void testSetUnionWithList() throws Exception {
     assertContainsInOrder("depset([]).union(['a', 'b', 'c'])", "a", "b", "c");
     assertContainsInOrder("depset(['a']).union(['b', 'c'])", "a", "b", "c");
     assertContainsInOrder("depset(['a', 'b']).union(['c'])", "a", "b", "c");
@@ -106,7 +93,7 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testUnionWithDepset() throws Exception {
+  public void testSetUnionWithSet() throws Exception {
     assertContainsInOrder("depset([]).union(depset(['a', 'b', 'c']))", "a", "b", "c");
     assertContainsInOrder("depset(['a']).union(depset(['b', 'c']))", "a", "b", "c");
     assertContainsInOrder("depset(['a', 'b']).union(depset(['c']))", "a", "b", "c");
@@ -114,12 +101,39 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testUnionDuplicates() throws Exception {
+  public void testDepsetUnionWithBadType() throws Exception {
+    new BothModesTest()
+        .testIfErrorContains("is not applicable for arguments (int)", "depset([]).union(5)");
+  }
+
+  @Test
+  public void testSetUnionDuplicates() throws Exception {
     assertContainsInOrder("depset(['a', 'b', 'c']).union(['a', 'b', 'c'])", "a", "b", "c");
     assertContainsInOrder("depset(['a', 'a', 'a']).union(['a', 'a'])", "a");
 
     assertContainsInOrder("depset(['a', 'b', 'c']).union(depset(['a', 'b', 'c']))", "a", "b", "c");
     assertContainsInOrder("depset(['a', 'a', 'a']).union(depset(['a', 'a']))", "a");
+  }
+
+  @Test
+  public void testSetUnionError() throws Exception {
+    new BothModesTest()
+        .testIfErrorContains("insufficient arguments received by union", "depset(['a']).union()")
+        .testIfErrorContains(
+            "method depset.union(new_elements: Iterable) is not applicable for arguments (string): "
+                + "'new_elements' is 'string', but should be 'Iterable'",
+            "depset(['a']).union('b')");
+  }
+
+  @Test
+  public void testSetUnionSideEffects() throws Exception {
+    eval(
+        "def func():",
+        "  n1 = depset(['a'])",
+        "  n2 = n1.union(['b'])",
+        "  return n1",
+        "n = func()");
+    assertThat(((SkylarkNestedSet) lookup("n")).toCollection()).isEqualTo(ImmutableList.of("a"));
   }
 
   private void assertContainsInOrder(String statement, Object... expectedElements)
@@ -128,135 +142,115 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testUnionOrder() throws Exception {
+  public void testFunctionReturnsNset() throws Exception {
     eval(
         "def func():",
-        "  s1 = depset()",
-        "  s2 = depset()",
-        "  s1 += ['a']",
-        "  s2 += ['b']",
-        "  s1 += s2",
-        "  return s1",
-        "s = func()");
-    assertThat(get("s").toCollection()).containsExactly("b", "a").inOrder();
-  }
-
-  @Test
-  public void testUnionIncompatibleOrder() throws Exception {
-    checkEvalError(
-        "Order mismatch: LINK_ORDER != COMPILE_ORDER",
-        "depset(['a', 'b'], order='compile') + depset(['c', 'd'], order='link')");
-  }
-
-  @Test
-  public void testUnionWithNonsequence() throws Exception {
-    new BothModesTest()
-        .testIfExactError(
-            "method depset.union(new_elements: Iterable) is not applicable for arguments (int): "
-            + "'new_elements' is 'int', but should be 'Iterable'",
-            "depset([]).union(5)")
-        .testIfExactError(
-            "method depset.union(new_elements: Iterable) is not applicable for arguments (string): "
-            + "'new_elements' is 'string', but should be 'Iterable'",
-            "depset(['a']).union('b')");
-  }
-
-  @Test
-  public void testUnionWrongNumArgs() throws Exception {
-    new BothModesTest()
-        .testIfErrorContains("insufficient arguments received by union", "depset(['a']).union()");
-  }
-
-  @Test
-  public void testUnionNoSideEffects() throws Exception {
-    eval(
-        "def func():",
-        "  s1 = depset(['a'])",
-        "  s2 = s1.union(['b'])",
-        "  return s1",
-        "s = func()");
-    assertThat(((SkylarkNestedSet) lookup("s")).toCollection()).isEqualTo(ImmutableList.of("a"));
-  }
-
-  @Test
-  public void testFunctionReturnsDepset() throws Exception {
-    eval(
-        "def func():",
-        "  t = depset()",
-        "  t += ['a']",
-        "  return t",
+        "  n = depset()",
+        "  n += ['a']",
+        "  return n",
         "s = func()");
     assertThat(get("s")).isInstanceOf(SkylarkNestedSet.class);
     assertThat(get("s").toCollection()).containsExactly("a");
   }
 
   @Test
-  public void testPlusEqualsWithList() throws Exception {
+  public void testNsetTwoReferences() throws Exception {
     eval(
         "def func():",
-        "  t = depset()",
-        "  t += ['a', 'b']",
-        "  return t",
-        "s = func()");
-    assertThat(get("s").toCollection()).containsExactly("a", "b").inOrder();
+        "  n1 = depset()",
+        "  n1 += ['a']",
+        "  n2 = n1",
+        "  n2 += ['b']",
+        "  return n1",
+        "n = func()");
+    assertThat(get("n").toCollection()).containsExactly("a");
   }
 
   @Test
-  public void testPlusEqualsNoSideEffects() throws Exception {
+  public void testNsetUnionOrder() throws Exception {
     eval(
         "def func():",
-        "  s1 = depset()",
-        "  s1 += ['a']",
-        "  s2 = s1",
-        "  s2 += ['b']",
-        "  return s1",
-        "s = func()");
-    assertThat(get("s").toCollection()).containsExactly("a");
+        "  n1 = depset()",
+        "  n2 = depset()",
+        "  n1 += ['a']",
+        "  n2 += ['b']",
+        "  n1 += n2",
+        "  return n1",
+        "n = func()");
+    assertThat(get("n").toCollection()).containsExactly("b", "a").inOrder();
   }
 
   @Test
-  public void testFuncParamNoSideEffects() throws Exception {
+  public void testNsetNestedItemBadOrder() throws Exception {
+    checkEvalError(
+        "Order mismatch: LINK_ORDER != COMPILE_ORDER",
+        "depset(['a', 'b'], order='compile') + depset(['c', 'd'], order='link')");
+  }
+
+  @Test
+  public void testNsetItemList() throws Exception {
     eval(
-        "def func1(t):",
-        "  t += ['b']",
+        "def func():",
+        "  n = depset()",
+        "  n += ['a', 'b']",
+        "  return n",
+        "n = func()");
+    assertThat(get("n").toCollection()).containsExactly("a", "b").inOrder();
+  }
+
+  @Test
+  public void testNsetFuncParamNoSideEffects() throws Exception {
+    eval(
+        "def func1(n):",
+        "  n += ['b']",
         "def func2():",
-        "  u = depset()",
-        "  u += ['a']",
-        "  func1(u)",
-        "  return u",
-        "s = func2()");
-    assertThat(get("s").toCollection()).containsExactly("a");
+        "  n = depset()",
+        "  n += ['a']",
+        "  func1(n)",
+        "  return n",
+        "n = func2()");
+    assertThat(get("n").toCollection()).containsExactly("a");
   }
 
   @Test
-  public void testTransitiveOrdering() throws Exception {
+  public void testNsetTransitiveOrdering() throws Exception {
     eval(
         "def func():",
-        "  sa = depset(['a'], order='compile')",
-        "  sb = depset(['b'], order='compile')",
-        "  sc = depset(['c'], order='compile') + sa",
-        "  return depset() + sb + sc",
-        "s = func()");
+        "  na = depset(['a'], order='compile')",
+        "  nb = depset(['b'], order='compile')",
+        "  nc = depset(['c'], order='compile') + na",
+        "  return depset() + nb + nc",
+        "n = func()");
     // The iterator lists the Transitive sets first
-    assertThat(get("s").toCollection()).containsExactly("b", "a", "c").inOrder();
+    assertThat(get("n").toCollection()).containsExactly("b", "a", "c").inOrder();
   }
 
   @Test
-  public void testLeftRightDirectOrdering() throws Exception {
+  public void testNsetOrdering() throws Exception {
     eval(
         "def func():",
-        "  t = depset()",
-        "  t += [4]",
-        "  t += [2, 4]",
-        "  t += [3, 4, 5]",
-        "  return t",
-        "s = func()");
-    // All elements are direct. The iterator lists them left-to-right.
-    assertThat(get("s").toCollection()).containsExactly(4, 2, 3, 5).inOrder();
+        "  na = depset()",
+        "  na += [4]",
+        "  na += [2, 4]",
+        "  na += [3, 4, 5]",
+        "  return na",
+        "n = func()");
+    // The iterator lists the Transitive sets first
+    assertThat(get("n").toCollection()).containsExactly(4, 2, 3, 5).inOrder();
   }
 
   @Test
-  public void testToString() throws Exception {
+  public void testNsetBadOrder() throws Exception {
+    checkEvalError("Invalid order: non_existing", "depset(order='non_existing')");
+  }
+
+  @Test
+  public void testNsetBadRightOperand() throws Exception {
+    checkEvalError("cannot add value of type 'string' to a depset", "l = ['a']", "depset() + l[0]");
+  }
+
+  @Test
+  public void testNsetToString() throws Exception {
     eval(
         "s = depset() + [2, 4, 6] + [3, 4, 5]",
         "x = str(s)");
@@ -264,7 +258,7 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testToStringWithOrder() throws Exception {
+  public void testNsetToStringWithOrder() throws Exception {
     eval(
         "s = depset(order = 'link') + [2, 4, 6] + [3, 4, 5]",
         "x = str(s)");
@@ -287,7 +281,7 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testOrderCompatibility() throws Exception {
+  public void testSetOrderCompatibility() throws Exception {
     // Two sets are compatible if
     //  (a) both have the same order or
     //  (b) at least one order is "stable"
@@ -316,7 +310,7 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testOrderComplexUnion() throws Exception {
+  public void testSetOrderComplexUnion() throws Exception {
     // {1, 11, {2, 22}, {3, 33}, {4, 44}}
     List<String> preOrder = Arrays.asList("1", "11", "2", "22", "3", "33", "4", "44");
     List<String> postOrder = Arrays.asList("2", "22", "3", "33", "4", "44", "1", "11");
@@ -336,7 +330,7 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testOrderBalancedTree() throws Exception {
+  public void testSetOrderBalancedTree() throws Exception {
     // {{1, 11, {2, 22}}, {3, 33, {4, 44}}}
     List<String> preOrder = Arrays.asList("1", "11", "2", "22", "3", "33", "4", "44");
     List<String> postOrder = Arrays.asList("2", "22", "4", "44", "3", "33", "1", "11");
@@ -356,7 +350,7 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testOrderManyLevelsOfNesting() throws Exception {
+  public void testSetOrderManyLevelsOfNesting() throws Exception {
     // {1, 11, {2, 22, {3, 33, {4, 44}}}}
     List<String> preOrder = Arrays.asList("1", "11", "2", "22", "3", "33", "4", "44");
     List<String> postOrder = Arrays.asList("4", "44", "3", "33", "2", "22", "1", "11");
