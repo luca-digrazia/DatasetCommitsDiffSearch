@@ -20,7 +20,6 @@ import com.sun.tools.javac.util.Context;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -33,7 +32,6 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-import javax.annotation.Nullable;
 import javax.tools.FileObject;
 import javax.tools.JavaFileManager;
 import javax.tools.JavaFileObject;
@@ -118,7 +116,7 @@ public class ZipOutputFileManager extends JavacFileManager {
 
     public final Location location;
 
-    @Nullable private ByteArrayOutputStream buffer;
+    private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
 
     public OutputFileObject(String name, Kind kind, Location location) {
       super(URI.create("outputbuffer:/" + name), kind);
@@ -127,25 +125,16 @@ public class ZipOutputFileManager extends JavacFileManager {
 
     @Override
     public OutputStream openOutputStream() {
-      if (buffer == null) {
-        buffer = new ByteArrayOutputStream();
-      }
       return buffer;
     }
 
     @Override
     public InputStream openInputStream() throws IOException {
-      if (buffer == null) {
-        throw new FileNotFoundException(getName());
-      }
       return new ByteArrayInputStream(asBytes());
     }
 
     @Override
     public CharSequence getCharContent(boolean ignoreEncodingErrors) throws IOException {
-      if (buffer == null) {
-        throw new FileNotFoundException(getName());
-      }
       CodingErrorAction errorAction =
           ignoreEncodingErrors ? CodingErrorAction.IGNORE : CodingErrorAction.REPORT;
       CharsetDecoder decoder =
@@ -157,7 +146,7 @@ public class ZipOutputFileManager extends JavacFileManager {
     }
 
     public byte[] asBytes() {
-      return buffer != null ? buffer.toByteArray() : null;
+      return buffer.toByteArray();
     }
   }
 
