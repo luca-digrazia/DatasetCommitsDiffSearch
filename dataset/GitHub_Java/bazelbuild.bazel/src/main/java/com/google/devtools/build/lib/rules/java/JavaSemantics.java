@@ -288,7 +288,6 @@ public interface JavaSemantics {
 
   /**
    * Adds extra providers to a Java target.
-   * @throws InterruptedException 
    */
   void addProviders(RuleContext ruleContext,
       JavaCommon javaCommon,
@@ -300,7 +299,7 @@ public interface JavaSemantics {
       ImmutableMap<Artifact, Artifact> compilationToRuntimeJarMap,
       JavaCompilationHelper helper,
       NestedSetBuilder<Artifact> filesBuilder,
-      RuleConfiguredTargetBuilder ruleBuilder) throws InterruptedException;
+      RuleConfiguredTargetBuilder ruleBuilder);
 
   /**
    * Tell if a build with the given configuration should use strict java dependencies. This method
@@ -325,12 +324,10 @@ public interface JavaSemantics {
    * @param attributesBuilder the builder to construct the list of attributes of this target
    *        (mutable).
    * @return the launcher as an artifact
-   * @throws InterruptedException 
    */
   Artifact getLauncher(final RuleContext ruleContext, final JavaCommon common,
       DeployArchiveBuilder deployArchiveBuilder, Runfiles.Builder runfilesBuilder,
-      List<String> jvmFlags, JavaTargetAttributes.Builder attributesBuilder, boolean shouldStrip)
-      throws InterruptedException;
+      List<String> jvmFlags, JavaTargetAttributes.Builder attributesBuilder, boolean shouldStrip);
 
   /**
    * Add extra dependencies for runfiles of a Java binary.
