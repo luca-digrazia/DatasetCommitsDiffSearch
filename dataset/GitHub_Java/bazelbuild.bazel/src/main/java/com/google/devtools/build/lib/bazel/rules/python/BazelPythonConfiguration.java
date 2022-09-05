@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,35 +22,14 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.util.OS;
-import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Option;
+
 import javax.annotation.Nullable;
 
 /**
  * Bazel-specific Python configuration.
  */
-@Immutable
 public class BazelPythonConfiguration extends BuildConfiguration.Fragment {
-
-  /**
-  * A path converter for python3 path
-  */
-  public static class Python3PathConverter implements Converter<String> {
-    @Override
-    public String convert(String input) {
-      if (input.equals("auto")) {
-        return OS.getCurrent() == OS.WINDOWS ? "python" : "python3";
-      }
-      return input;
-    }
-
-    @Override
-    public String getTypeDescription() {
-      return "An option for python3 path";
-    }
-  }
 
   /**
    * Bazel-specific Python configuration options.
@@ -62,20 +41,11 @@ public class BazelPythonConfiguration extends BuildConfiguration.Fragment {
       help = "Local path to the Python2 executable.")
     public String python2Path;
 
-    @Option(
-      name = "python3_path",
-      converter = Python3PathConverter.class,
-      defaultValue = "auto",
+    @Option(name = "python3_path",
+      defaultValue = "python3",
       category = "version",
-      help = "Local path to the Python3 executable."
-    )
+      help = "Local path to the Python3 executable.")
     public String python3Path;
-
-    @Option(name = "experimental_python_import_all_repositories",
-      defaultValue = "true",
-      category = "undocumented",
-      help = "Do not use.")
-    public boolean experimentalPythonImportAllRepositories;
   }
 
   /**
@@ -112,9 +82,5 @@ public class BazelPythonConfiguration extends BuildConfiguration.Fragment {
 
   public String getPython3Path() {
     return options.python3Path;
-  }
-
-  public boolean getImportAllRepositories() {
-    return options.experimentalPythonImportAllRepositories;
   }
 }
