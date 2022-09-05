@@ -750,7 +750,7 @@ public class JavaCompileAction extends AbstractAction {
       // aggregation code below should go away.
       List<String> jcopts = new ArrayList<>(javacOpts);
       JavaConfiguration javaConfiguration = configuration.getFragment(JavaConfiguration.class);
-      if (!javaConfiguration.getJavaWarns().isEmpty()) {
+      if (javaConfiguration.getJavaWarns().size() > 0) {
         jcopts.add("-Xlint:" + Joiner.on(',').join(javaConfiguration.getJavaWarns()));
       }
       if (!bootclasspathEntries.isEmpty()) {
@@ -950,12 +950,12 @@ public class JavaCompileAction extends AbstractAction {
      * Accumulates the given jar artifacts as being provided by direct dependencies.
      */
     public Builder addDirectJars(Collection<Artifact> directJars) {
-      this.directJars.addAll(directJars);
+      Iterables.addAll(this.directJars, directJars);
       return this;
     }
 
     public Builder addCompileTimeDependencyArtifacts(Collection<Artifact> dependencyArtifacts) {
-      this.compileTimeDependencyArtifacts.addAll(dependencyArtifacts);
+      Iterables.addAll(this.compileTimeDependencyArtifacts, dependencyArtifacts);
       return this;
     }
 

@@ -33,14 +33,14 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Used to keep track of resources consumed by the Blaze action execution threads and throttle them
- * when necessary.
+ * CPU/RAM resource manager. Used to keep track of resources consumed by the Blaze action execution
+ * threads and throttle them when necessary.
  *
- * <p>Threads which are known to consume a significant amount of resources should call
- * {@link #acquireResources} method. This method will check whether requested resources are
- * available and will either mark them as used and allow the thread to proceed or will block the
- * thread until requested resources will become available. When the thread completes its task, it
- * must release allocated resources by calling {@link #releaseResources} method.
+ * <p>Threads which are known to consume a significant amount of the local CPU or RAM resources
+ * should call {@link #acquireResources} method. This method will check whether requested resources
+ * are available and will either mark them as used and allow thread to proceed or will block the
+ * thread until requested resources will become available. When thread completes it task, it must
+ * release allocated resources by calling {@link #releaseResources} method.
  *
  * <p>Available resources can be calculated using one of three ways:
  * <ol>
@@ -100,9 +100,9 @@ public class ResourceManager {
   // Please note that this value is purely empirical - we assume that generally
   // requested resources are somewhat pessimistic and thread would end up
   // using less than requested amount.
-  private static final double MIN_NECESSARY_CPU_RATIO = 0.6;
-  private static final double MIN_NECESSARY_RAM_RATIO = 1.0;
-  private static final double MIN_NECESSARY_IO_RATIO = 1.0;
+  private final static double MIN_NECESSARY_CPU_RATIO = 0.6;
+  private final static double MIN_NECESSARY_RAM_RATIO = 1.0;
+  private final static double MIN_NECESSARY_IO_RATIO = 1.0;
 
   // List of blocked threads. Associated CountDownLatch object will always
   // be initialized to 1 during creation in the acquire() method.
@@ -129,9 +129,6 @@ public class ResourceManager {
   // definition in the ResourceSet class.
   private double usedIo;
 
-  // Used local test count. Corresponds to the local test count definition in the ResourceSet class.
-  private int usedLocalTestCount;
-
   // Specifies how much of the RAM in staticResources we should allow to be used.
   public static final int DEFAULT_RAM_UTILIZATION_PERCENTAGE = 67;
   private int ramUtilizationPercentage = DEFAULT_RAM_UTILIZATION_PERCENTAGE;
@@ -141,7 +138,7 @@ public class ResourceManager {
 
   private ResourceManager() {
     FINE = LOG.isLoggable(Level.FINE);
-    requestList = new LinkedList<>();
+    requestList = new LinkedList<Pair<ResourceSet, CountDownLatch>>();
   }
 
   @VisibleForTesting public static ResourceManager instanceForTestingOnly() {
@@ -157,7 +154,6 @@ public class ResourceManager {
     usedCpu = 0;
     usedRam = 0;
     usedIo = 0;
-    usedLocalTestCount = 0;
     for (Pair<ResourceSet, CountDownLatch> request : requestList) {
       // CountDownLatch can be set only to 0 or 1.
       request.second.countDown();
@@ -224,7 +220,7 @@ public class ResourceManager {
    */
   public void acquireResources(ActionMetadata owner, ResourceSet resources)
       throws InterruptedException {
-    Preconditions.checkNotNull(resources);
+    Preconditions.checkArgument(resources != null);
     long startTime = Profiler.nanoTimeMaybe();
     CountDownLatch latch = null;
     try {
@@ -235,7 +231,7 @@ public class ResourceManager {
       }
     } finally {
       threadLocked.set(resources.getCpuUsage() != 0 || resources.getMemoryMb() != 0
-          || resources.getIoUsage() != 0 || resources.getLocalTestCount() != 0);
+          || resources.getIoUsage() != 0);
       acquired(owner);
 
       // Profile acquisition only if it waited for resource to become available.
@@ -259,8 +255,7 @@ public class ResourceManager {
     }
 
     if (acquired) {
-      threadLocked.set(resources.getCpuUsage() != 0 || resources.getMemoryMb() != 0
-          || resources.getIoUsage() != 0 || resources.getLocalTestCount() != 0);
+      threadLocked.set(resources.getCpuUsage() != 0 || resources.getMemoryMb() != 0);
       acquired(owner);
     }
 
@@ -271,15 +266,13 @@ public class ResourceManager {
     usedCpu += resources.getCpuUsage();
     usedRam += resources.getMemoryMb();
     usedIo += resources.getIoUsage();
-    usedLocalTestCount += resources.getLocalTestCount();
   }
 
   /**
    * Return true if any resources have been claimed through this manager.
    */
   public synchronized boolean inUse() {
-    return usedCpu != 0.0 || usedRam != 0.0 || usedIo != 0.0 || usedLocalTestCount != 0
-        || requestList.size() > 0;
+    return usedCpu != 0.0 || usedRam != 0.0 || usedIo != 0.0 || requestList.size() > 0;
   }
 
 
@@ -360,18 +353,16 @@ public class ResourceManager {
     usedCpu -= resources.getCpuUsage();
     usedRam -= resources.getMemoryMb();
     usedIo -= resources.getIoUsage();
-    usedLocalTestCount -= resources.getLocalTestCount();
 
     // TODO(bazel-team): (2010) rounding error can accumulate and value below can end up being
     // e.g. 1E-15. So if it is small enough, we set it to 0. But maybe there is a better solution.
-    double epsilon = 0.0001;
-    if (usedCpu < epsilon) {
+    if (usedCpu < 0.0001) {
       usedCpu = 0;
     }
-    if (usedRam < epsilon) {
+    if (usedRam < 0.0001) {
       usedRam = 0;
     }
-    if (usedIo < epsilon) {
+    if (usedIo < 0.0001) {
       usedIo = 0;
     }
     if (requestList.size() > 0) {
@@ -402,7 +393,7 @@ public class ResourceManager {
     Preconditions.checkNotNull(availableResources);
     // Comparison below is robust, since any calculation errors will be fixed
     // by the release() method.
-    if (usedCpu == 0.0 && usedRam == 0.0 && usedIo == 0.0 && usedLocalTestCount == 0) {
+    if (usedCpu == 0.0 && usedRam == 0.0 && usedIo == 0.0) {
       return true;
     }
     // Use only MIN_NECESSARY_???_RATIO of the resource value to check for
@@ -413,12 +404,10 @@ public class ResourceManager {
     double cpu = resources.getCpuUsage() * MIN_NECESSARY_CPU_RATIO;
     double ram = resources.getMemoryMb() * MIN_NECESSARY_RAM_RATIO;
     double io = resources.getIoUsage() * MIN_NECESSARY_IO_RATIO;
-    int localTestCount = resources.getLocalTestCount();
 
     double availableCpu = availableResources.getCpuUsage();
     double availableRam = availableResources.getMemoryMb();
     double availableIo = availableResources.getIoUsage();
-    int availableLocalTestCount = availableResources.getLocalTestCount();
 
     // Resources are considered available if any one of the conditions below is true:
     // 1) If resource is not requested at all, it is available.
@@ -427,33 +416,28 @@ public class ResourceManager {
     // ensure that at any given time, at least one thread is able to acquire
     // resources even if it requests more than available.
     // 3) If used resource amount is less than total available resource amount.
-    boolean cpuIsAvailable = cpu == 0.0 || usedCpu == 0.0 || usedCpu + cpu <= availableCpu;
-    boolean ramIsAvailable = ram == 0.0 || usedRam == 0.0 || usedRam + ram <= availableRam;
-    boolean ioIsAvailable = io == 0.0 || usedIo == 0.0 || usedIo + io <= availableIo;
-    boolean localTestCountIsAvailable = localTestCount == 0 || usedLocalTestCount == 0
-        || usedLocalTestCount + localTestCount <= availableLocalTestCount;
-    return cpuIsAvailable && ramIsAvailable && ioIsAvailable && localTestCountIsAvailable;
+    return (cpu == 0.0 || usedCpu == 0.0 || usedCpu + cpu <= availableCpu) &&
+        (ram == 0.0 || usedRam == 0.0 || usedRam + ram <= availableRam) &&
+        (io == 0.0 || usedIo == 0.0 || usedIo + io <= availableIo);
   }
 
   private synchronized void updateAvailableResources(boolean useFreeReading) {
     Preconditions.checkNotNull(staticResources);
     if (useFreeReading && isAutoSensingEnabled()) {
-      availableResources = ResourceSet.create(
+      availableResources = ResourceSet.createWithRamCpuIo(
           usedRam + freeReading.getFreeMb(),
           usedCpu + freeReading.getAvgFreeCpu(),
-          staticResources.getIoUsage(),
-          staticResources.getLocalTestCount());
+          staticResources.getIoUsage());
       if(FINE) {
         LOG.fine("Free resources: " + Math.round(freeReading.getFreeMb()) + " MB,"
             + Math.round(freeReading.getAvgFreeCpu() * 100) + "% CPU");
       }
       processWaitingThreads();
     } else {
-      availableResources = ResourceSet.create(
+      availableResources = ResourceSet.createWithRamCpuIo(
           staticResources.getMemoryMb() * this.ramUtilizationPercentage / 100.0,
           staticResources.getCpuUsage(),
-          staticResources.getIoUsage(),
-          staticResources.getLocalTestCount());
+          staticResources.getIoUsage());
       processWaitingThreads();
     }
   }
@@ -482,7 +466,7 @@ public class ResourceManager {
   }
 
   @VisibleForTesting
-  synchronized boolean isAvailable(double ram, double cpu, double io, int localTestCount) {
-    return areResourcesAvailable(ResourceSet.create(ram, cpu, io, localTestCount));
+  synchronized boolean isAvailable(double ram, double cpu, double io) {
+    return areResourcesAvailable(ResourceSet.createWithRamCpuIo(ram, cpu, io));
   }
 }

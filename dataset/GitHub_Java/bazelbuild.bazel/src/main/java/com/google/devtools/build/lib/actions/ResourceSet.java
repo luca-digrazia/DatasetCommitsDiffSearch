@@ -33,7 +33,7 @@ import java.util.NoSuchElementException;
 public class ResourceSet {
 
   /** For actions that consume negligible resources. */
-  public static final ResourceSet ZERO = new ResourceSet(0.0, 0.0, 0.0, 0);
+  public static final ResourceSet ZERO = new ResourceSet(0.0, 0.0, 0.0);
 
   /** The amount of real memory (resident set size). */
   private final double memoryMb;
@@ -41,49 +41,20 @@ public class ResourceSet {
   /** The number of CPUs, or fractions thereof. */
   private final double cpuUsage;
 
-  /** The number of local tests. */
-  private final int localTestCount;
-
   /**
    * Relative amount of used I/O resources (with 1.0 being total available amount on an "average"
    * workstation.
    */
   private final double ioUsage;
   
-  private ResourceSet(double memoryMb, double cpuUsage, double ioUsage, int localTestCount) {
+  private ResourceSet(double memoryMb, double cpuUsage, double ioUsage) {
     this.memoryMb = memoryMb;
     this.cpuUsage = cpuUsage;
     this.ioUsage = ioUsage;
-    this.localTestCount = localTestCount;
   }
 
-  /**
-   * Returns a new ResourceSet with the provided values for memoryMb, cpuUsage, and ioUsage, and
-   * with 0.0 for localTestCount. Use this method in action resource definitions when they aren't
-   * local tests.
-   */
   public static ResourceSet createWithRamCpuIo(double memoryMb, double cpuUsage, double ioUsage) {
-    return new ResourceSet(memoryMb, cpuUsage, ioUsage, 0);
-  }
-
-  /**
-   * Returns a new ResourceSet with the provided value for localTestCount, and 0.0 for memoryMb,
-   * cpuUsage, and ioUsage. Use this method in action resource definitions when they are local tests
-   * that acquire no local resources.
-   */
-  public static ResourceSet createWithLocalTestCount(int localTestCount) {
-    return new ResourceSet(0.0, 0.0, 0.0, localTestCount);
-  }
-
-  /**
-   * Returns a new ResourceSet with the provided values for memoryMb, cpuUsage, ioUsage, and
-   * localTestCount. Most action resource definitions should use
-   * {@link #createWithRamCpuIo(double, double, double)} or {@link #createWithLocalTestCount(int)}.
-   * Use this method primarily when constructing ResourceSets that represent available resources.
-   */
-  public static ResourceSet create(double memoryMb, double cpuUsage, double ioUsage,
-      int localTestCount) {
-    return new ResourceSet(memoryMb, cpuUsage, ioUsage, localTestCount);
+    return new ResourceSet(memoryMb, cpuUsage, ioUsage);
   }
 
   /** Returns the amount of real memory (resident set size) used in MB. */
@@ -112,11 +83,6 @@ public class ResourceSet {
     return ioUsage;
   }
 
-  /** Returns the local test count used. */
-  public int getLocalTestCount() {
-    return localTestCount;
-  }
-
   public static class ResourceSetConverter implements Converter<ResourceSet> {
     private static final Splitter SPLITTER = Splitter.on(',');
 
@@ -133,9 +99,11 @@ public class ResourceSet {
         if (memoryMb <= 0.0 || cpuUsage <= 0.0 || ioUsage <= 0.0) {
           throw new OptionsParsingException("All resource values must be positive");
         }
-        return create(memoryMb, cpuUsage, ioUsage, Integer.MAX_VALUE);
-      } catch (NumberFormatException | NoSuchElementException nfe) {
+        return createWithRamCpuIo(memoryMb, cpuUsage, ioUsage);
+      } catch (NumberFormatException nfe) {
         throw new OptionsParsingException("Expected exactly 3 comma-separated float values", nfe);
+      } catch (NoSuchElementException nsee) {
+        throw new OptionsParsingException("Expected exactly 3 comma-separated float values", nsee);
       }
     }
 

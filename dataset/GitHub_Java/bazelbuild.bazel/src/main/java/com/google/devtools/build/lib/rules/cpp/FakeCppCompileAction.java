@@ -74,6 +74,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       ImmutableList<String> pluginOpts,
       Predicate<String> nocopts,
       ImmutableList<PathFragment> extraSystemIncludePrefixes,
+      boolean enableLayeringCheck,
       @Nullable String fdoBuildStamp) {
     super(owner, features, featureConfiguration, sourceFile, sourceLabel, mandatoryInputs,
         outputFile, dotdFile, null, null, null,
@@ -86,9 +87,9 @@ public class FakeCppCompileAction extends CppCompileAction {
         // the cc_fake_binary, and the runfiles must be determined at analysis
         // time, so they can't depend on the contents of the ".d" file.)
         CppCompilationContext.disallowUndeclaredHeaders(context), null, copts, pluginOpts, nocopts,
-        extraSystemIncludePrefixes, fdoBuildStamp, VOID_INCLUDE_RESOLVER,
+        extraSystemIncludePrefixes, enableLayeringCheck, fdoBuildStamp, VOID_INCLUDE_RESOLVER,
         ImmutableList.<IncludeScannable>of(),
-        GUID, /*usePic=*/false);
+        GUID, /*compileHeaderModules=*/false, /*usePic=*/false);
     this.tempOutputFile = Preconditions.checkNotNull(tempOutputFile);
   }
 

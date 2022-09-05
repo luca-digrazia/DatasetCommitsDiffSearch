@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.exec;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.AbstractAction;
@@ -21,18 +20,14 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ResourceManager;
-import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.util.CommandBuilder;
 import com.google.devtools.build.lib.util.OsUtils;
-import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.UnixFileSystem;
-import com.google.devtools.build.lib.vfs.UnixFileSystem.SymlinkStrategy;
 
 import java.util.List;
 
@@ -111,11 +106,13 @@ public final class SymlinkTreeHelper {
       BinTools binTools) throws ExecException, InterruptedException {
     List<String> args = getSpawnArgumentList(
         actionExecutionContext.getExecutor().getExecRoot(), binTools);
-    try (ResourceHandle handle =
-            ResourceManager.instance().acquireResources(action, RESOURCE_SET)) {
+    try {
+      ResourceManager.instance().acquireResources(action, RESOURCE_SET);
       actionExecutionContext.getExecutor().getSpawnActionContext(action.getMnemonic()).exec(
           new BaseSpawn.Local(args, ImmutableMap.<String, String>of(), action),
           actionExecutionContext);
+    } finally {
+      ResourceManager.instance().releaseResources(action, RESOURCE_SET);
     }
   }
 
@@ -123,19 +120,13 @@ public final class SymlinkTreeHelper {
    * Returns the complete argument list build-runfiles has to be called with.
    */
   private List<String> getSpawnArgumentList(Path execRoot, BinTools binTools) {
-    PathFragment path = binTools.getExecPath(BUILD_RUNFILES);
-    Preconditions.checkNotNull(path, BUILD_RUNFILES + " not found in embedded tools");
-    List<String> args = Lists.newArrayList(execRoot.getRelative(path).getPathString());
+    List<String> args = Lists.newArrayList(
+        execRoot.getRelative(binTools.getExecPath(BUILD_RUNFILES))
+            .getPathString());
 
     if (filesetTree) {
       args.add("--allow_relative");
       args.add("--use_metadata");
-    }
-
-    FileSystem fs = execRoot.getFileSystem();
-    if (fs instanceof UnixFileSystem
-        && ((UnixFileSystem) fs).getSymlinkStrategy() == SymlinkStrategy.WINDOWS_COMPATIBLE) {
-      args.add("--windows_compatible");
     }
 
     args.add(inputManifest.getPathString());

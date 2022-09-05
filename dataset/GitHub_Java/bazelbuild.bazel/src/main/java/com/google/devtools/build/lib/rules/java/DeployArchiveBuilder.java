@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -24,7 +25,6 @@ import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.IterablesChain;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.HashSet;
 import java.util.List;
@@ -218,7 +218,8 @@ public class DeployArchiveBuilder {
       inputs.addElement(runfilesMiddleman);
     }
 
-    ImmutableList<Artifact> buildInfoArtifacts = ruleContext.getBuildInfo(JavaBuildInfoFactory.KEY);
+    final ImmutableList<Artifact> buildInfoArtifacts =
+        ruleContext.getAnalysisEnvironment().getBuildInfo(ruleContext, JavaBuildInfoFactory.KEY);
     inputs.add(buildInfoArtifacts);
 
     Iterable<Artifact> runtimeClasspath = Iterables.concat(
@@ -239,7 +240,7 @@ public class DeployArchiveBuilder {
 
     ruleContext.registerAction(new SpawnAction.Builder()
         .addInputs(inputs.build())
-        .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext))
+        .addTransitiveInputs(JavaCompilationHelper.getHostJavabaseInputs(ruleContext))
         .addOutput(outputJar)
         .setResources(resourceSet)
         .setJarExecutable(
