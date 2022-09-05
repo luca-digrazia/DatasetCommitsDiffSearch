@@ -95,8 +95,7 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
     }
 
     public MetricsServlet(MetricsRegistry metricsRegistry, HealthCheckRegistry healthCheckRegistry, JsonFactory factory, String healthcheckUri, String metricsUri, String pingUri, String threadsUri, boolean showJvmMetrics) {
-        this(metricsRegistry, healthCheckRegistry,
-             VirtualMachineMetrics.getInstance(), factory, healthcheckUri, metricsUri, pingUri, threadsUri, showJvmMetrics);
+        this(metricsRegistry, healthCheckRegistry, VirtualMachineMetrics.INSTANCE, factory, healthcheckUri, metricsUri, pingUri, threadsUri, showJvmMetrics);
     }
 
     public MetricsServlet(MetricsRegistry metricsRegistry, HealthCheckRegistry healthCheckRegistry, VirtualMachineMetrics vm, JsonFactory factory, String healthcheckUri, String metricsUri, String pingUri, String threadsUri, boolean showJvmMetrics) {
@@ -303,7 +302,7 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
             writeSampling(histogram, json);
 
             if (context.showFullSamples) {
-                json.writeObjectField("values", histogram.getSnapshot().getValues());
+                json.writeObjectField("values", histogram.values());
             }
         }
         json.writeEndObject();
@@ -437,7 +436,7 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
                 writeSummarizable(timer, json);
                 writeSampling(timer, json);
                 if (context.showFullSamples) {
-                    json.writeObjectField("values", timer.getSnapshot().getValues());
+                    json.writeObjectField("values", timer.values());
                 }
             }
             json.writeEndObject();
