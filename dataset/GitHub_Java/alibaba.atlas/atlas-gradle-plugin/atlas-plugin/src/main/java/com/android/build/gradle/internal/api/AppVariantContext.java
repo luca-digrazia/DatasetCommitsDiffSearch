@@ -209,13 +209,11 @@
 
 package com.android.build.gradle.internal.api;
 
-import com.android.annotations.NonNull;
 import com.android.build.gradle.AppExtension;
 import com.android.build.gradle.BaseExtension;
 import com.android.build.gradle.internal.variant.ApplicationVariantData;
 import com.android.build.gradle.internal.variant.BaseVariantOutputData;
 import com.android.builder.model.AndroidLibrary;
-import com.android.utils.FileUtils;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.taobao.android.builder.dependency.model.AwbBundle;
@@ -225,11 +223,9 @@ import org.gradle.api.Project;
 import org.gradle.api.file.ConfigurableFileTree;
 
 import java.io.File;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 /**
  * Applicaiton的编译的context
@@ -372,11 +368,6 @@ public class AppVariantContext<T extends BaseVariantImpl, Z extends BaseExtensio
                         "." +
                         androidLibrary.getResolvedCoordinates().getArtifactId() +
                         ".xml");
-    }
-
-    @NonNull
-    public Collection<File> getAwbApkFiles() {
-        return FileUtils.find(getAwbApkOutputDir(), Pattern.compile("\\.so$"));
     }
 
     public File getAwbApkOutputDir() {

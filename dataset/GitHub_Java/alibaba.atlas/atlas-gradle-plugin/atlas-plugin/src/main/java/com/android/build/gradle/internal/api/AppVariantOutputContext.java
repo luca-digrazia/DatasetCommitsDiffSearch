@@ -209,13 +209,6 @@
 
 package com.android.build.gradle.internal.api;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import com.android.build.gradle.internal.core.GradleVariantConfiguration;
 import com.android.build.gradle.internal.scope.VariantOutputScope;
 import com.android.build.gradle.internal.tasks.databinding.DataBindingExportBuildInfoTask;
@@ -229,12 +222,20 @@ import com.taobao.android.builder.dependency.AtlasDependencyTree;
 import com.taobao.android.builder.dependency.model.AwbBundle;
 import com.taobao.android.builder.tasks.app.bundle.ProcessAwbAndroidResources;
 import com.taobao.android.object.ArtifactBundleInfo;
+
 import org.gradle.api.tasks.compile.JavaCompile;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static com.android.builder.model.AndroidProject.FD_OUTPUTS;
 
 /**
- * Created by shenghua.nish on 2016-05-04 3:46 afternoon.
+ * Created by shenghua.nish on 2016-05-04 下午3:46.
  */
 public class AppVariantOutputContext {
 
@@ -339,7 +340,7 @@ public class AppVariantOutputContext {
             AtlasDependencyTree dependencyTree = AtlasBuildContext.androidDependencyTrees.get(
                     variantContext.getVariantName());
             for (AwbBundle awbBundle : dependencyTree.getAwbBundles()) {
-                //Generate the AwbTransform object
+                //生成AwbTransform对象
                 AwbTransform awbTransform = new AwbTransform(awbBundle);
                 //                awbTransform.setInputDir(awbJavaCompile.getDestinationDir());
                 awbTransform.getInputLibraries().addAll(awbBundle.getLibraryJars());  //ADD R.class
@@ -374,7 +375,7 @@ public class AppVariantOutputContext {
     }
 
     /**
-     * Download the download address for dynamic download
+     * 取动态下载的so的下载地址
      *
      * @param awbBundle
      * @return
@@ -461,7 +462,7 @@ public class AppVariantOutputContext {
 
         List<File> otherFiles = new ArrayList<File>();
 
-        //Path and file name
+        //路径和文件名
         Map<String, File> otherFilesMap = new HashMap<>();
 
         File dependencyTreeFile;
