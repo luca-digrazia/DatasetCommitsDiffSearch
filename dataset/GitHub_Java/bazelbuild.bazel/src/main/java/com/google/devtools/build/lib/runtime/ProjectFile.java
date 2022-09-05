@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.runtime;
 
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.util.List;
 
@@ -40,11 +38,7 @@ public interface ProjectFile {
      * Returns an (optionally cached) project file instance. If there is no such file, or if the
      * file cannot be parsed, then it throws an exception.
      */
-    ProjectFile getProjectFile(
-        Path workingDirectory,
-        List<Root> packagePath,
-        PathFragment path,
-        OptionsParser optionsParser)
+    ProjectFile getProjectFile(Path workingDirectory, List<Path> packagePath, PathFragment path)
         throws OptionsParsingException;
   }
 
