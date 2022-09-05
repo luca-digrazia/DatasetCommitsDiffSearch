@@ -131,8 +131,7 @@ public abstract class AbstractBlazeQueryEnvironment<T> implements QueryEnvironme
    * @throws QueryException if the evaluation failed and {@code --nokeep_going} was in
    *   effect
    */
-  public QueryEvalResult<T> evaluateQuery(QueryExpression expr)
-      throws QueryException, InterruptedException {
+  public QueryEvalResult<T> evaluateQuery(QueryExpression expr) throws QueryException {
     resolvedTargetPatterns.clear();
 
     // In the --nokeep_going case, errors are reported in the order in which the patterns are
@@ -168,8 +167,7 @@ public abstract class AbstractBlazeQueryEnvironment<T> implements QueryEnvironme
     return new QueryEvalResult<>(!eventHandler.hasErrors(), resultNodes);
   }
 
-  public QueryEvalResult<T> evaluateQuery(String query)
-      throws QueryException, InterruptedException {
+  public QueryEvalResult<T> evaluateQuery(String query) throws QueryException {
     return evaluateQuery(QueryExpression.parse(query, this));
   }
 
