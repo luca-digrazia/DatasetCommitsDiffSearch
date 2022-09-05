@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.base.Preconditions;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.Dirent.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -67,7 +67,7 @@ public final class GlobFunction implements SkyFunction {
     PathFragment globSubdir = glob.getSubdir();
     if (!globSubdir.equals(PathFragment.EMPTY_FRAGMENT)) {
       PackageLookupValue globSubdirPkgLookupValue = (PackageLookupValue) env.getValue(
-          PackageLookupValue.key(PackageIdentifier.create(
+          PackageLookupValue.key(new PackageIdentifier(
               glob.getPackageId().getRepository(),
               glob.getPackageId().getPackageFragment().getRelative(globSubdir))));
       if (globSubdirPkgLookupValue == null) {
@@ -228,7 +228,7 @@ public final class GlobFunction implements SkyFunction {
         PathFragment directory = glob.getPackageId().getPackageFragment()
             .getRelative(glob.getSubdir()).getRelative(fileName);
         PackageLookupValue pkgLookupValue = (PackageLookupValue)
-            env.getValue(PackageLookupValue.key(PackageIdentifier.create(
+            env.getValue(PackageLookupValue.key(new PackageIdentifier(
                 glob.getPackageId().getRepository(), directory)));
         if (pkgLookupValue == null) {
           return;
