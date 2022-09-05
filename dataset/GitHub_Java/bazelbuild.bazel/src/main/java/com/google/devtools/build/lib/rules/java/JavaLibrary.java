@@ -227,7 +227,8 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
         .add(CcLinkParamsProvider.class, new CcLinkParamsProvider(ccLinkParamsStore))
         .add(JavaNativeLibraryProvider.class, new JavaNativeLibraryProvider(
             transitiveJavaNativeLibraries))
-        .add(JavaSourceInfoProvider.class, new JavaSourceInfoProvider(sourceInfoBuilder.build()))
+        .add(JavaSourceInfoProvider.class, new JavaSourceInfoProvider(
+            sourceInfoBuilder.build(), srcJar))
         .add(JavaSourceJarsProvider.class, new JavaSourceJarsProvider(
             transitiveSourceJars, ImmutableList.of(srcJar)))
         // TODO(bazel-team): this should only happen for java_plugin
