@@ -26,6 +26,7 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
+import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.Argument;
@@ -1277,9 +1278,13 @@ public final class RuleClass {
 
     Set<Label> configLabels = new LinkedHashSet<>();
     for (Attribute attr : rule.getAttributes()) {
-      Type.SelectorList<?> selectors = attributes.getSelectorList(attr.getName(), attr.getType());
-      if (selectors != null) {
-        configLabels.addAll(selectors.getKeyLabels());
+      Type.Selector<?> selector = attributes.getSelector(attr.getName(), attr.getType());
+      if (selector != null) {
+        for (Label label : selector.getEntries().keySet()) {
+          if (!Type.Selector.isReservedLabel(label)) {
+            configLabels.add(label);
+          }
+        }
       }
     }
 
@@ -1344,11 +1349,19 @@ public final class RuleClass {
    */
   private static void checkForDuplicateLabels(Rule rule, Attribute attribute,
        EventHandler eventHandler) {
-    Set<Label> duplicates = AggregatingAttributeMapper.of(rule).checkForDuplicateLabels(attribute);
-    for (Label label : duplicates) {
-      rule.reportError(
-          String.format("Label '%s' is duplicated in the '%s' attribute of rule '%s'",
-          label, attribute.getName(), rule.getName()), eventHandler);
+    final String attrName = attribute.getName();
+    // This attribute may be selectable, so iterate over each selection possibility in turn.
+    // TODO(bazel-team): merge '*' condition into all lists when implemented.
+    AggregatingAttributeMapper attributeMap = AggregatingAttributeMapper.of(rule);
+    for (List<Label> labels : attributeMap.visitAttribute(attrName, Type.LABEL_LIST)) {
+      if (!labels.isEmpty()) {
+        Set<Label> duplicates = CollectionUtils.duplicatedElementsOf(labels);
+        for (Label label : duplicates) {
+          rule.reportError(
+              String.format("Label '%s' is duplicated in the '%s' attribute of rule '%s'",
+              label, attrName, rule.getName()), eventHandler);
+        }
+      }
     }
   }
 
@@ -1431,7 +1444,7 @@ public final class RuleClass {
       String what = "attribute '" + attrName + "' in '" + name + "' rule";
       converted = attr.getType().selectableConvert(attrVal, what, rule.getLabel());
 
-      if ((converted instanceof Type.SelectorList<?>) && !attr.isConfigurable()) {
+      if ((converted instanceof Type.Selector<?>) && !attr.isConfigurable()) {
         rule.reportError(rule.getLabel() + ": attribute \"" + attr.getName()
             + "\" is not configurable", eventHandler);
         return null;
