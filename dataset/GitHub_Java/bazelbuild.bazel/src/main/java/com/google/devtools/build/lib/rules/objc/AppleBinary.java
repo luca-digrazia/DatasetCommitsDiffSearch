@@ -99,17 +99,15 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         ObjcRuleClasses.intermediateArtifacts(ruleContext).combinedArchitectureBinary();
 
     MultiArchBinarySupport multiArchBinarySupport = new MultiArchBinarySupport(ruleContext);
-
-    Map<BuildConfiguration, ObjcProvider> objcProviderByDepConfiguration =
-        multiArchBinarySupport.objcProviderByDepConfiguration(childConfigurations,
-            configToDepsCollectionMap, configurationToNonPropagatedObjcMap,
-            dylibProviders);
+    Map<BuildConfiguration, ObjcCommon> objcCommonByDepConfiguration =
+        multiArchBinarySupport.objcCommonByDepConfiguration(childConfigurations,
+            configToDepsCollectionMap, configurationToNonPropagatedObjcMap, dylibProviders);
 
     multiArchBinarySupport.registerActions(
         platform,
         getExtraLinkArgs(ruleContext),
-        objcProviderByDepConfiguration,
         getExtraLinkInputs(ruleContext),
+        objcCommonByDepConfiguration,
         configToDepsCollectionMap,
         outputArtifact);
 
@@ -119,8 +117,8 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build());
 
     ObjcProvider.Builder objcProviderBuilder = new ObjcProvider.Builder();
-    for (ObjcProvider objcProvider : objcProviderByDepConfiguration.values()) {
-      objcProviderBuilder.addTransitiveAndPropagate(objcProvider);
+    for (ObjcCommon objcCommon : objcCommonByDepConfiguration.values()) {
+      objcProviderBuilder.addTransitiveAndPropagate(objcCommon.getObjcProvider());
     }
     objcProviderBuilder.add(MULTI_ARCH_LINKED_BINARIES, outputArtifact);
 
