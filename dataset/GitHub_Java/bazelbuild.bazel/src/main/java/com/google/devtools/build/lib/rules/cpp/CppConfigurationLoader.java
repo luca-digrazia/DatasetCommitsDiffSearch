@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -94,11 +93,13 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
     protected final Label crosstoolTop;
     protected final Label ccToolchainLabel;
     protected final Path fdoZip;
+    protected final Path execRoot;
 
     CppConfigurationParameters(CrosstoolConfig.CToolchain toolchain,
         String cacheKeySuffix,
         BuildOptions buildOptions,
         Path fdoZip,
+        Path execRoot,
         Label crosstoolTop,
         Label ccToolchainLabel) {
       this.toolchain = toolchain;
@@ -106,6 +107,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
       this.commonOptions = buildOptions.get(BuildConfiguration.Options.class);
       this.cppOptions = buildOptions.get(CppOptions.class);
       this.fdoZip = fdoZip;
+      this.execRoot = execRoot;
       this.crosstoolTop = crosstoolTop;
       this.ccToolchainLabel = ccToolchainLabel;
     }
@@ -154,7 +156,6 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
               "The --fdo_optimize parameter you specified resolves to a file that does not exist");
         }
       } catch (NoSuchPackageException | NoSuchTargetException | LabelSyntaxException e) {
-        env.getEventHandler().handle(Event.error(e.getMessage()));
         throw new InvalidConfigurationException(e);
       }
     } else {
@@ -181,11 +182,11 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
       Rule ccToolchainSuite = (Rule) crosstoolTop;
       ccToolchainLabel = NonconfigurableAttributeMapper.of(ccToolchainSuite)
           .get("toolchains", BuildType.LABEL_DICT_UNARY)
-          .get(toolchain.getTargetCpu() + "|" + toolchain.getCompiler());
+          .get(toolchain.getTargetCpu());
       if (ccToolchainLabel == null) {
         throw new InvalidConfigurationException(String.format(
-            "cc_toolchain_suite '%s' does not contain a toolchain for CPU '%s' and compiler '%s'",
-            crosstoolTopLabel, toolchain.getTargetCpu(), toolchain.getCompiler()));
+            "cc_toolchain_suite '%s' does not contain a toolchain for CPU '%s'",
+            crosstoolTopLabel, toolchain.getTargetCpu()));
       }
     } else {
       try {
@@ -208,12 +209,13 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
           "The toolchain rule '%s' does not exist", ccToolchainLabel));
     }
 
-    if (!(ccToolchain instanceof Rule) || !CcToolchainRule.isCcToolchain(ccToolchain)) {
+    if (!(ccToolchain instanceof Rule)
+        || !((Rule) ccToolchain).getRuleClass().equals("cc_toolchain")) {
       throw new InvalidConfigurationException(String.format(
           "The label '%s' is not a cc_toolchain rule", ccToolchainLabel));
     }
 
     return new CppConfigurationParameters(toolchain, file.getMd5(), options,
-        fdoZip, crosstoolTopLabel, ccToolchainLabel);
+        fdoZip, directories.getExecRoot(), crosstoolTopLabel, ccToolchainLabel);
   }
 }

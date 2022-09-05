@@ -25,6 +25,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.PackageRootResolutionException;
@@ -45,8 +46,9 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader.CppConfigurationParameters;
 import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoException;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.syntax.SkylarkCallable;
+import com.google.devtools.build.lib.syntax.SkylarkModule;
+import com.google.devtools.build.lib.util.IncludeScanningUtil;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -352,6 +354,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    *  CppCompilationContexts, but registering build actions is disabled.
    */
   private final boolean lipoContextCollector;
+  private final Root greppedIncludesDirectory;
 
   protected CppConfiguration(CppConfigurationParameters params)
       throws InvalidConfigurationException {
@@ -368,6 +371,11 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     this.compilationMode = params.commonOptions.compilationMode;
     this.lipoContextCollector = cppOptions.lipoCollector;
     this.execRoot = params.execRoot;
+
+    // Note that the grepped includes directory is not configuration-specific; the paths of the
+    // files within that directory, however, are configuration-specific.
+    this.greppedIncludesDirectory = Root.asDerivedRoot(execRoot,
+        execRoot.getRelative(IncludeScanningUtil.GREPPED_INCLUDES));
 
     this.crosstoolTopPathFragment = crosstoolTop.getPackageIdentifier().getPathFragment();
 
@@ -927,6 +935,13 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     return pathPrefix.getRelative(path);
   }
 
+  /**
+   * Returns the configuration-independent grepped-includes directory.
+   */
+  public Root getGreppedIncludesDirectory() {
+    return greppedIncludesDirectory;
+  }
+
   @VisibleForTesting
   List<String> configureLinkerOptions(
       CompilationMode compilationMode, LipoMode lipoMode, LinkingMode linkingMode,
@@ -1444,6 +1459,10 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     return commandLineDefines.get(var);
   }
 
+  public boolean shouldScanIncludes() {
+    return Constants.ALLOW_CC_INCLUDE_SCANNING && cppOptions.scanIncludes;
+  }
+
   /**
    * Returns the currently active LIPO compilation mode.
    */
@@ -1561,6 +1580,14 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
   public boolean forceIgnoreDashStatic() {
     return cppOptions.forceIgnoreDashStatic;
+  }
+
+  /**
+   * Returns true iff this build configuration requires inclusion extraction
+   * (for include scanning) in the action graph.
+   */
+  public boolean needsIncludeScanning() {
+    return cppOptions.extractInclusions;
   }
 
   /**
@@ -1888,6 +1915,9 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     if (fdoSupport.getFdoRoot() != null) {
       roots.add(fdoSupport.getFdoRoot());
     }
+
+    // Grepped header includes; this root is not configuration specific.
+    roots.add(getGreppedIncludesDirectory());
   }
 
   @Override
