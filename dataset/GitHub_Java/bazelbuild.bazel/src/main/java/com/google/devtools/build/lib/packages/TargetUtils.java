@@ -18,8 +18,10 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.Type;
+
 import java.util.HashMap;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -183,7 +185,7 @@ public final class TargetUtils {
     return index != -1 ? ruleClass.substring(0, index) : ruleClass;
   }
 
-  private static boolean isExplicitDependency(Rule rule, Label label) throws InterruptedException {
+  private static boolean isExplicitDependency(Rule rule, Label label) {
     if (rule.getVisibility().getDependencyLabels().contains(label)) {
       return true;
     }
@@ -225,11 +227,11 @@ public final class TargetUtils {
   }
 
   /**
-   * Return nicely formatted error message that {@link Label} label that was pointed to by {@link
-   * Target} target did not exist, due to {@link NoSuchThingException} e.
+   * Return nicely formatted error message that {@link Label} label that was pointed to by
+   * {@link Target} target did not exist, due to {@link NoSuchThingException} e.
    */
-  public static String formatMissingEdge(
-      @Nullable Target target, Label label, NoSuchThingException e) throws InterruptedException {
+  public static String formatMissingEdge(@Nullable Target target, Label label,
+      NoSuchThingException e) {
     // instanceof returns false if target is null (which is exploited here)
     if (target instanceof Rule) {
       Rule rule = (Rule) target;
@@ -253,19 +255,5 @@ public final class TargetUtils {
       }
       return e.getMessage();
     }
-  }
-
-  public static Label getAliasTarget(Target target) {
-    if (!(target instanceof Rule)) {
-      return null;
-    }
-
-    Rule rule = (Rule) target;
-    String ruleClass = rule.getRuleClass();
-    if (!(ruleClass.equals("alias") || ruleClass.equals("bind"))) {
-      return null;
-    }
-
-    return AggregatingAttributeMapper.of(rule).get("actual", BuildType.LABEL);
   }
 }
