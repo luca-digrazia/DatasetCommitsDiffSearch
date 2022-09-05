@@ -234,7 +234,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   }
 
   @Override
-  protected BuildDriver getBuildDriver() {
+  protected BuildDriver newBuildDriver() {
     return new SequentialBuildDriver(memoizingEvaluator);
   }
 
