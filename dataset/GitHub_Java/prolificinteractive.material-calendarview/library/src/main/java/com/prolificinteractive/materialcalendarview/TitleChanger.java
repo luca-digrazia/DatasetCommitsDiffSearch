@@ -43,15 +43,15 @@ class TitleChanger {
     public void change(final CalendarDay currentMonth) {
         long currentTime = System.currentTimeMillis();
 
-        if (currentMonth == null) {
+        if(currentMonth == null) {
             return;
         }
 
-        if (TextUtils.isEmpty(title.getText()) || (currentTime - lastAnimTime) < animDelay) {
+        if(TextUtils.isEmpty(title.getText()) || (currentTime-lastAnimTime) < animDelay) {
             doChange(currentTime, currentMonth, false);
         }
 
-        if (currentMonth.equals(previousMonth) || currentMonth.getMonth() == previousMonth.getMonth()) {
+        if (currentMonth.equals(previousMonth)) {
             return;
         }
 
@@ -67,9 +67,10 @@ class TitleChanger {
 
         final CharSequence newTitle = titleFormatter.format(currentMonth);
 
-        if (!animate) {
+        if(!animate) {
             title.setText(newTitle);
-        } else {
+        }
+        else {
             final int yTranslation = yTranslate * (previousMonth.isBefore(currentMonth) ? 1 : -1);
 
             title.animate()
@@ -106,7 +107,7 @@ class TitleChanger {
     public TitleFormatter getTitleFormatter() {
         return titleFormatter;
     }
-
+    
     public void setTitleFormatter(TitleFormatter titleFormatter) {
         this.titleFormatter = titleFormatter;
     }
