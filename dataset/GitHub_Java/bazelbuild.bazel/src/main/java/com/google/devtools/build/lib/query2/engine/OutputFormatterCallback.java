@@ -36,7 +36,7 @@ public abstract class OutputFormatterCallback<T> implements Callback<T> {
    *
    * <p>Will be called even in the case of an error.
    */
-  public void close(boolean failFast) throws InterruptedException, IOException {
+  public void close() throws InterruptedException, IOException {
   }
 
   /**
@@ -72,11 +72,9 @@ public abstract class OutputFormatterCallback<T> implements Callback<T> {
    */
   public static <T> void processAllTargets(OutputFormatterCallback<T> callback,
       Iterable<T> targets) throws IOException, InterruptedException {
-    boolean failFast = true;
     try {
       callback.start();
       callback.process(targets);
-      failFast = false;
     } catch (InterruptedException e) {
       IOException ioException = callback.getIoException();
       if (ioException != null) {
@@ -87,7 +85,7 @@ public abstract class OutputFormatterCallback<T> implements Callback<T> {
       throw new IllegalStateException("This should not happen, as we are not running any query,"
           + " only printing the results:" + e.getMessage(), e);
     } finally {
-      callback.close(failFast);
+      callback.close();
     }
   }
 }
