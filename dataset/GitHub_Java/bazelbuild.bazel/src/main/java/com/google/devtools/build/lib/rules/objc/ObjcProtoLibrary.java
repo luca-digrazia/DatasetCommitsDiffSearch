@@ -123,8 +123,7 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
     CustomCommandLine.Builder commandLineBuilder = new CustomCommandLine.Builder()
         .add(compileProtos.getExecPathString())
         .add("--input-file-list").add(inputFileList.getExecPathString())
-        .add("--output-dir").add(workspaceRelativeOutputDir.getSafePathString())
-        .add("--working-dir").add(".");
+        .add("--output-dir").add(workspaceRelativeOutputDir.getSafePathString());
     if (optionsFile.isPresent()) {
         commandLineBuilder
             .add("--compiler-options-path")
@@ -138,7 +137,7 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
     }
 
     if (!Iterables.isEmpty(protos)) {
-      ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
+      ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
           .setMnemonic("GenObjcProtos")
           .addInput(compileProtos)
           .addInputs(optionsFile.asSet())
