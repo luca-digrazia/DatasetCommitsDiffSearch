@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
@@ -45,19 +44,16 @@ public class HttpDownloader {
 
   private final String urlString;
   private final String sha256;
-  private final String type;
   private final Path outputDirectory;
   private final Reporter reporter;
   private final ScheduledExecutorService scheduler;
 
-  HttpDownloader(
-      Reporter reporter, String urlString, String sha256, Path outputDirectory, String type) {
+  HttpDownloader(Reporter reporter, String urlString, String sha256, Path outputDirectory) {
     this.urlString = urlString;
     this.sha256 = sha256;
     this.outputDirectory = outputDirectory;
     this.reporter = reporter;
     this.scheduler = Executors.newScheduledThreadPool(1);
-    this.type = type;
   }
 
   /**
@@ -69,20 +65,8 @@ public class HttpDownloader {
     if (filename.isEmpty()) {
       filename = "temp";
     }
-    if (!type.isEmpty()) {
-      filename += "." + type;
-    }
     Path destination = outputDirectory.getRelative(filename);
 
-    try {
-      String currentSha256 = getHash(Hashing.sha256().newHasher(), destination);
-      if (currentSha256.equals(sha256)) {
-        // No need to download.
-        return destination;
-      }
-    } catch (IOException e) {
-      // Ignore error trying to hash. We'll just download again.
-    }
     int currentBytes;
     final AtomicInteger totalBytes = new AtomicInteger(0);
     final ScheduledFuture<?> loggerHandle = getLoggerHandle(totalBytes);
@@ -104,10 +88,7 @@ public class HttpDownloader {
           "Error downloading " + url + " to " + destination + ": " + e.getMessage());
     } finally {
       scheduler.schedule(new Runnable() {
-        @Override
-        public void run() {
-          loggerHandle.cancel(true);
-        }
+        public void run() { loggerHandle.cancel(true); }
       }, 0, TimeUnit.SECONDS);
     }
 
@@ -133,7 +114,6 @@ public class HttpDownloader {
       private static final String UNITS = " KMGTPEY";
       private final double logOfKb = Math.log(1024);
 
-      @Override
       public void run() {
         try {
           reporter.handle(Event.progress(
@@ -161,10 +141,7 @@ public class HttpDownloader {
 
   @VisibleForTesting
   protected ReadableByteChannel getChannel(URL url) throws IOException {
-    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-    connection.setInstanceFollowRedirects(true);
-    connection.connect();
-    return Channels.newChannel(connection.getInputStream());
+    return Channels.newChannel(url.openStream());
   }
 
   public static String getHash(Hasher hasher, Path path) throws IOException {
