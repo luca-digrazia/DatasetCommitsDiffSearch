@@ -13,11 +13,10 @@ import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
 import org.hswebframework.web.commons.model.Model;
 import org.hswebframework.web.controller.message.ResponseMessage;
-import org.hswebframework.utils.StringUtils;
+import org.hswebframwork.utils.StringUtils;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpOutputMessage;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.AbstractGenericHttpMessageConverter;
 import org.springframework.http.converter.AbstractHttpMessageConverter;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.converter.HttpMessageNotWritableException;
@@ -27,7 +26,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Modifier;
-import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -35,7 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class FastJsonHttpMessageConverter extends AbstractGenericHttpMessageConverter<Object> {
+public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<Object> {
 
     public final static Charset UTF8 = Charset.forName("UTF-8");
 
@@ -63,11 +61,6 @@ public class FastJsonHttpMessageConverter extends AbstractGenericHttpMessageConv
         return true;
     }
 
-    @Override
-    protected Object readInternal(Class<?> clazz, HttpInputMessage inputMessage) throws IOException, HttpMessageNotReadableException {
-        return read(clazz, clazz, inputMessage);
-    }
-
     public Charset getCharset() {
         return this.charset;
     }
@@ -84,25 +77,23 @@ public class FastJsonHttpMessageConverter extends AbstractGenericHttpMessageConv
         this.features = features;
     }
 
-    public Object readByString(Type type, String jsonStr) {
-        return readByBytes(type, jsonStr.getBytes());
+    public Object readByString(Class<?> clazz, String jsonStr) {
+        return readByBytes(clazz, jsonStr.getBytes());
     }
 
-    public Object readByBytes(Type type, byte[] bytes) {
-        if (type == String.class) return new String(bytes, charset);
-//        if (type instanceof Class) {
-//            Class typeClass = ((Class) type);
-//            if (entityFactory != null && (Entity.class.isAssignableFrom(typeClass) || Model.class.isAssignableFrom(typeClass))) {
-//                @SuppressWarnings("unchecked")
-//                Class tmp = entityFactory.getInstanceType(typeClass);
-//                if (tmp != null) type = tmp;
-//            }
-//        }
-        return JSON.parseObject(bytes, 0, bytes.length, charset.newDecoder(), type);
+    public Object readByBytes(Class<?> clazz, byte[] bytes) {
+        if (clazz == String.class) return new String(bytes, charset);
+        if (entityFactory != null && (Entity.class.isAssignableFrom(clazz) || Model.class.isAssignableFrom(clazz))) {
+            @SuppressWarnings("unchecked")
+            Class tmp = entityFactory.getInstanceType(clazz);
+            if (tmp != null) clazz = tmp;
+        }
+        return JSON.parseObject(bytes, 0, bytes.length, charset.newDecoder(), clazz);
     }
 
     @Override
-    public Object read(Type type, Class<?> contextClass, HttpInputMessage inputMessage) throws IOException, HttpMessageNotReadableException {
+    protected Object readInternal(Class<?> clazz, HttpInputMessage inputMessage) throws IOException,
+            HttpMessageNotReadableException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         InputStream in = inputMessage.getBody();
         byte[] buf = new byte[1024];
@@ -116,7 +107,7 @@ public class FastJsonHttpMessageConverter extends AbstractGenericHttpMessageConv
             }
         }
         byte[] bytes = baos.toByteArray();
-        return readByBytes(type, bytes);
+        return readByBytes(clazz, bytes);
     }
 
     public String converter(Object obj) {
@@ -139,7 +130,8 @@ public class FastJsonHttpMessageConverter extends AbstractGenericHttpMessageConv
     }
 
     @Override
-    protected void writeInternal(Object obj, Type type, HttpOutputMessage outputMessage) throws IOException, HttpMessageNotWritableException {
+    protected void writeInternal(Object obj, HttpOutputMessage outputMessage) throws IOException,
+            HttpMessageNotWritableException {
         OutputStream out = outputMessage.getBody();
         byte[] bytes = converter(obj).getBytes(charset);
         out.write(bytes);
