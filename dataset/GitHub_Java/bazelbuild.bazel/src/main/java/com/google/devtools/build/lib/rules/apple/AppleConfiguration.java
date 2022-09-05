@@ -531,16 +531,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     return configurationDistinguisher;
   }
 
-  private boolean shouldDistinguishOutputDirectory() {
-    if (configurationDistinguisher == ConfigurationDistinguisher.UNKNOWN) {
-      return false;
-    } else if (configurationDistinguisher == ConfigurationDistinguisher.APPLE_CROSSTOOL
-        && isAppleCrosstoolEnabled()) {
-      return false;
-    } else {
-      return true;
-    }
-  }
 
   @Nullable
   @Override
@@ -550,7 +540,7 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
       components.add(applePlatformType.toString().toLowerCase());
       components.add(appleSplitCpu);
     }
-    if (shouldDistinguishOutputDirectory()) {
+    if (configurationDistinguisher != ConfigurationDistinguisher.UNKNOWN) {
       components.add(configurationDistinguisher.getFileSystemName());
     }
 
