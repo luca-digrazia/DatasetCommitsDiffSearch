@@ -1512,7 +1512,6 @@ public final class Attribute implements Comparable<Attribute> {
     builder.value = defaultValue;
     builder.valueSet = false;
     builder.allowedValues = allowedValues;
-    builder.aspects = new LinkedHashSet<>(aspects);
 
     return builder;
   }
