@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2019 http://www.hswebframework.org
+ *  * Copyright 2016 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -19,16 +19,18 @@
 package org.hswebframework.web.commons.entity;
 
 
-import org.hswebframework.utils.RandomUtil;
 import org.hswebframework.web.id.IDGenerator;
-import org.springframework.util.CollectionUtils;
+import org.hswebframwork.utils.RandomUtil;
 
+import java.math.BigDecimal;
 import java.util.*;
-import java.util.function.*;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-@SuppressWarnings("all")
 public interface TreeSupportEntity<PK> extends GenericEntity<PK> {
 
     String id = "id";
@@ -58,110 +60,49 @@ public interface TreeSupportEntity<PK> extends GenericEntity<PK> {
      * @return 父节点path
      */
     static String getParentPath(String path) {
-        if (path == null || path.length() < 4) {
-            return null;
-        }
+        if (path == null || path.length() < 4) return null;
         return path.substring(0, path.length() - 5);
     }
-
-    static <T extends TreeSupportEntity> void forEach(Collection<T> list, Consumer<T> consumer) {
-        Queue<T> queue = new LinkedList<>(list);
-        Set<Long> all = new HashSet<>();
-        for (T node = queue.poll(); node != null; node = queue.poll()) {
-            long hash = System.identityHashCode(node);
-            if (all.contains(hash)) {
-                continue;
-            }
-            all.add(hash);
-            consumer.accept(node);
-            if (!CollectionUtils.isEmpty(node.getChildren())) {
-                queue.addAll(node.getChildren());
-            }
-        }
-    }
-
-    static <T extends TreeSupportEntity<PK>, PK> void expandTree2List(T parent, List<T> target, IDGenerator<PK> idGenerator) {
-        expandTree2List(parent, target, idGenerator, null);
-    }
-
 
     /**
      * 将树形结构转为列表结构，并填充对应的数据。<br>
      * 如树结构数据： {name:'父节点',children:[{name:'子节点1'},{name:'子节点2'}]}<br>
      * 解析后:[{id:'id1',name:'父节点',path:'<b>aoSt</b>'},{id:'id2',name:'子节点1',path:'<b>aoSt</b>-oS5a'},{id:'id3',name:'子节点2',path:'<b>aoSt</b>-uGpM'}]
      *
-     * @param root        树结构的根节点
+     * @param parent      树结构的根节点
      * @param target      目标集合,转换后的数据将直接添加({@link List#add(Object)})到这个集合.
      * @param <T>         继承{@link TreeSupportEntity}的类型
      * @param idGenerator ID生成策略
      * @param <PK>        主键类型
      */
-    static <T extends TreeSupportEntity<PK>, PK> void expandTree2List(T root, List<T> target, IDGenerator<PK> idGenerator, BiConsumer<T, List<T>> childConsumer) {
-
-        if (CollectionUtils.isEmpty(root.getChildren())) {
-            target.add(root);
-            return;
+    static <T extends TreeSupportEntity<PK>, PK> void expandTree2List(TreeSupportEntity<PK> parent, List<T> target, IDGenerator<PK> idGenerator) {
+        List<T> children = parent.getChildren();
+        if (parent.getPath() == null) {
+            parent.setPath(RandomUtil.randomChar(4));
+            if (parent.getPath() != null)
+                parent.setLevel(parent.getPath().split("-").length);
         }
-
-        //尝试设置id
-        PK parentId = root.getId();
-        if (parentId == null) {
-            parentId = idGenerator.generate();
-            root.setId(parentId);
-        }
-        //尝试设置树路径path
-        if (root.getPath() == null) {
-            root.setPath(RandomUtil.randomChar(4));
-        }
-        if (root.getPath() != null) {
-            root.setLevel(root.getPath().split("[-]").length);
-        }
-        //尝试设置排序
-        if (root instanceof SortSupportEntity) {
-            SortSupportEntity sortableRoot = ((SortSupportEntity) root);
-            Long index = sortableRoot.getSortIndex();
-            if (null == index) {
-                sortableRoot.setSortIndex(1L);
+        if (children != null) {
+            PK pid = parent.getId();
+            if (pid == null) {
+                pid = idGenerator.generate();
+                parent.setId(pid);
             }
-        }
-
-        //所有节点处理队列
-        Queue<T> queue = new LinkedList<>();
-        queue.add(root);
-        //已经处理过的节点过滤器
-        Set<Long> filter = new HashSet<>();
-
-        for (T parent = queue.poll(); parent != null; parent = queue.poll()) {
-            long hash = System.identityHashCode(parent);
-            if (filter.contains(hash)) {
-                continue;
-            }
-            filter.add(hash);
-
-            //处理子节点
-            if (!CollectionUtils.isEmpty(parent.getChildren())) {
-                long index = 1;
-                for (TreeSupportEntity<PK> child : parent.getChildren()) {
-                    if (child.getId() == null) {
-                        child.setId(idGenerator.generate());
+            for (int i = 0; i < children.size(); i++) {
+                T child = children.get(i);
+                if (child instanceof SortSupportEntity && parent instanceof SortSupportEntity) {
+                    Long index = ((SortSupportEntity) parent).getSortIndex();
+                    if (null == index) {
+                        ((SortSupportEntity) parent).setSortIndex(index = 1L);
                     }
-                    child.setParentId(parent.getId());
-                    child.setPath(parent.getPath() + "-" + RandomUtil.randomChar(4));
-                    child.setLevel(child.getPath().split("[-]").length);
-
-                    //子节点排序
-                    if (child instanceof SortSupportEntity && parent instanceof SortSupportEntity) {
-                        SortSupportEntity sortableParent = ((SortSupportEntity) parent);
-                        SortSupportEntity sortableChild = ((SortSupportEntity) child);
-                        sortableChild.setSortIndex(sortableParent.getSortIndex() * 100 + index++);
-                    }
-                    queue.add((T) child);
+                    ((SortSupportEntity) child).setSortIndex(new BigDecimal(index + "0" + (i + 1)).longValue());
                 }
+                child.setParentId(pid);
+                child.setPath(parent.getPath() + "-" + RandomUtil.randomChar(4));
+                child.setLevel(child.getPath().split("-").length);
+                target.add(child);
+                expandTree2List(child, target, idGenerator);
             }
-            if (childConsumer != null) {
-                childConsumer.accept(parent, new ArrayList<>());
-            }
-            target.add(parent);
         }
     }
 
@@ -201,7 +142,7 @@ public interface TreeSupportEntity<PK> extends GenericEntity<PK> {
         Objects.requireNonNull(childConsumer, "child consumer can not be null");
         Objects.requireNonNull(predicateFunction, "root predicate function can not be null");
 
-        Supplier<Stream<N>> streamSupplier = () -> dataList.size() < 50000 ? dataList.stream() : dataList.parallelStream();
+        Supplier<Stream<N>> streamSupplier = () -> dataList.size() < 1000 ? dataList.stream() : dataList.parallelStream();
         // id,node
         Map<PK, N> cache = new HashMap<>();
         // parentId,children

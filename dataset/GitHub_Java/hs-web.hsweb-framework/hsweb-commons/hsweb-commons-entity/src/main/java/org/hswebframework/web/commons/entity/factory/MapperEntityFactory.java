@@ -20,12 +20,14 @@ package org.hswebframework.web.commons.entity.factory;
 
 import com.alibaba.fastjson.JSON;
 import org.hswebframework.web.NotFoundException;
-import org.hswebframework.utils.ClassUtils;
+import org.hswebframwork.utils.ClassUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Modifier;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -70,6 +72,7 @@ public class MapperEntityFactory implements EntityFactory {
 
     private String getCopierCacheKey(Class source, Class target) {
         return source.getName().concat("->").concat(target.getName());
+
     }
 
     @Override
@@ -90,10 +93,8 @@ public class MapperEntityFactory implements EntityFactory {
     protected <T> Mapper<T> initCache(Class<T> beanClass) {
         Mapper<T> mapper = null;
         Class<T> realType = null;
-        ServiceLoader<T> serviceLoader = ServiceLoader.load(beanClass, this.getClass().getClassLoader());
-        Iterator<T> iterator = serviceLoader.iterator();
-        if (iterator.hasNext()) {
-            realType = (Class<T>) iterator.next().getClass();
+        if (!Modifier.isInterface(beanClass.getModifiers()) && !Modifier.isAbstract(beanClass.getModifiers())) {
+            realType = beanClass;
         }
         //尝试使用 Simple类，如: package.SimpleUserBean
         if (realType == null) {
@@ -101,14 +102,10 @@ public class MapperEntityFactory implements EntityFactory {
             try {
                 realType = (Class<T>) Class.forName(simpleClassName);
             } catch (ClassNotFoundException e) {
-               // throw new NotFoundException(e.getMessage());
+                throw new NotFoundException(e.getMessage());
             }
         }
-        if (!Modifier.isInterface(beanClass.getModifiers()) && !Modifier.isAbstract(beanClass.getModifiers())) {
-            realType = beanClass;
-        }
         if (realType != null) {
-            logger.debug("use instance {} for {}", realType, beanClass);
             mapper = new Mapper<>(realType, new DefaultInstanceGetter(realType));
             realTypeMapper.put(beanClass, mapper);
         }
