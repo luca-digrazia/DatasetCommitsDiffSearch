@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollectio
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.buildtool.BuildRequest.BuildRequestOptions;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.packages.PackageFactory;
@@ -54,6 +53,7 @@ import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
@@ -217,10 +217,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   protected Action getGeneratingAction(Artifact artifact) {
     ensureUpdateWasCalled();
     return analysisResult.getActionGraph().getGeneratingAction(artifact);
-  }
-
-  protected BuildConfigurationCollection getBuildConfigurationCollection() {
-    return masterConfig;
   }
 
   protected BuildConfiguration getTargetConfiguration() {
