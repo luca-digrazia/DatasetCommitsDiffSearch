@@ -19,6 +19,7 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
 import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetFactory;
@@ -32,14 +33,14 @@ public class MavenJarRule implements RuleDefinition {
   public static final String NAME = "maven_jar";
 
   @Override
-  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
+  public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
     return builder
         /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(artifact) -->
         A description of a Maven artifact using
         <a href="https://maven.apache.org/pom.html#Maven_Coordinates">Maven coordinates</a>.
 
         <p>These descriptions are of the form &lt;groupId&gt:&lt;artifactId&gt;:&lt;version&gt;,
-        see <a href="${link maven_jar_examples}">the documentation below</a> for an example.
+        see <a href="#maven_jar_examples">the documentation below</a> for an example.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("artifact", Type.STRING))
         /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(repository) -->
@@ -86,10 +87,10 @@ public class MavenJarRule implements RuleDefinition {
 
 <p>Note that the maven_jar name is used as a repository name, so it is limited by the rules
 governing workspace names: it cannot contain dashes nor dots (see
-<a href="http://bazel.build/docs/be/functions.html#workspace">the documentation on workspace
-names</a> for the exact specification). By convention, maven_jar names should match the artifact
-name, replacing illegal characters with underscores and leaving off the version.  For example, a
-rule with <code>artifact = "org.apache.commons:commons-lang3:3.4"</code> should have
+<a href="http://bazel.io/docs/be/functions.html#workspace">the documentation on workspace names</a>
+for the exact specification). By convention, maven_jar names should match the artifact name,
+replacing illegal characters with underscores and leaving off the version.  For example, a rule
+with <code>artifact = "org.apache.commons:commons-lang3:3.4"</code> should have
 <code>name = "org_apache_commons_commons_lang3"</code>.</p>
 
 <h4 id="maven_jar_examples">Examples</h4>
