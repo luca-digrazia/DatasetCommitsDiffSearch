@@ -681,8 +681,7 @@ public final class SkylarkRuleContext {
   )
   public String getBuildFileRelativePath() {
     Package pkg = ruleContext.getRule().getPackage();
-    Root root = Root.asSourceRoot(pkg.getSourceRoot(),
-        pkg.getPackageIdentifier().getRepository().isMain());
+    Root root = Root.asSourceRoot(pkg.getSourceRoot());
     return pkg.getBuildFile().getPath().relativeTo(root.getPath()).getPathString();
   }
 }
