@@ -24,9 +24,7 @@ import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.StaticallyLinkedMarkerProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -34,7 +32,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
@@ -225,14 +222,6 @@ public class CppHelper {
         .getFdoSupport();
   }
 
-  public static NestedSet<Artifact> getGcovFilesIfNeeded(RuleContext ruleContext) {
-    if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
-      return CppHelper.getToolchain(ruleContext).getCrosstool();
-    } else {
-      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-    }
-  }
-
   /**
    * This almost trivial method looks up the :cc_toolchain attribute on the rule context, makes sure
    * that it refers to a rule that has a {@link CcToolchainProvider} (gives an error otherwise), and
@@ -326,8 +315,10 @@ public class CppHelper {
         src.getRoot());
   }
 
-  /** Returns the linked artifact for linux. */
-  public static Artifact getLinuxLinkedArtifact(RuleContext ruleContext, LinkTargetType linkType) {
+  /**
+   * Returns the linked artifact.
+   */
+  public static Artifact getLinkedArtifact(RuleContext ruleContext, LinkTargetType linkType) {
     PathFragment name = new PathFragment(ruleContext.getLabel().getName());
     if (linkType != LinkTargetType.EXECUTABLE) {
       name = name.replaceName("lib" + name.getBaseName() + linkType.getExtension());
@@ -579,20 +570,5 @@ public class CppHelper {
         .setProgressMessage("Stripping " + output.prettyPrint() + " for " + context.getLabel())
         .setMnemonic("CcStrip")
         .build(context));
-  }
-
-  public static void maybeAddStaticLinkMarkerProvider(RuleConfiguredTargetBuilder builder,
-      RuleContext ruleContext) {
-    boolean staticallyLinked = false;
-    if (ruleContext.getFragment(CppConfiguration.class).getLinkOptions().contains("-static")) {
-      staticallyLinked = true;
-    } else if (ruleContext.attributes().has("linkopts", Type.STRING_LIST)
-        && ruleContext.attributes().get("linkopts", Type.STRING_LIST).contains("-static")) {
-      staticallyLinked = true;
-    }
-
-    if (staticallyLinked) {
-      builder.add(StaticallyLinkedMarkerProvider.class, new StaticallyLinkedMarkerProvider(true));
-    }
   }
 }
