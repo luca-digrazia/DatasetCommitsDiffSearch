@@ -345,11 +345,8 @@ public abstract class DependencyResolver {
     }
   }
 
-  private void resolveLateBoundAttributes(
-      Rule rule,
-      BuildConfiguration configuration,
-      AttributeMap attributeMap,
-      Iterable<Attribute> attributes,
+  private void resolveLateBoundAttributes(Rule rule, BuildConfiguration configuration,
+      AttributeMap attributeMap, Iterable<Attribute> attributes,
       ImmutableSortedKeyListMultimap.Builder<Attribute, LabelAndConfiguration> builder)
       throws EvalException {
     for (Attribute attribute : attributes) {
@@ -388,28 +385,17 @@ public abstract class DependencyResolver {
         if (EvalUtils.isNullOrNone(actualValue)) {
           continue;
         }
-        try {
-          if (attribute.getType() == Type.LABEL) {
-            Label label = Type.LABEL.cast(actualValue);
+        if (attribute.getType() == Type.LABEL) {
+          Label label;
+          label = Type.LABEL.cast(actualValue);
+          builder.put(attribute, LabelAndConfiguration.of(label, actualConfig));
+        } else if (attribute.getType() == Type.LABEL_LIST) {
+          for (Label label : Type.LABEL_LIST.cast(actualValue)) {
             builder.put(attribute, LabelAndConfiguration.of(label, actualConfig));
-          } else if (attribute.getType() == Type.LABEL_LIST) {
-            for (Label label : Type.LABEL_LIST.cast(actualValue)) {
-              builder.put(attribute, LabelAndConfiguration.of(label, actualConfig));
-            }
-          } else {
-            throw new IllegalStateException(
-                String.format(
-                    "Late bound attribute '%s' is not a label or a label list",
-                    attribute.getName()));
           }
-        } catch (ClassCastException e) {
-          throw new EvalException(
-              rule.getLocation(),
-              String.format(
-                  "When computing the default value of %s, expected '%s', got '%s'",
-                  attribute.getName(),
-                  attribute.getType(),
-                  EvalUtils.getDataTypeName(actualValue, true)));
+        } else {
+          throw new IllegalStateException(String.format(
+              "Late bound attribute '%s' is not a label or a label list", attribute.getName()));
         }
       }
     }
