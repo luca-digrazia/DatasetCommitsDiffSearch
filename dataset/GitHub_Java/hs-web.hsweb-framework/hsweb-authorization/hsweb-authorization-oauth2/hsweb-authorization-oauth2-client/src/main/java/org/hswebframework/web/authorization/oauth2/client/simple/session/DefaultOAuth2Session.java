@@ -50,6 +50,10 @@ public class DefaultOAuth2Session implements OAuth2Session {
 
     private Consumer<AccessTokenInfo> onTokenChange;
 
+    private boolean authorized = false;
+
+    private ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+
     public void setRequestBuilderFactory(OAuth2RequestBuilderFactory requestBuilderFactory) {
         this.requestBuilderFactory = requestBuilderFactory;
     }
@@ -104,7 +108,21 @@ public class DefaultOAuth2Session implements OAuth2Session {
 
     @Override
     public OAuth2Session authorize() {
-        setAccessTokenInfo(requestAccessToken());
+        readWriteLock.writeLock().lock();
+        if (authorized) {
+            return this;
+        }
+        try {
+            AccessTokenInfo accessTokenInfo = accessTokenRequest
+                    .param(OAuth2Constants.scope, scope)
+                    .post().onError(OAuth2Response.throwOnError)
+                    .as(AccessTokenInfo.class);
+            accessTokenInfo.setCreateTime(System.currentTimeMillis());
+            setAccessTokenInfo(accessTokenInfo);
+            authorized = true;
+        } finally {
+            readWriteLock.writeLock().unlock();
+        }
         return this;
     }
 
@@ -112,9 +130,6 @@ public class DefaultOAuth2Session implements OAuth2Session {
     public OAuth2Request request(String uriOrUrl) {
         if (accessTokenInfo == null) {
             authorize();
-        }
-        if(accessTokenInfo.isExpire()){
-            refreshToken();
         }
         OAuth2Request request = createRequest(getRealUrl(uriOrUrl));
         request.onTokenExpired(retry -> {
@@ -132,31 +147,26 @@ public class DefaultOAuth2Session implements OAuth2Session {
         return this;
     }
 
-    @Override
-    public AccessTokenInfo requestAccessToken() {
-        AccessTokenInfo accessTokenInfo = accessTokenRequest
-                .param(OAuth2Constants.scope, scope)
-                .post().onError(OAuth2Response.throwOnError)
-                .as(AccessTokenInfo.class);
-        accessTokenInfo.setCreateTime(System.currentTimeMillis());
-        return accessTokenInfo;
-    }
-
     protected void refreshToken() {
         if (accessTokenInfo == null) {
             return;
         }
-        OAuth2Request request = createRequest(getRealUrl(serverConfig.getAccessTokenUrl()));
-        applyBasicAuthParam(request);
-        AccessTokenInfo tokenInfo = request
-                .param(OAuth2Constants.scope, scope)
-                .param(OAuth2Constants.grant_type, GrantType.refresh_token)
-                .param(GrantType.refresh_token, accessTokenInfo.getRefreshToken())
-                .post().onError(OAuth2Response.throwOnError)
-                .as(AccessTokenInfo.class);
-        tokenInfo.setCreateTime(accessTokenInfo.getCreateTime());
-        tokenInfo.setUpdateTime(System.currentTimeMillis());
-        setAccessTokenInfo(tokenInfo);
+        readWriteLock.writeLock().lock();
+        try {
+            OAuth2Request request = createRequest(getRealUrl(serverConfig.getAccessTokenUrl()));
+            applyBasicAuthParam(request);
+            AccessTokenInfo tokenInfo = request
+                    .param(OAuth2Constants.scope, scope)
+                    .param(OAuth2Constants.grant_type, GrantType.refresh_token)
+                    .param(GrantType.refresh_token, accessTokenInfo.getRefreshToken())
+                    .post().onError(OAuth2Response.throwOnError)
+                    .as(AccessTokenInfo.class);
+            tokenInfo.setCreateTime(accessTokenInfo.getCreateTime());
+            tokenInfo.setUpdateTime(System.currentTimeMillis());
+            setAccessTokenInfo(tokenInfo);
+        } finally {
+            readWriteLock.writeLock().unlock();
+        }
     }
 
 

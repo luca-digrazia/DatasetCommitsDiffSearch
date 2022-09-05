@@ -43,17 +43,14 @@ public class SimpleOAuth2SessionBuilder implements OAuth2SessionBuilder {
 
     private OAuth2RequestBuilderFactory requestBuilderFactory;
 
-    private ReadWriteLock readWriteLock;//.= new ReentrantReadWriteLock();
-
+    private ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 
     public SimpleOAuth2SessionBuilder(OAuth2UserTokenRepository oAuth2UserTokenRepository,
                                       OAuth2ServerConfig oAuth2ServerConfig,
-                                      OAuth2RequestBuilderFactory requestBuilderFactory,
-                                      ReadWriteLock readWriteLock) {
+                                      OAuth2RequestBuilderFactory requestBuilderFactory) {
         this.oAuth2UserTokenRepository = oAuth2UserTokenRepository;
         this.serverConfig = oAuth2ServerConfig;
         this.requestBuilderFactory = requestBuilderFactory;
-        this.readWriteLock = readWriteLock;
     }
 
     protected String getRealUrl(String url) {
@@ -68,17 +65,20 @@ public class SimpleOAuth2SessionBuilder implements OAuth2SessionBuilder {
 
 
     protected AccessTokenInfo getClientCredentialsToken() {
-        return oAuth2UserTokenRepository
-                .findByServerIdAndGrantType(serverConfig.getId(), GrantType.client_credentials)
-                .stream()
-                .findAny()
-                .orElse(null);
+        readWriteLock.readLock().lock();
+        try {
+            List<AccessTokenInfo> list = oAuth2UserTokenRepository
+                    .findByServerIdAndGrantType(serverConfig.getId(), GrantType.client_credentials);
+            return list.isEmpty() ? null : list.get(0);
+        } finally {
+            readWriteLock.readLock().unlock();
+        }
     }
 
     protected Consumer<AccessTokenInfo> createOnTokenChanged(Supplier<AccessTokenInfo> tokenGetter, String grantType) {
         return token -> {
-            readWriteLock.writeLock().lock();
             AccessTokenInfo tokenInfo = tokenGetter.get();
+            readWriteLock.writeLock().lock();
             try {
                 if (tokenInfo != null) {
                     token.setId(tokenInfo.getId());
@@ -109,43 +109,14 @@ public class SimpleOAuth2SessionBuilder implements OAuth2SessionBuilder {
     }
 
 
-    Supplier<AccessTokenInfo> tokenGetter = () -> {
-        readWriteLock.readLock().lock();
-        try {
-            return getClientCredentialsToken();
-        } finally {
-            readWriteLock.readLock().unlock();
-        }
-    };
-
     @Override
     public OAuth2Session byClientCredentials() {
+        AccessTokenInfo tokenInfo = getClientCredentialsToken();
         DefaultOAuth2Session session;
-
-        AccessTokenInfo info = tokenGetter.get();
-        if (null != info) {
-            session = new CachedOAuth2Session(info);
+        if (null != tokenInfo) {
+            session = new CachedOAuth2Session(tokenInfo);
         } else {
-            readWriteLock.writeLock().lock();
-            try {
-                info = getClientCredentialsToken();
-                if (null == info) {
-                    session = new DefaultOAuth2Session();
-                    session.setServerConfig(serverConfig);
-                    session.setRequestBuilderFactory(requestBuilderFactory);
-                    session.onTokenChanged(onClientCredentialsTokenChanged);
-                    session.init();
-                    session.param(OAuth2Constants.grant_type, GrantType.client_credentials);
-                    info = session.requestAccessToken();
-                    info.setGrantType(GrantType.client_credentials);
-                    info.setCreateTime(System.currentTimeMillis());
-                    info.setServerId(serverConfig.getId());
-                    oAuth2UserTokenRepository.insert(info);
-                }
-            } finally {
-                readWriteLock.writeLock().unlock();
-            }
-            session = new CachedOAuth2Session(info);
+            session = new DefaultOAuth2Session();
         }
         session.setServerConfig(serverConfig);
         session.setRequestBuilderFactory(requestBuilderFactory);
@@ -179,5 +150,6 @@ public class SimpleOAuth2SessionBuilder implements OAuth2SessionBuilder {
         session.init();
         return session;
     }
+
 
 }
