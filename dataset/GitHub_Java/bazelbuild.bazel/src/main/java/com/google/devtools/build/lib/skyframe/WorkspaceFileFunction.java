@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.StoredEventHandler;
+import com.google.devtools.build.lib.packages.ExternalPackage;
 import com.google.devtools.build.lib.packages.ExternalPackage.Binding;
 import com.google.devtools.build.lib.packages.ExternalPackage.Builder;
 import com.google.devtools.build.lib.packages.ExternalPackage.Builder.NoSuchBindingException;
@@ -89,13 +90,13 @@ public class WorkspaceFileFunction implements SkyFunction {
     try {
       builder.resolveBindTargets(packageFactory.getRuleClass(BIND));
     } catch (NoSuchBindingException e) {
-      throw new WorkspaceFileFunctionException(
-          new EvalException(e.getLocation(), e.getMessage()));
+      throw new WorkspaceFileFunctionException(e);
     } catch (EvalException e) {
       throw new WorkspaceFileFunctionException(e);
     }
 
-    return new PackageValue(builder.build());
+    ExternalPackage pkg = builder.build();
+    return new WorkspaceFileValue(pkg.getWorkspaceName(), pkg);
   }
 
   private void parseWorkspaceFile(Path workspaceFilePath, Builder builder)

@@ -34,10 +34,18 @@ import java.util.Map.Entry;
  */
 public class ExternalPackage extends Package {
 
+  private String workspaceName;
   private Map<RepositoryName, Rule> repositoryMap;
 
   ExternalPackage() {
     super(PackageIdentifier.createInDefaultRepo("external"));
+  }
+
+  /**
+   * Returns the name for this repository.
+   */
+  public String getWorkspaceName() {
+    return workspaceName;
   }
 
   /**
@@ -69,7 +77,7 @@ public class ExternalPackage extends Package {
     }
 
     /**
-     * Checks if the label is bound, i.e., starts with {@code //external:}.
+     * Checks if the label is bound, i.e., starts with //external:.
      */
     public static boolean isBoundLabel(Label label) {
       return label.getPackageName().equals("external");
@@ -81,6 +89,7 @@ public class ExternalPackage extends Package {
    */
   public static class Builder
       extends AbstractBuilder<ExternalPackage, Builder> {
+    private String workspaceName;
     private Map<Label, Binding> bindMap = Maps.newHashMap();
     private Map<RepositoryName, Rule> repositoryMap = Maps.newHashMap();
 
@@ -97,6 +106,7 @@ public class ExternalPackage extends Package {
 
     @Override
     public ExternalPackage build() {
+      pkg.workspaceName = workspaceName;
       pkg.repositoryMap = ImmutableMap.copyOf(repositoryMap);
       return super.build();
     }
@@ -104,10 +114,8 @@ public class ExternalPackage extends Package {
     /**
      * Sets the name for this repository.
      */
-    @Override
-    public Builder setWorkspaceName(String workspaceName) {
-      pkg.workspaceName = workspaceName;
-      return this;
+    public void setWorkspaceName(String name) {
+      workspaceName = name;
     }
 
     public void addBinding(Label label, Binding binding) {
@@ -138,16 +146,14 @@ public class ExternalPackage extends Package {
       boolean moveTortoise = true;
       while (Binding.isBoundLabel(actual)) {
         if (tortoise == hare) {
-          throw new NoSuchBindingException("cycle detected resolving " + virtual + " binding",
-              binding.getLocation());
+          throw new NoSuchBindingException("cycle detected resolving " + virtual + " binding");
         }
 
         Label previous = actual; // For the exception.
-        Binding oldBinding = binding;
         binding = bindMap.get(actual);
         if (binding == null) {
           throw new NoSuchBindingException("no binding found for target " + previous + " (via "
-              + virtual + ")", oldBinding.getLocation());
+              + virtual + ")");
         }
         actual = binding.getActual();
         hare = actual;
@@ -176,6 +182,16 @@ public class ExternalPackage extends Package {
     }
 
     /**
+     * This is used when a binding is invalid, either because one of the targets is malformed,
+     * refers to a package that does not exist, or creates a circular dependency.
+     */
+    public class NoSuchBindingException extends NoSuchThingException {
+      public NoSuchBindingException(String message) {
+        super(message);
+      }
+    }
+
+    /**
      * Creates an external repository rule.
      * @throws SyntaxException if the repository name is invalid.
      */
@@ -189,23 +205,6 @@ public class ExternalPackage extends Package {
       addEvents(eventHandler.getEvents());
       repositoryMap.put(RepositoryName.create("@" + rule.getName()), rule);
       return this;
-    }
-
-    /**
-     * This is used when a binding is invalid, either because one of the targets is malformed,
-     * refers to a package that does not exist, or creates a circular dependency.
-     */
-    public class NoSuchBindingException extends NoSuchThingException {
-      private Location location;
-
-      public NoSuchBindingException(String message, Location location) {
-        super(message);
-        this.location = location;
-      }
-
-      public Location getLocation() {
-        return location;
-      }
     }
   }
 }

@@ -13,11 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType.ABSTRACT;
 import static com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType.TEST;
 
+import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -38,6 +37,7 @@ import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.SkylarkModules;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SkylarkEnvironment;
+import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.ValidationEnvironment;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -46,6 +46,7 @@ import com.google.devtools.common.options.OptionsClassProvider;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -85,8 +86,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private final  Map<String, Class<? extends RuleDefinition>> ruleDefinitionMap =
         new HashMap<>();
     private final Map<Class<? extends RuleDefinition>, RuleClass> ruleMap = new HashMap<>();
-    private final Map<Class<? extends RuleDefinition>, RuleDefinition> ruleDefinitionInstanceCache =
-        new HashMap<>();
     private final Digraph<Class<? extends RuleDefinition>> dependencyGraph =
         new Digraph<>();
     private ConfigurationCollectionFactory configurationCollectionFactory;
@@ -107,12 +106,11 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       return this;
     }
 
-    public Builder addRuleDefinition(RuleDefinition ruleDefinition) {
-      Class<? extends RuleDefinition> ruleDefinitionClass = ruleDefinition.getClass();
-      ruleDefinitionInstanceCache.put(ruleDefinitionClass, ruleDefinition);
-      dependencyGraph.createNode(ruleDefinitionClass);
-      for (Class<? extends RuleDefinition> ancestor : ruleDefinition.getMetadata().ancestors()) {
-        dependencyGraph.addEdge(ancestor, ruleDefinitionClass);
+    public Builder addRuleDefinition(Class<? extends RuleDefinition> ruleDefinition) {
+      dependencyGraph.createNode(ruleDefinition);
+      BlazeRule annotation = ruleDefinition.getAnnotation(BlazeRule.class);
+      for (Class<? extends RuleDefinition> ancestor : annotation.ancestors()) {
+        dependencyGraph.addEdge(ancestor, ruleDefinition);
       }
 
       return this;
@@ -150,38 +148,40 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     }
 
     private RuleClass commitRuleDefinition(Class<? extends RuleDefinition> definitionClass) {
-      RuleDefinition instance = checkNotNull(ruleDefinitionInstanceCache.get(definitionClass),
-          "addRuleDefinition(new %s()) should be called before build()", definitionClass.getName());
+      BlazeRule annotation = definitionClass.getAnnotation(BlazeRule.class);
+      Preconditions.checkArgument(ruleClassMap.get(annotation.name()) == null, annotation.name());
 
-      RuleDefinition.Metadata metadata = instance.getMetadata();
-      checkArgument(ruleClassMap.get(metadata.name()) == null, metadata.name());
+      Preconditions.checkArgument(
+          annotation.type() == ABSTRACT ^
+          annotation.factoryClass() != RuleConfiguredTargetFactory.class);
+      Preconditions.checkArgument(
+          (annotation.type() != TEST) ||
+          Arrays.asList(annotation.ancestors()).contains(
+              BaseRuleClasses.TestBaseRule.class));
 
-      List<Class<? extends RuleDefinition>> ancestors = metadata.ancestors();
-
-      checkArgument(
-          metadata.type() == ABSTRACT ^ metadata.factoryClass()
-              != RuleConfiguredTargetFactory.class);
-      checkArgument(
-          (metadata.type() != TEST)
-          || ancestors.contains(BaseRuleClasses.TestBaseRule.class));
-
-      RuleClass[] ancestorClasses = new RuleClass[ancestors.size()];
-      for (int i = 0; i < ancestorClasses.length; i++) {
-        ancestorClasses[i] = ruleMap.get(ancestors.get(i));
+      RuleDefinition instance;
+      try {
+        instance = definitionClass.newInstance();
+      } catch (IllegalAccessException | InstantiationException e) {
+        throw new IllegalStateException(e);
+      }
+      RuleClass[] ancestorClasses = new RuleClass[annotation.ancestors().length];
+      for (int i = 0; i < annotation.ancestors().length; i++) {
+        ancestorClasses[i] = ruleMap.get(annotation.ancestors()[i]);
         if (ancestorClasses[i] == null) {
           // Ancestors should have been initialized by now
-          throw new IllegalStateException("Ancestor " + ancestors.get(i) + " of "
-              + metadata.name() + " is not initialized");
+          throw new IllegalStateException("Ancestor " + annotation.ancestors()[i] + " of "
+              + annotation.name() + " is not initialized");
         }
       }
 
       RuleConfiguredTargetFactory factory = null;
-      if (metadata.type() != ABSTRACT) {
-        factory = createFactory(metadata.factoryClass());
+      if (annotation.type() != ABSTRACT) {
+        factory = createFactory(annotation.factoryClass());
       }
 
       RuleClass.Builder builder = new RuleClass.Builder(
-          metadata.name(), metadata.type(), false, ancestorClasses);
+          annotation.name(), annotation.type(), false, ancestorClasses);
       builder.factory(factory);
       RuleClass ruleClass = instance.build(builder, this);
       ruleMap.put(definitionClass, ruleClass);
@@ -193,7 +193,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
     public ConfiguredRuleClassProvider build() {
       for (Node<Class<? extends RuleDefinition>> ruleDefinition :
-          dependencyGraph.getTopologicalOrder()) {
+        dependencyGraph.getTopologicalOrder()) {
         commitRuleDefinition(ruleDefinition.getLabel());
       }
 
@@ -293,6 +293,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     this.skylarkValidationEnvironment = SkylarkModules.getValidationEnvironment(
         ImmutableMap.<String, SkylarkType>builder()
             .putAll(skylarkAccessibleJavaClasses)
+            .put("native", SkylarkType.of(NativeModule.class))
             .build());
   }
 
@@ -362,6 +363,12 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     return BuildOptions.of(configurationOptions, optionsProvider);
   }
 
+  @SkylarkModule(name = "native", namespace = true, onlyLoadingPhase = true,
+      doc = "Module for native rules.")
+  private static final class NativeModule {}
+
+  public static final NativeModule nativeModule = new NativeModule();
+
   @Override
   public SkylarkEnvironment createSkylarkRuleClassEnvironment(
       EventHandler eventHandler, String astFileContentHashCode) {
@@ -375,6 +382,11 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   @Override
   public ValidationEnvironment getSkylarkValidationEnvironment() {
     return skylarkValidationEnvironment;
+  }
+
+  @Override
+  public Object getNativeModule() {
+    return nativeModule;
   }
 
   @Override

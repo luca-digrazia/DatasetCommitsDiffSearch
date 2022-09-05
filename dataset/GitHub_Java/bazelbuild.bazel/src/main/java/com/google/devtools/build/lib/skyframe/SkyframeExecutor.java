@@ -585,10 +585,7 @@ public abstract class SkyframeExecutor {
       result = callUninterruptibly(new Callable<EvaluationResult<ContainingPackageLookupValue>>() {
         @Override
         public EvaluationResult<ContainingPackageLookupValue> call() throws InterruptedException {
-          synchronized (valueLookupLock) {
-            return buildDriver.evaluate(
-                packageKeys, /*keepGoing=*/true, /*numThreads=*/1, reporter);
-          }
+          return buildDriver.evaluate(packageKeys, /*keepGoing=*/true, /*numThreads=*/1, reporter);
         }
       });
     } catch (Exception e) {
