@@ -6,8 +6,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.hswebframework.web.authorization.access.DataAccessConfig.DefaultType.DENY_FIELDS;
-
 /**
  * 默认配置实现
  *
@@ -17,6 +15,8 @@ import static org.hswebframework.web.authorization.access.DataAccessConfig.Defau
  */
 public class SimpleFieldFilterDataAccessConfig extends AbstractDataAccessConfig implements FieldFilterDataAccessConfig {
     private Set<String> fields;
+
+    private String type = DefaultType.DENY_FIELDS;
 
     public SimpleFieldFilterDataAccessConfig() {
     }
@@ -36,6 +36,10 @@ public class SimpleFieldFilterDataAccessConfig extends AbstractDataAccessConfig 
 
     @Override
     public String getType() {
-        return DENY_FIELDS;
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
     }
 }
