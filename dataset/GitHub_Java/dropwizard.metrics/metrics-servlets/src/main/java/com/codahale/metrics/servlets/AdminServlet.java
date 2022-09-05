@@ -47,8 +47,6 @@ public class AdminServlet extends HttpServlet {
 
     @Override
     public void init(ServletConfig config) throws ServletException {
-        super.init(config);
-
         this.healthCheckServlet = new HealthCheckServlet();
         healthCheckServlet.init(config);
 

@@ -2,8 +2,7 @@ package com.codahale.metrics.servlets;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.health.HealthCheckRegistry;
-import org.eclipse.jetty.http.HttpHeader;
-import org.eclipse.jetty.servlet.ServletTester;
+import org.eclipse.jetty.testing.ServletTester;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -49,12 +48,12 @@ public class AdminServletTest extends AbstractServletTest {
                                 "    <li><a href=\"/context/admin/metrics?pretty=true\">Metrics</a></li>%n" +
                                 "    <li><a href=\"/context/admin/ping\">Ping</a></li>%n" +
                                 "    <li><a href=\"/context/admin/threads\">Threads</a></li>%n" +
-                                "    <li><a href=\"/context/admin/healthcheck?pretty=true\">Healthcheck</a></li>%n" +
+                                "    <li><a href=\"/context/admin/healthcheck\">Healthcheck</a></li>%n" +
                                 "  </ul>%n" +
                                 "</body>%n" +
                                 "</html>%n"
                 ));
-        assertThat(response.get(HttpHeader.CONTENT_TYPE))
-                .isEqualTo("text/html; charset=ISO-8859-1");
+        assertThat(response.getContentType())
+                .isEqualTo("text/html;charset=ISO-8859-1");
     }
 }
