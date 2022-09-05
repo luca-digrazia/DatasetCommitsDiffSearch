@@ -67,8 +67,9 @@ public abstract class ScheduledReporter implements Closeable {
                                 MetricFilter filter,
                                 TimeUnit rateUnit,
                                 TimeUnit durationUnit) {
-		this(registry, name, filter, rateUnit, durationUnit,
-                Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory(name + '-' + FACTORY_ID.incrementAndGet())));
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory(name + '-'
+                + FACTORY_ID.incrementAndGet()));
+		this(registry, name, filter, rateUnit, durationUnit, executor);
     }
 	
     /**
