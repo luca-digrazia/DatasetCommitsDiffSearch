@@ -271,10 +271,8 @@ public class RedisUserTokenManager implements UserTokenManager {
         SimpleUserToken inCache = localCache.get(token);
         if (inCache != null && inCache.isNormal()) {
             inCache.setLastRequestTime(System.currentTimeMillis());
-            if (inCache.getMaxInactiveInterval() > 0) {
-                //异步touch
-                touchSink.next(inCache);
-            }
+            //异步touch
+            touchSink.next(inCache);
             return Mono.empty();
         }
         return getByToken(token)
