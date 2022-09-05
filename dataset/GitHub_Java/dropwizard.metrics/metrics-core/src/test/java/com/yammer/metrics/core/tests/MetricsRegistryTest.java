@@ -8,7 +8,6 @@ import org.mockito.InOrder;
 
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.Matchers.is;
@@ -107,15 +106,5 @@ public class MetricsRegistryTest {
         final InOrder inOrder = inOrder(listener);
         inOrder.verify(listener).onMetricAdded(name, counter1);
         inOrder.verify(listener).onMetricRemoved(name);
-    }
-
-    @Test
-    public void createdExecutorsAreShutDownOnShutdown() throws Exception {
-        final ScheduledExecutorService service = registry.newScheduledThreadPool(1, "test");
-
-        registry.shutdown();
-        
-        assertThat(service.isShutdown(),
-                   is(true));
     }
 }
