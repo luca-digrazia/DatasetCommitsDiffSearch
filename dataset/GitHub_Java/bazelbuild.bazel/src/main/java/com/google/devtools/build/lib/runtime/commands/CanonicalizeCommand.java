@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.runtime.commands;
 import com.google.common.base.Joiner;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.flags.InvocationPolicyEnforcer;
-import com.google.devtools.build.lib.flags.InvocationPolicyParser;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeCommandUtils;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
@@ -78,9 +77,8 @@ public final class CanonicalizeCommand implements BlazeCommand {
       parser.setAllowResidue(false);
       parser.parse(options.getResidue());
 
-      InvocationPolicyEnforcer invocationPolicyEnforcer =
-          new InvocationPolicyEnforcer(
-              InvocationPolicyParser.parsePolicy(canonicalizeOptions.invocationPolicy));
+      InvocationPolicyEnforcer invocationPolicyEnforcer = InvocationPolicyEnforcer.create(
+          canonicalizeOptions.invocationPolicy);
       invocationPolicyEnforcer.enforce(parser, commandName);
 
       List<String> result = parser.canonicalize();
