@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,10 +15,9 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.syntax.SkylarkCallable;
+import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -44,7 +43,6 @@ import javax.annotation.Nullable;
  * that is the root of the merged directory tree.
  */
 @SkylarkModule(name = "root",
-    category = SkylarkModuleCategory.BUILTIN,
     doc = "A root for files. The roots are the directories containing files, and they are mapped "
         + "together into a single directory tree to form the execution environment.")
 public final class Root implements Comparable<Root>, Serializable {
@@ -128,11 +126,6 @@ public final class Root implements Comparable<Root>, Serializable {
       doc = "Returns the relative path from the exec root to the actual root.")
   public String getExecPathString() {
     return getExecPath().getPathString();
-  }
-
-  @Nullable
-  public Path getExecRoot() {
-    return execRoot;
   }
 
   public boolean isSourceRoot() {
