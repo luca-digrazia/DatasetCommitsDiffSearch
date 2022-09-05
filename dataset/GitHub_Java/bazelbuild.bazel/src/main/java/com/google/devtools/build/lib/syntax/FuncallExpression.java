@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.EvalException.EvalExceptionWithJavaCause;
 import com.google.devtools.build.lib.util.StringUtilities;
 
-import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -255,17 +254,10 @@ public final class FuncallExpression extends Expression {
     if (func.getName().equals("$index")) {
       return obj + "[" + args.get(0) + "]";
     }
-    StringBuilder sb = new StringBuilder();
     if (obj != null) {
-      sb.append(obj).append(".");
+      return obj + "." + func + "(" + args + ")";
     }
-    sb.append(func);
-    try {
-      EvalUtils.printList(args, "(", ", ", ")", null, sb);
-    } catch (IOException x) {
-      throw new RuntimeException("Error while printing", x);
-    }
-    return sb.toString();
+    return func + "(" + args + ")";
   }
 
   /**
@@ -428,7 +420,7 @@ public final class FuncallExpression extends Expression {
 
   @SuppressWarnings("unchecked")
   private void evalArguments(ImmutableList.Builder<Object> posargs, Map<String, Object> kwargs,
-      Environment env, BaseFunction function)
+      Environment env, Function function)
       throws EvalException, InterruptedException {
     ArgConversion conversion = getArgConversion(function);
     ImmutableList.Builder<String> duplicates = new ImmutableList.Builder<>();
@@ -481,7 +473,7 @@ public final class FuncallExpression extends Expression {
     Map<String, Object> kwargs = new HashMap<>();
 
     Object returnValue;
-    BaseFunction function;
+    Function function;
     if (obj != null) { // obj.func(...)
       Object objValue = obj.eval(env);
       // Strings, lists and dictionaries (maps) have functions that we want to use in MethodLibrary.
@@ -521,8 +513,8 @@ public final class FuncallExpression extends Expression {
       }
     } else { // func(...)
       Object funcValue = func.eval(env);
-      if ((funcValue instanceof BaseFunction)) {
-        function = (BaseFunction) funcValue;
+      if ((funcValue instanceof Function)) {
+        function = (Function) funcValue;
         evalArguments(posargs, kwargs, env, function);
         returnValue = function.call(
             posargs.build(), ImmutableMap.<String, Object>copyOf(kwargs), this, env);
@@ -542,7 +534,7 @@ public final class FuncallExpression extends Expression {
     return returnValue;
   }
 
-  private ArgConversion getArgConversion(BaseFunction function) {
+  private ArgConversion getArgConversion(Function function) {
     if (function == null) {
       // It means we try to call a Java function.
       return ArgConversion.FROM_SKYLARK;

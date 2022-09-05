@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
-import com.google.devtools.build.lib.syntax.GlobList;
 import com.google.devtools.build.lib.syntax.SkylarkFunction;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkModule;
@@ -38,7 +37,7 @@ import java.util.Map;
 public class SkylarkNativeModule {
 
   @SkylarkSignature(name = "glob", objectType = SkylarkNativeModule.class,
-      returnType = GlobList.class,
+      returnType = SkylarkList.class,
       doc = "Glob returns a list of every file in the current package that:<ul>\n"
           + "<li>Matches at least one pattern in <code>include</code>.</li>\n"
           + "<li>Does not match any of the patterns in <code>exclude</code> "

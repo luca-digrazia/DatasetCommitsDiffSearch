@@ -265,12 +265,12 @@ public class SkylarkDocumentationProcessor {
       argList.add(param.name());
     }
     for (Param param : method.optionalPositionals()) {
-      argList.add(formatOptionalParameter(param));
+      argList.add(param.name() + "?"); // or should we use pythonic " = &#ellipsis;" instead?
     }
     for (Param param : method.extraPositionals()) {
       argList.add("*" + param.name());
     }
-    if (argList.size() > 0 && method.extraPositionals().length == 0
+    if (method.extraPositionals().length == 0
         && (method.optionalNamedOnly().length > 0 || method.mandatoryNamedOnly().length > 0)) {
       argList.add("*");
     }
@@ -278,7 +278,7 @@ public class SkylarkDocumentationProcessor {
       argList.add(param.name());
     }
     for (Param param : method.optionalNamedOnly()) {
-      argList.add(formatOptionalParameter(param));
+      argList.add(param.name() + "?"); // or should we be more pythonic with this? " = ..."
     }
     for (Param param : method.extraKeywords()) {
       argList.add("**" + param.name());
@@ -291,13 +291,6 @@ public class SkylarkDocumentationProcessor {
       return String.format("<code>%s %s%s</code><br>\n",
           getTypeAnchor(method.returnType()), method.name(), args);
     }
-  }
-
-  private String formatOptionalParameter(Param param) {
-    String defaultValue = param.defaultValue();
-
-    return String.format("%s=%s", param.name(),
-        (defaultValue == null || defaultValue.isEmpty()) ? "&hellip;" : defaultValue);
   }
 
   private String getTypeAnchor(Class<?> returnType, Class<?> generic1) {

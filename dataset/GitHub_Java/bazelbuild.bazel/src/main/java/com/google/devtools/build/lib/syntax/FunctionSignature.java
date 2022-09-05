@@ -389,12 +389,8 @@ public abstract class FunctionSignature implements Serializable {
         }
         public void optional(int i) {
           mandatory(i);
-          sb.append(" = ");
-          if (defaultValues == null) {
-            sb.append("?");
-          } else {
-            Printer.write(sb, defaultValues.get(j++));
-          }
+          sb.append(" = ").append((defaultValues == null)
+              ? "?" : EvalUtils.prettyPrintValue(defaultValues.get(j++)));
         }
       };
       Show show = new Show();

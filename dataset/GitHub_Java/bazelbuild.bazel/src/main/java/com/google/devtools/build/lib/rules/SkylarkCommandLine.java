@@ -18,13 +18,16 @@ import com.google.common.base.Function;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.syntax.BuiltinFunction;
+import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.SkylarkFunction.SimpleSkylarkFunction;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.SkylarkSignature.Param;
-import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
+
+import java.util.Map;
 
 /**
  * A Skylark module class to create memory efficient command lines.
@@ -33,17 +36,23 @@ import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
     doc = "Module for creating memory efficient command lines.")
 public class SkylarkCommandLine {
 
-  @SkylarkSignature(name = "join_paths", objectType = SkylarkCommandLine.class,
-      returnType = String.class,
+  @SkylarkSignature(name = "join_paths",
       doc = "Creates a single command line argument joining the paths of a set "
           + "of files on the separator string.",
+      objectType = SkylarkCommandLine.class,
+      returnType = String.class,
       mandatoryPositionals = {
       @Param(name = "separator", type = String.class, doc = "the separator string to join on"),
       @Param(name = "files", type = SkylarkNestedSet.class, generic1 = Artifact.class,
              doc = "the files to concatenate")})
-  private static BuiltinFunction joinPaths = new BuiltinFunction("join_paths") {
-    public String invoke(String separator, SkylarkNestedSet files) {
-      NestedSet<Artifact> artifacts = files.getSet(Artifact.class);
+  private static SimpleSkylarkFunction joinPaths =
+      new SimpleSkylarkFunction("join_paths") {
+    @Override
+    public Object call(Map<String, Object> params, Location loc)
+        throws EvalException {
+      final String separator = (String) params.get("separator");
+      final NestedSet<Artifact> artifacts =
+          ((SkylarkNestedSet) params.get("files")).getSet(Artifact.class);
       // TODO(bazel-team): lazy evaluate
       return Artifact.joinExecPaths(separator, artifacts);
     }
@@ -61,8 +70,12 @@ public class SkylarkCommandLine {
           doc = "The template to use for the transformation, <code>%{path}</code> and "
               + "<code>%{short_path}</code> being substituted with the corresponding fields of each"
               + " file.")})
-  private static BuiltinFunction template = new BuiltinFunction("template") {
-    public SkylarkList invoke(final SkylarkNestedSet items, final String template) {
+  private static SimpleSkylarkFunction template = new SimpleSkylarkFunction("template") {
+    @Override
+    public Object call(Map<String, Object> params, Location loc)
+        throws EvalException {
+      final String template = (String) params.get("template");
+      SkylarkNestedSet items = (SkylarkNestedSet) params.get("items");
       return SkylarkList.lazyList(Iterables.transform(items, new Function<Object, String>() {
         @Override
         public String apply(Object input) {
@@ -74,8 +87,4 @@ public class SkylarkCommandLine {
       }), String.class);
     }
   };
-
-  static {
-    SkylarkSignatureProcessor.configureSkylarkFunctions(SkylarkCommandLine.class);
-  }
 }
