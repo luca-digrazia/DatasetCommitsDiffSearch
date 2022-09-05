@@ -14,15 +14,16 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Verify;
 import com.google.common.collect.Collections2;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.ResolvedFile;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.ResolvedFileFactory;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.TraversalRequest;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -151,7 +152,7 @@ public final class RecursiveFilesystemTraversalFunction implements SkyFunction {
         switch (traversal.crossPkgBoundaries) {
           case CROSS:
             // We are free to traverse the subpackage but we need to display a warning.
-            env.getListener().handle(Event.warn(null, msg));
+            env.getListener().handle(new Event(EventKind.WARNING, null, msg));
             break;
           case DONT_CROSS:
             // We cannot traverse the subpackage and should skip it silently. Return empty results.
