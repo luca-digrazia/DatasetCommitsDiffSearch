@@ -31,7 +31,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.syntax.Argument;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
@@ -181,33 +180,6 @@ public final class RuleClass {
           return configuration;
         }
   };
-
-  /**
-   * How to handle the case if the configuration is missing fragments that are required according
-   * to the rule class.
-   */
-  public enum MissingFragmentPolicy {
-    /**
-     * Some rules are monolithic across languages, and we want them to continue to work even when
-     * individual languages are disabled. Use this policy if the rule implementation is handling
-     * missing fragments.
-     */
-    IGNORE,
-
-    /**
-     * Use this policy to generate fail actions for the target rather than failing the analysis
-     * outright. Again, this is used when rules are monolithic across languages, but we still need
-     * to analyze the dependent libraries. (Instead of this mechanism, consider annotating
-     * attributes as unused if certain fragments are unavailable.)
-     */
-    CREATE_FAIL_ACTIONS,
-
-    /**
-     * Use this policy to fail the analysis of that target with an error message; this is the
-     * default.
-     */
-    FAIL_ANALYSIS;
-  }
 
   /**
    * For Bazel's constraint system: the attribute that declares the set of environments a rule
@@ -367,29 +339,6 @@ public final class RuleClass {
                 attribute.getName(), attribute.getType());
           }
         }
-      },
-
-      /**
-       * Placeholder rules are only instantiated when packages which refer to non-native rule
-       * classes are deserialized. At this time, non-native rule classes can't be serialized. To
-       * prevent crashes on deserialization, when a package containing a rule with a non-native rule
-       * class is deserialized, the rule is assigned a placeholder rule class. This is compatible
-       * with our limited set of package serialization use cases.
-       *
-       * Placeholder rule class names obey the rule for identifiers.
-       */
-      PLACEHOLDER {
-        @Override
-        public void checkName(String name) {
-          Preconditions.checkArgument(RULE_NAME_PATTERN.matcher(name).matches(), name);
-        }
-
-        @Override
-        public void checkAttributes(Map<String, Attribute> attributes) {
-          // No required attributes; this rule class cannot have the wrong set of attributes now
-          // because, if it did, the rule class would have failed to build before the package
-          // referring to it was serialized.
-        }
       };
 
       /**
@@ -488,7 +437,7 @@ public final class RuleClass {
         NO_EXTERNAL_BINDINGS;
     private SkylarkEnvironment ruleDefinitionEnvironment = null;
     private Set<Class<?>> configurationFragments = new LinkedHashSet<>();
-    private MissingFragmentPolicy missingFragmentPolicy = MissingFragmentPolicy.FAIL_ANALYSIS;
+    private boolean failIfMissingConfigurationFragment;
     private boolean supportsConstraintChecking = true;
 
     private final Map<String, Attribute> attributes = new LinkedHashMap<>();
@@ -516,7 +465,7 @@ public final class RuleClass {
           setPreferredDependencyPredicate(parent.preferredDependencyPredicate);
         }
         configurationFragments.addAll(parent.requiredConfigurationFragments);
-        missingFragmentPolicy = parent.missingFragmentPolicy;
+        failIfMissingConfigurationFragment |= parent.failIfMissingConfigurationFragment;
         supportsConstraintChecking = parent.supportsConstraintChecking;
 
         for (Attribute attribute : parent.getAttributes()) {
@@ -575,7 +524,7 @@ public final class RuleClass {
           configuredTargetFactory, validityPredicate, preferredDependencyPredicate,
           ImmutableSet.copyOf(advertisedProviders), configuredTargetFunction,
           externalBindingsFunction,
-          ruleDefinitionEnvironment, configurationFragments, missingFragmentPolicy,
+          ruleDefinitionEnvironment, configurationFragments, failIfMissingConfigurationFragment,
           supportsConstraintChecking, attributes.values().toArray(new Attribute[0]));
     }
 
@@ -592,12 +541,8 @@ public final class RuleClass {
       return this;
     }
 
-    /**
-     * Sets the policy for the case where the configuration is missing required fragments (see
-     * {@link #requiresConfigurationFragments}).
-     */
-    public Builder setMissingFragmentPolicy(MissingFragmentPolicy missingFragmentPolicy) {
-      this.missingFragmentPolicy = missingFragmentPolicy;
+    public Builder failIfMissingConfigurationFragment() {
+      this.failIfMissingConfigurationFragment = true;
       return this;
     }
 
@@ -745,11 +690,6 @@ public final class RuleClass {
       }
     }
 
-    /** True if the rule class contains an attribute named {@code name}. */
-    public boolean contains(String name) {
-      return attributes.containsKey(name);
-    }
-
     /**
      * Sets the rule implementation function. Meant for Skylark usage.
      */
@@ -849,20 +789,6 @@ public final class RuleClass {
     }
   }
 
-  public static Builder createPlaceholderBuilder(final String name, final Location ruleLocation,
-      ImmutableList<RuleClass> parents) {
-    return new Builder(name, RuleClassType.PLACEHOLDER, /*skylark=*/true,
-        parents.toArray(new RuleClass[parents.size()])).factory(
-        new ConfiguredTargetFactory<Object, Object>() {
-          @Override
-          public Object create(Object ruleContext) throws InterruptedException {
-            throw new IllegalStateException(
-                "Cannot create configured targets from rule with placeholder class named \"" + name
-                    + "\" at " + ruleLocation);
-          }
-        });
-  }
-
   private final String name; // e.g. "cc_library"
 
   /**
@@ -948,9 +874,12 @@ public final class RuleClass {
   private final ImmutableSet<Class<?>> requiredConfigurationFragments;
 
   /**
-   * What to do during analysis if a configuration fragment is missing.
+   * Whether to fail during analysis if a configuration fragment is missing. The default behavior is
+   * to create fail actions for all declared outputs, i.e., to fail during execution, if any of the
+   * outputs is actually attempted to be built.
    */
-  private final MissingFragmentPolicy missingFragmentPolicy;
+  private final boolean failIfMissingConfigurationFragment;
+
 
   /**
    * Determines whether instances of this rule should be checked for constraint compatibility
@@ -993,7 +922,7 @@ public final class RuleClass {
       @Nullable BaseFunction configuredTargetFunction,
       Function<? super Rule, Map<String, Label>> externalBindingsFunction,
       @Nullable SkylarkEnvironment ruleDefinitionEnvironment,
-      Set<Class<?>> allowedConfigurationFragments, MissingFragmentPolicy missingFragmentPolicy,
+      Set<Class<?>> allowedConfigurationFragments, boolean failIfMissingConfigurationFragment,
       boolean supportsConstraintChecking,
       Attribute... attributes) {
     this.name = name;
@@ -1016,7 +945,7 @@ public final class RuleClass {
     this.workspaceOnly = workspaceOnly;
     this.outputsDefaultExecutable = outputsDefaultExecutable;
     this.requiredConfigurationFragments = ImmutableSet.copyOf(allowedConfigurationFragments);
-    this.missingFragmentPolicy = missingFragmentPolicy;
+    this.failIfMissingConfigurationFragment = failIfMissingConfigurationFragment;
     this.supportsConstraintChecking = supportsConstraintChecking;
 
     // create the index:
@@ -1186,8 +1115,8 @@ public final class RuleClass {
   /**
    * Whether to fail analysis if any of the required configuration fragments are missing.
    */
-  public MissingFragmentPolicy missingFragmentPolicy() {
-    return missingFragmentPolicy;
+  public boolean failIfMissingConfigurationFragment() {
+    return failIfMissingConfigurationFragment;
   }
 
   /**
