@@ -185,6 +185,11 @@ public class BaseSpawn implements Spawn {
   }
 
   @Override
+  public ActionOwner getOwner() {
+    return action.getOwner();
+  }
+
+  @Override
   public String getMnemonic() {
     return action.getMnemonic();
   }

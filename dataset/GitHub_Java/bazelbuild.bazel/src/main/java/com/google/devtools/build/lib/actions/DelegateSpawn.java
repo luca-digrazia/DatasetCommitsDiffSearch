@@ -97,6 +97,11 @@ public class DelegateSpawn implements Spawn {
   }
 
   @Override
+  public ActionOwner getOwner() {
+    return spawn.getOwner();
+  }
+
+  @Override
   public String getMnemonic() {
     return spawn.getMnemonic();
   }
