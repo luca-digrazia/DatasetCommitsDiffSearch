@@ -276,10 +276,6 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
     this.graph = graph;
   }
 
-  public InMemoryGraph getGraphForTesting() {
-    return graph;
-  }
-
   @Override
   public void dump(boolean summarize, PrintStream out) {
     if (summarize) {

@@ -43,9 +43,9 @@ import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.testutil.TestThread;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.skyframe.GraphTester.StringValue;
-import com.google.devtools.build.skyframe.NotifyingHelper.EventType;
-import com.google.devtools.build.skyframe.NotifyingHelper.Listener;
-import com.google.devtools.build.skyframe.NotifyingHelper.Order;
+import com.google.devtools.build.skyframe.NotifyingInMemoryGraph.EventType;
+import com.google.devtools.build.skyframe.NotifyingInMemoryGraph.Listener;
+import com.google.devtools.build.skyframe.NotifyingInMemoryGraph.Order;
 import com.google.devtools.build.skyframe.ParallelEvaluator.EventFilter;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 
@@ -91,6 +91,9 @@ public class ParallelEvaluatorTest {
   @After
   public void assertNoTrackedErrors() {
     TrackingAwaiter.INSTANCE.assertNoErrors();
+    if (graph instanceof NotifyingInMemoryGraph) {
+      ((NotifyingInMemoryGraph) graph).assertNoExceptions();
+    }
   }
 
   private ParallelEvaluator makeEvaluator(
@@ -150,7 +153,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void smoke() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     set("a", "a");
     set("b", "b");
     tester.getOrCreate("ab").addDependency("a").addDependency("b").setComputedValue(CONCATENATE);
@@ -235,7 +238,7 @@ public class ParallelEvaluatorTest {
   }
 
   private void runPartialResultOnInterruption(boolean buildFastFirst) throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     // Two runs for fastKey's builder and one for the start of waitKey's builder.
     final CountDownLatch allValuesReady = new CountDownLatch(3);
     final SkyKey waitKey = GraphTester.toSkyKey("wait");
@@ -342,12 +345,9 @@ public class ParallelEvaluatorTest {
     final Semaphore threadStarted = new Semaphore(0);
     final Semaphore threadInterrupted = new Semaphore(0);
     final String[] wasError = new String[] { null };
-    final ParallelEvaluator evaluator =
-        makeEvaluator(
-            new InMemoryGraphImpl(),
-            ImmutableMap.of(
-                GraphTester.NODE_TYPE, valueBuilderFactory.create(threadStarted, wasError)),
-            false);
+    final ParallelEvaluator evaluator = makeEvaluator(new InMemoryGraph(),
+        ImmutableMap.of(GraphTester.NODE_TYPE, valueBuilderFactory.create(threadStarted, wasError)),
+        false);
 
     Thread t = new Thread(new Runnable() {
         @Override
@@ -407,9 +407,9 @@ public class ParallelEvaluatorTest {
       }
     };
 
-    final ParallelEvaluator evaluator =
-        makeEvaluator(
-            new InMemoryGraphImpl(), ImmutableMap.of(GraphTester.NODE_TYPE, builder), false);
+    final ParallelEvaluator evaluator = makeEvaluator(new InMemoryGraph(),
+        ImmutableMap.of(GraphTester.NODE_TYPE, builder),
+        false);
 
     SkyKey valueToEval = GraphTester.toSkyKey("a");
     try {
@@ -423,7 +423,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void simpleWarning() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     set("a", "a").setWarning("warning on 'a'");
     StringValue value = (StringValue) eval(false, GraphTester.toSkyKey("a"));
     assertEquals("a", value.getValue());
@@ -434,7 +434,7 @@ public class ParallelEvaluatorTest {
   /** Regression test: events from already-done value not replayed. */
   @Test
   public void eventFromDoneChildRecorded() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     set("a", "a").setWarning("warning on 'a'");
     SkyKey a = GraphTester.toSkyKey("a");
     SkyKey top = GraphTester.toSkyKey("top");
@@ -454,7 +454,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void storedEventFilter() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey a = GraphTester.toSkyKey("a");
     final AtomicBoolean evaluated = new AtomicBoolean(false);
     tester.getOrCreate(a).setBuilder(new SkyFunction() {
@@ -505,7 +505,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void shouldCreateErrorValueWithRootCause() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     set("a", "a");
     SkyKey parentErrorKey = GraphTester.toSkyKey("parent");
     SkyKey errorKey = GraphTester.toSkyKey("error");
@@ -518,7 +518,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void shouldBuildOneTarget() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     set("a", "a");
     set("b", "b");
     SkyKey parentErrorKey = GraphTester.toSkyKey("parent");
@@ -552,7 +552,7 @@ public class ParallelEvaluatorTest {
   }
 
   private void catastrophicBuild(boolean keepGoing, boolean keepEdges) throws Exception {
-    graph = new InMemoryGraphImpl(keepEdges);
+    graph = new InMemoryGraph(keepEdges);
 
     SkyKey catastropheKey = GraphTester.toSkyKey("catastrophe");
     SkyKey otherKey = GraphTester.toSkyKey("someKey");
@@ -610,7 +610,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void parentFailureDoesntAffectChild() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey parentKey = GraphTester.toSkyKey("parent");
     tester.getOrCreate(parentKey).setHasError(true);
     SkyKey childKey = GraphTester.toSkyKey("child");
@@ -629,7 +629,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void newParentOfErrorShouldHaveError() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey errorKey = GraphTester.toSkyKey("error");
     tester.getOrCreate(errorKey).setHasError(true);
     ErrorInfo error = evalValueInError(errorKey);
@@ -642,7 +642,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void errorTwoLevelsDeep() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey parentKey = GraphTester.toSkyKey("parent");
     SkyKey errorKey = GraphTester.toSkyKey("error");
     tester.getOrCreate(errorKey).setHasError(true);
@@ -654,7 +654,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void valueNotUsedInFailFastErrorRecovery() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey topKey = GraphTester.toSkyKey("top");
     SkyKey recoveryKey = GraphTester.toSkyKey("midRecovery");
     SkyKey badKey = GraphTester.toSkyKey("bad");
@@ -678,7 +678,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void multipleRootCauses() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey parentKey = GraphTester.toSkyKey("parent");
     SkyKey errorKey = GraphTester.toSkyKey("error");
     SkyKey errorKey2 = GraphTester.toSkyKey("error2");
@@ -697,7 +697,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void rootCauseWithNoKeepGoing() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey parentKey = GraphTester.toSkyKey("parent");
     SkyKey errorKey = GraphTester.toSkyKey("error");
     tester.getOrCreate(errorKey).setHasError(true);
@@ -711,7 +711,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void errorBubblesToParentsOfTopLevelValue() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey parentKey = GraphTester.toSkyKey("parent");
     final SkyKey errorKey = GraphTester.toSkyKey("error");
     final CountDownLatch latch = new CountDownLatch(1);
@@ -726,7 +726,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void noKeepGoingAfterKeepGoingFails() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey errorKey = GraphTester.toSkyKey("my_error_value");
     tester.getOrCreate(errorKey).setHasError(true);
     SkyKey parentKey = GraphTester.toSkyKey("parent");
@@ -742,7 +742,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void twoErrors() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey firstError = GraphTester.toSkyKey("error1");
     SkyKey secondError = GraphTester.toSkyKey("error2");
     CountDownLatch firstStart = new CountDownLatch(1);
@@ -764,7 +764,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void simpleCycle() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey bKey = GraphTester.toSkyKey("b");
     tester.getOrCreate(aKey).addDependency(bKey);
@@ -778,7 +778,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void cycleWithHead() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey bKey = GraphTester.toSkyKey("b");
     SkyKey topKey = GraphTester.toSkyKey("top");
@@ -796,7 +796,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void selfEdgeWithHead() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey topKey = GraphTester.toSkyKey("top");
     SkyKey midKey = GraphTester.toSkyKey("mid");
@@ -812,7 +812,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void cycleWithKeepGoing() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey bKey = GraphTester.toSkyKey("b");
     SkyKey topKey = GraphTester.toSkyKey("top");
@@ -835,7 +835,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void twoCycles() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey bKey = GraphTester.toSkyKey("b");
     SkyKey cKey = GraphTester.toSkyKey("c");
@@ -858,7 +858,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void twoCyclesKeepGoing() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey bKey = GraphTester.toSkyKey("b");
     SkyKey cKey = GraphTester.toSkyKey("c");
@@ -879,7 +879,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void triangleBelowHeadCycle() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey bKey = GraphTester.toSkyKey("b");
     SkyKey cKey = GraphTester.toSkyKey("c");
@@ -897,7 +897,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void longCycle() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey bKey = GraphTester.toSkyKey("b");
     SkyKey cKey = GraphTester.toSkyKey("c");
@@ -915,7 +915,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void cycleWithTail() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey bKey = GraphTester.toSkyKey("b");
     SkyKey cKey = GraphTester.toSkyKey("c");
@@ -936,7 +936,7 @@ public class ParallelEvaluatorTest {
   /** Regression test: "value cannot be ready in a cycle". */
   @Test
   public void selfEdgeWithExtraChildrenUnderCycle() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey bKey = GraphTester.toSkyKey("b");
     SkyKey cKey = GraphTester.toSkyKey("c");
@@ -954,7 +954,7 @@ public class ParallelEvaluatorTest {
   /** Regression test: "value cannot be ready in a cycle". */
   @Test
   public void cycleWithExtraChildrenUnderCycle() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey bKey = GraphTester.toSkyKey("b");
     SkyKey cKey = GraphTester.toSkyKey("c");
@@ -974,7 +974,7 @@ public class ParallelEvaluatorTest {
   /** Regression test: "value cannot be ready in a cycle". */
   @Test
   public void cycleAboveIndependentCycle() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey bKey = GraphTester.toSkyKey("b");
     SkyKey cKey = GraphTester.toSkyKey("c");
@@ -989,7 +989,7 @@ public class ParallelEvaluatorTest {
   }
 
   public void valueAboveCycleAndExceptionReportsException() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey errorKey = GraphTester.toSkyKey("error");
     SkyKey bKey = GraphTester.toSkyKey("b");
@@ -1006,7 +1006,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void errorValueStored() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey errorKey = GraphTester.toSkyKey("my_error_value");
     tester.getOrCreate(errorKey).setHasError(true);
     EvaluationResult<StringValue> result = eval(false, ImmutableList.of(errorKey));
@@ -1030,7 +1030,7 @@ public class ParallelEvaluatorTest {
    */
   @Test
   public void manyCycles() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey topKey = GraphTester.toSkyKey("top");
     for (int i = 0; i < 100; i++) {
       SkyKey dep = GraphTester.toSkyKey(Integer.toString(i));
@@ -1048,7 +1048,7 @@ public class ParallelEvaluatorTest {
    */
   @Test
   public void manyPathsToCycle() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey topKey = GraphTester.toSkyKey("top");
     SkyKey midKey = GraphTester.toSkyKey("mid");
     SkyKey cycleKey = GraphTester.toSkyKey("cycle");
@@ -1089,7 +1089,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void manyUnprocessedValuesInCycle() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey lastSelfKey = GraphTester.toSkyKey("lastSelf");
     SkyKey firstSelfKey = GraphTester.toSkyKey("firstSelf");
     SkyKey midSelfKey = GraphTester.toSkyKey("midSelf");
@@ -1135,7 +1135,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void errorValueStoredWithKeepGoing() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey errorKey = GraphTester.toSkyKey("my_error_value");
     tester.getOrCreate(errorKey).setHasError(true);
     EvaluationResult<StringValue> result = eval(true, ImmutableList.of(errorKey));
@@ -1155,7 +1155,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void continueWithErrorDep() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey errorKey = GraphTester.toSkyKey("my_error_value");
     tester.getOrCreate(errorKey).setHasError(true);
     tester.set("after", new StringValue("after"));
@@ -1174,7 +1174,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void transformErrorDep() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey errorKey = GraphTester.toSkyKey("my_error_value");
     tester.getOrCreate(errorKey).setHasError(true);
     SkyKey parentErrorKey = GraphTester.toSkyKey("parent");
@@ -1190,7 +1190,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void transformErrorDepKeepGoing() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey errorKey = GraphTester.toSkyKey("my_error_value");
     tester.getOrCreate(errorKey).setHasError(true);
     SkyKey parentErrorKey = GraphTester.toSkyKey("parent");
@@ -1206,7 +1206,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void transformErrorDepOneLevelDownKeepGoing() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey errorKey = GraphTester.toSkyKey("my_error_value");
     tester.getOrCreate(errorKey).setHasError(true);
     tester.set("after", new StringValue("after"));
@@ -1224,7 +1224,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void transformErrorDepOneLevelDownNoKeepGoing() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey errorKey = GraphTester.toSkyKey("my_error_value");
     tester.getOrCreate(errorKey).setHasError(true);
     tester.set("after", new StringValue("after"));
@@ -1241,67 +1241,12 @@ public class ParallelEvaluatorTest {
     assertThat(error.getValue().getRootCauses()).containsExactly(errorKey);
   }
 
-  @Test
-  public void errorDepDoesntStopOtherDep() throws Exception {
-    graph = new InMemoryGraphImpl();
-    final SkyKey errorKey = GraphTester.toSkyKey("error");
-    tester.getOrCreate(errorKey).setHasError(true);
-    EvaluationResult<StringValue> result1 = eval(/*keepGoing=*/ true, ImmutableList.of(errorKey));
-    assertThatEvaluationResult(result1).hasError();
-    assertThatEvaluationResult(result1)
-        .hasErrorEntryForKeyThat(errorKey)
-        .hasExceptionThat()
-        .isNotNull();
-    final SkyKey otherKey = GraphTester.toSkyKey("other");
-    tester.getOrCreate(otherKey).setConstantValue(new StringValue("other"));
-    SkyKey topKey = GraphTester.toSkyKey("top");
-    final Exception topException = new SomeErrorException("top exception");
-    final AtomicInteger numComputes = new AtomicInteger(0);
-    tester
-        .getOrCreate(topKey)
-        .setBuilder(
-            new SkyFunction() {
-              @Nullable
-              @Override
-              public SkyValue compute(SkyKey skyKey, Environment env) throws SkyFunctionException {
-                Map<SkyKey, ValueOrException<SomeErrorException>> values =
-                    env.getValuesOrThrow(
-                        ImmutableList.of(errorKey, otherKey), SomeErrorException.class);
-                if (numComputes.incrementAndGet() == 1) {
-                  assertThat(env.valuesMissing()).isTrue();
-                } else {
-                  assertThat(numComputes.get()).isEqualTo(2);
-                  assertThat(env.valuesMissing()).isFalse();
-                }
-                try {
-                  values.get(errorKey).get();
-                  throw new AssertionError("Should have thrown");
-                } catch (SomeErrorException e) {
-                  throw new SkyFunctionException(topException, Transience.PERSISTENT) {};
-                }
-              }
-
-              @Nullable
-              @Override
-              public String extractTag(SkyKey skyKey) {
-                return null;
-              }
-            });
-    EvaluationResult<StringValue> result2 = eval(/*keepGoing=*/ true, ImmutableList.of(topKey));
-    assertThatEvaluationResult(result2).hasError();
-    assertThatEvaluationResult(result2)
-        .hasErrorEntryForKeyThat(topKey)
-        .hasExceptionThat()
-        .isSameAs(topException);
-    assertThat(numComputes.get()).isEqualTo(2);
-  }
-
   /**
    * Make sure that multiple unfinished children can be cleared from a cycle value.
    */
   @Test
   public void cycleWithMultipleUnfinishedChildren() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     tester = new GraphTester();
     SkyKey cycleKey = GraphTester.toSkyKey("cycle");
     SkyKey midKey = GraphTester.toSkyKey("mid");
@@ -1331,7 +1276,7 @@ public class ParallelEvaluatorTest {
    * we should detect cycle.
    */
   private void cycleAndErrorInBubbleUp(boolean keepGoing) throws Exception {
-    graph = new DeterministicHelper.DeterministicProcessableGraph(new InMemoryGraphImpl());
+    graph = new DeterministicInMemoryGraph();
     tester = new GraphTester();
     SkyKey errorKey = GraphTester.toSkyKey("error");
     SkyKey cycleKey = GraphTester.toSkyKey("cycle");
@@ -1378,7 +1323,7 @@ public class ParallelEvaluatorTest {
    */
   @Test
   public void cycleAndErrorAndOtherInBubbleUp() throws Exception {
-    graph = new DeterministicHelper.DeterministicProcessableGraph(new InMemoryGraphImpl());
+    graph = new DeterministicInMemoryGraph();
     tester = new GraphTester();
     SkyKey errorKey = GraphTester.toSkyKey("error");
     SkyKey cycleKey = GraphTester.toSkyKey("cycle");
@@ -1421,7 +1366,7 @@ public class ParallelEvaluatorTest {
    * Here, we add an additional top-level key in error, just to mix it up.
    */
   private void cycleAndErrorAndError(boolean keepGoing) throws Exception {
-    graph = new DeterministicHelper.DeterministicProcessableGraph(new InMemoryGraphImpl());
+    graph = new DeterministicInMemoryGraph();
     tester = new GraphTester();
     SkyKey errorKey = GraphTester.toSkyKey("error");
     SkyKey cycleKey = GraphTester.toSkyKey("cycle");
@@ -1489,7 +1434,7 @@ public class ParallelEvaluatorTest {
     class ParentFunction implements SkyFunction {
       @Override
       public SkyValue compute(SkyKey skyKey, Environment env) {
-        SkyValue dep = env.getValue(SkyKey.create(childType, "billy the kid"));
+        SkyValue dep = env.getValue(new SkyKey(childType, "billy the kid"));
         if (dep == null) {
           return null;
         }
@@ -1502,10 +1447,11 @@ public class ParallelEvaluatorTest {
     ImmutableMap<SkyFunctionName, SkyFunction> skyFunctions = ImmutableMap.of(
         childType, new ChildFunction(),
         parentType, new ParentFunction());
-    ParallelEvaluator evaluator = makeEvaluator(new InMemoryGraphImpl(), skyFunctions, false);
+    ParallelEvaluator evaluator = makeEvaluator(new InMemoryGraph(),
+        skyFunctions, false);
 
     try {
-      evaluator.eval(ImmutableList.of(SkyKey.create(parentType, "octodad")));
+      evaluator.eval(ImmutableList.of(new SkyKey(parentType, "octodad")));
       fail();
     } catch (RuntimeException e) {
       assertEquals("I WANT A PONY!!!", e.getCause().getMessage());
@@ -1521,7 +1467,7 @@ public class ParallelEvaluatorTest {
   }
 
   private void unexpectedErrorDep(boolean keepGoing) throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey errorKey = GraphTester.toSkyKey("my_error_value");
     final SomeOtherErrorException exception = new SomeOtherErrorException("error exception");
     tester.getOrCreate(errorKey).setBuilder(new SkyFunction() {
@@ -1560,7 +1506,7 @@ public class ParallelEvaluatorTest {
   }
 
   private void unexpectedErrorDepOneLevelDown(final boolean keepGoing) throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey errorKey = GraphTester.toSkyKey("my_error_value");
     final SomeErrorException exception = new SomeErrorException("error exception");
     final SomeErrorException topException = new SomeErrorException("top exception");
@@ -1634,7 +1580,7 @@ public class ParallelEvaluatorTest {
    */
   private void sameDepInTwoGroups(final boolean sameFirst, final boolean twoCalls,
       final boolean valuesOrThrow) throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey topKey = GraphTester.toSkyKey("top");
     final List<SkyKey> leaves = new ArrayList<>();
     for (int i = 1; i <= 3; i++) {
@@ -1720,7 +1666,7 @@ public class ParallelEvaluatorTest {
   }
 
   private void getValuesOrThrowWithErrors(boolean keepGoing) throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey parentKey = GraphTester.toSkyKey("parent");
     final SkyKey errorDep = GraphTester.toSkyKey("errorChild");
     final SomeErrorException childExn = new SomeErrorException("child error");
@@ -1782,7 +1728,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void duplicateCycles() throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey grandparentKey = GraphTester.toSkyKey("grandparent");
     SkyKey parentKey1 = GraphTester.toSkyKey("parent1");
     SkyKey parentKey2 = GraphTester.toSkyKey("parent2");
@@ -1884,7 +1830,7 @@ public class ParallelEvaluatorTest {
 
   public void runDepOnErrorHaltsNoKeepGoingBuildEagerly(boolean childErrorCached,
       final boolean handleChildError) throws Exception {
-    graph = new InMemoryGraphImpl();
+    graph = new InMemoryGraph();
     SkyKey parentKey = GraphTester.toSkyKey("parent");
     final SkyKey childKey = GraphTester.toSkyKey("child");
     tester.getOrCreate(childKey).setHasError(/*hasError=*/true);
@@ -2054,8 +2000,7 @@ public class ParallelEvaluatorTest {
       }
     });
     graph =
-        new NotifyingHelper.NotifyingProcessableGraph(
-            new InMemoryGraphImpl(),
+        new NotifyingInMemoryGraph(
             new Listener() {
               @Override
               public void accept(SkyKey key, EventType type, Order order, Object context) {
@@ -2087,7 +2032,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void cachedErrorsFromKeepGoingUsedOnNoKeepGoing() throws Exception {
-    graph = new DeterministicHelper.DeterministicProcessableGraph(new InMemoryGraphImpl());
+    graph = new DeterministicInMemoryGraph();
     tester = new GraphTester();
     SkyKey errorKey = GraphTester.toSkyKey("error");
     SkyKey parent1Key = GraphTester.toSkyKey("parent1");
@@ -2107,7 +2052,7 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void cachedTopLevelErrorsShouldHaltNoKeepGoingBuildEarly() throws Exception {
-    graph = new DeterministicHelper.DeterministicProcessableGraph(new InMemoryGraphImpl());
+    graph = new DeterministicInMemoryGraph();
     tester = new GraphTester();
     SkyKey errorKey = GraphTester.toSkyKey("error");
     tester.getOrCreate(errorKey).setHasError(true);
@@ -2137,7 +2082,7 @@ public class ParallelEvaluatorTest {
 
   private void runUnhandledTransitiveErrors(boolean keepGoing,
       final boolean explicitlyPropagateError) throws Exception {
-    graph = new DeterministicHelper.DeterministicProcessableGraph(new InMemoryGraphImpl());
+    graph = new DeterministicInMemoryGraph();
     tester = new GraphTester();
     SkyKey grandparentKey = GraphTester.toSkyKey("grandparent");
     final SkyKey parentKey = GraphTester.toSkyKey("parent");

@@ -16,8 +16,12 @@ package com.google.devtools.build.skyframe;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Interners;
 
-/** Versioning scheme based on integers. */
-final class IntVersion implements Version {
+import java.io.Serializable;
+
+/**
+ * Versioning scheme based on integers.
+ */
+public final class IntVersion implements Version, Serializable {
   private static final Interner<IntVersion> interner = Interners.newWeakInterner();
 
   private final long val;
@@ -26,15 +30,19 @@ final class IntVersion implements Version {
     this.val = val;
   }
 
-  long getVal() {
+  public long getVal() {
     return val;
   }
 
-  IntVersion next() {
+  public IntVersion next() {
     return of(val + 1);
   }
 
-  static IntVersion of(long val) {
+  public IntVersion previous() {
+    return of(val - 1);
+  }
+
+  public static IntVersion of(long val) {
     return interner.intern(new IntVersion(val));
   }
 
