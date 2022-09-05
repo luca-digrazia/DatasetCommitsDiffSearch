@@ -27,7 +27,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import javax.annotation.Nullable;
 
@@ -552,21 +551,5 @@ public abstract class BaseFunction {
     }  
     builder.append(")");
     return builder.toString();
-  }
-
-  @Override
-  public boolean equals(@Nullable Object other) {
-    if (other instanceof BaseFunction) {
-      BaseFunction that = (BaseFunction) other;
-      // In theory, the location alone unambiguously identifies a given function. However, in
-      // some test cases the location might not have a valid value, thus we also check the name.
-      return Objects.equals(this.name, that.name) && Objects.equals(this.location, that.location);
-    }
-    return false;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(name, location);
   }
 }

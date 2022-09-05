@@ -356,9 +356,9 @@ public class Environment {
   }
 
   /**
-   * Return the current stack trace (list of functions).
+   * Return the current stack trace (list of function names).
    */
-  public ImmutableList<BaseFunction> getStackTrace() {
+  public ImmutableList<String> getStackTrace() {
     // Empty list, since this environment does not allow function definition
     // (see SkylarkEnvironment)
     return ImmutableList.of();
