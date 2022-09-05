@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -332,18 +332,6 @@ public class XcodeprojGeneration {
   }
 
   /**
-   * Returns the {@code LIBRARY_SEARCH_PATHS} array for a target's imported static libraries.
-   */
-  private static NSArray librarySearchPaths(Iterable<String> importedLibraries) {
-    ImmutableSet.Builder<NSString> result = new ImmutableSet.Builder<>();
-    for (String importedLibrary : importedLibraries) {
-      result.add(new NSString("$(WORKSPACE_ROOT)/" + Paths.get(importedLibrary).getParent()));
-    }
-
-    return (NSArray) NSObject.wrap(result.build().asList());
-  }
-
-  /**
    * Returns the {@code ARCHS} array for a target's build config given the list of architecture
    * strings. If none is given, an array with default architectures "armv7" and "arm64" will be
    * returned.
@@ -360,9 +348,14 @@ public class XcodeprojGeneration {
     }
   }
 
-  private static PBXFrameworksBuildPhase buildFrameworksInfo(
+  private static PBXFrameworksBuildPhase buildLibraryInfo(
       LibraryObjects libraryObjects, TargetControl target) {
     BuildPhaseBuilder builder = libraryObjects.newBuildPhase();
+    if (Containing.item(PRODUCT_TYPES_THAT_HAVE_A_BINARY, productType(target))) {
+      for (String dylib : target.getSdkDylibList()) {
+        builder.addDylib(dylib);
+      }
+    }
     for (String sdkFramework : target.getSdkFrameworkList()) {
       builder.addSdkFramework(sdkFramework);
     }
@@ -376,15 +369,11 @@ public class XcodeprojGeneration {
     Iterable<String> givenFlags = targetControl.getLinkoptList();
     ImmutableList.Builder<String> flags = new ImmutableList.Builder<>();
     flags.addAll(givenFlags);
-    if (Containing.item(PRODUCT_TYPES_THAT_HAVE_A_BINARY, productType(targetControl))) {
-      for (String dylib : targetControl.getSdkDylibList()) {
-        if (dylib.startsWith("lib")) {
-          dylib = dylib.substring(3);
-        }
-        flags.add("-l" + dylib);
+    if (!Equaling.of(ProductType.STATIC_LIBRARY, productType(targetControl))) {
+      for (String importedLibrary : targetControl.getImportedLibraryList()) {
+        flags.add("$(WORKSPACE_ROOT)/" + importedLibrary);
       }
     }
-
     return flags.build();
   }
 
@@ -399,22 +388,11 @@ public class XcodeprojGeneration {
 
     NSDictionary projBuildConfigMap = new NSDictionary();
     projBuildConfigMap.put("ARCHS", cpuArchitectures(control.getCpuArchitectureList()));
-    projBuildConfigMap.put("VALID_ARCHS",
-        new NSArray(
-            new NSString("armv7"),
-            new NSString("armv7s"),
-            new NSString("arm64"),
-            new NSString("i386"),
-            new NSString("x86_64")));
     projBuildConfigMap.put("CLANG_ENABLE_OBJC_ARC", "YES");
     projBuildConfigMap.put("SDKROOT", "iphoneos");
     projBuildConfigMap.put("IPHONEOS_DEPLOYMENT_TARGET", "7.0");
     projBuildConfigMap.put("GCC_VERSION", "com.apple.compilers.llvm.clang.1_0");
     projBuildConfigMap.put("CODE_SIGN_IDENTITY[sdk=iphoneos*]", "iPhone Developer");
-
-    // Disable bitcode for now.
-    // TODO(bazel-team): Need to re-enable once we have real Xcode 7 support.
-    projBuildConfigMap.put("ENABLE_BITCODE", "NO");
 
     for (XcodeprojBuildSetting projectSetting : control.getBuildSettingList()) {
       projBuildConfigMap.put(projectSetting.getName(), projectSetting.getValue());
@@ -502,7 +480,6 @@ public class XcodeprojGeneration {
             "INFOPLIST_FILE", "$(WORKSPACE_ROOT)/" + targetControl.getInfoplist());
       }
 
-
       // Double-quotes in copt strings need to be escaped for XCode.
       if (targetControl.getCoptCount() > 0) {
         List<String> escapedCopts = Lists.transform(
@@ -518,11 +495,6 @@ public class XcodeprojGeneration {
           value = "$(WORKSPACE_ROOT)/" + value;
         }
         targetBuildConfigMap.put(name, value);
-      }
-
-      if (!Equaling.of(ProductType.STATIC_LIBRARY, productType(targetControl))) {
-        targetBuildConfigMap.put("LIBRARY_SEARCH_PATHS",
-            librarySearchPaths(targetControl.getImportedLibraryList()));
       }
 
       // Note that HFS+ (the Mac filesystem) is usually case insensitive, so we cast all target
@@ -551,10 +523,7 @@ public class XcodeprojGeneration {
       }
       target.setProductReference(productReference);
 
-      // We only add frameworks here and not dylibs because of differences in how
-      // Xcode 6 and Xcode 7 specify dylibs in the project organizer.
-      // (Xcode 6 -> *.dylib, Xcode 7 -> *.tbd)
-      PBXFrameworksBuildPhase frameworksPhase = buildFrameworksInfo(libraryObjects, targetControl);
+      PBXFrameworksBuildPhase frameworksPhase = buildLibraryInfo(libraryObjects, targetControl);
       PBXResourcesBuildPhase resourcesPhase = resources.resourcesBuildPhase(targetControl);
 
       for (String importedArchive : targetControl.getImportedLibraryList()) {
@@ -598,17 +567,8 @@ public class XcodeprojGeneration {
 
     Iterables.addAll(project.getMainGroup().getChildren(), processedProjectFiles);
     for (TargetInfo targetInfo : targetInfoByLabel.values()) {
-      TargetControl targetControl = targetInfo.control;
-      for (DependencyControl dependency : targetControl.getDependencyList()) {
+      for (DependencyControl dependency : targetInfo.control.getDependencyList()) {
         targetInfo.addDependencyInfo(dependency, targetInfoByLabel);
-      }
-
-      if (!Equaling.of(ProductType.STATIC_LIBRARY, productType(targetControl))) {
-        for (String importedLibrary : targetControl.getImportedLibraryList()) {
-          FileReference fileReference = FileReference.of(importedLibrary, SourceTree.GROUP)
-              .withExplicitFileType(FILE_TYPE_ARCHIVE_LIBRARY);
-          targetInfo.frameworksPhase.getFiles().add(pbxBuildFiles.getStandalone(fileReference));
-        }
       }
     }
 
