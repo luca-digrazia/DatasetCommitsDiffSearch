@@ -2,20 +2,18 @@ package com.prolificinteractive.materialcalendarview;
 
 import android.content.Context;
 import android.content.res.TypedArray;
+import android.database.DataSetObserver;
 import android.graphics.Color;
 import android.os.Build;
-import android.os.Parcel;
-import android.os.Parcelable;
 import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.util.AttributeSet;
-import android.util.Log;
-import android.util.SparseArray;
 import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.prolificinteractive.library.calendarwidget.R;
@@ -38,18 +36,13 @@ import java.util.Locale;
  * By default, the range of dates shown is from 200 years in the past to 200 years in the future.
  * This can be extended or shortened by configuring the minimum and maximum dates.
  * </p>
- * <p>
- * When selecting a date out of range, or when the range changes so the selection becomes outside,
- * The date closest to the previous selection will become selected. This will also trigger the
- * {@linkplain com.prolificinteractive.materialcalendarview.OnDateChangedListener}
- * </p>
  *
  * @attr ref R.styleable.MaterialCalendarView_arrowColor
  * @attr ref R.styleable.MaterialCalendarView_selectionColor
  * @attr ref R.styleable.MaterialCalendarView_headerTextAppearance
  * @attr ref R.styleable.MaterialCalendarView_dateTextAppearance
  * @attr ref R.styleable.MaterialCalendarView_weekDayTextAppearance
- * @attr ref R.styleable.MaterialCalendarView_showOtherDates
+ * @attr ref R.styleable.MaterialCalendarView_showOtherMonths
  */
 public class MaterialCalendarView extends FrameLayout {
 
@@ -90,12 +83,30 @@ public class MaterialCalendarView extends FrameLayout {
         @Override
         public void onPageSelected(int position) {
             currentMonth = adapter.getItem(position);
-            updateUi();
+            updateUi(currentMonth);
         }
 
         @Override public void onPageScrollStateChanged(int state) {}
 
         @Override public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {}
+    };
+
+    private final DataSetObserver dataObserver = new DataSetObserver() {
+        @Override
+        public void onInvalidated() {
+            super.onInvalidated();
+            somethingChanged();
+        }
+
+        @Override
+        public void onChanged() {
+            super.onChanged();
+            somethingChanged();
+        }
+
+        private void somethingChanged() {
+            pager.setCurrentItem(adapter.getIndexForDay(currentMonth));
+        }
     };
 
     private CalendarDay minDate = null;
@@ -105,7 +116,6 @@ public class MaterialCalendarView extends FrameLayout {
 
     private int accentColor = 0;
     private int arrowColor = Color.BLACK;
-    private CalendarDay currentDate;
 
     public MaterialCalendarView(Context context) {
         this(context, null);
@@ -128,26 +138,18 @@ public class MaterialCalendarView extends FrameLayout {
         buttonPast.setOnClickListener(onClickListener);
         buttonFuture.setOnClickListener(onClickListener);
 
-        adapter = new MonthPagerAdapter(this);
+        adapter = new MonthPagerAdapter(getContext());
         pager.setAdapter(adapter);
         pager.setOnPageChangeListener(pageChangeListener);
-        pager.setPageTransformer(false, new ViewPager.PageTransformer() {
-            @Override
-            public void transformPage(View page, float position) {
-                position = (float) Math.sqrt(1 - Math.abs(position));
-                page.setAlpha(position);
-            }
-        });
 
         adapter.setCallbacks(monthViewCallbacks);
+        adapter.registerDataSetObserver(dataObserver);
 
-        TypedArray a = context.getTheme()
+        TypedArray a =
+            context.getTheme()
                 .obtainStyledAttributes(attrs, R.styleable.MaterialCalendarView, 0, 0);
         try {
-            setArrowColor(a.getColor(
-                R.styleable.MaterialCalendarView_arrowColor,
-                Color.BLACK
-            ));
+            setArrowColor(a.getColor(R.styleable.MaterialCalendarView_arrowColor, Color.BLACK));
             setSelectionColor(
                 a.getColor(
                     R.styleable.MaterialCalendarView_selectionColor,
@@ -155,27 +157,24 @@ public class MaterialCalendarView extends FrameLayout {
                 )
             );
 
-            setHeaderTextAppearance(a.getResourceId(
-                R.styleable.MaterialCalendarView_headerTextAppearance,
-                R.style.TextAppearance_MaterialCalendarWidget_Header
-            ));
-            setWeekDayTextAppearance(a.getResourceId(
-                R.styleable.MaterialCalendarView_weekDayTextAppearance,
-                R.style.TextAppearance_MaterialCalendarWidget_WeekDay
-            ));
-            setDateTextAppearance(a.getResourceId(
-                R.styleable.MaterialCalendarView_dateTextAppearance,
-                R.style.TextAppearance_MaterialCalendarWidget_Date
-            ));
-            setShowOtherDates(a.getBoolean(
-                R.styleable.MaterialCalendarView_showOtherDates,
-                false
-            ));
-        }
-        catch (Exception e) {
-            Log.e("Attr Error", "error" , e);
-        }
-        finally {
+            int taId = a.getResourceId(R.styleable.MaterialCalendarView_headerTextAppearance, -1);
+            if (taId != -1) {
+                setHeaderTextAppearance(taId);
+            }
+
+            taId = a.getResourceId(R.styleable.MaterialCalendarView_weekDayTextAppearance, -1);
+            if (taId != -1) {
+                setWeekDayTextAppearance(taId);
+            }
+
+            taId = a.getResourceId(R.styleable.MaterialCalendarView_dateTextAppearance, -1);
+            if (taId != -1) {
+                setDateTextAppearance(taId);
+            }
+
+            setShowOtherMonths(
+                a.getBoolean(R.styleable.MaterialCalendarView_showOtherMonths, false));
+        } finally {
             a.recycle();
         }
 
@@ -192,10 +191,8 @@ public class MaterialCalendarView extends FrameLayout {
         this.listener = listener;
     }
 
-    private void updateUi() {
-        if(currentMonth != null) {
-            title.setText(titleFormat.format(currentMonth.getDate()));
-        }
+    private void updateUi(CalendarDay day) {
+        title.setText(titleFormat.format(day.getDate()));
         buttonPast.setEnabled(canGoBack());
         buttonFuture.setEnabled(canGoForward());
     }
@@ -229,9 +226,6 @@ public class MaterialCalendarView extends FrameLayout {
      * @param color The selection color
      */
     public void setSelectionColor(int color) {
-        if(color == 0) {
-            return;
-        }
         accentColor = color;
         adapter.setSelectionColor(color);
         invalidate();
@@ -248,9 +242,6 @@ public class MaterialCalendarView extends FrameLayout {
      * @param color the new color for the paging arrows
      */
     public void setArrowColor(int color) {
-        if(color == 0) {
-            return;
-        }
         arrowColor = color;
         buttonPast.setColor(color);
         buttonFuture.setColor(color);
@@ -322,19 +313,12 @@ public class MaterialCalendarView extends FrameLayout {
     }
 
     /**
-     * @return The current day shown, will be set to first day of the month
-     */
-    public CalendarDay getCurrentDate() {
-        return currentDate;
-    }
-
-    /**
      * @param day a CalendarDay to focus the calendar on
      */
     public void setCurrentDate(CalendarDay day) {
         int index = adapter.getIndexForDay(day);
         pager.setCurrentItem(index);
-        updateUi();
+        updateUi(day);
     }
 
     /**
@@ -348,16 +332,8 @@ public class MaterialCalendarView extends FrameLayout {
      * @param calendar set the minimum selectable date, null for no minimum
      */
     public void setMinimumDate(Calendar calendar) {
-        setMinimumDate(calendar == null ? null : new CalendarDay(calendar));
-        setRangeDates(minDate, maxDate);
-    }
-
-    /**
-     * @param calendar set the minimum selectable date, null for no minimum
-     */
-    public void setMinimumDate(CalendarDay calendar) {
-        minDate = calendar;
-        setRangeDates(minDate, maxDate);
+        minDate = calendar == null ? null : new CalendarDay(calendar);
+        adapter.setRangeDates(minDate, maxDate);
     }
 
     /**
@@ -371,130 +347,22 @@ public class MaterialCalendarView extends FrameLayout {
      * @param calendar set the maximum selectable date, null for no maximum
      */
     public void setMaximumDate(Calendar calendar) {
-        setMaximumDate(calendar == null ? null : new CalendarDay(calendar));
-        setRangeDates(minDate, maxDate);
+        maxDate = calendar == null ? null : new CalendarDay(calendar);
+        adapter.setRangeDates(minDate, maxDate);
     }
 
     /**
-     * @param calendar set the maximum selectable date, null for no maximum
+     * @param showOtherMonths show days from the previous and next months, default is false
      */
-    public void setMaximumDate(CalendarDay calendar) {
-        maxDate = calendar;
-        setRangeDates(minDate, maxDate);
-    }
-
-    /**
-     *
-     * By default, only days of one month are shown. If this is set true,
-     * then days from the previous and next months are used to fill the empty space.
-     * This also controls showing dates outside of the min-max range.
-     *
-     * @param showOtherDates show other days, default is false
-     */
-    public void setShowOtherDates(boolean showOtherDates) {
-        adapter.setShowOtherDates(showOtherDates);
+    public void setShowOtherMonths(boolean showOtherMonths) {
+        adapter.setShowOtherMonths(showOtherMonths);
     }
 
     /**
      * @return true if days from previous or next months are shown, otherwise false.
      */
-    public boolean getShowOtherDates() {
-        return adapter.getShowOtherDates();
-    }
-
-    @Override
-    protected Parcelable onSaveInstanceState() {
-        SavedState ss = new SavedState(super.onSaveInstanceState());
-        ss.color = getSelectionColor();
-        ss.dateTextAppearance = adapter.getDateTextAppearance();
-        ss.weekDayTextAppearance = adapter.getWeekDayTextAppearance();
-        ss.showOtherDates = getShowOtherDates();
-        ss.minDate = getMinimumDate();
-        ss.maxDate = getMaximumDate();
-        ss.selectedDate = getSelectedDate();
-        return ss;
-    }
-
-    @Override
-    protected void onRestoreInstanceState(Parcelable state) {
-        SavedState ss = (SavedState) state;
-        super.onRestoreInstanceState(ss.getSuperState());
-        setSelectionColor(ss.color);
-        setDateTextAppearance(ss.dateTextAppearance);
-        setWeekDayTextAppearance(ss.weekDayTextAppearance);
-        setShowOtherDates(ss.showOtherDates);
-        setRangeDates(ss.minDate, ss.maxDate);
-        setSelectedDate(ss.selectedDate);
-    }
-
-    @Override
-    protected void dispatchSaveInstanceState(SparseArray<Parcelable> container) {
-        //super.dispatchSaveInstanceState(container);
-        super.dispatchFreezeSelfOnly(container);
-    }
-
-    @Override
-    protected void dispatchRestoreInstanceState(SparseArray<Parcelable> container) {
-        //super.dispatchRestoreInstanceState(container);
-        super.dispatchThawSelfOnly(container);
-    }
-
-    private void setRangeDates(CalendarDay min, CalendarDay max) {
-        CalendarDay c = currentMonth;
-        adapter.setRangeDates(min, max);
-        currentMonth = c;
-        int position = adapter.getIndexForDay(c);
-        pager.setCurrentItem(position, false);
-    }
-
-    public static class SavedState extends BaseSavedState {
-
-        int color = 0;
-        int dateTextAppearance = 0;
-        int weekDayTextAppearance = 0;
-        boolean showOtherDates = false;
-        CalendarDay minDate = null;
-        CalendarDay maxDate = null;
-        CalendarDay selectedDate = null;
-
-        SavedState(Parcelable superState) {
-            super(superState);
-        }
-
-        @Override
-        public void writeToParcel(Parcel out, int flags) {
-            super.writeToParcel(out, flags);
-            out.writeInt(color);
-            out.writeInt(dateTextAppearance);
-            out.writeInt(weekDayTextAppearance);
-            out.writeInt(showOtherDates ? 1 : 0);
-            out.writeParcelable(minDate, 0);
-            out.writeParcelable(maxDate, 0);
-            out.writeParcelable(selectedDate, 0);
-        }
-
-        public static final Parcelable.Creator<SavedState> CREATOR
-            = new Parcelable.Creator<SavedState>() {
-            public SavedState createFromParcel(Parcel in) {
-                return new SavedState(in);
-            }
-
-            public SavedState[] newArray(int size) {
-                return new SavedState[size];
-            }
-        };
-
-        private SavedState(Parcel in) {
-            super(in);
-            color = in.readInt();
-            dateTextAppearance = in.readInt();
-            weekDayTextAppearance = in.readInt();
-            showOtherDates = in.readInt() == 1;
-            ClassLoader loader = CalendarDay.class.getClassLoader();
-            minDate = in.readParcelable(loader);
-            maxDate = in.readParcelable(loader);
-            selectedDate = in.readParcelable(loader);
-        }
+    public boolean getShowOtherMonths() {
+        return adapter.getShowOtherMonths();
     }
 
     private static int getThemeAccentColor(Context context) {
@@ -514,7 +382,6 @@ public class MaterialCalendarView extends FrameLayout {
 
         private static final int TAG_ITEM = R.id.cw__pager;
 
-        private final MaterialCalendarView view;
         private final LayoutInflater inflater;
         private final LinkedList<MonthView> currentViews;
         private final ArrayList<CalendarDay> months;
@@ -523,14 +390,13 @@ public class MaterialCalendarView extends FrameLayout {
         private Integer color = null;
         private Integer dateTextAppearance = null;
         private Integer weekDayTextAppearance = null;
-        private Boolean showOtherDates = null;
+        private Boolean showOtherMonths = null;
         private CalendarDay minDate = null;
         private CalendarDay maxDate = null;
         private CalendarDay selectedDate = null;
 
-        private MonthPagerAdapter(MaterialCalendarView view) {
-            this.view = view;
-            this.inflater = LayoutInflater.from(view.getContext());
+        private MonthPagerAdapter(Context context) {
+            this.inflater = LayoutInflater.from(context);
             currentViews = new LinkedList<>();
             months = new ArrayList<>();
             setRangeDates(null, null);
@@ -542,9 +408,6 @@ public class MaterialCalendarView extends FrameLayout {
         }
 
         public int getIndexForDay(CalendarDay day) {
-            if(day == null) {
-                return getCount() / 2;
-            }
             if(minDate != null && day.isBefore(minDate)) {
                 return 0;
             }
@@ -592,10 +455,10 @@ public class MaterialCalendarView extends FrameLayout {
                 monthView.setDateTextAppearance(dateTextAppearance);
             }
             if(weekDayTextAppearance != null) {
-                monthView.setWeekDayTextAppearance(weekDayTextAppearance);
+                monthView.setDateTextAppearance(weekDayTextAppearance);
             }
-            if(showOtherDates != null) {
-                monthView.setShowOtherDates(showOtherDates);
+            if(showOtherMonths != null) {
+                monthView.setShowOtherMonths(showOtherMonths);
             }
             monthView.setMinimumDate(minDate);
             monthView.setMaximumDate(maxDate);
@@ -608,7 +471,10 @@ public class MaterialCalendarView extends FrameLayout {
             return monthView;
         }
 
-
+        @Override
+        public void startUpdate(ViewGroup container) {
+            super.startUpdate(container);
+        }
 
         @Override
         public void destroyItem(ViewGroup container, int position, Object object) {
@@ -636,94 +502,64 @@ public class MaterialCalendarView extends FrameLayout {
             }
         }
 
-        public void setDateTextAppearance(int taId) {
-            if(taId == 0) {
-                return;
-            }
-            this.dateTextAppearance = taId;
+        public void setDateTextAppearance(int dateTextAppearance) {
+            this.dateTextAppearance = dateTextAppearance;
             for(MonthView monthView : currentViews) {
-                monthView.setDateTextAppearance(taId);
+                monthView.setDateTextAppearance(dateTextAppearance);
             }
         }
 
-        public void setShowOtherDates(boolean show) {
-            this.showOtherDates = show;
+        public void setShowOtherMonths(boolean showOtherMonths) {
+            this.showOtherMonths = showOtherMonths;
             for(MonthView monthView : currentViews) {
-                monthView.setShowOtherDates(show);
+                monthView.setShowOtherMonths(showOtherMonths);
             }
         }
 
-        public boolean getShowOtherDates() {
-            return showOtherDates;
+        public boolean getShowOtherMonths() {
+            return showOtherMonths;
         }
 
-        public void setWeekDayTextAppearance(int taId) {
-            if(taId == 0) {
-                return;
-            }
-            this.weekDayTextAppearance = taId;
+        public void setWeekDayTextAppearance(int weekDayTextAppearance) {
+            this.weekDayTextAppearance = weekDayTextAppearance;
             for(MonthView monthView : currentViews) {
-                monthView.setWeekDayTextAppearance(taId);
+                monthView.setWeekDayTextAppearance(weekDayTextAppearance);
             }
         }
 
-        public void setRangeDates(CalendarDay min, CalendarDay max) {
-            this.minDate = min;
-            this.maxDate = max;
-            for(MonthView monthView : currentViews) {
-                monthView.setMinimumDate(min);
-                monthView.setMaximumDate(max);
-            }
+        public void setRangeDates(CalendarDay minDate, CalendarDay maxDate) {
+            this.minDate = minDate;
+            this.maxDate = maxDate;
 
-            if(min == null) {
+            if(minDate == null) {
                 CalendarWrapper worker = CalendarWrapper.getInstance();
                 worker.add(Calendar.YEAR, -200);
-                min = new CalendarDay(worker);
+                minDate = new CalendarDay(worker);
             }
 
-            if(max == null) {
+            if(maxDate == null) {
                 CalendarWrapper worker = CalendarWrapper.getInstance();
                 worker.add(Calendar.YEAR, 200);
-                max = new CalendarDay(worker);
+                maxDate = new CalendarDay(worker);
             }
 
             CalendarWrapper worker = CalendarWrapper.getInstance();
-            min.copyTo(worker);
+            minDate.copyTo(worker);
             months.clear();
             CalendarDay workingMonth = new CalendarDay(worker);
-            while (!max.isBefore(workingMonth)) {
+            while (!maxDate.isBefore(workingMonth)) {
                 months.add(new CalendarDay(worker));
                 worker.add(Calendar.MONTH, 1);
                 workingMonth = new CalendarDay(worker);
             }
-            CalendarDay prevDate = selectedDate;
             notifyDataSetChanged();
-            setSelectedDate(prevDate);
-            if(prevDate != null) {
-                if(!prevDate.equals(selectedDate)) {
-                    callbacks.onDateChanged(selectedDate);
-                }
-            }
         }
 
-        public void setSelectedDate(CalendarDay date) {
-            this.selectedDate = getValidSelectedDate(date);
+        public void setSelectedDate(CalendarDay selectedDate) {
+            this.selectedDate = selectedDate;
             for(MonthView monthView : currentViews) {
                 monthView.setSelectedDate(selectedDate);
             }
-        }
-
-        private CalendarDay getValidSelectedDate(CalendarDay date) {
-            if(date == null) {
-                return null;
-            }
-            if(minDate != null && minDate.isAfter(date)) {
-                return minDate;
-            }
-            if(maxDate != null && maxDate.isBefore(date)) {
-                return maxDate;
-            }
-            return date;
         }
 
         public CalendarDay getItem(int position) {
@@ -732,14 +568,6 @@ public class MaterialCalendarView extends FrameLayout {
 
         public CalendarDay getSelectedDate() {
             return selectedDate;
-        }
-
-        protected int getDateTextAppearance() {
-            return dateTextAppearance == null ? 0 : dateTextAppearance;
-        }
-
-        protected int getWeekDayTextAppearance() {
-            return weekDayTextAppearance == null ? 0 : weekDayTextAppearance;
         }
     }
 
