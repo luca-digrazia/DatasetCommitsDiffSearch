@@ -29,22 +29,19 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -97,8 +94,8 @@ public class ObjcRuleClasses {
   /**
    * Returns an {@link Iterable} of {@link Artifact}s containing all the j2objc archives from the
    * transitive closure of the rule through the "deps" attribute. This is useful for ensuring that
-   * the j2objc archives are present for linking.
-   *
+   * the j2objc archives are present for linking. 
+   * 
    * @param ruleContext the {@link RuleContext} of the current rule
    * @return an {@link Iterable} of j2objc library archive artifacts.
    */
@@ -180,6 +177,7 @@ public class ObjcRuleClasses {
   /**
    * Attributes for {@code objc_*} rules that have compiler options.
    */
+  @BlazeRule(name = "$objc_opts_rule", type = RuleClassType.ABSTRACT)
   public static class CoptsRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
@@ -195,19 +193,12 @@ public class ObjcRuleClasses {
           .add(attr("copts", STRING_LIST))
           .build();
     }
-
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_opts_rule")
-          .type(RuleClassType.ABSTRACT)
-          .build();
-    }
   }
 
   /**
    * Common attributes for {@code objc_*} rules that use plists or copts.
    */
+  @BlazeRule(name = "$objc_options_rule", type = RuleClassType.ABSTRACT)
   public static class OptionsRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -226,19 +217,12 @@ public class ObjcRuleClasses {
               .allowedRuleClasses("objc_options"))
           .build();
     }
-
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_options_rule")
-          .type(RuleClassType.ABSTRACT)
-          .build();
-    }
   }
 
   /**
    * Attributes for {@code objc_*} rules that can link in SDK frameworks.
    */
+  @BlazeRule(name = "$objc_sdk_frameworks_depender_rule", type = RuleClassType.ABSTRACT)
   public static class SdkFrameworksDependerRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
@@ -278,14 +262,6 @@ public class ObjcRuleClasses {
           .add(attr("sdk_dylibs", STRING_LIST))
           .build();
     }
-
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_sdk_frameworks_depender_rule")
-          .type(RuleClassType.ABSTRACT)
-          .build();
-    }
   }
 
   /**
@@ -310,6 +286,9 @@ public class ObjcRuleClasses {
    * storyboards. These resources are used during compilation of the declaring rule as well as when
    * bundling a dependent bundle (application, extension, etc.).
    */
+  @BlazeRule(name = "$objc_resources_rule",
+      type = RuleClassType.ABSTRACT,
+      ancestors = { ResourceToolsRule.class, })
   public static class ResourcesRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -411,37 +390,21 @@ public class ObjcRuleClasses {
               .value(env.getLabel("//tools/objc:momczip_deploy.jar")))
           .build();
     }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_resources_rule")
-          .type(RuleClassType.ABSTRACT)
-          .ancestors(ResourceToolsRule.class)
-          .build();
-    }
   }
 
   /**
    * Common attributes for {@code objc_*} rules that process resources (by defining or consuming
    * them).
    */
+  @BlazeRule(name = "$objc_resource_tools_rule", type = RuleClassType.ABSTRACT)
   public static class ResourceToolsRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
           .add(attr("$plmerge", LABEL).cfg(HOST).exec()
               .value(env.getLabel("//tools/objc:plmerge")))
-          .add(attr("$actoolzip_deploy", LABEL).cfg(HOST)
-              .value(env.getLabel("//tools/objc:actoolzip_deploy.jar")))
-          .add(attr("$ibtoolzip_deploy", LABEL).cfg(HOST)
-              .value(env.getLabel("//tools/objc:ibtoolzip_deploy.jar")))
-          .build();
-    }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_resource_tools_rule")
-          .type(RuleClassType.ABSTRACT)
+          .add(attr("$actooloribtoolzip_deploy", LABEL).cfg(HOST)
+              .value(env.getLabel("//tools/objc:actooloribtoolzip_deploy.jar")))
           .build();
     }
   }
@@ -449,6 +412,7 @@ public class ObjcRuleClasses {
   /**
    * Common attributes for {@code objc_*} rules that export an xcode project.
    */
+  @BlazeRule(name = "$objc_xcodegen_rule", type = RuleClassType.ABSTRACT)
   public static class XcodegenRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -459,19 +423,17 @@ public class ObjcRuleClasses {
               .value(env.getLabel("//tools/objc:dummy.c")))
           .build();
     }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_xcodegen_rule")
-          .type(RuleClassType.ABSTRACT)
-          .build();
-    }
   }
 
   /**
    * Common attributes for {@code objc_*} rules that can be input to compilation (i.e. can be
    * dependencies of other compiling rules).
    */
+  @BlazeRule(name = "$objc_compile_dependency_rule",
+      type = RuleClassType.ABSTRACT,
+      ancestors = {
+          ResourcesRule.class,
+          SdkFrameworksDependerRule.class })
   public static class CompileDependencyRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -508,27 +470,26 @@ public class ObjcRuleClasses {
           .add(attr("sdk_includes", Type.STRING_LIST))
           .build();
     }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_compile_dependency_rule")
-          .type(RuleClassType.ABSTRACT)
-          .ancestors(ResourcesRule.class, SdkFrameworksDependerRule.class)
-          .build();
-    }
   }
-
+  
   /**
    * Common attributes for {@code objc_*} rules that contain compilable content.
    */
+  @BlazeRule(name = "$objc_compiling_rule",
+      type = RuleClassType.ABSTRACT,
+      ancestors = {
+          CompileDependencyRule.class,
+          OptionsRule.class,
+          CoptsRule.class })
   public static class CompilingRule implements RuleDefinition {
+
     private static final Iterable<String> ALLOWED_DEPS_RULE_CLASSES = ImmutableSet.of(
         "objc_library",
         "objc_import",
         "objc_framework",
         "objc_proto_library",
         "j2objc_library");
-
+    
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
@@ -595,19 +556,14 @@ public class ObjcRuleClasses {
           .add(attr("defines", STRING_LIST))
           .build();
     }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_compiling_rule")
-          .type(RuleClassType.ABSTRACT)
-          .ancestors(CompileDependencyRule.class, OptionsRule.class, CoptsRule.class)
-          .build();
-    }
   }
 
   /**
    * Common attributes for {@code objc_*} rules that can optionally be set to {@code alwayslink}.
    */
+  @BlazeRule(name = "$objc_alwayslink_rule",
+      type = RuleClassType.ABSTRACT,
+      ancestors = { CompileDependencyRule.class, })
   public static class AlwaysLinkRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -625,43 +581,20 @@ public class ObjcRuleClasses {
           .add(attr("alwayslink", BOOLEAN))
           .build();
     }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_alwayslink_rule")
-          .type(RuleClassType.ABSTRACT)
-          .ancestors(CompileDependencyRule.class)
-          .build();
-    }
   }
 
   /**
    * Common attributes for {@code objc_*} rules that link sources and dependencies.
    */
+  @BlazeRule(name = "$objc_linking_rule",
+      type = RuleClassType.ABSTRACT,
+      ancestors = { CompilingRule.class, })
   public static class LinkingRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          .add(attr(":dumpsyms", LABEL)
-          .cfg(HOST)
-          .singleArtifact()
-          .value(new LateBoundLabel<BuildConfiguration>() {
-            @Override
-            public Label getDefault(Rule rule, BuildConfiguration configuration) {
-              if (!configuration.getFragment(ObjcConfiguration.class).generateDebugSymbols()) {
-                return null;
-              }
-              return configuration.getFragment(ObjcConfiguration.class).getDumpSymsLabel();
-            }
-          }))
-        .build();
-    }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_linking_rule")
-          .type(RuleClassType.ABSTRACT)
-          .ancestors(CompilingRule.class)
+          .add(attr("$dumpsyms", LABEL).cfg(HOST).exec()
+              .value(env.getLabel("//tools/objc:dump_syms")))
           .build();
     }
   }
@@ -669,7 +602,9 @@ public class ObjcRuleClasses {
   /**
    * Common attributes for rules that uses ObjC proto compiler.
    */
+  @BlazeRule(name = "$objc_proto_rule", type = RuleClassType.ABSTRACT)
   public static class ObjcProtoRule implements RuleDefinition {
+
     /**
      * A Predicate that returns true if the ObjC proto compiler and its support deps are needed by
      * the current rule.
@@ -704,18 +639,18 @@ public class ObjcRuleClasses {
               .value(env.getLabel("//tools/objc:proto_support")))
           .build();
     }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_proto_rule")
-          .type(RuleClassType.ABSTRACT)
-          .build();
-    }
   }
 
   /**
    * Base rule definition for iOS test rules.
    */
+  @BlazeRule(name = "$ios_test_base_rule",
+      type = RuleClassType.ABSTRACT,
+      ancestors = {
+          ReleaseBundlingRule.class,
+          LinkingRule.class,
+          XcodegenRule.class,
+          SimulatorRule.class })
   public static class IosTestBaseRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, final RuleDefinitionEnvironment env) {
@@ -761,20 +696,16 @@ public class ObjcRuleClasses {
               .allowedFileTypes(PLIST_TYPE))
           .build();
     }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$ios_test_base_rule")
-          .type(RuleClassType.ABSTRACT)
-          .ancestors(
-              ReleaseBundlingRule.class, LinkingRule.class, XcodegenRule.class, SimulatorRule.class)
-          .build();
-    }
   }
 
   /**
    * Common attributes for {@code objc_*} rules that create a bundle.
    */
+  @BlazeRule(name = "$objc_bundling_rule",
+      type = RuleClassType.ABSTRACT,
+      ancestors = {
+          OptionsRule.class,
+          ResourceToolsRule.class, })
   public static class BundlingRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -796,20 +727,15 @@ public class ObjcRuleClasses {
             .allowedFileTypes(PLIST_TYPE))
         .build();
     }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_bundling_rule")
-          .type(RuleClassType.ABSTRACT)
-          .ancestors(OptionsRule.class, ResourceToolsRule.class)
-          .build();
-    }
   }
 
   /**
    * Common attributes for {@code objc_*} rules that create a bundle meant for release (e.g.
    * application or extension).
    */
+  @BlazeRule(name = "$objc_release_bundling_rule",
+      type = RuleClassType.ABSTRACT,
+      ancestors = { BundlingRule.class, })
   public static class ReleaseBundlingRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -895,19 +821,13 @@ public class ObjcRuleClasses {
               .value(env.getLabel("//tools/objc:bundlemerge")))
           .build();
     }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_release_bundling_rule")
-          .type(RuleClassType.ABSTRACT)
-          .ancestors(BundlingRule.class)
-          .build();
-    }
   }
 
   /**
    * Common attributes for {@code objc_*} rules that use the iOS simulator.
    */
+  @BlazeRule(name = "$objc_simulator_rule",
+      type = RuleClassType.ABSTRACT)
   public static class SimulatorRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -915,13 +835,6 @@ public class ObjcRuleClasses {
           // Needed to run the binary in the simulator.
           .add(attr("$iossim", LABEL).cfg(HOST).exec()
               .value(env.getLabel("//third_party/iossim:iossim")))
-          .build();
-    }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_simulator_rule")
-          .type(RuleClassType.ABSTRACT)
           .build();
     }
   }
@@ -932,27 +845,23 @@ public class ObjcRuleClasses {
    */
   static final class Tools {
     private final RuleContext ruleContext;
-
+  
     Tools(RuleContext ruleContext) {
       this.ruleContext = Preconditions.checkNotNull(ruleContext);
     }
-
-    Artifact actoolzipDeployJar() {
-      return ruleContext.getPrerequisiteArtifact("$actoolzip_deploy", Mode.HOST);
+  
+    Artifact actooloribtoolzipDeployJar() {
+      return ruleContext.getPrerequisiteArtifact("$actooloribtoolzip_deploy", Mode.HOST);
     }
-
-    Artifact ibtoolzipDeployJar() {
-      return ruleContext.getPrerequisiteArtifact("$ibtoolzip_deploy", Mode.HOST);
-    }
-
+  
     Artifact momczipDeployJar() {
       return ruleContext.getPrerequisiteArtifact("$momczip_deploy", Mode.HOST);
     }
-
+  
     FilesToRunProvider xcodegen() {
       return ruleContext.getExecutablePrerequisite("$xcodegen", Mode.HOST);
     }
-
+  
     FilesToRunProvider plmerge() {
       return ruleContext.getExecutablePrerequisite("$plmerge", Mode.HOST);
     }
