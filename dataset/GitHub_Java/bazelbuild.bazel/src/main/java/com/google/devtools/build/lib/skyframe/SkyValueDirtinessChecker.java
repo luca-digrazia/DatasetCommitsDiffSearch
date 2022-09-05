@@ -34,13 +34,14 @@ public abstract class SkyValueDirtinessChecker {
    * was unable to create a new value.
    */
   @Nullable
-  public abstract SkyValue createNewValue(SkyKey key, @Nullable TimestampGranularityMonitor tsgm);
+  public abstract SkyValue createNewValue(SkyKey key, TimestampGranularityMonitor tsgm);
 
   /**
    * If {@code applies(key)}, returns the result of checking whether this key's value is up to date.
    */
+  @Nullable
   public DirtyResult check(SkyKey key, @Nullable SkyValue oldValue,
-      @Nullable TimestampGranularityMonitor tsgm) {
+      TimestampGranularityMonitor tsgm) {
     SkyValue newValue = createNewValue(key, tsgm);
     if (newValue == null) {
       return DirtyResult.dirty(oldValue);

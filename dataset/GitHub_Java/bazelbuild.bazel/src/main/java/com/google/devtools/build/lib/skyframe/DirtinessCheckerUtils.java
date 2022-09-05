@@ -41,7 +41,7 @@ class DirtinessCheckerUtils {
 
     @Override
     @Nullable
-    public SkyValue createNewValue(SkyKey key, @Nullable TimestampGranularityMonitor tsgm) {
+    public SkyValue createNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
       RootedPath rootedPath = (RootedPath) key.argument();
       try {
         return FileStateValue.create(rootedPath, tsgm);
@@ -62,7 +62,7 @@ class DirtinessCheckerUtils {
 
     @Override
     @Nullable
-    public SkyValue createNewValue(SkyKey key, @Nullable TimestampGranularityMonitor tsgm) {
+    public SkyValue createNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
       RootedPath rootedPath = (RootedPath) key.argument();
       try {
         return DirectoryListingStateValue.create(rootedPath);
@@ -85,7 +85,7 @@ class DirtinessCheckerUtils {
 
     @Override
     @Nullable
-    public SkyValue createNewValue(SkyKey key, @Nullable TimestampGranularityMonitor tsgm) {
+    public SkyValue createNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
       return checker.createNewValue(key, tsgm);
     }
   }
@@ -129,13 +129,14 @@ class DirtinessCheckerUtils {
 
     @Override
     @Nullable
-    public SkyValue createNewValue(SkyKey key, @Nullable TimestampGranularityMonitor tsgm) {
+    public SkyValue createNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
       return Preconditions.checkNotNull(getChecker(key), key).createNewValue(key, tsgm);
     }
 
     @Override
+    @Nullable
     public DirtyResult check(SkyKey key, @Nullable SkyValue oldValue,
-        @Nullable TimestampGranularityMonitor tsgm) {
+        TimestampGranularityMonitor tsgm) {
       return Preconditions.checkNotNull(getChecker(key), key).check(key, oldValue, tsgm);
     }
   }
