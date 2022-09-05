@@ -21,27 +21,27 @@ import java.nio.file.Path;
 import java.util.Objects;
 
 /**
- * Represents a file based android resource or asset.
+ * Represents a file based android resource.
  *
- * These include all resource types except those found in values, as well as all assets.
+ * These include all resource types except those found in values.
  */
-public class FileDataResource implements DataResource, DataAsset {
+public class FileDataResource implements DataResource {
 
-  private final DataKey dataKey;
-  private final Path source;
+  private FullyQualifiedName qn;
+  private Path source;
 
-  public FileDataResource(DataKey dataKey, Path source) {
-    this.dataKey = dataKey;
+  public FileDataResource(FullyQualifiedName qn, Path source) {
+    this.qn = qn;
     this.source = source;
   }
 
-  public static FileDataResource of(DataKey dataKey, Path source) {
-    return new FileDataResource(dataKey, source);
+  public static DataResource of(FullyQualifiedName qn, Path source) {
+    return new FileDataResource(qn, source);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(dataKey, source);
+    return Objects.hash(qn, source);
   }
 
   @Override
@@ -50,15 +50,12 @@ public class FileDataResource implements DataResource, DataAsset {
       return false;
     }
     FileDataResource resource = (FileDataResource) obj;
-    return Objects.equals(dataKey, resource.dataKey) && Objects.equals(source, resource.source);
+    return Objects.equals(qn, resource.qn) && Objects.equals(source, resource.source);
   }
 
   @Override
   public String toString() {
-    return MoreObjects.toStringHelper(getClass())
-        .add("dataKey", dataKey)
-        .add("source", source)
-        .toString();
+    return MoreObjects.toStringHelper(getClass()).add("qn", qn).add("source", source).toString();
   }
 
   static DataResource fromPath(Path path, Factory fqnFactory) {
@@ -83,8 +80,8 @@ public class FileDataResource implements DataResource, DataAsset {
   }
 
   @Override
-  public DataKey dataKey() {
-    return dataKey;
+  public FullyQualifiedName fullyQualifiedName() {
+    return qn;
   }
 
   @Override
@@ -100,29 +97,6 @@ public class FileDataResource implements DataResource, DataAsset {
 
   @Override
   public int compareTo(DataResource o) {
-    // TODO(corysmith): This is ugly -- Assets and File Resources are effectively identical
-    // but the DataKeys are incomparable. Restructure the classes to handle this gracefully.
-    if (!(o.dataKey() instanceof FullyQualifiedName && dataKey instanceof FullyQualifiedName)) {
-      throw new IllegalArgumentException(
-          String.format(
-              "DataKeys for DataResources should be FullyQualifiedName instead of %s and %s",
-              o.dataKey(),
-              dataKey));
-    }
-    return ((FullyQualifiedName) dataKey).compareTo((FullyQualifiedName) o.dataKey());
-  }
-
-  @Override
-  public int compareTo(DataAsset o) {
-    // TODO(corysmith): This is ugly -- Assets and File Resources are effectively identical
-    // but the DataKeys are incomparable. Restructure the classes to handle this gracefully.
-    if (!(o.dataKey() instanceof RelativeAssetPath && dataKey instanceof RelativeAssetPath)) {
-      throw new IllegalArgumentException(
-          String.format(
-              "DataKeys for DataResources should be RelativeAssetPath instead of %s and %s",
-              o.dataKey(),
-              dataKey));
-    }
-    return ((RelativeAssetPath) dataKey).compareTo((RelativeAssetPath) o.dataKey());
+    return qn.compareTo(o.fullyQualifiedName());
   }
 }

@@ -176,7 +176,7 @@ public class XmlDataResource implements DataResource {
   }
 
   @Override
-  public DataKey dataKey() {
+  public FullyQualifiedName fullyQualifiedName() {
     return fqn;
   }
 
@@ -213,15 +213,6 @@ public class XmlDataResource implements DataResource {
 
   @Override
   public int compareTo(DataResource o) {
-    // TODO(corysmith): This is ugly -- Assets and File Resources are effectively identical
-    // but the DataKeys are incomparable. Restructure the classes to handle this gracefully.
-    if (!(o.dataKey() instanceof FullyQualifiedName)) {
-      throw new IllegalArgumentException(
-          String.format(
-              "DataKeys for DataResources should be FullyQualifiedName instead of %s and %s",
-              o.dataKey(),
-              fqn));
-    }
-    return fqn.compareTo((FullyQualifiedName) o.dataKey());
+    return fqn.compareTo(o.fullyQualifiedName());
   }
 }

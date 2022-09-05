@@ -19,12 +19,12 @@ import java.nio.file.Path;
 /**
  * Represents an Android Resource parsed from an xml or binary file.
  */
-public interface DataResource {
+public interface DataResource extends Comparable<DataResource> {
 
   /**
-   * Provides the FullyQualifiedName of the DataResource.
+   * Provides the FullyQualifiedName of the DataResource
    */
-  DataKey dataKey();
+  FullyQualifiedName fullyQualifiedName();
 
   /**
    * Provides the Path to the file from which the DataResource was derived.
@@ -37,11 +37,4 @@ public interface DataResource {
    * @throws IOException if there are issues with writing the resource.
    */
   void write(Path newResourceDirectory) throws IOException;
-
-  /**
-   * Compares one data resource to another.
-   *
-   * Not implementing Comparable as it would conlfict with DataAsset.
-   */
-  int compareTo(DataResource other);
 }

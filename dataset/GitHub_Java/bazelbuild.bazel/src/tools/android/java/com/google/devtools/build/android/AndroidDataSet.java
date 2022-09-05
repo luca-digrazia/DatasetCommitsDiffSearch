@@ -15,12 +15,10 @@ package com.google.devtools.build.android;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 
 import com.android.ide.common.res2.MergingException;
 
 import java.io.IOException;
-import java.nio.file.FileVisitOption;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -44,83 +42,6 @@ import javax.xml.stream.XMLStreamException;
  */
 @Immutable
 public class AndroidDataSet {
-  /**
-   * An AndroidDataPathWalker that collects DataAsset and DataResources for an AndroidDataSet.
-   */
-  private static final class AndroidDataSetBuildingPathWalker implements AndroidDataPathWalker {
-    private final List<DataAsset> assets;
-    private final ResourceFileVisitor resourceVisitor;
-    private static final ImmutableSet<FileVisitOption> FOLLOW_LINKS =
-        ImmutableSet.of(FileVisitOption.FOLLOW_LINKS);
-    private List<DataResource> overwritingResources;
-    private List<DataResource> nonOverwritingResources;
-
-    private static AndroidDataSetBuildingPathWalker create() {
-      List<DataResource> overwritingResources = new ArrayList<>();
-      List<DataResource> nonOverwritingResources = new ArrayList<>();
-      final List<DataAsset> assets = new ArrayList<>();
-      final ResourceFileVisitor resourceVisitor =
-          new ResourceFileVisitor(overwritingResources, nonOverwritingResources);
-      return new AndroidDataSetBuildingPathWalker(
-          assets, overwritingResources, nonOverwritingResources, resourceVisitor);
-    }
-
-    private AndroidDataSetBuildingPathWalker(
-        List<DataAsset> assets,
-        List<DataResource> overwritingResources,
-        List<DataResource> nonOverwritingResources,
-        ResourceFileVisitor resourceVisitor) {
-      this.assets = assets;
-      this.overwritingResources = overwritingResources;
-      this.nonOverwritingResources = nonOverwritingResources;
-      this.resourceVisitor = resourceVisitor;
-    }
-
-    @Override
-    public void walkResources(Path path) throws IOException {
-
-      Files.walkFileTree(path, FOLLOW_LINKS, Integer.MAX_VALUE, resourceVisitor);
-    }
-
-    @Override
-    public void walkAssets(Path path) throws IOException {
-      Files.walkFileTree(
-          path,
-          FOLLOW_LINKS,
-          Integer.MAX_VALUE,
-          new AssetFileVisitor(RelativeAssetPath.Factory.of(path), assets));
-    }
-
-    /**
-     * Creates an AndroidDataSet from the collected DataAsset and DataResource instances.
-     */
-    public AndroidDataSet createAndroidDataSet() throws MergingException {
-      resourceVisitor.checkForErrors();
-      return AndroidDataSet.of(overwritingResources, nonOverwritingResources, assets);
-    }
-  }
-
-  /**
-   * A FileVisitor that walks the asset tree and extracts FileDataResources.
-   */
-  private static class AssetFileVisitor extends SimpleFileVisitor<Path> {
-    private final RelativeAssetPath.Factory dataKeyFactory;
-    private final List<DataAsset> assets;
-
-    public AssetFileVisitor(RelativeAssetPath.Factory dataKeyFactory, List<DataAsset> assets) {
-      this.dataKeyFactory = dataKeyFactory;
-      this.assets = assets;
-    }
-
-    @Override
-    public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-      if (!Files.isDirectory(path)) {
-        assets.add(FileDataResource.of(dataKeyFactory.create(path), path));
-      }
-      return super.visitFile(path, attrs);
-    }
-  }
-
   /**
    * A FileVisitor that walks a resource tree and extract FullyQualifiedName and resource values.
    */
@@ -159,7 +80,7 @@ public class AndroidDataSet {
 
     private List<String> getQualifiers(String[] dirNameAndQualifiers) {
       if (dirNameAndQualifiers.length == 1) {
-        return ImmutableList.of();
+        return ImmutableList.<String>of();
       }
       return Arrays.asList(
           Arrays.copyOfRange(dirNameAndQualifiers, 1, dirNameAndQualifiers.length));
@@ -187,65 +108,54 @@ public class AndroidDataSet {
     }
   }
 
-  /** Creates an AndroidDataSet of the overwriting, nonOverwritingResources, and asset lists. */
+  /** Creates an AndroidDataSet of the overwriting and nonOverwritingResources lists. */
   public static AndroidDataSet of(
-      List<DataResource> overwritingResources,
-      List<DataResource> nonOverwritingResources,
-      List<DataAsset> assets) {
+      List<DataResource> overwritingResources, List<DataResource> nonOverwritingResources) {
     return new AndroidDataSet(
-        ImmutableList.copyOf(overwritingResources),
-        ImmutableList.copyOf(nonOverwritingResources),
-        ImmutableList.copyOf(assets));
+        ImmutableList.copyOf(overwritingResources), ImmutableList.copyOf(nonOverwritingResources));
   }
 
-  /**
-   * Creates an AndroidDataSet from an UnvalidatedAndroidData.
-   *
-   * The adding process parses out all the provided symbol into DataResources and DataAssets
-   * objects.
-   *
-   * @param primary The primary data to parse into DataResources and DataAssets.
-   * @throws IOException when there are issues with reading files.
-   * @throws MergingException when there is invalid resource information.
-   */
   public static AndroidDataSet from(UnvalidatedAndroidData primary)
       throws IOException, MergingException {
-    final AndroidDataSetBuildingPathWalker pathWalker = AndroidDataSetBuildingPathWalker.create();
-    primary.walk(pathWalker);
-    return pathWalker.createAndroidDataSet();
+    List<DataResource> overwritingResources = new ArrayList<>();
+    List<DataResource> nonOverwritingResources = new ArrayList<>();
+    ResourceFileVisitor visitor =
+        new ResourceFileVisitor(overwritingResources, nonOverwritingResources);
+    primary.walkResources(visitor);
+    visitor.checkForErrors();
+    return of(overwritingResources, nonOverwritingResources);
   }
 
   /**
-   * Creates an AndroidDataSet from a list of DependencyAndroidData instances.
+   * Creates an AndroidDataSet from a list of DependencyAndroidDatas.
    *
-   * The adding process parses out all the provided symbol into DataResources and DataAssets
-   * objects.
+   * The adding process parses out all the provided symbol into DataResource objects.
    *
-   * @param dependencyAndroidDataList The dependency data to parse into DataResources and
-   *        DataAssets.
+   * @param dependencyAndroidDataList The dependency data to parse into DataResources.
    * @throws IOException when there are issues with reading files.
    * @throws MergingException when there is invalid resource information.
    */
   public static AndroidDataSet from(List<DependencyAndroidData> dependencyAndroidDataList)
       throws IOException, MergingException {
-    final AndroidDataSetBuildingPathWalker pathWalker = AndroidDataSetBuildingPathWalker.create();
+    List<DataResource> overwritingResources = new ArrayList<>();
+    List<DataResource> nonOverwritingResources = new ArrayList<>();
+    ResourceFileVisitor visitor =
+        new ResourceFileVisitor(overwritingResources, nonOverwritingResources);
     for (DependencyAndroidData data : dependencyAndroidDataList) {
-      data.walk(pathWalker);
+      data.walkResources(visitor);
     }
-    return pathWalker.createAndroidDataSet();
+    visitor.checkForErrors();
+    return of(overwritingResources, nonOverwritingResources);
   }
 
   private final ImmutableList<DataResource> overwritingResources;
   private final ImmutableList<DataResource> nonOverwritingResources;
-  private final ImmutableList<DataAsset> assets;
 
   private AndroidDataSet(
       ImmutableList<DataResource> overwritingResources,
-      ImmutableList<DataResource> nonOverwritingResources,
-      ImmutableList<DataAsset> assets) {
+      ImmutableList<DataResource> nonOverwritingResources) {
     this.overwritingResources = overwritingResources;
     this.nonOverwritingResources = nonOverwritingResources;
-    this.assets = assets;
   }
 
   @Override
@@ -253,7 +163,6 @@ public class AndroidDataSet {
     return MoreObjects.toStringHelper(this)
         .add("overwritingResources", overwritingResources)
         .add("nonOverwritingResources", nonOverwritingResources)
-        .add("assets", assets)
         .toString();
   }
 
@@ -267,13 +176,12 @@ public class AndroidDataSet {
     }
     AndroidDataSet that = (AndroidDataSet) other;
     return Objects.equals(overwritingResources, that.overwritingResources)
-        && Objects.equals(nonOverwritingResources, that.nonOverwritingResources)
-        && Objects.equals(assets, that.assets);
+        && Objects.equals(nonOverwritingResources, that.nonOverwritingResources);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(overwritingResources, nonOverwritingResources, assets);
+    return Objects.hash(overwritingResources, nonOverwritingResources);
   }
 
   /**
@@ -300,20 +208,5 @@ public class AndroidDataSet {
    */
   public List<DataResource> getNonOverwritingResources() {
     return nonOverwritingResources;
-  }
-
-  /**
-   * Returns a list of assets.
-   * 
-   * Assets always overwrite during merging, just like overwriting resources.
-   * <p>Example:
-   *
-   * A text asset (foo/bar.txt, containing fooza) could be replaced with (foo/bar.txt, containing
-   * ouza!) depending on the merging process.
-   *
-   * @return A list of overwriting assets.
-   */
-  public List<DataAsset> getAssets() {
-    return assets;
   }
 }

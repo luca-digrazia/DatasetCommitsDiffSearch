@@ -18,7 +18,6 @@ import com.google.common.base.MoreObjects;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Map.Entry;
 import java.util.Objects;
 
 /**
@@ -27,63 +26,36 @@ import java.util.Objects;
 public class UnwrittenMergedAndroidData {
 
   private final Path manifest;
-  private final ParsedAndroidData primary;
-  private final ParsedAndroidData deps;
+  private final AndroidDataSet resources;
+  private final AndroidDataSet deps;
 
   public static UnwrittenMergedAndroidData of(
-      Path manifest, ParsedAndroidData resources, ParsedAndroidData deps) {
+      Path manifest, AndroidDataSet resources, AndroidDataSet deps) {
     return new UnwrittenMergedAndroidData(manifest, resources, deps);
   }
 
-  private UnwrittenMergedAndroidData(
-      Path manifest, ParsedAndroidData primary, ParsedAndroidData deps) {
+  private UnwrittenMergedAndroidData(Path manifest, AndroidDataSet resources, AndroidDataSet deps) {
     this.manifest = manifest;
-    this.primary = primary;
+    this.resources = resources;
     this.deps = deps;
   }
 
   /**
-   * Writes the android data to the filesystem.
-   * @param mergedDataWriter Destination writer.
+   * Writes the android data to directories for consumption by aapt.
+   * @param newResourceDirectory The new resource directory to write to.
    * @return A MergedAndroidData that is ready for further tool processing.
    * @throws IOException when something goes wrong while writing.
    */
-  public MergedAndroidData write(AndroidDataWriter mergedDataWriter) throws IOException {
-    try {
-      writeParsedAndroidData(primary, mergedDataWriter);
-      writeParsedAndroidData(deps, mergedDataWriter);
-      return new MergedAndroidData(
-          mergedDataWriter.resourceDirectory(),
-          mergedDataWriter.assetDirectory(),
-          mergedDataWriter.copyManifest(this.manifest));
-    } finally {
-      // Flush to make sure all writing is completed before returning a MergedAndroidData.
-      // If resources aren't fully written, the MergedAndroidData might be invalid.
-      mergedDataWriter.flush();
-    }
-  }
-
-  private void writeParsedAndroidData(
-      ParsedAndroidData resources, AndroidDataWritingVisitor mergedDataWriter) throws IOException {
-    for (Entry<DataKey, DataAsset> entry : resources.iterateAssetEntries()) {
-      // TODO(corysmith): Resolve the nit of casting to a RelativeAssetPath by sorting
-      // out the type structure and generics of DataKey, ParsedAndroidData, AndroidDataMerger and
-      // MergeConflict.
-      entry.getValue().writeAsset((RelativeAssetPath) entry.getKey(), mergedDataWriter);
-    }
-    for (Entry<DataKey, DataResource> entry : resources.iterateDataResourceEntries()) {
-      // TODO(corysmith): Resolve the nit of casting to a FullyQualifiedName by sorting
-      // out the type structure and generics of DataKey, ParsedAndroidData, AndroidDataMerger and
-      // MergeConflict.
-      entry.getValue().writeResource((FullyQualifiedName) entry.getKey(), mergedDataWriter);
-    }
+  public MergedAndroidData write(Path newResourceDirectory) throws IOException {
+    // TODO(corysmith): Implement write.
+    throw new UnsupportedOperationException();
   }
 
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
         .add("manifest", manifest)
-        .add("primary", primary)
+        .add("resources", resources)
         .add("deps", deps)
         .toString();
   }
@@ -98,13 +70,13 @@ public class UnwrittenMergedAndroidData {
     }
     UnwrittenMergedAndroidData that = (UnwrittenMergedAndroidData) other;
     return Objects.equals(manifest, that.manifest)
-        && Objects.equals(primary, that.primary)
+        && Objects.equals(resources, that.resources)
         && Objects.equals(deps, that.deps);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(manifest, primary, deps);
+    return Objects.hash(manifest, resources, deps);
   }
 
   @VisibleForTesting
@@ -113,12 +85,12 @@ public class UnwrittenMergedAndroidData {
   }
 
   @VisibleForTesting
-  ParsedAndroidData getPrimary() {
-    return primary;
+  AndroidDataSet getResources() {
+    return resources;
   }
 
   @VisibleForTesting
-  ParsedAndroidData getDeps() {
+  AndroidDataSet getDeps() {
     return deps;
   }
 }
