@@ -41,6 +41,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import javax.annotation.Nullable;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.OutputKeys;
@@ -59,7 +60,7 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
   private boolean xmlLineNumbers;
   private boolean showDefaultValues;
   private boolean relativeLocations;
-  private AspectResolver aspectResolver;
+  @Nullable private AspectResolver aspectResolver;  // Null if aspect dependencies are not needed
   private BinaryPredicate<Rule, Attribute> dependencyFilter;
 
   @Override
@@ -145,10 +146,12 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
         inputElem.setAttribute("name", label.toString());
         elem.appendChild(inputElem);
       }
-      for (Label label : aspectResolver.computeAspectDependencies(target).values()) {
-        Element inputElem = doc.createElement("rule-input");
-        inputElem.setAttribute("name", label.toString());
-        elem.appendChild(inputElem);
+      if (aspectResolver != null) {
+        for (Label label : aspectResolver.computeAspectDependencies(target)) {
+          Element inputElem = doc.createElement("rule-input");
+          inputElem.setAttribute("name", label.toString());
+          elem.appendChild(inputElem);
+        }
       }
       for (OutputFile outputFile: rule.getOutputFiles()) {
         Element outputElem = doc.createElement("rule-output");
@@ -246,7 +249,9 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
 
   private void addSubincludedFilesToElement(Document doc, Element parent, InputFile inputFile)
       throws InterruptedException {
-    Iterable<Label> dependencies = aspectResolver.computeBuildFileDependencies(
+    Iterable<Label> dependencies = aspectResolver == null
+        ? inputFile.getPackage().getSubincludeLabels()
+        : aspectResolver.computeBuildFileDependencies(
             inputFile.getPackage(), BuildFileDependencyMode.SUBINCLUDE);
 
     for (Label subinclude : dependencies) {
@@ -258,8 +263,10 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
 
   private void addSkylarkFilesToElement(Document doc, Element parent, InputFile inputFile)
       throws InterruptedException {
-    Iterable<Label> dependencies = aspectResolver.computeBuildFileDependencies(
-        inputFile.getPackage(), BuildFileDependencyMode.SKYLARK);
+    Iterable<Label> dependencies = aspectResolver == null
+        ? inputFile.getPackage().getSkylarkFileDependencies()
+        : aspectResolver.computeBuildFileDependencies(
+            inputFile.getPackage(), BuildFileDependencyMode.SKYLARK);
 
     for (Label skylarkFileDep : dependencies) {
       Element elem = doc.createElement("load");
