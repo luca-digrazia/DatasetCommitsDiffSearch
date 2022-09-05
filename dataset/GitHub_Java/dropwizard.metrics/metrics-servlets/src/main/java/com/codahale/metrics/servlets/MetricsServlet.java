@@ -168,12 +168,15 @@ public class MetricsServlet extends HttpServlet {
         resp.setHeader("Cache-Control", "must-revalidate,no-cache,no-store");
         resp.setStatus(HttpServletResponse.SC_OK);
 
-        try (OutputStream output = resp.getOutputStream()) {
+        final OutputStream output = resp.getOutputStream();
+        try {
             if (jsonpParamName != null && req.getParameter(jsonpParamName) != null) {
                 getWriter(req).writeValue(output, new JSONPObject(req.getParameter(jsonpParamName), registry));
             } else {
                 getWriter(req).writeValue(output, registry);
             }
+        } finally {
+            output.close();
         }
     }
 
