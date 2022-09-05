@@ -13,12 +13,15 @@ public class SlidingTimeWindowReservoir implements Reservoir {
     private static final int COLLISION_BUFFER = 256;
     // only trim on updating once every N
     private static final int TRIM_THRESHOLD = 256;
+    // offsets the front of the time window for the purposes of clearing the buffer in trim
+    private static final long CLEAR_BUFFER = TimeUnit.HOURS.toNanos(1) * COLLISION_BUFFER;
 
     private final Clock clock;
     private final ConcurrentSkipListMap<Long, Long> measurements;
     private final long window;
     private final AtomicLong lastTick;
     private final AtomicLong count;
+    private final long startTick;
 
     /**
      * Creates a new {@link SlidingTimeWindowReservoir} with the given window of time.
@@ -38,10 +41,11 @@ public class SlidingTimeWindowReservoir implements Reservoir {
      * @param clock      the {@link Clock} to use
      */
     public SlidingTimeWindowReservoir(long window, TimeUnit windowUnit, Clock clock) {
+        this.startTick = clock.getTick();
         this.clock = clock;
-        this.measurements = new ConcurrentSkipListMap<Long, Long>();
+        this.measurements = new ConcurrentSkipListMap<>();
         this.window = windowUnit.toNanos(window) * COLLISION_BUFFER;
-        this.lastTick = new AtomicLong();
+        this.lastTick = new AtomicLong((clock.getTick() - startTick) * COLLISION_BUFFER);
         this.count = new AtomicLong();
     }
 
@@ -66,11 +70,11 @@ public class SlidingTimeWindowReservoir implements Reservoir {
     }
 
     private long getTick() {
-        for (; ; ) {
+        for ( ;; ) {
             final long oldTick = lastTick.get();
-            final long tick = clock.getTick() * COLLISION_BUFFER;
+            final long tick = (clock.getTick() - startTick) * COLLISION_BUFFER;
             // ensure the tick is strictly incrementing even if there are duplicate ticks
-            final long newTick = tick > oldTick ? tick : oldTick + 1;
+            final long newTick = tick - oldTick > 0 ? tick : oldTick + 1;
             if (lastTick.compareAndSet(oldTick, newTick)) {
                 return newTick;
             }
@@ -78,6 +82,14 @@ public class SlidingTimeWindowReservoir implements Reservoir {
     }
 
     private void trim() {
-        measurements.headMap(getTick() - window).clear();
+        final long now = getTick();
+        final long windowStart = now - window;
+        final long windowEnd = now + CLEAR_BUFFER;
+        if (windowStart < windowEnd) {
+            measurements.headMap(windowStart).clear();
+            measurements.tailMap(windowEnd).clear();
+        } else {
+            measurements.subMap(windowEnd, windowStart).clear();
+        }
     }
 }
