@@ -102,7 +102,6 @@ public final class FastBeanCopier {
                 "\n}\n" +
                 "\n}";
         try {
-//            System.out.println(method);
             return Proxy.create(Copier.class)
                     .addMethod(method)
                     .newInstance();
@@ -333,8 +332,7 @@ public final class FastBeanCopier {
                                 || Collection.class.isAssignableFrom(type)) && hasGeneric) {
                             convertCode.append("(" + getTypeName() + ")").append(convert);
                         } else {
-                            convertCode.append("(" + getTypeName() + ")").append(getterCode);
-//                            convertCode.append(getterCode);
+                            convertCode.append(getterCode);
                         }
 
                     }
@@ -453,6 +451,13 @@ public final class FastBeanCopier {
                     return (T) new Date(((Date) source).getTime());
                 }
             }
+            org.apache.commons.beanutils.Converter converter = BeanUtilsBean
+                    .getInstance()
+                    .getConvertUtils()
+                    .lookup(targetClass);
+            if (null != converter) {
+                return converter.convert(targetClass, source);
+            }
             if (Collection.class.isAssignableFrom(targetClass)) {
                 Collection collection = newCollection(targetClass);
                 Collection sourceCollection;
@@ -468,7 +473,6 @@ public final class FastBeanCopier {
                         sourceCollection = Arrays.asList(source);
                     }
                 }
-                //转换泛型
                 if (genericType != null && genericType.length > 0 && genericType[0] != Object.class) {
                     for (Object sourceObj : sourceCollection) {
                         collection.add(convert(sourceObj, genericType[0], null));
@@ -482,6 +486,7 @@ public final class FastBeanCopier {
             if (targetClass.isEnum()) {
                 if (EnumDict.class.isAssignableFrom(targetClass)) {
                     Object val = EnumDict.find((Class) targetClass, String.valueOf(source)).orElse(null);
+
                     if (targetClass.isInstance(val)) {
                         return ((T) val);
                     }
@@ -496,13 +501,6 @@ public final class FastBeanCopier {
                 return null;
             }
             try {
-                org.apache.commons.beanutils.Converter converter = BeanUtilsBean
-                        .getInstance()
-                        .getConvertUtils()
-                        .lookup(targetClass);
-                if (null != converter) {
-                    return converter.convert(targetClass, source);
-                }
 
                 T newTarget = targetClass == Map.class ? (T) new HashMap<>() : targetClass.newInstance();
                 copy(source, newTarget);

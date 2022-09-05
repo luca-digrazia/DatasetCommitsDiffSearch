@@ -1,13 +1,15 @@
 package org.hswebframework.web.bean;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * @author zhouhao
  * @since
  */
-@Getter
-@Setter
+@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -17,16 +19,8 @@ public class NestObject implements Cloneable {
     private int age;
 
 
-    @ToString.Ignore
-    private String password ;
-
     @Override
     public NestObject clone() throws CloneNotSupportedException {
-        return (NestObject) super.clone();
-    }
-
-    @Override
-    public String toString() {
-        return ToString.toString(this);
+        return (NestObject)super.clone();
     }
 }
