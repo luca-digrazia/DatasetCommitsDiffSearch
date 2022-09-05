@@ -295,9 +295,9 @@ public final class ParallelEvaluator implements Evaluator {
 
     @Override
     protected ImmutableMap<SkyKey, ValueOrUntypedException> getValueOrUntypedExceptions(
-        Set<SkyKey> depKeys) {
+        Iterable<SkyKey> depKeys) {
       checkActive();
-      Set<SkyKey> keys = Sets.newLinkedHashSetWithExpectedSize(depKeys.size());
+      Set<SkyKey> keys = new LinkedHashSet<>();
       for (SkyKey depKey : depKeys) {
         // Canonicalize SkyKeys to save memory.
         keys.add(KEY_CANONICALIZER.intern(depKey));
