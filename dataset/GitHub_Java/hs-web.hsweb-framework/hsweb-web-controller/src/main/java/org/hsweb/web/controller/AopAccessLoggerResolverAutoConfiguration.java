@@ -3,36 +3,36 @@ package org.hsweb.web.controller;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.hsweb.commons.StringUtils;
 import org.hsweb.web.bean.po.logger.LoggerInfo;
 import org.hsweb.web.bean.po.user.User;
 import org.hsweb.web.core.exception.BusinessException;
 import org.hsweb.web.core.logger.AccessLoggerPersisting;
-import org.hsweb.web.core.logger.AopAccessLoggerResolver;
+import org.hsweb.web.core.logger.Slf4jAccessLoggerPersisting;
 import org.hsweb.web.core.message.FastJsonHttpMessageConverter;
 import org.hsweb.web.core.message.ResponseMessage;
 import org.hsweb.web.core.utils.WebUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
-import org.hsweb.commons.StringUtils;
 
 import javax.annotation.PostConstruct;
 import java.util.List;
 
-/**
- * Created by zhouhao on 16-4-28.
- */
 @Configuration
-@ConditionalOnProperty(name = "logger.access", havingValue = "true")
-public class AopAccessLoggerResolverAutoConfiguration{
+@ConditionalOnProperty(name = "hsweb.access-logger", havingValue = "true")
+public class AopAccessLoggerResolverAutoConfiguration {
     @Bean
     public AopAccessLoggerResolverConfiguration aopAccessLoggerResolverConfiguration() {
         return new AopAccessLoggerResolverConfiguration();
+    }
+
+    @Bean
+    public Slf4jAccessLoggerPersisting slf4jAccessLoggerPersisting() {
+        return new Slf4jAccessLoggerPersisting();
     }
 
     @Aspect
