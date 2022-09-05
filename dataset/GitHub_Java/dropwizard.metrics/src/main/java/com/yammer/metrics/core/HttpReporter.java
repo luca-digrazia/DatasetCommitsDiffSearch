@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
@@ -72,8 +73,6 @@ public class HttpReporter {
 
 	/**
 	 * Begins listening on the specified port.
-	 *
-	 * @throws IOException if there is an error listening on the port
 	 */
 	public void start() throws IOException {
 		this.serverSocket = new ServerSocket(port);
@@ -82,8 +81,6 @@ public class HttpReporter {
 
 	/**
 	 * Stops listening if the server thread is running.
-	 *
-	 * @throws IOException if there is an error stopping the HTTP server
 	 */
 	public void stop() throws IOException {
 		if (future != null) {
@@ -194,8 +191,7 @@ public class HttpReporter {
 	private void writeMeter(JsonGenerator json, MeterMetric meter) throws IOException {
 		json.writeStartObject();
 		{
-			json.writeStringField("event_type", meter.getEventType());
-			json.writeStringField("unit", meter.getScaleUnit().toString().toLowerCase());
+			json.writeStringField("unit", meter.getUnit().toString().toLowerCase());
 			json.writeNumberField("count", meter.count());
 			json.writeNumberField("mean", meter.meanRate());
 			json.writeNumberField("m1", meter.oneMinuteRate());
