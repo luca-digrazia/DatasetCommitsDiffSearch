@@ -28,12 +28,10 @@ import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.Compi
 final class X86Crosstools {
   private final NdkPaths ndkPaths;
   private final StlImpl stlImpl;
-  private final String clangVersion;
 
-  X86Crosstools(NdkPaths ndkPaths, StlImpl stlImpl, String clangVersion) {
+  X86Crosstools(NdkPaths ndkPaths, StlImpl stlImpl) {
     this.ndkPaths = ndkPaths;
     this.stlImpl = stlImpl;
-    this.clangVersion = clangVersion;
   }
 
   ImmutableList<CToolchain.Builder> createCrosstools() {
@@ -48,6 +46,7 @@ final class X86Crosstools {
             .addAllToolPath(ndkPaths.createClangToolpaths("x86-4.9", "i686-linux-android", null))
             .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("x86"));
 
+    ndkPaths.addToolchainIncludePaths(x86Clang, "x86-4.9", "i686-linux-android", "4.9.x");
     stlImpl.addStlImpl(x86Clang, "4.9");
 
     /** x86_64 */
@@ -59,6 +58,7 @@ final class X86Crosstools {
                 ndkPaths.createClangToolpaths("x86_64-4.9", "x86_64-linux-android", null))
             .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("x86_64"));
 
+    ndkPaths.addToolchainIncludePaths(x8664Clang, "x86_64-4.9", "x86_64-linux-android", "4.9.x");
     stlImpl.addStlImpl(x8664Clang, "4.9");
 
     return ImmutableList.of(x86Clang, x8664Clang);
@@ -70,9 +70,6 @@ final class X86Crosstools {
 
     return CToolchain.newBuilder()
         .setCompiler("clang3.8")
-
-        .addCxxBuiltinIncludeDirectory(
-            ndkPaths.createClangToolchainBuiltinIncludeDirectory(clangVersion))
 
         // Compiler flags
         .addCompilerFlag("-gcc-toolchain")
@@ -108,6 +105,7 @@ final class X86Crosstools {
                 .setMode(CompilationMode.DBG)
                 .addCompilerFlag("-O0")
                 .addCompilerFlag("-g"))
+
         .setTargetSystemName("x86-linux-android");
   }
 }

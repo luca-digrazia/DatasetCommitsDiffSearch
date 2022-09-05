@@ -21,7 +21,7 @@ import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.r11.NdkMa
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.r12.NdkMajorRevisionR12;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.r13.NdkMajorRevisionR13;
 import com.google.devtools.build.lib.util.OS;
-import java.util.Map;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
 
 /**
  * Helper methods for generating a CrosstoolRelease proto for the Android NDK based on a particular
@@ -37,12 +37,9 @@ public final class AndroidNdkCrosstools {
           "10", new NdkMajorRevisionR10(),
           "11", new NdkMajorRevisionR11(),
           "12", new NdkMajorRevisionR12(),
-          "13", new NdkMajorRevisionR13("3.8.256229"),
-          // The only difference between the NDK13 and NDK14 CROSSTOOLs is the version of clang in
-          // built-in includes paths, so we can reuse everything else.
-          "14", new NdkMajorRevisionR13("3.8.275480"));
-  public static final Map.Entry<String, NdkMajorRevision> LATEST_KNOWN_REVISION =
-      Iterables.getLast(KNOWN_NDK_MAJOR_REVISIONS.entrySet());
+          "13", new NdkMajorRevisionR13());
+  public static final String LATEST_KNOWN_REVISION =
+      Iterables.getLast(KNOWN_NDK_MAJOR_REVISIONS.keySet());
 
   /**
    * Exception thrown when there is an error creating the crosstools file.
@@ -51,6 +48,23 @@ public final class AndroidNdkCrosstools {
     private NdkCrosstoolsException(String msg) {
       super(msg);
     }
+  }
+
+  public static CrosstoolRelease create(
+      NdkRelease ndkRelease,
+      NdkPaths ndkPaths,
+      StlImpl stlImpl,
+      String hostPlatform) {
+    NdkMajorRevision ndkMajorRevision;
+    if (ndkRelease.isValid) {
+      // NDK minor revisions should be backwards compatible within a major revision, so it should be
+      // enough to check the major revision of the release.
+      ndkMajorRevision = KNOWN_NDK_MAJOR_REVISIONS.get(ndkRelease.majorRevision);
+    } else {
+      // If the NDK revision isn't valid, try using the latest one we know about.
+      ndkMajorRevision = KNOWN_NDK_MAJOR_REVISIONS.get(LATEST_KNOWN_REVISION);
+    }
+    return ndkMajorRevision.crosstoolRelease(ndkPaths, stlImpl, hostPlatform);
   }
 
   public static String getHostPlatform(NdkRelease ndkRelease) throws NdkCrosstoolsException {
@@ -85,5 +99,5 @@ public final class AndroidNdkCrosstools {
 
   public static boolean isKnownNDKRevision(NdkRelease ndkRelease) {
     return KNOWN_NDK_MAJOR_REVISIONS.containsKey(ndkRelease.majorRevision);
-  }
+  } 
 }

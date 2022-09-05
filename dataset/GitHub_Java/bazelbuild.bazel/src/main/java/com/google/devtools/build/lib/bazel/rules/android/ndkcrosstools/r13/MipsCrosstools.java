@@ -29,12 +29,10 @@ import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.Compi
 final class MipsCrosstools {
   private final NdkPaths ndkPaths;
   private final StlImpl stlImpl;
-  private final String clangVersion;
 
-  MipsCrosstools(NdkPaths ndkPaths, StlImpl stlImpl, String clangVersion) {
+  MipsCrosstools(NdkPaths ndkPaths, StlImpl stlImpl) {
     this.ndkPaths = ndkPaths;
     this.stlImpl = stlImpl;
-    this.clangVersion = clangVersion;
   }
 
   ImmutableList<CToolchain.Builder> createCrosstools() {
@@ -55,6 +53,9 @@ final class MipsCrosstools {
                     CppConfiguration.Tool.DWP))
             .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("mips64"));
 
+    //List<CToolchain.Builder> toolchains = toolchainsListBuilder.build();
+    ndkPaths.addToolchainIncludePaths(
+        mips64Clang, "mips64el-linux-android-4.9", "mips64el-linux-android", "4.9.x");
     stlImpl.addStlImpl(mips64Clang, "4.9");
     return mips64Clang;
   }
@@ -75,6 +76,8 @@ final class MipsCrosstools {
                     CppConfiguration.Tool.GCOVTOOL))
             .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("mips"));
 
+    ndkPaths.addToolchainIncludePaths(
+        mipsClang, "mipsel-linux-android-4.9", "mipsel-linux-android", "4.9.x");
     stlImpl.addStlImpl(mipsClang, "4.9");
 
     return mipsClang;
@@ -88,8 +91,6 @@ final class MipsCrosstools {
 
     return CToolchain.newBuilder()
         .setCompiler("clang3.8")
-        .addCxxBuiltinIncludeDirectory(
-            ndkPaths.createClangToolchainBuiltinIncludeDirectory(clangVersion))
 
         // Compiler flags
         .addCompilerFlag("-gcc-toolchain")

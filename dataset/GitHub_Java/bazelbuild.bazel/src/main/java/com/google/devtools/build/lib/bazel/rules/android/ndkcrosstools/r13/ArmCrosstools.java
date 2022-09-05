@@ -29,12 +29,10 @@ import java.util.List;
 final class ArmCrosstools {
   private final NdkPaths ndkPaths;
   private final StlImpl stlImpl;
-  private final String clangVersion;
 
-  ArmCrosstools(NdkPaths ndkPaths, StlImpl stlImpl, String clangVersion) {
+  ArmCrosstools(NdkPaths ndkPaths, StlImpl stlImpl) {
     this.ndkPaths = ndkPaths;
     this.stlImpl = stlImpl;
-    this.clangVersion = clangVersion;
   }
 
   ImmutableList<CToolchain.Builder> createCrosstools() {
@@ -57,8 +55,6 @@ final class ArmCrosstools {
             .setTargetCpu("arm64-v8a")
             .setCompiler("clang3.8")
             .addAllToolPath(ndkPaths.createClangToolpaths(toolchainName, targetPlatform, null))
-            .addCxxBuiltinIncludeDirectory(
-                ndkPaths.createClangToolchainBuiltinIncludeDirectory(clangVersion))
             .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("arm64"))
 
             // Compiler flags
@@ -96,6 +92,7 @@ final class ArmCrosstools {
                     .addCompilerFlag("-O0")
                     .addCompilerFlag("-UNDEBUG"));
 
+    ndkPaths.addToolchainIncludePaths(toolchain, toolchainName, targetPlatform, "4.9.x");
     stlImpl.addStlImpl(toolchain, "4.9");
     return toolchain;
   }
@@ -139,8 +136,6 @@ final class ArmCrosstools {
             .setTargetSystemName("arm-linux-androideabi")
             .setCompiler("clang3.8")
             .addAllToolPath(ndkPaths.createClangToolpaths(toolchainName, targetPlatform, null))
-            .addCxxBuiltinIncludeDirectory(
-                ndkPaths.createClangToolchainBuiltinIncludeDirectory(clangVersion))
             .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("arm"))
 
             // Compiler flags
@@ -174,6 +169,7 @@ final class ArmCrosstools {
             .addCompilerFlag("-fno-strict-aliasing")
             .addCompilerFlag("-O0")
             .addCompilerFlag("-UNDEBUG"));
+    ndkPaths.addToolchainIncludePaths(toolchain, toolchainName, targetPlatform, "4.9.x");
     return toolchain;
   }
 }

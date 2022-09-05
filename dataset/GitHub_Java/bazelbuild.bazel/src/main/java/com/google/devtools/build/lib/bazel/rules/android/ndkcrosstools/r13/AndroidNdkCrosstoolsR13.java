@@ -27,7 +27,6 @@ import java.util.Map.Entry;
 
 /** Generates a CrosstoolRelease proto for the Android NDK. */
 final class AndroidNdkCrosstoolsR13 {
-
   /**
    * Creates a CrosstoolRelease proto for the Android NDK, given the API level to use and the
    * release revision. The crosstools are generated through code rather than checked in as a flat
@@ -38,25 +37,23 @@ final class AndroidNdkCrosstoolsR13 {
    *
    * @return A CrosstoolRelease for the Android NDK.
    */
-  static CrosstoolRelease create(
-      NdkPaths ndkPaths, StlImpl stlImpl, String hostPlatform, String clangVersion) {
+  static CrosstoolRelease create(NdkPaths ndkPaths, StlImpl stlImpl, String hostPlatform) {
     return CrosstoolRelease.newBuilder()
         .setMajorVersion("android")
         .setMinorVersion("")
         .setDefaultTargetCpu("armeabi")
         .addAllDefaultToolchain(getDefaultCpuToolchains(stlImpl))
-        .addAllToolchain(createToolchains(ndkPaths, stlImpl, hostPlatform, clangVersion))
+        .addAllToolchain(createToolchains(ndkPaths, stlImpl, hostPlatform))
         .build();
   }
 
   private static ImmutableList<CToolchain> createToolchains(
-      NdkPaths ndkPaths, StlImpl stlImpl, String hostPlatform, String clangVersion) {
+      NdkPaths ndkPaths, StlImpl stlImpl, String hostPlatform) {
 
     List<CToolchain.Builder> toolchainBuilders = new ArrayList<>();
-    toolchainBuilders.addAll(new ArmCrosstools(ndkPaths, stlImpl, clangVersion).createCrosstools());
-    toolchainBuilders.addAll(
-        new MipsCrosstools(ndkPaths, stlImpl, clangVersion).createCrosstools());
-    toolchainBuilders.addAll(new X86Crosstools(ndkPaths, stlImpl, clangVersion).createCrosstools());
+    toolchainBuilders.addAll(new ArmCrosstools(ndkPaths, stlImpl).createCrosstools());
+    toolchainBuilders.addAll(new MipsCrosstools(ndkPaths, stlImpl).createCrosstools());
+    toolchainBuilders.addAll(new X86Crosstools(ndkPaths, stlImpl).createCrosstools());
 
     ImmutableList.Builder<CToolchain> toolchains = new ImmutableList.Builder<>();
 

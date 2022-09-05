@@ -15,18 +15,18 @@
 package com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.r12;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.NdkPaths;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpl;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.DefaultCpuToolchain;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map.Entry;
 
 /** Generates a CrosstoolRelease proto for the Android NDK. */
 final class AndroidNdkCrosstoolsR12 {
-  /** {@code ./ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --version} */
-  static final String CLANG_VERSION = "3.8.256229";
-
   private AndroidNdkCrosstoolsR12() {}
   /**
    * Creates a CrosstoolRelease proto for the Android NDK, given the API level to use and the
@@ -43,6 +43,7 @@ final class AndroidNdkCrosstoolsR12 {
         .setMajorVersion("android")
         .setMinorVersion("")
         .setDefaultTargetCpu("armeabi")
+        .addAllDefaultToolchain(getDefaultCpuToolchains(stlImpl))
         .addAllToolchain(createToolchains(ndkPaths, stlImpl, hostPlatform))
         .build();
   }
@@ -72,5 +73,35 @@ final class AndroidNdkCrosstoolsR12 {
     }
 
     return toolchains.build();
+  }
+
+  private static ImmutableList<DefaultCpuToolchain> getDefaultCpuToolchains(StlImpl stlImpl) {
+    // TODO(bazel-team): It would be better to auto-generate this somehow.
+
+    ImmutableMap<String, String> defaultCpus =
+        ImmutableMap.<String, String>builder()
+            // arm
+            .put("armeabi", "arm-linux-androideabi-4.9")
+            .put("armeabi-v7a", "arm-linux-androideabi-4.9-v7a")
+            .put("arm64-v8a", "aarch64-linux-android-4.9")
+
+            // mips
+            .put("mips", "mipsel-linux-android-4.9")
+            .put("mips64", "mips64el-linux-android-4.9")
+
+            // x86
+            .put("x86", "x86-4.9")
+            .put("x86_64", "x86_64-4.9")
+            .build();
+
+    ImmutableList.Builder<DefaultCpuToolchain> defaultCpuToolchains = ImmutableList.builder();
+    for (Entry<String, String> defaultCpu : defaultCpus.entrySet()) {
+      defaultCpuToolchains.add(
+          DefaultCpuToolchain.newBuilder()
+              .setCpu(defaultCpu.getKey())
+              .setToolchainIdentifier(defaultCpu.getValue() + "-" + stlImpl.getName())
+              .build());
+    }
+    return defaultCpuToolchains.build();
   }
 }

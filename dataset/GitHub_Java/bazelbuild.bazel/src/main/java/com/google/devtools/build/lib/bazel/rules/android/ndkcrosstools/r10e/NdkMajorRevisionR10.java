@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.r13;
+package com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.r10e;
 
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.ApiLevel;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.NdkMajorRevision;
@@ -21,16 +21,16 @@ import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpl;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
 
-/** Logic specific to Android NDK R13. */
-public class NdkMajorRevisionR13 implements NdkMajorRevision {
+/** Logic specific to Android NDK R12. */
+public class NdkMajorRevisionR10 implements NdkMajorRevision {
   @Override
   public CrosstoolRelease crosstoolRelease(
       NdkPaths ndkPaths, StlImpl stlImpl, String hostPlatform) {
-    return AndroidNdkCrosstoolsR13.create(ndkPaths, stlImpl, hostPlatform);
+    return AndroidNdkCrosstoolsR10e.create(ndkPaths, stlImpl, hostPlatform);
   }
 
   @Override
   public ApiLevel apiLevel(EventHandler eventHandler, String name, String apiLevel) {
-    return new ApiLevelR13(eventHandler, name, apiLevel);
+    return new ApiLevelR10e(eventHandler, name, apiLevel);
   }
 }

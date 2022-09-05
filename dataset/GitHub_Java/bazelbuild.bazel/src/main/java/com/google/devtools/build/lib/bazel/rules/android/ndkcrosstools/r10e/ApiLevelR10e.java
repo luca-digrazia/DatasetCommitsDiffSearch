@@ -1,4 +1,4 @@
-// Copyright 2016 The Bazel Authors. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,17 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.r12;
+package com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.r10e;
 
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.ApiLevel;
 import com.google.devtools.build.lib.events.EventHandler;
 
-/** Class which encodes information from the Android NDK makefiles about API levels. */
-final class ApiLevelR12 extends ApiLevel {
+/**
+ * Class which encodes information from the Android NDK makefiles about API levels. 
+ */
+final class ApiLevelR10e extends ApiLevel {
   private static final ImmutableListMultimap<String, String> API_LEVEL_TO_ARCHITECTURES =
       ImmutableListMultimap.<String, String>builder()
+          .putAll("3", "arm")
+          .putAll("4", "arm")
+          .putAll("5", "arm")
           .putAll("8", "arm")
           .putAll("9", "arm", "mips", "x86")
           .putAll("12", "arm", "mips", "x86")
@@ -34,12 +39,10 @@ final class ApiLevelR12 extends ApiLevel {
           .putAll("18", "arm", "mips", "x86")
           .putAll("19", "arm", "mips", "x86")
           .putAll("21", "arm", "mips", "x86", "arm64", "mips64", "x86_64")
-          .putAll("23", "arm", "mips", "x86", "arm64", "mips64", "x86_64")
-          .putAll("24", "arm", "mips", "x86", "arm64", "mips64", "x86_64")
           .build();
 
   /**
-   * Per the "special cases" listed in build/core/add-application.mk:
+   * <p>Per the "special cases" listed in build/core/add-application.mk:
    *
    * <pre>
    *   SPECIAL CASES:
@@ -55,41 +58,47 @@ final class ApiLevelR12 extends ApiLevel {
    */
   private static final ImmutableMap<String, String> API_EQUIVALENCIES =
       ImmutableMap.<String, String>builder()
+          .put("3", "3")
+          .put("4", "4")
+    
           // Case 1
+          .put("5", "5")
           .put("6", "5")
           .put("7", "5")
+    
           .put("8", "8")
-
+    
           // Case 2
           .put("9", "9")
           .put("10", "9")
           .put("11", "9")
-
+    
           // Case 5
           .put("12", "12")
           .put("13", "12")
-
+    
           // Case 6
           .put("14", "14")
           .put("15", "14")
-
+    
           // Case 7
           .put("16", "16")
           .put("17", "16")
+    
           .put("18", "18")
-
+    
           // Case 3
           .put("19", "19")
           .put("20", "19")
-
+    
           // Case 4
           .put("21", "21")
-          .put("22", "22")
-          .put("23", "23")
-          .put("24", "24")
+          .put("22", "21")
+    
           .build();
 
-  ApiLevelR12(EventHandler eventHandler, String repositoryName, String apiLevel) {
+  ApiLevelR10e(EventHandler eventHandler, String repositoryName, String apiLevel) {
     super(API_LEVEL_TO_ARCHITECTURES, API_EQUIVALENCIES, eventHandler, repositoryName, apiLevel);
   }
 }
+

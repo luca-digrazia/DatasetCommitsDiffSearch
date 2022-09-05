@@ -73,10 +73,6 @@ public class AndroidNdkCrosstoolsTest {
       this.ndkDirectoriesFilename = ndkDirectoriesFilename;
     }
 
-    NdkMajorRevision getNdkMajorRevision() {
-      return AndroidNdkCrosstools.KNOWN_NDK_MAJOR_REVISIONS.get(ndkRelease.majorRevision);
-    }
-
     ImmutableSet<String> getNdkFiles() throws IOException {
       String ndkFilesFileContent =
           ResourceFileLoader.loadResource(AndroidNdkCrosstoolsTest.class, ndkFilesFilename);
@@ -138,7 +134,7 @@ public class AndroidNdkCrosstoolsTest {
     for (StlImpl ndkStlImpl : StlImpls.get(ndkPaths)) {
       // Protos are immutable, so this can be shared between tests.
       CrosstoolRelease crosstool =
-          params.getNdkMajorRevision().crosstoolRelease(ndkPaths, ndkStlImpl, HOST_PLATFORM);
+          AndroidNdkCrosstools.create(params.ndkRelease, ndkPaths, ndkStlImpl, HOST_PLATFORM);
       crosstools.add(crosstool);
       stlFilegroupsBuilder.putAll(ndkStlImpl.getFilegroupNamesAndFilegroupFileGlobPatterns());
     }
@@ -148,18 +144,18 @@ public class AndroidNdkCrosstoolsTest {
     ndkFiles = params.getNdkFiles();
     ndkDirectories = params.getNdkDirectories();
   }
-
+  
   @Test
   public void testPathsExist() throws Exception {
 
     for (CrosstoolRelease crosstool : crosstoolReleases) {
       for (CToolchain toolchain : crosstool.getToolchainList()) {
-
+  
         // Test that all tool paths exist.
         for (ToolPath toolpath : toolchain.getToolPathList()) {
           assertThat(ndkFiles).contains(toolpath.getPath());
         }
-
+  
         // Test that all cxx_builtin_include_directory paths exist.
         for (String includeDirectory : toolchain.getCxxBuiltinIncludeDirectoryList()) {
           // Special case for builtin_sysroot.
@@ -168,38 +164,18 @@ public class AndroidNdkCrosstoolsTest {
             assertThat(ndkDirectories).contains(path);
           }
         }
-
+  
         // Test that the builtin_sysroot path exists.
         {
           String builtinSysroot = NdkPaths.stripRepositoryPrefix(toolchain.getBuiltinSysroot());
           assertThat(ndkDirectories).contains(builtinSysroot);
         }
-
+  
         // Test that all include directories added through unfiltered_cxx_flag exist.
         for (String flag : toolchain.getUnfilteredCxxFlagList()) {
           if (!flag.equals("-isystem")) {
             flag = NdkPaths.stripRepositoryPrefix(flag);
             assertThat(ndkDirectories).contains(flag);
-          }
-        }
-      }
-    }
-  }
-
-  // Regression test for b/36091573
-  @Test
-  public void testBuiltinIncludesDirectories() {
-    for (CrosstoolRelease crosstool : crosstoolReleases) {
-      for (CToolchain toolchain : crosstool.getToolchainList()) {
-        // Each toolchain has at least one built-in include directory
-        assertThat(toolchain.getCxxBuiltinIncludeDirectoryList()).isNotEmpty();
-
-        for (String flag : toolchain.getUnfilteredCxxFlagList()) {
-          // This list only contains "-isystem" and the values after "-isystem".
-          if (!flag.equals("-isystem")) {
-            // We should NOT be setting -isystem for the builtin includes directories. They are
-            // already on the search list and adding the -isystem flag just changes their priority.
-            assertThat(toolchain.getCxxBuiltinIncludeDirectoryList()).doesNotContain(flag);
           }
         }
       }
