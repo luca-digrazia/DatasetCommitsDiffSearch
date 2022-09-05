@@ -489,11 +489,11 @@ public class ObjcRuleClasses {
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
           .add(attr("$plmerge", LABEL).cfg(HOST).exec()
-              .value(env.getToolsLabel("//tools/objc:plmerge")))
+              .value(env.getLabel(env.getToolsRepository() + "//tools/objc:plmerge")))
           .add(attr("$actoolwrapper", LABEL).cfg(HOST).exec()
-              .value(env.getToolsLabel("//tools/objc:actoolwrapper")))
+              .value(env.getLabel(env.getToolsRepository() + "//tools/objc:actoolwrapper")))
           .add(attr("$ibtoolwrapper", LABEL).cfg(HOST).exec()
-              .value(env.getToolsLabel("//tools/objc:ibtoolwrapper")))
+              .value(env.getLabel(env.getToolsRepository() + "//tools/objc:ibtoolwrapper")))
           .build();
     }
     @Override
@@ -513,9 +513,9 @@ public class ObjcRuleClasses {
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
           .add(attr("$xcodegen", LABEL).cfg(HOST).exec()
-              .value(env.getToolsLabel("//tools/objc:xcodegen")))
+              .value(env.getLabel(env.getToolsRepository() + "//tools/objc:xcodegen")))
           .add(attr("$dummy_source", LABEL)
-              .value(env.getToolsLabel("//tools/objc:dummy.c")))
+              .value(env.getLabel(env.getToolsRepository() + "//tools/objc:dummy.c")))
           .build();
     }
     @Override
@@ -732,15 +732,16 @@ public class ObjcRuleClasses {
           .add(attr("$dumpsyms", LABEL)
           .cfg(HOST)
           .singleArtifact()
-          .value(env.getToolsLabel("//tools/objc:dump_syms")))
+          .value(env.getLabel(env.getToolsRepository() + "//tools/objc:dump_syms")))
           .add(attr("$j2objc_dead_code_pruner", LABEL)
               .allowedFileTypes(FileType.of(".py"))
               .cfg(HOST)
               .exec()
               .singleArtifact()
-              .value(env.getToolsLabel("//tools/objc:j2objc_dead_code_pruner")))
+              .value(env.getLabel(
+                  env.getToolsRepository() + "//tools/objc:j2objc_dead_code_pruner")))
           .add(attr("$dummy_lib", LABEL)
-              .value(env.getToolsLabel("//tools/objc:dummy_lib")))
+              .value(env.getLabel(env.getToolsRepository() + "//tools/objc:dummy_lib")))
         .build();
     }
     @Override
@@ -806,12 +807,14 @@ public class ObjcRuleClasses {
               attr("$momcwrapper", LABEL)
                   .cfg(HOST)
                   .exec()
-                  .value(env.getToolsLabel("//tools/objc:momcwrapper")))
+                  .value(env.getLabel(env.getToolsRepository() + "//tools/objc:momcwrapper")))
           .add(
               attr("$swiftstdlibtoolwrapper", LABEL)
                   .cfg(HOST)
                   .exec()
-                  .value(env.getToolsLabel("//tools/objc:swiftstdlibtoolwrapper")))
+                  .value(
+                      env.getLabel(
+                          env.getToolsRepository() + "//tools/objc:swiftstdlibtoolwrapper")))
           .build();
     }
 
@@ -949,12 +952,13 @@ public class ObjcRuleClasses {
               attr("$bundlemerge", LABEL)
                   .cfg(HOST)
                   .exec()
-                  .value(env.getToolsLabel("//tools/objc:bundlemerge")))
+                  .value(env.getLabel(env.getToolsRepository() + "//tools/objc:bundlemerge")))
           .add(
               attr("$environment_plist", LABEL)
                   .cfg(HOST)
                   .exec()
-                  .value(env.getToolsLabel("//tools/objc:environment_plist")))
+                  .value(env.getLabel(
+                      env.getToolsRepository() + "//tools/objc:environment_plist")))
           .build();
     }
     @Override
@@ -976,9 +980,9 @@ public class ObjcRuleClasses {
       return builder
           // Needed to run the binary in the simulator.
           .add(attr("$iossim", LABEL).cfg(HOST).exec()
-              .value(env.getToolsLabel("//third_party/iossim:iossim")))
+              .value(env.getLabel(env.getToolsRepository() + "//third_party/iossim:iossim")))
           .add(attr("$std_redirect_dylib", LABEL).cfg(HOST).exec()
-              .value(env.getToolsLabel("//tools/objc:StdRedirect.dylib")))
+              .value(env.getLabel(env.getToolsRepository() + "//tools/objc:StdRedirect.dylib")))
           .build();
     }
     @Override
@@ -998,7 +1002,7 @@ public class ObjcRuleClasses {
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
           .add(attr("$xcrunwrapper", LABEL).cfg(HOST).exec()
-              .value(env.getToolsLabel("//tools/objc:xcrunwrapper")))
+              .value(env.getLabel(env.getToolsRepository() + "//tools/objc:xcrunwrapper")))
           .build();
     }
     @Override
@@ -1011,4 +1015,3 @@ public class ObjcRuleClasses {
     }
   }
 }
-
