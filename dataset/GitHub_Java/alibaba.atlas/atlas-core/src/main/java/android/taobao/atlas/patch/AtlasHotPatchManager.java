@@ -380,17 +380,15 @@ public class AtlasHotPatchManager implements BundleListener{
 
         private boolean isValidEntryClass(Class clazz){
             Class[] interfaces = clazz.getInterfaces();
-            if (null == interfaces){
-                return false;
-            }
-            for(Class itf : interfaces){
-                if(itf != IAtlasHotPatch.class) {
-                    continue;
-                }
-                Process processAnno =  (Process) clazz.getAnnotation(Process.class);
-                String patchProcess = processAnno !=null ? processAnno.value() : RuntimeVariables.androidApplication.getPackageName();
-                if(patchProcess.equals(RuntimeVariables.sCurrentProcessName)) {
-                    return true;
+            if(interfaces!=null){
+                for(Class itf : interfaces){
+                    if(itf == IAtlasHotPatch.class){
+                        Process processAnno =  (Process) itf.getAnnotation(Process.class);
+                        String patchProcess = processAnno!=null ? processAnno.value() : RuntimeVariables.androidApplication.getPackageName();
+                        if(processAnno.value().equals(RuntimeVariables.sCurrentProcessName)) {
+                            return true;
+                        }
+                    }
                 }
             }
             return false;

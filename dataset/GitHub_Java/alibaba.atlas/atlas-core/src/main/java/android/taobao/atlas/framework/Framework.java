@@ -468,8 +468,7 @@ public final class Framework {
             bundle = new BundleImpl(bundleDir, location, null, file,info.getUnique_tag(),true,-1l);
             return bundle;
         } catch (IOException e) {
-            BundleException e1 = new BundleException(
-                "Failed to install bundle." + FileUtils.getAvailableDisk() + ", location=" + location, e);
+            BundleException e1 = new BundleException("Failed to install bundle." + FileUtils.getAvailableDisk(), e);
             if (bundleDir != null && !updateHappend) {
                 Framework.deleteDirectory(bundleDir);
             }
@@ -478,8 +477,7 @@ public final class Framework {
             }
             throw new BundleException("Failed to install bundle.", e);
         } catch (BundleException e) {
-            BundleException e1 = new BundleException(
-                "Failed to install bundle." + FileUtils.getAvailableDisk() + ", location=" + location, e);
+            BundleException e1 = new BundleException("Failed to install bundle." + FileUtils.getAvailableDisk(), e);
             if (bundleDir != null && !updateHappend) {
                 Framework.deleteDirectory(bundleDir);
             }

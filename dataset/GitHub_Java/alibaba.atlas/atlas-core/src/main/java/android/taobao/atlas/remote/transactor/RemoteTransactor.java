@@ -18,7 +18,6 @@ public class RemoteTransactor implements IRemoteContext,IRemoteTransactor{
 
     public static RemoteTransactor crateRemoteTransactor(Activity activity,String key,String bundleName) throws Exception{
         RemoteTransactor remoteTransactor = new RemoteTransactor();
-        remoteTransactor.targetBundleName = bundleName;
         if(activity!=null) {
             remoteTransactor.remoteActivity = RemoteActivityManager.obtain(activity).getRemoteHost(remoteTransactor);
         }
@@ -26,16 +25,17 @@ public class RemoteTransactor implements IRemoteContext,IRemoteTransactor{
         String viewClassName = bi.remoteTransactors.get(key);
         Class transactorClass = Atlas.getInstance().getBundleClassLoader(bundleName).loadClass(viewClassName);
         remoteTransactor.targetTransactor = (IRemote)transactorClass.newInstance();
+        remoteTransactor.targetBundleName = bundleName;
         return remoteTransactor;
     }
 
     private String targetBundleName;
     private Activity remoteActivity;
-    private IRemote hostTransactor;
+    private IRemoteTransactor hostTransactor;
     private IRemote targetTransactor;
 
     @Override
-    public void registerHostTransactor(IRemote transactor) {
+    public void registerHostTransactor(IRemoteTransactor transactor) {
         hostTransactor = transactor;
     }
 
@@ -50,7 +50,7 @@ public class RemoteTransactor implements IRemoteContext,IRemoteTransactor{
     }
 
     @Override
-    public IRemote getHostTransactor() {
+    public IRemoteTransactor getHostTransactor() {
         return hostTransactor;
     }
 
@@ -60,7 +60,7 @@ public class RemoteTransactor implements IRemoteContext,IRemoteTransactor{
     }
 
     @Override
-    public <T> T getRemoteInterface(Class<T> interfaceClass,Bundle args) {
-        return targetTransactor.getRemoteInterface(interfaceClass,args);
+    public <T> T getRemoteInterface(Class<T> interfaceClass) {
+        return targetTransactor.getRemoteInterface(interfaceClass);
     }
 }
