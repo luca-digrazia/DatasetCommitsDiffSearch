@@ -14,14 +14,13 @@
 
 package com.google.devtools.build.lib.rules.repository;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.RuleFormatter;
+import com.google.devtools.build.lib.packages.RuleSerializer;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
@@ -34,25 +33,21 @@ import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import javax.annotation.Nullable;
 
 /**
  * A {@link SkyFunction} that implements delegation to the correct repository fetcher.
  *
- * <p>
- * Each repository in the WORKSPACE file is represented by a {@link SkyValue} that is computed by
- * this function.
+ * <p>Each repository in the WORKSPACE file is represented by a {@link SkyValue} that is computed
+ * by this function.
  */
 public final class RepositoryDelegatorFunction implements SkyFunction {
-
-  // The marker file version is inject in the rule key digest so the rule key is always different
-  // when we decide to update the format.
-  private static final int MARKER_FILE_VERSION = 2;
 
   // A special repository delegate used to handle Skylark remote repositories if present.
   public static final String SKYLARK_DELEGATE_NAME = "$skylark";
@@ -69,8 +64,10 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
 
   private Map<String, String> clientEnvironment;
 
-  public RepositoryDelegatorFunction(ImmutableMap<String, RepositoryFunction> handlers,
-      @Nullable RepositoryFunction skylarkHandler, AtomicBoolean isFetch) {
+  public RepositoryDelegatorFunction(
+      ImmutableMap<String, RepositoryFunction> handlers,
+      @Nullable RepositoryFunction skylarkHandler,
+      AtomicBoolean isFetch) {
     this.handlers = handlers;
     this.skylarkHandler = skylarkHandler;
     this.isFetch = isFetch;
@@ -109,50 +106,35 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
       handler = handlers.get(rule.getRuleClass());
     }
     if (handler == null) {
-      throw new RepositoryFunctionException(
-          new EvalException(Location.fromFile(directories.getWorkspace().getRelative("WORKSPACE")),
-              "Could not find handler for " + rule),
-          Transience.PERSISTENT);
+      throw new RepositoryFunctionException(new EvalException(
+          Location.fromFile(directories.getWorkspace().getRelative("WORKSPACE")),
+          "Could not find handler for " + rule), Transience.PERSISTENT);
     }
-
-    handler.setClientEnvironment(clientEnvironment);
 
     Path repoRoot =
         RepositoryFunction.getExternalRepositoryDirectory(directories).getRelative(rule.getName());
-    byte[] ruleSpecificData = handler.getRuleSpecificMarkerData(rule, env);
-    if (ruleSpecificData == null) {
-      return null;
-    }
-    String ruleKey = computeRuleKey(rule, ruleSpecificData);
-    Map<String, String> markerData = new TreeMap<>();
-    Path markerPath = getMarkerPath(directories, rule);
 
+    handler.setClientEnvironment(clientEnvironment);
     if (handler.isLocal(rule)) {
       // Local repositories are always fetched because the operation is generally fast and they do
-      // not depend on non-local data, so it does not make much sense to try to cache from across
+      // not depend on non-local data, so it does not make much sense to try to catch from across
       // server instances.
       setupRepositoryRoot(repoRoot);
-      RepositoryDirectoryValue.Builder localRepo =
-          handler.fetch(rule, repoRoot, directories, env, markerData);
-      if (localRepo == null) {
-        return null;
-      } else {
-        // We write the marker file for local repository essentially for getting the digest and
-        // injecting it in the RepositoryDirectoryValue.
-        byte[] digest = writeMarkerFile(markerPath, markerData, ruleKey);
-        return localRepo.setDigest(digest).build();
-      }
+      return handler.fetch(rule, repoRoot, directories, env);
     }
 
     // We check the repository root for existence here, but we can't depend on the FileValue,
     // because it's possible that we eventually create that directory in which case the FileValue
     // and the state of the file system would be inconsistent.
 
-    byte[] markerHash = isFilesystemUpToDate(markerPath, rule, ruleKey, handler, env);
-    if (env.valuesMissing()) {
+    byte[] ruleSpecificData = handler.getRuleSpecificMarkerData(rule, env);
+    if (ruleSpecificData == null) {
       return null;
     }
-    if (markerHash != null && repoRoot.exists()) {
+    byte[] ruleKey = computeRuleKey(rule, ruleSpecificData);
+    Path markerPath = getMarkerPath(directories, rule);
+    boolean markerUpToDate = isFilesystemUpToDate(markerPath, ruleKey);
+    if (markerUpToDate && repoRoot.exists()) {
       // Now that we know that it exists, we can declare a Skyframe dependency on the repository
       // root.
       RepositoryFunction.getRepositoryDirectory(repoRoot, env);
@@ -160,14 +142,13 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
         return null;
       }
 
-      return RepositoryDirectoryValue.builder().setPath(repoRoot).setDigest(markerHash).build();
+      return RepositoryDirectoryValue.create(repoRoot);
     }
 
     if (isFetch.get()) {
       // Fetching enabled, go ahead.
       setupRepositoryRoot(repoRoot);
-      RepositoryDirectoryValue.Builder result =
-          handler.fetch(rule, repoRoot, directories, env, markerData);
+      SkyValue result = handler.fetch(rule, repoRoot, directories, env);
       if (env.valuesMissing()) {
         return null;
       }
@@ -176,14 +157,14 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
       // and writing the marker file because if they aren't computed, it would cause a Skyframe
       // restart thus calling the possibly very slow (networking, decompression...) fetch()
       // operation again. So we write the marker file here immediately.
-      byte[] digest = writeMarkerFile(markerPath, markerData, ruleKey);
-      return result.setDigest(digest).build();
+      writeMarkerFile(markerPath, ruleKey);
+      return result;
     }
 
     if (!repoRoot.exists()) {
       // The repository isn't on the file system, there is nothing we can do.
-      throw new RepositoryFunctionException(
-          new IOException("to fix, run\n\tbazel fetch //...\nExternal repository " + repositoryName
+      throw new RepositoryFunctionException(new IOException(
+          "to fix, run\n\tbazel fetch //...\nExternal repository " + repositoryName
               + " not found and fetching repositories is disabled."),
           Transience.TRANSIENT);
     }
@@ -196,134 +177,58 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
     }
 
     // Try to build with whatever is on the file system and emit a warning.
-    env.getListener()
-        .handle(Event.warn(rule.getLocation(),
-            String.format(
-                "External repository '%s' is not up-to-date and fetching is disabled. To update, "
-                    + "run the build without the '--nofetch' command line option.",
-                rule.getName())));
+    env.getListener().handle(Event.warn(rule.getLocation(), String.format(
+        "External repository '%s' is not up-to-date and fetching is disabled. To update, "
+        + "run the build without the '--nofetch' command line option.",
+        rule.getName())));
 
-    return RepositoryDirectoryValue.builder().setPath(repoRootValue.realRootedPath().asPath())
-        .setFetchingDelayed().build();
+    return RepositoryDirectoryValue.fetchingDelayed(repoRootValue.realRootedPath().asPath());
   }
 
-  private final String computeRuleKey(Rule rule, byte[] ruleSpecificData) {
-    return new Fingerprint().addBytes(RuleFormatter.serializeRule(rule).build().toByteArray())
+  private final byte[] computeRuleKey(Rule rule, byte[] ruleSpecificData) {
+    return new Fingerprint()
+        .addBytes(RuleSerializer.serializeRule(rule).build().toByteArray())
         .addBytes(ruleSpecificData)
-        .addInt(MARKER_FILE_VERSION).hexDigestAndReset();
+        // This is to make the fingerprint different after adding names to the generated
+        // WORKSPACE files so they will get re-created, because otherwise there are
+        // annoying warnings for all of them.
+        // TODO(bsilver16384@gmail.com): Remove this once everybody's upgraded to the
+        // new WORKSPACE files.
+        .addInt(1)
+        .digestAndReset();
   }
 
   /**
    * Checks if the state of the repository in the file system is consistent with the rule in the
    * WORKSPACE file.
    *
-   * <p>
-   * Deletes the marker file if not so that no matter what happens after, the state of the file
+   * <p>Deletes the marker file if not so that no matter what happens after, the state of the file
    * system stays consistent.
-   *
-   * <p>
-   * Returns null if the file system is not up to date and a hash of the marker file if the file
-   * system is up to date.
    */
-  @Nullable
-  private final byte[] isFilesystemUpToDate(Path markerPath, Rule rule, String ruleKey,
-      RepositoryFunction handler, Environment env)
-      throws RepositoryFunctionException, InterruptedException {
+  private final boolean isFilesystemUpToDate(Path markerPath, byte[] ruleKey)
+      throws RepositoryFunctionException {
     try {
       if (!markerPath.exists()) {
-        return null;
+        return false;
       }
 
-      String content = FileSystemUtils.readContent(markerPath, StandardCharsets.UTF_8);
-
-      String[] lines = content.split("\n");
-      Map<String, String> markerData = new TreeMap<>();
-      String markerRuleKey = "";
-      boolean firstLine = true;
-      for (String line : lines) {
-        if (firstLine) {
-          markerRuleKey = line;
-          firstLine = false;
-        } else {
-          int sChar = line.indexOf(' ');
-          String key = line;
-          String value = "";
-          if (sChar > 0) {
-            key = unescape(line.substring(0, sChar));
-            value = unescape(line.substring(sChar + 1));
-          }
-          markerData.put(key, value);
-        }
-      }
-      boolean result = false;
-      if (markerRuleKey.equals(ruleKey)) {
-        result = handler.verifyMarkerData(rule, markerData, env);
-        if (env.valuesMissing()) {
-          return null;
-        }
-      }
-
-      if (result) {
-        return new Fingerprint().addString(content).digestAndReset();
-      } else {
+      byte[] content = FileSystemUtils.readContent(markerPath);
+      boolean result = Arrays.equals(ruleKey, content);
+      if (!result) {
         // So that we are in a consistent state if something happens while fetching the repository
         markerPath.delete();
-        return null;
       }
 
+      return result;
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
   }
 
-  // Escape a value for the marker file
-  @VisibleForTesting
-  static String escape(String str) {
-    return str == null ? "\\0" : str.replace("\\", "\\\\").replace("\n", "\\n").replace(" ", "\\s");
-  }
-
-  // Unescape a value from the marker file
-  @VisibleForTesting
-  static String unescape(String str) {
-    if (str.equals("\\0")) {
-      return null; // \0 == null string
-    }
-    StringBuffer result = new StringBuffer();
-    boolean escaped = false;
-    for (int i = 0; i < str.length(); i++) {
-      char c = str.charAt(i);
-      if (escaped) {
-        if (c == 'n') {  // n means new line
-          result.append("\n");
-        } else if (c == 's') { // s means space
-          result.append(" ");
-        } else {  // Any other escaped characters are just un-escaped
-          result.append(c);
-        }
-        escaped = false;
-      } else if (c == '\\') {
-        escaped = true;
-      } else {
-        result.append(c);
-      }
-    }
-    return result.toString();
-  }
-
-  private final byte[] writeMarkerFile(
-      Path markerPath, Map<String, String> markerData, String ruleKey)
+  private final void writeMarkerFile(Path markerPath, byte[] ruleKey)
       throws RepositoryFunctionException {
     try {
-      StringBuilder builder = new StringBuilder();
-      builder.append(ruleKey).append("\n");
-      for (Map.Entry<String, String> data : markerData.entrySet()) {
-        String key = data.getKey();
-        String value = data.getValue();
-        builder.append(escape(key)).append(" ").append(escape(value)).append("\n");
-      }
-      String content = builder.toString();
-      FileSystemUtils.writeContent(markerPath, StandardCharsets.UTF_8, content);
-      return new Fingerprint().addString(content).digestAndReset();
+      FileSystemUtils.writeContent(markerPath, ruleKey);
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
