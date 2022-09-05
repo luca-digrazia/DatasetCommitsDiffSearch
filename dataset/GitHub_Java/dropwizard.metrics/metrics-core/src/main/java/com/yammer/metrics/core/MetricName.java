@@ -55,7 +55,7 @@ public class MetricName implements Comparable<MetricName> {
      * @param scope the scope of the {@link Metric}
      */
     public MetricName(String group, String type, String name, String scope) {
-        this(group, type, name, scope, createMBeanName(group, type, name, scope));
+        this(group, type, name, scope, MetricName.createMBeanName(group, type, name, scope));
     }
 
     /**
@@ -156,11 +156,6 @@ public class MetricName implements Comparable<MetricName> {
         return mBeanName;
     }
 
-    @Override
-    public int compareTo(MetricName o) {
-        return mBeanName.compareTo(o.mBeanName);
-    }
-
     private static String createMBeanName(String group, String type, String name, String scope) {
         final StringBuilder nameBuilder = new StringBuilder();
         nameBuilder.append(group);
@@ -175,5 +170,10 @@ public class MetricName implements Comparable<MetricName> {
             nameBuilder.append(name);
         }
         return nameBuilder.toString();
+    }
+
+    @Override
+    public int compareTo(MetricName o) {
+        return mBeanName.compareTo(o.mBeanName);
     }
 }
