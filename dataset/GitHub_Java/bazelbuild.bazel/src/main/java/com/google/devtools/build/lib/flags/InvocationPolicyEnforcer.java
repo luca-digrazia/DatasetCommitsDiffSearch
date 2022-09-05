@@ -19,7 +19,6 @@ import com.google.common.base.Functions;
 import com.google.common.base.Strings;
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.AllowValues;
@@ -111,7 +110,7 @@ public final class InvocationPolicyEnforcer {
    * @throws OptionsParsingException if any flag policy is invalid.
    */
   public void enforce(OptionsParser parser) throws OptionsParsingException {
-    enforce(parser, null);
+    enforce(parser, "");
   }
 
   /**
@@ -119,36 +118,29 @@ public final class InvocationPolicyEnforcer {
    *
    * @param parser The OptionsParser to enforce policy on.
    * @param command The current blaze command, for flag policies that apply to only specific
-   *     commands. Such policies will be enforced only if they contain this command or a command
-   *     they inherit from
+   *     commands.
    * @throws OptionsParsingException if any flag policy is invalid.
    */
-  public void enforce(OptionsParser parser, @Nullable String command)
-      throws OptionsParsingException {
+  public void enforce(OptionsParser parser, String command) throws OptionsParsingException {
     if (invocationPolicy == null || invocationPolicy.getFlagPoliciesCount() == 0) {
       return;
     }
 
-    ImmutableSet<String> commandAndParentCommands =
-        command == null
-            ? ImmutableSet.<String>of()
-            : CommandNameCache.CommandNameCacheInstance.INSTANCE.get(command);
     for (FlagPolicy flagPolicy : invocationPolicy.getFlagPoliciesList()) {
       String flagName = flagPolicy.getFlagName();
 
       // Skip the flag policy if it doesn't apply to this command. If the commands list is empty,
       // then the policy applies to all commands.
-      if (!flagPolicy.getCommandsList().isEmpty() && !commandAndParentCommands.isEmpty()) {
-        boolean flagApplies = false;
-        for (String policyCommand : flagPolicy.getCommandsList()) {
-          if (commandAndParentCommands.contains(policyCommand)) {
-            flagApplies = true;
-            break;
-          }
-        }
-        if (!flagApplies) {
-          continue;
-        }
+      if (!flagPolicy.getCommandsList().isEmpty()
+          && !flagPolicy.getCommandsList().contains(command)) {
+        log.info(
+            String.format(
+                "Skipping flag policy for flag '%s' because it "
+                    + "applies only to commands %s and the current command is '%s'",
+                flagName,
+                flagPolicy.getCommandsList(),
+                command));
+        continue;
       }
 
       OptionValueDescription valueDescription;
@@ -255,10 +247,10 @@ public final class InvocationPolicyEnforcer {
               setValue.getFlagValueList()));
     } else {
 
-      if (!setValue.getAppend()) {
-        // Clear the value in case the flag is a repeated flag so that values don't accumulate.
-        parser.clearValue(flagName);
-      }
+      // Clear the value in case the flag is a repeated flag (so that values don't accumulate), and
+      // in case the flag is an expansion flag or has implicit flags (so that the additional flags
+      // also get cleared).
+      parser.clearValue(flagName);
 
       // Set all the flag values from the policy.
       for (String flagValue : setValue.getFlagValueList()) {
@@ -285,8 +277,7 @@ public final class InvocationPolicyEnforcer {
     }
   }
 
-  private static void applyUseDefaultOperation(OptionsParser parser, String flagName)
-      throws OptionsParsingException {
+  private static void applyUseDefaultOperation(OptionsParser parser, String flagName) {
 
     Map<String, OptionValueDescription> clearedValues = parser.clearValue(flagName);
     for (Entry<String, OptionValueDescription> clearedValue : clearedValues.entrySet()) {
