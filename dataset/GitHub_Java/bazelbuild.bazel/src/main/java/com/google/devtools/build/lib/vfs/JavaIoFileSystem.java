@@ -17,8 +17,10 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
+import com.google.devtools.build.lib.unix.FileAccessException;
 import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.util.JavaClock;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -189,11 +191,6 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  public boolean supportsHardLinksNatively() {
-    return true;
-  }
-
-  @Override
   public boolean isFilePathCaseSensitive() {
     return true;
   }
@@ -279,7 +276,7 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
     long startTime = Profiler.nanoTimeMaybe();
     try {
       String link = Files.readSymbolicLink(file.toPath()).toString();
-      return PathFragment.create(link);
+      return new PathFragment(link);
     } catch (java.nio.file.NotLinkException e) {
       throw new NotASymlinkException(path);
     } catch (java.nio.file.NoSuchFileException e) {
@@ -470,13 +467,5 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
       // between not-found exceptions and others.
       throw new IllegalStateException(e);
     }
-  }
-
-  @Override
-  protected void createFSDependentHardLink(Path linkPath, Path originalPath)
-      throws IOException {
-    Files.createLink(
-        java.nio.file.Paths.get(linkPath.toString()),
-        java.nio.file.Paths.get(originalPath.toString()));
   }
 }
