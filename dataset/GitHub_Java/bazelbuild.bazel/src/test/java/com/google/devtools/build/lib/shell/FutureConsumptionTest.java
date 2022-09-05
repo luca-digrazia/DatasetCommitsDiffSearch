@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import org.junit.runners.JUnit4;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -37,8 +38,7 @@ import java.util.logging.Logger;
 public class FutureConsumptionTest {
 
   @Before
-  public void setUp() throws Exception {
-
+  public final void configureLogger() throws Exception  {
     // enable all log statements to ensure there are no problems with
     // logging code
     Logger.getLogger("com.google.devtools.build.lib.shell.Command").setLevel(Level.FINEST);
@@ -49,8 +49,6 @@ public class FutureConsumptionTest {
     public void write(int b) {}
   };
 
-  private boolean inputFinished;
-
   @Test
   public void testFutureConsumptionIgnoresInterruptedExceptions()
   throws Exception {
@@ -59,20 +57,18 @@ public class FutureConsumptionTest {
     OutErrConsumers outErr = Consumers.createStreamingConsumers(DEV_NULL,
                                                                 DEV_NULL);
 
-    inputFinished = false;
+    final AtomicBoolean inputFinished = new AtomicBoolean(false);
 
     // We keep producing input until the other thread (the main test thread)
     // tells us to shut up ...
     InputStream outInput = new InputStream() {
-
       @Override
       public int read() {
-        if(inputFinished){
+        if (inputFinished.get()){
           return -1;
         }
         return 0;
       }
-
     };
     ByteArrayInputStream errInput = new ByteArrayInputStream(new byte[0]);
     outErr.registerInputs(outInput, errInput, false);
@@ -83,7 +79,7 @@ public class FutureConsumptionTest {
     // go into a different thread, wait a bit, interrupt the test thread,
     // wait a bit, and tell the input stream to finish.
     new Thread() {
-
+      @Override
       public void run() {
         try {
           Thread.sleep(1000);
@@ -92,9 +88,8 @@ public class FutureConsumptionTest {
         try {
           Thread.sleep(1000);
         } catch (InterruptedException e) {}
-        inputFinished = true;
+        inputFinished.set(true);
       }
-
     }.start();
 
     outErr.waitForCompletion();

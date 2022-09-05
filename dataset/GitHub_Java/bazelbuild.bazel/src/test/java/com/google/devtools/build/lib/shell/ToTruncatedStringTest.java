@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.shell;
 
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 
 import org.junit.Before;
@@ -35,8 +36,7 @@ import java.util.logging.Logger;
 public class ToTruncatedStringTest {
 
   @Before
-  public void setUp() throws Exception {
-
+  public final void configureLogger() throws Exception  {
     // enable all log statements to ensure there are no problems with
     // logging code
     Logger.getLogger("com.google.devtools.build.lib.shell.Command").setLevel(Level.FINEST);
@@ -44,12 +44,12 @@ public class ToTruncatedStringTest {
 
   @Test
   public void testTruncatingNullYieldsEmptyString() {
-    assertEquals("", LogUtil.toTruncatedString(null));
+    assertThat(LogUtil.toTruncatedString(null)).isEmpty();
   }
 
   @Test
   public void testTruncatingEmptyArrayYieldsEmptyString() {
-    assertEquals("", LogUtil.toTruncatedString(new byte[0]));
+    assertThat(LogUtil.toTruncatedString(new byte[0])).isEmpty();
   }
 
   @Test
