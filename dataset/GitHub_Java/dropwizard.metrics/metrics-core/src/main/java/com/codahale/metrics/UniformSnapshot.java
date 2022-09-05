@@ -49,7 +49,7 @@ public class UniformSnapshot extends Snapshot {
      */
     @Override
     public double getValue(double quantile) {
-        if (quantile < 0.0 || quantile > 1.0 || Double.isNaN( quantile )) {
+        if (quantile < 0.0 || quantile > 1.0) {
             throw new IllegalArgumentException(quantile + " is not in [0..1]");
         }
 
@@ -58,18 +58,17 @@ public class UniformSnapshot extends Snapshot {
         }
 
         final double pos = quantile * (values.length + 1);
-        final int index = (int) pos;
 
-        if (index < 1) {
+        if (pos < 1) {
             return values[0];
         }
 
-        if (index >= values.length) {
+        if (pos >= values.length) {
             return values[values.length - 1];
         }
 
-        final double lower = values[index - 1];
-        final double upper = values[index];
+        final double lower = values[(int) pos - 1];
+        final double upper = values[(int) pos];
         return lower + (pos - floor(pos)) * (upper - lower);
     }
 
