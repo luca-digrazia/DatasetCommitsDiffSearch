@@ -84,7 +84,6 @@ import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -445,18 +444,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return view.getDirectPrerequisitesForTesting(reporter, target, masterConfig);
   }
 
-  protected ConfiguredTarget getDirectPrerequisite(ConfiguredTarget target, String label)
-      throws Exception {
-    Label candidateLabel = Label.parseAbsolute(label);
-    for (ConfiguredTarget candidate : getDirectPrerequisites(target)) {
-      if (candidate.getLabel().equals(candidateLabel)) {
-        return candidate;
-      }
-    }
-
-    return null;
-  }
-
   /**
    * Asserts that a target's prerequisites contain the given dependency.
    */
@@ -506,12 +493,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected RuleContext getRuleContext(ConfiguredTarget target) throws Exception {
     return view.getRuleContextForTesting(
         reporter, target, new StubAnalysisEnvironment(), masterConfig);
-  }
-
-  protected RuleContext getRuleContext(ConfiguredTarget target,
-      AnalysisEnvironment analysisEnvironment) throws Exception {
-    return view.getRuleContextForTesting(
-        reporter, target, analysisEnvironment, masterConfig);
   }
 
   /**
@@ -982,8 +963,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * used instead.
    */
   protected Artifact getBinArtifactWithNoOwner(String rootRelativePath) {
-    return getDerivedArtifact(new PathFragment(rootRelativePath),
-        targetConfig.getBinDirectory(RepositoryName.MAIN),
+    return getDerivedArtifact(new PathFragment(rootRelativePath), targetConfig.getBinDirectory(),
         ActionsTestUtil.NULL_ARTIFACT_OWNER);
   }
 
@@ -1005,8 +985,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected Artifact getBinArtifact(String packageRelativePath, ConfiguredTarget owner) {
     return getPackageRelativeDerivedArtifact(packageRelativePath,
-        owner.getConfiguration().getBinDirectory(RepositoryName.MAIN),
-        new ConfiguredTargetKey(owner));
+        owner.getConfiguration().getBinDirectory(), new ConfiguredTargetKey(owner));
   }
 
   /**
@@ -1040,7 +1019,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       AspectParameters parameters) {
     return getPackageRelativeDerivedArtifact(
         packageRelativePath,
-        owner.getConfiguration().getBinDirectory(RepositoryName.MAIN),
+        owner.getConfiguration().getBinDirectory(),
         (AspectValue.AspectKey)
             AspectValue.key(
                     owner.getLabel(),
@@ -1058,8 +1037,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * be "foo.o".
    */
   private Artifact getBinArtifact(String packageRelativePath, ArtifactOwner owner) {
-    return getPackageRelativeDerivedArtifact(packageRelativePath,
-        targetConfig.getBinDirectory(RepositoryName.MAIN),
+    return getPackageRelativeDerivedArtifact(packageRelativePath, targetConfig.getBinDirectory(),
         owner);
   }
 
@@ -1071,8 +1049,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected Artifact getGenfilesArtifactWithNoOwner(String rootRelativePath) {
     return getDerivedArtifact(new PathFragment(rootRelativePath),
-        targetConfig.getGenfilesDirectory(RepositoryName.MAIN),
-        ActionsTestUtil.NULL_ARTIFACT_OWNER);
+        targetConfig.getGenfilesDirectory(), ActionsTestUtil.NULL_ARTIFACT_OWNER);
   }
 
   /**
@@ -1117,8 +1094,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       AspectParameters params) {
     return getPackageRelativeDerivedArtifact(
         packageRelativePath,
-        owner.getConfiguration().getGenfilesDirectory(
-            owner.getTarget().getLabel().getPackageIdentifier().getRepository()),
+        owner.getConfiguration().getGenfilesDirectory(),
         (AspectValue.AspectKey)
             AspectValue.key(
                     owner.getLabel(),
@@ -1149,7 +1125,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   private Artifact getGenfilesArtifact(String packageRelativePath, ArtifactOwner owner) {
     return getPackageRelativeDerivedArtifact(packageRelativePath,
-        targetConfig.getGenfilesDirectory(RepositoryName.MAIN),
+        targetConfig.getGenfilesDirectory(),
         owner);
   }
 
@@ -1171,7 +1147,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   private Artifact getIncludeArtifact(String packageRelativePath, ArtifactOwner owner) {
     return getPackageRelativeDerivedArtifact(packageRelativePath,
-        targetConfig.getIncludeDirectory(owner.getLabel().getPackageIdentifier().getRepository()),
+        targetConfig.getIncludeDirectory(),
         owner);
   }
 
@@ -1183,8 +1159,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * @param owner the artifact's owner.
    */
   protected Artifact getSharedArtifact(String rootRelativePath, ConfiguredTarget owner) {
-    return getDerivedArtifact(new PathFragment(rootRelativePath),
-        targetConfig.getBinDirectory(RepositoryName.MAIN),
+    return getDerivedArtifact(new PathFragment(rootRelativePath), targetConfig.getBinDirectory(),
         new ConfiguredTargetKey(owner));
   }
 

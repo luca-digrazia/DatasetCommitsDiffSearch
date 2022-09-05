@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fromTemplates;
 
 import com.google.common.collect.ImmutableList;
@@ -143,22 +142,6 @@ public interface JavaSemantics {
         }
       };
 
-  /**
-   * Implementation for the :java_launcher attribute. Note that the Java launcher is disabled by
-   * default, so it returns null for the configuration-independent default value.
-   */
-  LateBoundLabel<BuildConfiguration> JAVA_LAUNCHER =
-      new LateBoundLabel<BuildConfiguration>(JavaConfiguration.class) {
-        @Override
-        public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
-          // don't read --java_launcher if this target overrides via a launcher attribute
-          if (attributes != null && attributes.isAttributeValueExplicitlySpecified("launcher")) {
-            return attributes.get("launcher", LABEL);
-          }
-          return configuration.getFragment(JavaConfiguration.class).getJavaLauncherLabel();
-        }
-      };
-
   LateBoundLabelList<BuildConfiguration> JAVA_PLUGINS =
       new LateBoundLabelList<BuildConfiguration>() {
         @Override
@@ -234,7 +217,7 @@ public interface JavaSemantics {
    * May add extra command line options to the Java compile command line.
    */
   void buildJavaCommandLine(Collection<Artifact> outputs, BuildConfiguration configuration,
-      CustomCommandLine.Builder result, Label targetLabel);
+      CustomCommandLine.Builder result);
 
 
   /**
@@ -282,14 +265,10 @@ public interface JavaSemantics {
    *
    * @return new main class
    */
-  String addCoverageSupport(
-      JavaCompilationHelper helper,
+  String addCoverageSupport(JavaCompilationHelper helper,
       JavaTargetAttributes.Builder attributes,
-      Artifact executable,
-      Artifact instrumentationMetadata,
-      JavaCompilationArtifacts.Builder javaArtifactsBuilder,
-      String mainClass)
-      throws InterruptedException;
+      Artifact executable, Artifact instrumentationMetadata,
+      JavaCompilationArtifacts.Builder javaArtifactsBuilder, String mainClass);
 
   /**
    * Return the JVM flags to be used in a Java binary.

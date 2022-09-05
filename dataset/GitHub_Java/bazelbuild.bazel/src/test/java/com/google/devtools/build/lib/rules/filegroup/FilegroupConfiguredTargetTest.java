@@ -14,6 +14,8 @@
 package com.google.devtools.build.lib.rules.filegroup;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
@@ -24,6 +26,7 @@ import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.util.FileType;
 import java.io.IOException;
+import java.util.Arrays;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -40,8 +43,9 @@ public class FilegroupConfiguredTargetTest extends BuildViewTestCase {
         "filegroup(name  = 'staticdata',",
         "          srcs = ['staticdata/spam.txt', 'staticdata/good.txt'])");
     ConfiguredTarget groupTarget = getConfiguredTarget("//nevermore:staticdata");
-    assertThat(ActionsTestUtil.prettyArtifactNames(getFilesToBuild(groupTarget)))
-        .containsExactly("nevermore/staticdata/spam.txt", "nevermore/staticdata/good.txt");
+    assertEquals(Arrays.asList("nevermore/staticdata/spam.txt",
+                               "nevermore/staticdata/good.txt"),
+        ActionsTestUtil.prettyArtifactNames(getFilesToBuild(groupTarget)));
   }
 
   @Test
@@ -56,8 +60,8 @@ public class FilegroupConfiguredTargetTest extends BuildViewTestCase {
         "          srcs = ['b.txt', 'a.txt'])");
     FileConfiguredTarget appOutput =
         getFileConfiguredTarget("//java/com/google/test:test_app.jar");
-    assertThat(actionsTestUtil().predecessorClosureOf(appOutput.getArtifact(), FileType.of(".txt")))
-        .isEqualTo("b.txt a.txt");
+    assertEquals("b.txt a.txt", actionsTestUtil().predecessorClosureOf(
+        appOutput.getArtifact(), FileType.of(".txt")));
   }
 
   @Test
@@ -91,42 +95,38 @@ public class FilegroupConfiguredTargetTest extends BuildViewTestCase {
   @Test
   public void testFileCanBeSrcsOfMultipleRules() throws Exception {
     writeTest();
-    assertThat(
-            ActionsTestUtil.prettyArtifactNames(getFilesToBuild(getConfiguredTarget("//test:a"))))
-        .containsExactly("test/a.txt");
-    assertThat(
-            ActionsTestUtil.prettyArtifactNames(getFilesToBuild(getConfiguredTarget("//test:b"))))
-        .containsExactly("test/a.txt");
+    assertEquals(Arrays.asList("test/a.txt"),
+        ActionsTestUtil.prettyArtifactNames(getFilesToBuild(getConfiguredTarget("//test:a"))));
+    assertEquals(Arrays.asList("test/a.txt"),
+        ActionsTestUtil.prettyArtifactNames(getFilesToBuild(getConfiguredTarget("//test:b"))));
   }
 
   @Test
   public void testRuleCanBeSrcsOfOtherRule() throws Exception {
     writeTest();
-    assertThat(
-            ActionsTestUtil.prettyArtifactNames(getFilesToBuild(getConfiguredTarget("//test:c"))))
-        .containsExactly("test/a.txt", "test/b.txt");
+    assertEquals(Arrays.asList("test/a.txt", "test/b.txt"),
+        ActionsTestUtil.prettyArtifactNames(getFilesToBuild(getConfiguredTarget("//test:c"))));
   }
 
   @Test
   public void testOtherPackageCanBeSrcsOfRule() throws Exception {
     writeTest();
-    assertThat(
-            ActionsTestUtil.prettyArtifactNames(getFilesToBuild(getConfiguredTarget("//test:d"))))
-        .containsExactly("another/another.txt");
+    assertEquals(Arrays.asList("another/another.txt"),
+        ActionsTestUtil.prettyArtifactNames(getFilesToBuild(getConfiguredTarget("//test:d"))));
   }
 
   @Test
   public void testIsNotExecutable() throws Exception {
     scratch.file("x/BUILD",
                 "filegroup(name = 'not_exec_two_files', srcs = ['bin', 'bin.sh'])");
-    assertThat(getExecutable("//x:not_exec_two_files")).isNull();
+    assertNull(getExecutable("//x:not_exec_two_files"));
   }
 
   @Test
   public void testIsExecutable() throws Exception {
     scratch.file("x/BUILD",
                 "filegroup(name = 'exec', srcs = ['bin'])");
-    assertThat(getExecutable("//x:exec").getExecPath().getPathString()).isEqualTo("x/bin");
+    assertEquals("x/bin", getExecutable("//x:exec").getExecPath().getPathString());
   }
 
   @Test
@@ -135,8 +135,8 @@ public class FilegroupConfiguredTargetTest extends BuildViewTestCase {
                 "filegroup(name = 'a', srcs = ['file'])",
                 "filegroup(name = 'b', srcs = ['file'])",
                 "filegroup(name = 'c', srcs = [':a', ':b'])");
-    assertThat(ActionsTestUtil.prettyArtifactNames(getFilesToBuild(getConfiguredTarget("//x:c"))))
-        .containsExactly("x/file");
+    assertEquals(Arrays.asList("x/file"),
+        ActionsTestUtil.prettyArtifactNames(getFilesToBuild(getConfiguredTarget("//x:c"))));
   }
 
   @Test
@@ -181,8 +181,7 @@ public class FilegroupConfiguredTargetTest extends BuildViewTestCase {
       getConfiguredTarget("//pkg:group");
       fail("Should throw AssertionError");
     } catch (AssertionError e) {
-      assertThat(e)
-          .hasMessageThat()
+      assertThat(e.getMessage())
           .contains(
               String.format(
                   Filegroup.ILLEGAL_OUTPUT_GROUP_ERROR, OutputGroupProvider.HIDDEN_TOP_LEVEL));
