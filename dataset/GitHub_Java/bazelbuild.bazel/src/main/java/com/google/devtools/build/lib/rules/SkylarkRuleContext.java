@@ -324,8 +324,7 @@ public final class SkylarkRuleContext {
    * See {@link RuleContext#getPrerequisite(String, Mode)}.
    */
   @SkylarkCallable(name = "target", structField = true,
-      doc = "<b>Deprecated, use <code>ctx.attr</code> instead.</b> "
-          + "A <code>struct</code> containing prerequisite targets defined in label type "
+      doc = "A <code>struct</code> containing prerequisite targets defined in label type "
           + "attributes. The struct fields correspond to the attribute names. The struct value "
           + "is always a <a href=\"#modules.Target\"><code>Target</code></a> or <code>None</code>. "
           + "If an optional attribute is not specified in the rule, the corresponding struct "
@@ -338,8 +337,7 @@ public final class SkylarkRuleContext {
    * See {@link RuleContext#getPrerequisites(String, Mode)}.
    */
   @SkylarkCallable(name = "targets", structField = true,
-      doc = "<b>Deprecated, use <code>ctx.attr</code> instead.</b> "
-          + "A <code>struct</code> containing prerequisite targets defined in label or label list "
+      doc = "A <code>struct</code> containing prerequisite targets defined in label or label list "
           + "type attributes. The struct fields correspond to the attribute names. The struct "
           + "values are <code>list</code> of <a href=\"#modules.Target\"><code>Target</code></a>s. "
           + "If an optional attribute is not specified in the rule, an empty list is generated.")
