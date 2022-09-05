@@ -131,7 +131,6 @@ public final class JavaConfiguration extends Fragment {
   private final boolean headerCompilationDirectClasspathFallbackError;
   private final boolean generateJavaDeps;
   private final boolean strictDepsJavaProtos;
-  private final boolean enforceOneVersion;
   private final JavaClasspathMode javaClasspath;
   private final ImmutableList<String> defaultJvmFlags;
   private final ImmutableList<String> checkedConstraints;
@@ -143,6 +142,9 @@ public final class JavaConfiguration extends Fragment {
   private final ImmutableList<Label> translationTargets;
   private final JavaOptimizationMode javaOptimizationMode;
   private final Label javaToolchain;
+
+  // TODO(dmarting): remove when we have rolled out the new behavior
+  private final boolean legacyBazelJavaTest;
 
   JavaConfiguration(
       boolean generateJavaDeps,
@@ -169,8 +171,8 @@ public final class JavaConfiguration extends Fragment {
     this.bundleTranslations = javaOptions.bundleTranslations;
     this.javaToolchain = javaToolchain;
     this.javaOptimizationMode = javaOptions.javaOptimizationMode;
+    this.legacyBazelJavaTest = javaOptions.legacyBazelJavaTest;
     this.strictDepsJavaProtos = javaOptions.strictDepsJavaProtos;
-    this.enforceOneVersion = javaOptions.enforceOneVersion;
 
     ImmutableList.Builder<Label> translationsBuilder = ImmutableList.builder();
     for (String s : javaOptions.translationTargets) {
@@ -329,13 +331,11 @@ public final class JavaConfiguration extends Fragment {
   }
 
   /**
-   * Returns true if Bazel should attempt to enforce one-version correctness on java_binary rules
-   * using the 'oneversion' tool in the java_toolchain. One-version correctness will inspect for
-   * multiple non-identical versions of java classes in the transitive dependencies for a
-   * java_binary.
+   * Returns true if java_test in Bazel should behave in legacy mode that existed before we
+   * open-sourced our test runner.
    */
-  public boolean isEnforceOneVersion() {
-    return enforceOneVersion;
+  public boolean useLegacyBazelJavaTest() {
+    return legacyBazelJavaTest;
   }
 
   public boolean strictDepsJavaProtos() {

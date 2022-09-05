@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.ImmutableIterable;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -189,25 +188,21 @@ public class JavaHeaderCompileAction extends SpawnAction {
 
     private Artifact outputJar;
     @Nullable private Artifact outputDepsProto;
-    private ImmutableSet<Artifact> sourceFiles = ImmutableSet.of();
+    private final Collection<Artifact> sourceFiles = new ArrayList<>();
     private final Collection<Artifact> sourceJars = new ArrayList<>();
-    private NestedSet<Artifact> classpathEntries =
-        NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
-    private ImmutableIterable<Artifact> bootclasspathEntries =
-        ImmutableIterable.from(ImmutableList.<Artifact>of());
+    private NestedSet<Artifact> classpathEntries
+        = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
+    private final List<Artifact> bootclasspathEntries = new ArrayList<>();
     @Nullable private String ruleKind;
     @Nullable private Label targetLabel;
     private PathFragment tempDirectory;
     private BuildConfiguration.StrictDepsMode strictJavaDeps
         = BuildConfiguration.StrictDepsMode.OFF;
     private NestedSet<Artifact> directJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
-    private NestedSet<Artifact> compileTimeDependencyArtifacts =
-        NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+    private final List<Artifact> compileTimeDependencyArtifacts = new ArrayList<>();
     private ImmutableList<String> javacOpts;
-    private NestedSet<Artifact> processorPath = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+    private final List<Artifact> processorPath = new ArrayList<>();
     private final List<String> processorNames = new ArrayList<>();
-    private final List<String> processorFlags = new ArrayList<>();
-
     private NestedSet<Artifact> javabaseInputs;
     private Artifact javacJar;
 
@@ -229,9 +224,10 @@ public class JavaHeaderCompileAction extends SpawnAction {
     }
 
     /** Sets the .jdeps artifacts for direct dependencies. */
-    public Builder setCompileTimeDependencyArtifacts(NestedSet<Artifact> dependencyArtifacts) {
+    public Builder addCompileTimeDependencyArtifacts(
+        Collection<Artifact> dependencyArtifacts) {
       checkNotNull(dependencyArtifacts, "dependencyArtifacts must not be null");
-      this.compileTimeDependencyArtifacts = dependencyArtifacts;
+      this.compileTimeDependencyArtifacts.addAll(dependencyArtifacts);
       return this;
     }
 
@@ -249,10 +245,17 @@ public class JavaHeaderCompileAction extends SpawnAction {
       return this;
     }
 
+    /** Adds a Java source file to compile. */
+    public Builder addSourceFile(Artifact sourceFile) {
+      checkNotNull(sourceFile, "sourceFile must not be null");
+      sourceFiles.add(sourceFile);
+      return this;
+    }
+
     /** Adds Java source files to compile. */
-    public Builder setSourceFiles(ImmutableSet<Artifact> sourceFiles) {
+    public Builder addSourceFiles(Collection<Artifact> sourceFiles) {
       checkNotNull(sourceFiles, "sourceFiles must not be null");
-      this.sourceFiles = sourceFiles;
+      this.sourceFiles.addAll(sourceFiles);
       return this;
     }
 
@@ -271,16 +274,26 @@ public class JavaHeaderCompileAction extends SpawnAction {
     }
 
     /** Sets the compilation bootclasspath entries. */
-    public Builder setBootclasspathEntries(ImmutableIterable<Artifact> bootclasspathEntries) {
+    public Builder addAllBootclasspathEntries(
+        Collection<Artifact> bootclasspathEntries) {
       checkNotNull(bootclasspathEntries, "bootclasspathEntries must not be null");
-      this.bootclasspathEntries = bootclasspathEntries;
+      this.bootclasspathEntries.addAll(bootclasspathEntries);
+      return this;
+    }
+
+    /** Sets the compilation extclasspath entries. */
+    public Builder addAllExtClasspathEntries(
+        Collection<Artifact> extclasspathEntries) {
+      checkNotNull(extclasspathEntries, "extclasspathEntries must not be null");
+      // fold extclasspath entries into the bootclasspath; that's what javac ends up doing
+      this.bootclasspathEntries.addAll(extclasspathEntries);
       return this;
     }
 
     /** Sets the annotation processors classpath entries. */
-    public Builder setProcessorPaths(NestedSet<Artifact> processorPaths) {
+    public Builder addProcessorPaths(Collection<Artifact> processorPaths) {
       checkNotNull(processorPaths, "processorPaths must not be null");
-      this.processorPath = processorPaths;
+      this.processorPath.addAll(processorPaths);
       return this;
     }
 
@@ -288,13 +301,6 @@ public class JavaHeaderCompileAction extends SpawnAction {
     public Builder addProcessorNames(Collection<String> processorNames) {
       checkNotNull(processorNames, "processorNames must not be null");
       this.processorNames.addAll(processorNames);
-      return this;
-    }
-
-    /** Sets annotation processor flags to pass to javac. */
-    public Builder addProcessorFlags(Collection<String> processorFlags) {
-      checkNotNull(processorFlags, "processorFlags must not be null");
-      this.processorFlags.addAll(processorFlags);
       return this;
     }
 
@@ -360,7 +366,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
       // dependencyArtifacts are ignored
       if (strictJavaDeps == BuildConfiguration.StrictDepsMode.OFF) {
         directJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
-        compileTimeDependencyArtifacts = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+        compileTimeDependencyArtifacts.clear();
       }
       boolean useDirectClasspath = useDirectClasspath();
       CommandLine directCommandLine =
@@ -398,8 +404,8 @@ public class JavaHeaderCompileAction extends SpawnAction {
           NestedSetBuilder.<Artifact>stableOrder()
               .addTransitive(directInputs)
               .addTransitive(classpathEntries)
-              .addTransitive(processorPath)
-              .addTransitive(compileTimeDependencyArtifacts)
+              .addAll(processorPath)
+              .addAll(compileTimeDependencyArtifacts)
               .add(paramsFile)
               .build();
       JavaHeaderCompileAction javaHeaderCompileAction =
@@ -480,9 +486,6 @@ public class JavaHeaderCompileAction extends SpawnAction {
       baseCommandLine(result);
       if (!processorNames.isEmpty()) {
         result.add("--processors", processorNames);
-      }
-      if (!processorFlags.isEmpty()) {
-        result.add("--javacopts", processorFlags);
       }
       if (!processorPath.isEmpty()) {
         result.addExecPaths("--processorpath", processorPath);

@@ -119,7 +119,7 @@ public class JavaOptions extends FragmentOptions {
 
   @Option(
     name = "java_header_compilation",
-    defaultValue = "true",
+    defaultValue = "false",
     category = "semantics",
     help = "Compile ijars directly from source.",
     oldName = "experimental_java_header_compilation"
@@ -304,7 +304,6 @@ public class JavaOptions extends FragmentOptions {
       help = "Applies desired link-time optimizations to Java binaries and tests.")
   public JavaOptimizationMode javaOptimizationMode;
 
-  @Deprecated
   @Option(name = "legacy_bazel_java_test",
       defaultValue = "false",
       category = "undocumented",
@@ -341,16 +340,6 @@ public class JavaOptions extends FragmentOptions {
   )
   public boolean headerCompilationDirectClasspathFallbackError;
 
-  @Option(
-    name = "experimental_one_version_enforcement",
-    defaultValue = "false",
-    category = "undocumented",
-    help =
-        "When enabled, enforce that a java_binary rule can't contain more than one version "
-            + "of the same class file on the classpath"
-  )
-  public boolean enforceOneVersion;
-
   @Override
   public FragmentOptions getHost(boolean fallback) {
     JavaOptions host = (JavaOptions) getDefault();
@@ -375,8 +364,6 @@ public class JavaOptions extends FragmentOptions {
     host.javaClasspath = javaClasspath;
 
     host.strictJavaDeps = strictJavaDeps;
-
-    host.enforceOneVersion = enforceOneVersion;
 
     return host;
   }

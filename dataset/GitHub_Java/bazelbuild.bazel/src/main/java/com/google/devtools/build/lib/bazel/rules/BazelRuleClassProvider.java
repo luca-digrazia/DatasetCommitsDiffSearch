@@ -125,7 +125,6 @@ import com.google.devtools.build.lib.rules.java.JvmConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.ProguardLibraryRule;
 import com.google.devtools.build.lib.rules.java.proto.JavaProtoSkylarkCommon;
 import com.google.devtools.build.lib.rules.objc.AppleBinaryRule;
-import com.google.devtools.build.lib.rules.objc.AppleDebugOutputsProvider;
 import com.google.devtools.build.lib.rules.objc.AppleSkylarkCommon;
 import com.google.devtools.build.lib.rules.objc.AppleStaticLibraryRule;
 import com.google.devtools.build.lib.rules.objc.AppleWatch1ExtensionRule;
@@ -287,11 +286,9 @@ public class BazelRuleClassProvider {
     TESTING_SUPPORT.init(builder);
     VARIOUS_WORKSPACE_RULES.init(builder);
 
-    // These rules are a little special: they need to depend on every configuration fragment that
-    // has Make variables, so we can't put them in any of the above buckets.
+    // This rule is a little special: it needs to depend on every configuration fragment that has
+    // Make variables, so we can't put it in any of the above buckets.
     builder.addRuleDefinition(new BazelToolchainLookupRule());
-    builder.addRuleDefinition(new GenRuleBaseRule());
-    builder.addRuleDefinition(new BazelGenRuleRule());
   }
 
   public static final RuleSet BAZEL_SETUP =
@@ -345,6 +342,8 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new AliasRule());
           builder.addRuleDefinition(new BazelFilegroupRule());
           builder.addRuleDefinition(new TestSuiteRule());
+          builder.addRuleDefinition(new GenRuleBaseRule());
+          builder.addRuleDefinition(new BazelGenRuleRule());
           builder.addRuleDefinition(new GenQueryRule());
 
           try {
@@ -607,9 +606,6 @@ public class BazelRuleClassProvider {
               ObjcProvider.OBJC_SKYLARK_PROVIDER_NAME, ObjcProvider.class);
           builder.registerSkylarkProvider(
               XcTestAppProvider.XCTEST_APP_SKYLARK_PROVIDER_NAME, XcTestAppProvider.class);
-          builder.registerSkylarkProvider(
-              AppleDebugOutputsProvider.SKYLARK_PROVIDER.getName(),
-              AppleDebugOutputsProvider.class);
           builder.addSkylarkAccessibleTopLevels("apple_common", new AppleSkylarkCommon());
 
           builder.addConfig(ObjcCommandLineOptions.class, new ObjcConfigurationLoader());
