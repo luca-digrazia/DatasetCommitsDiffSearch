@@ -43,7 +43,7 @@ public class AuthenticationTests {
         Authentication authentication = builder.user("{\"id\":\"admin\",\"username\":\"admin\",\"name\":\"Administrator\",\"type\":\"default\"}")
                 .role("[{\"id\":\"admin-role\",\"name\":\"admin\"}]")
                 .permission("[{\"id\":\"user-manager\",\"actions\":[\"query\",\"get\",\"update\"]" +
-                        ",\"dataAccesses\":[{\"action\":\"query\",\"field\":\"test\",\"fields\":[\"1\",\"2\",\"3\"],\"scopeType\":\"CUSTOM_SCOPE\",\"type\":\"DENY_FIELDS\"}]}]")
+                        ",\"dataAccesses\":[{\"action\":\"query\",\"field\":\"test\",\"config\":{\"fields\":[\"1\",\"2\",\"3\"]},\"scopeType\":\"CUSTOM_SCOPE\",\"type\":\"DENY_FIELDS\"}]}]")
                 .build();
 
         //test user
@@ -54,7 +54,7 @@ public class AuthenticationTests {
 
         //test role
         assertNotNull(authentication.getRole("admin-role").orElse(null));
-        assertEquals(authentication.getRole("admin-role").get().getName(), "admin");
+        assertEquals(authentication.getRole("admin-role").orElse(null).getName(), "admin");
         assertTrue(authentication.hasRole("admin-role"));
 
 
@@ -63,24 +63,6 @@ public class AuthenticationTests {
         assertTrue(authentication.hasPermission("user-manager"));
         assertTrue(authentication.hasPermission("user-manager", "get"));
         assertTrue(!authentication.hasPermission("user-manager", "delete"));
-
-        boolean has = AuthenticationPredicate.has("permission:user-manager")
-                .or(AuthenticationPredicate.role("admin-role"))
-                .test(authentication);
-
-        Assert.assertTrue(has);
-        has = AuthenticationPredicate.has("permission:user-manager:test")
-                .and(AuthenticationPredicate.role("admin-role"))
-                .test(authentication);
-        Assert.assertFalse(has);
-
-        has = AuthenticationPredicate.has("permission:user-manager:get and role:admin-role")
-                .test(authentication);
-        Assert.assertTrue(has);
-
-        has = AuthenticationPredicate.has("permission:user-manager:test or role:admin-role")
-                .test(authentication);
-        Assert.assertTrue(has);
 
         //获取数据权限配置
         Set<String> fields = authentication.getPermission("user-manager")

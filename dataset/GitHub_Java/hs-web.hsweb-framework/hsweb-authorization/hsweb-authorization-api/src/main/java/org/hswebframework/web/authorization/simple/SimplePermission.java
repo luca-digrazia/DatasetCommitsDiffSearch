@@ -29,14 +29,14 @@ public class SimplePermission implements Permission {
 
     public Set<String> getActions() {
         if (actions == null) {
-            actions = new java.util.HashSet<>();
+            actions = Collections.emptySet();
         }
         return actions;
     }
 
     public Set<DataAccessConfig> getDataAccesses() {
         if (dataAccesses == null) {
-            dataAccesses = new java.util.HashSet<>();
+            dataAccesses = Collections.emptySet();
         }
         return dataAccesses;
     }
