@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
+import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
@@ -35,12 +36,14 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
+import com.google.devtools.build.lib.runtime.InvocationPolicyEnforcer;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -48,7 +51,9 @@ import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
+import com.google.devtools.common.options.OptionsParsingException;
 
 import org.junit.Before;
 
@@ -84,7 +89,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
       ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
     }
     skyframeExecutor = createSkyframeExecutor(getEnvironmentExtensions(),
-        getPreprocessorFactorySupplier());
+        Preprocessor.Factory.Supplier.NullSupplier.INSTANCE, ConstantRuleVisibility.PUBLIC, "");
     setUpSkyframe(parsePackageCacheOptions());
   }
 
@@ -93,12 +98,15 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
     return ImmutableList.of();
   }
 
-  private SkyframeExecutor createSkyframeExecutor(
+  protected SkyframeExecutor createSkyframeExecutor(
       Iterable<EnvironmentExtension> environmentExtensions,
-      Preprocessor.Factory.Supplier preprocessorFactorySupplier) {
+      Preprocessor.Factory.Supplier preprocessorFactorySupplier,
+      RuleVisibility defaultVisibility,
+      String defaultsPackageContents) {
     SkyframeExecutor skyframeExecutor =
         SequencedSkyframeExecutor.create(
             new PackageFactory(ruleClassProvider, environmentExtensions),
+            new TimestampGranularityMonitor(BlazeClock.instance()),
             new BlazeDirectories(outputBase, outputBase, rootDirectory),
             null, /* BinTools */
             null, /* workspaceStatusActionFactory */
@@ -109,6 +117,10 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
             ImmutableMap.<SkyFunctionName, SkyFunction>of(),
             ImmutableList.<PrecomputedValue.Injected>of(),
             ImmutableList.<SkyValueDirtinessChecker>of());
+    skyframeExecutor.preparePackageLoading(
+        new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
+        defaultVisibility, true, GLOBBING_THREADS, defaultsPackageContents,
+        UUID.randomUUID());
     return skyframeExecutor;
   }
 
@@ -116,25 +128,31 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
     return ImmutableList.<EnvironmentExtension>of();
   }
 
-  protected Preprocessor.Factory.Supplier getPreprocessorFactorySupplier() {
-    return Preprocessor.Factory.Supplier.NullSupplier.INSTANCE;
-  }
-
-  protected void setUpSkyframe(RuleVisibility defaultVisibility, String defaultsPackageContents) {
-    skyframeExecutor.preparePackageLoading(
-        new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
-        defaultVisibility, true, GLOBBING_THREADS, defaultsPackageContents,
-        UUID.randomUUID(), new TimestampGranularityMonitor(BlazeClock.instance()));
+  private OptionsParser enforceTestInvocationPolicyOnRuleClassProvider(
+      ConfiguredRuleClassProvider ruleClassProvider) {
+    OptionsParser optionsParser = OptionsParser.newOptionsParser(
+        ImmutableList.<Class<? extends OptionsBase>>copyOf(
+            ruleClassProvider.getOptionFragments()));
+    InvocationPolicyEnforcer optionsPolicyEnforcer =
+        new InvocationPolicyEnforcer(TestConstants.TEST_INVOCATION_POLICY);
+    try {
+      optionsPolicyEnforcer.enforce(optionsParser);
+    } catch (OptionsParsingException e) {
+      throw new IllegalStateException(e);
+    }
+    return optionsParser;
   }
 
   private void setUpSkyframe(PackageCacheOptions packageCacheOptions) {
     PathPackageLocator pkgLocator = PathPackageLocator.create(
         outputBase, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
+    OptionsParser enforcedTestOptions =
+        enforceTestInvocationPolicyOnRuleClassProvider(ruleClassProvider);
     skyframeExecutor.preparePackageLoading(pkgLocator,
         packageCacheOptions.defaultVisibility, true,
-        GLOBBING_THREADS, ruleClassProvider.getDefaultsPackageContent(),
-        UUID.randomUUID(), new TimestampGranularityMonitor(BlazeClock.instance()));
-    skyframeExecutor.setDeletedPackages(ImmutableSet.copyOf(packageCacheOptions.getDeletedPackages()));
+        7, ruleClassProvider.getDefaultsPackageContent(enforcedTestOptions),
+        UUID.randomUUID());
+    skyframeExecutor.setDeletedPackages(ImmutableSet.copyOf(packageCacheOptions.deletedPackages));
   }
 
   private PackageCacheOptions parsePackageCacheOptions(String... options) throws Exception {
