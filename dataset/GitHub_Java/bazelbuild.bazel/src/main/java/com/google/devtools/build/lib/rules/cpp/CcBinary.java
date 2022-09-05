@@ -192,9 +192,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     }
 
     Artifact binary = ruleContext.getBinArtifact(binaryPath);
-    if (isLinkShared(ruleContext)
-        && !CppFileTypes.SHARED_LIBRARY.matches(binary.getFilename())
-        && !CppFileTypes.VERSIONED_SHARED_LIBRARY.matches(binary.getFilename())) {
+    if (isLinkShared(ruleContext) && !CppFileTypes.SHARED_LIBRARY.matches(binary.getFilename())) {
       ruleContext.attributeError("linkshared", "'linkshared' used in non-shared library");
       return null;
     }
@@ -364,7 +362,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // Support test execution on darwin.
     if (Platform.isApplePlatform(cppConfiguration.getTargetCpu())
         && TargetUtils.isTestRule(ruleContext.getRule())) {
-      ruleBuilder.addNativeDeclaredProvider(
+      ruleBuilder.add(
+          ExecutionInfoProvider.class,
           new ExecutionInfoProvider(ImmutableMap.of("requires-darwin", "")));
     }
 

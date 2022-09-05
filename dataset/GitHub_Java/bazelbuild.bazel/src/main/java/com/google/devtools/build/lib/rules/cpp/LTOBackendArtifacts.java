@@ -128,12 +128,12 @@ public final class LTOBackendArtifacts {
 
     builder.setExecutable(compiler);
     Variables.Builder buildVariablesBuilder = new Variables.Builder();
-    buildVariablesBuilder.addStringVariable("thinlto_index", index.getExecPath().toString());
+    buildVariablesBuilder.addVariable("thinlto_index", index.getExecPath().toString());
     // The output from the LTO backend step is a native object file.
-    buildVariablesBuilder.addStringVariable(
+    buildVariablesBuilder.addVariable(
         "thinlto_output_object_file", objectFile.getExecPath().toString());
     // The input to the LTO backend step is the bitcode file.
-    buildVariablesBuilder.addStringVariable(
+    buildVariablesBuilder.addVariable(
         "thinlto_input_bitcode_file", bitcodeFile.getExecPath().toString());
     Variables buildVariables = buildVariablesBuilder.build();
     List<String> execArgs = new ArrayList<>();
