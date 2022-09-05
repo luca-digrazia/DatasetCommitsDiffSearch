@@ -368,20 +368,18 @@ public class BlazeCommandDispatcher {
       return exitCausingException.getExitCode().getNumericExitCode();
     }
 
-    if (env.getRuntime().writeCommandLog()) {
-      try {
-        Path commandLog = getCommandLogPath(env.getOutputBase());
+    try {
+      Path commandLog = getCommandLogPath(env.getOutputBase());
 
-        // Unlink old command log from previous build, if present, so scripts
-        // reading it don't conflate it with the command log we're about to write.
-        commandLog.delete();
+      // Unlink old command log from previous build, if present, so scripts
+      // reading it don't conflate it with the command log we're about to write.
+      commandLog.delete();
 
-        logOutputStream = commandLog.getOutputStream();
-        outErr = tee(outErr, OutErr.create(logOutputStream, logOutputStream));
-      } catch (IOException ioException) {
-        LoggingUtil.logToRemote(
-            Level.WARNING, "Unable to delete or open command.log", ioException);
-      }
+      logOutputStream = commandLog.getOutputStream();
+      outErr = tee(outErr, OutErr.create(logOutputStream, logOutputStream));
+    } catch (IOException ioException) {
+      LoggingUtil.logToRemote(
+          Level.WARNING, "Unable to delete or open command.log", ioException);
     }
 
     ExitCode result = checkCwdInWorkspace(env, commandAnnotation, commandName, outErr);
@@ -419,7 +417,6 @@ public class BlazeCommandDispatcher {
     BlazeCommandEventHandler.Options eventHandlerOptions =
         optionsParser.getOptions(BlazeCommandEventHandler.Options.class);
     OutErr colorfulOutErr = outErr;
-
     if (!eventHandlerOptions.useColor()) {
       outErr = ansiStripOut(ansiStripErr(outErr));
       if (!commandAnnotation.binaryStdOut()) {
@@ -428,14 +425,6 @@ public class BlazeCommandDispatcher {
       if (!commandAnnotation.binaryStdErr()) {
         colorfulOutErr = ansiStripErr(colorfulOutErr);
       }
-    }
-
-    if (!commandAnnotation.binaryStdOut()) {
-      outErr = lineBufferOut(outErr);
-    }
-
-    if (!commandAnnotation.binaryStdErr()) {
-      outErr = lineBufferErr(outErr);
     }
 
     CommonCommandOptions commonOptions = optionsParser.getOptions(CommonCommandOptions.class);
@@ -634,16 +623,6 @@ public class BlazeCommandDispatcher {
       getCommandNamesToParseHelper(base.getAnnotation(Command.class), accumulator);
     }
     accumulator.add(commandAnnotation.name());
-  }
-
-  private OutErr lineBufferOut(OutErr outErr) {
-    OutputStream wrappedOut = new LineBufferedOutputStream(outErr.getOutputStream());
-    return OutErr.create(wrappedOut, outErr.getErrorStream());
-  }
-
-  private OutErr lineBufferErr(OutErr outErr) {
-    OutputStream wrappedErr = new LineBufferedOutputStream(outErr.getErrorStream());
-    return OutErr.create(outErr.getOutputStream(), wrappedErr);
   }
 
   private OutErr ansiStripOut(OutErr outErr) {
