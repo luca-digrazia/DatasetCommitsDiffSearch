@@ -13,8 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
+import com.google.devtools.build.lib.util.Pair;
+
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 
 /** Interface for evaluating globs during package loading. */
 public interface Globber {
@@ -46,4 +49,7 @@ public interface Globber {
 
   /** Should be called when the globber is no longer needed. */
   void onCompletion();
+
+  /** Returns all the glob computations requested before {@link #onCompletion} was called. */
+    Set<Pair<String, Boolean>> getGlobPatterns();
 }

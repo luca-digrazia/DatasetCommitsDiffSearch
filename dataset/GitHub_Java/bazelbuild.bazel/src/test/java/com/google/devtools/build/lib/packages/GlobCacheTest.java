@@ -92,7 +92,7 @@ public class GlobCacheTest {
     scratch.file("isolated/sub/sub.js",
         "# this is sub/sub.js");
 
-    cache = new GlobCache(packageDirectory, PackageIdentifier.createInMainRepo("isolated"),
+    cache = new GlobCache(packageDirectory, PackageIdentifier.createInDefaultRepo("isolated"),
         new CachingPackageLocator() {
       @Override
       public Path getBuildFileForPackage(PackageIdentifier packageId) {
@@ -235,61 +235,6 @@ public class GlobCacheTest {
     List<String> glob = cache.getGlob("**/*.js");
     assertThat(glob).containsExactly("first.js", "second.js", "foo/first.js", "bar/first.js",
         "foo/second.js", "bar/second.js");
-  }
-
-  @Test
-  public void testSingleFileExclude_Star() throws Exception {
-    assertThat(cache.glob(list("*"), list("first.txt"), false)).containsExactly(
-        "BUILD", "bar", "first.js", "foo", "second.js", "second.txt").inOrder();
-  }
-
-  @Test
-  public void testSingleFileExclude_StarStar() throws Exception {
-    assertThat(cache.glob(list("**"), list("first.txt"), false)).containsExactly(
-        "BUILD", "bar", "bar/first.js", "bar/second.js", "first.js", "foo", "foo/first.js",
-        "foo/second.js", "second.js", "second.txt").inOrder();
-  }
-
-  @Test
-  public void testExcludeAll_Star() throws Exception {
-    assertThat(cache.glob(list("*"), list("*"), false)).isEmpty();
-  }
-
-  @Test
-  public void testExcludeAll_Star_NoMatchesAnyway() throws Exception {
-    assertThat(cache.glob(list("nope"), list("*"), false)).isEmpty();
-  }
-
-  @Test
-  public void testExcludeAll_StarStar() throws Exception {
-    assertThat(cache.glob(list("**"), list("**"), false)).isEmpty();
-  }
-
-  @Test
-  public void testExcludeAll_Manual() throws Exception {
-    assertThat(cache.glob(list("**"), list("*", "*/*", "*/*/*"), false)).isEmpty();
-  }
-
-  @Test
-  public void testSingleFileExcludeDoesntMatch() throws Exception {
-    assertThat(cache.glob(list("first.txt"), list("nope.txt"), false)).containsExactly("first.txt");
-  }
-
-  @Test
-  public void testExcludeDirectory() throws Exception {
-    assertThat(cache.glob(list("foo/*"), NONE, true)).containsExactly(
-        "foo/first.js", "foo/second.js");
-    assertThat(cache.glob(list("foo/*"), list("foo"), false)).containsExactly(
-        "foo/first.js", "foo/second.js");
-  }
-
-  @Test
-  public void testChildGlobWithChildExclude() throws Exception {
-    assertThat(cache.glob(list("foo/*"), list("foo/*"), false)).isEmpty();
-    assertThat(cache.glob(list("foo/first.js", "foo/second.js"), list("foo/*"), false)).isEmpty();
-    assertThat(cache.glob(list("foo/first.js"), list("foo/first.js"), false)).isEmpty();
-    assertThat(cache.glob(list("foo/first.js"), list("*/first.js"), false)).isEmpty();
-    assertThat(cache.glob(list("foo/first.js"), list("*/*"), false)).isEmpty();
   }
 
   private void assertEmpty(Collection<?> glob) {
