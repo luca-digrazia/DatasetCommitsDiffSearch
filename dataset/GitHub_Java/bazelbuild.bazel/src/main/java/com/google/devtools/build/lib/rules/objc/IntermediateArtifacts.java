@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,14 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -40,8 +41,21 @@ public final class IntermediateArtifacts {
   private final RuleContext ruleContext;
   private final String archiveFileNameSuffix;
 
+  /**
+   * Label to scope the output paths of generated artifacts, in addition to label of the rule that
+   * is being analyzed.
+   */
+  private final Optional<Label> scopingLabel;
+
   IntermediateArtifacts(RuleContext ruleContext, String archiveFileNameSuffix) {
     this.ruleContext = ruleContext;
+    this.scopingLabel = Optional.<Label>absent();
+    this.archiveFileNameSuffix = Preconditions.checkNotNull(archiveFileNameSuffix);
+  }
+
+  IntermediateArtifacts(RuleContext ruleContext, Label scopingLabel, String archiveFileNameSuffix) {
+    this.ruleContext = ruleContext;
+    this.scopingLabel = Optional.of(Preconditions.checkNotNull(scopingLabel));
     this.archiveFileNameSuffix = Preconditions.checkNotNull(archiveFileNameSuffix);
   }
 
@@ -59,13 +73,6 @@ public final class IntermediateArtifacts {
                 entitlementsDirectory.getBaseName() + extension),
             ruleContext.getConfiguration().getBinDirectory());
     return artifact;
-  }
-
-  /**
-   * Returns the location of this target's generated entitlements file.
-   */
-  public Artifact entitlements() {
-    return appendExtensionForEntitlementArtifact(".entitlements");
   }
 
   /**
@@ -171,9 +178,23 @@ public final class IntermediateArtifacts {
         inGenfiles
             ? ruleContext.getConfiguration().getGenfilesDirectory()
             : ruleContext.getConfiguration().getBinDirectory();
-
-    // The path of this artifact will be RULE_PACKAGE/SCOPERELATIVE
-    return ruleContext.getPackageRelativeArtifact(scopeRelative, root);
+    if (scopingLabel.isPresent()) {
+      // The path of this artifact will be
+      // RULE_PACKAGE/_intermediate_scoped/RULE_LABEL/SCOPING_PACKAGE/SCOPING_LABEL/SCOPERELATIVE
+      return ruleContext.getUniqueDirectoryArtifact(
+          "_intermediate_scoped",
+          scopingLabel
+              .get()
+              .getPackageIdentifier()
+              .getPathFragment()
+              .getRelative(scopingLabel.get().getName())
+              .getRelative(scopeRelative),
+          root);
+    } else {
+      // The path of this artifact will be
+      // RULE_PACKAGE/SCOPERELATIVE
+      return ruleContext.getPackageRelativeArtifact(scopeRelative, root);
+    }
   }
 
   private Artifact scopedArtifact(PathFragment scopeRelative) {
@@ -184,8 +205,12 @@ public final class IntermediateArtifacts {
    * The {@code .a} file which contains all the compiled sources for a rule.
    */
   public Artifact archive() {
-    // The path will be RULE_PACKAGE/libRULEBASENAME.a
-    String basename = new PathFragment(ruleContext.getLabel().getName()).getBaseName();
+    // If scopingLabel is present, the path will be
+    // RULE_PACKAGE/_intermediate_scoped/RULE_LABEL/SCOPE_PACKAGE/SCOPE_LABEL/libRULEBASENAME.a
+    //
+    // If it's not, the path will be RULE_PACKAGE/libRULEBASENAME.a  .
+    String basename = new PathFragment(scopingLabel.isPresent()
+        ? scopingLabel.get().getName() : ruleContext.getLabel().getName()).getBaseName();
     return scopedArtifact(new PathFragment(String.format(
         "lib%s%s.a", basename, archiveFileNameSuffix)));
   }
@@ -355,25 +380,5 @@ public final class IntermediateArtifacts {
     // To get Swift to pick up module maps, we need to name them "module.modulemap" and have their
     // parent directory in the module map search paths.
     return new CppModuleMap(appendExtensionInGenfiles(".modulemaps/module.modulemap"), moduleName);
-  }
-
-  /**
-   * Returns a static library archive with dead code/objects removed by J2ObjC dead code removal,
-   * given the original unpruned static library containing J2ObjC-translated code.
-   */
-  public Artifact j2objcPrunedArchive(Artifact unprunedArchive) {
-    PathFragment prunedSourceArtifactPath = FileSystemUtils.appendWithoutExtension(
-        unprunedArchive.getRootRelativePath(), "_pruned");
-    return ruleContext.getUniqueDirectoryArtifact(
-        "_j2objc_pruned",
-        prunedSourceArtifactPath,
-        ruleContext.getBinOrGenfilesDirectory());
-  }
-
-  /**
-   * Returns the location of this target's merged but not post-processed or signed IPA.
-   */
-  public Artifact unprocessedIpa() {
-    return appendExtension(".unprocessed.ipa");
   }
 }

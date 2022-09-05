@@ -16,11 +16,11 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.LABEL;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -37,17 +37,16 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -331,7 +330,7 @@ public class ObjcRuleClasses {
    */
   static final FileType CPP_SOURCES = FileType.of(".cc", ".cpp", ".mm", ".cxx", ".C");
 
-  static final FileType NON_CPP_SOURCES = FileType.of(".m", ".c");
+  private static final FileType NON_CPP_SOURCES = FileType.of(".m", ".c");
 
   static final FileType ASSEMBLY_SOURCES = FileType.of(".s", ".S", ".asm");
 
@@ -364,12 +363,6 @@ public class ObjcRuleClasses {
 
   // TODO(bazel-team): Restrict this to actual header files only.
   static final FileTypeSet HDRS_TYPE = FileTypeSet.ANY_FILE;
-
-  /**
-   * Coverage note files which contain information to reconstruct the basic block graphs and assign
-   * source line numbers to blocks.
-   */
-  static final FileType COVERAGE_NOTES = FileType.of(".gcno");
 
   /**
    * Common attributes for {@code objc_*} rules that allow the definition of resources such as
@@ -563,7 +556,7 @@ public class ObjcRuleClasses {
           A header defining the Objective-C interfaces to be exposed in Swift.
           ${SYNOPSIS}
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-          .add(attr("bridging_header", BuildType.LABEL)
+          .add(attr("bridging_header", Type.LABEL)
               .direct_compile_time_input()
               .allowedFileTypes(HDRS_TYPE))
           /* <!-- #BLAZE_RULE($objc_compile_dependency_rule).ATTRIBUTE(includes) -->
@@ -988,8 +981,6 @@ public class ObjcRuleClasses {
               }))
           .add(attr("$bundlemerge", LABEL).cfg(HOST).exec()
               .value(env.getLabel("//tools/objc:bundlemerge")))
-          .add(attr("$environment_plist_sh", LABEL).cfg(HOST)
-              .value(env.getLabel("//tools/objc:environment_plist.sh")))
           .build();
     }
     @Override

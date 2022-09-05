@@ -27,12 +27,14 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_DI
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_CPP;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_SWIFT;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.GCNO;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.GENERAL_RESOURCE_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.GENERAL_RESOURCE_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.HEADER;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE_SYSTEM;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INSTRUMENTED_SOURCE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LINKED_BINARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MODULE_MAP;
@@ -59,13 +61,13 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
+import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
@@ -97,7 +99,7 @@ public final class ObjcCommon {
 
     ImmutableList<Artifact> hdrs() {
       // Some rules may compile but not have the "hdrs" attribute.
-      if (!ruleContext.attributes().has("hdrs", BuildType.LABEL_LIST)) {
+      if (!ruleContext.attributes().has("hdrs", Type.LABEL_LIST)) {
         return ImmutableList.of();
       }
       return ImmutableList.copyOf(CcCommon.getHeaders(ruleContext));
@@ -180,7 +182,7 @@ public final class ObjcCommon {
      * this rule.
      */
     public Iterable<String> optionsCopts() {
-      if (!ruleContext.attributes().has("options", BuildType.LABEL)) {
+      if (!ruleContext.attributes().has("options", Type.LABEL)) {
         return ImmutableList.of();
       }
       OptionsProvider optionsProvider =
@@ -213,7 +215,7 @@ public final class ObjcCommon {
      */
     private void collectModuleMapsFromAttributeIfExists(
         ArrayList<CppModuleMap> moduleMaps, String attribute) {
-      if (ruleContext.attributes().has(attribute, BuildType.LABEL_LIST)) {
+      if (ruleContext.attributes().has(attribute, Type.LABEL_LIST)) {
         Iterable<ObjcProvider> providers =
             ruleContext.getPrerequisites(attribute, Mode.TARGET, ObjcProvider.class);
         for (ObjcProvider provider : providers) {
@@ -224,7 +226,7 @@ public final class ObjcCommon {
 
     /**
      * Returns whether this target uses language features that require clang modules, such as
-     * {@literal @}import.
+     * @import.
      */
     public boolean enableModules() {
       return ruleContext.attributes().has("enable_modules", Type.BOOLEAN)
@@ -515,6 +517,17 @@ public final class ObjcCommon {
             .addAll(HEADER, artifacts.getAdditionalHdrs())
             .addAll(LIBRARY, artifacts.getArchive().asSet())
             .addAll(SOURCE, allSources);
+        BuildConfiguration configuration = context.getConfiguration();
+        RegexFilter filter = configuration.getInstrumentationFilter();
+        if (configuration.isCodeCoverageEnabled()
+            && filter.isIncluded(context.getLabel().toString())) {
+          for (Artifact source : allSources) {
+            if (ObjcRuleClasses.isInstrumentable(source)) {
+              objcProvider.add(INSTRUMENTED_SOURCE, source);
+              objcProvider.add(GCNO, intermediateArtifacts.gcnoFile(source));
+            }
+          }
+        }
 
         boolean usesCpp = false;
         boolean usesSwift = false;
@@ -593,10 +606,20 @@ public final class ObjcCommon {
    * compilation information has no sources.
    */
   public Optional<Artifact> getCompiledArchive() {
-    if (compilationArtifacts.isPresent()) {
-      return compilationArtifacts.get().getArchive();
+    for (CompilationArtifacts justCompilationArtifacts : compilationArtifacts.asSet()) {
+      return justCompilationArtifacts.getArchive();
     }
     return Optional.absent();
+  }
+
+  /**
+   * Reports any known errors to the {@link RuleContext}. This should be called exactly once for
+   * a target.
+   */
+  public void reportErrors() {
+
+    // TODO(bazel-team): Report errors for rules that are not actually useful (i.e. objc_library
+    // without sources or resources, empty objc_bundles)
   }
 
   static ImmutableList<PathFragment> userHeaderSearchPaths(BuildConfiguration configuration) {
@@ -710,5 +733,4 @@ public final class ObjcCommon {
     }
     return errors;
   }
-
 }
