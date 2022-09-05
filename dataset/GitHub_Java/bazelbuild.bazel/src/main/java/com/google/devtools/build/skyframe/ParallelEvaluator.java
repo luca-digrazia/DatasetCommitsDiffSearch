@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState;
 import com.google.devtools.build.skyframe.MemoizingEvaluator.EmittedEventState;
@@ -599,9 +598,7 @@ public final class ParallelEvaluator implements Evaluator {
         // by the Preconditions check above, and was not actually changed this run -- when it was
         // written above, its version stayed below this update's version, so its value remains the
         // same as before.
-        // We use a SkyValueSupplier here because it keeps a reference to the entry, allowing for
-        // the receiver to be confident that the entry is readily accessible in memory.
-        progressReceiver.evaluated(skyKey, new SkyValueSupplier(primaryEntry),
+        progressReceiver.evaluated(skyKey, Suppliers.ofInstance(value),
             valueVersion.equals(graphVersion) ? EvaluationState.BUILT : EvaluationState.CLEAN);
       }
       signalValuesAndEnqueueIfReady(enqueueParents ? visitor : null, reverseDeps, valueVersion);
@@ -935,7 +932,7 @@ public final class ParallelEvaluator implements Evaluator {
       Preconditions.checkState(factory != null, "%s %s", functionName, state);
 
       SkyValue value = null;
-      long startTime = BlazeClock.instance().nanoTime();
+      long startTime = Profiler.nanoTimeMaybe();
       try {
         value = factory.compute(skyKey, env);
       } catch (final SkyFunctionException builderException) {
@@ -978,7 +975,7 @@ public final class ParallelEvaluator implements Evaluator {
         throw ex;
       } finally {
         env.doneBuilding();
-        long elapsedTimeNanos =  BlazeClock.instance().nanoTime() - startTime;
+        long elapsedTimeNanos = Profiler.nanoTimeMaybe() - startTime;
         if (elapsedTimeNanos > 0)  {
           if (progressReceiver != null) {
             progressReceiver.computed(skyKey, elapsedTimeNanos);
