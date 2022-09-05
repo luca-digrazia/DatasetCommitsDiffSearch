@@ -1,8 +1,6 @@
 package com.codahale.metrics.health;
 
-import com.codahale.metrics.health.annotation.Async;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static com.codahale.metrics.health.HealthCheck.Result;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -24,7 +22,10 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.codahale.metrics.health.HealthCheck.Result;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.codahale.metrics.health.annotation.Async;
 
 /**
  * A registry for health checks.
@@ -95,18 +96,19 @@ public class HealthCheckRegistry {
      * @param healthCheck the {@link HealthCheck} instance
      */
     public void register(String name, HealthCheck healthCheck) {
-        HealthCheck registered;
+        HealthCheck registered = null;
         synchronized (lock) {
-            if (healthChecks.containsKey(name)) {
-                throw new IllegalArgumentException("A health check named " + name + " already exists");
+            if (!healthChecks.containsKey(name)) {
+                registered = healthCheck;
+                if (healthCheck.getClass().isAnnotationPresent(Async.class)) {
+                    registered = new AsyncHealthCheckDecorator(healthCheck, asyncExecutorService);
+                }
+                healthChecks.put(name, registered);
             }
-            registered = healthCheck;
-            if (healthCheck.getClass().isAnnotationPresent(Async.class)) {
-                registered = new AsyncHealthCheckDecorator(healthCheck, asyncExecutorService);
-            }
-            healthChecks.put(name, registered);
         }
-        onHealthCheckAdded(name, registered);
+        if (registered != null) {
+            onHealthCheckAdded(name, registered);
+        }
     }
 
     /**
