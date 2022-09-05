@@ -24,10 +24,10 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SkylarkCallable;
 import com.google.devtools.build.lib.syntax.SkylarkModule;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -94,9 +94,8 @@ public final class CommandHelper {
    * @param labelMap adds files to set of known files of label. Used for resolving $(location)
    *     variables.
    */
-  public CommandHelper(
-      RuleContext ruleContext,
-      Iterable<? extends TransitiveInfoCollection> tools,
+  public CommandHelper(RuleContext ruleContext,
+      Iterable<FilesToRunProvider> tools,
       ImmutableMap<Label, Iterable<Artifact>> labelMap) {
     this.ruleContext = ruleContext;
 
@@ -109,13 +108,8 @@ public final class CommandHelper {
       Iterables.addAll(mapGet(tempLabelMap, entry.getKey()), entry.getValue());
     }
 
-    for (TransitiveInfoCollection dep : tools) { // (Note: host configuration)
-      Label label = dep.getLabel();
-      FilesToRunProvider tool = dep.getProvider(FilesToRunProvider.class);
-      if (tool == null) {
-        continue;
-      }
-
+    for (FilesToRunProvider tool : tools) { // (Note: host configuration)
+      Label label = tool.getLabel();
       Collection<Artifact> files = tool.getFilesToRun();
       resolvedToolsBuilder.addAll(files);
       Artifact executableArtifact = tool.getExecutable();
