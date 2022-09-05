@@ -22,7 +22,7 @@ public class DefaultCodeWriter implements CodeWriter {
         file.mkdir();
         String type = code.getType();
 
-        String filePath = path + "/" + code.getFile();
+        String filePath = code.getFile();
         if ("dir".equals(type)) {
             code.getChildren()
                     .forEach(childrenCode -> writeCode(filePath, childrenCode));
