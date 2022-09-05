@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.packages.util.PackageFactoryApparatus;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -80,31 +81,7 @@ public class PackageGroupTest {
 
     events.setFailFast(false);
     getPackageGroup("fruits", "apple");
-    events.assertContainsError("invalid package name 'vegetables'");
-  }
-
-  @Test
-  public void testPackagesWithRepositoryDoNotWork() throws Exception {
-    scratch.file(
-        "fruits/BUILD",
-        "package_group(name = 'banana',",
-        "              packages = ['@veggies//:cucumber'])");
-
-    events.setFailFast(false);
-    getPackageGroup("fruits", "banana");
-    events.assertContainsError("invalid package name '@veggies//:cucumber'");
-  }
-
-  @Test
-  public void testAllPackagesInMainRepositoryDoesNotWork() throws Exception {
-    scratch.file(
-        "fruits/BUILD",
-        "package_group(name = 'apple',",
-        "              packages = ['@//...'])");
-
-    events.setFailFast(false);
-    getPackageGroup("fruits", "apple");
-    events.assertContainsError("invalid package name '@//...'");
+    events.assertContainsError("invalid package label: vegetables");
   }
 
   @Test
@@ -119,7 +96,7 @@ public class PackageGroupTest {
 
     events.setFailFast(false);
     getPackageGroup("fruits", "apple");
-    events.assertContainsError("invalid package name '//vegetables:carrot'");
+    events.assertContainsError("invalid package label: //vegetables:carrot");
   }
 
   @Test
@@ -132,7 +109,7 @@ public class PackageGroupTest {
 
     events.setFailFast(false);
     getPackageGroup("fruits", "apple");
-    events.assertContainsError("invalid package name ':carrot'");
+    events.assertContainsError("invalid package label: :carrot");
   }
 
   @Test
@@ -150,7 +127,7 @@ public class PackageGroupTest {
     scratch.file("fruits/BUILD", "package_group(name = 'mango', packages = ['//...'])");
     PackageGroup packageGroup = getPackageGroup("fruits", "mango");
     assertThat(packageGroup.getPackageSpecifications())
-        .containsExactlyElementsIn(ImmutableList.of(PackageSpecification.everything()));
+        .containsExactlyElementsIn(ImmutableList.of(PackageSpecification.EVERYTHING));
   }
 
   private Package getPackage(String packageName) throws Exception {

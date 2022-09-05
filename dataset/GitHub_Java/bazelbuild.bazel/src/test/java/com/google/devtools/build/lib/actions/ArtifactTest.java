@@ -50,7 +50,7 @@ public class ArtifactTest {
   private Root rootDir;
 
   @Before
-  public final void setRootDir() throws Exception  {
+  public void setUp() throws Exception {
     scratch = new Scratch();
     execDir = scratch.dir("/exec");
     rootDir = Root.asDerivedRoot(scratch.dir("/exec/root"));

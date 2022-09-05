@@ -18,7 +18,6 @@ import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
@@ -77,7 +76,6 @@ public class AbstractCommandTest {
   @Test
   public void testGetOptionsYieldsAnnotatedOptions() {
     ConfiguredRuleClassProvider ruleClassProvider = new ConfiguredRuleClassProvider.Builder()
-        .setToolsRepository(TestConstants.TOOLS_REPOSITORY)
         .build();
 
     assertThat(
@@ -101,7 +99,6 @@ public class AbstractCommandTest {
   @Test
   public void testOptionsAreInherited() {
     ConfiguredRuleClassProvider ruleClassProvider = new ConfiguredRuleClassProvider.Builder()
-        .setToolsRepository(TestConstants.TOOLS_REPOSITORY)
         .build();
     assertThat(
             BlazeCommandUtils.getOptions(

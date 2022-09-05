@@ -113,8 +113,7 @@ public abstract class GlobFunctionTest {
     driver = new SequentialBuildDriver(evaluator);
     PrecomputedValue.BUILD_ID.set(differencer, UUID.randomUUID());
     PrecomputedValue.PATH_PACKAGE_LOCATOR.set(differencer, pkgLocator.get());
-    PrecomputedValue.BLACKLISTED_PACKAGE_PREFIXES_FILE.set(
-        differencer, PathFragment.EMPTY_FRAGMENT);
+    PrecomputedValue.BLACKLISTED_PKG_PREFIXES.set(differencer, ImmutableSet.<PathFragment>of());
 
     createTestFiles();
   }
@@ -131,8 +130,6 @@ public abstract class GlobFunctionTest {
         new DirectoryListingStateFunction(externalFilesHelper));
     skyFunctions.put(SkyFunctions.DIRECTORY_LISTING, new DirectoryListingFunction());
     skyFunctions.put(SkyFunctions.PACKAGE_LOOKUP, new PackageLookupFunction(deletedPackages));
-    skyFunctions.put(SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
-        new BlacklistedPackagePrefixesFunction());
     skyFunctions.put(
         SkyFunctions.FILE_STATE,
         new FileStateFunction(
