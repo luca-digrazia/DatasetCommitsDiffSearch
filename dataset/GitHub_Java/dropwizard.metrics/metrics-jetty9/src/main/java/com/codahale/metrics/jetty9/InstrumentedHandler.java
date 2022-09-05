@@ -184,6 +184,7 @@ public class InstrumentedHandler extends HandlerWrapper {
                 }
                 activeSuspended.inc();
             } else if (state.isInitial()) {
+                requests.update(dispatched, TimeUnit.MILLISECONDS);
                 updateResponses(request);
             }
             // else onCompletion will handle it.
