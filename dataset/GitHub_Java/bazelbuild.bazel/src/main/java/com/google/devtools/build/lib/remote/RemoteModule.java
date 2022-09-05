@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.common.options.OptionsBase;
+
 import java.net.URI;
 import java.net.URISyntaxException;
 
@@ -61,25 +62,15 @@ public final class RemoteModule extends BlazeModule {
     buildRequest = event.getRequest();
     RemoteOptions options = buildRequest.getOptions(RemoteOptions.class);
 
-    ConcurrentMapActionCache cache = null;
-
     // Don't provide the remote spawn unless at least action cache is initialized.
-    if (actionCache == null) {
-      if (options.hazelcastNode != null || options.hazelcastClientConfig != null) {
-        cache =
-            new ConcurrentMapActionCache(
-                this.env.getDirectories().getExecRoot(),
-                HazelcastCacheFactory.create(options));
-      } else if (options.restCacheUrl != null) {
-        cache =
-            new ConcurrentMapActionCache(
-                this.env.getDirectories().getExecRoot(),
-                RestUrlCacheFactory.create(options));
-      }
+    if (actionCache == null
+        && (options.hazelcastNode != null || options.hazelcastClientConfig != null)) {
+      MemcacheActionCache cache =
+          new MemcacheActionCache(
+              this.env.getDirectories().getExecRoot(),
+              options,
+              HazelcastCacheFactory.create(options));
       actionCache = cache;
-    }
-
-    if (cache != null) {
       if (workExecutor == null && options.remoteWorker != null) {
         try {
           URI uri = new URI("dummy://" + options.remoteWorker);
