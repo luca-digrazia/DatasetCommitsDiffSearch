@@ -1,25 +1,29 @@
 package com.codahale.metrics;
 
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * A meter metric which measures mean throughput and one-, five-, and fifteen-minute
- * exponentially-weighted moving average throughputs.
+ * moving average throughputs.
  *
- * @see EWMA
+ * @see MovingAverages
  */
 public class Meter implements Metered {
-    private static final long TICK_INTERVAL = TimeUnit.SECONDS.toNanos(5);
 
-    private final EWMA m1Rate = EWMA.oneMinuteEWMA();
-    private final EWMA m5Rate = EWMA.fiveMinuteEWMA();
-    private final EWMA m15Rate = EWMA.fifteenMinuteEWMA();
-
+    private final MovingAverages movingAverages;
     private final LongAdder count = new LongAdder();
     private final long startTime;
-    private final AtomicLong lastTick;
     private final Clock clock;
+
+    /**
+     * Creates a new {@link Meter}.
+     *
+     * @param movingAverages the {@link MovingAverages} implementation to use
+     */
+    public Meter(MovingAverages movingAverages) {
+        this(movingAverages, Clock.defaultClock());
+    }
 
     /**
      * Creates a new {@link Meter}.
@@ -31,12 +35,22 @@ public class Meter implements Metered {
     /**
      * Creates a new {@link Meter}.
      *
-     * @param clock      the clock to use for the meter ticks
+     * @param clock the clock to use for the meter ticks
      */
     public Meter(Clock clock) {
+        this(new ExponentialMovingAverages(clock), clock);
+    }
+
+    /**
+     * Creates a new {@link Meter}.
+     *
+     * @param movingAverages the {@link MovingAverages} implementation to use
+     * @param clock          the clock to use for the meter ticks
+     */
+    public Meter(MovingAverages movingAverages, Clock clock) {
+        this.movingAverages = movingAverages;
         this.clock = clock;
         this.startTime = this.clock.getTick();
-        this.lastTick = new AtomicLong(startTime);
     }
 
     /**
@@ -52,25 +66,9 @@ public class Meter implements Metered {
      * @param n the number of events
      */
     public void mark(long n) {
-        tickIfNecessary();
+        movingAverages.tickIfNecessary();
         count.add(n);
-        m1Rate.update(n);
-        m5Rate.update(n);
-        m15Rate.update(n);
-    }
-
-    private void tickIfNecessary() {
-        final long oldTick = lastTick.get();
-        final long newTick = clock.getTick();
-        final long age = newTick - oldTick;
-        if (age > TICK_INTERVAL && lastTick.compareAndSet(oldTick, newTick)) {
-            final long requiredTicks = age / TICK_INTERVAL;
-            for (long i = 0; i < requiredTicks; i++) {
-                m1Rate.tick();
-                m5Rate.tick();
-                m15Rate.tick();
-            }
-        }
+        movingAverages.update(n);
     }
 
     @Override
@@ -80,14 +78,14 @@ public class Meter implements Metered {
 
     @Override
     public double getFifteenMinuteRate() {
-        tickIfNecessary();
-        return m15Rate.getRate(TimeUnit.SECONDS);
+        movingAverages.tickIfNecessary();
+        return movingAverages.getM15Rate();
     }
 
     @Override
     public double getFiveMinuteRate() {
-        tickIfNecessary();
-        return m5Rate.getRate(TimeUnit.SECONDS);
+        movingAverages.tickIfNecessary();
+        return movingAverages.getM5Rate();
     }
 
     @Override
@@ -95,14 +93,14 @@ public class Meter implements Metered {
         if (getCount() == 0) {
             return 0.0;
         } else {
-            final double elapsed = (clock.getTick() - startTime);
+            final double elapsed = clock.getTick() - startTime;
             return getCount() / elapsed * TimeUnit.SECONDS.toNanos(1);
         }
     }
 
     @Override
     public double getOneMinuteRate() {
-        tickIfNecessary();
-        return m1Rate.getRate(TimeUnit.SECONDS);
+        movingAverages.tickIfNecessary();
+        return movingAverages.getM1Rate();
     }
 }
