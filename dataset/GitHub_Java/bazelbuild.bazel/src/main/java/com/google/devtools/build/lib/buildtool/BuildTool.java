@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
+import com.google.devtools.build.lib.analysis.config.BuildConfigurationKey;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
@@ -174,7 +175,8 @@ public class BuildTool {
               + "'test' right now!");
         }
       }
-      configurations = getConfigurations(buildOptions, request.getMultiCpus(),
+      configurations = getConfigurations(
+          runtime.getBuildConfigurationKey(buildOptions, request.getMultiCpus()),
           request.getViewOptions().keepGoing);
 
       getEventBus().post(new ConfigurationsCreatedEvent(configurations));
@@ -199,9 +201,8 @@ public class BuildTool {
 
       // Execution phase.
       if (needsExecutionPhase(request.getBuildOptions())) {
-        executionTool.executeBuild(request.getId(), analysisResult, result,
-            runtime.getSkyframeExecutor(), configurations,
-            mergePackageRoots(loadingResult.getPackageRoots(),
+        executionTool.executeBuild(analysisResult, result, runtime.getSkyframeExecutor(),
+            configurations, mergePackageRoots(loadingResult.getPackageRoots(),
             runtime.getSkyframeExecutor().getPackageRoots()));
       }
 
@@ -377,15 +378,13 @@ public class BuildTool {
     return result;
   }
 
-  private final BuildConfigurationCollection getConfigurations(BuildOptions buildOptions,
-      Set<String> multiCpu, boolean keepGoing)
+  protected final BuildConfigurationCollection getConfigurations(BuildConfigurationKey key,
+      boolean keepGoing)
       throws InvalidConfigurationException, InterruptedException {
     SkyframeExecutor executor = runtime.getSkyframeExecutor();
     // TODO(bazel-team): consider a possibility of moving ConfigurationFactory construction into
     // skyframe.
-    return executor.createConfigurations(
-        runtime.getConfigurationFactory(), buildOptions, runtime.getDirectories(), multiCpu,
-        keepGoing);
+    return executor.createConfigurations(keepGoing, runtime.getConfigurationFactory(), key);
   }
 
   @VisibleForTesting

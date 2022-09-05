@@ -208,7 +208,7 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
     Preconditions.checkNotNull(repository);
     Preconditions.checkNotNull(pkgName);
     this.repository = repository;
-    this.pkgName = Canonicalizer.fragments().intern(pkgName.normalize());
+    this.pkgName = Canonicalizer.fragments().intern(pkgName);
   }
 
   private Object writeReplace() throws ObjectStreamException {

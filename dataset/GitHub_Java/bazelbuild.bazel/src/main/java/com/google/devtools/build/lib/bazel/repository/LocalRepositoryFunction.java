@@ -79,12 +79,12 @@ public class LocalRepositoryFunction extends RepositoryFunction {
           new IOException(rule + " must specify an existing directory"), Transience.TRANSIENT);
     }
 
-    return RepositoryValue.create(repositoryPath, repositoryValue);
+    return new RepositoryValue(repositoryPath, repositoryValue);
   }
 
   @Override
   public SkyFunctionName getSkyFunctionName() {
-    return SkyFunctionName.create(LocalRepositoryRule.NAME.toUpperCase());
+    return SkyFunctionName.computed(LocalRepositoryRule.NAME.toUpperCase());
   }
 
   @Override
