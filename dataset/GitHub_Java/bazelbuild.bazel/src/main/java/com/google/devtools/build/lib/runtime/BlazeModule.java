@@ -310,7 +310,9 @@ public abstract class BlazeModule {
         throws NoSuchThingException, InterruptedException, IOException;
 
     /**
-     * Exits Blaze as early as possible by sending an interrupt to the command's main thread.
+     * Exits Blaze as early as possible. This is currently a hack and should only be called in
+     * event handlers for {@code BuildStartingEvent}, {@code GotOptionsEvent} and
+     * {@code LoadingPhaseCompleteEvent}.
      */
     void exit(AbruptExitException exception);
   }
