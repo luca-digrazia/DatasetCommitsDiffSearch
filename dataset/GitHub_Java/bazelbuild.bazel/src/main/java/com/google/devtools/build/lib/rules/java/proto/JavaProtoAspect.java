@@ -122,7 +122,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
   public AspectDefinition getDefinition(AspectParameters aspectParameters) {
     AspectDefinition.Builder result =
         new AspectDefinition.Builder(this)
-            .propagateAlongAttribute("deps")
+            .attributeAspect("deps", this)
             .requiresConfigurationFragments(JavaConfiguration.class, ProtoConfiguration.class)
             .requireProviders(ProtoSourcesProvider.class)
             .add(

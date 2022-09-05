@@ -49,6 +49,7 @@ import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
+import java.util.Set;
 
 /**
  * Rule class definitions for Java rules.
@@ -59,8 +60,6 @@ public class BazelJavaRuleClasses {
       PackageNameConstraint.ANY_SEGMENT, "java", "javatests");
 
   protected static final String JUNIT_TESTRUNNER = "//tools/jdk:TestRunner_deploy.jar";
-  protected static final String EXPERIMENTAL_TESTRUNNER =
-      "//tools/jdk:ExperimentalTestRunner_deploy.jar";
 
   public static final ImplicitOutputsFunction JAVA_BINARY_IMPLICIT_OUTPUTS =
       fromFunctions(
@@ -125,7 +124,7 @@ public class BazelJavaRuleClasses {
     }
   }
 
-  static final ImmutableSet<String> ALLOWED_RULES_IN_DEPS =
+  static final Set<String> ALLOWED_RULES_IN_DEPS =
       ImmutableSet.of(
           "cc_binary", // NB: linkshared=1
           "cc_library",
@@ -177,11 +176,6 @@ public class BazelJavaRuleClasses {
               attr("runtime_deps", LABEL_LIST)
                   .allowedFileTypes(JavaSemantics.JAR)
                   .allowedRuleClasses(ALLOWED_RULES_IN_DEPS)
-                  .mandatoryProvidersList(
-                      ImmutableList.of(
-                          ImmutableList.of(
-                              SkylarkProviderIdentifier.forKey(
-                                  JavaProvider.JAVA_PROVIDER.getKey()))))
                   .skipAnalysisTimeFileTypeCheck())
 
           /* <!-- #BLAZE_RULE($java_rule).ATTRIBUTE(srcs) -->
@@ -389,17 +383,6 @@ public class BazelJavaRuleClasses {
                         public Object getDefault(AttributeMap rule) {
                           return rule.get("use_testrunner", Type.BOOLEAN)
                               ? env.getToolsLabel(JUNIT_TESTRUNNER)
-                              : null;
-                        }
-                      }))
-          .add(
-              attr("$experimental_testsupport", LABEL)
-                  .value(
-                      new Attribute.ComputedDefault("use_testrunner") {
-                        @Override
-                        public Object getDefault(AttributeMap rule) {
-                          return rule.get("use_testrunner", Type.BOOLEAN)
-                              ? env.getToolsLabel(EXPERIMENTAL_TESTRUNNER)
                               : null;
                         }
                       }))
