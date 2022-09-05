@@ -84,8 +84,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   protected abstract AndroidSemantics createAndroidSemantics();
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException {
+  public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
     JavaSemantics javaSemantics = createJavaSemantics();
     AndroidSemantics androidSemantics = createAndroidSemantics();
     if (!AndroidSdkProvider.verifyPresence(ruleContext)) {
@@ -113,6 +112,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         androidCommon,
         javaSemantics,
         androidSemantics);
+    if (builder == null) {
+      return null;
+    }
     return builder.build();
   }
 
@@ -123,22 +125,23 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       JavaCommon javaCommon,
       AndroidCommon androidCommon,
       JavaSemantics javaSemantics,
-      AndroidSemantics androidSemantics)
-      throws InterruptedException, RuleErrorException {
+      AndroidSemantics androidSemantics) throws InterruptedException {
 
     if (getMultidexMode(ruleContext) != MultidexMode.LEGACY
         && ruleContext.attributes().isAttributeValueExplicitlySpecified(
             "main_dex_proguard_specs")) {
-      ruleContext.throwWithAttributeError("main_dex_proguard_specs", "The "
-          + "'main_dex_proguard_specs' attribute is only allowed if 'multidex' is set to 'legacy'");
+      ruleContext.attributeError("main_dex_proguard_specs", "The 'main_dex_proguard_specs' "
+          + "attribute is only allowed if 'multidex' is set to 'legacy'");
+      return null;
     }
 
     if (ruleContext.attributes().isAttributeValueExplicitlySpecified("proguard_apply_mapping")
         && ruleContext.attributes()
             .get(ProguardHelper.PROGUARD_SPECS, BuildType.LABEL_LIST)
             .isEmpty()) {
-      ruleContext.throwWithAttributeError("proguard_apply_mapping",
+      ruleContext.attributeError("proguard_apply_mapping",
           "'proguard_apply_mapping' can only be used when 'proguard_specs' is also set");
+      return null;
     }
 
     // TODO(bazel-team): Find a way to simplify this code.
@@ -185,8 +188,13 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     ResourceApk resourceApk;
     if (LocalResourceContainer.definesAndroidResources(ruleContext.attributes())) {
       // Retrieve and compile the resources defined on the android_binary rule.
-      LocalResourceContainer.validateRuleContext(ruleContext);
+      if (!LocalResourceContainer.validateRuleContext(ruleContext)) {
+        return null;
+      }
       ApplicationManifest ruleManifest = androidSemantics.getManifestForRule(ruleContext);
+      if (ruleManifest == null) {
+        return null;
+      }
 
       String applicationId = ruleContext.attributes().get("application_id", Type.STRING);
       String versionCode = getExpandedMakeVarsForAttr(ruleContext, "version_code");
@@ -227,7 +235,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
           createMainDexProguardSpec(ruleContext),
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST),
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP));
-      ruleContext.assertNoErrors();
+      if (ruleContext.hasErrors()) {
+        return null;
+      }
       incrementalResourceApk = applicationManifest.addStubApplication(ruleContext)
           .packWithDataAndResources(ruleContext
                   .getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_INCREMENTAL_RESOURCES_APK),
@@ -248,7 +258,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               null, /* mainDexProguardCfg */
               null, /* manifestOut */
               null /* mergedResourcesOut */);
-      ruleContext.assertNoErrors();
+      if (ruleContext.hasErrors()) {
+        return null;
+      }
       splitResourceApk = applicationManifest
           .createSplitManifest(ruleContext, "android_resources", false)
           .packWithDataAndResources(getDxArtifact(ruleContext, "android_resources.ap_"),
@@ -269,18 +281,21 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               null, /* mainDexProguardCfg */
               null, /* manifestOut */
               null /* mergedResourcesOut */);
-      ruleContext.assertNoErrors();
+      if (ruleContext.hasErrors()) {
+        return null;
+      }
     } else {
       if (!ruleContext.attributes().get("crunch_png", Type.BOOLEAN)) {
-        ruleContext.throwWithRuleError("Setting crunch_png = 0 is not supported for android_binary"
+        ruleContext.ruleError("Setting crunch_png = 0 is not supported for android_binary"
             + " rules which depend on android_resources rules.");
+        return null;
       }
 
       // Retrieve the resources from the resources attribute on the android_binary rule
       // and recompile them if necessary.
       ApplicationManifest resourcesManifest = ApplicationManifest.fromResourcesRule(ruleContext);
       if (resourcesManifest == null) {
-        throw new RuleErrorException();
+        return null;
       }
       applicationManifest = resourcesManifest.mergeWith(ruleContext, resourceDeps);
       // Always recompiling resources causes AndroidTest to fail in certain circumstances.
@@ -307,7 +322,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               false,
               ProguardHelper.getProguardConfigArtifact(ruleContext, "incremental"),
               null /* mainDexProguardConfig */);
-      ruleContext.assertNoErrors();
+      if (ruleContext.hasErrors()) {
+        return null;
+      }
 
       splitResourceApk = applicationManifest
           .createSplitManifest(ruleContext, "android_resources", false)
@@ -317,7 +334,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             false,
             ProguardHelper.getProguardConfigArtifact(ruleContext, "incremental_split"),
             null /* mainDexProguardConfig */);
-      ruleContext.assertNoErrors();
+      if (ruleContext.hasErrors()) {
+        return null;
+      }
     }
 
     JavaTargetAttributes resourceClasses = androidCommon.init(
@@ -326,7 +345,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         resourceApk,
         ruleContext.getConfiguration().isCodeCoverageEnabled(),
         true /* collectJavaCompilationArgs */);
-    ruleContext.assertNoErrors();
+    if (resourceClasses == null) {
+      return null;
+    }
 
     Artifact deployJar = createDeployJar(ruleContext, javaSemantics, androidCommon, resourceClasses,
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_DEPLOY_JAR));
@@ -375,8 +396,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       JavaTargetAttributes resourceClasses,
       ImmutableList<Artifact> apksUnderTest,
       ImmutableList<Artifact> additionalMergedManifests,
-      Artifact proguardMapping)
-      throws InterruptedException, RuleErrorException {
+      Artifact proguardMapping) throws InterruptedException {
 
     ImmutableList<Artifact> proguardSpecs = ProguardHelper.collectTransitiveProguardSpecs(
         ruleContext, ImmutableList.of(resourceApk.getResourceProguardConfig()));
@@ -409,6 +429,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 androidCommon,
                 resourceApk.getMainDexProguardConfig(),
                 resourceClasses);
+    if (dexingOutput == null) {
+      return null;
+    }
 
     Artifact unsignedApk =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_UNSIGNED_APK);
@@ -480,7 +503,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     Artifact stubData = ruleContext.getImplicitOutputArtifact(
         AndroidRuleClasses.STUB_APPLICATION_DATA);
     Artifact stubDex = getStubDex(ruleContext, javaSemantics, false);
-    ruleContext.assertNoErrors();
+    if (ruleContext.hasErrors()) {
+      return null;
+    }
 
     ApkActionBuilder incrementalActionBuilder = new ApkActionBuilder(ruleContext, androidSemantics)
         .classesDex(stubDex)
@@ -598,7 +623,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> splitApks = splitApkSetBuilder.build();
     Artifact splitMainApk = getDxArtifact(ruleContext, "split_main.apk");
     Artifact splitStubDex = getStubDex(ruleContext, javaSemantics, true);
-    ruleContext.assertNoErrors();
+    if (ruleContext.hasErrors()) {
+      return null;
+    }
     ruleContext.registerAction(new ApkActionBuilder(ruleContext, androidSemantics)
         .resourceApk(splitMainApkResources)
         .classesDex(splitStubDex)
@@ -1051,31 +1078,35 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       AndroidCommon common,
       @Nullable Artifact mainDexProguardSpec,
       JavaTargetAttributes attributes)
-      throws InterruptedException, RuleErrorException {
+      throws InterruptedException {
     boolean isFinalJarDerived = isBinaryJarFiltered || binaryJar != proguardedJar;
     List<String> dexopts = ruleContext.getTokenizedStringListAttr("dexopts");
     MultidexMode multidexMode = getMultidexMode(ruleContext);
     if (!supportsMultidexMode(ruleContext, multidexMode)) {
-      ruleContext.throwWithRuleError("Multidex mode \"" + multidexMode.getAttributeValue()
+      ruleContext.ruleError("Multidex mode \"" + multidexMode.getAttributeValue()
           + "\" not supported by this version of the Android SDK");
+      return null;
     }
 
     int dexShards = ruleContext.attributes().get("dex_shards", Type.INTEGER);
     if (dexShards > 1) {
       if (multidexMode == MultidexMode.OFF) {
-        ruleContext.throwWithRuleError(".dex sharding is only available in multidex mode");
+        ruleContext.ruleError(".dex sharding is only available in multidex mode");
+        return null;
       }
 
       if (multidexMode == MultidexMode.MANUAL_MAIN_DEX) {
-        ruleContext.throwWithRuleError(".dex sharding is not available in manual multidex mode");
+        ruleContext.ruleError(".dex sharding is not available in manual multidex mode");
+        return null;
       }
     }
 
     Artifact mainDexList = ruleContext.getPrerequisiteArtifact("main_dex_list", Mode.TARGET);
     if ((mainDexList != null && multidexMode != MultidexMode.MANUAL_MAIN_DEX)
         || (mainDexList == null && multidexMode == MultidexMode.MANUAL_MAIN_DEX)) {
-      ruleContext.throwWithRuleError(
+      ruleContext.ruleError(
           "Both \"main_dex_list\" and \"multidex='manual_main_dex'\" must be specified.");
+      return null;
     }
 
     // Always OFF if finalJarIsDerived
