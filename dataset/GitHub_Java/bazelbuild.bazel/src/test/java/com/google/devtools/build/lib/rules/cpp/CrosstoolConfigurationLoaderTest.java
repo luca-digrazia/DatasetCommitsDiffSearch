@@ -536,7 +536,8 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             CompilationMode.FASTBUILD,
             LipoMode.OFF,
             LinkingMode.FULLY_STATIC,
-            new PathFragment("hello-world/ld")));
+            new PathFragment("hello-world/ld"),
+            true));
     assertEquals(
         Arrays.asList(
             "linker-flag-A-1",
@@ -548,7 +549,8 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             CompilationMode.DBG,
             LipoMode.OFF,
             LinkingMode.DYNAMIC,
-            new PathFragment("hello-world/ld")));
+            new PathFragment("hello-world/ld"),
+            true));
     assertEquals(
         Arrays.asList(
             "linker-flag-A-1",
@@ -560,7 +562,8 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             CompilationMode.OPT,
             LipoMode.OFF,
             LinkingMode.FULLY_STATIC,
-            new PathFragment("hello-world/ld")));
+            new PathFragment("hello-world/ld"),
+            true));
 
     assertEquals(
         Arrays.asList(
@@ -573,7 +576,8 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             CompilationMode.OPT,
             LipoMode.BINARY,
             LinkingMode.FULLY_STATIC,
-            new PathFragment("hello-world/ld")));
+            new PathFragment("hello-world/ld"),
+            true));
 
     assertEquals(
         Arrays.asList("objcopy-embed-flag-A-1", "objcopy-embed-flag-A-2"),
@@ -635,21 +639,24 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             CompilationMode.FASTBUILD,
             LipoMode.OFF,
             LinkingMode.FULLY_STATIC,
-            new PathFragment("hello-world/ld")));
+            new PathFragment("hello-world/ld"),
+            true));
     assertEquals(
         Arrays.asList("-Wl,-S"),
         toolchainC.configureLinkerOptions(
             CompilationMode.DBG,
             LipoMode.OFF,
             LinkingMode.DYNAMIC,
-            new PathFragment("hello-world/ld")));
+            new PathFragment("hello-world/ld"),
+            true));
     assertEquals(
         Arrays.asList("-Wl,-S"),
         toolchainC.configureLinkerOptions(
             CompilationMode.OPT,
             LipoMode.OFF,
             LinkingMode.FULLY_STATIC,
-            new PathFragment("hello-world/ld")));
+            new PathFragment("hello-world/ld"),
+            true));
     assertThat(toolchainC.getObjCopyOptionsForEmbedding()).isEmpty();
     assertThat(toolchainC.getLdOptionsForEmbedding()).isEmpty();
 
@@ -690,7 +697,8 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             CompilationMode.DBG,
             lipoMode,
             LinkingMode.DYNAMIC,
-            new PathFragment("hello-world/ld")));
+            new PathFragment("hello-world/ld"),
+            true));
     assertEquals(
         ImmutableList.<String>of(
             "compiler-flag-B-1",
