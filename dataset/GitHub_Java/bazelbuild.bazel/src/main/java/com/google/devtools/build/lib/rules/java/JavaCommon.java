@@ -103,7 +103,7 @@ public class JavaCommon {
   private final ImmutableMap<ClasspathType, ImmutableList<TransitiveInfoCollection>>
       targetsTreatedAsDeps;
 
-  private final ImmutableList<Artifact> sources;
+  private ImmutableList<Artifact> sources = ImmutableList.of();
   private ImmutableList<JavaPluginInfoProvider> activePlugins = ImmutableList.of();
 
   private final RuleContext ruleContext;
@@ -112,16 +112,6 @@ public class JavaCommon {
 
   public JavaCommon(RuleContext ruleContext, JavaSemantics semantics) {
     this(ruleContext, semantics,
-        ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET).list(),
-        collectTargetsTreatedAsDeps(ruleContext, semantics, ClasspathType.COMPILE_ONLY),
-        collectTargetsTreatedAsDeps(ruleContext, semantics, ClasspathType.RUNTIME_ONLY),
-        collectTargetsTreatedAsDeps(ruleContext, semantics, ClasspathType.BOTH));
-  }
-
-  public JavaCommon(RuleContext ruleContext, JavaSemantics semantics,
-      ImmutableList<Artifact> sources) {
-    this(ruleContext, semantics,
-        sources,
         collectTargetsTreatedAsDeps(ruleContext, semantics, ClasspathType.COMPILE_ONLY),
         collectTargetsTreatedAsDeps(ruleContext, semantics, ClasspathType.RUNTIME_ONLY),
         collectTargetsTreatedAsDeps(ruleContext, semantics, ClasspathType.BOTH));
@@ -129,23 +119,11 @@ public class JavaCommon {
 
   public JavaCommon(RuleContext ruleContext,
       JavaSemantics semantics,
-      ImmutableList<TransitiveInfoCollection> compileDeps,
-      ImmutableList<TransitiveInfoCollection> runtimeDeps,
-      ImmutableList<TransitiveInfoCollection> bothDeps) {
-    this(ruleContext, semantics,
-        ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET).list(),
-        compileDeps, runtimeDeps, bothDeps);
-  }
-
-  public JavaCommon(RuleContext ruleContext,
-      JavaSemantics semantics,
-      ImmutableList<Artifact> sources,
       ImmutableList<TransitiveInfoCollection> compileDeps,
       ImmutableList<TransitiveInfoCollection> runtimeDeps,
       ImmutableList<TransitiveInfoCollection> bothDeps) {
     this.ruleContext = ruleContext;
     this.semantics = semantics;
-    this.sources = sources;
     this.targetsTreatedAsDeps = ImmutableMap.of(
         ClasspathType.COMPILE_ONLY, compileDeps,
         ClasspathType.RUNTIME_ONLY, runtimeDeps,
@@ -526,6 +504,7 @@ public class JavaCommon {
    */
   public JavaTargetAttributes.Builder initCommon(Collection<Artifact> extraSrcs) {
     Preconditions.checkState(javacOpts != null);
+    sources = ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET).list();
     activePlugins = collectPlugins();
 
     JavaTargetAttributes.Builder javaTargetAttributes = new JavaTargetAttributes.Builder(semantics);

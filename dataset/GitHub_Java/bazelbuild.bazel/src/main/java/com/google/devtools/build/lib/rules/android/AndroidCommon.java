@@ -246,7 +246,6 @@ public class AndroidCommon {
       Iterable<Artifact> apksUnderTest) {
     AndroidIdeInfoProvider.Builder ideInfoProviderBuilder =
         new AndroidIdeInfoProvider.Builder()
-            .setJavaPackage(getJavaPackage(ruleContext))
             .setIdlClassJar(idlHelper.getIdlClassJar())
             .setIdlSourceJar(idlHelper.getIdlSourceJar())
             .addIdlParcelables(idlHelper.getIdlParcelables())
@@ -404,8 +403,9 @@ public class AndroidCommon {
     classJar = ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_CLASS_JAR);
     idlHelper = new AndroidIdlHelper(ruleContext, classJar);
 
+    javaCommon.initializeJavacOpts(androidSemantics.getJavacArguments());
     JavaTargetAttributes.Builder attributes = javaCommon
-        .initCommon(idlHelper.getIdlGeneratedJavaSources(), androidSemantics.getJavacArguments())
+        .initCommon(idlHelper.getIdlGeneratedJavaSources())
         .setBootClassPath(ImmutableList.of(
             AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar()));
 
@@ -602,16 +602,12 @@ public class AndroidCommon {
             JavaRuntimeJarProvider.class,
             new JavaRuntimeJarProvider(javaCommon.getJavaCompilationArtifacts().getRuntimeJars()))
         .add(RunfilesProvider.class, RunfilesProvider.simple(getRunfiles()))
-        .add(AndroidResourcesProvider.class, resourceApk.toResourceProvider(ruleContext.getLabel()))
+        .add(
+            AndroidResourcesProvider.class, resourceApk.toResourceProvider(ruleContext.getLabel()))
         .add(
             AndroidIdeInfoProvider.class,
-            createAndroidIdeInfoProvider(
-                ruleContext,
-                androidSemantics,
-                idlHelper,
-                resourceApk,
-                zipAlignedApk,
-                apksUnderTest))
+            createAndroidIdeInfoProvider(ruleContext, androidSemantics, idlHelper,
+                resourceApk, zipAlignedApk, apksUnderTest))
         .add(
             JavaCompilationArgsProvider.class,
             new JavaCompilationArgsProvider(
@@ -624,7 +620,6 @@ public class AndroidCommon {
             asNeverLink
                 ? jackCompilationHelper.compileAsNeverlinkLibrary()
                 : jackCompilationHelper.compileAsLibrary())
-        .addSkylarkTransitiveInfo(AndroidSkylarkApiProvider.NAME, new AndroidSkylarkApiProvider())
         .addOutputGroup(
             OutputGroupProvider.HIDDEN_TOP_LEVEL, collectHiddenTopLevelArtifacts(ruleContext))
         .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars);
