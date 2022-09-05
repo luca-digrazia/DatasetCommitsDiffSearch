@@ -14,51 +14,32 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
-import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import java.util.Objects;
 import javax.annotation.Nullable;
 
 /**
- * A (Label, Configuration) pair. Note that this pair may be used to look up the generating action
+ *  A (Label, Configuration) pair. Note that this pair may be used to look up the generating action
  * of an artifact. Callers may want to ensure that they have the correct configuration for this
- * purpose by passing in {@link BuildConfiguration#getArtifactOwnerTransition} in preference to
+ * purpose by passing in {@link BuildConfiguration#getArtifactOwnerConfiguration} in preference to
  * the raw configuration.
  */
-public class ConfiguredTargetKey extends ActionLookupKey {
+public class ConfiguredTargetKey extends ActionLookupValue.ActionLookupKey {
   private final Label label;
   @Nullable
   private final BuildConfiguration configuration;
 
-  private transient int hashCode;
-
-  private ConfiguredTargetKey(Label label, @Nullable BuildConfiguration configuration) {
+  public ConfiguredTargetKey(Label label, @Nullable BuildConfiguration configuration) {
     this.label = Preconditions.checkNotNull(label);
     this.configuration = configuration;
   }
 
-  public static ConfiguredTargetKey of(ConfiguredTarget configuredTarget) {
-    AliasProvider aliasProvider = configuredTarget.getProvider(AliasProvider.class);
-    Label label =
-        aliasProvider != null ? aliasProvider.getAliasChain().get(0) : configuredTarget.getLabel();
-    return of(label, configuredTarget.getConfiguration());
-  }
-
-  /**
-   * Cache so that the number of ConfiguredTargetKey instances is {@code O(configured targets)} and
-   * not {@code O(edges between configured targets)}.
-   */
-  private static final Interner<ConfiguredTargetKey> interner = BlazeInterners.newWeakInterner();
-
-  public static ConfiguredTargetKey of(Label label, @Nullable BuildConfiguration configuration) {
-    return interner.intern(new ConfiguredTargetKey(label, configuration));
+  public ConfiguredTargetKey(ConfiguredTarget rule) {
+    this(rule.getTarget().getLabel(), rule.getConfiguration());
   }
 
   @Override
@@ -67,7 +48,7 @@ public class ConfiguredTargetKey extends ActionLookupKey {
   }
 
   @Override
-  public SkyFunctionName functionName() {
+  SkyFunctionName getType() {
     return SkyFunctions.CONFIGURED_TARGET;
   }
 
@@ -78,31 +59,6 @@ public class ConfiguredTargetKey extends ActionLookupKey {
 
   @Override
   public int hashCode() {
-    // We use the hash code caching strategy employed by java.lang.String. There are three subtle
-    // things going on here:
-    //
-    // (1) We use a value of 0 to indicate that the hash code hasn't been computed and cached yet.
-    // Yes, this means that if the hash code is really 0 then we will "recompute" it each time. But
-    // this isn't a problem in practice since a hash code of 0 should be rare.
-    //
-    // (2) Since we have no synchronization, multiple threads can race here thinking there are the
-    // first one to compute and cache the hash code.
-    //
-    // (3) Moreover, since 'hashCode' is non-volatile, the cached hash code value written from one
-    // thread may not be visible by another.
-    //
-    // All three of these issues are benign from a correctness perspective; in the end we have no
-    // overhead from synchronization, at the cost of potentially computing the hash code more than
-    // once.
-    int h = hashCode;
-    if (h == 0) {
-      h = computeHashCode();
-      hashCode = h;
-    }
-    return h;
-  }
-
-  private int computeHashCode() {
     int configVal = configuration == null ? 79 : configuration.hashCode();
     return 31 * label.hashCode() + configVal;
   }
@@ -137,4 +93,5 @@ public class ConfiguredTargetKey extends ActionLookupKey {
         System.identityHashCode(this),
         (configuration == null ? "null" : System.identityHashCode(configuration)));
   }
+
 }
