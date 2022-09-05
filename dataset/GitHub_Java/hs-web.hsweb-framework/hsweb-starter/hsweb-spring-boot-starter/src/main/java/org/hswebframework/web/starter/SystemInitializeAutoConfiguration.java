@@ -128,8 +128,7 @@ public class SystemInitializeAutoConfiguration implements CommandLineRunner, Bea
                 metaData.setParser(new H2TableMetaParser(sqlExecutor));
                 break;
         }
-        SimpleDatabase database = new SimpleDatabase(metaData, sqlExecutor);
-        database.setAutoParse(true);
+        RDBDatabase database = new SimpleDatabase(metaData, sqlExecutor);
         SystemInitialize initialize = new SystemInitialize(sqlExecutor, database, version);
 
         initialize.addScriptContext("db", jdbcUserName);
