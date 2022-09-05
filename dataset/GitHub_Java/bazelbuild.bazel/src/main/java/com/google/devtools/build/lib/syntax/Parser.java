@@ -670,24 +670,6 @@ class Parser {
     }
   }
 
-  /**
-   * Parse a String literal value, e.g. "str".
-   */
-  private StringLiteral parseStringLiteral() {
-    Preconditions.checkState(token.kind == TokenKind.STRING);
-    int end = token.right;
-    char quoteChar = lexer.charAt(token.left);
-    StringLiteral literal =
-        setLocation(new StringLiteral((String) token.value, quoteChar), token.left, end);
-
-    nextToken();
-    if (token.kind == TokenKind.STRING) {
-      reportError(lexer.createLocation(end, token.left),
-          "Implicit string concatenation is forbidden, use the + operator");
-    }
-    return literal;
-  }
-
   //  primary ::= INTEGER
   //            | STRING
   //            | STRING '.' IDENTIFIER funcall_suffix
@@ -709,7 +691,17 @@ class Parser {
         return literal;
       }
       case STRING: {
-        return parseStringLiteral();
+        String value = (String) token.value;
+        int end = token.right;
+        char quoteChar = lexer.charAt(start);
+        nextToken();
+        if (token.kind == TokenKind.STRING) {
+          reportError(lexer.createLocation(end, token.left),
+              "Implicit string concatenation is forbidden, use the + operator");
+        }
+        StringLiteral literal = new StringLiteral(value, quoteChar);
+        setLocation(literal, start, end);
+        return literal;
       }
       case IDENTIFIER: {
         Identifier ident = parseIdent();
@@ -1111,7 +1103,10 @@ class Parser {
       return;
     }
 
-    StringLiteral path = parseStringLiteral();
+    Token pathToken = token;
+    String path = (String) token.value;
+
+    nextToken();
     expect(TokenKind.COMMA);
 
     Map<Identifier, String> symbols = new HashMap<>();
@@ -1135,7 +1130,7 @@ class Parser {
     try {
       stmt.validatePath();
     } catch (EvalException e) {
-      reportError(path.getLocation(), e.getMessage());
+      syntaxError(pathToken, e.getMessage());
     }
 
     list.add(setLocation(stmt, start, token.left));

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,11 +20,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.DictionaryLiteral.DictionaryEntryLiteral;
-import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -34,43 +32,42 @@ import org.junit.runners.JUnit4;
 import java.util.LinkedList;
 import java.util.List;
 
+
 /**
  *  Tests of parser behaviour.
  */
 @RunWith(JUnit4.class)
 public class ParserTest extends EvaluationTestCase {
 
-  Environment buildEnvironment;
+  EvaluationContext buildContext;
+  EvaluationContext buildContextWithPython;
 
   @Before
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    buildEnvironment = newBuildEnvironment();
+    buildContext = EvaluationContext.newBuildContext(getEventHandler());
+    buildContextWithPython = EvaluationContext.newBuildContext(
+        getEventHandler(), new Environment(), /*parsePython*/true);
   }
 
   private Parser.ParseResult parseFileWithComments(String... input) {
-    return buildEnvironment.parseFileWithComments(input);
+    return buildContext.parseFileWithComments(input);
   }
-
-  /** Parses build code (not Skylark) */
   @Override
   protected List<Statement> parseFile(String... input) {
-    return buildEnvironment.parseFile(input);
+    return buildContext.parseFile(input);
   }
-
-  /** Parses a build code (not Skylark) with PythonProcessing enabled */
   private List<Statement> parseFileWithPython(String... input) {
-    return Parser.parseFile(
-        ParserInputSource.create(Joiner.on("\n").join(input), null),
-        getEventHandler(),
-        /*parsePython=*/true).statements;
+    return buildContextWithPython.parseFile(input);
+  }
+  private List<Statement> parseFileForSkylark(String... input) {
+    return evaluationContext.parseFile(input);
+  }
+  private Statement parseStatement(String... input) {
+    return buildContext.parseStatement(input);
   }
 
-  /** Parses Skylark code */
-  private List<Statement> parseFileForSkylark(String... input) {
-    return env.parseFile(input);
-  }
 
   private static String getText(String text, ASTNode node) {
     return text.substring(node.getLocation().getStartOffset(),
@@ -710,7 +707,7 @@ public class ParserTest extends EvaluationTestCase {
   @Test
   public void testParserContainsErrors() throws Exception {
     setFailFast(false);
-    parseFile("+");
+    parseStatement("+");
     assertContainsEvent("syntax error at '+'");
   }
 
@@ -977,7 +974,7 @@ public class ParserTest extends EvaluationTestCase {
     List<Statement> stmts3 = parseFile("[ i for (i, j, k) in [(1, 2, 3)] ]\n");
     assertThat(stmts3).hasSize(1);
   }
-
+  
   @Test
   public void testReturnNone() throws Exception {
     List<Statement> defNone = parseFileForSkylark("def foo():", "  return None\n");
@@ -994,10 +991,10 @@ public class ParserTest extends EvaluationTestCase {
       List<Statement> defNoExpr = parseFileForSkylark("def bar" + i + "():", "  return" + end);
       i++;
       assertThat(defNoExpr).hasSize(1);
-
+  
       List<Statement> bodyNoExpr = ((FunctionDefStatement) defNoExpr.get(0)).getStatements();
       assertThat(bodyNoExpr).hasSize(1);
-
+  
       ReturnStatement returnNoExpr = (ReturnStatement) bodyNoExpr.get(0);
       Identifier none = (Identifier) returnNoExpr.getReturnExpression();
       assertEquals("None", none.getName());
@@ -1150,7 +1147,7 @@ public class ParserTest extends EvaluationTestCase {
     parseFileForSkylark("load('/foo', test3 = old)\n");
     assertContainsEvent("syntax error at 'old': expected string");
   }
-
+  
   @Test
   public void testParseErrorNotComparison() throws Exception {
     setFailFast(false);
@@ -1255,38 +1252,16 @@ public class ParserTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testTryStatementInBuild() throws Exception {
+  public void testIncludeFailureSkylark() throws Exception {
     setFailFast(false);
-    parseFile("try: pass");
-    assertContainsEvent("syntax error at 'try': Try statements are not supported.");
+    parseFileForSkylark("include('//foo:bar')");
+    assertContainsEvent("function 'include' does not exist");
   }
 
   @Test
-  public void testTryStatementInSkylark() throws Exception {
+  public void testIncludeFailure() throws Exception {
     setFailFast(false);
-    parseFileForSkylark("try: pass");
-    assertContainsEvent("syntax error at 'try': Try statements are not supported.");
-  }
-
-  @Test
-  public void testClassDefinitionInBuild() throws Exception {
-    setFailFast(false);
-    parseFile("class test(object): pass");
-    assertContainsEvent("syntax error at 'class': Class definitions are not supported.");
-  }
-
-  @Test
-  public void testClassDefinitionInSkylark() throws Exception {
-    setFailFast(false);
-    parseFileForSkylark("class test(object): pass");
-    assertContainsEvent("syntax error at 'class': Class definitions are not supported.");
-  }
-
-  @Test
-  public void testDefInBuild() throws Exception {
-    setFailFast(false);
-    parseFile("def func(): pass");
-    assertContainsEvent("syntax error at 'def': This is not supported in BUILD files. "
-        + "Move the block to a .bzl file and load it");
+    parseFile("include('nonexistent')\n");
+    assertContainsEvent("Invalid label 'nonexistent'");
   }
 }
