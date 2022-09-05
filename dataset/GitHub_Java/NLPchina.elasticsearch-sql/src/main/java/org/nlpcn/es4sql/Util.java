@@ -45,9 +45,7 @@ public class Util {
             value = expr.toString();
 		}else if (expr instanceof SQLAllColumnExpr) {
 			value = "*";
-		} else if (expr instanceof  SQLValuableExpr){
-            value = ((SQLValuableExpr)expr).getValue();
-        } else {
+		} else {
 			throw new SqlParseException("can not support this type " + expr.getClass());
 		}
 		return value;
