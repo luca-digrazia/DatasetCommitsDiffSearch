@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("rawtypes")
 public class BufferPoolMetricSetTest {
     private final MBeanServer mBeanServer = mock(MBeanServer.class);
     private final BufferPoolMetricSet buffers = new BufferPoolMetricSet(mBeanServer);
@@ -27,14 +28,14 @@ public class BufferPoolMetricSetTest {
     }
 
     @Test
-    public void includesGaugesForDirectAndMappedPools() throws Exception {
+    public void includesGaugesForDirectAndMappedPools() {
         assertThat(buffers.getMetrics().keySet())
                 .containsOnly("direct.count",
-                              "mapped.used",
-                              "mapped.capacity",
-                              "direct.capacity",
-                              "mapped.count",
-                              "direct.used");
+                        "mapped.used",
+                        "mapped.capacity",
+                        "direct.capacity",
+                        "mapped.count",
+                        "direct.used");
     }
 
     @Test
@@ -43,8 +44,8 @@ public class BufferPoolMetricSetTest {
 
         assertThat(buffers.getMetrics().keySet())
                 .containsOnly("direct.count",
-                              "direct.capacity",
-                              "direct.used");
+                        "direct.capacity",
+                        "direct.used");
     }
 
     @Test
@@ -76,7 +77,7 @@ public class BufferPoolMetricSetTest {
         assertThat(gauge.getValue())
                 .isEqualTo(100);
     }
-    
+
     @Test
     public void includesAGaugeForMappedCount() throws Exception {
         final Gauge gauge = (Gauge) buffers.getMetrics().get("mapped.count");
