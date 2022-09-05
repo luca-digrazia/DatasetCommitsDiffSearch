@@ -23,7 +23,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Reporter;
@@ -38,7 +37,6 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.LoadingMock;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
-import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
@@ -450,7 +448,7 @@ public class IncrementalLoadingTest {
     private final ManualClock clock;
     private final Path workspace;
     private final Path outputBase;
-    private final Reporter reporter = new Reporter(new EventBus());
+    private final Reporter reporter = new Reporter();
     private final SkyframeExecutor skyframeExecutor;
     private final List<Path> changes = new ArrayList<>();
     private boolean everythingModified = false;
@@ -487,8 +485,7 @@ public class IncrementalLoadingTest {
               ImmutableList.<PrecomputedValue.Injected>of(),
               ImmutableList.<SkyValueDirtinessChecker>of(),
               loadingMock.getProductName(),
-              CrossRepositoryLabelViolationStrategy.ERROR,
-              ImmutableList.of(BuildFileName.BUILD_DOT_BAZEL, BuildFileName.BUILD));
+              CrossRepositoryLabelViolationStrategy.ERROR);
       PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
       packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
       packageCacheOptions.showLoadingProgress = true;
@@ -498,7 +495,6 @@ public class IncrementalLoadingTest {
           packageCacheOptions,
           "",
           UUID.randomUUID(),
-          ImmutableMap.<String, String>of(),
           ImmutableMap.<String, String>of(),
           new TimestampGranularityMonitor(BlazeClock.instance()));
     }
@@ -586,11 +582,10 @@ public class IncrementalLoadingTest {
           "",
           UUID.randomUUID(),
           ImmutableMap.<String, String>of(),
-          ImmutableMap.<String, String>of(),
           new TimestampGranularityMonitor(BlazeClock.instance()));
       skyframeExecutor.invalidateFilesUnderPathForTesting(
-          new Reporter(new EventBus()), modifiedFileSet, workspace);
-      ((SequencedSkyframeExecutor) skyframeExecutor).handleDiffs(new Reporter(new EventBus()));
+          new Reporter(), modifiedFileSet, workspace);
+      ((SequencedSkyframeExecutor) skyframeExecutor).handleDiffs(new Reporter());
 
       changes.clear();
     }

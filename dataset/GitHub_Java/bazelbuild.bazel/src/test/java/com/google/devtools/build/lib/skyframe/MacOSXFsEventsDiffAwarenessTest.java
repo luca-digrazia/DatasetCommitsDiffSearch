@@ -16,13 +16,12 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.skyframe.DiffAwareness.View;
 import com.google.devtools.build.lib.skyframe.LocalDiffAwareness.Options;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsBase;
-import com.google.devtools.common.options.OptionsProvider;
+import com.google.devtools.common.options.OptionsClassProvider;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -30,7 +29,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Map;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -62,7 +60,7 @@ public class MacOSXFsEventsDiffAwarenessTest {
 
   private MacOSXFsEventsDiffAwareness underTest;
   private Path watchedPath;
-  private OptionsProvider watchFsEnabledProvider;
+  private OptionsClassProvider watchFsEnabledProvider;
 
   @Before
   public void setUp() throws Exception {
@@ -125,7 +123,7 @@ public class MacOSXFsEventsDiffAwarenessTest {
   /**
    * Only returns a fixed options class for {@link LocalDiffAwareness.Options}.
    */
-  private static final class LocalDiffAwarenessOptionsProvider implements OptionsProvider {
+  private static final class LocalDiffAwarenessOptionsProvider implements OptionsClassProvider {
     private final Options localDiffOptions;
 
     private LocalDiffAwarenessOptionsProvider(Options localDiffOptions) {
@@ -138,11 +136,6 @@ public class MacOSXFsEventsDiffAwarenessTest {
         return optionsClass.cast(localDiffOptions);
       }
       return null;
-    }
-
-    @Override
-    public Map<String, Object> getSkylarkOptions() {
-      return ImmutableMap.of();
     }
   }
 }

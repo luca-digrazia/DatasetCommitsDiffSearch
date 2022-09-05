@@ -17,7 +17,7 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.UnixJniLoader;
-import com.google.devtools.common.options.OptionsProvider;
+import com.google.devtools.common.options.OptionsClassProvider;
 import java.io.File;
 import java.nio.file.Path;
 
@@ -120,7 +120,7 @@ public final class MacOSXFsEventsDiffAwareness extends LocalDiffAwareness {
   }
 
   @Override
-  public View getCurrentView(OptionsProvider options)
+  public View getCurrentView(OptionsClassProvider options)
       throws BrokenDiffAwarenessException {
     if (!JNI_AVAILABLE) {
       return EVERYTHING_MODIFIED;

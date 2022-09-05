@@ -93,8 +93,6 @@ public final class CommandEnvironment {
   private ImmutableList<ActionInputPrefetcher> actionInputPrefetchers = ImmutableList.of();
   private Path workingDirectory;
 
-  private OptionsClassProvider options;
-
   private AtomicReference<AbruptExitException> pendingException = new AtomicReference<>();
 
   private class BlazeModuleEnvironment implements BlazeModule.ModuleEnvironment {
@@ -180,10 +178,6 @@ public final class CommandEnvironment {
    */
   public Map<String, String> getClientEnv() {
     return Collections.unmodifiableMap(clientEnv);
-  }
-
-  public OptionsClassProvider getOptions() {
-    return options;
   }
 
   /**
@@ -533,7 +527,6 @@ public final class CommandEnvironment {
         throw new IllegalStateException(e);
       }
     }
-    this.options = optionsParser;
 
     eventBus.post(new GotOptionsEvent(runtime.getStartupOptionsProvider(), optionsParser));
     throwPendingException();

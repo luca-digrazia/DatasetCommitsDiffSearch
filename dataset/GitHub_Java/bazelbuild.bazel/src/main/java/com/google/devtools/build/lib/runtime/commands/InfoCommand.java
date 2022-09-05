@@ -213,10 +213,6 @@ public class InfoCommand implements BlazeCommand {
             new InfoItem.MaxHeapSizeInfoItem(),
             new InfoItem.GcTimeInfoItem(),
             new InfoItem.GcCountInfoItem(),
-            new InfoItem.JavaRuntimeInfoItem(),
-            new InfoItem.JavaVirtualMachineInfoItem(),
-            new InfoItem.JavaHomeInfoItem(),
-            new InfoItem.CharacterEncodingInfoItem(),
             new InfoItem.DefaultsPackageInfoItem(),
             new InfoItem.BuildLanguageInfoItem(),
             new InfoItem.DefaultPackagePathInfoItem(commandOptions));
