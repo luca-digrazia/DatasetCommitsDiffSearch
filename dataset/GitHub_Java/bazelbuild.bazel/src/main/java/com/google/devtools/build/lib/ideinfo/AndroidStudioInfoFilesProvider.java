@@ -28,9 +28,7 @@ import com.google.devtools.build.lib.rules.android.AndroidIdeInfoProvider.Source
  */
 @Immutable
 public final class AndroidStudioInfoFilesProvider implements TransitiveInfoProvider {
-  private final NestedSet<Artifact> ideInfoFiles;
-  private final NestedSet<Artifact> ideInfoTextFiles;
-  private final NestedSet<Artifact> ideResolveFiles;
+  private final NestedSet<Artifact> ideBuildFiles;
   private final NestedSet<Label> transitiveDependencies;
   private final NestedSet<Label> exportedDeps;
   private final NestedSet<AndroidIdeInfoProvider.SourceDirectory> transitiveResources;
@@ -39,34 +37,22 @@ public final class AndroidStudioInfoFilesProvider implements TransitiveInfoProvi
    * Builder class for {@link AndroidStudioInfoFilesProvider}
    */
   public static class Builder {
-    private final NestedSetBuilder<Artifact> ideInfoFilesBuilder;
-    private final NestedSetBuilder<Artifact> ideInfoTextFilesBuilder;
-    private final NestedSetBuilder<Artifact> ideResolveFilesBuilder;
+    private final NestedSetBuilder<Artifact> ideBuildFilesBuilder;
     private final NestedSetBuilder<Label> transitiveDependenciesBuilder;
     private NestedSetBuilder<Label> exportedDepsBuilder;
     private NestedSetBuilder<AndroidIdeInfoProvider.SourceDirectory> transitiveResourcesBuilder;
     private NestedSet<AndroidIdeInfoProvider.SourceDirectory> transitiveResources;
 
     public Builder() {
-      ideInfoFilesBuilder = NestedSetBuilder.stableOrder();
-      ideInfoTextFilesBuilder = NestedSetBuilder.stableOrder();
-      ideResolveFilesBuilder = NestedSetBuilder.stableOrder();
+      ideBuildFilesBuilder = NestedSetBuilder.stableOrder();
       transitiveDependenciesBuilder = NestedSetBuilder.stableOrder();
       exportedDepsBuilder = NestedSetBuilder.stableOrder();
       transitiveResourcesBuilder = NestedSetBuilder.stableOrder();
       transitiveResources = null;
     }
 
-    public NestedSetBuilder<Artifact> ideInfoFilesBuilder() {
-      return ideInfoFilesBuilder;
-    }
-
-    public NestedSetBuilder<Artifact> ideInfoTextFilesBuilder() {
-      return ideInfoTextFilesBuilder;
-    }
-
-    public NestedSetBuilder<Artifact> ideResolveFilesBuilder() {
-      return ideResolveFilesBuilder;
+    public NestedSetBuilder<Artifact> ideBuildFilesBuilder() {
+      return ideBuildFilesBuilder;
     }
 
     public NestedSetBuilder<Label> transitiveDependenciesBuilder() {
@@ -96,9 +82,7 @@ public final class AndroidStudioInfoFilesProvider implements TransitiveInfoProvi
 
     public AndroidStudioInfoFilesProvider build() {
       return new AndroidStudioInfoFilesProvider(
-          ideInfoFilesBuilder.build(),
-          ideInfoTextFilesBuilder.build(),
-          ideResolveFilesBuilder.build(),
+          ideBuildFilesBuilder.build(),
           transitiveDependenciesBuilder.build(),
           exportedDepsBuilder.build(),
           getTransitiveResources()
@@ -107,30 +91,18 @@ public final class AndroidStudioInfoFilesProvider implements TransitiveInfoProvi
   }
 
   private AndroidStudioInfoFilesProvider(
-      NestedSet<Artifact> ideInfoFiles,
-      NestedSet<Artifact> ideInfoTextFiles,
-      NestedSet<Artifact> ideResolveFiles,
+      NestedSet<Artifact> ideBuildFiles,
       NestedSet<Label> transitiveDependencies,
       NestedSet<Label> exportedDeps,
       NestedSet<SourceDirectory> transitiveResources) {
-    this.ideInfoFiles = ideInfoFiles;
-    this.ideInfoTextFiles = ideInfoTextFiles;
-    this.ideResolveFiles = ideResolveFiles;
+    this.ideBuildFiles = ideBuildFiles;
     this.transitiveDependencies = transitiveDependencies;
     this.exportedDeps = exportedDeps;
     this.transitiveResources = transitiveResources;
   }
 
-  public NestedSet<Artifact> getIdeInfoFiles() {
-    return ideInfoFiles;
-  }
-
-  public NestedSet<Artifact> getIdeInfoTextFiles() {
-    return ideInfoTextFiles;
-  }
-
-  public NestedSet<Artifact> getIdeResolveFiles() {
-    return ideResolveFiles;
+  public NestedSet<Artifact> getIdeBuildFiles() {
+    return ideBuildFiles;
   }
 
   public NestedSet<Label> getTransitiveDependencies() {
