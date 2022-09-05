@@ -19,7 +19,6 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -79,7 +78,6 @@ import java.io.PrintStream;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -244,25 +242,23 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       // behavior of the query engine in these two use cases.
       settings.add(Setting.NO_NODEP_DEPS);
 
+      // All the packages are already loaded at this point, so there is no need
+      // to start up many threads. 4 is started up to make good use of multiple
+      // cores.
       ImmutableList<OutputFormatter> outputFormatters = QUERY_OUTPUT_FORMATTERS.get(
           ruleContext.getAnalysisEnvironment().getSkyframeEnv());
       // This is a precomputed value so it should have been injected by the rules module by the
       // time we get there.
       formatter =  OutputFormatter.getFormatter(
           Preconditions.checkNotNull(outputFormatters), queryOptions.outputFormat);
-
-      // All the packages are already loaded at this point, so there is no need
-      // to start up many threads. 4 are started up to make good use of multiple
-      // cores.
       queryResult = (BlazeQueryEvalResult<Target>) AbstractBlazeQueryEnvironment
           .newQueryEnvironment(
-              /*transitivePackageLoader=*/null, /*graph=*/null, packageProvider,
+          /*transitivePackageLoader=*/null, /*graph=*/null, packageProvider,
               evaluator,
-              /*keepGoing=*/false,
+          /* keepGoing = */ false,
               ruleContext.attributes().get("strict", Type.BOOLEAN),
-              /*orderedResults=*/QueryOutputUtils.orderResults(queryOptions, formatter),
-              /*universeScope=*/ImmutableList.<String>of(),
-              /*loadingPhaseThreads=*/4,
+          /*orderedResults=*/QueryOutputUtils.orderResults(queryOptions, formatter),
+              /*universeScope=*/ImmutableList.<String>of(), 4,
               labelFilter,
               getEventHandler(ruleContext),
               settings,
@@ -303,16 +299,6 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       this.env = env;
     }
 
-    private static Target getExistingTarget(Label label,
-        Map<PackageIdentifier, Package> packages) {
-      try {
-        return packages.get(label.getPackageIdentifier()).getTarget(label.getName());
-      } catch (NoSuchTargetException e) {
-        // Unexpected since the label was part of the TargetPatternValue.
-        throw new IllegalStateException(e);
-      }
-    }
-
     @Override
     public Map<String, ResolvedTargets<Target>> preloadTargetPatterns(EventHandler eventHandler,
                                                                Collection<String> patterns,
@@ -322,73 +308,24 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       boolean ok = true;
       Map<String, ResolvedTargets<Target>> preloadedPatterns =
           Maps.newHashMapWithExpectedSize(patterns.size());
-      Map<SkyKey, String> patternKeys = Maps.newHashMapWithExpectedSize(patterns.size());
+      Map<SkyKey, String> keys = Maps.newHashMapWithExpectedSize(patterns.size());
       for (String pattern : patterns) {
         checkValidPatternType(pattern);
-        patternKeys.put(TargetPatternValue.key(pattern, FilteringPolicies.NO_FILTER, ""), pattern);
+        keys.put(TargetPatternValue.key(pattern, FilteringPolicies.NO_FILTER, ""), pattern);
       }
-      Set<SkyKey> packageKeys = new HashSet<>();
-      Map<String, ResolvedTargets<Label>> resolvedLabelsMap =
-          Maps.newHashMapWithExpectedSize(patterns.size());
       synchronized (this) {
         for (Map.Entry<SkyKey, ValueOrException<TargetParsingException>> entry :
-          env.getValuesOrThrow(patternKeys.keySet(), TargetParsingException.class).entrySet()) {
+          env.getValuesOrThrow(keys.keySet(), TargetParsingException.class).entrySet()) {
           TargetPatternValue patternValue = (TargetPatternValue) entry.getValue().get();
           if (patternValue == null) {
             ok = false;
           } else {
-            ResolvedTargets<Label> resolvedLabels = patternValue.getTargets();
-            resolvedLabelsMap.put(patternKeys.get(entry.getKey()), resolvedLabels);
-            for (Label label
-                : Iterables.concat(resolvedLabels.getTargets(),
-                    resolvedLabels.getFilteredTargets())) {
-              packageKeys.add(PackageValue.key(label.getPackageIdentifier()));
-            }
+            preloadedPatterns.put(keys.get(entry.getKey()), patternValue.getTargets());
           }
         }
       }
       if (!ok) {
         throw new SkyframeRestartQueryException();
-      }
-      Map<PackageIdentifier, Package> packages =
-          Maps.newHashMapWithExpectedSize(packageKeys.size());
-      synchronized (this) {
-        for (Map.Entry<SkyKey, ValueOrException<NoSuchPackageException>> entry :
-          env.getValuesOrThrow(packageKeys, NoSuchPackageException.class).entrySet()) {
-          PackageIdentifier pkgName = (PackageIdentifier) entry.getKey().argument();
-          Package pkg = null;
-          try {
-            PackageValue packageValue = (PackageValue) entry.getValue().get();
-            if (packageValue == null) {
-              ok = false;
-              continue;
-            }
-            pkg = packageValue.getPackage();
-          } catch (NoSuchPackageException nspe) {
-            if (nspe.getPackage() != null) {
-              pkg = nspe.getPackage();
-            } else {
-              continue;
-            }
-          }
-          Preconditions.checkNotNull(pkg, pkgName);
-          packages.put(pkgName, pkg);
-        }
-      }
-      if (!ok) {
-        throw new SkyframeRestartQueryException();
-      }
-      for (Map.Entry<String, ResolvedTargets<Label>> entry : resolvedLabelsMap.entrySet()) {
-        String pattern = entry.getKey();
-        ResolvedTargets<Label> resolvedLabels = resolvedLabelsMap.get(pattern);
-        ResolvedTargets.Builder<Target> builder = ResolvedTargets.builder();
-        for (Label label : resolvedLabels.getTargets()) {
-          builder.add(getExistingTarget(label, packages));
-        }
-        for (Label label : resolvedLabels.getFilteredTargets()) {
-          builder.remove(getExistingTarget(label, packages));
-        }
-        preloadedPatterns.put(pattern, builder.build());
       }
       return preloadedPatterns;
     }

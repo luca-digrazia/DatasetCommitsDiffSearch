@@ -54,7 +54,6 @@ import java.util.Set;
          shortDescription = "Executes a dependency graph query.",
          allowResidue = true,
          binaryStdOut = true,
-         completion = "label",
          canRunInOutputDirectory = true)
 public final class QueryCommand implements BlazeCommand {
 
