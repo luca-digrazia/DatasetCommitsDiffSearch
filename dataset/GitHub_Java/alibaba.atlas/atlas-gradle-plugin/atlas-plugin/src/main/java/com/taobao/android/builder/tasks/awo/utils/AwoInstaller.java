@@ -211,7 +211,6 @@ package com.taobao.android.builder.tasks.awo.utils;
 
 import java.io.File;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 
 import com.android.builder.core.AndroidBuilder;
@@ -250,34 +249,6 @@ public class AwoInstaller {
             installPatchIfDeviceConnected(androidBuilder, tPatchFile, packageName, logger, tPatchFile.getName());
             installPatchIfDeviceConnected(androidBuilder, updateInfoFile, packageName, logger,
                                           FilenameUtils.getBaseName(tPatchFile.getName()) + ".json");
-            notifyApppatching(androidBuilder, packageName, logger);
-        } catch (Throwable e) {
-            throw new GradleException("install awo error", e);
-        }
-    }
-
-    public static void installAwoSo(AndroidBuilder androidBuilder, File maindexFile, Collection<File> awoSoFiles,
-                                    String packageName, Logger logger) {
-        try {
-            if (maindexFile != null) {
-                if (!maindexFile.exists()) {
-                    throw new IllegalArgumentException(
-                        "maindexFile file " + maindexFile.getAbsolutePath() + " does not exist.");
-                }
-
-                installPatchIfDeviceConnected(androidBuilder, maindexFile, packageName, logger,
-                                              "libcom_taobao_maindex.so");
-            }
-            if (awoSoFiles != null) {
-                for (File awoSoFile : awoSoFiles) {
-                    if (!awoSoFile.exists()) {
-                        throw new IllegalArgumentException(
-                            "awoSoFile file " + awoSoFile.getAbsolutePath() + " does not exist.");
-                    }
-
-                    installPatchIfDeviceConnected(androidBuilder, awoSoFile, packageName, logger, awoSoFile.getName());
-                }
-            }
             notifyApppatching(androidBuilder, packageName, logger);
         } catch (Throwable e) {
             throw new GradleException("install awo error", e);
