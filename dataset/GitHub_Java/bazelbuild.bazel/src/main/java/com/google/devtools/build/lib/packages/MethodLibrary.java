@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.Function;
 import com.google.devtools.build.lib.syntax.MixedModeFunction;
-import com.google.devtools.build.lib.syntax.SelectorList;
 import com.google.devtools.build.lib.syntax.SelectorValue;
 import com.google.devtools.build.lib.syntax.SkylarkBuiltin;
 import com.google.devtools.build.lib.syntax.SkylarkBuiltin.Param;
@@ -417,7 +416,7 @@ public class MethodLibrary {
       };
 
   // slice operator
-  @SkylarkBuiltin(name = "$slice", documented = false,
+  @SkylarkBuiltin(name = "$slice", hidden = true,
       doc = "x[<code>start</code>:<code>end</code>] returns a slice or a list slice.")
   private static Function slice = new MixedModeFunction("$slice",
       ImmutableList.of("this", "start", "end"), 3, false) {
@@ -447,7 +446,7 @@ public class MethodLibrary {
   };
 
   // supported list methods
-  @SkylarkBuiltin(name = "append", documented = false,
+  @SkylarkBuiltin(name = "append", hidden = true,
       doc = "Adds an item to the end of the list.")
   private static Function append = new MixedModeFunction("append",
       ImmutableList.of("this", "x"), 2, false) {
@@ -460,7 +459,7 @@ public class MethodLibrary {
     }
   };
 
-  @SkylarkBuiltin(name = "extend", documented = false,
+  @SkylarkBuiltin(name = "extend", hidden = true,
       doc = "Adds all items to the end of the list.")
   private static Function extend = new MixedModeFunction("extend",
           ImmutableList.of("this", "x"), 2, false) {
@@ -475,7 +474,7 @@ public class MethodLibrary {
   };
 
   // dictionary access operator
-  @SkylarkBuiltin(name = "$index", documented = false,
+  @SkylarkBuiltin(name = "$index", hidden = true,
       doc = "Returns the nth element of a list or string, "
           + "or looks up a value in a dictionary.")
   private static Function indexOperator = new MixedModeFunction("$index",
@@ -609,7 +608,7 @@ public class MethodLibrary {
   }
 
   // unary minus
-  @SkylarkBuiltin(name = "-", documented = false, doc = "Unary minus operator.")
+  @SkylarkBuiltin(name = "-", hidden = true, doc = "Unary minus operator.")
   private static Function minus = new MixedModeFunction("-", ImmutableList.of("this"), 1, false) {
     @Override
     public Object call(Object[] args, FuncallExpression ast) throws ConversionException {
@@ -830,7 +829,7 @@ public class MethodLibrary {
           throw new EvalException(ast.getLocation(),
               "select({...}) argument isn't a dictionary");
         }
-        return SelectorList.of(new SelectorValue((Map<?, ?>) dict));
+        return new SelectorValue((Map<?, ?>) dict);
       }
     };
 
@@ -1090,15 +1089,38 @@ public class MethodLibrary {
       + "</pre>")
   public static final class DictModule {}
 
-  public static final List<Function> stringFunctions = ImmutableList.of(
-      count, endswith, find, index, join, lower, replace, rfind,
-      rindex, slice, split, startswith, strip, upper);
+  public static final Map<Function, SkylarkType> stringFunctions = ImmutableMap
+      .<Function, SkylarkType>builder()
+      .put(join, SkylarkType.STRING)
+      .put(lower, SkylarkType.STRING)
+      .put(upper, SkylarkType.STRING)
+      .put(replace, SkylarkType.STRING)
+      .put(split, SkylarkType.of(List.class, String.class))
+      .put(rfind, SkylarkType.INT)
+      .put(find, SkylarkType.INT)
+      .put(rindex, SkylarkType.INT)
+      .put(index, SkylarkType.INT)
+      .put(endswith, SkylarkType.BOOL)
+      .put(startswith, SkylarkType.BOOL)
+      .put(strip, SkylarkType.STRING)
+      .put(slice, SkylarkType.STRING)
+      .put(count, SkylarkType.INT)
+      .build();
 
-  public static final List<Function> listPureFunctions = ImmutableList.of(slice);
+  public static final Map<Function, SkylarkType> listPureFunctions = ImmutableMap
+      .<Function, SkylarkType>builder()
+      .put(slice, SkylarkType.LIST)
+      .build();
 
   public static final List<Function> listFunctions = ImmutableList.of(append, extend);
 
-  public static final List<Function> dictFunctions = ImmutableList.of(items, get, keys, values);
+  public static final Map<Function, SkylarkType> dictFunctions = ImmutableMap
+      .<Function, SkylarkType>builder()
+      .put(items, SkylarkType.of(List.class))
+      .put(get, SkylarkType.UNKNOWN)
+      .put(keys, SkylarkType.of(Set.class))
+      .put(values, SkylarkType.of(List.class))
+      .build();
 
   private static final Map<Function, SkylarkType> pureGlobalFunctions = ImmutableMap
       .<Function, SkylarkType>builder()
@@ -1135,11 +1157,11 @@ public class MethodLibrary {
    */
   public static void setupMethodEnvironment(Environment env) {
     env.registerFunction(Map.class, indexOperator.getName(), indexOperator);
-    setupMethodEnvironment(env, Map.class, dictFunctions);
+    setupMethodEnvironment(env, Map.class, dictFunctions.keySet());
     env.registerFunction(String.class, indexOperator.getName(), indexOperator);
-    setupMethodEnvironment(env, String.class, stringFunctions);
-    setupMethodEnvironment(env, List.class, listPureFunctions);
-    setupMethodEnvironment(env, SkylarkList.class, listPureFunctions);
+    setupMethodEnvironment(env, String.class, stringFunctions.keySet());
+    setupMethodEnvironment(env, List.class, listPureFunctions.keySet());
+    setupMethodEnvironment(env, SkylarkList.class, listPureFunctions.keySet());
     if (env.isSkylarkEnabled()) {
       env.registerFunction(SkylarkList.class, indexOperator.getName(), indexOperator);
       setupMethodEnvironment(env, skylarkGlobalFunctions.keySet());
@@ -1149,7 +1171,7 @@ public class MethodLibrary {
       // TODO(bazel-team): listFunctions are not allowed in Skylark extensions (use += instead).
       // It is allowed in BUILD files only for backward-compatibility.
       setupMethodEnvironment(env, List.class, listFunctions);
-      setupMethodEnvironment(env, stringFunctions);
+      setupMethodEnvironment(env, stringFunctions.keySet());
       setupMethodEnvironment(env, pureGlobalFunctions.keySet());
     }
   }
@@ -1175,17 +1197,21 @@ public class MethodLibrary {
     }
   }
 
-  /**
-   * Collect global functions for the validation environment.
-   */
   public static void setupValidationEnvironment(
       Map<SkylarkType, Map<String, SkylarkType>> builtIn) {
     Map<String, SkylarkType> global = builtIn.get(SkylarkType.GLOBAL);
+    setupValidationEnvironment(skylarkGlobalFunctions, global);
 
-    // TODO(bazel-team): To be simplified (we need only the names, not the types).
-    for (Map.Entry<Function, SkylarkType> function : skylarkGlobalFunctions.entrySet()) {
-      String name = function.getKey().getName();
-      global.put(name, SkylarkFunctionType.of(name, function.getValue()));
-    }
+    Map<String, SkylarkType> dict = new HashMap<>();
+    setupValidationEnvironment(dictFunctions, dict);
+    builtIn.put(SkylarkType.of(Map.class), dict);
+
+    Map<String, SkylarkType> string = new HashMap<>();
+    setupValidationEnvironment(stringFunctions, string);
+    builtIn.put(SkylarkType.STRING, string);
+
+    Map<String, SkylarkType> list = new HashMap<>();
+    setupValidationEnvironment(listPureFunctions, list);
+    builtIn.put(SkylarkType.LIST, list);
   }
 }
