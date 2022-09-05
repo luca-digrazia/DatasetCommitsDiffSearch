@@ -3,7 +3,6 @@ package com.prolificinteractive.materialcalendarview;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Color;
-import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -24,7 +23,6 @@ import android.widget.TextView;
 
 import com.prolificinteractive.materialcalendarview.format.ArrayWeekDayFormatter;
 import com.prolificinteractive.materialcalendarview.format.DateFormatTitleFormatter;
-import com.prolificinteractive.materialcalendarview.format.DayFormatter;
 import com.prolificinteractive.materialcalendarview.format.MonthArrayTitleFormatter;
 import com.prolificinteractive.materialcalendarview.format.TitleFormatter;
 import com.prolificinteractive.materialcalendarview.format.WeekDayFormatter;
@@ -52,16 +50,17 @@ import java.util.List;
  * The date closest to the previous selection will become selected. This will also trigger the
  * {@linkplain com.prolificinteractive.materialcalendarview.OnDateChangedListener}
  * </p>
+ *
+ * @see R.styleable#MaterialCalendarView_mcv_arrowColor
+ * @see R.styleable#MaterialCalendarView_mcv_selectionColor
+ * @see R.styleable#MaterialCalendarView_mcv_headerTextAppearance
+ * @see R.styleable#MaterialCalendarView_mcv_dateTextAppearance
+ * @see R.styleable#MaterialCalendarView_mcv_weekDayTextAppearance
+ * @see R.styleable#MaterialCalendarView_mcv_showOtherDates
  */
 public class MaterialCalendarView extends FrameLayout {
 
-    /**
-     *
-     */
-    public static final int DEFAULT_TILE_SIZE_DP = 44;
-
     private static final TitleFormatter DEFAULT_TITLE_FORMATTER = new DateFormatTitleFormatter();
-    private final TitleChanger titleChanger;
 
     private final TextView title;
     private final DirectionButton buttonPast;
@@ -69,7 +68,7 @@ public class MaterialCalendarView extends FrameLayout {
     private final ViewPager pager;
     private final MonthPagerAdapter adapter;
     private CalendarDay currentMonth;
-    private LinearLayout topbar;
+    private TitleFormatter titleFormatter = DEFAULT_TITLE_FORMATTER;
 
     private final ArrayList<DayViewDecorator> dayViewDecorators = new ArrayList<>();
 
@@ -98,7 +97,6 @@ public class MaterialCalendarView extends FrameLayout {
     private final ViewPager.OnPageChangeListener pageChangeListener = new ViewPager.OnPageChangeListener() {
         @Override
         public void onPageSelected(int position) {
-            titleChanger.setPreviousMonth(currentMonth);
             currentMonth = adapter.getItem(position);
             updateUi();
 
@@ -120,8 +118,6 @@ public class MaterialCalendarView extends FrameLayout {
 
     private int accentColor = 0;
     private int arrowColor = Color.BLACK;
-    private Drawable leftArrowMask;
-    private Drawable rightArrowMask;
 
     private LinearLayout root;
 
@@ -146,8 +142,6 @@ public class MaterialCalendarView extends FrameLayout {
         buttonPast.setOnClickListener(onClickListener);
         buttonFuture.setOnClickListener(onClickListener);
 
-        titleChanger = new TitleChanger(title);
-        titleChanger.setTitleFormatter(DEFAULT_TITLE_FORMATTER);
         adapter = new MonthPagerAdapter(this);
         pager.setAdapter(adapter);
         pager.setOnPageChangeListener(pageChangeListener);
@@ -174,21 +168,6 @@ public class MaterialCalendarView extends FrameLayout {
                 R.styleable.MaterialCalendarView_mcv_arrowColor,
                 Color.BLACK
             ));
-            Drawable leftMask = a.getDrawable(
-                R.styleable.MaterialCalendarView_mcv_leftArrowMask
-            );
-            if (leftMask == null) {
-                leftMask = getResources().getDrawable(R.drawable.mcv_action_previous);
-            }
-            setLeftArrowMask(leftMask);
-            Drawable rightMask = a.getDrawable(
-                R.styleable.MaterialCalendarView_mcv_rightArrowMask
-            );
-            if (rightMask == null) {
-                rightMask = getResources().getDrawable(R.drawable.mcv_action_next);
-            }
-            setRightArrowMask(rightMask);
-
             setSelectionColor(
                 a.getColor(
                     R.styleable.MaterialCalendarView_mcv_selectionColor,
@@ -241,7 +220,7 @@ public class MaterialCalendarView extends FrameLayout {
     private void setupChildren() {
         int tileSize = (int) TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP,
-                DEFAULT_TILE_SIZE_DP,
+                getResources().getInteger(R.integer.mcv_default_tile_size),
                 getResources().getDisplayMetrics()
         );
 
@@ -256,7 +235,7 @@ public class MaterialCalendarView extends FrameLayout {
         p.gravity = Gravity.CENTER;
         addView(root, p);
 
-        topbar = new LinearLayout(getContext());
+        LinearLayout topbar = new LinearLayout(getContext());
         topbar.setOrientation(LinearLayout.HORIZONTAL);
         topbar.setClipChildren(false);
         topbar.setClipToPadding(false);
@@ -301,7 +280,9 @@ public class MaterialCalendarView extends FrameLayout {
     }
 
     private void updateUi() {
-        titleChanger.change(currentMonth);
+        if(currentMonth != null) {
+            title.setText(titleFormatter.format(currentMonth));
+        }
         buttonPast.setEnabled(canGoBack());
         buttonFuture.setEnabled(canGoForward());
     }
@@ -387,36 +368,6 @@ public class MaterialCalendarView extends FrameLayout {
         buttonPast.setColor(color);
         buttonFuture.setColor(color);
         invalidate();
-    }
-
-    /**
-     * @return icon used for the left arrow
-     */
-    public Drawable getLeftArrowMask() {
-        return leftArrowMask;
-    }
-
-    /**
-     * @param icon the new icon to use for the left paging arrow
-     */
-    public void setLeftArrowMask(Drawable icon) {
-        leftArrowMask = icon;
-        buttonPast.setImageDrawable(icon);
-    }
-
-    /**
-     * @return icon used for the right arrow
-     */
-    public Drawable getRightArrowMask() {
-        return rightArrowMask;
-    }
-
-    /**
-     * @param icon the new icon to use for the right paging arrow
-     */
-    public void setRightArrowMask(Drawable icon) {
-        rightArrowMask = icon;
-        buttonFuture.setImageDrawable(icon);
     }
 
     /**
@@ -589,15 +540,6 @@ public class MaterialCalendarView extends FrameLayout {
     }
 
     /**
-     * Set a formatter for day labels.
-     *
-     * @param formatter the new formatter, null for default
-     */
-    public void setDayFormatter(DayFormatter formatter) {
-        adapter.setDayFormatter(formatter == null ? DayFormatter.DEFAULT : formatter);
-    }
-
-    /**
      * Set a {@linkplain com.prolificinteractive.materialcalendarview.format.WeekDayFormatter}
      * with the provided week day labels
      *
@@ -635,7 +577,7 @@ public class MaterialCalendarView extends FrameLayout {
      * @param titleFormatter new formatter to use, null to use default formatter
      */
     public void setTitleFormatter(TitleFormatter titleFormatter) {
-        titleChanger.setTitleFormatter(titleFormatter == null ? DEFAULT_TITLE_FORMATTER : titleFormatter);
+        this.titleFormatter = titleFormatter == null ? DEFAULT_TITLE_FORMATTER : titleFormatter;
         updateUi();
     }
 
@@ -663,20 +605,6 @@ public class MaterialCalendarView extends FrameLayout {
      */
     public void setTitleMonths(@ArrayRes int arrayRes) {
         setTitleMonths(getResources().getTextArray(arrayRes));
-    }
-
-    /**
-     * Sets the visibility {@link #topbar}, which contains
-     * the previous month button {@link #buttonPast}, next month button {@link #buttonFuture},
-     * and the month title {@link #title}.
-     *
-     * @param visible Boolean indicating if the topbar is visible
-     */
-    public void setTopbarVisibility(boolean visible) {
-        if (visible)
-            topbar.setVisibility(View.VISIBLE);
-        else
-            topbar.setVisibility(View.GONE);
     }
 
     @Override
@@ -857,7 +785,6 @@ public class MaterialCalendarView extends FrameLayout {
         private CalendarDay maxDate = null;
         private CalendarDay selectedDate = null;
         private WeekDayFormatter weekDayFormatter = WeekDayFormatter.DEFAULT;
-        private DayFormatter dayFormatter = DayFormatter.DEFAULT;
         private List<DayViewDecorator> decorators = null;
         private List<DecoratorResult> decoratorResults = null;
         private int firstDayOfTheWeek = Calendar.SUNDAY;
@@ -937,7 +864,6 @@ public class MaterialCalendarView extends FrameLayout {
             MonthView monthView = new MonthView(container.getContext(), month, firstDayOfTheWeek);
 
             monthView.setWeekDayFormatter(weekDayFormatter);
-            monthView.setDayFormatter(dayFormatter);
             monthView.setCallbacks(callbacks);
             if(color != null) {
                 monthView.setSelectionColor(color);
@@ -1017,13 +943,6 @@ public class MaterialCalendarView extends FrameLayout {
             this.weekDayFormatter = formatter;
             for(MonthView monthView : currentViews) {
                 monthView.setWeekDayFormatter(formatter);
-            }
-        }
-
-        public void setDayFormatter(DayFormatter formatter) {
-            this.dayFormatter = formatter;
-            for(MonthView monthView : currentViews) {
-                monthView.setDayFormatter(formatter);
             }
         }
 
@@ -1126,4 +1045,5 @@ public class MaterialCalendarView extends FrameLayout {
             return firstDayOfTheWeek;
         }
     }
+
 }
