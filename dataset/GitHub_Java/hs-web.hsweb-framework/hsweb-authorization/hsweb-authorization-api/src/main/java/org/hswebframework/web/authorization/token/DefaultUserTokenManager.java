@@ -178,9 +178,10 @@ public class DefaultUserTokenManager implements UserTokenManager {
             String userId = tokenObject.getUserId();
             if (removeUserToken) {
                 Set<String> tokens = getUserToken(userId);
-                if (!tokens.isEmpty()) {
+                if (tokens.size() > 0) {
                     tokens.remove(token);
-                } else {
+                }
+                if (tokens.size() == 0) {
                     userStorage.remove(tokenObject.getUserId());
                 }
             }
@@ -263,7 +264,8 @@ public class DefaultUserTokenManager implements UserTokenManager {
     @Override
     public void checkExpiredToken() {
         for (SimpleUserToken token : tokenStorage.values()) {
-            if (token != null && checkTimeout(token).isExpired()) {
+            checkTimeout(token);
+            if (token.isExpired()) {
                 signOutByToken(token.getToken());
             }
         }
