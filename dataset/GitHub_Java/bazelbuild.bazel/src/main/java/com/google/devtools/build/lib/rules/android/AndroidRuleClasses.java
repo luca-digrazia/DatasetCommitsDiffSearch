@@ -168,64 +168,63 @@ public final class AndroidRuleClasses {
 
   public static final SplitTransition<BuildOptions> ANDROID_SPLIT_TRANSITION =
       new SplitTransition<BuildOptions>() {
-        @Override
-        public boolean defaultsToSelf() {
-          return true;
+    @Override
+    public boolean defaultsToSelf() {
+      return true;
+    }
+
+    private void setCrosstoolToAndroid(BuildOptions output, BuildOptions input) {
+      AndroidConfiguration.Options inputAndroidOptions =
+          input.get(AndroidConfiguration.Options.class);
+      AndroidConfiguration.Options outputAndroidOptions =
+          output.get(AndroidConfiguration.Options.class);
+
+      CppOptions cppOptions = output.get(CppOptions.class);
+      if (inputAndroidOptions.androidCrosstoolTop != null
+          && !cppOptions.crosstoolTop.equals(inputAndroidOptions.androidCrosstoolTop)) {
+        if (cppOptions.hostCrosstoolTop == null) {
+          cppOptions.hostCrosstoolTop = cppOptions.crosstoolTop;
         }
+        cppOptions.crosstoolTop = inputAndroidOptions.androidCrosstoolTop;
+      }
 
-        private void setCrosstoolToAndroid(BuildOptions output, BuildOptions input) {
-          AndroidConfiguration.Options inputAndroidOptions =
-              input.get(AndroidConfiguration.Options.class);
-          AndroidConfiguration.Options outputAndroidOptions =
-              output.get(AndroidConfiguration.Options.class);
+      outputAndroidOptions.configurationDistinguisher = ConfigurationDistinguisher.ANDROID;
+    }
 
-          CppOptions cppOptions = output.get(CppOptions.class);
-          if (inputAndroidOptions.androidCrosstoolTop != null
-              && !cppOptions.crosstoolTop.equals(inputAndroidOptions.androidCrosstoolTop)) {
-            if (cppOptions.hostCrosstoolTop == null) {
-              cppOptions.hostCrosstoolTop = cppOptions.crosstoolTop;
-            }
-            cppOptions.crosstoolTop = inputAndroidOptions.androidCrosstoolTop;
-          }
+    @Override
+    public List<BuildOptions> split(BuildOptions buildOptions) {
+      AndroidConfiguration.Options androidOptions =
+          buildOptions.get(AndroidConfiguration.Options.class);
+      CppOptions cppOptions = buildOptions.get(CppOptions.class);
+      Label androidCrosstoolTop = androidOptions.androidCrosstoolTop;
+      if (androidOptions.realFatApkCpus().isEmpty()
+          && (androidCrosstoolTop == null
+          || androidCrosstoolTop.equals(cppOptions.crosstoolTop))) {
+        return ImmutableList.of();
+      }
 
-          outputAndroidOptions.configurationDistinguisher = ConfigurationDistinguisher.ANDROID;
-        }
+      if (androidOptions.realFatApkCpus().isEmpty()) {
+        BuildOptions splitOptions = buildOptions.clone();
+        setCrosstoolToAndroid(splitOptions, buildOptions);
+        return ImmutableList.of(splitOptions);
+      }
 
-        @Override
-        public List<BuildOptions> split(BuildOptions buildOptions) {
-          AndroidConfiguration.Options androidOptions =
-              buildOptions.get(AndroidConfiguration.Options.class);
-          CppOptions cppOptions = buildOptions.get(CppOptions.class);
-          Label androidCrosstoolTop = androidOptions.androidCrosstoolTop;
-          if (androidOptions.realFatApkCpus().isEmpty()
-              && (androidCrosstoolTop == null
-                  || androidCrosstoolTop.equals(cppOptions.crosstoolTop))) {
-            return ImmutableList.of();
-          }
+      List<BuildOptions> result = new ArrayList<>();
+      for (String cpu : ImmutableSortedSet.copyOf(androidOptions.realFatApkCpus())) {
+        BuildOptions splitOptions = buildOptions.clone();
+        // Disable fat APKs for the child configurations.
+        splitOptions.get(AndroidConfiguration.Options.class).fatApkCpus = ImmutableList.of();
 
-          if (androidOptions.realFatApkCpus().isEmpty()) {
-            BuildOptions splitOptions = buildOptions.clone();
-            setCrosstoolToAndroid(splitOptions, buildOptions);
-            return ImmutableList.of(splitOptions);
-          }
-
-          List<BuildOptions> result = new ArrayList<>();
-          for (String cpu : ImmutableSortedSet.copyOf(androidOptions.realFatApkCpus())) {
-            BuildOptions splitOptions = buildOptions.clone();
-            // Disable fat APKs for the child configurations.
-            splitOptions.get(AndroidConfiguration.Options.class).fatApkCpus = ImmutableList.of();
-
-            // Set the cpu & android_cpu.
-            // TODO(bazel-team): --android_cpu doesn't follow --cpu right now; it should.
-            splitOptions.get(AndroidConfiguration.Options.class).cpu = cpu;
-            splitOptions.get(BuildConfiguration.Options.class).cpu = cpu;
-            splitOptions.get(CppOptions.class).cppCompiler = androidOptions.cppCompiler;
-            setCrosstoolToAndroid(splitOptions, buildOptions);
-            result.add(splitOptions);
-          }
-          return result;
-        }
-      };
+        // Set the cpu & android_cpu.
+        // TODO(bazel-team): --android_cpu doesn't follow --cpu right now; it should.
+        splitOptions.get(AndroidConfiguration.Options.class).cpu = cpu;
+        splitOptions.get(BuildConfiguration.Options.class).cpu = cpu;
+        setCrosstoolToAndroid(splitOptions, buildOptions);
+        result.add(splitOptions);
+      }
+      return result;
+    }
+  };
 
   public static final FileType ANDROID_IDL = FileType.of(".aidl");
 
@@ -282,16 +281,16 @@ public final class AndroidRuleClasses {
       new SafeImplicitOutputsFunction() {
         @Override
         public Iterable<String> getImplicitOutputs(AttributeMap attributes) {
-
+          
           ImmutableList.Builder<SafeImplicitOutputsFunction> implicitOutputs =
               ImmutableList.builder();
-
+          
           implicitOutputs.add(
               AndroidRuleClasses.ANDROID_LIBRARY_CLASS_JAR,
               AndroidRuleClasses.ANDROID_LIBRARY_SOURCE_JAR,
               AndroidRuleClasses.ANDROID_LIBRARY_JACK_FILE,
               AndroidRuleClasses.ANDROID_LIBRARY_AAR);
-
+          
           if (LocalResourceContainer.definesAndroidResources(attributes)) {
             implicitOutputs.add(
                 AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR,
@@ -536,8 +535,7 @@ public final class AndroidRuleClasses {
           // TODO(ahumesky): It would be better to put this dependency in //tools/android somehow
           // like all the rest of android tools.
           .add(attr("$jarjar_bin", LABEL).cfg(HOST).exec()
-              .value(env.getLabel(
-                  Constants.TOOLS_REPOSITORY + "//third_party/java/jarjar:jarjar_bin")))
+              .value(env.getLabel("//third_party/java/jarjar:jarjar_bin")))
           .add(attr("$idlclass", LABEL).cfg(HOST).exec()
               .value(env.getLabel(Constants.ANDROID_DEP_PREFIX + "IdlClass")))
           .build();
