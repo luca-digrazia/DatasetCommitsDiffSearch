@@ -579,7 +579,7 @@ public class ObjcRuleClasses {
             "cc_library",
             "cc_inc_library",
             "ios_framework",
-            "swift_library");
+            "swift_binary");
 
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
