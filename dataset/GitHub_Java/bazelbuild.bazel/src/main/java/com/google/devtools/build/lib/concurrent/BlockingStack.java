@@ -22,11 +22,11 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 
 /** A {@link BlockingQueue} with LIFO (last-in-first-out) ordering. */
-public class BlockingStack<E> extends AbstractQueue<E> implements BlockingQueue<E> {
+class BlockingStack<E> extends AbstractQueue<E> implements BlockingQueue<E> {
   // We just restrict to only using the *First methods on the deque, turning it into a stack.
   private final BlockingDeque<E> deque;
 
-  public BlockingStack() {
+  BlockingStack() {
     this.deque = new LinkedBlockingDeque<>();
   }
 

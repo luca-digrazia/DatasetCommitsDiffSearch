@@ -52,7 +52,7 @@ public class AbstractQueueVisitorTest {
   public void simpleCounter() throws Exception {
     CountingQueueVisitor counter = new CountingQueueVisitor();
     counter.enqueue();
-    counter.awaitQuiescence(/*interruptWorkers=*/ false);
+    counter.work(false);
     assertSame(10, counter.getCount());
   }
 
@@ -64,7 +64,7 @@ public class AbstractQueueVisitorTest {
 
     CountingQueueVisitor counter = new CountingQueueVisitor(executor);
     counter.enqueue();
-    counter.awaitQuiescence(/*interruptWorkers=*/ false);
+    counter.work(false);
     assertSame(10, counter.getCount());
 
     executor.shutdown();
@@ -76,7 +76,7 @@ public class AbstractQueueVisitorTest {
     CountingQueueVisitor counter = new CountingQueueVisitor();
     counter.enqueue();
     counter.enqueue();
-    counter.awaitQuiescence(/*interruptWorkers=*/ false);
+    counter.work(false);
     assertSame(10, counter.getCount());
   }
 
@@ -84,18 +84,17 @@ public class AbstractQueueVisitorTest {
   public void exceptionFromWorkerThread() {
     final RuntimeException myException = new IllegalStateException();
     ConcreteQueueVisitor visitor = new ConcreteQueueVisitor();
-    visitor.execute(
-        new Runnable() {
-          @Override
-          public void run() {
-            throw myException;
-          }
-        });
+    visitor.enqueue(new Runnable() {
+      @Override
+      public void run() {
+        throw myException;
+      }
+    });
 
     try {
       // The exception from the worker thread should be
       // re-thrown from the main thread.
-      visitor.awaitQuiescence(/*interruptWorkers=*/ false);
+      visitor.work(false);
       fail();
     } catch (Exception e) {
       assertSame(myException, e);
@@ -126,7 +125,7 @@ public class AbstractQueueVisitorTest {
     CountingQueueVisitor counter = new CountingQueueVisitor(executor);
     counter.enqueue();
     try {
-      counter.awaitQuiescence(/*interruptWorkers=*/ false);
+      counter.work(false);
       fail();
     } catch (Error expected) {
       assertThat(expected).hasMessage("Could not create thread (fakeout)");
@@ -144,22 +143,20 @@ public class AbstractQueueVisitorTest {
     final ConcreteQueueVisitor visitor = new ConcreteQueueVisitor();
     // Use a latch to make sure the thread gets a chance to start.
     final CountDownLatch threadStarted = new CountDownLatch(1);
-    visitor.execute(
-        new Runnable() {
-          @Override
-          public void run() {
-            threadStarted.countDown();
-            assertTrue(
-                Uninterruptibles.awaitUninterruptibly(
-                    visitor.getInterruptionLatchForTestingOnly(), 2, TimeUnit.SECONDS));
-            throw THROWABLE;
-          }
-        });
+    visitor.enqueue(new Runnable() {
+      @Override
+      public void run() {
+        threadStarted.countDown();
+        assertTrue(Uninterruptibles.awaitUninterruptibly(
+            visitor.getInterruptionLatchForTestingOnly(), 2, TimeUnit.SECONDS));
+        throw THROWABLE;
+      }
+    });
     assertTrue(threadStarted.await(TestUtils.WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS));
     // Interrupt will not be processed until work starts.
     Thread.currentThread().interrupt();
     try {
-      visitor.awaitQuiescence(/*interruptWorkers=*/ true);
+      visitor.work(/*interruptWorkers=*/true);
       fail();
     } catch (Exception e) {
       assertEquals(THROWABLE, e);
@@ -175,19 +172,18 @@ public class AbstractQueueVisitorTest {
     final boolean[] workerThreadCompleted = { false };
     final ConcreteQueueVisitor visitor = new ConcreteQueueVisitor();
 
-    visitor.execute(
-        new Runnable() {
-          @Override
-          public void run() {
-            try {
-              latch1.countDown();
-              latch2.await();
-              workerThreadCompleted[0] = true;
-            } catch (InterruptedException e) {
-              // Do not set workerThreadCompleted to true
-            }
-          }
-        });
+    visitor.enqueue(new Runnable() {
+      @Override
+      public void run() {
+        try {
+          latch1.countDown();
+          latch2.await();
+          workerThreadCompleted[0] = true;
+        } catch (InterruptedException e) {
+          // Do not set workerThreadCompleted to true
+        }
+      }
+    });
 
     TestThread interrupterThread = new TestThread() {
       @Override
@@ -203,7 +199,7 @@ public class AbstractQueueVisitorTest {
     interrupterThread.start();
 
     try {
-      visitor.awaitQuiescence(/*interruptWorkers=*/ false);
+      visitor.work(false);
       fail();
     } catch (InterruptedException e) {
       // Expected.
@@ -232,24 +228,23 @@ public class AbstractQueueVisitorTest {
         ? new ConcreteQueueVisitor()
         : new ConcreteQueueVisitor(executor, true);
 
-    visitor.execute(
-        new Runnable() {
-          @Override
-          public void run() {
-            try {
-              latch1.countDown();
-              latch2.await();
-            } catch (InterruptedException e) {
-              workerThreadInterrupted[0] = true;
-            }
-          }
-        });
+    visitor.enqueue(new Runnable() {
+      @Override
+      public void run() {
+        try {
+          latch1.countDown();
+          latch2.await();
+        } catch (InterruptedException e) {
+          workerThreadInterrupted[0] = true;
+        }
+      }
+    });
 
     latch1.await();
     Thread.currentThread().interrupt();
 
     try {
-      visitor.awaitQuiescence(/*interruptWorkers=*/ true);
+      visitor.work(true);
       fail();
     } catch (InterruptedException e) {
       // Expected.
@@ -312,14 +307,14 @@ public class AbstractQueueVisitorTest {
     Runnable ra = awaitAddAndEnqueueRunnable(interrupt, visitor, latchA, visitedList, "a", r1);
     Runnable rb = awaitAddAndEnqueueRunnable(interrupt, visitor, latchB, visitedList, "b", r2);
 
-    visitor.execute(ra);
-    visitor.execute(rb);
+    visitor.enqueue(ra);
+    visitor.enqueue(rb);
     latchA.await();
     latchB.await();
-    visitor.execute(interrupt ? interruptingRunnable(Thread.currentThread()) : throwingRunnable());
+    visitor.enqueue(interrupt ? interruptingRunnable(Thread.currentThread()) : throwingRunnable());
 
     try {
-      visitor.awaitQuiescence(/*interruptWorkers=*/ false);
+      visitor.work(false);
       fail();
     } catch (Exception e) {
       if (interrupt) {
@@ -362,12 +357,12 @@ public class AbstractQueueVisitorTest {
       }
     };
 
-    visitor.execute(r1);
+    visitor.enqueue(r1);
     latch1.await();
-    visitor.execute(throwingRunnable());
+    visitor.enqueue(throwingRunnable());
 
     try {
-      visitor.awaitQuiescence(/*interruptWorkers=*/ true);
+      visitor.work(true);
       fail();
     } catch (Exception e) {
       assertSame(THROWABLE, e);
@@ -409,13 +404,13 @@ public class AbstractQueueVisitorTest {
         }
       }
     };
-    visitor.execute(errorRunnable);
-    visitor.execute(sleepRunnable);
+    visitor.enqueue(errorRunnable);
+    visitor.enqueue(sleepRunnable);
     Error thrownError = null;
     // Interrupt workers on a critical error. That way we can test that visitor.work doesn't wait
     // for all workers to finish if one of them already had a critical error.
     try {
-      visitor.awaitQuiescence(/*interruptWorkers=*/ true);
+      visitor.work(/*interruptWorkers=*/true);
     } catch (Error e) {
       thrownError = e;
     }
@@ -456,17 +451,16 @@ public class AbstractQueueVisitorTest {
         }
 
         try {
-          assertTrue(
-              interrupt
-                  ? visitor.awaitInterruptionForTestingOnly(1, TimeUnit.MINUTES)
-                  : visitor.getExceptionLatchForTestingOnly().await(1, TimeUnit.MINUTES));
+          assertTrue(interrupt
+                     ? visitor.awaitInterruptionForTestingOnly(1, TimeUnit.MINUTES)
+                     : visitor.getExceptionLatchForTestingOnly().await(1, TimeUnit.MINUTES));
         } catch (InterruptedException e) {
           // Unexpected.
           throw new RuntimeException(e);
         }
         list.add(toAdd);
         if (toEnqueue != null) {
-          visitor.execute(toEnqueue);
+          visitor.enqueue(toEnqueue);
         }
       }
     };
@@ -488,18 +482,17 @@ public class AbstractQueueVisitorTest {
     }
 
     public void enqueue() {
-      super.execute(
-          new Runnable() {
-            @Override
-            public void run() {
-              synchronized (lock) {
-                if (theInt < 10) {
-                  theInt++;
-                  enqueue();
-                }
-              }
+      super.enqueue(new Runnable() {
+        @Override
+        public void run() {
+          synchronized (lock) {
+            if (theInt < 10) {
+              theInt++;
+              enqueue();
             }
-          });
+          }
+        }
+      });
     }
 
     public int getCount() {
