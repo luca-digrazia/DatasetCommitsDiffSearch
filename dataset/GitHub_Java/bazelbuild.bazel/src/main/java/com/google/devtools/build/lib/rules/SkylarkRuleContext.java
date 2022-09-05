@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.OutputFile;
@@ -95,10 +94,8 @@ public final class SkylarkRuleContext {
     });
 
   private final RuleContext ruleContext;
-
+  
   private final FragmentCollection fragments;
-
-  private final FragmentCollection hostFragments;
 
   // TODO(bazel-team): support configurable attributes.
   private final SkylarkClassObject attrObject;
@@ -123,8 +120,7 @@ public final class SkylarkRuleContext {
    */
   public SkylarkRuleContext(RuleContext ruleContext) throws EvalException {
     this.ruleContext = Preconditions.checkNotNull(ruleContext);
-    fragments = new FragmentCollection(ruleContext, ConfigurationTransition.NONE);
-    hostFragments = new FragmentCollection(ruleContext, ConfigurationTransition.HOST);
+    fragments = new FragmentCollection(ruleContext);
 
     HashMap<String, Object> outputsBuilder = new HashMap<>();
     if (ruleContext.getRule().getRuleClassObject().outputsDefaultExecutable()) {
@@ -302,9 +298,7 @@ public final class SkylarkRuleContext {
           + "to the attribute names. The struct value is always a <code>file</code> or "
           + "<code>None</code>. If an optional attribute is not specified in the rule "
           + "then the corresponding struct value is <code>None</code>. If a label type is not "
-          + "marked as <code>single_file=True</code>, no corresponding struct field is generated. "
-          + "It is a shortcut for:"
-          + "<pre class=language-python>list(ctx.attr.<ATTR>.files)[0]</pre>")
+          + "marked as <code>single_file=True</code>, no corresponding struct field is generated.")
   public SkylarkClassObject getFile() {
     return fileObject;
   }
@@ -316,9 +310,7 @@ public final class SkylarkRuleContext {
       doc = "A <code>struct</code> containing files defined in label or label list "
           + "type attributes. The struct fields correspond to the attribute names. The struct "
           + "values are <code>list</code> of <code>file</code>s. If an optional attribute is "
-          + "not specified in the rule, an empty list is generated."
-          + "It is a shortcut for:"
-          + "<pre class=language-python>[f for t in ctx.attr.<ATTR> for f in t.files]</pre>")
+          + "not specified in the rule, an empty list is generated.")
   public SkylarkClassObject getFiles() {
     return filesObject;
   }
@@ -334,26 +326,17 @@ public final class SkylarkRuleContext {
     return ruleContext.getLabel();
   }
 
-  @SkylarkCallable(name = "fragments", structField = true,
-      doc =
-      "Allows access to configuration fragments in target configuration. "
-      + "Possible fields are <code>cpp</code>, "
-      + "<code>java</code> and <code>jvm</code>. "
-      + "However, rules have to declare their required fragments in order to access them "
-      + "(see <a href=\"../rules.html#fragments\">here</a>).")
+  @SkylarkCallable(
+    name = "fragments",
+    structField = true,
+    doc =
+        "Allows access to configuration fragments. Possible fields are <code>cpp</code>, "
+            + "<code>java</code> and <code>jvm</code>. "
+            + "However, rules have to declare their required fragments in order to access them "
+            + "(see <a href=\"../rules.html#fragments\">here</a>)."
+  )
   public FragmentCollection getFragments() {
     return fragments;
-  }
-
-  @SkylarkCallable(name = "host_fragments", structField = true,
-      doc =
-      "Allows access to configuration fragments in host configuration. "
-      + "Possible fields are <code>cpp</code>, "
-      + "<code>java</code> and <code>jvm</code>. "
-      + "However, rules have to declare their required fragments in order to access them "
-      + "(see <a href=\"../rules.html#fragments\">here</a>).")
-  public FragmentCollection getHostFragments() {
-    return hostFragments;
   }
 
   @SkylarkCallable(name = "configuration", structField = true,
