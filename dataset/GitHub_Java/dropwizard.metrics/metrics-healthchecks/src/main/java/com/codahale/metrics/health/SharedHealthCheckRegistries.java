@@ -10,9 +10,9 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class SharedHealthCheckRegistries {
     private static final ConcurrentMap<String, HealthCheckRegistry> REGISTRIES =
-            new ConcurrentHashMap<>();
+            new ConcurrentHashMap<String, HealthCheckRegistry>();
 
-    private static AtomicReference<String> defaultRegistryName = new AtomicReference<>();
+    private static AtomicReference<String> defaultRegistryName = new AtomicReference<String>();
 
     /* Visible for testing */
     static void setDefaultRegistryName(AtomicReference<String> defaultRegistryName) {
