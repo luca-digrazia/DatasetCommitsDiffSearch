@@ -35,9 +35,9 @@ public interface ReactiveCrudService<E, K> {
     }
 
     @Transactional(readOnly = true)
-    default Mono<E> findById(K id) {
+    default Mono<E> findById(K publisher) {
         return getRepository()
-                .findById(id);
+                .findById(publisher);
     }
 
     @Transactional(readOnly = true)
