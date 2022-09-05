@@ -46,7 +46,6 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
 
 /**
  * Action used by extra_action rules to create an action that shadows an existing action. Runs a
@@ -57,8 +56,6 @@ public final class ExtraAction extends SpawnAction {
   private final boolean createDummyOutput;
   private final ImmutableMap<PathFragment, Artifact> runfilesManifests;
   private final ImmutableSet<Artifact> extraActionInputs;
-  // This can be read/written from multiple threads, and so accesses should be synchronized.
-  @GuardedBy("this")
   private boolean inputsKnown;
 
   public ExtraAction(ActionOwner owner,
@@ -123,7 +120,7 @@ public final class ExtraAction extends SpawnAction {
       if (shadowedAction.discoversInputs() && shadowedAction instanceof AbstractAction) {
         Iterable<Artifact> additionalInputs =
             ((AbstractAction) shadowedAction).getInputFilesForExtraAction(actionExecutionContext);
-        updateInputs(createInputs(additionalInputs, extraActionInputs));
+        updateInputs(additionalInputs);
         return ImmutableSet.copyOf(additionalInputs);
       }
     }
@@ -131,7 +128,7 @@ public final class ExtraAction extends SpawnAction {
   }
 
   @Override
-  public synchronized boolean inputsKnown() {
+  public boolean inputsKnown() {
     return inputsKnown;
   }
 
@@ -147,9 +144,13 @@ public final class ExtraAction extends SpawnAction {
   }
 
   @Override
-  public synchronized void updateInputs(Iterable<Artifact> discoveredInputs) {
-    setInputs(discoveredInputs);
-    inputsKnown = true;
+  public void updateInputs(Iterable<Artifact> shadowedActionInputs) {
+    shadowedAction.updateInputs(shadowedActionInputs);
+    Preconditions.checkArgument(shadowedAction.inputsKnown(), "%s %s", this, shadowedAction);
+    synchronized (this) {
+      setInputs(createInputs(shadowedActionInputs, extraActionInputs));
+      inputsKnown = true;
+    }
   }
 
   @Nullable
