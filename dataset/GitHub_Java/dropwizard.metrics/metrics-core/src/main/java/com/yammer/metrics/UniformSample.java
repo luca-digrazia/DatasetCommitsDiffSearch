@@ -12,20 +12,9 @@ import java.util.concurrent.atomic.AtomicLongArray;
  * @see <a href="http://www.cs.umd.edu/~samir/498/vitter.pdf">Random Sampling with a Reservoir</a>
  */
 public class UniformSample implements Sample {
-    private static final int DEFAULT_SAMPLE_SIZE = 1028;
     private static final int BITS_PER_LONG = 63;
     private final AtomicLong count = new AtomicLong();
     private final AtomicLongArray values;
-
-    /**
-     * Creates a new uniform sample of 1028 elements, which offers a 99.9% confidence level with a
-     * 5% margin of error assuming a normal distribution.
-     *
-     * @return a new {@link UniformSample}
-     */
-    public static UniformSample create() {
-        return new UniformSample(DEFAULT_SAMPLE_SIZE);
-    }
 
     /**
      * Creates a new {@link UniformSample}.
@@ -34,6 +23,11 @@ public class UniformSample implements Sample {
      */
     public UniformSample(int reservoirSize) {
         this.values = new AtomicLongArray(reservoirSize);
+        clear();
+    }
+
+    @Override
+    public void clear() {
         for (int i = 0; i < values.length(); i++) {
             values.set(i, 0);
         }
