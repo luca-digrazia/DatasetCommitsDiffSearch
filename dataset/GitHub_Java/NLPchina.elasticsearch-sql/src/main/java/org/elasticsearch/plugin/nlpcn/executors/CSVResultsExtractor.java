@@ -1,6 +1,8 @@
 package org.elasticsearch.plugin.nlpcn.executors;
 
-import com.google.common.base.Joiner;
+import com.sun.org.apache.xpath.internal.operations.Mult;
+import org.elasticsearch.cluster.routing.allocation.decider.Decision;
+import org.elasticsearch.common.base.Joiner;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHitField;
 import org.elasticsearch.search.SearchHits;
@@ -113,7 +115,7 @@ public class CSVResultsExtractor {
             boolean firstLine = true;
             for (MultiBucketsAggregation.Bucket bucket : buckets) {
                 //each bucket need to add new line with current line copied => except for first line
-                String key = bucket.getKeyAsString();
+                String key = bucket.getKeyAsText().string();
                 if(firstLine){
                     firstLine = false;
                 }
@@ -247,7 +249,7 @@ public class CSVResultsExtractor {
             for(String header : headers){
                 line += findFieldValue(header, doc, flat, separator);
             }
-            csvLines.add(line.substring(0, line.lastIndexOf(separator)));
+            csvLines.add(line.substring(0, line.length() - 1));
         }
         return csvLines;
     }
