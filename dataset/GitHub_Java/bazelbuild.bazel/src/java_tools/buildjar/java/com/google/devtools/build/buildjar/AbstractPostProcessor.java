@@ -15,7 +15,6 @@
 package com.google.devtools.build.buildjar;
 
 import com.google.common.base.Preconditions;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
@@ -40,16 +39,14 @@ public abstract class AbstractPostProcessor {
     postProcessors.put(name, postProcessor);
   }
 
-  private String workingDir = null;
   private JavaLibraryBuildRequest build = null;
 
   /**
    * Sets the command line arguments for this processor.
    *
    * @param arguments the list of arguments
-   *
    * @throws InvalidCommandLineException when the list of arguments for this processors is
-   *         incorrect.
+   *     incorrect.
    */
   public abstract void setCommandLineArguments(List<String> arguments)
       throws InvalidCommandLineException;
@@ -64,9 +61,7 @@ public abstract class AbstractPostProcessor {
 
   protected String workingPath(String name) {
     Preconditions.checkNotNull(this.build);
-    return workingDir != null && name.length() > 0 && name.charAt(0) != '/'
-        ? workingDir + File.separator + name
-        : name;
+    return name;
   }
 
   protected boolean shouldCompressJar() {
@@ -77,19 +72,17 @@ public abstract class AbstractPostProcessor {
     return build.getClassDir();
   }
 
-  /**
-   * Main interface method of the post processor.
-   */
+  /** Main interface method of the post processor. */
   public abstract void processRequest() throws IOException;
 
   /**
    * Create an {@link AbstractPostProcessor} using reflection.
    *
    * @param processorName the name of the processor to instantiate. It should exist in the list of
-   *        post processors added with the {@link #addPostProcessor(String, AbstractPostProcessor)}
-   *        method.
+   *     post processors added with the {@link #addPostProcessor(String, AbstractPostProcessor)}
+   *     method.
    * @param arguments the list of arguments that should be passed to the processor during
-   *        instantiation.
+   *     instantiation.
    * @throws InvalidCommandLineException on error creating the processor
    */
   static AbstractPostProcessor create(String processorName, List<String> arguments)

@@ -19,7 +19,6 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -79,12 +78,10 @@ public final class JavacOptions {
   }
 
   private static boolean isBazelSpecificFlag(String opt) {
-    return opt.startsWith("-Werror:")
-        || opt.startsWith("-Xep")
-        // TODO(b/36228287): delete this once the migration to -XepDisableAllChecks is complete
-        || opt.equals("-extra_checks")
-        || opt.startsWith("-extra_checks:");
+    return opt.startsWith("-Werror:") || opt.startsWith("-Xep");
   }
+
+  private static final XlintOptionNormalizer XLINT_OPTION_NORMALIZER = new XlintOptionNormalizer();
 
   /**
    * Interface to define an option normalizer. For instance, to group all -Xlint: option into one
@@ -98,12 +95,11 @@ public final class JavacOptions {
    * in the normalized option list.
    */
   public static interface JavacOptionNormalizer {
-    /**
-     * Process an option and return true if the option was handled by this normalizer. {@code
-     * remaining} provides an iterator to any remaining options so normalizers that process
-     * non-nullary options can also process the options' arguments.
-     */
-    boolean processOption(String option, Iterator<String> remaining);
+    /** Resets the state of the normalizer to start a new option parsing. */
+    void start();
+
+    /** Process an option and return true if the option was handled by this normalizer. */
+    boolean processOption(String option);
 
     /**
      * Add the normalized versions of the options handled by {@link #processOption(String)} to the
@@ -150,11 +146,15 @@ public final class JavacOptions {
     public XlintOptionNormalizer(ImmutableList<String> enforcedXlints) {
       this.enforcedXlints = enforcedXlints;
       xlintPlus = new LinkedHashSet<>(enforcedXlints);
+    }
+
+    @Override
+    public void start() {
       resetBasisTo(BasisXlintSelection.Empty);
     }
 
     @Override
-    public boolean processOption(String option, Iterator<String> remaining) {
+    public boolean processOption(String option) {
       if (option.equals("-nowarn")) {
         // It is equivalent to -Xlint:none
         resetBasisTo(BasisXlintSelection.None);
@@ -228,61 +228,6 @@ public final class JavacOptions {
   }
 
   /**
-   * Normalizer for {@code -source}, {@code -target}, and {@code --release} options. If both {@code
-   * -source} and {@code --release} are specified, {@code --release} wins.
-   */
-  public static class ReleaseOptionNormalizer implements JavacOptionNormalizer {
-
-    private String source;
-    private String target;
-    private String release;
-
-    @Override
-    public boolean processOption(String option, Iterator<String> remaining) {
-      switch (option) {
-        case "-source":
-          if (remaining.hasNext()) {
-            source = remaining.next();
-          }
-          return true;
-        case "-target":
-          if (remaining.hasNext()) {
-            target = remaining.next();
-          }
-          return true;
-        case "--release":
-          if (remaining.hasNext()) {
-            release = remaining.next();
-          }
-          return true;
-        default: // fall out
-      }
-      if (option.startsWith("--release=")) {
-        release = option.substring("--release=".length());
-        return true;
-      }
-      return false;
-    }
-
-    @Override
-    public void normalize(List<String> normalized) {
-      if (release != null) {
-        normalized.add("--release");
-        normalized.add(release);
-      } else {
-        if (source != null) {
-          normalized.add("-source");
-          normalized.add(source);
-        }
-        if (target != null) {
-          normalized.add("-target");
-          normalized.add(target);
-        }
-      }
-    }
-  }
-
-  /**
    * Outputs a reasonably normalized javac option list.
    *
    * @param javacopts the raw javac option list to cleanup
@@ -293,12 +238,14 @@ public final class JavacOptions {
       List<String> javacopts, JavacOptionNormalizer... normalizers) {
     List<String> normalized = new ArrayList<>();
 
-    Iterator<String> it = javacopts.iterator();
-    while (it.hasNext()) {
-      String opt = it.next();
+    for (JavacOptionNormalizer normalizer : normalizers) {
+      normalizer.start();
+    }
+
+    for (String opt : javacopts) {
       boolean found = false;
       for (JavacOptionNormalizer normalizer : normalizers) {
-        if (normalizer.processOption(opt, it)) {
+        if (normalizer.processOption(opt)) {
           found = true;
           break;
         }
@@ -322,7 +269,6 @@ public final class JavacOptions {
    * -Xlint:xxx,yyy,zzz add flag followed by a -Xlint:-xxx,-yyy,-zzz minus flag.
    */
   public static List<String> normalizeOptions(List<String> javacopts) {
-    return normalizeOptionsWithNormalizers(
-        javacopts, new XlintOptionNormalizer(), new ReleaseOptionNormalizer());
+    return normalizeOptionsWithNormalizers(javacopts, XLINT_OPTION_NORMALIZER);
   }
 }

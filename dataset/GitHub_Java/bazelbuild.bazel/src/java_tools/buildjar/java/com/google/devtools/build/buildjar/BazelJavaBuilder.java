@@ -16,8 +16,10 @@ package com.google.devtools.build.buildjar;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.buildjar.instrumentation.JacocoInstrumentationProcessor;
 import com.google.devtools.build.buildjar.javac.JavacOptions;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
+import com.google.devtools.build.buildjar.javac.plugins.classloader.ClassLoaderMaskingPlugin;
 import com.google.devtools.build.buildjar.javac.plugins.dependency.DependencyModule;
 import com.google.devtools.build.buildjar.javac.plugins.errorprone.ErrorPronePlugin;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
@@ -38,6 +40,7 @@ public abstract class BazelJavaBuilder {
 
   /** The main method of the BazelJavaBuilder. */
   public static void main(String[] args) {
+    AbstractPostProcessor.addPostProcessor("jacoco", new JacocoInstrumentationProcessor());
     if (args.length == 1 && args[0].equals("--persistent_worker")) {
       System.exit(runPersistentWorker());
     } else {
@@ -81,12 +84,11 @@ public abstract class BazelJavaBuilder {
   public static int processRequest(List<String> args, PrintWriter err) {
     try {
       JavaLibraryBuildRequest build = parse(args);
-      try (SimpleJavaLibraryBuilder builder =
+      AbstractJavaBuilder builder =
           build.getDependencyModule().reduceClasspath()
               ? new ReducedClasspathJavaLibraryBuilder()
-              : new SimpleJavaLibraryBuilder()) {
-        return builder.run(build, err).exitCode;
-      }
+              : new SimpleJavaLibraryBuilder();
+      return builder.run(build, err).exitCode;
     } catch (InvalidCommandLineException e) {
       System.err.println(CMDNAME + " threw exception: " + e.getMessage());
       return 1;
@@ -131,6 +133,7 @@ public abstract class BazelJavaBuilder {
       throws IOException, InvalidCommandLineException {
     OptionsParser optionsParser = new OptionsParser(args);
     ImmutableList.Builder<BlazeJavaCompilerPlugin> plugins = ImmutableList.builder();
+    plugins.add(new ClassLoaderMaskingPlugin());
 
     // Support for -extra_checks:off was removed from ErrorPronePlugin, but Bazel still needs it,
     // so we'll emulate support for this here by handling the flag ourselves and not loading the

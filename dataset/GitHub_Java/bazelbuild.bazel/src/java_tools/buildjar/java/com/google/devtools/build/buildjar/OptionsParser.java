@@ -27,7 +27,6 @@ import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +54,6 @@ public final class OptionsParser {
   private String sourceGenDir;
   private String generatedSourcesOutputJar;
   private String manifestProtoPath;
-  private String manifestFile;
   private final Set<String> sourceRoots = new HashSet<>();
 
   private final List<String> sourceFiles = new ArrayList<>();
@@ -66,7 +64,7 @@ public final class OptionsParser {
   private final List<String> rootResourceFiles = new ArrayList<>();
 
   private String classPath = "";
-  private String bootClassPath;
+
   private String extdir;
 
   private String processorPath = "";
@@ -109,7 +107,6 @@ public final class OptionsParser {
           // otherwise we have to do something like adding a "--"
           // terminator to the passed arguments.
           collectFlagArguments(javacOpts, argQueue, "--");
-          bootClassPathFromJavacOpts();
           break;
         case "--direct_dependency":
           {
@@ -146,9 +143,6 @@ public final class OptionsParser {
         case "--output_manifest_proto":
           manifestProtoPath = getArgument(argQueue, arg);
           break;
-        case "--manifest_file":
-          manifestFile = getArgument(argQueue, arg);
-          break;
         case "--source_roots":
           collectFlagArguments(sourceRoots, argQueue, "-");
           break;
@@ -172,9 +166,6 @@ public final class OptionsParser {
           break;
         case "--classpath":
           classPath = getArgument(argQueue, arg);
-          break;
-        case "--bootclasspath":
-          bootClassPath = getArgument(argQueue, arg);
           break;
         case "--processorpath":
           processorPath = getArgument(argQueue, arg);
@@ -323,19 +314,6 @@ public final class OptionsParser {
     postProcessors.put(processorName, arguments);
   }
 
-  // TODO(cushon): update Blaze to set --bootclasspath directly
-  private void bootClassPathFromJavacOpts() {
-    Iterator<String> it = javacOpts.iterator();
-    while (it.hasNext()) {
-      String curr = it.next();
-      if (curr.equals("-bootclasspath") && it.hasNext()) {
-        it.remove();
-        bootClassPath = it.next();
-        it.remove();
-      }
-    }
-  }
-
   public List<String> getJavacOpts() {
     return javacOpts;
   }
@@ -376,10 +354,6 @@ public final class OptionsParser {
     return manifestProtoPath;
   }
 
-  public String getManifestFile() {
-    return manifestFile;
-  }
-
   public Set<String> getSourceRoots() {
     return sourceRoots;
   }
@@ -410,10 +384,6 @@ public final class OptionsParser {
 
   public String getClassPath() {
     return classPath;
-  }
-
-  public String getBootClassPath() {
-    return bootClassPath;
   }
 
   public String getExtdir() {

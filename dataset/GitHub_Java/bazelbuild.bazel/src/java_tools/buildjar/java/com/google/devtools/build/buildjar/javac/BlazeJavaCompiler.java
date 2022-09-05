@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.buildjar.javac;
 
+import com.google.common.base.Function;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
 import com.sun.tools.javac.comp.AttrContext;
 import com.sun.tools.javac.comp.CompileStates.CompileState;
@@ -23,6 +24,7 @@ import com.sun.tools.javac.util.Context;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import javax.annotation.Nullable;
 
 /**
  * An extended version of the javac compiler, providing support for composable static analyses via a
@@ -61,7 +63,9 @@ public class BlazeJavaCompiler extends JavaCompiler {
    * and save the output after its call for introspection.
    */
   public static void preRegister(
-      final Context context, final Iterable<BlazeJavaCompilerPlugin> plugins) {
+      final Context context,
+      final Iterable<BlazeJavaCompilerPlugin> plugins,
+      @Nullable final Function<BlazeJavaCompiler, Void> listener) {
     context.put(
         compilerKey,
         new Context.Factory<JavaCompiler>() {
@@ -73,9 +77,18 @@ public class BlazeJavaCompiler extends JavaCompiler {
               throw new AssertionError("Expected a single creation of BlazeJavaCompiler.");
             }
             first = false;
-            return new BlazeJavaCompiler(c, plugins);
+            BlazeJavaCompiler compiler = new BlazeJavaCompiler(c, plugins);
+            if (listener != null) {
+              listener.apply(compiler);
+            }
+            return compiler;
           }
         });
+  }
+
+  public static void preRegister(
+      final Context context, final Iterable<BlazeJavaCompilerPlugin> plugins) {
+    preRegister(context, plugins, null);
   }
 
   @Override

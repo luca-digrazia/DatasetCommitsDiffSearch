@@ -14,10 +14,17 @@
 
 package com.google.devtools.build.buildjar.javac;
 
+import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
+import com.sun.tools.javac.main.Main.Result;
+import java.io.PrintWriter;
+
 /**
  * The JavacRunner is a type that can be used to invoke javac and provides a convenient hook for
  * modifications.
  */
 public interface JavacRunner {
-  BlazeJavacResult invokeJavac(BlazeJavacArguments arguments);
+
+  Result invokeJavac(
+      ImmutableList<BlazeJavaCompilerPlugin> plugins, String[] args, PrintWriter output);
 }

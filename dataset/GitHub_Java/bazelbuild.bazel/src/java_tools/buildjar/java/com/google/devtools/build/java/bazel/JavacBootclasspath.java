@@ -14,19 +14,15 @@
 
 package com.google.devtools.build.java.bazel;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
-
-import com.google.common.collect.ImmutableList;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOError;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Utility class to provide java-level access to the blessed javac boot class path: {@code
- * //tools/defaults:javac_bootclasspath}.
+ * //tools/defaults:javac_bootclasspath}, as defined by bazel's --javac_bootclasspath flag.
  *
  * <p>This class is typically used only from a host build tool or in tests. When using this in
  * production, the bootclasspath is deployed as separate jar files within the runfiles directory.
@@ -87,10 +83,5 @@ public class JavacBootclasspath {
    */
   public static List<File> asFiles() {
     return new ArrayList<>(AS_FILES);
-  }
-
-  /** Returns the blessed boot class path as a list of {@code Path}s. */
-  public static ImmutableList<Path> asPaths() {
-    return asFiles().stream().map(File::toPath).map(Path::normalize).collect(toImmutableList());
   }
 }
