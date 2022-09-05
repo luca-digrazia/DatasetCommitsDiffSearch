@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,14 +14,14 @@
 
 package com.google.devtools.build.lib.rules.java;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap.Builder;
+import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.util.OsUtils;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.syntax.SkylarkCallable;
+import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
@@ -35,9 +35,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 public final class Jvm extends BuildConfiguration.Fragment {
   private final PathFragment javaHome;
   private final Label jvmLabel;
-  private final PathFragment javac;
-  private final PathFragment jar;
-  private final PathFragment java;
 
   /**
    * Creates a Jvm instance. Either the {@code javaHome} parameter is absolute,
@@ -48,9 +45,13 @@ public final class Jvm extends BuildConfiguration.Fragment {
     Preconditions.checkArgument(javaHome.isAbsolute() ^ (jvmLabel != null));
     this.javaHome = javaHome;
     this.jvmLabel = jvmLabel;
-    this.javac = getJavaHome().getRelative("bin/javac" + OsUtils.executableExtension());
-    this.jar = getJavaHome().getRelative("bin/jar" + OsUtils.executableExtension());
-    this.java = getJavaHome().getRelative("bin/java" + OsUtils.executableExtension());
+  }
+
+  @Override
+  public void addImplicitLabels(Multimap<String, Label> implicitLabels) {
+    if (jvmLabel != null) {
+      implicitLabels.put("Jvm", jvmLabel);
+    }
   }
 
   /**
@@ -65,14 +66,14 @@ public final class Jvm extends BuildConfiguration.Fragment {
    * Returns the path to the javac binary.
    */
   public PathFragment getJavacExecutable() {
-    return javac;
+    return getJavaHome().getRelative("bin/javac");
   }
 
   /**
    * Returns the path to the jar binary.
    */
   public PathFragment getJarExecutable() {
-    return jar;
+    return getJavaHome().getRelative("bin/jar");
   }
 
   /**
@@ -81,7 +82,7 @@ public final class Jvm extends BuildConfiguration.Fragment {
   @SkylarkCallable(name = "java_executable", structField = true,
       doc = "The java executable, i.e. bin/java relative to the Java home.")
   public PathFragment getJavaExecutable() {
-    return java;
+    return getJavaHome().getRelative("bin/java");
   }
 
   /**
@@ -99,5 +100,6 @@ public final class Jvm extends BuildConfiguration.Fragment {
   public void addGlobalMakeVariables(Builder<String, String> globalMakeEnvBuilder) {
     globalMakeEnvBuilder.put("JAVABASE", getJavaHome().getPathString());
     globalMakeEnvBuilder.put("JAVA", getJavaExecutable().getPathString());
+    globalMakeEnvBuilder.put("JAVAC", getJavacExecutable().getPathString());
   }
 }
