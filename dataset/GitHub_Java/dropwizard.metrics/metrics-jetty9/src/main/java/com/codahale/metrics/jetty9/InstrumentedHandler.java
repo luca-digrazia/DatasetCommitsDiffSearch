@@ -29,7 +29,6 @@ public class InstrumentedHandler extends HandlerWrapper {
     private final MetricRegistry metricRegistry;
 
     private String name;
-    private final String prefix;
 
     // the requests handled by this handler, excluding active
     private Timer requests;
@@ -74,20 +73,8 @@ public class InstrumentedHandler extends HandlerWrapper {
      *
      */
     public InstrumentedHandler(MetricRegistry registry) {
-        this(registry, null);
+        this.metricRegistry = registry;
     }
-
-	/**
-	 * Create a new instrumented handler using a given metrics registry.
-	 *
-	 * @param registry   the registry for the metrics
-	 * @param prefix     the prefix to use for the metrics names
-	 *
-	 */
-	public InstrumentedHandler(MetricRegistry registry, String prefix) {
-		this.metricRegistry = registry;
-		this.prefix = prefix;
-	}
 
     public String getName() {
         return name;
@@ -101,7 +88,7 @@ public class InstrumentedHandler extends HandlerWrapper {
     protected void doStart() throws Exception {
         super.doStart();
 
-        final String prefix = this.prefix == null ? name(getHandler().getClass(), name) : name(this.prefix, name);
+        final String prefix = name(getHandler().getClass(), name);
 
         this.requests = metricRegistry.timer(name(prefix, "requests"));
         this.dispatches = metricRegistry.timer(name(prefix, "dispatches"));
@@ -197,7 +184,6 @@ public class InstrumentedHandler extends HandlerWrapper {
                 }
                 activeSuspended.inc();
             } else if (state.isInitial()) {
-                requests.update(dispatched, TimeUnit.MILLISECONDS);
                 updateResponses(request);
             }
             // else onCompletion will handle it.
