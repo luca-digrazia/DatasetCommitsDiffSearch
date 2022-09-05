@@ -100,7 +100,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
     this.skyFunctions = ImmutableMap.copyOf(skyFunctions);
     this.differencer = Preconditions.checkNotNull(differencer);
     this.progressReceiver = invalidationReceiver;
-    this.graph = new InMemoryGraphImpl(keepEdges);
+    this.graph = new InMemoryGraph(keepEdges);
     this.emittedEventState = emittedEventState;
     this.keepEdges = keepEdges;
   }
@@ -261,35 +261,22 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
     return graph.getDoneValues();
   }
 
-  private static boolean isDone(@Nullable NodeEntry entry) {
-    return entry != null && entry.isDone();
-  }
-
   @Override
   @Nullable public SkyValue getExistingValueForTesting(SkyKey key) {
-    NodeEntry entry = getExistingEntryForTesting(key);
-    return isDone(entry) ? entry.getValue() : null;
+    return graph.getValue(key);
   }
 
   @Override
   @Nullable public ErrorInfo getExistingErrorForTesting(SkyKey key) {
-    NodeEntry entry = getExistingEntryForTesting(key);
-    return isDone(entry) ? entry.getErrorInfo() : null;
+    NodeEntry entry = graph.get(key);
+    return (entry == null || !entry.isDone()) ? null : entry.getErrorInfo();
   }
 
-  @Nullable
-  @Override
-  public NodeEntry getExistingEntryForTesting(SkyKey key) {
-    return graph.get(key);
+  public void setGraphForTesting(InMemoryGraph graph) {
+    this.graph = graph;
   }
 
-  @Override
-  public void injectGraphTransformerForTesting(
-      Function<ThinNodeQueryableGraph, ProcessableGraph> transformer) {
-    this.graph = (InMemoryGraph) transformer.apply(this.graph);
-  }
-
-  public ProcessableGraph getGraphForTesting() {
+  public InMemoryGraph getGraphForTesting() {
     return graph;
   }
 
@@ -360,7 +347,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
       new EvaluatorSupplier() {
         @Override
         public MemoizingEvaluator create(
-            ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions,
+            Map<SkyFunctionName, ? extends SkyFunction> skyFunctions,
             Differencer differencer,
             @Nullable EvaluationProgressReceiver invalidationReceiver,
             EmittedEventState emittedEventState,

@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.events.EventCollector;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
+import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
@@ -120,7 +121,8 @@ abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCas
    * Check that the expected targets were exactly those visited, and that the packages of these
    * expected targets were exactly those packages visited.
    */
-  protected void assertExpectedTargets(Set<String> expectedLabels, Set<Target> startingTargets)
+  protected void assertExpectedTargets(
+      Set<String> expectedLabels, boolean expectError, Set<Target> startingTargets)
       throws Exception {
     Set<Label> visitedLabels =
         getVisitedLabels(
@@ -141,6 +143,13 @@ abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCas
     }
 
     assertEquals(expectedPkgs, getVisitedPackageNames(startingTargets));
+    if (!expectError) {
+      Set<PathFragment> visitedPkgs = new HashSet<>();
+      for (Package pkg : getErrorFreeVisitedPackages(startingTargets)) {
+        visitedPkgs.add(pkg.getNameFragment());
+      }
+      assertEquals(expectedPkgs, visitedPkgs);
+    }
   }
 
   /**
@@ -167,7 +176,7 @@ abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCas
             reporter, startingTargets, ImmutableSet.<Label>of(), keepGoing, 200, Integer.MAX_VALUE);
 
     assertNotSame(expectError, result);
-    assertExpectedTargets(expectedLabels, startingTargets);
+    assertExpectedTargets(expectedLabels, expectError, startingTargets);
   }
 
   /**
@@ -273,6 +282,15 @@ abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCas
     }
     for (Target target : startingTargets) {
       builder.add(target.getPackage().getNameFragment());
+    }
+    return builder.build();
+  }
+
+  protected Set<Package> getErrorFreeVisitedPackages(Set<Target> startingTargets) {
+    ImmutableSet.Builder<Package> builder = ImmutableSet.builder();
+    builder.addAll(visitor.getErrorFreeVisitedPackages(reporter));
+    for (Target target : startingTargets) {
+      builder.add(target.getPackage());
     }
     return builder.build();
   }
