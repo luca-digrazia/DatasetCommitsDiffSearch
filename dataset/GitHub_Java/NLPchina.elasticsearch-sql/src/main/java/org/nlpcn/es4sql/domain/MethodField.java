@@ -1,14 +1,10 @@
 package org.nlpcn.es4sql.domain;
 
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
-import org.nlpcn.commons.lang.util.StringUtil;
 import org.nlpcn.es4sql.Util;
-import org.nlpcn.es4sql.exception.SqlParseException;
-
-import com.alibaba.druid.sql.ast.SQLExpr;
-import com.alibaba.druid.sql.ast.expr.SQLBinaryOpExpr;
 
 /**
  * 搜索域
@@ -18,15 +14,20 @@ import com.alibaba.druid.sql.ast.expr.SQLBinaryOpExpr;
  */
 public class MethodField extends Field {
 	private List<KVValue> params = null;
-	private String option ;
-	
+	private String option;
 
 	public MethodField(String name, List<KVValue> params, String option, String alias) {
 		super(name, alias);
 		this.params = params;
-		this.option = option ;
-		if (StringUtil.isBlank(alias)) {
-			this.setAlias(this.toString());
+		this.option = option;
+		if (alias==null||alias.trim().length()==0) {
+            Map<String, Object> paramsAsMap = this.getParamsAsMap();
+            if(paramsAsMap.containsKey("alias")){
+                this.setAlias(paramsAsMap.get("alias").toString());
+            }
+            else {
+                this.setAlias(this.toString());
+            }
 		}
 	}
 
@@ -34,19 +35,22 @@ public class MethodField extends Field {
 		return params;
 	}
 
-	public void setParams(List<KVValue> params) {
-		this.params = params;
-	}
+    public Map<String,Object> getParamsAsMap(){
+        Map<String,Object> paramsAsMap = new HashMap<>();
+        if(this.params == null ) return paramsAsMap;
+        for(KVValue kvValue : this.params){
+            paramsAsMap.put(kvValue.key,kvValue.value);
+        }
+        return paramsAsMap;
+    }
 
 	@Override
 	public String toString() {
-		if(option!=null){
-			return this.name + "(" + option+" "+Util.joiner(params, ",") + ")";
+		if (option != null) {
+			return this.name + "(" + option + " " + Util.joiner(params, ",") + ")";
 		}
 		return this.name + "(" + Util.joiner(params, ",") + ")";
 	}
-	
-	
 
 	public String getOption() {
 		return option;
@@ -56,19 +60,38 @@ public class MethodField extends Field {
 		this.option = option;
 	}
 
-	public static Field makeField(String name, List<SQLExpr> arguments, String option, String alias) throws SqlParseException {
-		List<KVValue> paramers = new ArrayList<>();
-		for (SQLExpr object : arguments) {
-			if (object instanceof SQLBinaryOpExpr) {
-				SQLExpr right = ((SQLBinaryOpExpr) object).getRight();
-				Object value = Util.expr2Object(right);
-				paramers.add(new KVValue(((SQLBinaryOpExpr) object).getLeft().toString(), value));
-			} else {
-				paramers.add(new KVValue(Util.expr2Object(object)));
-			}
+    @Override
+    public boolean isNested() {
+        Map<String, Object> paramsAsMap = this.getParamsAsMap();
+        return paramsAsMap.containsKey("nested") || paramsAsMap.containsKey("reverse_nested");
+    }
 
-		}
-		return new MethodField(name, paramers, option,alias);
-	}
+    @Override
+    public boolean isReverseNested() {
+        return this.getParamsAsMap().containsKey("reverse_nested");
 
+    }
+
+    @Override
+    public String getNestedPath() {
+        if(!this.isNested()) return null;
+        if(this.isReverseNested()){
+            String reverseNestedPath = this.getParamsAsMap().get("reverse_nested").toString();
+            return reverseNestedPath.isEmpty() ? null : reverseNestedPath;
+        }
+        return this.getParamsAsMap().get("nested").toString();
+    }
+
+    @Override
+    public boolean isChildren() {
+        Map<String, Object> paramsAsMap = this.getParamsAsMap();
+        return paramsAsMap.containsKey("children");
+    }
+
+    @Override
+    public String getChildType() {
+        if(!this.isChildren()) return null;
+
+        return this.getParamsAsMap().get("children").toString();
+    }
 }
