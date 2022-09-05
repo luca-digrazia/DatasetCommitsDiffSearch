@@ -204,7 +204,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
           null, /* Artifact symbolsTxt */
           ruleContext.getTokenizedStringListAttr("resource_configuration_filters"),
           ruleContext.getTokenizedStringListAttr("nocompress_extensions"),
-          ruleContext.attributes().get("crunch_png", Type.BOOLEAN),
           ruleContext.getTokenizedStringListAttr("densities"),
           ruleContext.attributes().get("application_id", Type.STRING),
           getExpandedMakeVarsForAttr(ruleContext, "version_code"),
@@ -226,7 +225,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               null, /* Artifact symbolsTxt */
               ruleContext.getTokenizedStringListAttr("resource_configuration_filters"),
               ruleContext.getTokenizedStringListAttr("nocompress_extensions"),
-              ruleContext.attributes().get("crunch_png", Type.BOOLEAN),
               ruleContext.getTokenizedStringListAttr("densities"),
               ruleContext.attributes().get("application_id", Type.STRING),
               getExpandedMakeVarsForAttr(ruleContext, "version_code"),
@@ -248,7 +246,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               null, /* Artifact symbolsTxt */
               ruleContext.getTokenizedStringListAttr("resource_configuration_filters"),
               ruleContext.getTokenizedStringListAttr("nocompress_extensions"),
-              ruleContext.attributes().get("crunch_png", Type.BOOLEAN),
               ruleContext.getTokenizedStringListAttr("densities"),
               ruleContext.attributes().get("application_id", Type.STRING),
               getExpandedMakeVarsForAttr(ruleContext, "version_code"),
@@ -261,12 +258,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         return null;
       }
     } else {
-      if (!ruleContext.attributes().get("crunch_png", Type.BOOLEAN)) {
-        ruleContext.ruleError("Setting crunch_png = 0 is not supported for android_binary"
-            + " rules which depend on android_resources rules.");
-        return null;
-      }
-
       // Retrieve the resources from the resources attribute on the android_binary rule
       // and recompile them if necessary.
       ApplicationManifest resourcesManifest = ApplicationManifest.fromResourcesRule(ruleContext);
