@@ -9,11 +9,6 @@ import org.nlpcn.es4sql.exception.SqlParseException;
 public class QueryTest {
 	
 	private SearchDao searchDao = new SearchDao("localhost", 9300) ;
-	@Test
-	public void likeTest() throws IOException, SqlParseException{
-		ActionResponse select = searchDao.execute("select email from bank where age between 20 and 21 and email like '%c%' ");
-		System.out.println(select);
-	}
 	
 	@Test
 	public void betweenTest() throws IOException, SqlParseException{
@@ -77,21 +72,9 @@ public class QueryTest {
 	}
 	
 
-
 	@Test
 	public void countSearch() throws IOException, SqlParseException{
 		ActionResponse select = searchDao.execute("select count(*) from bank where (gender='m' and (age> 25 or account_number>5)) or (gender='w' and (age>30 or account_number < 8)) and email is not miss");
-		System.out.println(select);
-	}
-	
-	/**
-	 * table have '.' and type test
-	 * @throws IOException
-	 * @throws SqlParseException
-	 */
-	@Test
-	public void searchTableTest() throws IOException, SqlParseException{
-		ActionResponse select = searchDao.execute("select count(*) from doc/accounts,bank/doc limit 10");
 		System.out.println(select);
 	}
 }
