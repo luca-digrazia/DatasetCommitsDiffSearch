@@ -13,16 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.EvalException.EvalExceptionWithJavaCause;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -43,7 +41,7 @@ public abstract class SkylarkFunction extends AbstractFunction {
   private boolean onlyLoadingPhase;
 
   /**
-   * Creates a SkylarkFunction with the given name. 
+   * Creates a SkylarkFunction with the given name.
    */
   public SkylarkFunction(String name) {
     super(name);
@@ -52,11 +50,10 @@ public abstract class SkylarkFunction extends AbstractFunction {
   /**
    * Configures the parameter of this Skylark function using the annotation.
    */
-  @VisibleForTesting
   public void configure(SkylarkBuiltin annotation) {
     Preconditions.checkState(!configured);
-    Preconditions.checkArgument(getName().equals(annotation.name()),
-                                getName() + " != " + annotation.name());
+    Preconditions.checkArgument(
+        getName().equals(annotation.name()), "%s != %s", getName(), annotation.name());
     mandatoryParamNum = 0;
     ImmutableList.Builder<String> paramListBuilder = ImmutableList.builder();
     ImmutableMap.Builder<String, SkylarkBuiltin.Param> paramTypeBuilder = ImmutableMap.builder();
@@ -98,11 +95,11 @@ public abstract class SkylarkFunction extends AbstractFunction {
                      FuncallExpression ast,
                      Environment env)
       throws EvalException, InterruptedException {
-
-    Preconditions.checkState(configured, "Function " + getName() + " was not configured");
+    Preconditions.checkState(configured, "Function %s was not configured", getName());
     try {
       ImmutableMap.Builder<String, Object> arguments = new ImmutableMap.Builder<>();
       if (objectType != null && !FuncallExpression.isNamespace(objectType)) {
+        args = new ArrayList<>(args); // args immutable, get a mutable copy.
         arguments.put("self", args.remove(0));
       }
 
@@ -129,7 +126,7 @@ public abstract class SkylarkFunction extends AbstractFunction {
       }
 
       for (Entry<String, Object> kwarg : kwargs.entrySet()) {
-        int idx = parameters.indexOf(kwarg.getKey()); 
+        int idx = parameters.indexOf(kwarg.getKey());
         if (idx < 0) {
           throw new EvalException(ast.getLocation(),
               String.format("unknown keyword argument: %s", kwarg.getKey()));
@@ -156,61 +153,25 @@ public abstract class SkylarkFunction extends AbstractFunction {
   private void checkTypeAndAddArg(String paramName, Object value,
       ImmutableMap.Builder<String, Object> arguments, Location loc) throws EvalException {
     SkylarkBuiltin.Param param = parameterTypes.get(paramName);
-    if (param.callbackEnabled() && Function.class.isAssignableFrom(value.getClass())) {
+    if (param.callbackEnabled() && value instanceof Function) {
       // If we pass a function as an argument we trust the Function implementation with the type
       // check. It's OK since the function needs to be called manually anyway.
       arguments.put(paramName, value);
       return;
     }
-    cast(getName(), paramName, param.type(), param.generic1(), value, loc, param.doc());
+    checkType(getName(), paramName, SkylarkType.of(param.type(), param.generic1()),
+        value, loc, param.doc());
     arguments.put(paramName, value);
   }
 
-  /**
-   * Throws an EvalException of realValue is not of the expected type, otherwise returns realValue.
-   * 
-   * @param functionName - name of the function
-   * @param paramName - name of the parameter
-   * @param expectedType - the expected type of the parameter
-   * @param expectedGenericType - the expected generic type of the parameter, or
-   * Object.class if undefined
-   * @param realValue - the actual value of the parameter
-   * @param loc - the location info used in the EvalException
-   * @param paramDoc - the documentation of the parameter to print in the error message
-   */
-  @SuppressWarnings("unchecked")
-  public static <T> T cast(String functionName, String paramName,
-      Class<T> expectedType, Class<?> expectedGenericType,
-      Object realValue, Location loc, String paramDoc) throws EvalException {
-    if (!(expectedType.isAssignableFrom(realValue.getClass()))) {
-      throw new EvalException(loc, String.format("expected %s for '%s' but got %s instead\n"
-          + "%s.%s: %s",
-          EvalUtils.getDataTypeNameFromClass(expectedType), paramName,
-          EvalUtils.getDatatypeName(realValue), functionName, paramName, paramDoc));
-    }
-    if (expectedType.equals(SkylarkList.class)) {
-      checkGeneric(functionName, paramName, expectedType, expectedGenericType,
-          realValue, ((SkylarkList) realValue).getGenericType(), loc, paramDoc);
-    } else if (expectedType.equals(SkylarkNestedSet.class)) {
-      checkGeneric(functionName, paramName, expectedType, expectedGenericType,
-          realValue, ((SkylarkNestedSet) realValue).getGenericType(), loc, paramDoc);
-    }
-    return (T) realValue;
-  }
-
-  private static void checkGeneric(String functionName, String paramName,
-      Class<?> expectedType, Class<?> expectedGenericType,
-      Object realValue, Class<?> realGenericType,
-      Location loc, String paramDoc) throws EvalException {
-    if (!realGenericType.equals(Object.class)
-        && !expectedGenericType.isAssignableFrom(realGenericType)) {
-      String mainType = EvalUtils.getDataTypeNameFromClass(expectedType);
-      throw new EvalException(loc, String.format(
-          "expected %s of %ss for '%s' but got %s of %ss instead\n%s.%s: %s",
-        mainType, EvalUtils.getDataTypeNameFromClass(expectedGenericType),
-        paramName,
-        EvalUtils.getDatatypeName(realValue), EvalUtils.getDataTypeNameFromClass(realGenericType),
-        functionName, paramName, paramDoc));
+  public static void checkType(String functionName, String paramName,
+      SkylarkType type, Object value, Location loc, String paramDoc) throws EvalException {
+    if (type != null && value != null) { // TODO(bazel-team): should we give a pass to NONE here?
+      if (!type.contains(value)) {
+        throw new EvalException(loc, String.format(
+            "expected %s for '%s' while calling %s but got %s instead: %s",
+            type, paramName, functionName, EvalUtils.getDataTypeName(value, true), value));
+      }
     }
   }
 
@@ -223,6 +184,7 @@ public abstract class SkylarkFunction extends AbstractFunction {
       ConversionException,
       IllegalArgumentException,
       IllegalStateException,
+      InterruptedException,
       ClassCastException,
       ClassNotFoundException,
       ExecutionException;
@@ -260,74 +222,6 @@ public abstract class SkylarkFunction extends AbstractFunction {
         ExecutionException;
   }
 
-  public static <TYPE> Iterable<TYPE> castList(Object obj, final Class<TYPE> type) {
-    if (obj == null) {
-      return ImmutableList.of();
-    }
-    return ((SkylarkList) obj).to(type);
-  }
-
-  public static <TYPE> Iterable<TYPE> castList(
-      Object obj, final Class<TYPE> type, final String what) throws ConversionException {
-    if (obj == null) {
-      return ImmutableList.of();
-    }
-    return Iterables.transform(Type.LIST.convert(obj, what),
-        new com.google.common.base.Function<Object, TYPE>() {
-          @Override
-          public TYPE apply(Object input) {
-            try {
-              return type.cast(input);
-            } catch (ClassCastException e) {
-              throw new IllegalArgumentException(String.format(
-                  "expected %s type for '%s' but got %s instead",
-                  EvalUtils.getDataTypeNameFromClass(type), what,
-                  EvalUtils.getDatatypeName(input)));
-            }
-          }
-    });
-  }
-
-  public static <KEY_TYPE, VALUE_TYPE> ImmutableMap<KEY_TYPE, VALUE_TYPE> toMap(
-      Iterable<Map.Entry<KEY_TYPE, VALUE_TYPE>> obj) {
-    ImmutableMap.Builder<KEY_TYPE, VALUE_TYPE> builder = ImmutableMap.builder();
-    for (Map.Entry<KEY_TYPE, VALUE_TYPE> entry : obj) {
-      builder.put(entry.getKey(), entry.getValue());
-    }
-    return builder.build();
-  }
-
-  public static <KEY_TYPE, VALUE_TYPE> Iterable<Map.Entry<KEY_TYPE, VALUE_TYPE>> castMap(Object obj,
-      final Class<KEY_TYPE> keyType, final Class<VALUE_TYPE> valueType, final String what) {
-    if (obj == null) {
-      return ImmutableList.of();
-    }
-    if (!(obj instanceof Map<?, ?>)) {
-      throw new IllegalArgumentException(String.format(
-          "expected a dictionary for %s but got %s instead",
-          what, EvalUtils.getDatatypeName(obj)));
-    }
-    return Iterables.transform(((Map<?, ?>) obj).entrySet(),
-        new com.google.common.base.Function<Map.Entry<?, ?>, Map.Entry<KEY_TYPE, VALUE_TYPE>>() {
-          // This is safe. We check the type of the key-value pairs for every entry in the Map.
-          // In Map.Entry the key always has the type of the first generic parameter, the
-          // value has the second.
-          @SuppressWarnings("unchecked")
-            @Override
-            public Map.Entry<KEY_TYPE, VALUE_TYPE> apply(Map.Entry<?, ?> input) {
-            if (keyType.isAssignableFrom(input.getKey().getClass())
-                && valueType.isAssignableFrom(input.getValue().getClass())) {
-              return (Map.Entry<KEY_TYPE, VALUE_TYPE>) input;
-            }
-            throw new IllegalArgumentException(String.format(
-                "expected <%s, %s> type for '%s' but got <%s, %s> instead",
-                keyType.getSimpleName(), valueType.getSimpleName(), what,
-                EvalUtils.getDatatypeName(input.getKey()),
-                EvalUtils.getDatatypeName(input.getValue())));
-          }
-        });
-  }
-
   // TODO(bazel-team): this is only used in MixedModeFunctions in MethodLibrary, migrate those
   // to SkylarkFunction then remove this.
   public static <TYPE> TYPE cast(Object elem, Class<TYPE> type, String what, Location loc)
@@ -336,7 +230,7 @@ public abstract class SkylarkFunction extends AbstractFunction {
       return type.cast(elem);
     } catch (ClassCastException e) {
       throw new EvalException(loc, String.format("expected %s for '%s' but got %s instead",
-          type.getSimpleName(), what, EvalUtils.getDatatypeName(elem)));
+          EvalUtils.getDataTypeNameFromClass(type), what, EvalUtils.getDataTypeName(elem)));
     }
   }
 }

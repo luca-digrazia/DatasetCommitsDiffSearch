@@ -142,11 +142,6 @@ public final class PackageFactory {
     void update(Environment environment, MakeEnvironment.Builder pkgMakeEnv,
         Label buildFileLabel);
 
-    /**
-     * Returns the extra functions needed to be added to the Skylark native module.
-     */
-    ImmutableList<Function> nativeModuleFunctions();
-
     Iterable<PackageArgument<?>> getPackageArguments();
   }
 
@@ -826,7 +821,7 @@ public final class PackageFactory {
   /**
    * Get the PackageContext by looking up in the environment.
    */
-  public static PackageContext getContext(Environment env, FuncallExpression ast)
+  private static PackageContext getContext(Environment env, FuncallExpression ast)
       throws EvalException {
     try {
       return (PackageContext) env.lookup(PKG_CONTEXT);
@@ -1074,13 +1069,6 @@ public final class PackageFactory {
       this.eventHandler = eventHandler;
       this.globber = globber;
     }
-
-    /**
-     * Returns the Label of this Package.
-     */
-    public Label getLabel() {
-      return pkgBuilder.getBuildFileLabel();
-    }
   }
 
   /**
@@ -1093,9 +1081,6 @@ public final class PackageFactory {
       builder.add(newRuleFunction(ruleFactory, ruleClass));
     }
     builder.add(newPackageFunction(packageArguments));
-    for (EnvironmentExtension extension : environmentExtensions) {
-      builder.addAll(extension.nativeModuleFunctions());
-    }
     return builder.build();
   }
 
