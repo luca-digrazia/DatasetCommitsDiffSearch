@@ -38,8 +38,7 @@ import com.google.common.io.ByteStreams;
         ShowTest.class,
         CSVResultsExtractorTests.class,
         SourceFieldTest.class,
-		SQLFunctionsTest.class,
-		JDBCTests.class
+		SQLFunctionsTest.class
 })
 public class MainTestSuite {
 
