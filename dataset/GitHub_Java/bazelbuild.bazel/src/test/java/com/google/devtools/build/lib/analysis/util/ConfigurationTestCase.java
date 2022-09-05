@@ -107,7 +107,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
             ImmutableList.<DiffAwareness.Factory>of(),
             Predicates.<PathFragment>alwaysFalse(),
             Preprocessor.Factory.Supplier.NullSupplier.INSTANCE,
-            analysisMock.getSkyFunctions(),
+            analysisMock.getSkyFunctions(directories),
             ImmutableList.<PrecomputedValue.Injected>of(),
             ImmutableList.<SkyValueDirtinessChecker>of());
 

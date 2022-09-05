@@ -166,7 +166,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             ImmutableList.<DiffAwareness.Factory>of(),
             Predicates.<PathFragment>alwaysFalse(),
             Preprocessor.Factory.Supplier.NullSupplier.INSTANCE,
-            analysisMock.getSkyFunctions(),
+            analysisMock.getSkyFunctions(directories),
             getPrecomputedValues(),
             ImmutableList.<SkyValueDirtinessChecker>of());
     skyframeExecutor.preparePackageLoading(

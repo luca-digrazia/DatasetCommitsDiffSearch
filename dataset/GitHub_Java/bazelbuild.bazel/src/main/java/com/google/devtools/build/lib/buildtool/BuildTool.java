@@ -289,7 +289,7 @@ public final class BuildTool {
       SupportedEnvironmentsProvider provider =
           Verify.verifyNotNull(topLevelTarget.getProvider(SupportedEnvironmentsProvider.class));
         Collection<Label> missingEnvironments = ConstraintSemantics.getUnsupportedEnvironments(
-            provider.getRefinedEnvironments(), expectedEnvironments);
+            provider.getEnvironments(), expectedEnvironments);
         if (!missingEnvironments.isEmpty()) {
           throw new ViewCreationFailedException(
               String.format("This is a restricted-environment build. %s does not support"

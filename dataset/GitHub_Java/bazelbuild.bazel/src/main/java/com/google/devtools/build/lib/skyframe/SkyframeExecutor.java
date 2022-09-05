@@ -265,8 +265,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   private MutableSupplier<ImmutableList<ConfigurationFragmentFactory>> configurationFragments =
       new MutableSupplier<>();
 
-  private final PathFragment blacklistedPackagePrefixesFile;
-
   private static final Logger LOG = Logger.getLogger(SkyframeExecutor.class.getName());
 
   protected SkyframeExecutor(
@@ -280,8 +278,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       Preprocessor.Factory.Supplier preprocessorFactorySupplier,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
-      boolean errorOnExternalFiles,
-      PathFragment blacklistedPackagePrefixesFile) {
+      boolean errorOnExternalFiles) {
     // Strictly speaking, these arguments are not required for initialization, but all current
     // callsites have them at hand, so we might as well set them during construction.
     this.evaluatorSupplier = evaluatorSupplier;
@@ -301,7 +298,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.extraSkyFunctions = extraSkyFunctions;
     this.extraPrecomputedValues = extraPrecomputedValues;
     this.errorOnExternalFiles = errorOnExternalFiles;
-    this.blacklistedPackagePrefixesFile = blacklistedPackagePrefixesFile;
     this.binTools = binTools;
 
     this.skyframeBuildView = new SkyframeBuildView(
@@ -507,9 +503,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     }
   }
 
-  @VisibleForTesting
-  public PathFragment getBlacklistedPackagePrefixesFile() {
-    return blacklistedPackagePrefixesFile;
+  protected PathFragment getBlacklistedPackagePrefixesFile() {
+    return PathFragment.EMPTY_FRAGMENT;
   }
 
   class BuildViewProvider {

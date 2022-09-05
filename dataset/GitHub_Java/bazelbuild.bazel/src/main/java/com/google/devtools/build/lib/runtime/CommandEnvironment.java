@@ -87,6 +87,7 @@ public final class CommandEnvironment {
   private PathFragment relativeWorkingDirectory = PathFragment.EMPTY_FRAGMENT;
   private long commandStartTime;
   private OutputService outputService;
+  private String outputFileSystem;
   private Path workingDirectory;
 
   private AtomicReference<AbruptExitException> pendingException = new AtomicReference<>();
@@ -412,6 +413,10 @@ public final class CommandEnvironment {
     this.workingDirectory = workingDirectory;
   }
 
+  public String getOutputFileSystem() {
+    return outputFileSystem;
+  }
+
   /**
    * Hook method called by the BlazeCommandDispatcher prior to the dispatch of
    * each command.
@@ -444,6 +449,8 @@ public final class CommandEnvironment {
 
     SkyframeExecutor skyframeExecutor = getSkyframeExecutor();
     skyframeExecutor.setOutputService(outputService);
+
+    this.outputFileSystem = determineOutputFileSystem();
 
     // Ensure that the working directory will be under the workspace directory.
     Path workspace = getWorkspace();
@@ -500,16 +507,16 @@ public final class CommandEnvironment {
         new CommandStartEvent(command.name(), commandId, getClientEnv(), workingDirectory));
   }
 
-  /** Returns the name of the file system we are writing output to. */
-  public String determineOutputFileSystem() {
-    // If we have a fancy OutputService, this may be different between consecutive Blaze commands
-    // and so we need to compute it freshly. Otherwise, we can used the immutable value that's
-    // precomputed by our BlazeWorkspace.
+  /**
+   * Figures out what file system we are writing output to. Here we use
+   * outputBase instead of outputPath because we need a file system to create the latter.
+   */
+  private String determineOutputFileSystem() {
     if (getOutputService() != null) {
-      try (AutoProfiler p = profiled("Finding output file system", ProfilerTask.INFO)) {
-        return getOutputService().getFilesSystemName();
-      }
+      return getOutputService().getFilesSystemName();
     }
-    return workspace.getOutputBaseFilesystemTypeName();
+    try (AutoProfiler p = profiled("Finding output file system", ProfilerTask.INFO)) {
+      return FileSystemUtils.getFileSystem(getOutputBase());
+    }
   }
 }
