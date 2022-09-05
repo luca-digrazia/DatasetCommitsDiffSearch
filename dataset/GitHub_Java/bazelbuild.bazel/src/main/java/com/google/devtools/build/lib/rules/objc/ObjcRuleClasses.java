@@ -61,13 +61,10 @@ public class ObjcRuleClasses {
       IosSdkCommands.DEVELOPER_DIR + "/Toolchains/XcodeDefault.xctoolchain/usr/bin";
   static final PathFragment CLANG = new PathFragment(BIN_DIR + "/clang");
   static final PathFragment CLANG_PLUSPLUS = new PathFragment(BIN_DIR + "/clang++");
-  static final PathFragment SWIFT = new PathFragment(BIN_DIR + "/swift");
   static final PathFragment LIBTOOL = new PathFragment(BIN_DIR + "/libtool");
   static final PathFragment DSYMUTIL = new PathFragment(BIN_DIR + "/dsymutil");
   static final PathFragment LIPO = new PathFragment(BIN_DIR + "/lipo");
   static final PathFragment IBTOOL = new PathFragment(IosSdkCommands.IBTOOL_PATH);
-  static final PathFragment SWIFT_STDLIB_TOOL = new PathFragment(BIN_DIR + "/swift-stdlib-tool");
-
   private static final PathFragment JAVA = new PathFragment("/usr/bin/java");
 
   private ObjcRuleClasses() {
@@ -315,11 +312,9 @@ public class ObjcRuleClasses {
    */
   static final FileType CPP_SOURCES = FileType.of(".cc", ".cpp", ".mm", ".cxx", ".C");
 
-  static final FileType SWIFT_SOURCES = FileType.of(".swift");
-
   private static final FileType NON_CPP_SOURCES = FileType.of(".m", ".c");
 
-  static final FileTypeSet SRCS_TYPE = FileTypeSet.of(NON_CPP_SOURCES, CPP_SOURCES, SWIFT_SOURCES);
+  static final FileTypeSet SRCS_TYPE = FileTypeSet.of(NON_CPP_SOURCES, CPP_SOURCES);
 
   static final FileTypeSet NON_ARC_SRCS_TYPE = FileTypeSet.of(FileType.of(".m", ".mm"));
 
@@ -457,8 +452,6 @@ public class ObjcRuleClasses {
               .value(env.getLabel("//tools/objc:actoolzip_deploy.jar")))
           .add(attr("$ibtoolzip_deploy", LABEL).cfg(HOST)
               .value(env.getLabel("//tools/objc:ibtoolzip_deploy.jar")))
-          .add(attr("$swiftstdlibtoolzip_deploy", LABEL).cfg(HOST)
-              .value(env.getLabel("//tools/objc:swiftstdlibtoolzip_deploy.jar")))
           .build();
     }
     @Override
@@ -752,49 +745,44 @@ public class ObjcRuleClasses {
     public RuleClass build(Builder builder, final RuleDefinitionEnvironment env) {
       return builder
           /* <!-- #BLAZE_RULE($ios_test_base_rule).ATTRIBUTE(target_device) -->
-           The device against which to run the test.
-           ${SYNOPSIS}
-           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-          .add(
-              attr(IosTest.TARGET_DEVICE, LABEL)
-                  .allowedFileTypes()
-                  .allowedRuleClasses("ios_device"))
+          The device against which to run the test.
+          ${SYNOPSIS}
+          <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
+          .add(attr(IosTest.TARGET_DEVICE, LABEL)
+              .allowedFileTypes()
+              .allowedRuleClasses("ios_device"))
           /* <!-- #BLAZE_RULE($ios_test_base_rule).ATTRIBUTE(xctest) -->
-           Whether this target contains tests using the XCTest testing framework.
-           ${SYNOPSIS}
-           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-          .add(attr(IosTest.IS_XCTEST, BOOLEAN).value(true))
+          Whether this target contains tests using the XCTest testing framework.
+          ${SYNOPSIS}
+          <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
+          .add(attr(IosTest.IS_XCTEST, BOOLEAN))
           /* <!-- #BLAZE_RULE($ios_test_base_rule).ATTRIBUTE(xctest_app) -->
-           A <code>objc_binary</code> target that contains the app bundle to test against in XCTest.
-           This attribute is only valid if <code>xctest</code> is true.
-           ${SYNOPSIS}
-           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-          .add(
-              attr(IosTest.XCTEST_APP, LABEL)
-                  .value(
-                      new Attribute.ComputedDefault(IosTest.IS_XCTEST) {
-                        @Override
-                        public Object getDefault(AttributeMap rule) {
-                          return rule.get(IosTest.IS_XCTEST, Type.BOOLEAN)
-                              ? env.getLabel("//tools/objc:xctest_app")
-                              : null;
-                        }
-                      })
-                  .allowedFileTypes()
-                  // TODO(bazel-team): Remove objc_binary once it stops exporting XcTestAppProvider.
-                  .allowedRuleClasses("objc_binary", "ios_application"))
-          .override(
-              attr("infoplist", LABEL)
-                  .value(
-                      new Attribute.ComputedDefault(IosTest.IS_XCTEST) {
-                        @Override
-                        public Object getDefault(AttributeMap rule) {
-                          return rule.get(IosTest.IS_XCTEST, Type.BOOLEAN)
-                              ? env.getLabel("//tools/objc:xctest_infoplist")
-                              : null;
-                        }
-                      })
-                  .allowedFileTypes(PLIST_TYPE))
+          A <code>objc_binary</code> target that contains the app bundle to test against in XCTest.
+          This attribute is only valid if <code>xctest</code> is true.
+          ${SYNOPSIS}
+          <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
+          .add(attr(IosTest.XCTEST_APP, LABEL)
+              .value(new Attribute.ComputedDefault(IosTest.IS_XCTEST) {
+                @Override
+                public Object getDefault(AttributeMap rule) {
+                  return rule.get(IosTest.IS_XCTEST, Type.BOOLEAN)
+                      ? env.getLabel("//tools/objc:xctest_app")
+                      : null;
+                }
+              })
+              .allowedFileTypes()
+              // TODO(bazel-team): Remove objc_binary once it stops exporting XcTestAppProvider.
+              .allowedRuleClasses("objc_binary", "ios_application"))
+          .override(attr("infoplist", LABEL)
+              .value(new Attribute.ComputedDefault(IosTest.IS_XCTEST) {
+                @Override
+                public Object getDefault(AttributeMap rule) {
+                  return rule.get(IosTest.IS_XCTEST, Type.BOOLEAN)
+                      ? env.getLabel("//tools/objc:xctest_infoplist")
+                      : null;
+                }
+              })
+              .allowedFileTypes(PLIST_TYPE))
           .build();
     }
     @Override

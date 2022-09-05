@@ -18,14 +18,12 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.BUNDLE_IMPOR
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DEFINE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FORCE_LOAD_FOR_XCODEGEN;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_DIR;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.GENERAL_RESOURCE_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.GENERAL_RESOURCE_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_DYLIB;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.WEAK_SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCASSETS_DIR;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCDATAMODEL;
 import static com.google.devtools.build.lib.rules.objc.XcodeProductType.LIBRARY_STATIC;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -103,6 +101,7 @@ public final class XcodeProvider implements TransitiveInfoProvider {
     private final NestedSetBuilder<Artifact> additionalSources = NestedSetBuilder.stableOrder();
     private final ImmutableList.Builder<XcodeProvider> extensions = new ImmutableList.Builder<>();
     private String architecture;
+    private ImmutableList.Builder<PathFragment> datamodelDirs = new ImmutableList.Builder<>();
     private boolean generateCompanionLibTarget = false;
     private ConfigurationDistinguisher configurationDistinguisher;
 
@@ -298,6 +297,11 @@ public final class XcodeProvider implements TransitiveInfoProvider {
       return this;
     }
 
+    public Builder addDatamodelDirs(Iterable<PathFragment> datamodelDirs) {
+      this.datamodelDirs.addAll(datamodelDirs);
+      return this;
+    }
+
     /**
      * Generates an extra LIBRARY_STATIC Xcode target with the same compilation artifacts. Dependent
      * Xcode targets will pick this companion library target as its dependency, rather than the
@@ -415,6 +419,7 @@ public final class XcodeProvider implements TransitiveInfoProvider {
   private final NestedSet<Artifact> additionalSources;
   private final ImmutableList<XcodeProvider> extensions;
   private final String architecture;
+  private final ImmutableList<PathFragment> datamodelDirs;
   private final boolean generateCompanionLibTarget;
   private final ConfigurationDistinguisher configurationDistinguisher;
 
@@ -441,6 +446,7 @@ public final class XcodeProvider implements TransitiveInfoProvider {
     this.additionalSources = builder.additionalSources.build();
     this.extensions = builder.extensions.build();
     this.architecture = Preconditions.checkNotNull(builder.architecture);
+    this.datamodelDirs = builder.datamodelDirs.build();
     this.generateCompanionLibTarget = builder.generateCompanionLibTarget;
     this.configurationDistinguisher =
         Preconditions.checkNotNull(builder.configurationDistinguisher);
@@ -521,39 +527,33 @@ public final class XcodeProvider implements TransitiveInfoProvider {
         .build();
 
     // TODO(bazel-team): Add provisioning profile information when Xcodegen supports it.
-    TargetControl.Builder targetControl =
-        TargetControl.newBuilder()
-            .setName(label.getName())
-            .setLabel(xcodeTargetName(label))
-            .setProductType(productType.getIdentifier())
-            .addAllImportedLibrary(Artifact.toExecPaths(objcProvider.get(IMPORTED_LIBRARY)))
-            .addAllUserHeaderSearchPath(userHeaderSearchPaths)
-            .addAllHeaderSearchPath(headerSearchPaths)
-            .addAllSupportFile(Artifact.toExecPaths(headers))
-            .addAllCopt(compilationModeCopts)
-            .addAllCopt(IosSdkCommands.DEFAULT_COMPILER_FLAGS)
-            .addAllCopt(Interspersing.prependEach("-D", objcProvider.get(DEFINE)))
-            .addAllCopt(copts)
-            .addAllLinkopt(
-                Interspersing.beforeEach("-force_load", objcProvider.get(FORCE_LOAD_FOR_XCODEGEN)))
-            .addAllLinkopt(IosSdkCommands.DEFAULT_LINKER_FLAGS)
-            .addAllLinkopt(
-                Interspersing.beforeEach(
-                    "-weak_framework", SdkFramework.names(objcProvider.get(WEAK_SDK_FRAMEWORK))))
-            .addAllBuildSetting(xcodeprojBuildSettings)
-            .addAllBuildSetting(IosSdkCommands.defaultWarningsForXcode())
-            .addAllSdkFramework(SdkFramework.names(objcProvider.get(SDK_FRAMEWORK)))
-            .addAllFramework(PathFragment.safePathStrings(objcProvider.get(FRAMEWORK_DIR)))
-            .addAllXcassetsDir(PathFragment.safePathStrings(objcProvider.get(XCASSETS_DIR)))
-            .addAllXcdatamodel(PathFragment.safePathStrings(
-                Xcdatamodels.datamodelDirs(objcProvider.get(XCDATAMODEL))))
-            .addAllBundleImport(PathFragment.safePathStrings(objcProvider.get(BUNDLE_IMPORT_DIR)))
-            .addAllSdkDylib(objcProvider.get(SDK_DYLIB))
-            .addAllGeneralResourceFile(
-                Artifact.toExecPaths(objcProvider.get(GENERAL_RESOURCE_FILE)))
-            .addAllGeneralResourceFile(
-                PathFragment.safePathStrings(objcProvider.get(GENERAL_RESOURCE_DIR)))
-            .addSupportFile(buildFilePath);
+    TargetControl.Builder targetControl = TargetControl.newBuilder()
+        .setName(label.getName())
+        .setLabel(xcodeTargetName(label))
+        .setProductType(productType.getIdentifier())
+        .addAllImportedLibrary(Artifact.toExecPaths(objcProvider.get(IMPORTED_LIBRARY)))
+        .addAllUserHeaderSearchPath(userHeaderSearchPaths)
+        .addAllHeaderSearchPath(headerSearchPaths)
+        .addAllSupportFile(Artifact.toExecPaths(headers))
+        .addAllCopt(compilationModeCopts)
+        .addAllCopt(IosSdkCommands.DEFAULT_COMPILER_FLAGS)
+        .addAllCopt(Interspersing.prependEach("-D", objcProvider.get(DEFINE)))
+        .addAllCopt(copts)
+        .addAllLinkopt(
+            Interspersing.beforeEach("-force_load", objcProvider.get(FORCE_LOAD_FOR_XCODEGEN)))
+        .addAllLinkopt(IosSdkCommands.DEFAULT_LINKER_FLAGS)
+        .addAllLinkopt(Interspersing.beforeEach(
+            "-weak_framework", SdkFramework.names(objcProvider.get(WEAK_SDK_FRAMEWORK))))
+        .addAllBuildSetting(xcodeprojBuildSettings)
+        .addAllBuildSetting(IosSdkCommands.defaultWarningsForXcode())
+        .addAllSdkFramework(SdkFramework.names(objcProvider.get(SDK_FRAMEWORK)))
+        .addAllFramework(PathFragment.safePathStrings(objcProvider.get(FRAMEWORK_DIR)))
+        .addAllXcassetsDir(PathFragment.safePathStrings(objcProvider.get(XCASSETS_DIR)))
+        .addAllXcdatamodel(PathFragment.safePathStrings(datamodelDirs))
+        .addAllBundleImport(PathFragment.safePathStrings(objcProvider.get(BUNDLE_IMPORT_DIR)))
+        .addAllSdkDylib(objcProvider.get(SDK_DYLIB))
+        .addAllGeneralResourceFile(Artifact.toExecPaths(objcProvider.get(GENERAL_RESOURCE_FILE)))
+        .addSupportFile(buildFilePath);
 
     if (CAN_LINK_PRODUCT_TYPES.contains(productType)) {
       for (XcodeProvider dependency : propagatedDependencies) {

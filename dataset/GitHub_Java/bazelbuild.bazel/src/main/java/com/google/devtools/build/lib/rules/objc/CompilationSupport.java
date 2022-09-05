@@ -20,7 +20,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FORCE_LOAD_L
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_CPP;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_SWIFT;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.HEADER;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE;
@@ -33,15 +32,12 @@ import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.CLANG_PLU
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.DSYMUTIL;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.NON_ARC_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SRCS_TYPE;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.STRIP;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SWIFT;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -52,9 +48,7 @@ import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.CompilationAttributes;
 import com.google.devtools.build.lib.rules.objc.XcodeProvider.Builder;
@@ -152,24 +146,17 @@ final class CompilationSupport {
     for (Artifact sourceFile : compilationArtifacts.getSrcs()) {
       Artifact objFile = intermediateArtifacts.objFile(sourceFile);
       objFiles.add(objFile);
-      if (ObjcRuleClasses.SWIFT_SOURCES.matches(sourceFile.getFilename())) {
-        registerSwiftCompileAction(sourceFile, objFile, intermediateArtifacts);
-      } else {
-        registerCompileAction(sourceFile, objFile, objcProvider, intermediateArtifacts,
-            compilationArtifacts, ImmutableList.of("-fobjc-arc"), isCodeCoverageEnabled);
-      }
+      registerCompileAction(sourceFile, objFile, compilationArtifacts.getPchFile(),
+          objcProvider, intermediateArtifacts, ImmutableList.of("-fobjc-arc"),
+          isCodeCoverageEnabled);
     }
     for (Artifact nonArcSourceFile : compilationArtifacts.getNonArcSrcs()) {
       Artifact objFile = intermediateArtifacts.objFile(nonArcSourceFile);
       objFiles.add(objFile);
-      registerCompileAction(nonArcSourceFile, objFile, objcProvider, intermediateArtifacts,
-          compilationArtifacts, ImmutableList.of("-fno-objc-arc"), isCodeCoverageEnabled);
+      registerCompileAction(nonArcSourceFile, objFile, compilationArtifacts.getPchFile(),
+          objcProvider, intermediateArtifacts, ImmutableList.of("-fno-objc-arc"),
+          isCodeCoverageEnabled);
     }
-
-    if (compilationArtifacts.hasSwiftSources()) {
-      registerSwiftModuleMergeAction(intermediateArtifacts, compilationArtifacts);
-    }
-
     for (Artifact archive : compilationArtifacts.getArchive().asSet()) {
       registerArchiveActions(intermediateArtifacts, objFiles, archive);
     }
@@ -178,15 +165,14 @@ final class CompilationSupport {
   private void registerCompileAction(
       Artifact sourceFile,
       Artifact objFile,
+      Optional<Artifact> pchFile,
       ObjcProvider objcProvider,
       IntermediateArtifacts intermediateArtifacts,
-      CompilationArtifacts compilationArtifacts,
       Iterable<String> otherFlags,
       boolean isCodeCoverageEnabled) {
     ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     ImmutableList.Builder<String> coverageFlags = new ImmutableList.Builder<>();
     ImmutableList.Builder<Artifact> gcnoFiles = new ImmutableList.Builder<>();
-    ImmutableList.Builder<Artifact> additionalInputs = new ImmutableList.Builder<>();
     if (isCodeCoverageEnabled) {
       coverageFlags.addAll(CLANG_COVERAGE_FLAGS);
       gcnoFiles.add(intermediateArtifacts.gcnoFile(sourceFile));
@@ -195,14 +181,6 @@ final class CompilationSupport {
     if (ObjcRuleClasses.CPP_SOURCES.matches(sourceFile.getExecPath())) {
       commandLine.add("-stdlib=libc++");
     }
-
-    if (compilationArtifacts.hasSwiftSources()) {
-      // Add the directory that contains merged TargetName-Swift.h header to search path, in case
-      // any of ObjC files use it.
-      commandLine.add("-I");
-      commandLine.addPath(intermediateArtifacts.swiftHeader().getExecPath().getParentDirectory());
-      additionalInputs.add(intermediateArtifacts.swiftHeader());
-    }
     commandLine
         .add(IosSdkCommands.compileFlagsForClang(objcConfiguration))
         .add(IosSdkCommands.commonLinkAndCompileFlagsForClang(
@@ -210,7 +188,7 @@ final class CompilationSupport {
         .add(objcConfiguration.getCoptsForCompilationMode())
         .addBeforeEachPath(
             "-iquote", ObjcCommon.userHeaderSearchPaths(ruleContext.getConfiguration()))
-        .addBeforeEachExecPath("-include", compilationArtifacts.getPchFile().asSet())
+        .addBeforeEachExecPath("-include", pchFile.asSet())
         .addBeforeEachPath("-I", objcProvider.get(INCLUDE))
         .add(otherFlags)
         .addFormatEach("-D%s", objcProvider.get(DEFINE))
@@ -226,114 +204,11 @@ final class CompilationSupport {
         .setExecutable(CLANG)
         .setCommandLine(commandLine.build())
         .addInput(sourceFile)
-        .addInputs(additionalInputs.build())
         .addOutput(objFile)
         .addOutputs(gcnoFiles.build())
         .addTransitiveInputs(objcProvider.get(HEADER))
         .addTransitiveInputs(objcProvider.get(FRAMEWORK_FILE))
-        .addInputs(compilationArtifacts.getPchFile().asSet())
-        .build(ruleContext));
-  }
-
-  /**
-   * Compiles a single swift file.
-   *
-   * @param sourceFile the artifact to compile
-   * @param objFile the resulting object artifact
-   */
-  private void registerSwiftCompileAction(
-      Artifact sourceFile,
-      Artifact objFile,
-      IntermediateArtifacts intermediateArtifacts) {
-    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
-
-    // Compiling a single swift file requires knowledge of all of the other
-    // swift files in the same module. The primary file ({@code sourceFile}) is
-    // compiled to an object file, while the remaining files are used to resolve
-    // symbols (they behave like c/c++ headers in this context).
-    ImmutableSet.Builder<Artifact> otherSwiftSourcesBuilder = ImmutableSet.builder();
-    for (Artifact otherSourceFile : compilationArtifacts(ruleContext).getSrcs()) {
-      if (ObjcRuleClasses.SWIFT_SOURCES.matches(otherSourceFile.getFilename())
-          && otherSourceFile != sourceFile) {
-        otherSwiftSourcesBuilder.add(otherSourceFile);
-      }
-    }
-    ImmutableSet<Artifact> otherSwiftSources = otherSwiftSourcesBuilder.build();
-
-    CustomCommandLine.Builder commandLine = new CustomCommandLine.Builder()
-        .add("-frontend")
-        .add("-emit-object")
-        .add("-target").add(IosSdkCommands.swiftTarget(objcConfiguration))
-        .add("-sdk").add(IosSdkCommands.sdkDir(objcConfiguration))
-        .add("-enable-objc-interop");
-
-    if (objcConfiguration.generateDebugSymbols()) {
-      commandLine.add("-g");
-    }
-
-    commandLine
-      .add("-Onone")
-      .add("-module-name").add(getModuleName())
-      .add("-parse-as-library")
-      .addExecPath("-primary-file", sourceFile)
-      .addExecPaths(otherSwiftSources)
-      .addExecPath("-o", objFile)
-      .addExecPath("-emit-module-path", intermediateArtifacts.swiftModuleFile(sourceFile));
-
-    // Add all ObjC headers to the compiler, in case Swift code is calling into Objc
-    // TODO(bazel-team): This can be augmented by an explicit bridging header field in the rule.
-    commandLine.addBeforeEachExecPath("-import-objc-header", attributes.hdrs());
-
-    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
-        .setMnemonic("SwiftCompile")
-        .setExecutable(SWIFT)
-        .setCommandLine(commandLine.build())
-        .addInput(sourceFile)
-        .addInputs(otherSwiftSources)
-        .addInputs(attributes.hdrs())
-        .addOutput(objFile)
-        .addOutput(intermediateArtifacts.swiftModuleFile(sourceFile))
-        .build(ruleContext));
-  }
-
-  /**
-   * Merges multiple .partial_swiftmodule files together. Also produces a swift header that can be
-   * used by Objective-C code.
-   */
-  private void registerSwiftModuleMergeAction(
-      IntermediateArtifacts intermediateArtifacts,
-      CompilationArtifacts compilationArtifacts) {
-    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
-
-    ImmutableList.Builder<Artifact> moduleFiles = new ImmutableList.Builder<>();
-    for (Artifact src : compilationArtifacts.getSrcs()) {
-      if (ObjcRuleClasses.SWIFT_SOURCES.matches(src.getFilename())) {
-        moduleFiles.add(intermediateArtifacts.swiftModuleFile(src));
-      }
-    }
-
-    CustomCommandLine.Builder commandLine = new CustomCommandLine.Builder();
-    commandLine.add("-frontend");
-    commandLine.add("-emit-module");
-    commandLine.add("-sdk").add(IosSdkCommands.sdkDir(objcConfiguration));
-    commandLine.add("-target").add(IosSdkCommands.swiftTarget(objcConfiguration));
-    if (objcConfiguration.generateDebugSymbols()) {
-      commandLine.add("-g");
-    }
-
-    commandLine.add("-module-name").add(getModuleName());
-    commandLine.add("-parse-as-library");
-    commandLine.addExecPaths(moduleFiles.build());
-    commandLine.addExecPath("-o", intermediateArtifacts.swiftModule());
-    commandLine.addExecPath("-emit-objc-header-path", intermediateArtifacts.swiftHeader());
-
-    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
-        .setMnemonic("SwiftModuleMerge")
-        .setExecutable(SWIFT)
-        .setCommandLine(commandLine.build())
-        .addInputs(moduleFiles.build())
-        .addOutput(intermediateArtifacts.swiftModule())
-        .addOutput(intermediateArtifacts.swiftHeader())
+        .addInputs(pchFile.asSet())
         .build(ruleContext));
   }
 
@@ -380,15 +255,8 @@ final class CompilationSupport {
   }
 
   /**
-   * Registers any actions necessary to link this rule and its dependencies.
-   *
-   * <p>Dsym bundle and breakpad files are generated if
-   * {@link ObjcConfiguration#generateDebugSymbols()} is set.
-   *
-   * <p>When Bazel flag {@code --compilation_mode=opt} is specified, additional optimizations
-   * will be performed on the linked binary: all-symbol stripping (using {@code /usr/bin/strip})
-   * and dead-code stripping (using linker flags: {@code -dead_strip} and
-   * {@code -no_dead_strip_inits_and_terms}).
+   * Registers any actions necessary to link this rule and its dependencies. Debug symbols are
+   * generated if {@link ObjcConfiguration#generateDebugSymbols()} is set.
    *
    * @param objcProvider common information about this rule's attributes and its dependencies
    * @param extraLinkArgs any additional arguments to pass to the linker
@@ -414,19 +282,8 @@ final class CompilationSupport {
 
   private void registerLinkAction(ObjcProvider objcProvider, ExtraLinkArgs extraLinkArgs,
       Iterable<Artifact> extraLinkInputs, Optional<Artifact> dsymBundle) {
-    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
-    IntermediateArtifacts intermediateArtifacts =
-        ObjcRuleClasses.intermediateArtifacts(ruleContext);
-    CompilationMode compilationMode = objcConfiguration.getCompilationMode();
-
-    // When compilation_mode=opt, the unstripped binary containing debug symbols is generated by the
-    // linker, which also needs the debug symbols for dead-code removal. The binary is also used to
-    // generate dSYM bundle if --objc_generate_debug_symbol is specified. A symbol strip action is
-    // later registered to strip the symbol table from the unstripped binary.
-    Artifact binaryToLink =
-        compilationMode == CompilationMode.OPT
-            ? intermediateArtifacts.unstrippedSingleArchitectureBinary()
-            : intermediateArtifacts.strippedSingleArchitectureBinary();
+    Artifact linkedBinary =
+        ObjcRuleClasses.intermediateArtifacts(ruleContext).singleArchitectureBinary();
 
     ImmutableList<Artifact> ccLibraries = ccLibraries(objcProvider);
     ruleContext.registerAction(
@@ -434,8 +291,8 @@ final class CompilationSupport {
             .setMnemonic("ObjcLink")
             .setShellCommand(ImmutableList.of("/bin/bash", "-c"))
             .setCommandLine(
-                linkCommandLine(extraLinkArgs, objcProvider, binaryToLink, dsymBundle, ccLibraries))
-            .addOutput(binaryToLink)
+                linkCommandLine(extraLinkArgs, objcProvider, linkedBinary, dsymBundle, ccLibraries))
+            .addOutput(linkedBinary)
             .addOutputs(dsymBundle.asSet())
             .addTransitiveInputs(objcProvider.get(LIBRARY))
             .addTransitiveInputs(objcProvider.get(IMPORTED_LIBRARY))
@@ -443,24 +300,6 @@ final class CompilationSupport {
             .addInputs(ccLibraries)
             .addInputs(extraLinkInputs)
             .build(ruleContext));
-
-    if (compilationMode == CompilationMode.OPT) {
-      // For test targets, only debug symbols are stripped off, since /usr/bin/strip is not able
-      // to strip off all symbols in XCTest bundle.
-      boolean isTestTarget = TargetUtils.isTestRule(ruleContext.getRule());
-      Iterable<String> stripArgs =
-          isTestTarget ? ImmutableList.of("-S") : ImmutableList.<String>of();
-      Artifact strippedBinary = intermediateArtifacts.strippedSingleArchitectureBinary();
-
-      ruleContext.registerAction(
-          ObjcRuleClasses.spawnOnDarwinActionBuilder()
-              .setMnemonic("ObjcBinarySymbolStrip")
-              .setExecutable(STRIP)
-              .setCommandLine(symbolStripCommandLine(stripArgs, binaryToLink, strippedBinary))
-              .addOutput(strippedBinary)
-              .addInput(binaryToLink)
-              .build(ruleContext));
-    }
   }
 
   private ImmutableList<Artifact> ccLibraries(ObjcProvider objcProvider) {
@@ -469,15 +308,6 @@ final class CompilationSupport {
       ccLibraryBuilder.add(libraryToLink.getArtifact());
     }
     return ccLibraryBuilder.build();
-  }
-
-  private static CommandLine symbolStripCommandLine(
-      Iterable<String> extraFlags, Artifact unstrippedArtifact, Artifact strippedArtifact) {
-    return CustomCommandLine.builder()
-        .add(extraFlags)
-        .addExecPath("-o", strippedArtifact)
-        .addPath(unstrippedArtifact.getExecPath())
-        .build();
   }
 
   private CommandLine linkCommandLine(ExtraLinkArgs extraLinkArgs,
@@ -494,20 +324,10 @@ final class CompilationSupport {
     } else {
       commandLine.addPath(CLANG);
     }
-
-    // Do not perform code stripping on tests because XCTest binary is linked not as an executable
-    // but as a bundle without any entry point.
-    boolean isTestTarget = TargetUtils.isTestRule(ruleContext.getRule());
-    if (objcConfiguration.getCompilationMode() == CompilationMode.OPT && !isTestTarget) {
-      commandLine.add("-dead_strip").add("-no_dead_strip_inits_and_terms");
-    }
-
     commandLine
         .add(IosSdkCommands.commonLinkAndCompileFlagsForClang(objcProvider, objcConfiguration))
-        .add("-Xlinker")
-        .add("-objc_abi_version")
-        .add("-Xlinker")
-        .add("2")
+        .add("-Xlinker").add("-objc_abi_version")
+        .add("-Xlinker").add("2")
         .add("-fobjc-link-runtime")
         .add(IosSdkCommands.DEFAULT_LINKER_FLAGS)
         .addBeforeEach("-framework", frameworkNames(objcProvider))
@@ -523,13 +343,6 @@ final class CompilationSupport {
 
     if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
       commandLine.add(LINKER_COVERAGE_FLAGS);
-    }
-
-    if (objcProvider.is(USES_SWIFT)) {
-      commandLine
-          .add("-L").add(IosSdkCommands.swiftLibDir(objcConfiguration))
-          .add("-Xlinker").add("-rpath")
-          .add("-Xlinker").add("@executable_path/Frameworks");
     }
 
     // Call to dsymutil for debug symbol generation must happen in the link action.
@@ -714,50 +527,22 @@ final class CompilationSupport {
   private CompilationSupport registerDsymActions() {
     IntermediateArtifacts intermediateArtifacts =
         ObjcRuleClasses.intermediateArtifacts(ruleContext);
-    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
-    CompilationMode compilationMode = objcConfiguration.getCompilationMode();
-
     Artifact dsymBundle = intermediateArtifacts.dsymBundle();
-    Artifact linkedBinary =
-        compilationMode == CompilationMode.OPT
-            ? intermediateArtifacts.unstrippedSingleArchitectureBinary()
-            : intermediateArtifacts.strippedSingleArchitectureBinary();
     Artifact debugSymbolFile = intermediateArtifacts.dsymSymbol();
-    Artifact dsymPlist = intermediateArtifacts.dsymPlist();
-
-    PathFragment dsymOutputDir =
-        replaceSuffix(
-            dsymBundle.getExecPath(), IntermediateArtifacts.TMP_DSYM_BUNDLE_SUFFIX, ".app.dSYM");
-    PathFragment dsymPlistZipEntry = dsymPlist.getExecPath().relativeTo(dsymOutputDir);
-    PathFragment debugSymbolFileZipEntry =
-        debugSymbolFile
-            .getExecPath()
-            .replaceName(linkedBinary.getFilename())
-            .relativeTo(dsymOutputDir);
-
-    StringBuilder unzipDsymCommand = new StringBuilder();
-    unzipDsymCommand
-        .append(
-            String.format(
-                "unzip -p %s %s > %s",
-                dsymBundle.getExecPathString(),
-                dsymPlistZipEntry,
-                dsymPlist.getExecPathString()))
-        .append(
-            String.format(
-                " && unzip -p %s %s > %s",
-                dsymBundle.getExecPathString(),
-                debugSymbolFileZipEntry,
-                debugSymbolFile.getExecPathString()));
-
-    ruleContext.registerAction(
-        new SpawnAction.Builder()
-            .setMnemonic("UnzipDsym")
-            .setShellCommand(unzipDsymCommand.toString())
-            .addInput(dsymBundle)
-            .addOutput(dsymPlist)
-            .addOutput(debugSymbolFile)
-            .build(ruleContext));
+    ruleContext.registerAction(new SpawnAction.Builder()
+        .setMnemonic("UnzipDsym")
+        .setProgressMessage("Unzipping dSYM file: " + ruleContext.getLabel())
+        .setExecutable(new PathFragment("/usr/bin/unzip"))
+        .addInput(dsymBundle)
+        .setCommandLine(CustomCommandLine.builder()
+            .add(dsymBundle.getExecPathString())
+            .add("-d")
+            .add(stripSuffix(dsymBundle.getExecPathString(),
+                IntermediateArtifacts.TMP_DSYM_BUNDLE_SUFFIX) + ".app.dSYM")
+            .build())
+        .addOutput(intermediateArtifacts.dsymPlist())
+        .addOutput(debugSymbolFile)
+        .build(ruleContext));
 
     Artifact dumpsyms = ruleContext.getPrerequisiteArtifact(":dumpsyms", Mode.HOST);
     Artifact breakpadFile = intermediateArtifacts.breakpadSym();
@@ -776,20 +561,8 @@ final class CompilationSupport {
     return this;
   }
 
-  private PathFragment replaceSuffix(PathFragment path, String suffix, String newSuffix) {
+  private String stripSuffix(String str, String suffix) {
     // TODO(bazel-team): Throw instead of returning null?
-    String name = path.getBaseName();
-    if (name.endsWith(suffix)) {
-      return path.replaceName(name.substring(0, name.length() - suffix.length()) + newSuffix);
-    } else {
-      return null;
-    }
-  }
-
-  /**
-   * Returns the name of Swift module for this target.
-   */
-  private String getModuleName() {
-    return ruleContext.getLabel().getName();
+    return str.endsWith(suffix) ? str.substring(0, str.length() - suffix.length()) : null;
   }
 }

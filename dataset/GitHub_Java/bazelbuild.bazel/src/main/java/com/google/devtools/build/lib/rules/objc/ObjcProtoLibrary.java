@@ -230,7 +230,7 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
       }
       PathFragment rawFragment = new PathFragment(
           rootRelativeOutputDir,
-          proto.getRootRelativePath().getParentDirectory(),
+          proto.getExecPath().getParentDirectory(),
           new PathFragment(protoOutputName));
       @Nullable PathFragment outputFile = FileSystemUtils.replaceExtension(
           rawFragment,

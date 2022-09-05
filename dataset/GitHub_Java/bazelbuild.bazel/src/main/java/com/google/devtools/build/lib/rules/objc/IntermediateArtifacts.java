@@ -119,21 +119,10 @@ final class IntermediateArtifacts {
 
   /**
    * The artifact which is the binary (or library) which is comprised of one or more .a files linked
-   * together. Compared to the artifact returned by {@link #unstrippedSingleArchitectureBinary},
-   * this artifact is stripped of symbol table when --compilation_mode=opt is specified.
+   * together.
    */
-  public Artifact strippedSingleArchitectureBinary() {
+  public Artifact singleArchitectureBinary() {
     return appendExtension("_bin");
-  }
-
-  /**
-   * The artifact which is the binary (or library) which is comprised of one or more .a files linked
-   * together. It also contains full debug symbol information, compared to the artifact returned
-   * by {@link #strippedSingleArchitectureBinary}. This artifact will serve as input for the symbol
-   * strip action and is only created when --compilation_mode=opt is specified.
-   */
-  public Artifact unstrippedSingleArchitectureBinary() {
-    return appendExtension("_bin_unstripped");
   }
 
   /**
@@ -194,28 +183,6 @@ final class IntermediateArtifacts {
   }
 
   /**
-   * The swift module produced by compiling the {@code source} artifact.
-   */
-  public Artifact swiftModuleFile(Artifact source) {
-    return analysisEnvironment.getDerivedArtifact(inUniqueObjsDir(source, ".partial_swiftmodule"),
-        binDirectory);
-  }
-
-  /**
-   * Integrated swift module for this target.
-   */
-  public Artifact swiftModule() {
-    return appendExtension(".swiftmodule");
-  }
-
-  /**
-   * Integrated swift header for this target.
-   */
-  public Artifact swiftHeader() {
-    return appendExtension("-Swift.h");
-  }
-
-  /**
    * The artifact for the .gcno file that should be generated when compiling the {@code source}
    * artifact.
    */
@@ -266,14 +233,6 @@ final class IntermediateArtifacts {
   public Artifact compiledXibFileZip(Artifact originalFile) {
     return appendExtension(
         "/" + FileSystemUtils.replaceExtension(originalFile.getExecPath(), ".nib.zip"));
-  }
-
-  /**
-   * Returns the artifact which is the output of running swift-stdlib-tool and copying resulting
-   * dylibs.
-   */
-  public Artifact swiftFrameworksFileZip() {
-    return appendExtension(".swiftstdlib.zip");
   }
 
   /**

@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.TargetControl;
@@ -77,9 +76,6 @@ public final class ObjcProvider implements TransitiveInfoProvider {
    */
   public static final Key<String> FORCE_LOAD_FOR_XCODEGEN = new Key<>(LINK_ORDER);
 
-  /**
-   * Contains all header files. These may be either public or private headers.
-   */
   public static final Key<Artifact> HEADER = new Key<>(STABLE_ORDER);
 
   /**
@@ -94,7 +90,7 @@ public final class ObjcProvider implements TransitiveInfoProvider {
 
   /**
    * Contains all .gcno files one for every source file if in coverage mode.
-   * It contains information to reconstruct the basic block graphs and assign source line numbers
+   * It contains information to reconstruct the basic block graphs and assign source line numbers 
    * to blocks.
    */
   public static final Key<Artifact> GCNO = new Key<>(STABLE_ORDER);
@@ -104,11 +100,6 @@ public final class ObjcProvider implements TransitiveInfoProvider {
    * paths (and distinct from <em>user</em> header search paths).
    */
   public static final Key<PathFragment> INCLUDE = new Key<>(LINK_ORDER);
-
-  /**
-   * Include search paths specified with {@code -isystem} on the command line.
-   */
-  public static final Key<PathFragment> INCLUDE_SYSTEM = new Key<>(LINK_ORDER);
 
   /**
    * Key for values in {@code defines} attributes. These are passed as {@code -D} flags to all
@@ -122,13 +113,6 @@ public final class ObjcProvider implements TransitiveInfoProvider {
    * Added to {@link TargetControl#getGeneralResourceFileList()} when running Xcodegen.
    */
   public static final Key<Artifact> GENERAL_RESOURCE_FILE = new Key<>(STABLE_ORDER);
-
-  /**
-   * Resource directories added to {@link TargetControl#getGeneralResourceFileList()} when running
-   * Xcodegen. When copying files inside resource directories to the app bundle, XCode will preserve
-   * the directory structures of the copied files.
-   */
-  public static final Key<PathFragment> GENERAL_RESOURCE_DIR = new Key<>(STABLE_ORDER);
 
   /**
    * Exec paths of {@code .bundle} directories corresponding to imported bundles to link.
@@ -149,19 +133,6 @@ public final class ObjcProvider implements TransitiveInfoProvider {
   public static final Key<SdkFramework> WEAK_SDK_FRAMEWORK = new Key<>(STABLE_ORDER);
   public static final Key<Artifact> XCDATAMODEL = new Key<>(STABLE_ORDER);
   public static final Key<Flag> FLAG = new Key<>(STABLE_ORDER);
-
-  /**
-   * Clang module maps, used to enforce proper use of private header files.
-   */
-  public static final Key<Artifact> MODULE_MAP = new Key<>(STABLE_ORDER);
-
-  /**
-   * Information about this provider's module map, in the form of a {@link CppModuleMap}. This
-   * is intransitive, and can be used to get just the target's module map to pass to clang or to
-   * get the module maps for direct but not transitive dependencies. You should only add module maps
-   * for this key using {@link Builder#addWithoutPropagating}.
-   */
-  public static final Key<CppModuleMap> TOP_LEVEL_MODULE_MAP = new Key<>(STABLE_ORDER);
 
   /**
    * Merge zips to include in the bundle. The entries of these zip files are included in the final
@@ -228,19 +199,7 @@ public final class ObjcProvider implements TransitiveInfoProvider {
      * Indicates that C++ (or Objective-C++) is used in any source file. This affects how the linker
      * is invoked.
     */
-    USES_CPP,
-
-    /**
-     * Indicates that Swift source files are present. This affects bundling, compiling and linking
-     * actions.
-     */
-    USES_SWIFT,
-
-    /**
-     * Indicates that the resulting bundle will have embedded frameworks. This affects linking step.
-     */
-    USES_FRAMEWORKS
-
+    USES_CPP;
   }
 
   private final ImmutableMap<Key<?>, NestedSet<?>> items;
@@ -301,10 +260,9 @@ public final class ObjcProvider implements TransitiveInfoProvider {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private void uncheckedAddAll(Key key, Iterable toAdd, boolean propagate) {
-      Map<Key<?>, NestedSetBuilder<?>> set = propagate ? items : nonPropagatedItems;
-      maybeAddEmptyBuilder(set, key);
-      set.get(key).addAll(toAdd);
+    private void uncheckedAddAll(Key key, Iterable toAdd) {
+      maybeAddEmptyBuilder(items, key);
+      items.get(key).addAll(toAdd);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -357,7 +315,7 @@ public final class ObjcProvider implements TransitiveInfoProvider {
     /**
      * Add elements from providers, but don't propagate them to any dependers on this ObjcProvider.
      * These elements will be exposed to {@link #get(Key)} calls, but not to any ObjcProviders
-     * which add this provider to themselves.
+     * which add this provider to themself.
      */
     public Builder addTransitiveWithoutPropagating(Iterable<ObjcProvider> providers) {
       for (ObjcProvider provider : providers) {
@@ -372,7 +330,7 @@ public final class ObjcProvider implements TransitiveInfoProvider {
      * Add element, and propagate it to any (transitive) dependers on this ObjcProvider.
      */
     public <E> Builder add(Key<E> key, E toAdd) {
-      uncheckedAddAll(key, ImmutableList.of(toAdd), true);
+      uncheckedAddAll(key, ImmutableList.of(toAdd));
       return this;
     }
 
@@ -380,17 +338,7 @@ public final class ObjcProvider implements TransitiveInfoProvider {
      * Add elements in toAdd, and propagate them to any (transitive) dependers on this ObjcProvider.
      */
     public <E> Builder addAll(Key<E> key, Iterable<? extends E> toAdd) {
-      uncheckedAddAll(key, toAdd, true);
-      return this;
-    }
-
-    /**
-     * Add element, but don't propagate dependers on this ObjcProvider. These elements will be
-     * exposed to {@link #get(Key)} calls, but not to any ObjcProviders which add this provider to
-     * themselves.
-     */
-    public <E> Builder addWithoutPropagating(Key<E> key, E toAdd) {
-      uncheckedAddAll(key, ImmutableList.of(toAdd), false);
+      uncheckedAddAll(key, toAdd);
       return this;
     }
 
