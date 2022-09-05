@@ -126,12 +126,7 @@ public class StyleableXmlResourceValue implements XmlResourceValue {
       } else {
         // Make a reference to the attr.
         definition =
-            definition
-                .startTag("attr")
-                .attribute("name")
-                .setTo(entry.getKey())
-                .closeUnaryTag()
-                .addCharactersOf("\n");
+            definition.startTag("attr").attribute("name").setTo(entry.getKey()).closeUnaryTag();
       }
     }
     definition.endTag().save();

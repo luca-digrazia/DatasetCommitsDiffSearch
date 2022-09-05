@@ -18,6 +18,7 @@ import static com.google.common.base.Predicates.not;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
+import com.google.common.base.Joiner;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.FluentIterable;
@@ -312,10 +313,7 @@ public class AttrXmlResourceValue implements XmlResourceValue {
               .derivedFrom(source)
               .startTag("attr")
               .named(key)
-              .optional()
-              .attribute("format")
-              .setFrom(formatKeys)
-              .joinedBy("|")
+              .optional().attribute("format").setTo(Joiner.on("|").join(formatKeys))
               .closeTag();
       for (ResourceXmlAttrValue value : formats.values()) {
         definition = value.writeTo(definition);

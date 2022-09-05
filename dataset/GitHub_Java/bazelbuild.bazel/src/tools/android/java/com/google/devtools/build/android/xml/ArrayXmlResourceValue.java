@@ -127,13 +127,7 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
         .addAttributesFrom(attributes.entrySet())
         .closeTag();
     for (String value : values) {
-      definition =
-          definition
-              .startItemTag()
-              .closeTag()
-              .addCharactersOf(value)
-              .endTag()
-              .addCharactersOf("\n");
+      definition = definition.startItemTag().closeTag().addCharactersOf(value).endTag();
     }
     definition.endTag().save();
   }
