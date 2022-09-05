@@ -9,7 +9,6 @@ import org.nlpcn.es4sql.domain.Where;
 import org.nlpcn.es4sql.domain.Where.CONN;
 import org.nlpcn.es4sql.exception.SqlParseException;
 
-import com.alibaba.druid.sql.SQLUtils;
 import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.SQLOrderBy;
 import com.alibaba.druid.sql.ast.expr.SQLBetweenExpr;
@@ -20,7 +19,6 @@ import com.alibaba.druid.sql.ast.expr.SQLInListExpr;
 import com.alibaba.druid.sql.ast.expr.SQLMethodInvokeExpr;
 import com.alibaba.druid.sql.ast.expr.SQLNullExpr;
 import com.alibaba.druid.sql.ast.expr.SQLNumericLiteralExpr;
-import com.alibaba.druid.sql.ast.expr.SQLPropertyExpr;
 import com.alibaba.druid.sql.ast.expr.SQLQueryExpr;
 import com.alibaba.druid.sql.ast.statement.SQLSelectGroupByClause;
 import com.alibaba.druid.sql.ast.statement.SQLSelectItem;
@@ -33,13 +31,13 @@ import com.alibaba.druid.sql.dialect.mysql.ast.statement.MySqlSelectQueryBlock.L
  * es sql support
  * 
  * @author ansj
- * 
+ *
  */
 public class SqlParser {
 
 	public SqlParser() {
 	};
-
+	
 	public Select parseSelect(SQLQueryExpr mySqlExpr) throws SqlParseException {
 
 		MySqlSelectQueryBlock query = (MySqlSelectQueryBlock) mySqlExpr.getSubQuery().getQuery();
@@ -73,7 +71,7 @@ public class SqlParser {
 	}
 
 	private boolean isCond(SQLBinaryOpExpr expr) {
-		return expr.getLeft() instanceof SQLIdentifierExpr || expr.getLeft() instanceof SQLPropertyExpr;
+		return expr.getLeft() instanceof SQLIdentifierExpr;
 	}
 
 	private void parseWhere(SQLExpr expr, Where where) throws SqlParseException {
@@ -213,7 +211,7 @@ public class SqlParser {
 		String[] split = from.toString().split(",");
 
 		for (String string : split) {
-			select.addIndexAndType(string.replace(" ", "").trim());
+			select.addIndexAndType(string.trim());
 		}
 	}
 

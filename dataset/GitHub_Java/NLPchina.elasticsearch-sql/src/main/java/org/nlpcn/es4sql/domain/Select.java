@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
+import com.alibaba.druid.util.StringUtils;
+
 /**
  * 将sql语句转换为select 对象
  * 
@@ -11,11 +13,11 @@ import java.util.List;
  */
 public class Select {
 
-	private List<Index> indexs = new ArrayList<>();
-	private List<Field> fields = new ArrayList<>();
+	private List<Index> indexs = new LinkedList<>();
+	private List<Field> fields = new LinkedList<>();
 	private Where where = null;
-	private List<Field> groupBys = new ArrayList<>();
-	private List<Order> orderBys = new ArrayList<>();
+	private List<Field> groupBys = new LinkedList<>();
+	private List<Order> orderBys = new LinkedList<>();
 	private int offset;
 	private int rowCount = Integer.MAX_VALUE;
 
@@ -43,7 +45,7 @@ public class Select {
 	}
 
 	public void addIndexAndType(String from) {
-		if (from == null || from.trim().length() == 0) {
+		if (StringUtils.isEmpty(from)) {
 			return;
 		}
 		indexs.add(new Index(from));
@@ -98,7 +100,7 @@ public class Select {
 		Index index = null;
 		for (int i = 0; i < indexs.size(); i++) {
 			index = indexs.get(i);
-			if (index.getType() != null && index.getType().trim().length() > 0) {
+			if (index.getType() != null && !"*".equals(index.getType())) {
 				list.add(index.getType());
 			}
 		}
@@ -123,7 +125,7 @@ public class Select {
 			case "AVG":
 			case "TOPHITS":
 			case "COUNT":
-				if (!"*".equals(((MethodField) field).getParams().get(0).toString())) {
+				if(!"*".equals(((MethodField) field).getParams().get(0).toString())){
 					isAgg = true;
 				}
 			}

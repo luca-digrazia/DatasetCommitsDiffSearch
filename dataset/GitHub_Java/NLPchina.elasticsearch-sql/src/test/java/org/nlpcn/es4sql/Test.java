@@ -20,12 +20,10 @@ import com.alibaba.fastjson.JSONObject;
 
 public class Test {
 	public static void main(String[] args) throws IOException, SqlParseException, ParseException {
-		System.out.println(System.currentTimeMillis()-8*60*3600);
-		System.out.println(System.currentTimeMillis()-7*60*3600);
-//		SearchDao searchDao = new SearchDao("ky_ESearch", "172.21.19.57", 9300);
-//		String sql = "SELECT COUNT(DISTINCT path) FROM adlog group by path limit 3 order by COUNT(DISTINCT path)";
-//		ActionResponse select = searchDao.execute(sql);
-//		System.out.println(select);
+		SearchDao searchDao = new SearchDao("ky_ESearch", "172.21.19.57", 9300);
+		String sql = "SELECT COUNT(DISTINCT path) FROM adlog group by path limit 3 order by COUNT(DISTINCT path)";
+		ActionResponse select = searchDao.execute(sql);
+		System.out.println(select);
 	}
 
 	public static void importData() throws IOException {
