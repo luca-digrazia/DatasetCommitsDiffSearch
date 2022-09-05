@@ -11,7 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.converter.AbstractHttpMessageConverter;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.converter.HttpMessageNotWritableException;
-import org.hsweb.commons.StringUtils;
+import org.webbuilder.utils.common.StringUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -73,13 +73,12 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
                 baos.write(buf, 0, len);
             }
         }
+
         byte[] bytes = baos.toByteArray();
-        if (clazz == String.class) return new String(bytes);
         return JSON.parseObject(bytes, 0, bytes.length, charset.newDecoder(), clazz);
     }
 
     public String converter(Object obj) {
-        if (obj instanceof String) return (String) obj;
         String text;
         if (obj instanceof ResponseMessage) {
             ResponseMessage message = (ResponseMessage) obj;

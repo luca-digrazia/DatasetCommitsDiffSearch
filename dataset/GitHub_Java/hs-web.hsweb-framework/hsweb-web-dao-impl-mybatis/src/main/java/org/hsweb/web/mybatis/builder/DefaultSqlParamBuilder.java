@@ -4,8 +4,6 @@ import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.PropertyUtilsBean;
 import org.apache.ibatis.mapping.ResultMap;
 import org.apache.ibatis.mapping.ResultMapping;
-import org.hsweb.commons.DateTimeUtils;
-import org.hsweb.commons.StringUtils;
 import org.hsweb.ezorm.meta.FieldMetaData;
 import org.hsweb.ezorm.param.Term;
 import org.hsweb.ezorm.render.Dialect;
@@ -14,6 +12,8 @@ import org.hsweb.web.bean.common.QueryParam;
 import org.hsweb.web.bean.common.UpdateParam;
 import org.hsweb.web.mybatis.utils.ResultMapsUtils;
 import org.hsweb.web.mybatis.utils.SqlAppender;
+import org.webbuilder.utils.common.DateTimeUtils;
+import org.webbuilder.utils.common.StringUtils;
 
 import java.sql.JDBCType;
 import java.sql.SQLException;
@@ -24,20 +24,21 @@ import java.util.*;
  */
 public class DefaultSqlParamBuilder {
 
+    public String getQuoteStart() {
+        return "\"";
+    }
+
+    public String getQuoteEnd() {
+        return "\"";
+    }
+
     public Dialect getDialect() {
         return Dialect.ORACLE;
     }
 
-    public boolean filedToUpperCase() {
-        return true;
-    }
-
     protected static final Map<Class, String> simpleName = new HashMap<>();
-
     private static DefaultSqlParamBuilder instance = new DefaultSqlParamBuilder();
-
-    protected PropertyUtilsBean propertyUtils = BeanUtilsBean.getInstance().getPropertyUtils();
-
+   protected PropertyUtilsBean propertyUtils = BeanUtilsBean.getInstance().getPropertyUtils();
     public DefaultSqlParamBuilder() {
         simpleName.put(Integer.class, "int");
         simpleName.put(Byte.class, "byte");
@@ -60,15 +61,6 @@ public class DefaultSqlParamBuilder {
 
     public static DefaultSqlParamBuilder instance() {
         return instance;
-    }
-
-    public String encodeFiled(String field) {
-        if (field.contains(".")) {
-            String[] tmp = field.split("[.]");
-            return tmp[0] + "." + getDialect().getQuoteStart() + (filedToUpperCase() ? (tmp[1].toUpperCase()) : tmp[1]) + getDialect().getQuoteEnd();
-        } else {
-            return getDialect().getQuoteStart() + (filedToUpperCase() ? (field.toUpperCase()) : field) + getDialect().getQuoteEnd();
-        }
     }
 
     public KeyWordMapper getKeyWordMapper(String type) {
@@ -132,10 +124,7 @@ public class DefaultSqlParamBuilder {
             listData = Arrays.asList(param.getData());
         }
         param.setData(listData);
-        String fields = mappings.keySet().stream()
-                .map(str -> new SqlAppender().add(encodeFiled(str), "").toString())
-                .reduce((f1, f2) -> new SqlAppender().add(f1, ",", f2)
-                        .toString()).get();
+        String fields = mappings.keySet().stream().reduce((f1, f2) -> f1 + "," + f2).get();
         //批量
         int size = listData.size();
         SqlAppender batchSql = new SqlAppender();
@@ -175,11 +164,11 @@ public class DefaultSqlParamBuilder {
             if (!appender.isEmpty())
                 appender.add(",");
             if (!k.contains(".") || k.split("[.]")[0].equals(tableName)) {
-                appender.add(tableName, ".", encodeFiled(k), " as ");
+                appender.add(tableName, ".", k, " as ");
             } else {
-                appender.add(encodeFiled(k), " as ");
+                appender.add(k, " as ");
             }
-            appender.addEdSpc(getDialect().getQuoteStart(), k, getDialect().getQuoteEnd());
+            appender.addEdSpc(getQuoteStart(), k, getQuoteEnd());
         });
         if (appender.isEmpty()) return "*";
         return appender.toString();
@@ -198,7 +187,7 @@ public class DefaultSqlParamBuilder {
                     if (!appender.isEmpty())
                         appender.add(",");
                     Map<String, Object> config = ((Map) fieldConfig.get(k));
-                    appender.add(encodeFiled(k), "=", "#{data.", v);
+                    appender.add(k, "=", "#{data.", v);
                     if (config != null) {
                         Object jdbcType = config.get("jdbcType"),
                                 javaType = config.get("javaType");
@@ -371,6 +360,31 @@ public class DefaultSqlParamBuilder {
                 break;
         }
         return value;
+    }
+
+    protected List<Object> param2list(Object value) {
+        if (value == null) return new ArrayList<>();
+        if (!(value instanceof Iterable)) {
+            if (value instanceof String) {
+                String[] arr = ((String) value).split("[, ;]");
+                Object[] objArr = new Object[arr.length];
+                for (int i = 0; i < arr.length; i++) {
+                    String str = arr[i];
+                    Object val = str;
+                    if (StringUtils.isInt(str))
+                        val = StringUtils.toInt(str);
+                    else if (StringUtils.isDouble(str))
+                        val = StringUtils.toDouble(str);
+                    objArr[i] = val;
+                }
+                return Arrays.asList(objArr);
+            } else if (value.getClass().isArray()) {
+                return Arrays.asList(((Object[]) value));
+            } else {
+                return Arrays.asList(value);
+            }
+        }
+        return new ArrayList<>();
     }
 
     public interface KeyWordMapper {

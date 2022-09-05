@@ -1,11 +1,9 @@
 package org.hsweb.web.bean.po;
 
 
-import org.hsweb.commons.MD5;
-import org.hsweb.web.bean.po.module.Module;
+import org.webbuilder.utils.common.MD5;
 
 import java.io.Serializable;
-import java.lang.reflect.Field;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -14,7 +12,7 @@ import java.util.UUID;
  * 通用的PO对象，实现基本的属性和方法。新建的PO都应继承该类
  * Created by 浩 on 2015-07-20 0020.
  */
-public class GenericPo<PK> implements Serializable, Cloneable {
+public class GenericPo<PK> implements Serializable {
     private static final long serialVersionUID = 9197157871004374522L;
     /**
      * 主键
@@ -61,6 +59,7 @@ public class GenericPo<PK> implements Serializable, Cloneable {
     /**
      * 创建一个主键
      *
+     * @return
      */
     public static String createUID() {
         return MD5.encode(UUID.randomUUID().toString());
@@ -72,21 +71,5 @@ public class GenericPo<PK> implements Serializable, Cloneable {
 
     public void setProperties(Map<String, Object> properties) {
         this.properties = properties;
-    }
-
-    public interface Property {
-        /**
-         * 主键
-         *
-         * @see GenericPo#id
-         */
-        String id = "id";
-
-        /**
-         * 其他属性
-         *
-         * @see GenericPo#properties
-         */
-        String properties = "properties";
     }
 }
