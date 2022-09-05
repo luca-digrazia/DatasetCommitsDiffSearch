@@ -21,6 +21,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -157,11 +158,7 @@ public class InstrumentedHandlerTest {
             switch (path) {
                 case "/blocking":
                     request.setHandled(true);
-                    try {
-                        Thread.sleep(100);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
+                    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(1));
                     httpServletResponse.setStatus(200);
                     httpServletResponse.setContentType("text/plain");
                     httpServletResponse.getWriter().write("some content from the blocking request\n");
@@ -170,11 +167,7 @@ public class InstrumentedHandlerTest {
                     request.setHandled(true);
                     final AsyncContext context = request.startAsync();
                     Thread t = new Thread(() -> {
-                        try {
-                            Thread.sleep(100);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
+                        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(1));
                         httpServletResponse.setStatus(200);
                         httpServletResponse.setContentType("text/plain");
                         final ServletOutputStream servletOutputStream;
