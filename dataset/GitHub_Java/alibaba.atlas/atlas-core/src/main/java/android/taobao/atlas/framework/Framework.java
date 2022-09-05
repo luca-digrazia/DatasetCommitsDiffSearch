@@ -245,8 +245,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import android.os.*;
-import android.widget.Toast;
-
 import java.util.zip.ZipEntry;
 
 import static android.os.Environment.MEDIA_UNKNOWN;
@@ -503,8 +501,7 @@ public final class Framework {
             File[] externalStorages = getExternalFilesDirs(RuntimeVariables.androidApplication,"storage");
             if(externalStorages!=null && externalStorages.length>0){
                 for(File tmpDir : externalStorages){
-                    if(tmpDir!=null && new File(tmpDir,location+File.separator+bundleUniqueTag).exists() &&
-                            getStorageState(tmpDir).equals(Environment.MEDIA_MOUNTED)) {
+                    if(tmpDir!=null && new File(tmpDir,location+File.separator+bundleUniqueTag).exists() && getStorageState(tmpDir).equals(Environment.MEDIA_MOUNTED)) {
                         bundleDir = new File(tmpDir,location);
                         break;
                     }
@@ -605,16 +602,14 @@ public final class Framework {
         }
         updateHappend = true;
         for (int i = 0; i < locations.length; i++) {
+            if (locations[i] == null || files[i] == null) {
+                continue;
+            }
             //reset
             if(upgrade && newBundleTag[i].equals("-1")){
                 continue;
             }else if(!upgrade && dexPatchVersions[i]==-1){
                 updateBundles.put(locations[i],"-1");
-                continue;
-            }
-
-            if (locations[i] == null || files[i] == null) {
-                continue;
             }
 
             File bundleDir = null;
@@ -641,16 +636,7 @@ public final class Framework {
                     // Hold the storage file lock
                     AtlasFileLock.getInstance().LockExclusive(bundleDir);
                     if(upgrade) {
-                        BundleListing.BundleInfo info = AtlasBundleInfoManager.instance().getBundleInfo(locations[i]);
-                        if(info!=null && info.getUnique_tag().equals(newBundleTag[i])){
-                            Log.e("Framework",locations[i]+" unitTag is same as before,it maybe a mistake");
-                            if(Framework.isDeubgMode()){
-                                Toast.makeText(RuntimeVariables.androidApplication,locations[i]+" unitTag is same as before,it maybe a mistake",Toast.LENGTH_LONG).show();
-                            }
-                            continue;
-                        }
                         new BundleImpl(bundleDir, locations[i], null, files[i], newBundleTag[i], false, -1);
-
                     }else{
                         new BundleImpl(bundleDir, locations[i], null, files[i],null, false,dexPatchVersions[i]);
                     }

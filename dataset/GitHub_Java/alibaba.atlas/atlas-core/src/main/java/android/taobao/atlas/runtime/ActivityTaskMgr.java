@@ -267,7 +267,6 @@ public class ActivityTaskMgr {
         if(sReminderDialog!=null && sReminderDialog.getContext()==activity){
             try{
                 sReminderDialog.dismiss();
-                sReminderDialog = null;
             }catch (Throwable e){}
         }
         for(int x=0; x<activityList.size(); x++){
