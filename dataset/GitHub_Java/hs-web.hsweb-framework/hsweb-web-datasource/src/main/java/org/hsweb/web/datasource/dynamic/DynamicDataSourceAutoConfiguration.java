@@ -24,15 +24,14 @@ import com.atomikos.jdbc.AtomikosDataSourceBean;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
-import org.aspectj.lang.reflect.MethodSignature;
-import org.hsweb.commons.ClassUtils;
 import org.hsweb.commons.StringUtils;
 import org.hsweb.web.core.datasource.DataSourceHolder;
 import org.hsweb.web.core.datasource.DynamicDataSource;
-import org.hsweb.web.core.utils.AopUtils;
+import org.hsweb.web.core.exception.AuthorizeForbiddenException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.transaction.jta.JtaAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.jta.atomikos.AtomikosProperties;
 import org.springframework.cache.annotation.Cacheable;
@@ -44,7 +43,6 @@ import org.springframework.transaction.jta.JtaTransactionManager;
 
 import javax.sql.DataSource;
 import javax.transaction.SystemException;
-import java.lang.annotation.Annotation;
 import java.util.Properties;
 
 @Configuration
@@ -125,40 +123,23 @@ public class DynamicDataSourceAutoConfiguration {
 
     @Aspect
     public static class AnnotationDataSourceChangeConfiguration {
-
-        private <T extends Annotation> T getAnn(ProceedingJoinPoint pjp, Class<T> annClass) {
-            MethodSignature signature = (MethodSignature) pjp.getSignature();
-            T ann = ClassUtils.getAnnotation(signature.getMethod(), annClass);
-            if (null == ann)
-                ann = ClassUtils.getAnnotation(pjp.getTarget().getClass(), annClass);
-            return ann;
-        }
-
-        @Around(value = "within(@org.hsweb.web.datasource.dynamic.UseDataSource *)||@annotation(org.hsweb.web.datasource.dynamic.UseDataSource)")
-        public Object useDatasource(ProceedingJoinPoint pjp) throws Throwable {
-            UseDataSource ann = getAnn(pjp, UseDataSource.class);
+        @Around(value = "@annotation(dataSource)")
+        public Object useDatasource(ProceedingJoinPoint pjp, UseDataSource dataSource) throws Throwable {
             try {
-                if (null != ann) {
-                    DynamicDataSource.use(ann.value());
-                }
+                DynamicDataSource.use(dataSource.value());
                 return pjp.proceed();
             } finally {
-                if (null != ann) {
-                    DynamicDataSource.useDefault(false);
-                }
+                DynamicDataSource.useDefault(false);
             }
         }
 
-        @Around(value = "within(@org.hsweb.web.datasource.dynamic.UseDefaultDataSource *)||@annotation(org.hsweb.web.datasource.dynamic.UseDataSource)")
-        public Object useDefaultDatasource(ProceedingJoinPoint pjp) throws Throwable {
-            UseDefaultDataSource ann = getAnn(pjp, UseDefaultDataSource.class);
+        @Around(value = "@annotation(dataSource)")
+        public Object useDefaultDatasource(ProceedingJoinPoint pjp, UseDefaultDataSource dataSource) throws Throwable {
             try {
-                if (null != ann) {
-                    DynamicDataSource.useDefault(ann.value());
-                }
+                DynamicDataSource.useDefault(dataSource.value());
                 return pjp.proceed();
             } finally {
-                if (ann != null && ann.value())
+                if (dataSource.value())
                     DynamicDataSource.useLast();
             }
         }
