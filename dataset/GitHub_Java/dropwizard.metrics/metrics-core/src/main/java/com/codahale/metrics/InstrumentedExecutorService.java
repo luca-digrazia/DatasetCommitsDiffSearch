@@ -3,190 +3,239 @@ package com.codahale.metrics;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.AbstractExecutorService;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class InstrumentedExecutorService extends AbstractExecutorService
-{
-  private static final AtomicLong nameCounter = new AtomicLong();
+/**
+ * An {@link ExecutorService} that monitors the number of tasks submitted, running,
+ * completed and also keeps a {@link Timer} for the task duration.
+ * <p>
+ * It will register the metrics using the given (or auto-generated) name as classifier, e.g:
+ * "your-executor-service.submitted", "your-executor-service.running", etc.
+ */
+public class InstrumentedExecutorService implements ExecutorService {
+    private static final AtomicLong NAME_COUNTER = new AtomicLong();
 
-  private final ExecutorService executorService;
-  final Counter submitted;
-  final Counter running;
-  final Counter completed;
-  final Timer duration;
+    private final ExecutorService delegate;
+    private final Meter submitted;
+    private final Counter running;
+    private final Meter completed;
+    private final Timer idle;
+    private final Timer duration;
 
-  public InstrumentedExecutorService(ExecutorService executorService, MetricRegistry registry)
-  {
-    this(executorService, registry, "instrumented-executorService-" + nameCounter.incrementAndGet());
-  }
-
-  public InstrumentedExecutorService(ExecutorService executorService, MetricRegistry registry, String name)
-  {
-    this.executorService = executorService;
-    this.submitted = registry.counter(name + ".submitted");
-    this.running = registry.counter(name + ".running");
-    this.completed = registry.counter(name + ".completed");
-    this.duration = registry.timer(name + ".duration");
-  }
-
-  @Override
-  public void execute(Runnable runnable)
-  {
-    System.out.println("executing");
-    executorService.execute(new InstrumentedRunnable(runnable));
-  }
-
-  @Override
-  public Future<?> submit(Runnable runnable)
-  {
-    submitted.inc();
-    return executorService.submit(new InstrumentedRunnable(runnable));
-  }
-
-  @Override
-  public <T> Future<T> submit(Runnable runnable, T result)
-  {
-    submitted.inc();
-    return executorService.submit(new InstrumentedRunnable(runnable), result);
-  }
-
-  @Override
-  public <T> Future<T> submit(Callable<T> task)
-  {
-    submitted.inc();
-    return executorService.submit(new InstrumentedCallable<T>(task));
-  }
-
-  @Override
-  public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks) throws InterruptedException
-  {
-    submitted.inc(tasks.size());
-    Collection<? extends Callable<T>> instrumented = instrument(tasks);
-    return executorService.invokeAll(instrumented);
-  }
-
-  @Override
-  public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit)
-          throws InterruptedException
-  {
-    submitted.inc(tasks.size());
-    Collection<? extends Callable<T>> instrumented = instrument(tasks);
-    return executorService.invokeAll(instrumented, timeout, unit);
-  }
-
-  @Override
-  public <T> T invokeAny(Collection<? extends Callable<T>> tasks) throws ExecutionException, InterruptedException
-  {
-    submitted.inc(tasks.size());
-    Collection<? extends Callable<T>> instrumented = instrument(tasks);
-    return executorService.invokeAny(instrumented);
-  }
-
-  @Override
-  public <T> T invokeAny(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit)
-          throws ExecutionException, InterruptedException, TimeoutException
-  {
-    submitted.inc(tasks.size());
-    Collection<? extends Callable<T>> instrumented = instrument(tasks);
-    return executorService.invokeAny(instrumented, timeout, unit);
-  }
-
-  private <T> Collection<? extends Callable<T>> instrument(Collection<? extends Callable<T>> tasks)
-  {
-    List<InstrumentedCallable<T>> instrumented = new ArrayList<InstrumentedCallable<T>>();
-    for (Callable<T> task: tasks)
-    {
-      instrumented.add(new InstrumentedCallable(task));
+    /**
+     * Wraps an {@link ExecutorService} uses an auto-generated default name.
+     *
+     * @param delegate {@link ExecutorService} to wrap.
+     * @param registry {@link MetricRegistry} that will contain the metrics.
+     */
+    public InstrumentedExecutorService(ExecutorService delegate, MetricRegistry registry) {
+        this(delegate, registry, "instrumented-delegate-" + NAME_COUNTER.incrementAndGet());
     }
-    return instrumented;
-  }
 
-  @Override
-  public void shutdown()
-  {
-    executorService.shutdown();
-  }
+    /**
+     * Wraps an {@link ExecutorService} with an explicit name.
+     *
+     * @param delegate {@link ExecutorService} to wrap.
+     * @param registry {@link MetricRegistry} that will contain the metrics.
+     * @param name     name for this executor service.
+     */
+    public InstrumentedExecutorService(ExecutorService delegate, MetricRegistry registry, String name) {
+        this.delegate = delegate;
+        this.submitted = registry.meter(MetricRegistry.name(name, "submitted"));
+        this.running = registry.counter(MetricRegistry.name(name, "running"));
+        this.completed = registry.meter(MetricRegistry.name(name, "completed"));
+        this.idle = registry.timer(MetricRegistry.name(name, "idle"));
+        this.duration = registry.timer(MetricRegistry.name(name, "duration"));
 
-  @Override
-  public List<Runnable> shutdownNow()
-  {
-    return executorService.shutdownNow();
-  }
+        if (delegate instanceof ThreadPoolExecutor) {
+            ThreadPoolExecutor executor = (ThreadPoolExecutor) delegate;
+            registry.register(MetricRegistry.name(name, "pool.size"),
+                    (Gauge<Integer>) executor::getPoolSize);
+            registry.register(MetricRegistry.name(name, "pool.core"),
+                    (Gauge<Integer>) executor::getCorePoolSize);
+            registry.register(MetricRegistry.name(name, "pool.max"),
+                    (Gauge<Integer>) executor::getMaximumPoolSize);
+            final BlockingQueue<Runnable> queue = executor.getQueue();
+            registry.register(MetricRegistry.name(name, "tasks.active"),
+                    (Gauge<Integer>) executor::getActiveCount);
+            registry.register(MetricRegistry.name(name, "tasks.completed"),
+                    (Gauge<Long>) executor::getCompletedTaskCount);
+            registry.register(MetricRegistry.name(name, "tasks.queued"),
+                    (Gauge<Integer>) queue::size);
+            registry.register(MetricRegistry.name(name, "tasks.capacity"),
+                    (Gauge<Integer>) queue::remainingCapacity);
+        } else if (delegate instanceof ForkJoinPool) {
+            ForkJoinPool forkJoinPool = (ForkJoinPool) delegate;
+            registry.register(MetricRegistry.name(name, "tasks.stolen"),
+                    (Gauge<Long>) forkJoinPool::getStealCount);
+            registry.register(MetricRegistry.name(name, "tasks.queued"),
+                    (Gauge<Long>) forkJoinPool::getQueuedTaskCount);
+            registry.register(MetricRegistry.name(name, "threads.active"),
+                    (Gauge<Integer>) forkJoinPool::getActiveThreadCount);
+            registry.register(MetricRegistry.name(name, "threads.running"),
+                    (Gauge<Integer>) forkJoinPool::getRunningThreadCount);
+        }
+    }
 
-  @Override
-  public boolean isShutdown()
-  {
-    return executorService.isShutdown();
-  }
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void execute(Runnable runnable) {
+        submitted.mark();
+        delegate.execute(new InstrumentedRunnable(runnable));
+    }
 
-  @Override
-  public boolean isTerminated()
-  {
-    return executorService.isTerminated();
-  }
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Future<?> submit(Runnable runnable) {
+        submitted.mark();
+        return delegate.submit(new InstrumentedRunnable(runnable));
+    }
 
-  @Override
-  public boolean awaitTermination(long l, TimeUnit timeUnit) throws InterruptedException
-  {
-    return executorService.awaitTermination(l, timeUnit);
-  }
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public <T> Future<T> submit(Runnable runnable, T result) {
+        submitted.mark();
+        return delegate.submit(new InstrumentedRunnable(runnable), result);
+    }
 
-  private class InstrumentedRunnable implements Runnable
-  {
-    private final Runnable task;
-    InstrumentedRunnable(Runnable task)
-    {
-      this.task = task;
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public <T> Future<T> submit(Callable<T> task) {
+        submitted.mark();
+        return delegate.submit(new InstrumentedCallable<>(task));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks) throws InterruptedException {
+        submitted.mark(tasks.size());
+        Collection<? extends Callable<T>> instrumented = instrument(tasks);
+        return delegate.invokeAll(instrumented);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit) throws InterruptedException {
+        submitted.mark(tasks.size());
+        Collection<? extends Callable<T>> instrumented = instrument(tasks);
+        return delegate.invokeAll(instrumented, timeout, unit);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public <T> T invokeAny(Collection<? extends Callable<T>> tasks) throws ExecutionException, InterruptedException {
+        submitted.mark(tasks.size());
+        Collection<? extends Callable<T>> instrumented = instrument(tasks);
+        return delegate.invokeAny(instrumented);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public <T> T invokeAny(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit) throws ExecutionException, InterruptedException, TimeoutException {
+        submitted.mark(tasks.size());
+        Collection<? extends Callable<T>> instrumented = instrument(tasks);
+        return delegate.invokeAny(instrumented, timeout, unit);
+    }
+
+    private <T> Collection<? extends Callable<T>> instrument(Collection<? extends Callable<T>> tasks) {
+        final List<InstrumentedCallable<T>> instrumented = new ArrayList<>(tasks.size());
+        for (Callable<T> task : tasks) {
+            instrumented.add(new InstrumentedCallable<>(task));
+        }
+        return instrumented;
     }
 
     @Override
-    public void run()
-    {
-      running.inc();
-      Timer.Context context = duration.time();
-      try
-      {
-        task.run();
-      }
-      finally
-      {
-        context.stop();
-        running.dec();
-        completed.inc();
-      }
-    }
-  }
-
-  private class InstrumentedCallable<T> implements Callable<T>
-  {
-    private final Callable<T> callable;
-    InstrumentedCallable(Callable<T> callable)
-    {
-      this.callable = callable;
+    public void shutdown() {
+        delegate.shutdown();
     }
 
     @Override
-    public T call() throws Exception
-    {
-      running.inc();
-      Timer.Context context = duration.time();
-      try
-      {
-        return callable.call();
-      }
-      finally
-      {
-        context.stop();
-        running.dec();
-        completed.inc();
-      }
+    public List<Runnable> shutdownNow() {
+        return delegate.shutdownNow();
     }
-  }
+
+    @Override
+    public boolean isShutdown() {
+        return delegate.isShutdown();
+    }
+
+    @Override
+    public boolean isTerminated() {
+        return delegate.isTerminated();
+    }
+
+    @Override
+    public boolean awaitTermination(long l, TimeUnit timeUnit) throws InterruptedException {
+        return delegate.awaitTermination(l, timeUnit);
+    }
+
+    private class InstrumentedRunnable implements Runnable {
+        private final Runnable task;
+        private final Timer.Context idleContext;
+
+        InstrumentedRunnable(Runnable task) {
+            this.task = task;
+            this.idleContext = idle.time();
+        }
+
+        @Override
+        public void run() {
+            idleContext.stop();
+            running.inc();
+            try (Timer.Context durationContext = duration.time()) {
+                task.run();
+            } finally {
+                running.dec();
+                completed.mark();
+            }
+        }
+    }
+
+    private class InstrumentedCallable<T> implements Callable<T> {
+        private final Callable<T> callable;
+        private final Timer.Context idleContext;
+
+        InstrumentedCallable(Callable<T> callable) {
+            this.callable = callable;
+            this.idleContext = idle.time();
+        }
+
+        @Override
+        public T call() throws Exception {
+            idleContext.stop();
+            running.inc();
+            try (Timer.Context context = duration.time()) {
+                return callable.call();
+            } finally {
+                running.dec();
+                completed.mark();
+            }
+        }
+    }
 }
