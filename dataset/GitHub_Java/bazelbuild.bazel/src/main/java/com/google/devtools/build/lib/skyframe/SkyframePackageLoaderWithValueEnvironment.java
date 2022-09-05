@@ -21,7 +21,7 @@ import com.google.devtools.build.lib.analysis.config.PackageProviderForConfigura
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
+
 import java.io.IOException;
 
 /**
@@ -50,12 +51,12 @@ class SkyframePackageLoaderWithValueEnvironment implements PackageProviderForCon
   }
 
   @Override
-  public ExtendedEventHandler getEventHandler() {
+  public EventHandler getEventHandler() {
     return env.getListener();
   }
 
   private Package getPackage(final PackageIdentifier pkgIdentifier)
-      throws NoSuchPackageException, InterruptedException {
+      throws NoSuchPackageException {
     SkyKey key = PackageValue.key(pkgIdentifier);
     PackageValue value = (PackageValue) env.getValueOrThrow(key, NoSuchPackageException.class);
     if (value != null) {
@@ -65,15 +66,13 @@ class SkyframePackageLoaderWithValueEnvironment implements PackageProviderForCon
   }
 
   @Override
-  public Target getTarget(Label label)
-      throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
+  public Target getTarget(Label label) throws NoSuchPackageException, NoSuchTargetException {
     Package pkg = getPackage(label.getPackageIdentifier());
     return pkg == null ? null : pkg.getTarget(label.getName());
   }
 
   @Override
-  public void addDependency(Package pkg, String fileName)
-      throws LabelSyntaxException, IOException, InterruptedException {
+  public void addDependency(Package pkg, String fileName) throws LabelSyntaxException, IOException {
     RootedPath fileRootedPath = RootedPath.toRootedPath(pkg.getSourceRoot(),
         pkg.getPackageIdentifier().getSourceRoot().getRelative(fileName));
     FileValue result = (FileValue) env.getValue(FileValue.key(fileRootedPath));
@@ -84,7 +83,7 @@ class SkyframePackageLoaderWithValueEnvironment implements PackageProviderForCon
 
   @Override
   public <T extends Fragment> T getFragment(BuildOptions buildOptions, Class<T> fragmentType)
-      throws InvalidConfigurationException, InterruptedException {
+      throws InvalidConfigurationException {
     ConfigurationFragmentValue fragmentNode = (ConfigurationFragmentValue) env.getValueOrThrow(
         ConfigurationFragmentValue.key(buildOptions, fragmentType, ruleClassProvider),
         InvalidConfigurationException.class);
@@ -95,7 +94,7 @@ class SkyframePackageLoaderWithValueEnvironment implements PackageProviderForCon
   }
 
   @Override
-  public BlazeDirectories getDirectories() throws InterruptedException {
+  public BlazeDirectories getDirectories() {
     return PrecomputedValue.BLAZE_DIRECTORIES.get(env);
   }
 

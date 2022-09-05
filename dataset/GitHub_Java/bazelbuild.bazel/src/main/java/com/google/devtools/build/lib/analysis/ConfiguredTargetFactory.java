@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ListMultimap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
@@ -50,7 +51,6 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.SkylarkRuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.rules.fileset.FilesetProvider;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
-import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -79,7 +79,7 @@ public final class ConfiguredTargetFactory {
    * to the {@code AnalysisEnvironment}.
    */
   private NestedSet<PackageSpecification> convertVisibility(
-      OrderedSetMultimap<Attribute, ConfiguredTarget> prerequisiteMap, EventHandler reporter,
+      ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap, EventHandler reporter,
       Target target, BuildConfiguration packageGroupConfiguration) {
     RuleVisibility ruleVisibility = target.getVisibility();
     if (ruleVisibility instanceof ConstantRuleVisibility) {
@@ -125,7 +125,7 @@ public final class ConfiguredTargetFactory {
   }
 
   private ConfiguredTarget findPrerequisite(
-      OrderedSetMultimap<Attribute, ConfiguredTarget> prerequisiteMap, Label label,
+      ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap, Label label,
       BuildConfiguration config) {
     for (ConfiguredTarget prerequisite : prerequisiteMap.get(null)) {
       if (prerequisite.getLabel().equals(label) && (prerequisite.getConfiguration() == config)) {
@@ -139,8 +139,8 @@ public final class ConfiguredTargetFactory {
       boolean isFileset, ArtifactFactory artifactFactory) {
     Rule rule = outputFile.getAssociatedRule();
     Root root = rule.hasBinaryOutput()
-        ? configuration.getBinDirectory(rule.getRepository())
-        : configuration.getGenfilesDirectory(rule.getRepository());
+        ? configuration.getBinDirectory()
+        : configuration.getGenfilesDirectory();
     ArtifactOwner owner =
         new ConfiguredTargetKey(rule.getLabel(), configuration.getArtifactOwnerConfiguration());
     PathFragment rootRelativePath =
@@ -163,8 +163,7 @@ public final class ConfiguredTargetFactory {
   @Nullable
   public final ConfiguredTarget createConfiguredTarget(AnalysisEnvironment analysisEnvironment,
       ArtifactFactory artifactFactory, Target target, BuildConfiguration config,
-      BuildConfiguration hostConfig,
-      OrderedSetMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
+      BuildConfiguration hostConfig, ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions)
       throws InterruptedException {
     if (target instanceof Rule) {
@@ -219,7 +218,7 @@ public final class ConfiguredTargetFactory {
   private ConfiguredTarget createRule(
       AnalysisEnvironment env, Rule rule, BuildConfiguration configuration,
       BuildConfiguration hostConfiguration,
-      OrderedSetMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
+      ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions) throws InterruptedException {
     // Visibility computation and checking is done for every rule.
     RuleContext ruleContext =
@@ -311,7 +310,7 @@ public final class ConfiguredTargetFactory {
       RuleConfiguredTarget associatedTarget,
       ConfiguredAspectFactory aspectFactory,
       Aspect aspect,
-      OrderedSetMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
+      ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       BuildConfiguration aspectConfiguration,
       BuildConfiguration hostConfiguration)

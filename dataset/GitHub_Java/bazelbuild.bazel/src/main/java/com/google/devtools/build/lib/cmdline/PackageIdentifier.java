@@ -123,16 +123,12 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
     return repository.getSourceRoot().getRelative(pkgName);
   }
 
-  public PathFragment getPathUnderExecRoot() {
-    return getSourceRoot();
-  }
-
   /**
    * Returns the runfiles/execRoot path for this repository (relative to the x.runfiles/main-repo/
    * directory).
    */
-  public PathFragment getRunfilesPath() {
-    return repository.getRunfilesPath().getRelative(pkgName);
+  public PathFragment getPathUnderExecRoot() {
+    return getRepository().getPathUnderExecRoot().getRelative(getPackageFragment());
   }
 
   public PackageIdentifier makeAbsolute() {

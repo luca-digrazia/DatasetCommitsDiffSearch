@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.java;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.RedirectChaser;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
@@ -33,7 +34,9 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.List;
+
 import javax.annotation.Nullable;
 
 /**
@@ -57,7 +60,7 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
 
   @Override
   public Jvm create(ConfigurationEnvironment env, BuildOptions buildOptions)
-      throws InvalidConfigurationException, InterruptedException {
+      throws InvalidConfigurationException {
     JavaOptions javaOptions = buildOptions.get(JavaOptions.class);
     if (javaOptions.disableJvm) {
       // TODO(bazel-team): Instead of returning null here, add another method to the interface.
@@ -89,8 +92,8 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
   }
 
   @Nullable
-  private static Jvm createDefault(ConfigurationEnvironment lookup, String javaHome, String cpu)
-      throws InvalidConfigurationException, LabelSyntaxException, InterruptedException {
+  private Jvm createDefault(ConfigurationEnvironment lookup, String javaHome, String cpu)
+      throws InvalidConfigurationException, LabelSyntaxException {
     try {
       Label label = Label.parseAbsolute(javaHome);
       label = RedirectChaser.followRedirects(lookup, label, "jdk");
@@ -160,5 +163,20 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
           "', javabase must be an absolute path or label");
     }
     return new Jvm(new PathFragment(javaHome), null);
+  }
+
+  /**
+   * Converts the cpu name to a GNU system name. If the cpu is not a known value, it returns
+   * <code>"unknown-unknown-linux-gnu"</code>.
+   */
+  @VisibleForTesting
+  static String convertCpuToGnuSystemName(String cpu) {
+    if ("piii".equals(cpu)) {
+      return "i686-unknown-linux-gnu";
+    } else if ("k8".equals(cpu)) {
+      return "x86_64-unknown-linux-gnu";
+    } else {
+      return "unknown-unknown-linux-gnu";
+    }
   }
 }

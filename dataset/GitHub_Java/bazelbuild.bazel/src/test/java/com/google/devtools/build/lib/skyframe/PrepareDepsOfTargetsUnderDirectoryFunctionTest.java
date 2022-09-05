@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.skyframe.WalkableGraphUtils.exists;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -35,11 +34,13 @@ import com.google.devtools.build.skyframe.BuildDriver;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
-import java.io.IOException;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.io.IOException;
 
 /**
  * Tests for {@link PrepareDepsOfTargetsUnderDirectoryFunction}. Insert excuses here.
@@ -103,7 +104,7 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
 
     // Then the TransitiveTraversalValue for "@//a:a" is evaluated,
     SkyKey aaKey = TransitiveTraversalValue.key(Label.create("@//a", "a"));
-    assertThat(exists(aaKey, graph)).isTrue();
+    assertThat(graph.exists(aaKey)).isTrue();
 
     // And that TransitiveTraversalValue depends on "@//b:b.txt".
     Iterable<SkyKey> depsOfAa =
@@ -112,7 +113,7 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
     assertThat(depsOfAa).contains(bTxtKey);
 
     // And the TransitiveTraversalValue for "b:b.txt" is evaluated.
-    assertThat(exists(bTxtKey, graph)).isTrue();
+    assertThat(graph.exists(bTxtKey)).isTrue();
   }
 
   @Test
@@ -129,11 +130,11 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
 
     // Then the TransitiveTraversalValue for "@//a:a" is not evaluated,
     SkyKey aaKey = TransitiveTraversalValue.key(Label.create("@//a", "a"));
-    assertThat(exists(aaKey, graph)).isFalse();
+    assertThat(graph.exists(aaKey)).isFalse();
 
     // But the TransitiveTraversalValue for "@//a:aTest" is.
     SkyKey aaTestKey = TransitiveTraversalValue.key(Label.create("@//a", "aTest"));
-    assertThat(exists(aaTestKey, graph)).isTrue();
+    assertThat(graph.exists(aaTestKey)).isTrue();
   }
 
   /**
@@ -187,18 +188,13 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
 
     // Also, the computation graph does not contain a cached value for "a/b".
     WalkableGraph graph = Preconditions.checkNotNull(evaluationResult.getWalkableGraph());
-    assertFalse(
-        exists(
-            createPrepDepsKey(rootDirectory, excludedPathFragment, ImmutableSet.<PathFragment>of()),
-            graph));
+    assertFalse(graph.exists(createPrepDepsKey(rootDirectory, excludedPathFragment,
+        ImmutableSet.<PathFragment>of())));
 
     // And the computation graph does contain a cached value for "a/c" with the empty set excluded,
     // because that key was evaluated.
-    assertTrue(
-        exists(
-            createPrepDepsKey(
-                rootDirectory, new PathFragment("a/c"), ImmutableSet.<PathFragment>of()),
-            graph));
+    assertTrue(graph.exists(createPrepDepsKey(rootDirectory, new PathFragment("a/c"),
+        ImmutableSet.<PathFragment>of())));
   }
 
   @Test
@@ -237,7 +233,7 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
     // "a/b/c" does live underneath "a/b".
     WalkableGraph graph = Preconditions.checkNotNull(evaluationResult.getWalkableGraph());
     SkyKey abKey = createCollectPackagesKey(rootDirectory, new PathFragment("a/b"), excludedPaths);
-    assertThat(exists(abKey, graph)).isTrue();
+    assertThat(graph.exists(abKey)).isTrue();
     CollectPackagesUnderDirectoryValue abValue =
         (CollectPackagesUnderDirectoryValue) Preconditions.checkNotNull(graph.getValue(abKey));
 

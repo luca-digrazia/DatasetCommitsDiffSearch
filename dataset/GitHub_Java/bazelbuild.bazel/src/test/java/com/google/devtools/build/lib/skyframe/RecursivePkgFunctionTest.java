@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.skyframe.WalkableGraphUtils.exists;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -32,6 +31,7 @@ import com.google.devtools.build.skyframe.BuildDriver;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -140,18 +140,16 @@ public class RecursivePkgFunctionTest extends BuildViewTestCase {
     // Also, the computation graph does not contain a cached value for "a/b".
     WalkableGraph graph = Preconditions.checkNotNull(evaluationResult.getWalkableGraph());
     assertFalse(
-        exists(
+        graph.exists(
             buildRecursivePkgKey(
-                rootDirectory, excludedPathFragment, ImmutableSet.<PathFragment>of()),
-            graph));
+                rootDirectory, excludedPathFragment, ImmutableSet.<PathFragment>of())));
 
     // And the computation graph does contain a cached value for "a/c" with the empty set excluded,
     // because that key was evaluated.
     assertTrue(
-        exists(
+        graph.exists(
             buildRecursivePkgKey(
-                rootDirectory, new PathFragment("a/c"), ImmutableSet.<PathFragment>of()),
-            graph));
+                rootDirectory, new PathFragment("a/c"), ImmutableSet.<PathFragment>of())));
   }
 
   @Test
@@ -178,6 +176,6 @@ public class RecursivePkgFunctionTest extends BuildViewTestCase {
     // "a/b/c" does live underneath "a/b".
     WalkableGraph graph = Preconditions.checkNotNull(evaluationResult.getWalkableGraph());
     assertTrue(
-        exists(buildRecursivePkgKey(rootDirectory, new PathFragment("a/b"), excludedPaths), graph));
+        graph.exists(buildRecursivePkgKey(rootDirectory, new PathFragment("a/b"), excludedPaths)));
   }
 }

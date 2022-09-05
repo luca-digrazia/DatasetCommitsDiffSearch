@@ -25,7 +25,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.rules.android.ResourceContainer.ResourceType;
+import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceType;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.Collection;
@@ -77,20 +77,22 @@ public final class LocalResourceContainer {
       throws RuleErrorException {
     if (ruleContext.attributes().isAttributeValueExplicitlySpecified("assets")
         ^ ruleContext.attributes().isAttributeValueExplicitlySpecified("assets_dir")) {
-      ruleContext.throwWithRuleError(
+      ruleContext.ruleError(
           "'assets' and 'assets_dir' should be either both empty or both non-empty");
+      throw new RuleErrorException();
     }
   }
 
   /**
-   * Validates that there are no resources defined if there are resource attributes defined.
+   * Validates that there are no resources defined if there are resource attribute defined.
    */
   private static void validateNoResourcesAttribute(RuleContext ruleContext)
       throws RuleErrorException {
     if (ruleContext.attributes().isAttributeValueExplicitlySpecified("resources")) {
-      ruleContext.throwWithAttributeError("resources",
+      ruleContext.attributeError("resources",
           String.format("resources cannot be set when any of %s are defined.",
               Joiner.on(", ").join(RESOURCES_ATTRIBUTES)));
+      throw new RuleErrorException();
     }
   }
 
@@ -103,15 +105,17 @@ public final class LocalResourceContainer {
     Iterable<AndroidResourcesProvider> resources =
         ruleContext.getPrerequisites("srcs", Mode.TARGET, AndroidResourcesProvider.class);
     for (AndroidResourcesProvider provider : resources) {
-      ruleContext.throwWithAttributeError("srcs",
+      ruleContext.attributeError("srcs",
           String.format("srcs should not contain android_resource label %s", provider.getLabel()));
+      throw new RuleErrorException();
     }
   }
 
   private static void validateManifest(RuleContext ruleContext) throws RuleErrorException {
     if (ruleContext.getPrerequisiteArtifact("manifest", Mode.TARGET) == null) {
-      ruleContext.throwWithAttributeError("manifest",
+      ruleContext.attributeError("manifest",
           "manifest is required when resource_files or assets are defined.");
+      throw new RuleErrorException();
     }
   }
 
@@ -232,7 +236,7 @@ public final class LocalResourceContainer {
         return null;
       }
       // TODO(bazel-team): Expand Fileset to verify, or remove Fileset as an option for resources.
-      if (artifact.isFileset() || artifact.isTreeArtifact()) {
+      if (artifact.isFileset()) {
         return fragment.subFragment(segmentCount - 1, segmentCount);
       }
 

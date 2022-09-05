@@ -64,6 +64,7 @@ import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException2;
 import com.google.devtools.build.skyframe.ValueOrException3;
 import com.google.devtools.build.skyframe.ValueOrException4;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -76,6 +77,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import javax.annotation.Nullable;
 
 /**
@@ -412,6 +414,7 @@ public class PackageFunction implements SkyFunction {
   public SkyValue compute(SkyKey key, Environment env) throws PackageFunctionException,
       InterruptedException {
     PackageIdentifier packageId = (PackageIdentifier) key.argument();
+    PathFragment packageNameFragment = packageId.getPackageFragment();
 
     SkyKey packageLookupKey = PackageLookupValue.key(packageId);
     PackageLookupValue packageLookupValue;
@@ -460,7 +463,9 @@ public class PackageFunction implements SkyFunction {
           Transience.PERSISTENT);
     }
 
-    RootedPath buildFileRootedPath = packageLookupValue.getRootedPath(packageId);
+    PathFragment buildFileFragment = packageNameFragment.getChild("BUILD");
+    RootedPath buildFileRootedPath = RootedPath.toRootedPath(packageLookupValue.getRoot(),
+        buildFileFragment);
     FileValue buildFileValue = null;
     Path buildFilePath = buildFileRootedPath.asPath();
     String replacementContents = null;

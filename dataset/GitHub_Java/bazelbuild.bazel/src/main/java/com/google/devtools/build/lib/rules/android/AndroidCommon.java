@@ -69,10 +69,12 @@ import com.google.devtools.build.lib.rules.java.SourcesJavaCompilationArgsProvid
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -639,17 +641,14 @@ public class AndroidCommon {
     helper.createCompileActionWithInstrumentation(classJar, manifestProtoOutput, genSourceJar,
         outputDepsProto, javaArtifactsBuilder);
 
+    compileTimeDependencyArtifacts =
+        javaCommon.collectCompileTimeDependencyArtifacts(outputDepsProto);
     filesToBuild = filesBuilder.build();
 
     if ((attributes.hasSourceFiles() || attributes.hasSourceJars()) && jar != null) {
       iJar = helper.createCompileTimeJarAction(jar, javaArtifactsBuilder);
     }
-
-    JavaCompilationArtifacts javaArtifacts = javaArtifactsBuilder.build();
-    compileTimeDependencyArtifacts =
-        javaCommon.collectCompileTimeDependencyArtifacts(
-            javaArtifacts.getCompileTimeDependencyArtifact());
-    javaCommon.setJavaCompilationArtifacts(javaArtifacts);
+    javaCommon.setJavaCompilationArtifacts(javaArtifactsBuilder.build());
 
     javaCommon.setClassPathFragment(
         new ClasspathConfiguredFragment(
@@ -861,11 +860,12 @@ public class AndroidCommon {
   }
 
   public CcLinkParamsStore getCcLinkParamsStore() {
-    return getCcLinkParamsStore(javaCommon.targetsTreatedAsDeps(ClasspathType.BOTH));
+    return getCcLinkParamsStore(javaCommon.targetsTreatedAsDeps(ClasspathType.BOTH),
+        ImmutableList.<String>of());
   }
 
   public static CcLinkParamsStore getCcLinkParamsStore(
-      final Iterable<? extends TransitiveInfoCollection> deps) {
+      final Iterable<? extends TransitiveInfoCollection> deps, final Collection<String> linkOpts) {
     return new CcLinkParamsStore() {
       @Override
       protected void collect(CcLinkParams.Builder builder, boolean linkingStatically,
@@ -877,6 +877,7 @@ public class AndroidCommon {
             AndroidCcLinkParamsProvider.TO_LINK_PARAMS,
             // Link in non-language-specific C++ code in the transitive closure
             CcLinkParamsProvider.TO_LINK_PARAMS);
+        builder.addLinkOpts(linkOpts);
       }
     };
   }

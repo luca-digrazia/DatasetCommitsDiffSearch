@@ -77,7 +77,6 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -1614,28 +1613,19 @@ public final class RuleContext extends TargetContext
       reporter.attributeWarning(attrName, message);
     }
 
-    private String badPrerequisiteMessage(String targetKind, ConfiguredTarget prerequisite,
-        String reason, boolean isWarning) {
+    private void reportBadPrerequisite(Attribute attribute, String targetKind,
+        ConfiguredTarget prerequisite, String reason, boolean isWarning) {
       String msgPrefix = targetKind != null ? targetKind + " " : "";
       String msgReason = reason != null ? " (" + reason + ")" : "";
       if (isWarning) {
-        return String.format(
+        attributeWarning(attribute.getName(), String.format(
             "%s'%s'%s is unexpected here%s; continuing anyway",
             msgPrefix, prerequisite.getLabel(), AliasProvider.printVisibilityChain(prerequisite),
-            msgReason);
-      }
-      return String.format(
-          "%s'%s'%s is misplaced here%s", msgPrefix, prerequisite.getLabel(),
-          AliasProvider.printVisibilityChain(prerequisite), msgReason);
-    }
-
-    private void reportBadPrerequisite(Attribute attribute, String targetKind,
-        ConfiguredTarget prerequisite, String reason, boolean isWarning) {
-      String message = badPrerequisiteMessage(targetKind, prerequisite, reason, isWarning);
-      if (isWarning) {
-        attributeWarning(attribute.getName(), message);
+            msgReason));
       } else {
-        attributeError(attribute.getName(), message);
+        attributeError(attribute.getName(), String.format(
+            "%s'%s'%s is misplaced here%s", msgPrefix, prerequisite.getLabel(),
+            AliasProvider.printVisibilityChain(prerequisite), msgReason));
       }
     }
 
@@ -1813,20 +1803,19 @@ public final class RuleContext extends TargetContext
 
     /**
      * Because some rules still have to use allowedRuleClasses to do rule dependency validation.
-     * A dependency is valid if it is from a rule in allowedRuledClasses, OR if all of the providers
-     * in mandatoryNativeProviders AND mandatoryProvidersList are provided by the target.
+     * We implemented the allowedRuleClasses OR mandatoryProvidersList mechanism. Either condition
+     * is satisfied, we consider the dependency valid.
      */
     private void validateRuleDependency(ConfiguredTarget prerequisite, Attribute attribute) {
       Target prerequisiteTarget = prerequisite.getTarget();
       RuleClass ruleClass = ((Rule) prerequisiteTarget).getRuleClassObject();
-      HashSet<String> unfulfilledRequirements = new HashSet<>();
+      Boolean allowed = null;
 
       if (attribute.getAllowedRuleClassesPredicate() != Predicates.<RuleClass>alwaysTrue()) {
-        if (attribute.getAllowedRuleClassesPredicate().apply(ruleClass)) {
+        allowed = attribute.getAllowedRuleClassesPredicate().apply(ruleClass);
+        if (allowed) {
           return;
         }
-        unfulfilledRequirements.add(badPrerequisiteMessage(prerequisiteTarget.getTargetKind(),
-            prerequisite, "expected " + attribute.getAllowedRuleClassesPredicate(), false));
       }
 
       if (attribute.getAllowedRuleClassesWarningPredicate()
@@ -1839,38 +1828,27 @@ public final class RuleContext extends TargetContext
         }
       }
 
-      // This condition is required; getMissingMandatory[Native]Providers() would be vacuously true
-      // if no providers were mandatory (thus, none are missing), which would cause an early return
-      // below without emitting the error message about the not-allowed rule class if that
-      // requirement was unfulfilled.
-      if (!attribute.getMandatoryNativeProviders().isEmpty()
-          || !attribute.getMandatoryProvidersList().isEmpty()) {
-        boolean hadAllMandatoryProviders = true;
-
-        String missingNativeProviders = getMissingMandatoryNativeProviders(prerequisite, attribute);
-        if (missingNativeProviders != null) {
-          unfulfilledRequirements.add(
-              "'" + prerequisite.getLabel() + "' does not have mandatory providers: "
-                  + missingNativeProviders);
-          hadAllMandatoryProviders = false;
-        }
-
-        String missingProviders = getMissingMandatoryProviders(prerequisite, attribute);
-        if (missingProviders != null) {
-          unfulfilledRequirements.add(
-              "'" + prerequisite.getLabel() + "' does not have mandatory provider "
-                  + missingProviders);
-          hadAllMandatoryProviders = false;
-        }
-
-        if (hadAllMandatoryProviders) {
+      if (!attribute.getMandatoryNativeProviders().isEmpty()) {
+        String missing = getMissingMandatoryNativeProviders(prerequisite, attribute);
+        if (missing != null) {
+          attributeError(
+              attribute.getName(),
+              "'" + prerequisite.getLabel() + "' does not have mandatory providers: " + missing);
           return;
         }
       }
 
-      if (!unfulfilledRequirements.isEmpty()) {
-        attributeError(
-            attribute.getName(), StringUtil.joinEnglishList(unfulfilledRequirements, "and"));
+      if (!attribute.getMandatoryProvidersList().isEmpty()) {
+        String missingMandatoryProviders = getMissingMandatoryProviders(prerequisite, attribute);
+        if (missingMandatoryProviders != null) {
+          attributeError(
+              attribute.getName(),
+              "'" + prerequisite.getLabel() + "' does not have mandatory provider "
+                  + missingMandatoryProviders);
+        }
+      } else if (Boolean.FALSE.equals(allowed)) {
+        reportBadPrerequisite(attribute, prerequisiteTarget.getTargetKind(), prerequisite,
+            "expected " + attribute.getAllowedRuleClassesPredicate(), false);
       }
     }
 

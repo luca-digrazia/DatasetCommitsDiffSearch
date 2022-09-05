@@ -134,14 +134,13 @@ class SymlinkForest {
       PackageIdentifier dir = entry.getKey();
       if (!dir.getRepository().isMain()) {
         FileSystemUtils.createDirectoryAndParents(
-            workspace.getRelative(dir.getRepository().getPathUnderExecRoot()));
+            workspace.getRelative(dir.getRepository().getSourceRoot()));
       }
       if (entry.getValue().size() > 1) {
         if (LOG_FINER) {
-          LOG.finer("mkdir " + workspace.getRelative(dir.getPathUnderExecRoot()));
+          LOG.finer("mkdir " + workspace.getRelative(dir.getSourceRoot()));
         }
-        FileSystemUtils.createDirectoryAndParents(
-            workspace.getRelative(dir.getPathUnderExecRoot()));
+        FileSystemUtils.createDirectoryAndParents(workspace.getRelative(dir.getSourceRoot()));
       }
     }
 
@@ -159,9 +158,9 @@ class SymlinkForest {
         Path root = roots.iterator().next();  // lone root in set
         if (LOG_FINER) {
           LOG.finer("ln -s " + root.getRelative(dir.getSourceRoot()) + " "
-              + workspace.getRelative(dir.getPathUnderExecRoot()));
+              + workspace.getRelative(dir.getSourceRoot()));
         }
-        workspace.getRelative(dir.getPathUnderExecRoot())
+        workspace.getRelative(dir.getSourceRoot())
             .createSymbolicLink(root.getRelative(dir.getSourceRoot()));
       }
     }
@@ -203,7 +202,7 @@ class SymlinkForest {
       if (!pkgId.getPackageFragment().equals(PathFragment.EMPTY_FRAGMENT)) {
         continue;
       }
-      Path execrootDirectory = workspace.getRelative(pkgId.getPathUnderExecRoot());
+      Path execrootDirectory = workspace.getRelative(pkgId.getSourceRoot());
       // If there were no subpackages, this directory might not exist yet.
       if (!execrootDirectory.exists()) {
         FileSystemUtils.createDirectoryAndParents(execrootDirectory);
