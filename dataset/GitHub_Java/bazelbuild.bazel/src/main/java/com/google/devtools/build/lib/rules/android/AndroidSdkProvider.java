@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import javax.annotation.Nullable;
 
 /** Description of the tools Blaze needs from an Android SDK. */
 @AutoValue
@@ -33,7 +32,6 @@ public abstract class AndroidSdkProvider implements TransitiveInfoProvider {
       String buildToolsVersion,
       boolean aaptSupportsMainDexGeneration,
       Artifact frameworkAidl,
-      @Nullable TransitiveInfoCollection aidlLib,
       Artifact androidJar,
       Artifact shrinkedAndroidJar,
       NestedSet<Artifact> androidBaseClasspathForJack,
@@ -57,7 +55,6 @@ public abstract class AndroidSdkProvider implements TransitiveInfoProvider {
         buildToolsVersion,
         aaptSupportsMainDexGeneration,
         frameworkAidl,
-        aidlLib,
         androidJar,
         shrinkedAndroidJar,
         androidBaseClasspathForJack,
@@ -110,9 +107,6 @@ public abstract class AndroidSdkProvider implements TransitiveInfoProvider {
   public abstract boolean getAaptSupportsMainDexGeneration();
 
   public abstract Artifact getFrameworkAidl();
-
-  @Nullable
-  public abstract TransitiveInfoCollection getAidlLib();
 
   public abstract Artifact getAndroidJar();
 
