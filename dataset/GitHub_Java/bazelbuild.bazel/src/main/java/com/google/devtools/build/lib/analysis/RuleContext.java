@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
@@ -1558,10 +1557,16 @@ public final class RuleContext extends TargetContext
         }
       }
 
-      if (prerequisiteTarget instanceof Rule) {
-        validateRuleDependency(prerequisite, attribute);
-      } else if (prerequisiteTarget instanceof FileTarget) {
-        if (attribute.isStrictLabelCheckingEnabled()) {
+      if (attribute.isStrictLabelCheckingEnabled()) {
+        if (prerequisiteTarget instanceof Rule) {
+          RuleClass ruleClass = ((Rule) prerequisiteTarget).getRuleClassObject();
+          if (!attribute.getAllowedRuleClassesPredicate().apply(ruleClass)) {
+            boolean allowedWithWarning = attribute.getAllowedRuleClassesWarningPredicate()
+                .apply(ruleClass);
+            reportBadPrerequisite(attribute, prerequisiteTarget.getTargetKind(), prerequisiteLabel,
+                "expected " + attribute.getAllowedRuleClassesPredicate(), allowedWithWarning);
+          }
+        } else if (prerequisiteTarget instanceof FileTarget) {
           if (!attribute.getAllowedFileTypesPredicate()
               .apply(((FileTarget) prerequisiteTarget).getFilename())) {
             if (prerequisiteTarget instanceof InputFile
@@ -1655,10 +1660,10 @@ public final class RuleContext extends TargetContext
       }
     }
 
-    private String getMissingMandatoryProviders(ConfiguredTarget prerequisite, Attribute attribute){
+    private void validateMandatoryProviders(ConfiguredTarget prerequisite, Attribute attribute) {
       List<ImmutableSet<String>> mandatoryProvidersList = attribute.getMandatoryProvidersList();
       if (mandatoryProvidersList.isEmpty()) {
-        return null;
+        return;
       }
       List<List<String>> missingProvidersList = new ArrayList<>();
       for (ImmutableSet<String> providers : mandatoryProvidersList) {
@@ -1669,7 +1674,7 @@ public final class RuleContext extends TargetContext
           }
         }
         if (missing.isEmpty()) {
-          return null;
+          return;
         } else {
           missingProvidersList.add(missing);
         }
@@ -1686,55 +1691,16 @@ public final class RuleContext extends TargetContext
         missingProviders.append("'")
                         .append((providers.size() > 1) ? "]" : "");
       }
-      return missingProviders.toString();
-    }
-
-    /**
-     * Because some rules still have to use allowedRuleClasses to do rule dependency validation.
-     * We implemented the allowedRuleClasses OR mandatoryProvidersList mechanism. Either condition
-     * is satisfied, we consider the dependency valid.
-     */
-    private void validateRuleDependency(ConfiguredTarget prerequisite, Attribute attribute) {
-      Target prerequisiteTarget = prerequisite.getTarget();
-      Label prerequisiteLabel = prerequisiteTarget.getLabel();
-      RuleClass ruleClass = ((Rule) prerequisiteTarget).getRuleClassObject();
-      Boolean allowed = null;
-      Boolean allowedWithWarning = null;
-
-      if (attribute.getAllowedRuleClassesPredicate() != Predicates.<RuleClass>alwaysTrue()) {
-        allowed = attribute.getAllowedRuleClassesPredicate().apply(ruleClass);
-        if (allowed) {
-          return;
-        }
-      }
-
-      if (attribute.getAllowedRuleClassesWarningPredicate()
-              != Predicates.<RuleClass>alwaysTrue()) {
-        allowedWithWarning = attribute.getAllowedRuleClassesWarningPredicate().apply(ruleClass);
-        if (allowedWithWarning) {
-          reportBadPrerequisite(attribute, prerequisiteTarget.getTargetKind(), prerequisiteLabel,
-                  "expected " + attribute.getAllowedRuleClassesPredicate(), true);
-          return;
-        }
-      }
-
-      if (!attribute.getMandatoryProvidersList().isEmpty()) {
-        String missingMandatoryProviders = getMissingMandatoryProviders(prerequisite, attribute);
-        if (missingMandatoryProviders != null) {
-          attributeError(
-                  attribute.getName(),
-                  "'" + prerequisite.getLabel() + "' does not have mandatory provider "
-                          + missingMandatoryProviders);
-        }
-      } else if (Boolean.FALSE.equals(allowed)) {
-        reportBadPrerequisite(attribute, prerequisiteTarget.getTargetKind(), prerequisiteLabel,
-                "expected " + attribute.getAllowedRuleClassesPredicate(), false);
-      }
+      attributeError(
+          attribute.getName(),
+          "'" + prerequisite.getLabel() + "' does not have mandatory provider "
+                  + missingProviders);
     }
 
     private void validateDirectPrerequisite(Attribute attribute, ConfiguredTarget prerequisite) {
       validateDirectPrerequisiteType(prerequisite, attribute);
       validateDirectPrerequisiteFileTypes(prerequisite, attribute);
+      validateMandatoryProviders(prerequisite, attribute);
       if (attribute.performPrereqValidatorCheck()) {
         prerequisiteValidator.validate(this, prerequisite, attribute);
       }
