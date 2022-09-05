@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.vfs.Symlinks;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -281,13 +282,11 @@ public class ActionMetadataHandler implements MetadataHandler {
   }
 
   @Override
-  public void discardOutputMetadata() {
+  public void discardMetadata(Collection<Artifact> artifactList) {
     Preconditions.checkState(injectedArtifacts.isEmpty(),
         "Artifacts cannot be injected before action execution: %s", injectedArtifacts);
-    Preconditions.checkState(omittedOutputs.isEmpty(),
-        "Artifacts cannot be marked omitted before action execution: %s", omittedOutputs);
-    outputArtifactData.clear();
-    additionalOutputData.clear();
+    outputArtifactData.keySet().removeAll(artifactList);
+    additionalOutputData.keySet().removeAll(artifactList);
   }
 
   @Override
