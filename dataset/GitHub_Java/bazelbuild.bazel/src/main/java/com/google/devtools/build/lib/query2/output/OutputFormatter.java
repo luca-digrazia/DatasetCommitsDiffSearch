@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -311,10 +311,7 @@ public abstract class OutputFormatter implements Serializable {
           // Display it as a list (and not as a tuple). Attributes can never be tuples.
           value = new ArrayList<>((List<?>) value);
         }
-        // It is *much* faster to write to a StringBuilder compared to the PrintStream object.
-        StringBuilder builder = new StringBuilder();
-        Printer.write(builder, value);
-        out.print(builder);
+        Printer.write(out, value);
         out.println(",");
       }
       out.printf(")\n%n");
