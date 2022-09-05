@@ -18,7 +18,6 @@ import com.google.common.base.Function;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RedirectChaser;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
@@ -73,13 +72,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
     if (params == null) {
       return null;
     }
-    CppConfiguration cppConfig = new CppConfiguration(params);
-    if (options.get(BuildConfiguration.Options.class).useDynamicConfigurations
-        && cppConfig.getLipoMode() != CrosstoolConfig.LipoMode.OFF) {
-      throw new InvalidConfigurationException(
-          "LIPO does not currently work with dynamic configurations");
-    }
-    return cppConfig;
+    return new CppConfiguration(params);
   }
 
   /**
