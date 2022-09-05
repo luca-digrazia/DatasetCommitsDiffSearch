@@ -298,6 +298,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
           NestedSetBuilder.<Artifact>stableOrder()
               .addTransitive(directInputs)
               .addTransitive(classpathEntries)
+              .addAll(bootclasspathEntries)
               .addAll(processorPath)
               .addAll(compileTimeDependencyArtifacts)
               .add(paramsFile)
