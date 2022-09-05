@@ -45,6 +45,7 @@ import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.SkylarkType;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsClassProvider;
 
 import java.lang.reflect.Constructor;
@@ -85,7 +86,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private final StringBuilder defaultWorkspaceFile = new StringBuilder();
     private Label preludeLabel;
     private String runfilesPrefix;
-    private String toolsRepository;
     private final List<ConfigurationFragmentFactory> configurationFragments = new ArrayList<>();
     private final List<BuildInfoFactory> buildInfoFactories = new ArrayList<>();
     private final List<Class<? extends FragmentOptions>> configurationOptions = new ArrayList<>();
@@ -128,11 +128,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
     public Builder setRunfilesPrefix(String runfilesPrefix) {
       this.runfilesPrefix = runfilesPrefix;
-      return this;
-    }
-    
-    public Builder setToolsRepository(String toolsRepository) {
-      this.toolsRepository = toolsRepository;
       return this;
     }
 
@@ -252,7 +247,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       return new ConfiguredRuleClassProvider(
           preludeLabel,
           runfilesPrefix,
-          toolsRepository,
           ImmutableMap.copyOf(ruleClassMap),
           ImmutableMap.copyOf(ruleDefinitionMap),
           ImmutableMap.copyOf(aspectFactoryMap),
@@ -270,11 +264,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     @Override
     public Label getLabel(String labelValue) {
       return LABELS.getUnchecked(labelValue);
-    }
-    
-    @Override
-    public String getToolsRepository() {
-      return toolsRepository;
     }
   }
 
@@ -309,11 +298,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    * The default runfiles prefix.
    */
   private final String runfilesPrefix;
-  
-  /**
-   * The path to the tools repository.
-   */
-  private final String toolsRepository;
 
   /**
    * Maps rule class name to the metaclass instance for that rule.
@@ -362,7 +346,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   private ConfiguredRuleClassProvider(
       Label preludeLabel,
       String runfilesPrefix,
-      String toolsRepository,
       ImmutableMap<String, RuleClass> ruleClassMap,
       ImmutableMap<String, Class<? extends RuleDefinition>> ruleDefinitionMap,
       ImmutableMap<String, Class<? extends NativeAspectFactory>> aspectFactoryMap,
@@ -377,7 +360,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       List<Class<? extends FragmentOptions>> buildOptions) {
     this.preludeLabel = preludeLabel;
     this.runfilesPrefix = runfilesPrefix;
-    this.toolsRepository = toolsRepository;
     this.ruleClassMap = ruleClassMap;
     this.ruleDefinitionMap = ruleDefinitionMap;
     this.aspectFactoryMap = aspectFactoryMap;
@@ -404,11 +386,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   @Override
   public String getRunfilesPrefix() {
     return runfilesPrefix;
-  }
-  
-  @Override
-  public String getToolsRepository() {
-    return toolsRepository;
   }
 
   @Override
@@ -507,7 +484,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       Environment.Frame globals,
       EventHandler eventHandler,
       String astFileContentHashCode,
-      Map<String, Extension> importMap) {
+      Map<PathFragment, Extension> importMap) {
     Environment env = Environment.builder(mutability)
         .setSkylark()
         .setGlobals(globals)
@@ -524,7 +501,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       Mutability mutability,
       EventHandler eventHandler,
       String astFileContentHashCode,
-      Map<String, Extension> importMap) {
+      Map<PathFragment, Extension> importMap) {
     return createSkylarkRuleClassEnvironment(
         mutability, globals, eventHandler, astFileContentHashCode, importMap);
   }

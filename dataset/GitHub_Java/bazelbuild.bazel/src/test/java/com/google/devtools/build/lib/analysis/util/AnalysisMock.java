@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.rules.repository.LocalRepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.LocalRepositoryRule;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
-import com.google.devtools.build.lib.rules.repository.RepositoryLoaderFunction;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.Path;
@@ -64,11 +63,6 @@ public abstract class AnalysisMock {
 
   public abstract ConfigurationFactory createConfigurationFactory();
 
-  /**
-   * Creates a configuration factory that doesn't contain any mock parts.
-   */
-  public abstract ConfigurationFactory createFullConfigurationFactory();
-
   public abstract ConfigurationCollectionFactory createConfigurationCollectionFactory();
 
   public abstract Collection<String> getOptionOverrides();
@@ -82,15 +76,13 @@ public abstract class AnalysisMock {
   public ImmutableMap<SkyFunctionName, SkyFunction> getSkyFunctions(BlazeDirectories directories) {
     // Some tests require the local_repository rule so we need the appropriate SkyFunctions.
     RepositoryFunction localRepositoryFunction = new LocalRepositoryFunction();
+    localRepositoryFunction.setDirectories(directories);
     ImmutableMap<String, RepositoryFunction> repositoryHandlers = ImmutableMap.of(
         LocalRepositoryRule.NAME, localRepositoryFunction);
 
-    return ImmutableMap.of(
-        SkyFunctions.REPOSITORY_DIRECTORY,
-        new RepositoryDelegatorFunction(
-            directories, repositoryHandlers, null, new AtomicBoolean(true)),
+    return ImmutableMap.<SkyFunctionName, SkyFunction>of(
         SkyFunctions.REPOSITORY,
-        new RepositoryLoaderFunction());
+        new RepositoryDelegatorFunction(directories, repositoryHandlers, new AtomicBoolean(true)));
   }
 
   public static class Delegate extends AnalysisMock {
@@ -116,11 +108,6 @@ public abstract class AnalysisMock {
     }
 
     @Override
-    public ConfigurationFactory createFullConfigurationFactory() {
-      return delegate.createFullConfigurationFactory();
-    }
-
-    @Override
     public ConfigurationCollectionFactory createConfigurationCollectionFactory() {
       return delegate.createConfigurationCollectionFactory();
     }
@@ -134,5 +121,6 @@ public abstract class AnalysisMock {
     public Collection<String> getOptionOverrides() {
       return delegate.getOptionOverrides();
     }
+
   }
 }

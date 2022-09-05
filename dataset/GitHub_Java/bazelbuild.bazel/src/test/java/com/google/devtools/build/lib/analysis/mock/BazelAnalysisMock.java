@@ -34,9 +34,9 @@ import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader;
+import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.JvmConfigurationLoader;
-import com.google.devtools.build.lib.rules.objc.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.objc.ObjcConfigurationLoader;
 import com.google.devtools.build.lib.rules.python.PythonConfigurationLoader;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
@@ -71,15 +71,10 @@ public final class BazelAnalysisMock extends AnalysisMock {
                 "  name = 'objc_proto_cpp_lib',",
                 "  actual = '//objcproto:ProtocolBuffersCPP_lib',",
                 ")",
-                "bind(",
-                "  name = 'objc_protobuf_lib',",
-                "  actual = '//objcproto:protobuf_lib',",
-                ")",
                 "bind(name = 'android/sdk', actual='@bazel_tools//tools/android:sdk')",
                 "bind(name = 'tools/python', actual='//tools/python')"));
 
     config.overwrite("WORKSPACE", workspaceContents.toArray(new String[workspaceContents.size()]));
-    config.create("/bazel_tools_workspace/WORKSPACE", "workspace(name = 'bazel_tools')");
     config.create(
         "/bazel_tools_workspace/tools/jdk/BUILD",
         "package(default_visibility=['//visibility:public'])",
@@ -93,9 +88,8 @@ public final class BazelAnalysisMock extends AnalysisMock {
         "filegroup(name='extdir', srcs=glob(['jdk/jre/lib/ext/*']))",
         // "dummy" is needed so that RedirectChaser stops here
         "filegroup(name='java', srcs = ['jdk/jre/bin/java', 'dummy'])",
-        "exports_files(['JavaBuilder_deploy.jar','SingleJar_deploy.jar','TestRunner_deploy.jar',",
-        "               'JavaBuilderCanary_deploy.jar', 'ijar', 'GenClass_deploy.jar',",
-        "               'turbine_deploy.jar'])");
+        "exports_files(['JavaBuilder_deploy.jar','SingleJar_deploy.jar',",
+        "               'JavaBuilderCanary_deploy.jar', 'ijar', 'GenClass_deploy.jar'])");
 
 
     ImmutableList<String> androidBuildContents = createAndroidBuildContents();
@@ -218,11 +212,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
         new AppleConfiguration.Loader(),
         new J2ObjcConfiguration.Loader(),
         new AndroidConfiguration.Loader());
-  }
-
-  @Override
-  public ConfigurationFactory createFullConfigurationFactory() {
-    return createConfigurationFactory();
   }
 
   @Override

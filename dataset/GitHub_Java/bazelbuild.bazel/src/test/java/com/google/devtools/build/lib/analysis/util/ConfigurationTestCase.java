@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.runtime.InvocationPolicyEnforcer;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
@@ -101,6 +100,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
     skyframeExecutor =
         SequencedSkyframeExecutor.create(
             pkgFactory,
+            new TimestampGranularityMonitor(BlazeClock.instance()),
             directories,
             BinTools.forUnitTesting(directories, TestConstants.EMBEDDED_TOOLS),
             workspaceStatusActionFactory,
@@ -114,8 +114,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
 
     skyframeExecutor.preparePackageLoading(pkgLocator,
         Options.getDefaults(PackageCacheOptions.class).defaultVisibility, true,
-        7, ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID(),
-        new TimestampGranularityMonitor(BlazeClock.instance()));
+        7, ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID());
 
     analysisMock.setupMockClient(new MockToolsConfig(rootDirectory));
     analysisMock.setupMockWorkspaceFiles(directories.getEmbeddedBinariesRoot());
@@ -150,11 +149,6 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
         .add(TestOptions.class)
         .build());
     parser.parse(args);
-
-    InvocationPolicyEnforcer optionsPolicyEnforcer =
-        new InvocationPolicyEnforcer(TestConstants.TEST_INVOCATION_POLICY);
-    optionsPolicyEnforcer.enforce(parser);
-
     ImmutableSortedSet<String> multiCpu = ImmutableSortedSet.copyOf(
         parser.getOptions(TestOptions.class).multiCpus);
 
