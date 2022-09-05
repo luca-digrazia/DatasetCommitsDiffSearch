@@ -12,7 +12,6 @@ import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -44,7 +43,7 @@ import java.util.Locale;
  * @attr ref R.styleable.MaterialCalendarView_weekDayTextAppearance
  * @attr ref R.styleable.MaterialCalendarView_showOtherMonths
  */
-public class MaterialCalendarView extends FrameLayout {
+public class MaterialCalendarView extends LinearLayout {
 
     private final TextView title;
     private final DirectionButton buttonPast;
@@ -124,6 +123,7 @@ public class MaterialCalendarView extends FrameLayout {
     public MaterialCalendarView(Context context, AttributeSet attrs) {
         super(context, attrs);
 
+        setOrientation(VERTICAL);
         setClipChildren(false);
         setClipToPadding(false);
 
