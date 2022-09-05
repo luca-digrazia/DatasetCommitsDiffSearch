@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -140,14 +140,6 @@ public class BlazeCommandEventHandler implements EventHandler {
         category = "verbosity",
         help = "Forces --experimental_external_repositories.")
     public boolean forceExternalRepositories;
-
-    @Option(
-      name = "experimental_ui",
-      defaultValue = "false",
-      category = "hidden",
-      help = "Enable the experimental new Bazel UI."
-    )
-    public boolean experimentalUi;
 
     public boolean useColor() {
       return useColorEnum == UseColor.YES || (useColorEnum == UseColor.AUTO && isATty);
