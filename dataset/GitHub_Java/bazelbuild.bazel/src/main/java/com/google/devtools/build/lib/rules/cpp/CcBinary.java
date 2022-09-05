@@ -512,13 +512,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> dwpTools = CppHelper.getToolchain(context).getDwp();
     Preconditions.checkState(!dwpTools.isEmpty());
 
-    List<SpawnAction.Builder> packagers = createIntermediateDwpPackagers(
-        context, dwpOutput, cppConfiguration, dwpTools, allInputs, 1);
-
     // We apply a hierarchical action structure to limit the maximum number of inputs to any
     // single action.
     //
-    // While the dwp tool consumes .dwo files, it can also consume intermediate .dwp files,
+    // While the dwp tools consumes .dwo files, it can also consume intermediate .dwp files,
     // allowing us to split a large input set into smaller batches of arbitrary size and order.
     // Aside from the parallelism performance benefits this offers, this also reduces input
     // size requirements: if a.dwo, b.dwo, c.dwo, and e.dwo are each 1 KB files, we can apply
@@ -526,23 +523,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // When we then apply the final action DWP(i1.dwp, i2.dwp) --> finalOutput.dwp, the inputs
     // to this action will usually total far less than 4 KB.
     //
-    // The actions form an n-ary tree with n == MAX_INPUTS_PER_DWP_ACTION. The tree is fuller
-    // at the leaves than the root, but that both increases parallelism and reduces the final
-    // action's input size.
-    context.registerAction(Iterables.getOnlyElement(packagers)
-        .addArgument("-o")
-        .addOutputArgument(dwpOutput)
-        .setMnemonic("CcGenerateDwp")
-        .build(context));
-  }
-
-  /**
-   * Creates the intermediate actions needed to generate this target's
-   * "debug info package" (i.e. its .dwp file).
-   */
-  private static List<SpawnAction.Builder> createIntermediateDwpPackagers(RuleContext context,
-      Artifact dwpOutput, CppConfiguration cppConfiguration, NestedSet<Artifact> dwpTools,
-      Iterable<Artifact> inputs, int intermediateDwpCount) {
+    // This list tracks every action we'll need to generate the output .dwp with batching.
     List<SpawnAction.Builder> packagers = new ArrayList<>();
 
     // Step 1: generate our batches. We currently break into arbitrary batches of fixed maximum
@@ -550,7 +531,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     SpawnAction.Builder currentPackager = newDwpAction(cppConfiguration, dwpTools);
     int inputsForCurrentPackager = 0;
 
-    for (Artifact dwoInput : inputs) {
+    for (Artifact dwoInput : allInputs) {
       if (inputsForCurrentPackager == MAX_INPUTS_PER_DWP_ACTION) {
         packagers.add(currentPackager);
         currentPackager = newDwpAction(cppConfiguration, dwpTools);
@@ -560,16 +541,28 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       inputsForCurrentPackager++;
     }
     packagers.add(currentPackager);
+
     // Step 2: given the batches, create the actions.
-    if (packagers.size() > 1) {
+    if (packagers.size() == 1) {
+      // If we only have one batch, make a single "original inputs --> final output" action.
+      context.registerAction(Iterables.getOnlyElement(packagers)
+          .addArgument("-o")
+          .addOutputArgument(dwpOutput)
+          .setMnemonic("CcGenerateDwp")
+          .build(context));
+    } else {
       // If we have multiple batches, make them all intermediate actions, then pipe their outputs
-      // into an additional level.
+      // into an additional action that outputs the final artifact.
+      //
+      // Note this only creates a hierarchy one level deep (i.e. we don't check if the number of
+      // intermediate outputs exceeds the maximum batch size). This is okay for current needs,
+      // which shouldn't stress those limits.
       List<Artifact> intermediateOutputs = new ArrayList<>();
 
+      int count = 1;
       for (SpawnAction.Builder packager : packagers) {
         Artifact intermediateOutput =
-            getIntermediateDwpFile(
-                context.getAnalysisEnvironment(), dwpOutput, intermediateDwpCount++);
+            getIntermediateDwpFile(context.getAnalysisEnvironment(), dwpOutput, count++);
         context.registerAction(packager
             .addArgument("-o")
             .addOutputArgument(intermediateOutput)
@@ -577,11 +570,15 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             .build(context));
         intermediateOutputs.add(intermediateOutput);
       }
-      return createIntermediateDwpPackagers(
-          context, dwpOutput, cppConfiguration, dwpTools, intermediateOutputs,
-          intermediateDwpCount);
+
+      // Now create the final action.
+      context.registerAction(newDwpAction(cppConfiguration, dwpTools)
+          .addInputArguments(intermediateOutputs)
+          .addArgument("-o")
+          .addOutputArgument(dwpOutput)
+          .setMnemonic("CcGenerateDwp")
+          .build(context));
     }
-    return packagers;
   }
 
   /**

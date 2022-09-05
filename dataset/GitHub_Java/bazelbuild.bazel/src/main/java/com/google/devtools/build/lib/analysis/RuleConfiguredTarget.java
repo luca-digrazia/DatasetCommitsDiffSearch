@@ -201,13 +201,6 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     public ImmutableCollection<String> getKeys() {
       return skylarkProviders.keySet();
     }
-
-    /**
-     * Returns a Skylark provider; "key" must be one from {@link #getKeys()}.
-     */
-    public Object getValue(String key) {
-      return skylarkProviders.get(key);
-    }
   }
 
   @Override
