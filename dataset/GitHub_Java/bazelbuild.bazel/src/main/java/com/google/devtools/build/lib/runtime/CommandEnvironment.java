@@ -69,7 +69,6 @@ public final class CommandEnvironment {
   private final BuildView view;
 
   private String outputFileSystem;
-  private Path workingDirectory;
 
   private AtomicReference<AbruptExitException> pendingException = new AtomicReference<>();
 
@@ -102,10 +101,6 @@ public final class CommandEnvironment {
         runtime.getPackageFactory().getRuleClassNames());
     this.view = new BuildView(runtime.getDirectories(), runtime.getRuleClassProvider(),
         runtime.getSkyframeExecutor(), runtime.getCoverageReportActionFactory());
-
-    // TODO(ulfjack): We don't call beforeCommand() in tests, but rely on workingDirectory being set
-    // in setupPackageCache(). This leads to NPE if we don't set it here.
-    this.workingDirectory = runtime.getWorkspace();
   }
 
   public BlazeRuntime getRuntime() {
@@ -186,15 +181,8 @@ public final class CommandEnvironment {
     return runtime.getSkyframeExecutor();
   }
 
-  /**
-   * Returns the working directory of the {@code blaze} client process.
-   *
-   * <p>This may be equal to {@code BlazeRuntime#getWorkspace()}, or beneath it.
-   *
-   * @see BlazeRuntime#getWorkspace()
-   */
   public Path getWorkingDirectory() {
-    return workingDirectory;
+    return runtime.getWorkingDirectory();
   }
 
   public ActionCache getPersistentActionCache() throws IOException {
@@ -258,12 +246,7 @@ public final class CommandEnvironment {
    */
   public void setupPackageCache(PackageCacheOptions packageCacheOptions,
       String defaultsPackageContents) throws InterruptedException, AbruptExitException {
-    SkyframeExecutor skyframeExecutor = getSkyframeExecutor();
-    if (!skyframeExecutor.hasIncrementalState()) {
-      skyframeExecutor.resetEvaluator();
-    }
-    skyframeExecutor.sync(reporter, packageCacheOptions, runtime.getOutputBase(),
-        getWorkingDirectory(), defaultsPackageContents, commandId);
+    runtime.setupPackageCache(reporter, packageCacheOptions, defaultsPackageContents, commandId);
   }
 
   public long getCommandStartTime() {
@@ -272,10 +255,6 @@ public final class CommandEnvironment {
 
   void setOutputFileSystem(String outputFileSystem) {
     this.outputFileSystem = outputFileSystem;
-  }
-
-  void setWorkingDirectory(Path workingDirectory) {
-    this.workingDirectory = workingDirectory;
   }
 
   public String getOutputFileSystem() {
