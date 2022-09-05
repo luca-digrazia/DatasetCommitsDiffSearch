@@ -87,10 +87,7 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
             ResponseMessage message = (ResponseMessage) obj;
             if (message.isSuccess() && message.isOnlyData())
                 obj = message.getData();
-            if (obj instanceof String)
-                text = ((String) obj);
-            else
-                text = JSON.toJSONString(obj, parseFilter(message), features);
+            text = JSON.toJSONString(obj, parseFilter(message), features);
             if (callback == null) callback = message.getCallback();
         } else {
             text = JSON.toJSONString(obj, features);
