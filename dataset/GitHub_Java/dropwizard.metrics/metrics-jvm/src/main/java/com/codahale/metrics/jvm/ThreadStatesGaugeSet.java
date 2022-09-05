@@ -18,6 +18,9 @@ import static com.codahale.metrics.MetricRegistry.name;
  * A set of gauges for the number of threads in their various states and deadlock detection.
  */
 public class ThreadStatesGaugeSet implements MetricSet {
+	// do not compute stack traces.
+	private final static int STACK_TRACE_DEPTH = 0;
+
     private final ThreadMXBean threads;
     private final ThreadDeadlockDetector deadlockDetector;
 
@@ -46,12 +49,12 @@ public class ThreadStatesGaugeSet implements MetricSet {
 
         for (final Thread.State state : Thread.State.values()) {
             gauges.put(name(state.toString().toLowerCase(), "count"),
-                    new Gauge<Object>() {
-                        @Override
-                        public Object getValue() {
-                            return getThreadCount(state);
-                        }
-                    });
+                       new Gauge<Object>() {
+                           @Override
+                           public Object getValue() {
+                               return getThreadCount(state);
+                           }
+                       });
         }
 
         gauges.put("count", new Gauge<Integer>() {
@@ -68,13 +71,6 @@ public class ThreadStatesGaugeSet implements MetricSet {
             }
         });
 
-        gauges.put("deadlock.count", new Gauge<Integer>() {
-            @Override
-            public Integer getValue() {
-                return deadlockDetector.getDeadlockedThreads().size();
-            }
-        });
-
         gauges.put("deadlocks", new Gauge<Set<String>>() {
             @Override
             public Set<String> getValue() {
@@ -86,7 +82,7 @@ public class ThreadStatesGaugeSet implements MetricSet {
     }
 
     private int getThreadCount(Thread.State state) {
-        final ThreadInfo[] allThreads = threads.getThreadInfo(threads.getAllThreadIds());
+        final ThreadInfo[] allThreads = getThreadInfo();
         int count = 0;
         for (ThreadInfo info : allThreads) {
             if (info != null && info.getThreadState() == state) {
@@ -95,4 +91,8 @@ public class ThreadStatesGaugeSet implements MetricSet {
         }
         return count;
     }
+
+	ThreadInfo[] getThreadInfo() {
+		return threads.getThreadInfo(threads.getAllThreadIds(), STACK_TRACE_DEPTH);
+	}
 }

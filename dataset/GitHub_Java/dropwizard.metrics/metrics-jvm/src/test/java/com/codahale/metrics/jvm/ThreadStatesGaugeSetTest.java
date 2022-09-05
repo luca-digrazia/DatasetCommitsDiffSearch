@@ -40,7 +40,7 @@ public class ThreadStatesGaugeSetTest {
         when(terminatedThread.getThreadState()).thenReturn(Thread.State.TERMINATED);
 
         when(threads.getAllThreadIds()).thenReturn(ids);
-        when(threads.getThreadInfo(ids)).thenReturn(new ThreadInfo[]{
+        when(threads.getThreadInfo(ids, 0)).thenReturn(new ThreadInfo[]{
                 newThread, runnableThread, blockedThread,
                 waitingThread, timedWaitingThread, terminatedThread
         });
@@ -55,15 +55,14 @@ public class ThreadStatesGaugeSetTest {
     public void hasASetOfGauges() throws Exception {
         assertThat(gauges.getMetrics().keySet())
                 .containsOnly("terminated.count",
-                        "new.count",
-                        "count",
-                        "timed_waiting.count",
-                        "deadlocks",
-                        "blocked.count",
-                        "waiting.count",
-                        "daemon.count",
-                        "runnable.count",
-                        "deadlock.count");
+                              "new.count",
+                              "count",
+                              "timed_waiting.count",
+                              "deadlocks",
+                              "blocked.count",
+                              "waiting.count",
+                              "daemon.count",
+                              "runnable.count");
     }
 
     @Test
@@ -103,12 +102,6 @@ public class ThreadStatesGaugeSetTest {
     public void hasAGaugeForAnyDeadlocks() throws Exception {
         assertThat(((Gauge) gauges.getMetrics().get("deadlocks")).getValue())
                 .isEqualTo(deadlocks);
-    }
-
-    @Test
-    public void hasAGaugeForAnyDeadlockCount() throws Exception {
-        assertThat(((Gauge) gauges.getMetrics().get("deadlock.count")).getValue())
-                .isEqualTo(1);
     }
 
     @Test
