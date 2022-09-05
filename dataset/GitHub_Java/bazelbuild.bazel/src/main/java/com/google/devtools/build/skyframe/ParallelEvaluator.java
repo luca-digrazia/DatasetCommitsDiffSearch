@@ -615,7 +615,8 @@ public final class ParallelEvaluator implements Evaluator {
 
     @Override
     public void run() {
-      NodeEntry state = Preconditions.checkNotNull(graph.get(skyKey), skyKey);
+      NodeEntry state = graph.get(skyKey);
+      Preconditions.checkNotNull(state, "%s %s", skyKey, state);
       Preconditions.checkState(state.isReady(), "%s %s", skyKey, state);
 
       if (state.isDirty()) {

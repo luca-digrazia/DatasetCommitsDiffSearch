@@ -66,8 +66,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import javax.annotation.Nullable;
-
 /**
  * A {@link Builder} implementation driven by Skyframe.
  */
@@ -105,7 +103,7 @@ public class SkyframeBuilder implements Builder {
       Executor executor,
       Set<ConfiguredTarget> builtTargets,
       boolean explain,
-      @Nullable Range<Long> lastExecutionTimeRange)
+      Range<Long> lastExecutionTimeRange)
       throws BuildFailedException, AbruptExitException, TestExecException, InterruptedException {
     skyframeExecutor.prepareExecution(checkOutputFiles, lastExecutionTimeRange);
     skyframeExecutor.setFileCache(fileCache);
