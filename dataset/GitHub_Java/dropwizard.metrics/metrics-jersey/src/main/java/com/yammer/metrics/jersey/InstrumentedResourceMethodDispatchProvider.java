@@ -7,10 +7,15 @@ import com.sun.jersey.spi.dispatch.RequestDispatcher;
 import com.yammer.metrics.annotation.ExceptionMetered;
 import com.yammer.metrics.annotation.Metered;
 import com.yammer.metrics.annotation.Timed;
-import com.yammer.metrics.core.*;
+import com.yammer.metrics.core.Meter;
+import com.yammer.metrics.core.MetricName;
+import com.yammer.metrics.core.MetricsRegistry;
+import com.yammer.metrics.core.Timer;
+import com.yammer.metrics.core.TimerContext;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
+import java.util.concurrent.TimeUnit;
 
 class InstrumentedResourceMethodDispatchProvider implements ResourceMethodDispatchProvider {
     private static class TimedRequestDispatcher implements RequestDispatcher {
@@ -87,7 +92,7 @@ class InstrumentedResourceMethodDispatchProvider implements ResourceMethodDispat
     }
 
     private final ResourceMethodDispatchProvider provider;
-    private final MetricsRegistry registry;
+    private MetricsRegistry registry;
 
     public InstrumentedResourceMethodDispatchProvider(ResourceMethodDispatchProvider provider, MetricsRegistry registry) {
         this.provider = provider;
@@ -103,39 +108,57 @@ class InstrumentedResourceMethodDispatchProvider implements ResourceMethodDispat
 
         if (method.getMethod().isAnnotationPresent(Timed.class)) {
             final Timed annotation = method.getMethod().getAnnotation(Timed.class);
-            final Class<?> klass = method.getDeclaringResource().getResourceClass();
-            final String group = MetricName.chooseGroup(annotation.group(), klass);
-            final String type = MetricName.chooseType(annotation.type(), klass);
-            final String name = MetricName.chooseName(annotation.name(), method.getMethod());
-            final MetricName metricName = new MetricName(group, type, name);
-            final Timer timer = registry.newTimer(metricName, annotation.durationUnit(), annotation.rateUnit());
-            dispatcher = new TimedRequestDispatcher(dispatcher, timer);
-        }
 
-        if (method.getMethod().isAnnotationPresent(Metered.class)) {
-            final Metered annotation = method.getMethod().getAnnotation(Metered.class);
             Class<?> klass = method.getDeclaringResource().getResourceClass();
             String group = MetricName.chooseGroup(annotation.group(), klass);
             String type = MetricName.chooseType(annotation.type(), klass);
             String name = MetricName.chooseName(annotation.name(), method.getMethod());
             MetricName metricName = new MetricName(group, type, name);
-            final Meter meter = registry.newMeter(metricName, annotation.eventType(), annotation.rateUnit());
+
+            final Timer timer = registry.newTimer(metricName,
+                                                       annotation.durationUnit() == null ?
+                                                               TimeUnit.MILLISECONDS : annotation.durationUnit(),
+                                                       annotation.rateUnit() == null ?
+                                                               TimeUnit.SECONDS : annotation.rateUnit());
+            dispatcher = new TimedRequestDispatcher(dispatcher, timer);
+        }
+
+        if (method.getMethod().isAnnotationPresent(Metered.class)) {
+            final Metered annotation = method.getMethod().getAnnotation(Metered.class);
+
+            Class<?> klass = method.getDeclaringResource().getResourceClass();
+            String group = MetricName.chooseGroup(annotation.group(), klass);
+            String type = MetricName.chooseType(annotation.type(), klass);
+            String name = MetricName.chooseName(annotation.name(), method.getMethod());
+            MetricName metricName = new MetricName(group, type, name);
+
+            final Meter meter = registry.newMeter(metricName,
+                                                       annotation.eventType() == null ?
+                                                               "requests" : annotation.eventType(),
+                                                       annotation.rateUnit() == null ?
+                                                               TimeUnit.SECONDS : annotation.rateUnit());
             dispatcher = new MeteredRequestDispatcher(dispatcher, meter);
         }
 
         if (method.getMethod().isAnnotationPresent(ExceptionMetered.class)) {
             final ExceptionMetered annotation = method.getMethod().getAnnotation(ExceptionMetered.class);
+
             Class<?> klass = method.getDeclaringResource().getResourceClass();
             String group = MetricName.chooseGroup(annotation.group(), klass);
             String type = MetricName.chooseType(annotation.type(), klass);
             String name = annotation.name() == null || annotation.name().equals("") ?
-                    method.getMethod().getName() + ExceptionMetered.DEFAULT_NAME_SUFFIX : annotation
-                    .name();
+                    method.getMethod().getName() + ExceptionMetered.DEFAULT_NAME_SUFFIX : annotation.name();
             MetricName metricName = new MetricName(group, type, name);
-            final Meter meter = registry.newMeter(metricName, annotation.eventType(), annotation.rateUnit());
+
+            final Meter meter = registry.newMeter(metricName,
+                                                       annotation.eventType() == null ?
+                                                               "requests" : annotation.eventType(),
+                                                       annotation.rateUnit() == null ?
+                                                               TimeUnit.SECONDS : annotation.rateUnit());
             dispatcher = new ExceptionMeteredRequestDispatcher(dispatcher, meter, annotation.cause());
         }
 
         return dispatcher;
     }
+
 }
