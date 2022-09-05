@@ -23,6 +23,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
+import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -43,7 +44,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -661,21 +661,8 @@ public final class JavaCompilationHelper {
 
     JavaClasspathMode classpathMode = getJavaConfiguration().getReduceJavaClasspath();
     if (isStrict() && classpathMode != JavaClasspathMode.OFF) {
-      List<JavaCompilationArgsProvider> compilationArgsProviders = new LinkedList<>();
-      for (TransitiveInfoCollection dep : deps) {
-        // First check if there is a JavaCompilationArgsProvider.
-        JavaCompilationArgsProvider provider = dep.getProvider(JavaCompilationArgsProvider.class);
-
-        if (provider == null) {
-          // A target can either have both JavaCompilationArgsProvider and JavaProvider that
-          // encapsulates the same information, or just one of them.
-          provider = JavaProvider.getProvider(JavaCompilationArgsProvider.class, dep);
-        }
-        if (provider != null) {
-          compilationArgsProviders.add(provider);
-        }
-      }
-      addDependencyArtifactsToAttributes(attributes, compilationArgsProviders);
+      addDependencyArtifactsToAttributes(
+          attributes, AnalysisUtils.getProviders(deps, JavaCompilationArgsProvider.class));
     }
   }
 

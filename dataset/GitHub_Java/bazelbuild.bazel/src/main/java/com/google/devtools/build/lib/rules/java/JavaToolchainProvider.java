@@ -51,7 +51,6 @@ public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
       boolean forciblyDisableHeaderCompilation,
       Artifact singleJar,
       Artifact genClass,
-      @Nullable Artifact resourceJarBuilder,
       FilesToRunProvider ijar,
       ImmutableListMultimap<String, String> compatibleJavacOptions) {
     return new AutoValue_JavaToolchainProvider(
@@ -67,7 +66,6 @@ public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
         forciblyDisableHeaderCompilation,
         singleJar,
         genClass,
-        resourceJarBuilder,
         ijar,
         compatibleJavacOptions,
         // merges the defaultJavacFlags from
@@ -118,9 +116,6 @@ public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
 
   /** Returns the {@link Artifact} of the GenClass deploy jar */
   public abstract Artifact getGenClass();
-
-  @Nullable
-  public abstract Artifact getResourceJarBuilder();
 
   /** Returns the ijar executable */
   public abstract FilesToRunProvider getIjar();
