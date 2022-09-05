@@ -1,33 +1,82 @@
 package com.yammer.metrics.core;
 
+import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.HistogramMetric.SampleType;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * A timer metric which aggregates timing durations and provides duration
- * statistics, plus throughput statistics via {@link MeterMetric}.
- *
- * @author coda
+ * A timer metric which aggregates timing durations and provides duration statistics, plus
+ * throughput statistics via {@link MeterMetric}.
  */
-public class TimerMetric implements Metered {
+public class TimerMetric implements Metered, Stoppable, Percentiled, Summarized {
+
     private final TimeUnit durationUnit, rateUnit;
     private final MeterMetric meter;
     private final HistogramMetric histogram = new HistogramMetric(SampleType.BIASED);
+    private final Clock clock;
 
     /**
      * Creates a new {@link TimerMetric}.
      *
      * @param durationUnit the scale unit for this timer's duration metrics
-     * @param rateUnit the scale unit for this timer's rate metrics
+     * @param rateUnit     the scale unit for this timer's rate metrics
+     * @deprecated either use the other constructor or create via the {@link MetricsRegistry} or
+     *             {@link Metrics}
      */
+    @SuppressWarnings({"deprecation"})
     public TimerMetric(TimeUnit durationUnit, TimeUnit rateUnit) {
+        this(durationUnit, rateUnit, Clock.DEFAULT);
+    }
+
+    /**
+     * Creates a new {@link TimerMetric} with the specified clock.
+     *
+     * @param durationUnit the scale unit for this timer's duration metrics
+     * @param rateUnit     the scale unit for this timer's rate metrics
+     * @param clock        the clock used to calculate duration
+     * @deprecated either use the other constructor or create via the {@link MetricsRegistry} or
+     *             {@link Metrics}
+     */
+    @SuppressWarnings({"deprecation"})
+    public TimerMetric(TimeUnit durationUnit, TimeUnit rateUnit, Clock clock) {
         this.durationUnit = durationUnit;
         this.rateUnit = rateUnit;
         this.meter = MeterMetric.newMeter("calls", rateUnit);
+        this.clock = clock;
+        clear();
+    }
+
+    /**
+     * Creates a new {@link TimerMetric}.
+     *
+     * @param tickThread   background thread for updating the rates
+     * @param durationUnit the scale unit for this timer's duration metrics
+     * @param rateUnit     the scale unit for this timer's rate metrics
+     */
+    public TimerMetric(ScheduledExecutorService tickThread, TimeUnit durationUnit, TimeUnit rateUnit) {
+        this(tickThread, durationUnit, rateUnit, Clock.DEFAULT);
+    }
+
+    /**
+     * Creates a new {@link TimerMetric}.
+     *
+     * @param tickThread   background thread for updating the rates
+     * @param durationUnit the scale unit for this timer's duration metrics
+     * @param rateUnit     the scale unit for this timer's rate metrics
+     * @param clock        the clock used to calculate duration
+     */
+    public TimerMetric(ScheduledExecutorService tickThread, TimeUnit durationUnit, TimeUnit rateUnit, Clock clock) {
+        this.durationUnit = durationUnit;
+        this.rateUnit = rateUnit;
+        this.meter = MeterMetric.newMeter(tickThread, "calls", rateUnit);
+        this.clock = clock;
         clear();
     }
 
@@ -56,7 +105,7 @@ public class TimerMetric implements Metered {
      * Adds a recorded duration.
      *
      * @param duration the length of the duration
-     * @param unit the scale unit of {@code duration}
+     * @param unit     the scale unit of {@code duration}
      */
     public void update(long duration, TimeUnit unit) {
         update(unit.toNanos(duration));
@@ -65,72 +114,109 @@ public class TimerMetric implements Metered {
     /**
      * Times and records the duration of event.
      *
-     * @param event a {@link Callable} whose {@link Callable#call()} method
-     * implements a process whose duration should be timed
-     * @param <T> the type of the value returned by {@code event}
+     * @param event a {@link Callable} whose {@link Callable#call()} method implements a process
+     *              whose duration should be timed
+     * @param <T>   the type of the value returned by {@code event}
      * @return the value returned by {@code event}
      * @throws Exception if {@code event} throws an {@link Exception}
      */
     public <T> T time(Callable<T> event) throws Exception {
-        final long startTime = System.nanoTime();
+        final long startTime = clock.tick();
         try {
             return event.call();
         } finally {
-            update(System.nanoTime() - startTime);
+            update(clock.tick() - startTime);
         }
     }
 
-    @Override
-    public long count() { return histogram.count(); }
+    /**
+     * Returns a timing {@link TimerContext}, which measures an elapsed time in nanoseconds.
+     *
+     * @return a new {@link TimerContext}
+     */
+    public TimerContext time() {
+        return new TimerContext(this);
+    }
 
     @Override
-    public double fifteenMinuteRate() { return meter.fifteenMinuteRate(); }
+    public long count() {
+        return histogram.count();
+    }
 
     @Override
-    public double fiveMinuteRate() { return meter.fiveMinuteRate(); }
+    public double fifteenMinuteRate() {
+        return meter.fifteenMinuteRate();
+    }
 
     @Override
-    public double meanRate() { return meter.meanRate(); }
+    public double fiveMinuteRate() {
+        return meter.fiveMinuteRate();
+    }
 
     @Override
-    public double oneMinuteRate() { return meter.oneMinuteRate(); }
+    public double meanRate() {
+        return meter.meanRate();
+    }
+
+    @Override
+    public double oneMinuteRate() {
+        return meter.oneMinuteRate();
+    }
 
     /**
      * Returns the longest recorded duration.
      *
      * @return the longest recorded duration
      */
-    public double max() { return convertFromNS(histogram.max()); }
+    @Override
+    public double max() {
+        return convertFromNS(histogram.max());
+    }
 
     /**
      * Returns the shortest recorded duration.
      *
      * @return the shortest recorded duration
      */
-    public double min() { return convertFromNS(histogram.min()); }
+    @Override
+    public double min() {
+        return convertFromNS(histogram.min());
+    }
 
     /**
      * Returns the arithmetic mean of all recorded durations.
      *
      * @return the arithmetic mean of all recorded durations
      */
-    public double mean() { return convertFromNS(histogram.mean()); }
+    @Override
+    public double mean() {
+        return convertFromNS(histogram.mean());
+    }
 
     /**
      * Returns the standard deviation of all recorded durations.
      *
      * @return the standard deviation of all recorded durations
      */
-    public double stdDev() { return convertFromNS(histogram.stdDev()); }
+    @Override
+    public double stdDev() {
+        return convertFromNS(histogram.stdDev());
+    }
 
-    /**
-     * Returns an array of durations at the given percentiles.
-     *
-     * @param percentiles one or more percentiles ({@code 0..1})
-     * @return an array of durations at the given percentiles
+    /* (non-Javadoc)
+     * @see com.yammer.metrics.core.Percentiled#percentile(double)
      */
-    public double[] percentiles(double... percentiles) {
-        final double[] scores = histogram.percentiles(percentiles);
+    @Override
+    public double percentile(double percentile) {
+        return percentiles(percentile)[0];
+    }
+
+    /* (non-Javadoc)
+     * @see com.yammer.metrics.core.Percentiled#percentiles(double)
+     */
+    @Override
+    public Double[] percentiles(Double... percentiles) {
+        final Double[] scores = histogram.percentiles(percentiles);
         for (int i = 0; i < scores.length; i++) {
             scores[i] = convertFromNS(scores[i]);
         }
@@ -156,6 +242,16 @@ public class TimerMetric implements Metered {
         return values;
     }
 
+    /**
+     * Writes the values of the timer's sample to the given file.
+     *
+     * @param output the file to which the values will be written
+     * @throws java.io.IOException if there is an error writing the values
+     */
+    public void dump(File output) throws IOException {
+        histogram.dump(output);
+    }
+
     private void update(long duration) {
         if (duration >= 0) {
             histogram.update(duration);
@@ -167,4 +263,13 @@ public class TimerMetric implements Metered {
         return ns / TimeUnit.NANOSECONDS.convert(1, durationUnit);
     }
 
+    @Override
+    public void stop() {
+        meter.stop();
+    }
+
+    @Override
+    public <T> void processWith(MetricsProcessor<T> processor, MetricName name, T context) throws Exception {
+        processor.processTimer(name, this, context);
+    }
 }

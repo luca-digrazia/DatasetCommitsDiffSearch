@@ -56,8 +56,8 @@ public class GangliaMessage {
      * @return
      */
     public GangliaMessage addString(String value) {
-        final byte[] bytes = value.getBytes();
-        final int len = bytes.length;
+        byte[] bytes = value.getBytes();
+        int len = bytes.length;
         addInt(len);
         System.arraycopy(bytes, 0, this.buffer, this.offset, len);
         this.offset += len;
@@ -70,7 +70,7 @@ public class GangliaMessage {
      * Pads the buffer with zero bytes up to the nearest multiple of 4.
      */
     private void pad() {
-        final int newOffset = ((this.offset + 3) / 4) * 4;
+        int newOffset = ((this.offset + 3) / 4) * 4;
         while (this.offset < newOffset) {
             this.buffer[this.offset++] = 0;
         }

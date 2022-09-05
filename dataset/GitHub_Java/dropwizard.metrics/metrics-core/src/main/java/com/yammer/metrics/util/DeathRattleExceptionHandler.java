@@ -1,8 +1,6 @@
 package com.yammer.metrics.util;
 
-import com.yammer.metrics.core.Counter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.yammer.metrics.core.CounterMetric;
 
 /**
  * When a thread throws an Exception that was not caught, a DeathRattleExceptionHandler will
@@ -17,39 +15,32 @@ import org.slf4j.LoggerFactory;
  * <p/>
  * Usage is straightforward:
  * <p/>
- * <pre><code>
- * final Counter c = Metrics.newCounter(MyRunnable.class, "thread-deaths");
- * Thread.UncaughtExceptionHandler exHandler = new DeathRattleExceptionHandler(c);
- * final Thread myThread = new Thread(myRunnable, "MyRunnable");
- * myThread.setUncaughtExceptionHandler(exHandler);
- * </code></pre>
+ * <pre>
+ * CounterMetric c = Metrics.newCounter(MyRunnable.class, "thread-deaths")
+ * Thread.UncaughtExceptionHandler exHandler = new DeathRattleExceptionHandler(c)
+ * Thread myThread = new Thread(myRunnable, "MyRunnable")
+ * myThread.setUncaughtExceptionHandler(exHandler)
+ * </pre>
  * <p/>
  * Setting the global default exception handler should be done first, like so:
  * <p/>
- * <pre><code>
- * final Counter c = Metrics.newCounter(MyMainClass.class, "unhandled-thread-deaths");
- * Thread.UncaughtExceptionHandler ohNoIDidntKnowAboutThis = new DeathRattleExceptionHandler(c);
- * Thread.setDefaultUncaughtExceptionHandler(ohNoIDidntKnowAboutThis);
- * </code></pre>
+ * <pre>
+ * CounterMetric c = Metrics.newCounter(MyMainClass.class, "unhandled-thread-deaths")
+ * Thread.UncaughtExceptionHandler ohNoIDidntKnowAboutThis = new DeathRattleExceptionHandler(c)
+ * Thread.setDefaultUncaughtExceptionHandler(ohNoIDidntKnowAboutThis)
+ * </pre>
  */
 public class DeathRattleExceptionHandler implements Thread.UncaughtExceptionHandler {
-    private static final Logger LOGGER = LoggerFactory.getLogger(DeathRattleExceptionHandler.class);
+    final private CounterMetric deathRattle;
 
-    private final Counter counter;
-
-    /**
-     * Creates a new {@link DeathRattleExceptionHandler} with the given {@link Counter}.
-     *
-     * @param counter    the {@link Counter} which will be used to record the number of uncaught
-     *                   exceptions
-     */
-    public DeathRattleExceptionHandler(Counter counter) {
-        this.counter = counter;
+    public DeathRattleExceptionHandler(CounterMetric deathRattle) {
+        this.deathRattle = deathRattle;
     }
 
     @Override
     public void uncaughtException(Thread t, Throwable e) {
-        counter.inc();
-        LOGGER.error("Uncaught exception on thread {}", t, e);
+        deathRattle.inc();
+        System.err.println("Uncaught exception on thread " + t);
+        e.printStackTrace();
     }
 }

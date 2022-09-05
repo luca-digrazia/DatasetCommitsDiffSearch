@@ -2,15 +2,18 @@ package com.yammer.metrics.guice.tests;
 
 import com.google.inject.Guice;
 import com.google.inject.Injector;
-import com.yammer.metrics.annotation.ExceptionMetered;
 import com.yammer.metrics.core.*;
+import com.yammer.metrics.guice.ExceptionMetered;
 import com.yammer.metrics.guice.InstrumentationModule;
+
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.concurrent.TimeUnit;
 
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.instanceOf;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
@@ -21,7 +24,7 @@ public class ExceptionMeteredTest {
 
     @Before
     public void setup() {
-        final Injector injector = Guice.createInjector(new InstrumentationModule());
+        Injector injector = Guice.createInjector(new InstrumentationModule());
         instance = injector.getInstance(InstrumentedWithExceptionMetered.class);
         registry = injector.getInstance(MetricsRegistry.class);
     }
@@ -35,7 +38,7 @@ public class ExceptionMeteredTest {
         assertMetricIsSetup(metric);
 
         assertThat("Metric intialises to zero",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(0L));
 
         try {
@@ -46,7 +49,7 @@ public class ExceptionMeteredTest {
         }
 
         assertThat("Metric is marked",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(1L));
     }
 
@@ -59,7 +62,7 @@ public class ExceptionMeteredTest {
         assertMetricIsSetup(metric);
 
         assertThat("Metric intialises to zero",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(0L));
 
         try {
@@ -70,7 +73,7 @@ public class ExceptionMeteredTest {
         }
 
         assertThat("Metric is marked",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(1L));
     }
 
@@ -83,13 +86,13 @@ public class ExceptionMeteredTest {
         assertMetricIsSetup(metric);
 
         assertThat("Metric intialises to zero",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(0L));
 
         instance.explodeWithPublicScope(false);
 
         assertThat("Metric should remain at zero if no exception is thrown",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(0L));
     }
 
@@ -98,11 +101,11 @@ public class ExceptionMeteredTest {
 
         final Metric metric = registry.allMetrics()
                                       .get(new MetricName(InstrumentedWithExceptionMetered.class,
-                                                          "explodeWithDefaultScopeExceptions"));
+                                                          "explodeWithDefaultScopeExceptionMetric"));
         assertMetricIsSetup(metric);
 
         assertThat("Metric intialises to zero",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(0L));
 
         try {
@@ -112,7 +115,7 @@ public class ExceptionMeteredTest {
         }
 
         assertThat("Metric is marked",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(1L));
     }
 
@@ -121,12 +124,12 @@ public class ExceptionMeteredTest {
 
         final Metric metric = registry.allMetrics()
                                       .get(new MetricName(InstrumentedWithExceptionMetered.class,
-                                                          "explodeWithProtectedScopeExceptions"));
+                                                          "explodeWithProtectedScopeExceptionMetric"));
 
         assertMetricIsSetup(metric);
 
         assertThat("Metric intialises to zero",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(0L));
 
         try {
@@ -136,7 +139,7 @@ public class ExceptionMeteredTest {
         }
 
         assertThat("Metric is marked",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(1L));
     }
 
@@ -149,7 +152,7 @@ public class ExceptionMeteredTest {
         assertMetricIsSetup(metric);
 
         assertThat("Metric intialises to zero",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(0L));
         try {
             instance.errorProneMethod(new MyException());
@@ -158,7 +161,7 @@ public class ExceptionMeteredTest {
         }
 
         assertThat("Metric should be marked when the specified exception type is thrown",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(1L));
     }
 
@@ -171,7 +174,7 @@ public class ExceptionMeteredTest {
         assertMetricIsSetup(metric);
 
         assertThat("Metric intialises to zero",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(0L));
         try {
             instance.errorProneMethod(new MySpecialisedException());
@@ -181,7 +184,7 @@ public class ExceptionMeteredTest {
 
         assertThat(
                 "Metric should be marked when a subclass of the specified exception type is thrown",
-                ((Meter) metric).count(),
+                ((MeterMetric) metric).count(),
                 is(1L));
     }
 
@@ -194,7 +197,7 @@ public class ExceptionMeteredTest {
         assertMetricIsSetup(metric);
 
         assertThat("Metric intialises to zero",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(0L));
         try {
             instance.errorProneMethod(new MyOtherException());
@@ -203,7 +206,7 @@ public class ExceptionMeteredTest {
         }
 
         assertThat("Metric should not be marked if the exception is a different type",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(0L));
     }
 
@@ -223,15 +226,15 @@ public class ExceptionMeteredTest {
         assertMetricIsSetup(metric);
 
         assertThat("Guice creates a meter which gets marked",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(1L));
 
         assertThat("Guice creates a meter with the given event type",
-                   ((Meter) metric).eventType(),
+                   ((MeterMetric) metric).eventType(),
                    is("poops"));
 
         assertThat("Guice creates a meter with the given rate unit",
-                   ((Meter) metric).rateUnit(),
+                   ((MeterMetric) metric).rateUnit(),
                    is(TimeUnit.MINUTES));
     }
 
@@ -245,7 +248,7 @@ public class ExceptionMeteredTest {
 
         final Metric errorMetric = registry.allMetrics()
                                            .get(new MetricName(InstrumentedWithExceptionMetered.class,
-                                                               "timedAndExceptionExceptions"));
+                                                               "timedAndExceptionExceptionMetric"));
 
         assertThat("Guice creates a metric",
                    timedMetric,
@@ -253,7 +256,7 @@ public class ExceptionMeteredTest {
 
         assertThat("Guice creates a timer",
                    timedMetric,
-                   is(instanceOf(Timer.class)));
+                   is(instanceOf(TimerMetric.class)));
 
         assertThat("Guice creates a metric",
                    errorMetric,
@@ -261,27 +264,27 @@ public class ExceptionMeteredTest {
 
         assertThat("Guice creates a meter",
                    errorMetric,
-                   is(instanceOf(Meter.class)));
+                   is(instanceOf(MeterMetric.class)));
 
         // Counts should start at zero        
         assertThat("Timer Metric should be zero when initialised",
-                   ((Timer) timedMetric).count(),
+                   ((TimerMetric) timedMetric).count(),
                    is(0L));
 
 
         assertThat("Error Metric should be zero when initialised",
-                   ((Meter) errorMetric).count(),
+                   ((MeterMetric) errorMetric).count(),
                    is(0L));
 
         // Invoke, but don't throw an exception
         instance.timedAndException(null);
 
         assertThat("Expected the meter metric to be marked on invocation",
-                   ((Timer) timedMetric).count(),
+                   ((TimerMetric) timedMetric).count(),
                    is(1L));
 
         assertThat("Expected the exception metric to be zero since no exceptions thrown",
-                   ((Meter) errorMetric).count(),
+                   ((MeterMetric) errorMetric).count(),
                    is(0L));
 
         // Invoke and throw an exception
@@ -291,11 +294,11 @@ public class ExceptionMeteredTest {
         } catch (Exception e) {}
 
         assertThat("Expected a count of 2, one for each invocation",
-                   ((Timer) timedMetric).count(),
+                   ((TimerMetric) timedMetric).count(),
                    is(2L));
 
         assertThat("Expected exception count to be 1 as one (of two) invocations threw an exception",
-                   ((Meter) errorMetric).count(),
+                   ((MeterMetric) errorMetric).count(),
                    is(1L));
 
     }
@@ -309,7 +312,7 @@ public class ExceptionMeteredTest {
 
         final Metric errorMetric = registry.allMetrics()
                                            .get(new MetricName(InstrumentedWithExceptionMetered.class,
-                                                               "meteredAndExceptionExceptions"));
+                                                               "meteredAndExceptionExceptionMetric"));
 
         assertThat("Guice creates a metric",
                    meteredMetric,
@@ -317,7 +320,7 @@ public class ExceptionMeteredTest {
 
         assertThat("Guice creates a meter",
                    meteredMetric,
-                   is(instanceOf(Meter.class)));
+                   is(instanceOf(MeterMetric.class)));
 
         assertThat("Guice creates a metric",
                    errorMetric,
@@ -325,27 +328,27 @@ public class ExceptionMeteredTest {
 
         assertThat("Guice creates an exception meter",
                    errorMetric,
-                   is(instanceOf(Meter.class)));
+                   is(instanceOf(MeterMetric.class)));
 
         // Counts should start at zero        
         assertThat("Meter Metric should be zero when initialised",
-                   ((Meter) meteredMetric).count(),
+                   ((MeterMetric) meteredMetric).count(),
                    is(0L));
 
 
         assertThat("Error Metric should be zero when initialised",
-                   ((Meter) errorMetric).count(),
+                   ((MeterMetric) errorMetric).count(),
                    is(0L));
 
         // Invoke, but don't throw an exception
         instance.meteredAndException(null);
 
         assertThat("Expected the meter metric to be marked on invocation",
-                   ((Meter) meteredMetric).count(),
+                   ((MeterMetric) meteredMetric).count(),
                    is(1L));
 
         assertThat("Expected the exception metric to be zero since no exceptions thrown",
-                   ((Meter) errorMetric).count(),
+                   ((MeterMetric) errorMetric).count(),
                    is(0L));
 
         // Invoke and throw an exception
@@ -355,11 +358,11 @@ public class ExceptionMeteredTest {
         } catch (Exception e) {}
 
         assertThat("Expected a count of 2, one for each invocation",
-                   ((Meter) meteredMetric).count(),
+                   ((MeterMetric) meteredMetric).count(),
                    is(2L));
 
         assertThat("Expected exception count to be 1 as one (of two) invocations threw an exception",
-                   ((Meter) errorMetric).count(),
+                   ((MeterMetric) errorMetric).count(),
                    is(1L));
 
     }
@@ -371,7 +374,7 @@ public class ExceptionMeteredTest {
 
         assertThat("Guice creates a meter",
                    metric,
-                   is(instanceOf(Meter.class)));
+                   is(instanceOf(MeterMetric.class)));
     }
 
     @SuppressWarnings("serial")

@@ -11,7 +11,7 @@ public interface MetricPredicate {
     /**
      * A predicate which matches all inputs.
      */
-    static final MetricPredicate ALL = new MetricPredicate() {
+    public static final MetricPredicate ALL = new MetricPredicate() {
         @Override
         public boolean matches(MetricName name, Metric metric) {
             return true;
@@ -25,5 +25,5 @@ public interface MetricPredicate {
      * @param metric the metric itself
      * @return {@code true} if the predicate applies, {@code false} otherwise
      */
-    boolean matches(MetricName name, Metric metric);
+    public boolean matches(MetricName name, Metric metric);
 }

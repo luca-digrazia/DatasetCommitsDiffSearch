@@ -7,4 +7,9 @@ public class InstrumentedWithGauge {
     public String doAThing() {
         return "poop";
     }
+
+    @Gauge
+    public String doAnotherThing() {
+        return "anotherThing";
+    }
 }

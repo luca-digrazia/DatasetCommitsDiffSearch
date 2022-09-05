@@ -22,7 +22,7 @@ public class TimedTest {
 
     @Before
     public void setup() {
-        final Injector injector = Guice.createInjector(new InstrumentationModule());
+        Injector injector = Guice.createInjector(new InstrumentationModule());
         instance = injector.getInstance(InstrumentedWithTimed.class);
         registry = injector.getInstance(MetricsRegistry.class);
     }
@@ -38,15 +38,15 @@ public class TimedTest {
         assertMetricSetup(metric);
 
         assertThat("Guice creates a timer which records invocation length",
-                   ((Timer) metric).count(),
+                   ((TimerMetric) metric).count(),
                    is(1L));
 
         assertThat("Guice creates a timer with the given rate unit",
-                   ((Timer) metric).rateUnit(),
+                   ((TimerMetric) metric).rateUnit(),
                    is(TimeUnit.MINUTES));
 
         assertThat("Guice creates a timer with the given duration unit",
-                   ((Timer) metric).durationUnit(),
+                   ((TimerMetric) metric).durationUnit(),
                    is(TimeUnit.MICROSECONDS));
     }
 
@@ -79,6 +79,6 @@ public class TimedTest {
 
         assertThat("Guice creates a timer",
                    metric,
-                   is(instanceOf(Timer.class)));
+                   is(instanceOf(TimerMetric.class)));
     }
 }

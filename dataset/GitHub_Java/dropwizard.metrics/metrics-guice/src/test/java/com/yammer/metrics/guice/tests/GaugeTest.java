@@ -2,14 +2,12 @@ package com.yammer.metrics.guice.tests;
 
 import com.google.inject.Guice;
 import com.google.inject.Injector;
-import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.GaugeMetric;
 import com.yammer.metrics.core.Metric;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 import com.yammer.metrics.guice.InstrumentationModule;
 
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 import static org.hamcrest.Matchers.instanceOf;
@@ -18,30 +16,14 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertThat;
 
 public class GaugeTest {
-    private InstrumentedWithGauge instance;
-    private MetricsRegistry registry;
-
-    @Before
-    public void setup() {
-        this.registry = new MetricsRegistry();
-        final Injector injector = Guice.createInjector(new InstrumentationModule() {
-            @Override
-            protected MetricsRegistry createMetricsRegistry() {
-                return registry;
-            }
-        });
-        this.instance = injector.getInstance(InstrumentedWithGauge.class);
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        registry.shutdown();
-    }
-
 
     @Test
     @SuppressWarnings("unchecked")
     public void aGaugeAnnotatedMethod() throws Exception {
+        final Injector injector = Guice.createInjector(new InstrumentationModule());
+        final InstrumentedWithGauge instance = injector.getInstance(InstrumentedWithGauge.class);
+        final MetricsRegistry registry = injector.getInstance(MetricsRegistry.class);
+
         instance.doAThing();
 
         final Metric metric = registry.allMetrics().get(new MetricName(InstrumentedWithGauge.class,
@@ -53,10 +35,10 @@ public class GaugeTest {
 
         assertThat("Guice creates a gauge",
                    metric,
-                   is(instanceOf(Gauge.class)));
+                   is(instanceOf(GaugeMetric.class)));
 
         assertThat("Guice creates a gauge with the given value",
-                   ((Gauge<String>) metric).value(),
+                   ((GaugeMetric<String>) metric).value(),
                    is("poop"));
     }
 
@@ -64,6 +46,10 @@ public class GaugeTest {
     @Test
     @SuppressWarnings("unchecked")
     public void aGaugeAnnotatedMethodWithDefaultName() throws Exception {
+        final Injector injector = Guice.createInjector(new InstrumentationModule());
+        final InstrumentedWithGauge instance = injector.getInstance(InstrumentedWithGauge.class);
+        final MetricsRegistry registry = injector.getInstance(MetricsRegistry.class);
+
         instance.doAnotherThing();
 
         final Metric metric = registry.allMetrics().get(new MetricName(InstrumentedWithGauge.class,
@@ -75,10 +61,10 @@ public class GaugeTest {
 
         assertThat("Guice creates a gauge",
                    metric,
-                   is(instanceOf(Gauge.class)));
+                   is(instanceOf(GaugeMetric.class)));
 
         assertThat("Guice creates a gauge with the given value",
-                   ((Gauge<String>) metric).value(),
+                   ((GaugeMetric<String>) metric).value(),
                    is("anotherThing"));
     }
 }

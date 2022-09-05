@@ -4,7 +4,7 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
 
 /**
- * An abstraction for how time passes. It is passed to {@link Timer} to track timing.
+ * An abstraction for how time passes. It is passed to {@link TimerMetric} to track timing.
  */
 public abstract class Clock {
 
@@ -43,11 +43,11 @@ public abstract class Clock {
      * Another implementation, uses {@link ThreadMXBean#getCurrentThreadCpuTime()}
      */
     public static class CpuTime extends Clock {
-        private static final ThreadMXBean THREAD_MX_BEAN = ManagementFactory.getThreadMXBean();
+        private static final ThreadMXBean threadMxBean = ManagementFactory.getThreadMXBean();
 
         @Override
         public long tick() {
-            return THREAD_MX_BEAN.getCurrentThreadCpuTime();
+            return threadMxBean.getCurrentThreadCpuTime();
         }
     }
 }

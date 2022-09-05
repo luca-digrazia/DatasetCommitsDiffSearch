@@ -7,20 +7,20 @@ import com.yammer.metrics.core.MetricsRegistry;
 import com.yammer.metrics.reporting.JmxReporter;
 
 /**
- * A Guice module which instruments methods annotated with the {@link com.yammer.metrics.annotation.Metered} and {@link com.yammer.metrics.annotation.Timed}
+ * A Guice module which instruments methods annotated with the {@link Metered} and {@link Timed}
  * annotations.
  *
- * @see com.yammer.metrics.annotation.Gauge
- * @see com.yammer.metrics.annotation.Metered
- * @see com.yammer.metrics.annotation.Timed
- * @see com.yammer.metrics.aop.MeteredInterceptor
- * @see com.yammer.metrics.aop.TimedInterceptor
+ * @see Gauge
+ * @see Metered
+ * @see Timed
+ * @see MeteredInterceptor
+ * @see TimedInterceptor
  * @see GaugeInjectionListener
  */
 public class InstrumentationModule extends AbstractModule {
     @Override
     protected void configure() {
-        final MetricsRegistry metricsRegistry = createMetricsRegistry();
+        MetricsRegistry metricsRegistry = createMetricsRegistry();
         bind(MetricsRegistry.class).toInstance(metricsRegistry);
         bind(HealthCheckRegistry.class).toInstance(createHealthCheckRegistry());
         bindJmxReporter();

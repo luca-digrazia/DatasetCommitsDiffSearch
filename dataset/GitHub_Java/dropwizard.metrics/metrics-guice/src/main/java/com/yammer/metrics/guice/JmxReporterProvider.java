@@ -15,7 +15,7 @@ public class JmxReporterProvider implements Provider<JmxReporter> {
 
     @Override
     public JmxReporter get() {
-        final JmxReporter reporter = new JmxReporter(metricsRegistry);
+        JmxReporter reporter = new JmxReporter(metricsRegistry);
         reporter.start();
         return reporter;
     }

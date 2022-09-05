@@ -1,8 +1,8 @@
 package com.yammer.metrics.guice.tests;
 
-import com.yammer.metrics.annotation.ExceptionMetered;
-import com.yammer.metrics.annotation.Metered;
-import com.yammer.metrics.annotation.Timed;
+import com.yammer.metrics.guice.ExceptionMetered;
+import com.yammer.metrics.guice.Metered;
+import com.yammer.metrics.guice.Timed;
 
 import java.util.concurrent.TimeUnit;
 
@@ -42,7 +42,7 @@ public class InstrumentedWithExceptionMetered {
                       rateUnit = TimeUnit.MINUTES,
                       cause = ArrayIndexOutOfBoundsException.class)
     public Object causeAnOutOfBoundsException() {
-        final Object[] arr = {};
+        Object[] arr = {};
         return arr[1];
     }
 

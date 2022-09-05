@@ -9,4 +9,14 @@ public class InstrumentedWithTimed {
     public String doAThing() {
         return "poop";
     }
+
+    @Timed
+    String doAThingWithDefaultScope() {
+        return "defaultResult";
+    }
+
+    @Timed
+    protected String doAThingWithProtectedScope() {
+        return "defaultProtected";
+    }
 }

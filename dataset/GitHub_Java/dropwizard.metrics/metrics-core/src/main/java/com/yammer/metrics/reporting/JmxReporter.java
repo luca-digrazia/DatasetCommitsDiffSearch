@@ -18,7 +18,6 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
     private final Map<MetricName, ObjectName> registeredBeans;
     private final MBeanServer server;
 
-    @SuppressWarnings("UnusedDeclaration")
     public static interface MetricMBean {
         public ObjectName objectName();
     }
@@ -36,15 +35,14 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
         }
     }
 
-    @SuppressWarnings("UnusedDeclaration")
     public static interface GaugeMBean extends MetricMBean {
         public Object getValue();
     }
 
     public static class Gauge extends AbstractBean implements GaugeMBean {
-        private final com.yammer.metrics.core.Gauge<?> metric;
+        private final GaugeMetric<?> metric;
 
-        public Gauge(com.yammer.metrics.core.Gauge<?> metric, ObjectName objectName) {
+        public Gauge(GaugeMetric<?> metric, ObjectName objectName) {
             super(objectName);
             this.metric = metric;
         }
@@ -55,15 +53,14 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
         }
     }
 
-    @SuppressWarnings("UnusedDeclaration")
     public static interface CounterMBean extends MetricMBean {
         public long getCount();
     }
 
     public static class Counter extends AbstractBean implements CounterMBean {
-        private final com.yammer.metrics.core.Counter metric;
+        private final CounterMetric metric;
 
-        public Counter(com.yammer.metrics.core.Counter metric, ObjectName objectName) {
+        public Counter(CounterMetric metric, ObjectName objectName) {
             super(objectName);
             this.metric = metric;
         }
@@ -74,7 +71,6 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
         }
     }
 
-    @SuppressWarnings("UnusedDeclaration")
     public static interface MeterMBean extends MetricMBean {
         public long getCount();
 
@@ -135,7 +131,6 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
         }
     }
 
-    @SuppressWarnings("UnusedDeclaration")
     public static interface HistogramMBean extends MetricMBean {
         public long getCount();
 
@@ -164,9 +159,9 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
     public static class Histogram implements HistogramMBean {
         private final ObjectName objectName;
-        private final com.yammer.metrics.core.Histogram metric;
+        private final HistogramMetric metric;
 
-        public Histogram(com.yammer.metrics.core.Histogram metric, ObjectName objectName) {
+        public Histogram(HistogramMetric metric, ObjectName objectName) {
             this.metric = metric;
             this.objectName = objectName;
         }
@@ -178,7 +173,7 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public double get50thPercentile() {
-            return metric.quantiles(0.5)[0];
+            return metric.percentiles(0.5)[0];
         }
 
         @Override
@@ -208,27 +203,27 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public double get75thPercentile() {
-            return metric.quantiles(0.75)[0];
+            return metric.percentiles(0.75)[0];
         }
 
         @Override
         public double get95thPercentile() {
-            return metric.quantiles(0.95)[0];
+            return metric.percentiles(0.95)[0];
         }
 
         @Override
         public double get98thPercentile() {
-            return metric.quantiles(0.98)[0];
+            return metric.percentiles(0.98)[0];
         }
 
         @Override
         public double get99thPercentile() {
-            return metric.quantiles(0.99)[0];
+            return metric.percentiles(0.99)[0];
         }
 
         @Override
         public double get999thPercentile() {
-            return metric.quantiles(0.999)[0];
+            return metric.percentiles(0.999)[0];
         }
 
         @Override
@@ -237,22 +232,21 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
         }
     }
 
-    @SuppressWarnings("UnusedDeclaration")
     public static interface TimerMBean extends MeterMBean, HistogramMBean {
         public TimeUnit getLatencyUnit();
     }
 
     public static class Timer extends Meter implements TimerMBean {
-        private final com.yammer.metrics.core.Timer metric;
+        private final TimerMetric metric;
 
-        public Timer(com.yammer.metrics.core.Timer metric, ObjectName objectName) {
+        public Timer(TimerMetric metric, ObjectName objectName) {
             super(metric, objectName);
             this.metric = metric;
         }
 
         @Override
         public double get50thPercentile() {
-            return metric.quantiles(0.5)[0];
+            return metric.percentiles(0.5)[0];
         }
 
         @Override
@@ -282,27 +276,27 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public double get75thPercentile() {
-            return metric.quantiles(0.75)[0];
+            return metric.percentiles(0.75)[0];
         }
 
         @Override
         public double get95thPercentile() {
-            return metric.quantiles(0.95)[0];
+            return metric.percentiles(0.95)[0];
         }
 
         @Override
         public double get98thPercentile() {
-            return metric.quantiles(0.98)[0];
+            return metric.percentiles(0.98)[0];
         }
 
         @Override
         public double get99thPercentile() {
-            return metric.quantiles(0.99)[0];
+            return metric.percentiles(0.99)[0];
         }
 
         @Override
         public double get999thPercentile() {
-            return metric.quantiles(0.999)[0];
+            return metric.percentiles(0.999)[0];
         }
 
         @Override
@@ -348,26 +342,26 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
     }
 
     @Override
-    public void processCounter(MetricName name, com.yammer.metrics.core.Counter counter, Context context) throws Exception {
+    public void processCounter(MetricName name, CounterMetric counter, Context context) throws Exception {
         registerBean(context.metricName,
                      new Counter(counter, context.objectName),
                      context.objectName);
     }
 
     @Override
-    public void processHistogram(MetricName name, com.yammer.metrics.core.Histogram histogram, Context context) throws Exception {
+    public void processHistogram(MetricName name, HistogramMetric histogram, Context context) throws Exception {
         registerBean(context.metricName,
                      new Histogram(histogram, context.objectName),
                      context.objectName);
     }
 
     @Override
-    public void processTimer(MetricName name, com.yammer.metrics.core.Timer timer, Context context) throws Exception {
+    public void processTimer(MetricName name, TimerMetric timer, Context context) throws Exception {
         registerBean(context.metricName, new Timer(timer, context.objectName), context.objectName);
     }
 
     @Override
-    public void processGauge(MetricName name, com.yammer.metrics.core.Gauge<?> gauge, Context context) throws Exception {
+    public void processGauge(MetricName name, GaugeMetric<?> gauge, Context context) throws Exception {
         registerBean(context.metricName, new Gauge(gauge, context.objectName), context.objectName);
     }
 
@@ -383,7 +377,7 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
     @Override
     public void onMetricRemoved(MetricName name) {
-        final ObjectName objectName = registeredBeans.remove(name);
+        ObjectName objectName = registeredBeans.remove(name);
         if (objectName != null) {
             try {
                 server.unregisterMBean(objectName);

@@ -1,6 +1,8 @@
 package com.yammer.metrics.core.tests;
 
 import com.yammer.metrics.core.GaugeMetric;
+import com.yammer.metrics.core.MetricName;
+import com.yammer.metrics.core.MetricsProcessor;
 import org.junit.Test;
 
 import static org.hamcrest.Matchers.is;
@@ -11,6 +13,10 @@ public class GaugeMetricTest {
         @Override
         public String value() {
             return "woo";
+        }
+
+        @Override
+        public <T> void processWith(MetricsProcessor<T> reporter, MetricName name, T context) throws Exception {
         }
     };
 

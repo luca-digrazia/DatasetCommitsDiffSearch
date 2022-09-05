@@ -2,36 +2,37 @@ package com.yammer.metrics.reporting;
 
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.*;
-import com.yammer.metrics.core.VirtualMachineMetrics.GarbageCollector;
+import com.yammer.metrics.core.VirtualMachineMetrics.*;
 import com.yammer.metrics.util.MetricPredicate;
+import com.yammer.metrics.util.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.lang.Thread.State;
 import java.net.Socket;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Map.Entry;
-import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
+
+import static com.yammer.metrics.core.VirtualMachineMetrics.*;
 
 
 /**
  * A simple reporter which sends out application metrics to a <a href="http://graphite.wikidot.com/faq">Graphite</a>
  * server periodically.
  */
-public class GraphiteReporter extends AbstractPollingReporter implements MetricProcessor<Long> {
+public class GraphiteReporter extends AbstractPollingReporter implements MetricsProcessor<Long> {
     private static final Logger LOG = LoggerFactory.getLogger(GraphiteReporter.class);
     private final String prefix;
     private final MetricPredicate predicate;
     private final Locale locale = Locale.US;
-    private final Clock clock;
-    private final SocketProvider socketProvider;
-    private final VirtualMachineMetrics vm;
     private Writer writer;
+    private Clock clock;
+    private final SocketProvider socketProvider;
     public boolean printVMMetrics = true;
 
     /**
@@ -148,29 +149,11 @@ public class GraphiteReporter extends AbstractPollingReporter implements MetricP
      * @param metricsRegistry the metrics registry
      * @param prefix          is prepended to all names reported to graphite
      * @param predicate       filters metrics to be reported
-     * @param socketProvider  a {@link SocketProvider} instance
-     * @param clock           a {@link Clock} instance
      * @throws IOException if there is an error connecting to the Graphite server
      */
     public GraphiteReporter(MetricsRegistry metricsRegistry, String prefix, MetricPredicate predicate, SocketProvider socketProvider, Clock clock) throws IOException {
-        this(metricsRegistry, prefix, predicate, socketProvider, clock, VirtualMachineMetrics.INSTANCE);
-    }
-
-    /**
-     * Creates a new {@link GraphiteReporter}.
-     *
-     * @param metricsRegistry the metrics registry
-     * @param prefix          is prepended to all names reported to graphite
-     * @param predicate       filters metrics to be reported
-     * @param socketProvider  a {@link SocketProvider} instance
-     * @param clock           a {@link Clock} instance
-     * @param vm              a {@link VirtualMachineMetrics} instance
-     * @throws IOException if there is an error connecting to the Graphite server
-     */
-    public GraphiteReporter(MetricsRegistry metricsRegistry, String prefix, MetricPredicate predicate, SocketProvider socketProvider, Clock clock, VirtualMachineMetrics vm) throws IOException {
         super(metricsRegistry, "graphite-reporter");
         this.socketProvider = socketProvider;
-        this.vm = vm;
 
         this.clock = clock;
 
@@ -188,9 +171,9 @@ public class GraphiteReporter extends AbstractPollingReporter implements MetricP
         Socket socket = null;
         try {
             socket = this.socketProvider.get();
-            writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+            writer = new OutputStreamWriter(socket.getOutputStream());
 
-            final long epoch = clock.time() / 1000;
+            long epoch = clock.time() / 1000;
             if (this.printVMMetrics) {
                 printVmMetrics(epoch);
             }
@@ -222,8 +205,9 @@ public class GraphiteReporter extends AbstractPollingReporter implements MetricP
     }
 
     private void printRegularMetrics(final Long epoch) {
-        for (Entry<String,SortedMap<MetricName,Metric>> entry : getMetricsRegistry().groupedMetrics(
-                predicate).entrySet()) {
+        for (Entry<String, Map<MetricName, Metric>> entry : Utils.sortAndFilterMetrics(
+                metricsRegistry.allMetrics(),
+                this.predicate).entrySet()) {
             for (Entry<MetricName, Metric> subEntry : entry.getValue().entrySet()) {
                 final Metric metric = subEntry.getValue();
                 if (metric != null) {
@@ -237,30 +221,9 @@ public class GraphiteReporter extends AbstractPollingReporter implements MetricP
         }
     }
 
-    private void sendInt(long timestamp, String name, String valueName, long value) {
-        sendToGraphite(timestamp, name, valueName + " " + String.format(locale, "%d", value));
-    }
-
-    private void sendFloat(long timestamp, String name, String valueName, double value) {
-        sendToGraphite(timestamp, name, valueName + " " + String.format(locale, "%2.2f", value));
-    }
-
-    private void sendObjToGraphite(long timestamp, String name, String valueName, Object value) {
-        sendToGraphite(timestamp, name, valueName + " " + String.format(locale, "%s", value));
-    }
-
-    private void sendToGraphite(long timestamp, String name, String value) {
+    private void sendToGraphite(String data) {
         try {
-            if (!prefix.isEmpty()) {
-                writer.write(prefix);
-            }
-            writer.write(sanitizeString(name));
-            writer.write('.');
-            writer.write(value);
-            writer.write(' ');
-            writer.write(Long.toString(timestamp));
-            writer.write('\n');
-            writer.flush();
+            writer.write(data);
         } catch (IOException e) {
             LOG.error("Error sending to Graphite:", e);
         }
@@ -276,85 +239,205 @@ public class GraphiteReporter extends AbstractPollingReporter implements MetricP
             sb.append(name.getScope())
               .append('.');
         }
-        return sb.append(name.getName()).toString();
-    }
-    
-    private String sanitizeString(String s) {
-        return s.replace(' ', '-');
+        return sb.append(name.getName())
+                 .toString()
+                 .replace(' ', '-');
     }
 
     @Override
-    public void processGauge(MetricName name, Gauge<?> gauge, Long epoch) throws IOException {
-        sendObjToGraphite(epoch, sanitizeName(name), "value", gauge.value());
+    public void processGauge(MetricName name, GaugeMetric<?> gauge, Long epoch) throws IOException {
+        sendToGraphite(String.format(locale,
+                                     "%s%s.%s %s %d\n",
+                                     prefix,
+                                     sanitizeName(name),
+                                     "value",
+                                     gauge.value(),
+                                     epoch));
     }
 
     @Override
-    public void processCounter(MetricName name, Counter counter, Long epoch) throws IOException {
-        sendInt(epoch, sanitizeName(name), "count", counter.count());
+    public void processCounter(MetricName name, CounterMetric counter, Long epoch) throws IOException {
+        sendToGraphite(String.format(locale,
+                                     "%s%s.%s %d %d\n",
+                                     prefix,
+                                     sanitizeName(name),
+                                     "count",
+                                     counter.count(),
+                                     epoch));
     }
 
     @Override
     public void processMeter(MetricName name, Metered meter, Long epoch) throws IOException {
         final String sanitizedName = sanitizeName(name);
-        sendInt(epoch, sanitizedName, "count", meter.count());
-        sendFloat(epoch, sanitizedName, "meanRate", meter.meanRate());
-        sendFloat(epoch, sanitizedName, "1MinuteRate", meter.oneMinuteRate());
-        sendFloat(epoch, sanitizedName, "5MinuteRate", meter.fiveMinuteRate());
-        sendFloat(epoch, sanitizedName, "15MinuteRate", meter.fifteenMinuteRate());
+        final StringBuilder lines = new StringBuilder();
+        lines.append(String.format(locale,
+                                   "%s%s.%s %d %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "count",
+                                   meter.count(),
+                                   epoch));
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "meanRate",
+                                   meter.meanRate(),
+                                   epoch));
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "1MinuteRate",
+                                   meter.oneMinuteRate(),
+                                   epoch));
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "5MinuteRate",
+                                   meter.fiveMinuteRate(),
+                                   epoch));
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "15MinuteRate",
+                                   meter.fifteenMinuteRate(),
+                                   epoch));
+        sendToGraphite(lines.toString());
     }
 
     @Override
-    public void processHistogram(MetricName name, Histogram histogram, Long epoch) throws IOException {
+    public void processHistogram(MetricName name, HistogramMetric histogram, Long epoch) throws IOException {
         final String sanitizedName = sanitizeName(name);
-        sendSummarized(epoch, sanitizedName, histogram);
-        sendQuantized(epoch, sanitizedName, histogram);
+        final StringBuilder lines = new StringBuilder();
+        printSummarized(histogram, sanitizedName, epoch, lines);
+        printPercentiled(histogram, sanitizedName, epoch, lines);
+        sendToGraphite(lines.toString());
     }
 
     @Override
-    public void processTimer(MetricName name, Timer timer, Long epoch) throws IOException {
+    public void processTimer(MetricName name, TimerMetric timer, Long epoch) throws IOException {
         processMeter(name, timer, epoch);
         final String sanitizedName = sanitizeName(name);
-        sendSummarized(epoch, sanitizedName, timer);
-        sendQuantized(epoch, sanitizedName, timer);
+        final Double[] percentiles = timer.percentiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
+        final StringBuilder lines = new StringBuilder();
+        printSummarized(timer, sanitizedName, epoch, lines);
+        printPercentiled(timer, sanitizedName, epoch, lines);
+        sendToGraphite(lines.toString());
     }
 
-    private void sendSummarized(long epoch, String sanitizedName, Summarized metric) throws IOException {
-        sendFloat(epoch, sanitizedName, "min", metric.min());
-        sendFloat(epoch, sanitizedName, "max", metric.max());
-        sendFloat(epoch, sanitizedName, "mean", metric.mean());
-        sendFloat(epoch, sanitizedName, "stddev", metric.stdDev());
+    private void printSummarized(Summarized metric, String sanitizedName, Long epoch, Appendable lines) throws IOException {
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "min",
+                                   metric.min(),
+                                   epoch));
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "max",
+                                   metric.max(),
+                                   epoch));
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "mean",
+                                   metric.mean(),
+                                   epoch));
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "stddev",
+                                   metric.stdDev(),
+                                   epoch));
     }
 
-    private void sendQuantized(long epoch, String sanitizedName, Quantized metric) throws IOException {
-        final Double[] quantiles = metric.quantiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
-        sendFloat(epoch, sanitizedName, "median", quantiles[0]);
-        sendFloat(epoch, sanitizedName, "75percentile", quantiles[1]);
-        sendFloat(epoch, sanitizedName, "95percentile", quantiles[2]);
-        sendFloat(epoch, sanitizedName, "98percentile", quantiles[3]);
-        sendFloat(epoch, sanitizedName, "99percentile", quantiles[4]);
-        sendFloat(epoch, sanitizedName, "999percentile", quantiles[5]);
+    private void printPercentiled(Percentiled metric, String sanitizedName, Long epoch, Appendable lines) throws IOException {
+        final Double[] percentiles = metric.percentiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "median",
+                                   percentiles[0],
+                                   epoch));
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "75percentile",
+                                   percentiles[1],
+                                   epoch));
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "95percentile",
+                                   percentiles[2],
+                                   epoch));
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "98percentile",
+                                   percentiles[3],
+                                   epoch));
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "99percentile",
+                                   percentiles[4],
+                                   epoch));
+        lines.append(String.format(locale,
+                                   "%s%s.%s %2.2f %d\n",
+                                   prefix,
+                                   sanitizedName,
+                                   "999percentile",
+                                   percentiles[5],
+                                   epoch));
+    }
+
+    private void printDoubleField(String name, double value, long epoch) {
+        sendToGraphite(String.format(locale, "%s%s %2.2f %d\n", prefix, name, value, epoch));
+    }
+
+    private void printLongField(String name, long value, long epoch) {
+        sendToGraphite(String.format(locale, "%s%s %d %d\n", prefix, name, value, epoch));
     }
 
     private void printVmMetrics(long epoch) {
-        sendFloat(epoch, "jvm.memory", "heap_usage", vm.heapUsage());
-        sendFloat(epoch, "jvm.memory", "non_heap_usage", vm.nonHeapUsage());
-        for (Entry<String, Double> pool : vm.memoryPoolUsage().entrySet()) {
-            sendFloat(epoch, "jvm.memory.memory_pool_usages", pool.getKey(), pool.getValue());
+        printDoubleField("jvm.memory.heap_usage", heapUsage(), epoch);
+        printDoubleField("jvm.memory.non_heap_usage", nonHeapUsage(), epoch);
+        for (Entry<String, Double> pool : memoryPoolUsage().entrySet()) {
+            printDoubleField("jvm.memory.memory_pool_usages." + pool.getKey(),
+                             pool.getValue(),
+                             epoch);
         }
 
-        sendInt(epoch, "jvm", "daemon_thread_count", vm.daemonThreadCount());
-        sendInt(epoch, "jvm", "thread_count", vm.threadCount());
-        sendInt(epoch, "jvm", "uptime", vm.uptime());
-        sendFloat(epoch, "jvm", "fd_usage", vm.fileDescriptorUsage());
+        printDoubleField("jvm.daemon_thread_count", daemonThreadCount(), epoch);
+        printDoubleField("jvm.thread_count", threadCount(), epoch);
+        printDoubleField("jvm.uptime", uptime(), epoch);
+        printDoubleField("jvm.fd_usage", fileDescriptorUsage(), epoch);
 
-        for (Entry<State, Double> entry : vm.threadStatePercentages().entrySet()) {
-            sendFloat(epoch, "jvm.thread-states", entry.getKey().toString().toLowerCase(), entry.getValue());
+        for (Entry<State, Double> entry : threadStatePercentages().entrySet()) {
+            printDoubleField("jvm.thread-states." + entry.getKey().toString().toLowerCase(),
+                             entry.getValue(),
+                             epoch);
         }
 
-        for (Entry<String, GarbageCollector> entry : vm.garbageCollectors().entrySet()) {
-            final String name = "jvm.gc." + entry.getKey();
-            sendInt(epoch, name, "time", entry.getValue().getTime(TimeUnit.MILLISECONDS));
-            sendInt(epoch, name, "runs", entry.getValue().getRuns());
+        for (Entry<String, GarbageCollector> entry : garbageCollectors().entrySet()) {
+            printLongField("jvm.gc." + entry.getKey() + ".time",
+                           entry.getValue().getTime(TimeUnit.MILLISECONDS),
+                           epoch);
+            printLongField("jvm.gc." + entry.getKey() + ".runs", entry.getValue().getRuns(), epoch);
         }
     }
 

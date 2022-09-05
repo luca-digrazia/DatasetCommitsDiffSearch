@@ -8,7 +8,6 @@ import com.yammer.metrics.util.MetricPredicate;
 
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.util.Locale;
 import java.util.TimeZone;
 
 public class ConsoleReporterTest extends AbstractPollingReporterTest {
@@ -19,8 +18,7 @@ public class ConsoleReporterTest extends AbstractPollingReporterTest {
                                    new PrintStream(out),
                                    MetricPredicate.ALL,
                                    clock,
-                                   TimeZone.getTimeZone("UTC"),
-                                   Locale.US);
+                                   TimeZone.getTimeZone("UTC"));
     }
 
     @Override

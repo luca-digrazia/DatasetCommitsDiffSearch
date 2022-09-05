@@ -22,7 +22,7 @@ public class MeteredTest {
 
     @Before
     public void setup() {
-        final Injector injector = Guice.createInjector(new InstrumentationModule());
+        Injector injector = Guice.createInjector(new InstrumentationModule());
         instance = injector.getInstance(InstrumentedWithMetered.class);
         registry = injector.getInstance(MetricsRegistry.class);
     }
@@ -39,15 +39,15 @@ public class MeteredTest {
         assertMetricIsSetup(metric);
 
         assertThat("Guice creates a meter which gets marked",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(1L));
 
         assertThat("Guice creates a meter with the given event type",
-                   ((Meter) metric).eventType(),
+                   ((MeterMetric) metric).eventType(),
                    is("poops"));
 
         assertThat("Guice creates a meter with the given rate unit",
-                   ((Meter) metric).rateUnit(),
+                   ((MeterMetric) metric).rateUnit(),
                    is(TimeUnit.MINUTES));
     }
 
@@ -60,13 +60,13 @@ public class MeteredTest {
         assertMetricIsSetup(metric);
 
         assertThat("Metric intialises to zero",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(0L));
 
         instance.doAThingWithDefaultScope();
 
         assertThat("Metric is marked",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(1L));
     }
 
@@ -80,13 +80,13 @@ public class MeteredTest {
         assertMetricIsSetup(metric);
 
         assertThat("Metric intialises to zero",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(0L));
 
         instance.doAThingWithProtectedScope();
 
         assertThat("Metric is marked",
-                   ((Meter) metric).count(),
+                   ((MeterMetric) metric).count(),
                    is(1L));
     }
 
@@ -97,6 +97,6 @@ public class MeteredTest {
 
         assertThat("Guice creates a meter",
                    metric,
-                   is(instanceOf(Meter.class)));
+                   is(instanceOf(MeterMetric.class)));
     }
 }

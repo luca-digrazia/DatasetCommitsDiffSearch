@@ -1,6 +1,6 @@
 package com.yammer.metrics.servlet.reporting.tests;
 
-import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.GaugeMetric;
 import com.yammer.metrics.core.HealthCheckRegistry;
 import com.yammer.metrics.core.MetricsRegistry;
 import com.yammer.metrics.reporting.MetricsServlet;
@@ -26,7 +26,7 @@ public class MetricsServletJsonTest {
 
     @Test
     public void gauge() throws IOException {
-        registry.newGauge(Object.class, "test", new Gauge<String>() {
+        registry.newGauge(Object.class, "test", new GaugeMetric<String>() {
             @Override
             public String value() {
                 return "foo";
@@ -54,7 +54,7 @@ public class MetricsServletJsonTest {
 
     @After
     public void tearDown() {
-        registry.shutdown();
+        registry.threadPools().shutdownThreadPools();
     }
 
     private MetricsRegistry registry;
