@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 http://www.hswebframework.org
+ * Copyright 2016 http://www.hswebframework.org
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@ public @interface RequiresDataAccess {
     /**
      * @return permission id ,如果为空将继承 {@link Authorize#permission()}
      * @see Permission#getId()
+     *
      */
     String permission() default "";
 
@@ -51,8 +52,6 @@ public @interface RequiresDataAccess {
      * @see DataAccessConfig#getAction()
      */
     String[] action() default {};
-
-    String[] supportType() default {};
 
     /**
      * @return logical
@@ -81,9 +80,4 @@ public @interface RequiresDataAccess {
      */
     boolean ignore() default false;
 
-    /**
-     * @return 进行控制的实体类类型
-     * @since 3.0.6
-     */
-    Class entityType() default Void.class;
 }
