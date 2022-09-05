@@ -42,13 +42,13 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AspectDefinition;
+import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
@@ -165,12 +165,12 @@ public class SkylarkRuleClassFunctions {
   // rules to skylark extensions. Using the same instance would require a large refactoring.
   // If we don't want to support old built-in rules and Skylark simultaneously
   // (except for transition phase) it's probably OK.
-  private static final LoadingCache<String, Label> labelCache =
+  private static LoadingCache<String, Label> labelCache =
       CacheBuilder.newBuilder().build(new CacheLoader<String, Label>() {
     @Override
     public Label load(String from) throws Exception {
       try {
-        return Label.parseAbsolute(from, false);
+        return Label.parseAbsolute(from);
       } catch (LabelSyntaxException e) {
         throw new Exception(from);
       }
@@ -615,36 +615,16 @@ public class SkylarkRuleClassFunctions {
       + "Example: <br><pre class=language-python>Label(\"//tools:default\")</pre>",
       returnType = Label.class,
       mandatoryPositionals = {@Param(name = "label_string", type = String.class,
-          doc = "the label string")},
-      optionalNamedOnly = {@Param(
-          name = "relative_to_caller_repository",
-          type = Boolean.class,
-          defaultValue = "False",
-          doc = "whether the label should be resolved relative to the label of the file this "
-              + "function is called from.")},
-      useLocation = true,
-      useEnvironment = true)
+            doc = "the label string")},
+      useLocation = true)
   private static final BuiltinFunction label = new BuiltinFunction("Label") {
-      @SuppressWarnings({"unchecked", "unused"})
-      public Label invoke(
-          String labelString, Boolean relativeToCallerRepository, Location loc, Environment env)
-          throws EvalException {
-        Label parentLabel = null;
-        if (relativeToCallerRepository) {
-          parentLabel = env.getCallerLabel();
-        } else {
-          parentLabel = env.getGlobals().label();
-        }
-        try {
-          if (parentLabel != null) {
-            LabelValidator.parseAbsoluteLabel(labelString);
-            labelString = parentLabel.getRelative(labelString)
-                .getUnambiguousCanonicalForm();
+      public Label invoke(String labelString,
+          Location loc) throws EvalException, ConversionException {
+          try {
+            return labelCache.get(labelString);
+          } catch (ExecutionException e) {
+            throw new EvalException(loc, "Illegal absolute label syntax: " + labelString);
           }
-          return labelCache.get(labelString);
-        } catch (LabelValidator.BadLabelException | LabelSyntaxException | ExecutionException e) {
-          throw new EvalException(loc, "Illegal absolute label syntax: " + labelString);
-        }
       }
     };
 
@@ -991,7 +971,7 @@ public class SkylarkRuleClassFunctions {
     }
 
     @Override
-    public AspectDefinition getDefinition() {
+    public AspectDefinition getDefinition(AspectParameters aspectParameters) {
       return aspectDefinition;
     }
 

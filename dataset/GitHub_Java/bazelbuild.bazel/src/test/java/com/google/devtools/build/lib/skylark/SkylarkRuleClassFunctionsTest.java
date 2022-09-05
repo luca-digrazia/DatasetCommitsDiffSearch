@@ -32,15 +32,17 @@ import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.PredicateWithMessage;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.rules.SkylarkAttr;
+import com.google.devtools.build.lib.rules.SkylarkAttr.Descriptor;
 import com.google.devtools.build.lib.rules.SkylarkFileType;
 import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions;
 import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions.RuleFunction;
+import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions.SkylarkAspect;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
+import com.google.devtools.build.lib.util.Pair;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -177,39 +179,39 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   public void testAttrWithProviders() throws Exception {
     Attribute attr =
         evalAttributeDefinition("attr.label_list(allow_files = True, providers = ['a', 'b'])")
-            .build("a1");
+        .build("a1");
     assertThat(attr.getMandatoryProvidersList()).containsExactly(ImmutableSet.of("a", "b"));
   }
 
   @Test
   public void testAttrWithProvidersList() throws Exception {
     Attribute attr =
-        evalAttributeDefinition("attr.label_list(allow_files = True,"
-            + " providers = [['a', 'b'], ['c']])")
-            .build("a1");
+            evalAttributeDefinition("attr.label_list(allow_files = True,"
+                    + " providers = [['a', 'b'], ['c']])")
+                    .build("a1");
     assertThat(attr.getMandatoryProvidersList()).containsExactly(ImmutableSet.of("a", "b"),
-        ImmutableSet.of("c"));
+            ImmutableSet.of("c"));
   }
 
   @Test
   public void testAttrWithWrongProvidersList() throws Exception {
     checkErrorContains("Illegal argument: element in 'providers' is of unexpected type."
             + " Should be list of string, but got list with an element of type int.",
-        "attr.label_list(allow_files = True,  providers = [['a', 1], ['c']])");
+            "attr.label_list(allow_files = True,  providers = [['a', 1], ['c']])");
 
     checkErrorContains("Illegal argument: element in 'providers' is of unexpected type."
             + " Should be list of string, but got string.",
-        "attr.label_list(allow_files = True,  providers = [['a', 'b'], 'c'])");
+            "attr.label_list(allow_files = True,  providers = [['a', 'b'], 'c'])");
   }
 
   @Test
   public void testLabelListWithAspects() throws Exception {
     SkylarkAttr.Descriptor attr =
         (SkylarkAttr.Descriptor) evalRuleClassCode(
-            "def _impl(target, ctx):",
-            "   pass",
-            "my_aspect = aspect(implementation = _impl)",
-            "attr.label_list(aspects = [my_aspect])");
+          "def _impl(target, ctx):",
+          "   pass",
+          "my_aspect = aspect(implementation = _impl)",
+          "attr.label_list(aspects = [my_aspect])");
     Object aspect = ev.lookup("my_aspect");
     assertThat(aspect).isNotNull();
     assertThat(attr.getAspects()).containsExactly(aspect);
@@ -235,61 +237,21 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
         "   attrs = { '_extra_deps' : attr.label(default = Label('//foo/bar:baz')) }",
         ")");
     SkylarkAspect aspect = (SkylarkAspect) ev.lookup("my_aspect");
-    Attribute attribute = Iterables.getOnlyElement(aspect.getAttributes());
-    assertThat(attribute.getName()).isEqualTo("$extra_deps");
-    assertThat(attribute.getDefaultValue(null))
-        .isEqualTo(Label.parseAbsolute("//foo/bar:baz", false));
+    Pair<String, Descriptor> pair = Iterables.getOnlyElement(aspect.getAttributes());
+    assertThat(pair.first).isEqualTo("$extra_deps");
+    assertThat(pair.second.getAttributeBuilder().build("$extra_deps").getDefaultValue(null))
+        .isEqualTo(Label.parseAbsolute("//foo/bar:baz"));
   }
 
   @Test
-  public void testAspectParameter() throws Exception {
-    evalAndExport(
-        "def _impl(target, ctx):",
-        "   pass",
-        "my_aspect = aspect(_impl,",
-        "   attrs = { 'param' : attr.string(values=['a', 'b']) }",
-        ")");
-    SkylarkAspect aspect = (SkylarkAspect) ev.lookup("my_aspect");
-    Attribute attribute = Iterables.getOnlyElement(aspect.getAttributes());
-    assertThat(attribute.getName()).isEqualTo("param");
-  }
-  
-  @Test
-  public void testAspectParameterRequiresValues() throws Exception {
+  public void testAspectNonImplicitAttribute() throws Exception {
     checkErrorContains(
-        "Aspect parameter attribute 'param' must have type 'string' and use the 'values' "
-        + "restriction.",
+        "Aspect attribute 'extra_deps' must be implicit (its name should start with '_')",
         "def _impl(target, ctx):",
         "   pass",
         "my_aspect = aspect(_impl,",
-        "   attrs = { 'param' : attr.string(default = 'c') }",
+        "   attrs = { 'extra_deps' : attr.label(default = Label('//foo/bar:baz')) }",
         ")");
-  }
-
-  @Test
-  public void testAspectParameterBadType() throws Exception {
-    checkErrorContains(
-        "Aspect parameter attribute 'param' must have type 'string' and use the 'values' "
-        + "restriction.",
-        "def _impl(target, ctx):",
-        "   pass",
-        "my_aspect = aspect(_impl,",
-        "   attrs = { 'param' : attr.label(default = Label('//foo/bar:baz')) }",
-        ")");
-  }
-
-  @Test
-  public void testAspectParameterAndExtraDeps() throws Exception {
-    evalAndExport(
-        "def _impl(target, ctx):",
-        "   pass",
-        "my_aspect = aspect(_impl,",
-        "   attrs = { 'param' : attr.string(values=['a', 'b']),",
-        "             '_extra' : attr.label(default = Label('//foo/bar:baz')) }",
-        ")");
-    SkylarkAspect aspect = (SkylarkAspect) ev.lookup("my_aspect");
-    assertThat(aspect.getAttributes()).hasSize(2);
-    assertThat(aspect.getParamAttributes()).containsExactly("param");
   }
 
   @Test
@@ -311,12 +273,12 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   private static final RuleClass.ConfiguredTargetFactory<Object, Object>
       DUMMY_CONFIGURED_TARGET_FACTORY =
-      new RuleClass.ConfiguredTargetFactory<Object, Object>() {
-        @Override
-        public Object create(Object ruleContext) throws InterruptedException {
-          throw new IllegalStateException();
-        }
-      };
+          new RuleClass.ConfiguredTargetFactory<Object, Object>() {
+            @Override
+            public Object create(Object ruleContext) throws InterruptedException {
+              throw new IllegalStateException();
+            }
+          };
 
   private RuleClass ruleClass(String name) {
     return new RuleClass.Builder(name, RuleClassType.NORMAL, false)
@@ -652,7 +614,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   public void testJsonInvalidStructure() throws Exception {
     checkErrorContains(
         "Invalid text format, expected a struct, a string, a bool, or an int but got a "
-            + "ConfigurationTransition for struct field 'a'",
+        + "ConfigurationTransition for struct field 'a'",
         "struct(a=DATA_CFG).to_json()");
   }
 
