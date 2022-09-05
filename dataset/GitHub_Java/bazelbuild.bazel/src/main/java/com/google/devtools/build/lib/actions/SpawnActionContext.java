@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,9 @@ public interface SpawnActionContext extends Executor.ActionContext {
   /** Executes the given spawn. */
   void exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException;
+
+  /** Returns the locality of running the spawn, i.e., "local". */
+  String strategyLocality(String mnemonic, boolean remotable);
 
   /**
    * This implements a tri-state mode. There are three possible cases: (1) implementations of this

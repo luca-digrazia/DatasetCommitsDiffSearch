@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
@@ -23,7 +24,6 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.util.Clock;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsClassProvider;
 
@@ -107,7 +107,6 @@ public final class BlazeExecutor implements Executor {
       if (annotation != null) {
         contextMap.put(annotation.contextType(), context);
       }
-      contextMap.put(context.getClass(), context);
     }
 
     for (ActionContextProvider factory : contextProviders) {
