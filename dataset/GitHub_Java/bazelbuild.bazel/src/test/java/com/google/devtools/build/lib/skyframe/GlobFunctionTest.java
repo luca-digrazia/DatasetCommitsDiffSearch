@@ -284,7 +284,7 @@ public abstract class GlobFunctionTest {
   public void testStarStarDoesNotCrossPackageBoundary() throws Exception {
     FileSystemUtils.createEmptyFile(pkgPath.getRelative("foo/bar/BUILD"));
     // "foo/bar" should not be in the results because foo/bar is a separate package.
-    assertGlobMatches("foo/**", /* => */ "foo/barnacle/wiz", "foo/barnacle", "foo");
+    assertGlobMatches("foo/**", /* => */ "foo", "foo/barnacle", "foo/barnacle/wiz");
   }
 
   @Test
@@ -293,7 +293,7 @@ public abstract class GlobFunctionTest {
     FileSystemUtils.createEmptyFile(writableRoot.getRelative("pkg/foo/bar/BUILD"));
     // "foo/bar" should not be in the results because foo/bar is detected as a separate package,
     // even though it is under a different package path.
-    assertGlobMatches("foo/**", /* => */ "foo/barnacle/wiz", "foo/barnacle", "foo");
+    assertGlobMatches("foo/**", /* => */ "foo", "foo/barnacle", "foo/barnacle/wiz");
   }
 
   private void assertGlobMatches(String pattern, String... expecteds) throws Exception {
@@ -306,16 +306,10 @@ public abstract class GlobFunctionTest {
 
   private void assertGlobMatches(boolean excludeDirs, String pattern, String... expecteds)
       throws Exception {
-    // The order requirement is not strictly necessary -- a change to GlobFunction semantics that
-    // changes the output order is fine, but we require that the order be the same here to detect
-    // potential non-determinism in output order, which would be bad.
-    // The current order in the case of "**" or "*" is roughly that of nestedset.Order.STABLE_ORDER,
-    // putting subdirectories before directories, but putting ordinary files after their parent
-    // directories.
     assertThat(
             Iterables.transform(
                 runGlob(excludeDirs, pattern).getMatches(), Functions.toStringFunction()))
-        .containsExactlyElementsIn(ImmutableList.copyOf(expecteds)).inOrder();
+        .containsExactlyElementsIn(ImmutableList.copyOf(expecteds));
   }
 
   private void assertGlobsEqual(String pattern1, String pattern2) throws Exception {
@@ -456,7 +450,7 @@ public abstract class GlobFunctionTest {
     }
     // Note that these are not in the result: ".", ".."
     assertGlobMatches(
-        "*", "..also.hidden", ".hidden", "BUILD", "a1", "a2", "foo", "food", "fool", "not.hidden");
+        "*", "a1", "a2", "not.hidden", "foo", "fool", "food", "BUILD", ".hidden", "..also.hidden");
     assertGlobMatches("*.hidden", "not.hidden");
   }
 
@@ -464,63 +458,65 @@ public abstract class GlobFunctionTest {
   public void testDoubleStar() throws Exception {
     assertGlobMatches(
         "**",
-        "a1/b1/c",
-        "a1/b1",
+        "",
+        "BUILD",
         "a1",
+        "a1/b1",
+        "a1/b1/c",
         "a2",
+        "foo",
+        "foo/bar",
         "foo/bar/wiz",
         "foo/bar/wiz/file",
-        "foo/bar",
-        "foo/barnacle/wiz",
         "foo/barnacle",
-        "foo",
-        "food/barnacle/wiz",
-        "food/barnacle",
+        "foo/barnacle/wiz",
         "food",
-        "fool/barnacle/wiz",
-        "fool/barnacle",
+        "food/barnacle",
+        "food/barnacle/wiz",
         "fool",
-        "BUILD");
+        "fool/barnacle",
+        "fool/barnacle/wiz");
   }
 
   @Test
   public void testDoubleStarExcludeDirs() throws Exception {
-    assertGlobWithoutDirsMatches("**", "foo/bar/wiz/file", "BUILD");
+    assertGlobWithoutDirsMatches("**", "BUILD", "foo/bar/wiz/file");
   }
 
   @Test
   public void testDoubleDoubleStar() throws Exception {
     assertGlobMatches(
         "**/**",
-        "a1/b1/c",
-        "a1/b1",
+        "",
+        "BUILD",
         "a1",
+        "a1/b1",
+        "a1/b1/c",
         "a2",
+        "foo",
+        "foo/bar",
         "foo/bar/wiz",
         "foo/bar/wiz/file",
-        "foo/bar",
-        "foo/barnacle/wiz",
         "foo/barnacle",
-        "foo",
-        "food/barnacle/wiz",
-        "food/barnacle",
+        "foo/barnacle/wiz",
         "food",
-        "fool/barnacle/wiz",
-        "fool/barnacle",
+        "food/barnacle",
+        "food/barnacle/wiz",
         "fool",
-        "BUILD");
+        "fool/barnacle",
+        "fool/barnacle/wiz");
   }
 
   @Test
   public void testDirectoryWithDoubleStar() throws Exception {
     assertGlobMatches(
         "foo/**",
+        "foo",
+        "foo/bar",
         "foo/bar/wiz",
         "foo/bar/wiz/file",
-        "foo/bar",
-        "foo/barnacle/wiz",
         "foo/barnacle",
-        "foo");
+        "foo/barnacle/wiz");
   }
 
   @Test
@@ -541,8 +537,8 @@ public abstract class GlobFunctionTest {
     assertGlobMatches(
         "foo/**/wiz",
         "foo/bar/wiz",
-        "foo/barnacle/wiz",
         "foo/barnacle/baz/wiz",
+        "foo/barnacle/wiz",
         "foo/barnacle/wiz/wiz");
   }
 
