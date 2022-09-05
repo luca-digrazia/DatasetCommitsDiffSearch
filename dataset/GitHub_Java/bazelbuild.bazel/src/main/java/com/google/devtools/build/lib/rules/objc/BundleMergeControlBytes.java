@@ -26,6 +26,7 @@ import com.google.devtools.build.xcode.bundlemerge.proto.BundleMergeProtos;
 import com.google.devtools.build.xcode.bundlemerge.proto.BundleMergeProtos.Control;
 import com.google.devtools.build.xcode.bundlemerge.proto.BundleMergeProtos.MergeZip;
 import com.google.devtools.build.xcode.bundlemerge.proto.BundleMergeProtos.VariableSubstitution;
+import com.google.devtools.build.xcode.common.TargetDeviceFamily;
 
 import java.io.InputStream;
 import java.util.Map;
