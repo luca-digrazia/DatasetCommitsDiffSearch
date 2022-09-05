@@ -172,8 +172,7 @@ public class ProtoCommon {
   @Nullable
   public static NestedSet<Artifact> computeProtosInDirectDeps(RuleContext ruleContext) {
     NestedSetBuilder<Artifact> result = NestedSetBuilder.stableOrder();
-    ImmutableList<Artifact> srcs = ruleContext.getPrerequisiteArtifacts("srcs", TARGET).list();
-    if (srcs.isEmpty()) {
+    if (ruleContext.getPrerequisiteArtifacts("srcs", TARGET).list().isEmpty()) {
       for (ProtoSupportDataProvider provider :
           ruleContext.getPrerequisites("deps", TARGET, ProtoSupportDataProvider.class)) {
         result.addTransitive(provider.getSupportData().getProtosInDirectDeps());
@@ -183,7 +182,6 @@ public class ProtoCommon {
           ruleContext.getPrerequisites("deps", TARGET, ProtoSourcesProvider.class)) {
         result.addAll(provider.getCheckDepsProtoSources());
       }
-      result.addAll(srcs);
     }
     return result.build();
   }
