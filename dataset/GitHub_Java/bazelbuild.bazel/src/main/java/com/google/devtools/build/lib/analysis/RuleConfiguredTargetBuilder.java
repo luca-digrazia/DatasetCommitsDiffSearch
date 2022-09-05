@@ -156,10 +156,8 @@ public final class RuleConfiguredTargetBuilder {
     EnvironmentCollection supportedEnvironments =
         ConstraintSemantics.getSupportedEnvironments(ruleContext);
     if (supportedEnvironments != null) {
-      EnvironmentCollection.Builder refinedEnvironments = new EnvironmentCollection.Builder();
-      ConstraintSemantics.checkConstraints(ruleContext, supportedEnvironments, refinedEnvironments);
-      add(SupportedEnvironmentsProvider.class,
-          new SupportedEnvironments(supportedEnvironments, refinedEnvironments.build()));
+      add(SupportedEnvironmentsProvider.class, new SupportedEnvironments(supportedEnvironments));
+      ConstraintSemantics.checkConstraints(ruleContext, supportedEnvironments);
     }
   }
 

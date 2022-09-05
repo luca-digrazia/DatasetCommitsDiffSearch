@@ -47,9 +47,10 @@ public class Environment implements RuleConfiguredTargetFactory {
       return null;
     }
 
-    EnvironmentCollection env = new EnvironmentCollection.Builder().put(group, label).build();
     return new RuleConfiguredTargetBuilder(ruleContext)
-        .addProvider(SupportedEnvironmentsProvider.class, new SupportedEnvironments(env, env))
+        .addProvider(SupportedEnvironmentsProvider.class,
+            new SupportedEnvironments(
+                new EnvironmentCollection.Builder().put(group, label).build()))
         .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
         .add(FileProvider.class, new FileProvider(ruleContext.getLabel(),
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)))
