@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,9 +45,9 @@ import javax.annotation.Nullable;
  * Recursive descent parser for LL(2) BUILD language.
  * Loosely based on Python 2 grammar.
  * See https://docs.python.org/2/reference/grammar.html
+ *
  */
-@VisibleForTesting
-public class Parser {
+class Parser {
 
   /**
    * Combines the parser result into a single value object.
@@ -128,14 +128,6 @@ public class Parser {
           TokenKind.RBRACKET,
           TokenKind.RPAREN,
           TokenKind.SLASH);
-
-  /**
-   * Keywords that are forbidden in both Skylark and BUILD parsing modes.
-   *
-   * <p>(Mapping: token -> human-readable string description)
-   */
-  private static final ImmutableMap<TokenKind, String> ILLEGAL_BLOCK_KEYWORDS =
-      ImmutableMap.of(TokenKind.CLASS, "Class definition", TokenKind.TRY, "Try statement");
 
   private Token token; // current lookahead token
   private Token pushedToken = null; // used to implement LL(2)
@@ -1441,19 +1433,18 @@ public class Parser {
     return setLocation(new ReturnStatement(expression), start, expression);
   }
 
-  // block ::= ('if' | 'for' | 'class' | 'try' | 'def') expr ':' suite
+  // block ::= ('if' | 'for' | 'class') expr ':' suite
   private void skipBlock() {
     int start = token.left;
     Token blockToken = token;
     syncTo(EnumSet.of(TokenKind.COLON, TokenKind.EOF)); // skip over expression or name
     if (parsingMode != PYTHON) {
-      String msg =
-          ILLEGAL_BLOCK_KEYWORDS.containsKey(blockToken.kind)
-              ? String.format("%ss are not supported.", ILLEGAL_BLOCK_KEYWORDS.get(blockToken.kind))
-              : "This is not supported in BUILD files. Move the block to a .bzl file and load it";
       reportError(
           lexer.createLocation(start, token.right),
-          String.format("syntax error at '%s': %s", blockToken, msg));
+          "syntax error at '"
+              + blockToken
+              + "': This is not supported in BUILD files. "
+              + "Move the block to a .bzl file and load it");
     }
     expect(TokenKind.COLON);
     skipSuite();

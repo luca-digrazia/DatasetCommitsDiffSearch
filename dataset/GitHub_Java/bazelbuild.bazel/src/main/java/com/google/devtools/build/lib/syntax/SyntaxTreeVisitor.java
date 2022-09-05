@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -142,18 +142,6 @@ public class SyntaxTreeVisitor {
   public void visit(DotExpression node) {
     visit(node.getObj());
     visit(node.getField());
-  }
-
-  public void visit(IndexExpression node) {
-    visit(node.getObject());
-    visit(node.getKey());
-  }
-
-  public void visit(SliceExpression node) {
-    visit(node.getObject());
-    visit(node.getStart());
-    visit(node.getEnd());
-    visit(node.getStep());
   }
 
   public void visit(@SuppressWarnings("unused") Comment node) {}
