@@ -1,6 +1,5 @@
 package com.prolificinteractive.materialcalendarview;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Color;
@@ -100,7 +99,6 @@ public class MaterialCalendarView extends ViewGroup {
      * @see #setShowOtherDates(int)
      * @see #getShowOtherDates()
      */
-    @SuppressLint("UniqueConstants")
     @Retention(RetentionPolicy.RUNTIME)
     @IntDef(flag = true, value = {
             SHOW_NONE, SHOW_ALL, SHOW_DEFAULTS,
@@ -153,10 +151,14 @@ public class MaterialCalendarView extends ViewGroup {
     private final TextView title;
     private final DirectionButton buttonPast;
     private final DirectionButton buttonFuture;
-    private final MonthPager pager;
+    private final ViewPager pager;
     private final MonthPagerAdapter adapter;
     private CalendarDay currentMonth;
     private LinearLayout topbar;
+    /**
+     * Used for the dynamic calendar height.
+     */
+    private boolean mDynamicHeightEnabled;
 
     private final ArrayList<DayViewDecorator> dayViewDecorators = new ArrayList<>();
 
@@ -224,7 +226,7 @@ public class MaterialCalendarView extends ViewGroup {
         buttonPast = new DirectionButton(getContext());
         title = new TextView(getContext());
         buttonFuture = new DirectionButton(getContext());
-        pager = new MonthPager(getContext());
+        pager = new ViewPager(getContext());
 
         setupChildren();
 
@@ -314,8 +316,7 @@ public class MaterialCalendarView extends ViewGroup {
                     -1
             );
             if (firstDayOfWeek < 0) {
-                //Allowing use of Calendar.getInstance() here as a performance optimization
-                firstDayOfWeek = Calendar.getInstance().getFirstDayOfWeek();
+                firstDayOfWeek = CalendarUtils.getInstance().getFirstDayOfWeek();
             }
             setFirstDayOfWeek(firstDayOfWeek);
         } catch (Exception e) {
@@ -466,7 +467,7 @@ public class MaterialCalendarView extends ViewGroup {
      * @return true if there is a future month that can be shown
      */
     private boolean canGoForward() {
-        return pager.isPagingEnabled() && pager.getCurrentItem() < (adapter.getCount() - 1);
+        return pager.getCurrentItem() < (adapter.getCount() - 1);
     }
 
     /**
@@ -475,7 +476,7 @@ public class MaterialCalendarView extends ViewGroup {
      * @return true if there is a previous month that can be shown
      */
     private boolean canGoBack() {
-        return pager.isPagingEnabled() && pager.getCurrentItem() > 0;
+        return pager.getCurrentItem() > 0;
     }
 
     /**
@@ -964,7 +965,7 @@ public class MaterialCalendarView extends ViewGroup {
             out.writeInt(showOtherDates);
             out.writeParcelable(minDate, 0);
             out.writeParcelable(maxDate, 0);
-            out.writeTypedList(selectedDates);
+            out.writeParcelableArray(selectedDates.toArray(new CalendarDay[selectedDates.size()]), 0);
             out.writeInt(firstDayOfWeek);
             out.writeInt(tileSizePx);
             out.writeInt(topbarVisible ? 1 : 0);
@@ -991,7 +992,8 @@ public class MaterialCalendarView extends ViewGroup {
             ClassLoader loader = CalendarDay.class.getClassLoader();
             minDate = in.readParcelable(loader);
             maxDate = in.readParcelable(loader);
-            in.readTypedList(selectedDates, CalendarDay.CREATOR);
+            CalendarDay[] days = (CalendarDay[]) in.readParcelableArray(loader);
+            selectedDates.addAll(Arrays.asList(days));
             firstDayOfWeek = in.readInt();
             tileSizePx = in.readInt();
             topbarVisible = in.readInt() == 1;
@@ -1030,6 +1032,26 @@ public class MaterialCalendarView extends ViewGroup {
     public int getFirstDayOfWeek() {
         return adapter.getFirstDayOfWeek();
     }
+
+    /**
+     * Sets a boolean to indicate the dynamic height state.
+     * Dynamic height means that if a month is 5 week long than the MaterialCalendarView
+     * shows only the active weeks, so the calendar height will be 5 row instead of 6.
+     * Default value is false, so if this is not set, the MaterialCalendarView
+     * will always show 6 row.
+     * @param dynamicHeightState
+     */
+    public void setDynamicHeightEnabled(boolean dynamicHeightState) {
+        this.mDynamicHeightEnabled = dynamicHeightState;
+    }
+
+    /**
+     * @return the dynamic height state - true if enabled.
+     */
+    public boolean isDynamicHeightEnabled() {
+        return mDynamicHeightEnabled;
+    }
+
 
     /**
      * Add a collection of day decorators
@@ -1226,13 +1248,24 @@ public class MaterialCalendarView extends ViewGroup {
         final int desiredWidth = specWidthSize - getPaddingLeft() - getPaddingRight();
         final int desiredHeight = specHeightSize - getPaddingTop() - getPaddingBottom();
 
-        final int viewTileHieght = getTopbarVisible() ?
-                (MonthView.DEFAULT_MONTH_TILE_HEIGHT + 1) :
-                MonthView.DEFAULT_MONTH_TILE_HEIGHT;
+        int weekCount = MonthView.DEFAULT_MONTH_TILE_HEIGHT;
+        // region Dynamic calendar height
+        /**
+         * The default height of the calendar component is {@code MonthView.DEFAULT_MONTH_TILE_HEIGHT} row, but we need to hide 1 if the actual date is 5 week long
+         */
+        if (mDynamicHeightEnabled && adapter != null && pager != null) {
+            Calendar lastDayOfMonth = Calendar.getInstance();
+            lastDayOfMonth.setTimeInMillis(adapter.getItem(pager.getCurrentItem()).getCalendar().getTimeInMillis());
+            lastDayOfMonth.set(Calendar.DAY_OF_MONTH, lastDayOfMonth.getActualMaximum(Calendar.DAY_OF_MONTH));
+            lastDayOfMonth.setFirstDayOfWeek(getFirstDayOfWeek());
+            weekCount = lastDayOfMonth.get(Calendar.WEEK_OF_MONTH) + 1; // + 1 because of the week days
+        }
+        // endregion
+        final int viewTileHeight = getTopbarVisible() ? (weekCount + 1) : weekCount;
 
         //Calculate independent tile sizes for later
         int desiredTileWidth = desiredWidth / MonthView.DEFAULT_DAYS_IN_WEEK;
-        int desiredTileHeight = desiredHeight / viewTileHieght;
+        int desiredTileHeight = desiredHeight / viewTileHeight;
 
         int measureTileSize = -1;
 
@@ -1259,7 +1292,7 @@ public class MaterialCalendarView extends ViewGroup {
 
         //Calculate our size based off our measured tile size
         int measuredWidth = measureTileSize * MonthView.DEFAULT_DAYS_IN_WEEK;
-        int measuredHeight = measureTileSize * viewTileHieght;
+        int measuredHeight = measureTileSize * viewTileHeight;
 
         //Put padding back in from when we took it away
         measuredWidth += getPaddingLeft() + getPaddingRight();
@@ -1400,22 +1433,5 @@ public class MaterialCalendarView extends ViewGroup {
             super(MATCH_PARENT, tileHeight);
         }
 
-    }
-
-    /**
-     * Enable or disable the ability to swipe between months.
-     *
-     * @param pagingEnabled pass false to disable paging, true to enable (default)
-     */
-    public void setPagingEnabled(boolean pagingEnabled) {
-        pager.setPagingEnabled(pagingEnabled);
-        updateUi();
-    }
-
-    /**
-     * @return true if swiping months is enabled, false if disabled. Default is true.
-     */
-    public boolean isPagingEnabled() {
-        return pager.isPagingEnabled();
     }
 }
