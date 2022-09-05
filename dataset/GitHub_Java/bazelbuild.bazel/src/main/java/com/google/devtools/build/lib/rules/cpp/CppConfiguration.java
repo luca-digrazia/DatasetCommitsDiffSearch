@@ -1997,6 +1997,11 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   @Override
+  public boolean supportsIncrementalBuild() {
+    return !isLipoOptimization();
+  }
+
+  @Override
   public boolean performsStaticLink() {
     return getLinkOptions().contains("-static");
   }

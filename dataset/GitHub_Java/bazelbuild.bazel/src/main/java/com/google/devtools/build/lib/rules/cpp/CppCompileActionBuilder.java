@@ -33,7 +33,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
-import com.google.devtools.build.lib.rules.cpp.CppCompileAction.SpecialInputsHandler;
+import com.google.devtools.build.lib.rules.cpp.CppCompileAction.IncludeResolver;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -73,7 +73,7 @@ public class CppCompileActionBuilder {
   private ImmutableList<PathFragment> extraSystemIncludePrefixes = ImmutableList.of();
   private String fdoBuildStamp;
   private boolean usePic; 
-  private SpecialInputsHandler specialInputsHandler = CppCompileAction.VOID_SPECIAL_INPUTS_HANDLER;
+  private IncludeResolver includeResolver = CppCompileAction.VOID_INCLUDE_RESOLVER;
   private UUID actionClassId = GUID;
   private Class<? extends CppCompileActionContext> actionContext;
   private CppConfiguration cppConfiguration;
@@ -163,7 +163,7 @@ public class CppCompileActionBuilder {
     this.nocopts.addAll(other.nocopts);
     this.analysisEnvironment = other.analysisEnvironment;
     this.extraSystemIncludePrefixes = ImmutableList.copyOf(other.extraSystemIncludePrefixes);
-    this.specialInputsHandler = other.specialInputsHandler;
+    this.includeResolver = other.includeResolver;
     this.actionClassId = other.actionClassId;
     this.actionContext = other.actionContext;
     this.cppConfiguration = other.cppConfiguration;
@@ -262,6 +262,10 @@ public class CppCompileActionBuilder {
     }
     realMandatoryInputsBuilder.addTransitive(context.getAdditionalInputs(usePic));
 
+    if (cppConfiguration.sendTransitiveHeaderModuleSrcs()) {
+      realMandatoryInputsBuilder.addTransitive(context.getTransitiveHeaderModuleSrcs());
+    }
+
     realMandatoryInputsBuilder.addTransitive(pluginInputsBuilder.build());
     realMandatoryInputsBuilder.add(sourceFile);
     boolean fake = tempOutputFile != null;
@@ -278,34 +282,16 @@ public class CppCompileActionBuilder {
     } else {
       NestedSet<Artifact> realMandatoryInputs = realMandatoryInputsBuilder.build();
 
-      return new CppCompileAction(
-          owner,
-          ImmutableList.copyOf(features),
-          featureConfiguration,
-          variables,
-          sourceFile,
-          shouldScanIncludes,
-          sourceLabel,
-          realMandatoryInputs,
-          outputFile,
-          dotdFile,
-          gcnoFile,
-          getDwoFile(ruleContext, outputFile, cppConfiguration),
-          optionalSourceFile,
-          configuration,
-          cppConfiguration,
-          context,
-          actionContext,
-          ImmutableList.copyOf(copts),
+      return new CppCompileAction(owner, ImmutableList.copyOf(features), featureConfiguration,
+          variables, sourceFile, shouldScanIncludes, sourceLabel, realMandatoryInputs,
+          outputFile, dotdFile, gcnoFile, getDwoFile(ruleContext, outputFile, cppConfiguration),
+          optionalSourceFile, configuration, cppConfiguration, context,
+          actionContext, ImmutableList.copyOf(copts),
           ImmutableList.copyOf(pluginOpts),
           getNocoptPredicate(nocopts),
-          extraSystemIncludePrefixes,
-          fdoBuildStamp,
-          specialInputsHandler,
-          getLipoScannables(realMandatoryInputs),
-          actionClassId,
-          usePic,
-          ruleContext);
+          extraSystemIncludePrefixes, fdoBuildStamp,
+          includeResolver, getLipoScannables(realMandatoryInputs), actionClassId,
+          usePic, ruleContext);
     }
   }
   
@@ -326,9 +312,8 @@ public class CppCompileActionBuilder {
     return this;
   }
 
-  public CppCompileActionBuilder setSpecialInputsHandler(
-      SpecialInputsHandler specialInputsHandler) {
-    this.specialInputsHandler = specialInputsHandler;
+  public CppCompileActionBuilder setIncludeResolver(IncludeResolver includeResolver) {
+    this.includeResolver = includeResolver;
     return this;
   }
 

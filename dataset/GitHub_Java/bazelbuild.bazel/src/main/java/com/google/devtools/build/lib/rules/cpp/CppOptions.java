@@ -18,7 +18,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration.DefaultLabelConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
@@ -45,6 +47,12 @@ import java.util.Set;
  * Command-line options for C++.
  */
 public class CppOptions extends FragmentOptions {
+  /** Custom converter for {@code --crosstool_top}. */
+  public static class CrosstoolTopConverter extends DefaultLabelConverter {
+    public CrosstoolTopConverter() {
+      super(Constants.TOOLS_REPOSITORY + "//tools/cpp:toolchain");
+    }
+  }
 
   /**
    * Converter for --cwarn flag
@@ -161,9 +169,9 @@ public class CppOptions extends FragmentOptions {
 
   @Option(
     name = "crosstool_top",
-    defaultValue = "@bazel_tools//tools/cpp:toolchain",
+    defaultValue = "",
     category = "version",
-    converter = LabelConverter.class,
+    converter = CrosstoolTopConverter.class,
     help = "The label of the crosstool package to be used for compiling C++ code."
   )
   public Label crosstoolTop;
@@ -283,12 +291,18 @@ public class CppOptions extends FragmentOptions {
   )
   public boolean skipStaticOutputs;
 
-  // TODO(djasper): Remove once it has been removed from the global blazerc.
+  // Add all sources of transitively found modules. Although they are also embedded in the .pcm
+  // files, Clang currently verifies that all files specified in a cppmap do exist.
+  // TODO(djasper): Once Clang's r264664 is released, the default can be flipped and this option
+  // can be removed.
   @Option(
     name = "send_transitive_header_module_srcs",
     defaultValue = "true",
     category = "semantics",
-    help = "Obsolete. Don't use."
+    help =
+        "This flag is only used for a transition and will go away. "
+            + "If true, treat all headers mentioned in transitive .cppmap files as mandatory "
+            + "inputs."
   )
   public boolean sendTransitiveHeaderModuleSrcs;
 
