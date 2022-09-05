@@ -34,7 +34,7 @@ import java.util.concurrent.Callable;
 
 /**
  * @author lilong
- * @create 2017-05-03 On the afternoon of 2:22
+ * @create 2017-05-03 下午2:22
  */
 
 public class DiffDependenciesTask extends BaseTask {
@@ -167,7 +167,6 @@ public class DiffDependenciesTask extends BaseTask {
                 awbBundleInfo.setApplicationName(bundleInfo.getApplicationName());
                 awbBundleInfo.setArtifactId(awbBundle.getResolvedCoordinates().getArtifactId());
                 awbBundleInfo.setName(bundleInfo.getName());
-
                 for (BasicBundleInfo key : bundleInfos) {
                     if (key.getPkgName().equals(awbBundle.getPackageName())) {
                         awbBundleInfo.setSrcUnitTag(key.getUnique_tag());
@@ -401,7 +400,7 @@ public class DiffDependenciesTask extends BaseTask {
 
         for (String key : newMap.keySet()) {
             String baseValue = baseMap.get(key);
-            //For added direct neglect
+            //对于新增直接忽略
             if (baseValue == null) {
                 continue;
             }
