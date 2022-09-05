@@ -19,14 +19,21 @@ import static org.junit.Assert.fail;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.sandbox.LinuxSandboxedStrategy.MountMap;
+import com.google.devtools.build.lib.testutil.TestUtils;
+import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.UnixFileSystem;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -46,7 +53,28 @@ import java.util.Map.Entry;
  * tree of files given only the set of input files.
  */
 @RunWith(JUnit4.class)
-public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
+public class LinuxSandboxedStrategyTest {
+  private FileSystem testFS;
+  private Path workingDir;
+  private Path fakeSandboxDir;
+
+  @Before
+  public void setUp() throws Exception {
+    testFS = new UnixFileSystem();
+    workingDir = testFS.getPath(new File(TestUtils.tmpDir()).getCanonicalPath());
+    fakeSandboxDir = workingDir.getRelative("sandbox");
+    fakeSandboxDir.createDirectory();
+  }
+
+  @After
+  public void tearDown() throws Exception {
+    FileSystemUtils.deleteTreesBelow(workingDir);
+  }
+
+  private Path getSandboxPath(Path entry) {
+    return fakeSandboxDir.getRelative(entry.asFragment().relativeTo("/"));
+  }
+
   /**
    * Strips the working directory (which can be very long) from the file names in the input map, to
    * make assertion failures easier to read.
@@ -54,72 +82,16 @@ public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
   private ImmutableMap<String, String> userFriendlyMap(Map<Path, Path> input) {
     ImmutableMap.Builder<String, String> userFriendlyMap = ImmutableMap.builder();
     for (Entry<Path, Path> entry : input.entrySet()) {
-      String key = entry.getKey().getPathString().replace(workspaceDir.getPathString(), "");
-      String value = entry.getValue().getPathString().replace(workspaceDir.getPathString(), "");
+      String key = entry.getKey().getPathString().replace(workingDir.getPathString(), "");
+      String value = entry.getValue().getPathString().replace(workingDir.getPathString(), "");
       userFriendlyMap.put(key, value);
     }
     return userFriendlyMap.build();
   }
 
-  /**
-   * Takes a map of file specifications, creates the necessary files / symlinks / dirs,
-   * mounts files listed in customMount at their canonical location in the sandbox and returns the
-   * output of {@code LinuxSandboxedStrategy#fixMounts} for it.
-   */
-  private ImmutableMap<String, String> userFriendlyMounts(
-      Map<String, String> linksAndFiles, List<String> customMounts) throws IOException {
-    return userFriendlyMap(mounts(linksAndFiles, customMounts));
-  }
-
-  private ImmutableMap<Path, Path> mounts(
-      Map<String, String> linksAndFiles, List<String> customMounts) throws IOException {
-    createTreeStructure(linksAndFiles);
-
-    ImmutableMap.Builder<Path, Path> mounts = ImmutableMap.builder();
-    for (String customMount : customMounts) {
-      Path customMountPath = workspaceDir.getRelative(customMount);
-      mounts.put(customMountPath, customMountPath);
-    }
-    return LinuxSandboxedStrategy.validateMounts(
-        LinuxSandboxedStrategy.withResolvedSymlinks(
-            LinuxSandboxedStrategy.withRecursedDirs(mounts.build())));
-  }
-
-  /**
-   * Takes a map of file specifications, creates the necessary files / symlinks / dirs,
-   * mounts the first file of the specification at its canonical location in the sandbox and returns
-   * the output of {@code LinuxSandboxedStrategy#fixMounts} for it.
-   */
-  private Map<String, String> userFriendlyMounts(Map<String, String> linksAndFiles)
-      throws IOException {
-    return userFriendlyMap(mounts(linksAndFiles));
-  }
-
-  private Map<Path, Path> mounts(Map<String, String> linksAndFiles) throws IOException {
-    return mounts(
-        linksAndFiles, ImmutableList.of(Iterables.getFirst(linksAndFiles.keySet(), null)));
-  }
-
-  /**
-   * Returns a map of mount entries for a list files, which can be used to assert that all
-   * expected mounts have been made by the LinuxSandboxedStrategy.
-   */
-  private ImmutableMap<String, String> userFriendlyAsserts(List<String> asserts) {
-    return userFriendlyMap(asserts(asserts));
-  }
-
-  private ImmutableMap<Path, Path> asserts(List<String> asserts) {
-    ImmutableMap.Builder<Path, Path> pathifiedAsserts = ImmutableMap.builder();
-    for (String fileName : asserts) {
-      Path inputPath = workspaceDir.getRelative(fileName);
-      pathifiedAsserts.put(inputPath, inputPath);
-    }
-    return pathifiedAsserts.build();
-  }
-
   private void createTreeStructure(Map<String, String> linksAndFiles) throws IOException {
     for (Entry<String, String> entry : linksAndFiles.entrySet()) {
-      Path filePath = workspaceDir.getRelative(entry.getKey());
+      Path filePath = workingDir.getRelative(entry.getKey());
       String linkTarget = entry.getValue();
 
       FileSystemUtils.createDirectoryAndParents(filePath.getParentDirectory());
@@ -134,8 +106,65 @@ public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
     }
   }
 
+  /**
+   * Takes a map of file specifications, creates the necessary files / symlinks / dirs,
+   * mounts files listed in customMount at their canonical location in the sandbox and returns the
+   * output of {@code LinuxSandboxedStrategy#fixMounts} for it.
+   */
+  private ImmutableMap<Path, Path> mounts(
+      Map<String, String> linksAndFiles, List<String> customMounts) throws IOException {
+    createTreeStructure(linksAndFiles);
+
+    ImmutableMap.Builder<Path, Path> mounts = ImmutableMap.builder();
+    for (String customMount : customMounts) {
+      Path customMountPath = workingDir.getRelative(customMount);
+      mounts.put(getSandboxPath(customMountPath), customMountPath);
+    }
+    return LinuxSandboxedStrategy.validateMounts(
+        fakeSandboxDir,
+        LinuxSandboxedStrategy.withResolvedSymlinks(
+            fakeSandboxDir, LinuxSandboxedStrategy.withRecursedDirs(mounts.build())));
+  }
+
+  private ImmutableMap<String, String> userFriendlyMounts(
+      Map<String, String> linksAndFiles, List<String> customMounts) throws IOException {
+    return userFriendlyMap(mounts(linksAndFiles, customMounts));
+  }
+
+  /**
+   * Takes a map of file specifications, creates the necessary files / symlinks / dirs,
+   * mounts the first file of the specification at its canonical location in the sandbox and returns
+   * the output of {@code LinuxSandboxedStrategy#fixMounts} for it.
+   */
+  private Map<Path, Path> mounts(Map<String, String> linksAndFiles) throws IOException {
+    return mounts(
+        linksAndFiles, ImmutableList.of(Iterables.getFirst(linksAndFiles.keySet(), null)));
+  }
+
+  private Map<String, String> userFriendlyMounts(Map<String, String> linksAndFiles)
+      throws IOException {
+    return userFriendlyMap(mounts(linksAndFiles));
+  }
+
+  /**
+   * Returns a map of mount entries for a list files, which can be used to assert that all
+   * expected mounts have been made by the LinuxSandboxedStrategy.
+   */
+  private ImmutableMap<Path, Path> asserts(List<String> asserts) {
+    ImmutableMap.Builder<Path, Path> pathifiedAsserts = ImmutableMap.builder();
+    for (String fileName : asserts) {
+      Path inputPath = workingDir.getRelative(fileName);
+      pathifiedAsserts.put(getSandboxPath(inputPath), inputPath);
+    }
+    return pathifiedAsserts.build();
+  }
+
+  private ImmutableMap<String, String> userFriendlyAsserts(List<String> asserts) {
+    return userFriendlyMap(asserts(asserts));
+  }
+
   @Test
-  public void testResolvesRelativeFileToFileSymlinkInSameDir() throws IOException {
+  public void resolvesRelativeFileToFileSymlinkInSameDir() throws IOException {
     Map<String, String> testFiles = new LinkedHashMap<>();
     testFiles.put("symlink.txt", "goal.txt");
     testFiles.put("goal.txt", "");
@@ -148,7 +177,7 @@ public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
   }
 
   @Test
-  public void testResolvesRelativeFileToFileSymlinkInSubDir() throws IOException {
+  public void resolvesRelativeFileToFileSymlinkInSubDir() throws IOException {
     Map<String, String> testFiles =
         ImmutableMap.of(
             "symlink.txt", "x/goal.txt",
@@ -159,7 +188,7 @@ public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
   }
 
   @Test
-  public void testResolvesRelativeFileToFileSymlinkInParentDir() throws IOException {
+  public void resolvesRelativeFileToFileSymlinkInParentDir() throws IOException {
     Map<String, String> testFiles =
         ImmutableMap.of(
             "x/symlink.txt", "../goal.txt",
@@ -171,7 +200,7 @@ public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
   }
 
   @Test
-  public void testRecursesSubDirs() throws IOException {
+  public void recursesSubDirs() throws IOException {
     ImmutableList<String> inputFile = ImmutableList.of("a/b");
 
     Map<String, String> testFiles =
@@ -190,7 +219,7 @@ public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
    * Test that the algorithm correctly identifies and refuses symlink loops.
    */
   @Test
-  public void testCatchesSymlinkLoop() throws IOException {
+  public void catchesSymlinkLoop() throws IOException {
     try {
       mounts(
           ImmutableMap.of(
@@ -202,7 +231,7 @@ public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
           .hasMessage(
               String.format(
                   "%s (Too many levels of symbolic links)",
-                  workspaceDir.getRelative("a").getPathString()));
+                  workingDir.getRelative("a").getPathString()));
     }
   }
 
@@ -211,7 +240,7 @@ public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
    * directories (e.g. "a -> dir/file/file").
    */
   @Test
-  public void testCatchesIllegalSymlink() throws IOException {
+  public void catchesIllegalSymlink() throws IOException {
     try {
       mounts(
           ImmutableMap.of(
@@ -221,20 +250,19 @@ public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
     } catch (IOException e) {
       assertThat(e)
           .hasMessage(
-              String.format(
-                  "%s (Not a directory)", workspaceDir.getRelative("a/c").getPathString()));
+              String.format("%s (Not a directory)", workingDir.getRelative("a/c").getPathString()));
     }
   }
 
   @Test
   public void testParseManifestFile() throws IOException {
-    Path targetDir = workspaceDir.getRelative("runfiles");
+    Path targetDir = workingDir.getRelative("runfiles");
     targetDir.createDirectory();
 
-    Path testFile = workspaceDir.getRelative("testfile");
+    Path testFile = workingDir.getRelative("testfile");
     FileSystemUtils.createEmptyFile(testFile);
 
-    Path manifestFile = workspaceDir.getRelative("MANIFEST");
+    Path manifestFile = workingDir.getRelative("MANIFEST");
     FileSystemUtils.writeContent(
         manifestFile,
         Charset.defaultCharset(),
@@ -242,56 +270,56 @@ public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
 
     MountMap<Path, Path> mounts =
         LinuxSandboxedStrategy.parseManifestFile(
-            targetDir, manifestFile.getPathFile());
+            fakeSandboxDir, targetDir, manifestFile.getPathFile());
 
     assertThat(userFriendlyMap(mounts))
         .isEqualTo(
             userFriendlyMap(
                 ImmutableMap.of(
-                    fileSystem.getPath("/runfiles/x/testfile"),
+                    fakeSandboxDir.getRelative("runfiles/x/testfile"),
                     testFile,
-                    fileSystem.getPath("/runfiles/x/emptyfile"),
-                    fileSystem.getPath("/dev/null"))));
+                    fakeSandboxDir.getRelative("runfiles/x/emptyfile"),
+                    testFS.getPath("/dev/null"))));
   }
 
   @Test
   public void testMountMapWithNormalMounts() throws IOException {
     // Allowed: Just two normal mounts (a -> sandbox/a, b -> sandbox/b)
     MountMap<Path, Path> mounts = new MountMap<>();
-    mounts.put(fileSystem.getPath("/a"), workspaceDir.getRelative("a"));
-    mounts.put(fileSystem.getPath("/b"), workspaceDir.getRelative("b"));
+    mounts.put(fakeSandboxDir.getRelative("a"), workingDir.getRelative("a"));
+    mounts.put(fakeSandboxDir.getRelative("b"), workingDir.getRelative("b"));
     assertThat(mounts)
         .isEqualTo(
             ImmutableMap.of(
-                fileSystem.getPath("/a"), workspaceDir.getRelative("a"),
-                fileSystem.getPath("/b"), workspaceDir.getRelative("b")));
+                fakeSandboxDir.getRelative("a"), workingDir.getRelative("a"),
+                fakeSandboxDir.getRelative("b"), workingDir.getRelative("b")));
   }
 
   @Test
   public void testMountMapWithSameMountTwice() throws IOException {
     // Allowed: Mount same thing twice (a -> sandbox/a, a -> sandbox/a, b -> sandbox/b)
     MountMap<Path, Path> mounts = new MountMap<>();
-    mounts.put(fileSystem.getPath("/a"), workspaceDir.getRelative("a"));
-    mounts.put(fileSystem.getPath("/a"), workspaceDir.getRelative("a"));
-    mounts.put(fileSystem.getPath("/b"), workspaceDir.getRelative("b"));
+    mounts.put(fakeSandboxDir.getRelative("a"), workingDir.getRelative("a"));
+    mounts.put(fakeSandboxDir.getRelative("a"), workingDir.getRelative("a"));
+    mounts.put(fakeSandboxDir.getRelative("b"), workingDir.getRelative("b"));
     assertThat(mounts)
         .isEqualTo(
             ImmutableMap.of(
-                fileSystem.getPath("/a"), workspaceDir.getRelative("a"),
-                fileSystem.getPath("/b"), workspaceDir.getRelative("b")));
+                fakeSandboxDir.getRelative("a"), workingDir.getRelative("a"),
+                fakeSandboxDir.getRelative("b"), workingDir.getRelative("b")));
   }
 
   @Test
   public void testMountMapWithOneThingTwoTargets() throws IOException {
     // Allowed: Mount one thing in two targets (x -> sandbox/a, x -> sandbox/b)
     MountMap<Path, Path> mounts = new MountMap<>();
-    mounts.put(fileSystem.getPath("/a"), workspaceDir.getRelative("x"));
-    mounts.put(fileSystem.getPath("/b"), workspaceDir.getRelative("x"));
+    mounts.put(fakeSandboxDir.getRelative("a"), workingDir.getRelative("x"));
+    mounts.put(fakeSandboxDir.getRelative("b"), workingDir.getRelative("x"));
     assertThat(mounts)
         .isEqualTo(
             ImmutableMap.of(
-                fileSystem.getPath("/a"), workspaceDir.getRelative("x"),
-                fileSystem.getPath("/b"), workspaceDir.getRelative("x")));
+                fakeSandboxDir.getRelative("a"), workingDir.getRelative("x"),
+                fakeSandboxDir.getRelative("b"), workingDir.getRelative("x")));
   }
 
   @Test
@@ -299,18 +327,17 @@ public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
     // Forbidden: Mount two things onto the same target (x -> sandbox/a, y -> sandbox/a)
     try {
       MountMap<Path, Path> mounts = new MountMap<>();
-      mounts.put(fileSystem.getPath("/x"), workspaceDir.getRelative("a"));
-      mounts.put(fileSystem.getPath("/x"), workspaceDir.getRelative("b"));
+      mounts.put(fakeSandboxDir.getRelative("x"), workingDir.getRelative("a"));
+      mounts.put(fakeSandboxDir.getRelative("x"), workingDir.getRelative("b"));
       fail();
     } catch (IllegalArgumentException e) {
       assertThat(e)
           .hasMessage(
               String.format(
                   "Cannot mount both '%s' and '%s' onto '%s'",
-                  workspaceDir.getRelative("a"),
-                  workspaceDir.getRelative("b"),
-                  fileSystem.getPath("/x")));
+                  workingDir.getRelative("a"),
+                  workingDir.getRelative("b"),
+                  fakeSandboxDir.getRelative("x")));
     }
   }
-
 }
