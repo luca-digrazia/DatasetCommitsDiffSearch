@@ -212,7 +212,6 @@ package com.android.builder.core;
 import com.android.annotations.NonNull;
 import com.android.annotations.Nullable;
 import com.android.build.gradle.internal.aapt.AaptGeneration;
-import com.android.build.gradle.options.BooleanOption;
 import com.android.build.gradle.options.ProjectOptions;
 import com.android.builder.internal.aapt.Aapt;
 import com.android.builder.internal.aapt.AaptPackageConfig;
@@ -260,7 +259,7 @@ import java.util.*;
  */
 public class AtlasBuilder extends AndroidBuilder {
 
-    private static final Logger sLogger = LoggerFactory.getLogger(AtlasBuilder.class);
+    private static Logger sLogger = LoggerFactory.getLogger(AtlasBuilder.class);
 
     public static final String PRE_DEXCACHE_TYPE = "pre-dex-0.11";
 
@@ -272,16 +271,16 @@ public class AtlasBuilder extends AndroidBuilder {
 
     private DexByteCodeConverter dexByteCodeConverter;
 
-    private final JavaProcessExecutor javaProcessExecutor;
+    private JavaProcessExecutor javaProcessExecutor;
 
     public List<ManifestProvider>manifestProviders;
 
-    private final ILogger logger;
 
-    private final boolean verboseExec;
+    private ILogger logger;
+
+    private boolean verboseExec;
     private boolean useMyDex;
 
-    private AaptGeneration aaptGeneration;
 
     /**
      * Creates an AndroidBuilder.
@@ -321,29 +320,29 @@ public class AtlasBuilder extends AndroidBuilder {
         super.setSdkInfo(defaultBuilder.getSdkInfo());
         super.setLibraryRequests((Collection<LibraryRequest>) ReflectUtils.getField(defaultBuilder,"mLibraryRequests"));
         boolean updateAapt = atlasExtension.getTBuildConfig().getUseCustomAapt();
-        aaptGeneration = AaptGeneration.fromProjectOptions(projectOptions);
+        AaptGeneration aaptGeneration = AaptGeneration.fromProjectOptions(projectOptions);
         switch (aaptGeneration){
             case AAPT_V1:
                 if (updateAapt){
                     updateAapt(PathId.AAPT);
                 }
                 break;
-            // case AAPT_V2:
-            //     if (updateAapt){
-            //         updateAapt(PathId.AAPT2);
-            //     }
-            //     break;
-            // case AAPT_V2_DAEMON_MODE:
-            //     if (updateAapt){
-            //         updateAapt(PathId.DAEMON_AAPT2);
-            //     }
-            //     break;
-            //
-            // case AAPT_V2_JNI:
-            //     if (updateAapt) {
-            //         updateAapt(PathId.DAEMON_AAPT2);
-            //     }
-            //     break;
+            case AAPT_V2:
+                if (updateAapt){
+                    updateAapt(PathId.AAPT2);
+                }
+                break;
+            case AAPT_V2_DAEMON_MODE:
+                if (updateAapt){
+                    updateAapt(PathId.DAEMON_AAPT2);
+                }
+                break;
+
+            case AAPT_V2_JNI:
+                if (updateAapt) {
+                    updateAapt(PathId.DAEMON_AAPT2);
+                }
+                break;
                 default:break;
         }
 
@@ -365,27 +364,11 @@ public class AtlasBuilder extends AndroidBuilder {
         this.defaultBuilder = defaultBuilder;
     }
 
-    @Override
+
     public void processResources(Aapt aapt,
                                  Builder aaptConfigBuilder)
         throws IOException, InterruptedException, ProcessException {
-        String s;
 
-        if (aaptGeneration == AaptGeneration.AAPT_V1) {
-            s = "--non-constant-id";
-        } else {
-            s = "--non-final-ids";
-        }
-
-        if (!atlasExtension.getTBuildConfig().getAaptConstantId() && !aaptConfigBuilder.build()
-            .getOptions()
-            .getAdditionalParameters()
-            .contains(s)) {
-            aaptConfigBuilder.build().getOptions().getAdditionalParameters().add(s);
-        } else {
-            aaptConfigBuilder.build().getOptions().getAdditionalParameters().remove(s);
-
-        }
         super.processResources(aapt, aaptConfigBuilder);
 
     }
@@ -493,7 +476,7 @@ public class AtlasBuilder extends AndroidBuilder {
             }
      }
 
-    @Override
+
     @NonNull
     public List<String> getBootClasspathAsStrings(boolean includeOptionalLibraries) {
 
@@ -753,7 +736,6 @@ public class AtlasBuilder extends AndroidBuilder {
         return defaultBuilder.getSdkInfo();
     }
 
-    @Override
     public MergingReport mergeManifestsForApplication(
             @NonNull File mainManifest,
             @NonNull List<File> manifestOverlays,
