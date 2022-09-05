@@ -210,13 +210,10 @@ public class SkylarkImportLookupFunction implements SkyFunction {
   /** Computes the Label corresponding to a relative import path. */
   private static Label labelForRelativeImport(PathFragment importPath, Label containingFileLabel)
       throws SkylarkImportFailedException {
-    // The twistiness of the code below is due to the fact that the containing file may be in
-    // a subdirectory of the package that contains it. We need to construct a Label with
-    // the import file in the same subdirectory.
     PackageIdentifier pkgIdForImport = containingFileLabel.getPackageIdentifier();
-    PathFragment containingDirInPkg =
+    PathFragment containingDir =
         (new PathFragment(containingFileLabel.getName())).getParentDirectory();
-    String targetNameForImport = containingDirInPkg.getRelative(importPath).toString();
+    String targetNameForImport = importPath.getRelative(containingDir).toString();
     try {
       return Label.create(pkgIdForImport, targetNameForImport);
     } catch (LabelSyntaxException e) {
