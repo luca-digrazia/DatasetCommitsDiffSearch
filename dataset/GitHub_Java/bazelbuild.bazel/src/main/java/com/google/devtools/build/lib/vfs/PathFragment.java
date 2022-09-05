@@ -737,12 +737,12 @@ public final class PathFragment implements Comparable<PathFragment>, Serializabl
     // once.
     int h = hashCode;
     if (h == 0) {
-      h = Boolean.valueOf(isAbsolute).hashCode();
+      h = Boolean.hashCode(isAbsolute);
       for (String segment : segments) {
         h = h * 31 + segment.hashCode();
       }
       if (!isEmpty()) {
-        h = h * 31 + Character.valueOf(driveLetter).hashCode();
+        h = h * 31 + Character.hashCode(driveLetter);
       }
       hashCode = h;
     }
