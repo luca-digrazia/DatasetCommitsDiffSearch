@@ -1,22 +1,20 @@
 package org.hswebframework.web.organizational.authorization.simple.handler;
 
 import org.hsweb.ezorm.core.param.Term;
-import org.hswebframework.utils.ClassUtils;
 import org.hswebframework.web.authorization.Permission;
 import org.hswebframework.web.authorization.access.DataAccessConfig;
 import org.hswebframework.web.authorization.access.DataAccessHandler;
 import org.hswebframework.web.authorization.access.ScopeDataAccessConfig;
 import org.hswebframework.web.authorization.annotation.RequiresDataAccess;
-import org.hswebframework.web.boost.aop.context.MethodInterceptorHolder;
 import org.hswebframework.web.boost.aop.context.MethodInterceptorParamContext;
 import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.param.QueryParamEntity;
 import org.hswebframework.web.controller.QueryController;
-import org.hswebframework.web.entity.organizational.OrganizationalEntity;
-import org.hswebframework.web.entity.organizational.authorization.OrgAttachEntity;
 import org.hswebframework.web.organizational.authorization.PersonnelAuthorization;
 import org.hswebframework.web.organizational.authorization.access.DataAccessType;
+import org.hswebframework.web.organizational.authorization.entity.OrgAttachEntity;
 import org.hswebframework.web.service.QueryService;
+import org.hswebframwork.utils.ClassUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,8 +38,6 @@ public abstract class AbstractScopeDataAccessHandler<E> implements DataAccessHan
     protected abstract String getSupportScope();
 
     protected abstract String getOperationScope(E entity);
-
-    protected abstract void applyScopeProperty(E entity, String value);
 
     protected abstract Term createQueryTerm(Set<String> scope);
 
@@ -80,16 +76,16 @@ public abstract class AbstractScopeDataAccessHandler<E> implements DataAccessHan
         if (scopes.size() == 0) return true;
         else if (scopes.size() == 1) scope = scopes.iterator().next();
         else logger.warn("existing many scope :{} , try use config.", scopes);
-        scopes = getTryOperationScope(access).stream().map(String::valueOf).collect(Collectors.toSet());
+        scopes = access.getScope().stream().map(String::valueOf).collect(Collectors.toSet());
         if (scope == null && scopes.size() == 1) {
             scope = scopes.iterator().next();
         }
         if (scope != null) {
             String finalScopeId = scope;
             context.getParams().values().stream()
-                    .filter(getEntityClass()::isInstance)
-                    .map(getEntityClass()::cast)
-                    .forEach(entity -> applyScopeProperty(entity, finalScopeId));
+                    .filter(OrgAttachEntity.class::isInstance)
+                    .map(OrgAttachEntity.class::cast)
+                    .forEach(entity -> entity.setOrgId(finalScopeId));
         } else {
             logger.warn("scope is null!");
         }
@@ -109,10 +105,14 @@ public abstract class AbstractScopeDataAccessHandler<E> implements DataAccessHan
             //判断是否满足条件(泛型为 getEntityClass)
             Class entityType = ClassUtils.getGenericType(controller.getClass(), 0);
             if (ClassUtils.instanceOf(entityType, getEntityClass())) {
-                @SuppressWarnings("unchecked")
-                QueryService<E, Object> queryService = ((QueryController<E, Object, Entity>) controller).getService();
+                QueryService<E, Object> queryService =
+                        ((QueryController<E, Object, Entity>) controller).getService();
                 E oldData = queryService.selectByPk(id);
-                return !(oldData != null && !ids.contains(getOperationScope(oldData)));
+                if (oldData != null && ids.contains(getOperationScope(oldData))) {
+                    return false;
+                } else {
+                    return true;
+                }
             } else {
                 errorMsg = "GenericType[0] not instance of " + getEntityClass();
             }
@@ -163,11 +163,5 @@ public abstract class AbstractScopeDataAccessHandler<E> implements DataAccessHan
             logger.warn("try validate query access,but entity not support, QueryParamEntity support now!");
         }
         return true;
-    }
-
-    protected boolean genericTypeInstanceOf(Class type) {
-        MethodInterceptorHolder holder = MethodInterceptorHolder.current();
-        Class entity = ClassUtils.getGenericType(holder.getTarget().getClass());
-        return null != entity && ClassUtils.instanceOf(entity, type);
     }
 }

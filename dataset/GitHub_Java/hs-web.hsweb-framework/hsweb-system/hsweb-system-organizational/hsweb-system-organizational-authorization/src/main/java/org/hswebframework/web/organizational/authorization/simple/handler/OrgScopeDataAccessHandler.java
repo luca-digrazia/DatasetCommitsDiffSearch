@@ -1,11 +1,10 @@
 package org.hswebframework.web.organizational.authorization.simple.handler;
 
-import org.hswebframework.ezorm.core.param.Term;
-import org.hswebframework.ezorm.core.param.TermType;
-import org.hswebframework.web.authorization.define.AuthorizingContext;
-import org.hswebframework.web.organizational.authorization.access.OrgAttachEntity;
-import org.hswebframework.web.organizational.authorization.PersonnelAuthentication;
+import org.hsweb.ezorm.core.param.Term;
+import org.hsweb.ezorm.core.param.TermType;
+import org.hswebframework.web.organizational.authorization.PersonnelAuthorization;
 import org.hswebframework.web.organizational.authorization.access.DataAccessType;
+import org.hswebframework.web.organizational.authorization.entity.OrgAttachEntity;
 
 import java.util.Collections;
 import java.util.Set;
@@ -14,6 +13,8 @@ import static org.hswebframework.web.organizational.authorization.access.DataAcc
 import static org.hswebframework.web.organizational.authorization.access.DataAccessType.SCOPE_TYPE_ONLY_SELF;
 
 /**
+ * TODO 完成注释
+ *
  * @author zhouhao
  */
 public class OrgScopeDataAccessHandler extends AbstractScopeDataAccessHandler<OrgAttachEntity> {
@@ -28,19 +29,14 @@ public class OrgScopeDataAccessHandler extends AbstractScopeDataAccessHandler<Or
     }
 
     @Override
-    protected void applyScopeProperty(OrgAttachEntity entity, String value) {
-        entity.setOrgId(value);
-    }
-
-    @Override
-    protected Set<String> getTryOperationScope(String scopeType, PersonnelAuthentication authorization) {
+    protected Set<String> getTryOperationScope(String scopeType, PersonnelAuthorization authorization) {
         switch (scopeType) {
             case SCOPE_TYPE_CHILDREN:
                 return authorization.getAllOrgId();
             case SCOPE_TYPE_ONLY_SELF:
                 return authorization.getRootOrgId();
             default:
-                return new java.util.HashSet<>();
+                return Collections.emptySet();
         }
     }
 
@@ -50,7 +46,7 @@ public class OrgScopeDataAccessHandler extends AbstractScopeDataAccessHandler<Or
     }
 
     @Override
-    protected Term createQueryTerm(Set<String> scope, AuthorizingContext context) {
+    protected Term createQueryTerm(Set<String> scope) {
         Term term = new Term();
         term.setColumn(OrgAttachEntity.orgId);
         term.setTermType(TermType.in);

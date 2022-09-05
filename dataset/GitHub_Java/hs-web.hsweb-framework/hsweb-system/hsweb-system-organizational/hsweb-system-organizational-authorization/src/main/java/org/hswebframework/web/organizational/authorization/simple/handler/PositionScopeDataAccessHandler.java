@@ -1,11 +1,10 @@
 package org.hswebframework.web.organizational.authorization.simple.handler;
 
-import org.hswebframework.ezorm.core.param.Term;
-import org.hswebframework.ezorm.core.param.TermType;
-import org.hswebframework.web.authorization.define.AuthorizingContext;
-import org.hswebframework.web.organizational.authorization.access.PositionAttachEntity;
-import org.hswebframework.web.organizational.authorization.PersonnelAuthentication;
+import org.hsweb.ezorm.core.param.Term;
+import org.hsweb.ezorm.core.param.TermType;
+import org.hswebframework.web.organizational.authorization.PersonnelAuthorization;
 import org.hswebframework.web.organizational.authorization.access.DataAccessType;
+import org.hswebframework.web.organizational.authorization.entity.PositionAttachEntity;
 
 import java.util.Collections;
 import java.util.Set;
@@ -14,6 +13,8 @@ import static org.hswebframework.web.organizational.authorization.access.DataAcc
 import static org.hswebframework.web.organizational.authorization.access.DataAccessType.SCOPE_TYPE_ONLY_SELF;
 
 /**
+ * TODO 完成注释
+ *
  * @author zhouhao
  */
 public class PositionScopeDataAccessHandler extends AbstractScopeDataAccessHandler<PositionAttachEntity> {
@@ -28,20 +29,15 @@ public class PositionScopeDataAccessHandler extends AbstractScopeDataAccessHandl
     }
 
     @Override
-    protected Set<String> getTryOperationScope(String scopeType, PersonnelAuthentication authorization) {
+    protected Set<String> getTryOperationScope(String scopeType, PersonnelAuthorization authorization) {
         switch (scopeType) {
             case SCOPE_TYPE_CHILDREN:
                 return authorization.getAllPositionId();
             case SCOPE_TYPE_ONLY_SELF:
                 return authorization.getRootPositionId();
             default:
-                return new java.util.HashSet<>();
+                return Collections.emptySet();
         }
-    }
-
-    @Override
-    protected void applyScopeProperty(PositionAttachEntity entity, String value) {
-        entity.setPositionId(value);
     }
 
     @Override
@@ -50,7 +46,7 @@ public class PositionScopeDataAccessHandler extends AbstractScopeDataAccessHandl
     }
 
     @Override
-    protected Term createQueryTerm(Set<String> scope, AuthorizingContext context) {
+    protected Term createQueryTerm(Set<String> scope) {
         Term term = new Term();
         term.setColumn(PositionAttachEntity.positionId);
         term.setTermType(TermType.in);

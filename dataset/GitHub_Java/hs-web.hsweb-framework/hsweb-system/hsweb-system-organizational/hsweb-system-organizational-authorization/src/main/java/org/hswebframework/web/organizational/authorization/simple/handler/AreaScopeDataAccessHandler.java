@@ -2,8 +2,8 @@ package org.hswebframework.web.organizational.authorization.simple.handler;
 
 import org.hsweb.ezorm.core.param.Term;
 import org.hsweb.ezorm.core.param.TermType;
-import org.hswebframework.web.entity.organizational.authorization.DistrictAttachEntity;
 import org.hswebframework.web.organizational.authorization.PersonnelAuthorization;
+import org.hswebframework.web.organizational.authorization.entity.AreaAttachEntity;
 
 import java.util.Collections;
 import java.util.Set;
@@ -15,10 +15,10 @@ import static org.hswebframework.web.organizational.authorization.access.DataAcc
  *
  * @author zhouhao
  */
-public class AreaScopeDataAccessHandler extends AbstractScopeDataAccessHandler<DistrictAttachEntity> {
+public class AreaScopeDataAccessHandler extends AbstractScopeDataAccessHandler<AreaAttachEntity> {
     @Override
-    protected Class<DistrictAttachEntity> getEntityClass() {
-        return DistrictAttachEntity.class;
+    protected Class<AreaAttachEntity> getEntityClass() {
+        return AreaAttachEntity.class;
     }
 
     @Override
@@ -27,22 +27,17 @@ public class AreaScopeDataAccessHandler extends AbstractScopeDataAccessHandler<D
     }
 
     @Override
-    protected String getOperationScope(DistrictAttachEntity entity) {
-        return entity.getDistrictId();
-    }
-
-    @Override
-    protected void applyScopeProperty(DistrictAttachEntity entity, String value) {
-        entity.setDistrictId(value);
+    protected String getOperationScope(AreaAttachEntity entity) {
+        return entity.getAreaId();
     }
 
     @Override
     protected Set<String> getTryOperationScope(String scopeType, PersonnelAuthorization authorization) {
         switch (scopeType) {
             case SCOPE_TYPE_CHILDREN:
-                return authorization.getAllDistrictId();
+                return authorization.getAllAreaId();
             case SCOPE_TYPE_ONLY_SELF:
-                return authorization.getRootDistrictId();
+                return authorization.getRootAreaId();
             default:
                 return Collections.emptySet();
         }
@@ -51,7 +46,7 @@ public class AreaScopeDataAccessHandler extends AbstractScopeDataAccessHandler<D
     @Override
     protected Term createQueryTerm(Set<String> scope) {
         Term term = new Term();
-        term.setColumn(DistrictAttachEntity.districtId);
+        term.setColumn(AreaAttachEntity.areaId);
         term.setTermType(TermType.in);
         term.setValue(scope);
         term.setType(Term.Type.and);
