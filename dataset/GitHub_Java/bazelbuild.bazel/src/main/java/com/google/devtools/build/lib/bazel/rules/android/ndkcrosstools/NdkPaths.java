@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.ToolPath;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -45,7 +46,7 @@ public class NdkPaths {
     this.apiLevel = apiLevel;
   }
 
-  public ImmutableList<ToolPath> createToolpaths(String toolchainName, String targetPlatform,
+  ImmutableList<ToolPath> createToolpaths(String toolchainName, String targetPlatform,
       CppConfiguration.Tool... excludedTools) {
 
     ImmutableList.Builder<ToolPath> toolPaths = ImmutableList.builder();
@@ -67,7 +68,7 @@ public class NdkPaths {
     return toolPaths.build();
   }
 
-  public ImmutableList<ToolPath> createClangToolpaths(String toolchainName, String targetPlatform,
+  ImmutableList<ToolPath> createClangToolpaths(String toolchainName, String targetPlatform,
       String llvmVersion, CppConfiguration.Tool... excludedTools) {
 
     // Add GCC to the list of excluded tools. It will be replaced by clang below.
@@ -83,14 +84,15 @@ public class NdkPaths {
 
         .add(ToolPath.newBuilder()
             .setName("gcc")
-            .setPath(createToolPath(llvmVersion == null ? "llvm" : "llvm-" + llvmVersion, "clang"))
+            .setPath(createToolPath("llvm-" + llvmVersion, "clang"))
             .build())
         .build();
   }
 
   private String createToolPath(String toolchainName, String toolName) {
 
-    String toolpathTemplate = "ndk/toolchains/%toolchainName%/prebuilt/%hostPlatform%"
+    String toolpathTemplate =
+        "external/%repositoryName%/ndk/toolchains/%toolchainName%/prebuilt/%hostPlatform%"
         + "/bin/%toolName%";
 
     return toolpathTemplate
@@ -101,10 +103,10 @@ public class NdkPaths {
   }
 
   public static String getToolchainDirectoryFromToolPath(String toolPath) {
-    return toolPath.split("/")[2];
+    return toolPath.split("/")[4];
   }
 
-  public String createGccToolchainPath(String toolchainName) {
+  String createGccToolchainPath(String toolchainName) {
 
     String gccToolchainPathTemplate =
         "external/%repositoryName%/ndk/toolchains/%toolchainName%/prebuilt/%hostPlatform%";
@@ -115,7 +117,7 @@ public class NdkPaths {
         .replace("%hostPlatform%", hostPlatform);
   }
 
-  public void addToolchainIncludePaths(
+  void addToolchainIncludePaths(
       List<CToolchain.Builder> toolchains,
       String toolchainName,
       String targetPlatform,
@@ -126,7 +128,7 @@ public class NdkPaths {
     }
   }
 
-  public void addToolchainIncludePaths(
+  void addToolchainIncludePaths(
       CToolchain.Builder toolchain,
       String toolchainName,
       String targetPlatform,
@@ -171,7 +173,7 @@ public class NdkPaths {
         .replace("%includeFolderName%", includeFolderName);
   }
 
-  public String createBuiltinSysroot(String targetCpu) {
+  String createBuiltinSysroot(String targetCpu) {
 
     String correctedApiLevel = apiLevel.getCpuCorrectedApiLevel(targetCpu);
 

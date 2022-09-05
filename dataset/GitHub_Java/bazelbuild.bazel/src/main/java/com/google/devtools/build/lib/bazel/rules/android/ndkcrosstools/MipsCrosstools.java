@@ -61,33 +61,28 @@ class MipsCrosstools {
             // mips64 toolchain doesn't have the dwp tool.
             CppConfiguration.Tool.DWP))
 
-        .addAllCxxBuiltinIncludeDirectory(ndkPaths.createToolchainIncludePaths(
-            "mips64el-linux-android-4.9", "mips64el-linux-android", "4.9"))
-
         .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("mips64")));
 
     // The flags for mips64 clang 3.5 and 3.6 are the same, they differ only in the LLVM version
     // given in their tool paths.
     for (String clangVersion : new String[] { "3.5", "3.6" }) {
 
-      toolchainsListBuilder.add(createBaseMipsClangToolchain("mips64", "4.9")
+      toolchainsListBuilder.add(createBaseMipsClangToolchain("mips64", "4.9", clangVersion)
           .setToolchainIdentifier("mips64el-linux-android-clang" + clangVersion)
           .setTargetSystemName("mips64el-linux-android")
           .setTargetCpu("mips64")
-          .setCompiler("gcc-4.9")
 
           .addAllToolPath(ndkPaths.createClangToolpaths(
               "mips64el-linux-android-4.9", "mips64el-linux-android", clangVersion,
               CppConfiguration.Tool.DWP))
 
-          .addAllCxxBuiltinIncludeDirectory(ndkPaths.createToolchainIncludePaths(
-              "mips64el-linux-android-4.9", "mips64el-linux-android", "4.9"))
-
           .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("mips64")));
     }
 
     List<CToolchain.Builder> toolchains = toolchainsListBuilder.build();
-    stlImpl.addStlImpl(toolchains, "4.9", false);
+    ndkPaths.addToolchainIncludePaths(
+        toolchains, "mips64el-linux-android-4.9", "mips64el-linux-android", "4.9");
+    stlImpl.addStlImpl(toolchains, "4.9");
     return toolchains;
   }
 
@@ -106,22 +101,20 @@ class MipsCrosstools {
     // given in their tool paths.
     for (String clangVersion : new String[] { "3.5", "3.6" }) {
 
-      CToolchain.Builder mipsClang = createBaseMipsClangToolchain("mips", "4.8")
+      CToolchain.Builder mipsClang = createBaseMipsClangToolchain("mips", "4.8", clangVersion)
           // Purposefully no hyphen between "clang" and clang version.
           .setToolchainIdentifier("mipsel-linux-android-clang" + clangVersion)
           .setTargetSystemName("mipsel-linux-android")
           .setTargetCpu("mips")
-          .setCompiler("gcc-4.8")
     
           .addAllToolPath(ndkPaths.createClangToolpaths(
               "mipsel-linux-android-4.8", "mipsel-linux-android", clangVersion,
               CppConfiguration.Tool.DWP, CppConfiguration.Tool.GCOVTOOL))
     
-          .addAllCxxBuiltinIncludeDirectory(ndkPaths.createToolchainIncludePaths(
-              "mipsel-linux-android-4.8", "mipsel-linux-android", "4.8"))
-    
           .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("mips"));
 
+      ndkPaths.addToolchainIncludePaths(
+          mipsClang, "mipsel-linux-android-4.8", "mipsel-linux-android", "4.8");
       stlImpl.addStlImpl(mipsClang, "4.8");
       toolchainsListBuilder.add(mipsClang);
     }
@@ -142,11 +135,10 @@ class MipsCrosstools {
             "mipsel-linux-android-" + gccVersion, "mipsel-linux-android",
             excludedTools))
     
-        .addAllCxxBuiltinIncludeDirectory(ndkPaths.createToolchainIncludePaths(
-                "mipsel-linux-android-" + gccVersion, "mipsel-linux-android", gccVersion))
-    
         .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("mips"));
 
+    ndkPaths.addToolchainIncludePaths(
+        toolchain, "mipsel-linux-android-" + gccVersion, "mipsel-linux-android", gccVersion);
     stlImpl.addStlImpl(toolchain, gccVersion);
     return toolchain;
   }
@@ -187,7 +179,8 @@ class MipsCrosstools {
             .addCompilerFlag("-fno-omit-frame-pointer"));
   }
 
-  private CToolchain.Builder createBaseMipsClangToolchain(String mipsArch, String gccVersion) {
+  private CToolchain.Builder createBaseMipsClangToolchain(
+      String mipsArch, String gccVersion, String clangVersion) {
 
     String gccToolchain = ndkPaths.createGccToolchainPath(
         String.format("%s-linux-android-%s", mipsArch, gccVersion));
@@ -195,7 +188,7 @@ class MipsCrosstools {
     String llvmTriple = mipsArch + "-none-linux-android";
     
     return CToolchain.newBuilder()
-        .setCompiler("gcc-" + gccVersion)
+        .setCompiler("clang" + clangVersion)
 
         // Compiler flags
         .addCompilerFlag("-gcc-toolchain")
