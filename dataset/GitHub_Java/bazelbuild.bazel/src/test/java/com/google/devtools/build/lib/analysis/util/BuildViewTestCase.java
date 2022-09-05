@@ -1240,11 +1240,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   protected BuildConfiguration getDataConfiguration() {
-    BuildConfiguration targetConfig = getTargetConfiguration();
-    // TODO(bazel-team): do a proper data transition for dynamic configurations.
-    return targetConfig.useDynamicConfigurations()
-        ? targetConfig
-        : targetConfig.getConfiguration(ConfigurationTransition.DATA);
+    return getTargetConfiguration().getConfiguration(ConfigurationTransition.DATA);
   }
 
   protected BuildConfiguration getHostConfiguration() {
@@ -1285,14 +1281,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       // TODO(bazel-team): What's supposed to happen in this case?
       return null;
     }
-    return view.update(
-        loadingResult,
-        masterConfig,
-        ImmutableList.<String>of(),
-        viewOptions,
-        AnalysisTestUtil.TOP_LEVEL_ARTIFACT_CONTEXT,
-        reporter,
-        eventBus);
+    return view.update(loadingResult, masterConfig, viewOptions,
+        AnalysisTestUtil.TOP_LEVEL_ARTIFACT_CONTEXT, reporter, eventBus);
   }
 
   protected static Predicate<Artifact> artifactNamed(final String name) {
