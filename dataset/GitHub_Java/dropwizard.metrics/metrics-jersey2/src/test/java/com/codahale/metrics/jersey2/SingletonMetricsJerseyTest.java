@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
  * Tests registering {@link InstrumentedResourceMethodApplicationListener} as a singleton
  * in a Jersey {@link org.glassfish.jersey.server.ResourceConfig}
  */
+
 public class SingletonMetricsJerseyTest extends JerseyTest {
     static {
         Logger.getLogger("org.glassfish.jersey").setLevel(Level.OFF);
