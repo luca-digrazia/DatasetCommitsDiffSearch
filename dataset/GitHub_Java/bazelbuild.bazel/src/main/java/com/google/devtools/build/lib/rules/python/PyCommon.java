@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.Util;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -382,9 +381,7 @@ public final class PyCommon {
     for (Artifact source : sources) {
       Artifact pycFile = createPycFile(source, pythonBinary, pythonPrecompileAttribute,
           hostPython2RuntimeAttribute);
-      if (pycFile != null) {
-        pycFiles.add(pycFile);
-      }
+      pycFiles.add(pycFile);
     }
     return ImmutableList.copyOf(pycFiles);
   }
@@ -397,13 +394,6 @@ public final class PyCommon {
   public Artifact createPycFile(
       Artifact source, PathFragment pythonBinary,
       String pythonPrecompileAttribute, String hostPython2RuntimeAttribute) {
-    PackageIdentifier packageId = ruleContext.getLabel().getPackageIdentifier();
-    PackageIdentifier itemPackageId = source.getOwner().getPackageIdentifier();
-    if (!itemPackageId.equals(packageId)) {
-      // This will produce an error, so we skip this element.
-      return null;
-    }
-
     Artifact output =
         ruleContext.getRelatedArtifact(source.getRootRelativePath(), ".pyc");
 
