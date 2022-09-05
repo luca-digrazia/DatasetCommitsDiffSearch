@@ -1,5 +1,6 @@
 package com.yammer.metrics;
 
+import java.io.Closeable;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
@@ -8,33 +9,68 @@ import java.util.concurrent.TimeUnit;
  * throughput statistics via {@link Meter}.
  */
 public class Timer implements Metered, Sampling, Summarizable {
+    /**
+     * A timing context.
+     *
+     * @see Timer#time()
+     */
+    public static class Context implements Closeable {
+        private final Timer timer;
+        private final Clock clock;
+        private final long startTime;
+
+        private Context(Timer timer, Clock clock) {
+            this.timer = timer;
+            this.clock = clock;
+            this.startTime = clock.getTick();
+        }
+
+        /**
+         * Stops recording the elapsed time, updates the timer and returns the elapsed time in
+         * nanoseconds.
+         */
+        public long stop() {
+            final long elapsed = clock.getTick() - startTime;
+            timer.update(elapsed, TimeUnit.NANOSECONDS);
+            return elapsed;
+        }
+
+        @Override
+        public void close() {
+            stop();
+        }
+    }
+
     private final Meter meter;
-    private final Histogram histogram = new Histogram(SampleType.BIASED);
+    private final Histogram histogram;
     private final Clock clock;
 
     /**
      * Creates a new {@link Timer}.
      */
     public Timer() {
-        this(Clock.defaultClock());
+        this(new ExponentiallyDecayingSample());
     }
 
     /**
-     * Creates a new {@link Timer}.
+     * Creates a new {@link Timer} that uses the given {@link Sample}.
      *
-     * @param clock        the clock used to calculate duration
+     * @param sample the {@link Sample} implementation the timer should use
      */
-    Timer(Clock clock) {
+    public Timer(Sample sample) {
+        this(sample, Clock.defaultClock());
+    }
+
+    /**
+     * Creates a new {@link Timer} that uses the given {@link Sample} and {@link Clock}.
+     *
+     * @param sample the {@link Sample} implementation the timer should use
+     * @param clock  the {@link Clock} implementation the timer should use
+     */
+    public Timer(Sample sample, Clock clock) {
         this.meter = new Meter(clock);
         this.clock = clock;
-        clear();
-    }
-
-    /**
-     * Clears all recorded durations.
-     */
-    public void clear() {
-        histogram.clear();
+        this.histogram = new Histogram(sample);
     }
 
     /**
@@ -159,33 +195,6 @@ public class Timer implements Metered, Sampling, Summarizable {
         if (duration >= 0) {
             histogram.update(duration);
             meter.mark();
-        }
-    }
-
-    /**
-     * A timing context.
-     *
-     * @see Timer#time()
-     */
-    public static class Context {
-        private final Timer timer;
-        private final Clock clock;
-        private final long startTime;
-
-        private Context(Timer timer, Clock clock) {
-            this.timer = timer;
-            this.clock = clock;
-            this.startTime = clock.getTick();
-        }
-
-        /**
-         * Stops recording the elapsed time, updates the timer and returns the elapsed time in
-         * nanoseconds.
-         */
-        public long stop() {
-            final long elapsedNanos = clock.getTick() - startTime;
-            timer.update(elapsedNanos, TimeUnit.NANOSECONDS);
-            return elapsedNanos;
         }
     }
 }
