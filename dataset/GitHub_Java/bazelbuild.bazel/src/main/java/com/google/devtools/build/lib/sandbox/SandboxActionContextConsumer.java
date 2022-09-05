@@ -15,11 +15,11 @@ package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.ImmutableMultimap.Builder;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.actions.ActionContextConsumer;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.OS;
 
 /**
@@ -28,20 +28,6 @@ import com.google.devtools.build.lib.util.OS;
  */
 public class SandboxActionContextConsumer implements ActionContextConsumer {
 
-  private final ImmutableMultimap<Class<? extends ActionContext>, String> contexts;
-
-  public SandboxActionContextConsumer(CommandEnvironment env) {
-    ImmutableMultimap.Builder<Class<? extends ActionContext>, String> contexts =
-        ImmutableMultimap.builder();
-
-    if ((OS.getCurrent() == OS.LINUX && LinuxSandboxedStrategy.isSupported(env))
-        || (OS.getCurrent() == OS.DARWIN && DarwinSandboxRunner.isSupported())) {
-      contexts.put(SpawnActionContext.class, "sandboxed");
-    }
-
-    this.contexts = contexts.build();
-  }
-
   @Override
   public ImmutableMap<String, String> getSpawnActionContexts() {
     return ImmutableMap.of();
@@ -49,6 +35,13 @@ public class SandboxActionContextConsumer implements ActionContextConsumer {
 
   @Override
   public Multimap<Class<? extends ActionContext>, String> getActionContexts() {
-    return contexts;
+    Builder<Class<? extends ActionContext>, String> contexts = ImmutableMultimap.builder();
+
+    if (OS.getCurrent() == OS.LINUX) {
+      contexts.put(SpawnActionContext.class, "sandboxed");
+    }
+
+    return contexts.build();
   }
+
 }

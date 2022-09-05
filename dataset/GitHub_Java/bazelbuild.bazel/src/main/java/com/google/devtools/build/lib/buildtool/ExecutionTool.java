@@ -51,6 +51,7 @@ import com.google.devtools.build.lib.actions.SimpleActionContextProvider;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
+import com.google.devtools.build.lib.analysis.BuildView;
 import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.SymlinkTreeActionContext;
@@ -93,6 +94,7 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
@@ -118,7 +120,7 @@ import java.util.logging.Logger;
  * PackageCache.
  *
  * @see BuildTool
- * @see com.google.devtools.build.lib.analysis.BuildView
+ * @see BuildView
  */
 public class ExecutionTool {
   private static class StrategyConverter {
@@ -164,7 +166,7 @@ public class ExecutionTool {
     }
   }
 
-  static final Logger log = Logger.getLogger(ExecutionTool.class.getName());
+  static final Logger LOG = Logger.getLogger(ExecutionTool.class.getName());
 
   private final CommandEnvironment env;
   private final BlazeRuntime runtime;
@@ -300,6 +302,7 @@ public class ExecutionTool {
       throws ExecutorInitException {
     return new BlazeExecutor(
         env.getExecRoot(),
+        env.getOutputPath(),
         getReporter(),
         env.getEventBus(),
         runtime.getClock(),
@@ -338,7 +341,7 @@ public class ExecutionTool {
       TopLevelArtifactContext topLevelArtifactContext)
       throws BuildFailedException, InterruptedException, TestExecException, AbruptExitException {
     Stopwatch timer = Stopwatch.createStarted();
-    prepare(packageRoots, analysisResult.getWorkspaceName());
+    prepare(packageRoots);
 
     ActionGraph actionGraph = analysisResult.getActionGraph();
 
@@ -351,8 +354,7 @@ public class ExecutionTool {
       modifiedOutputFiles = outputService.startBuild(buildId,
               request.getBuildOptions().finalizeActions);
     } else {
-      // TODO(bazel-team): this could be just another OutputService
-      startLocalOutputBuild(analysisResult.getWorkspaceName());
+      startLocalOutputBuild(); // TODO(bazel-team): this could be just another OutputService
     }
 
     List<BuildConfiguration> targetConfigurations = configurations.getTargetConfigurations();
@@ -360,18 +362,16 @@ public class ExecutionTool {
         ? targetConfigurations.get(0) : null;
     if (targetConfigurations.size() == 1) {
       String productName = runtime.getProductName();
-      String workspaceName = analysisResult.getWorkspaceName();
       OutputDirectoryLinksUtils.createOutputDirectoryLinks(
-          workspaceName, env.getWorkspace(), env.getDirectories().getExecRoot(workspaceName),
-          env.getDirectories().getOutputPath(workspaceName), getReporter(), targetConfiguration,
+          env.getWorkspaceName(), env.getWorkspace(), getExecRoot(),
+          env.getOutputPath(), getReporter(), targetConfiguration,
           request.getBuildOptions().getSymlinkPrefix(productName), productName);
     }
 
     ActionCache actionCache = getActionCache();
     SkyframeExecutor skyframeExecutor = env.getSkyframeExecutor();
-    Builder builder = createBuilder(
-        request, actionCache, skyframeExecutor, modifiedOutputFiles,
-        analysisResult.getWorkspaceName());
+    Builder builder =
+            createBuilder(request, executor, actionCache, skyframeExecutor, modifiedOutputFiles);
 
     //
     // Execution proper.  All statements below are logically nested in
@@ -423,6 +423,7 @@ public class ExecutionTool {
         // skyframe full, this destroys the action graph as well, so we can only do it after the
         // action graph is no longer needed.
         env.getSkyframeBuildView().clearAnalysisCache(analysisResult.getTargetsToBuild());
+        actionGraph = null;
       }
 
       configureResourceManager(request);
@@ -498,7 +499,7 @@ public class ExecutionTool {
     }
   }
 
-  private void prepare(ImmutableMap<PackageIdentifier, Path> packageRoots, String workspaceName)
+  private void prepare(ImmutableMap<PackageIdentifier, Path> packageRoots)
       throws ExecutorInitException {
     // Prepare for build.
     Profiler.instance().markPhase(ProfilePhase.PREPARE);
@@ -509,8 +510,7 @@ public class ExecutionTool {
     // Plant the symlink forest.
     try {
       new SymlinkForest(
-          packageRoots, getExecRoot(), runtime.getProductName(), workspaceName)
-          .plantSymlinkForest();
+          packageRoots, getExecRoot(), runtime.getProductName()).plantSymlinkForest();
     } catch (IOException e) {
       throw new ExecutorInitException("Source forest creation failed", e);
     }
@@ -539,9 +539,9 @@ public class ExecutionTool {
   /**
    * Prepare for a local output build.
    */
-  private void startLocalOutputBuild(String workspaceName) throws ExecutorInitException {
+  private void startLocalOutputBuild() throws ExecutorInitException {
     try (AutoProfiler p = AutoProfiler.profiled("Starting local output build", ProfilerTask.INFO)) {
-      Path outputPath = env.getDirectories().getOutputPath(workspaceName);
+      Path outputPath = env.getOutputPath();
       Path localOutputPath = env.getDirectories().getLocalOutputPath();
 
       if (outputPath.isSymbolicLink()) {
@@ -657,10 +657,10 @@ public class ExecutionTool {
   }
 
   private Builder createBuilder(BuildRequest request,
+      Executor executor,
       ActionCache actionCache,
       SkyframeExecutor skyframeExecutor,
-      ModifiedFileSet modifiedOutputFiles,
-      String workspaceName) {
+      ModifiedFileSet modifiedOutputFiles) {
     BuildRequest.BuildRequestOptions options = request.getBuildOptions();
     boolean verboseExplanations = options.verboseExplanations;
     boolean keepGoing = request.getViewOptions().keepGoing;
@@ -675,7 +675,7 @@ public class ExecutionTool {
 
     // Unfortunately, the exec root cache is not shared with caches in the remote execution
     // client.
-    fileCache = createBuildSingleFileCache(env.getDirectories().getExecRoot(workspaceName));
+    fileCache = createBuildSingleFileCache(executor.getExecRoot());
     skyframeExecutor.setActionOutputRoot(actionOutputRoot);
     ArtifactFactory artifactFactory = env.getSkyframeBuildView().getArtifactFactory();
     return new SkyframeBuilder(skyframeExecutor,
@@ -715,7 +715,7 @@ public class ExecutionTool {
     long actionCacheSizeInBytes = 0;
     long actionCacheSaveTimeInMs;
 
-    AutoProfiler p = AutoProfiler.profiledAndLogged("Saving action cache", ProfilerTask.INFO, log);
+    AutoProfiler p = AutoProfiler.profiledAndLogged("Saving action cache", ProfilerTask.INFO, LOG);
     try {
       actionCacheSizeInBytes = actionCache.save();
     } catch (IOException e) {

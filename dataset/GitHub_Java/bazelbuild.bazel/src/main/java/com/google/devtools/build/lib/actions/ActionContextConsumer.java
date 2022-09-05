@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,9 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
-
-import java.util.Map;
 
 /**
  * An object describing that actions require a particular implementation of an
@@ -46,13 +46,18 @@ public interface ActionContextConsumer {
    *
    * <p>If a spawn action is executed whose mnemonic maps to the empty string or is not
    * present in the map at all, the choice of the implementation is left to Blaze.
+   *
+   * <p>Matching on mnemonics is done case-insensitively so it is recommended that any
+   * implementation of this method makes sure that no two keys that refer to the same mnemonic are
+   * present in the returned map. The easiest way to assure this is to use a map created using
+   * {@code new TreeMap<>(String.CASE_INSENSITIVE_ORDER)}.
    */
-  public Map<String, String> getSpawnActionContexts();
+  ImmutableMap<String, String> getSpawnActionContexts();
 
   /**
    * Returns a map from action context class to the implementation required by the module.
    *
    * <p>If the implementation name is the empty string, the choice is left to Blaze.
    */
-  public Map<Class<? extends ActionContext>, String> getActionContexts();
+  Multimap<Class<? extends ActionContext>, String> getActionContexts();
 }
