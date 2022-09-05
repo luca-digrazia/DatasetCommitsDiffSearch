@@ -26,7 +26,6 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -402,10 +401,7 @@ final class ProtoSupport {
   }
 
   private String getProtoInputListFileContents() {
-    // Sort the file names to make the remote action key independent of the precise deps structure.
-    // compile_protos.py will sort the input list anyway.
-    Iterable<Artifact> sorted = Ordering.natural().immutableSortedCopy(getFilteredProtoSources());
-    return Artifact.joinExecPaths("\n", sorted);
+    return Artifact.joinExecPaths("\n", getFilteredProtoSources());
   }
 
   private PathFragment getWorkspaceRelativeOutputDir() {
@@ -419,15 +415,8 @@ final class ProtoSupport {
   }
 
   private ImmutableList<Artifact> getGeneratedHeaders() {
-    ImmutableList.Builder<Artifact> headers = new ImmutableList.Builder<>();
-    headers.addAll(generatedOutputArtifacts(FileType.of(".pbobjc.h")));
-    if (!usesProtobufLibrary()) {
-      // As part of the compatibility layer between PB2 and protobuf, PB2 generates both pb.h and
-      // pbobjc.h files, easing the migration out of PB2.
-      headers.addAll(generatedOutputArtifacts(FileType.of(".pb.h")));
-    }
-
-    return headers.build();
+    boolean useObjcName = attributes.usesObjcHeaderNames() || usesProtobufLibrary();
+    return generatedOutputArtifacts(FileType.of(".pb" + (useObjcName ? "objc.h" : ".h")));
   }
 
   private ImmutableList<Artifact> getGeneratedSources() {
