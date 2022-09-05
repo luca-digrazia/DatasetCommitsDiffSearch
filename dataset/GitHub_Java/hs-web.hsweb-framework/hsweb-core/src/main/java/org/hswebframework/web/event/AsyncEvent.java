@@ -12,8 +12,6 @@ import reactor.core.publisher.Mono;
  */
 public interface AsyncEvent {
 
-    Mono<Void> getAsync();
-
     /**
      * 注册一个异步任务
      *

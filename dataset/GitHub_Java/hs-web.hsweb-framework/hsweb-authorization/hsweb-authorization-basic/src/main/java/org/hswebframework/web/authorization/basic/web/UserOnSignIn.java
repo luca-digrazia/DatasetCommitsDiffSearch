@@ -1,12 +1,13 @@
 package org.hswebframework.web.authorization.basic.web;
 
-import org.hswebframework.web.authorization.listener.AuthorizationListener;
-import org.hswebframework.web.authorization.listener.event.AuthorizationSuccessEvent;
+import org.hswebframework.web.authorization.events.AuthorizationEvent;
+import org.hswebframework.web.authorization.events.AuthorizationSuccessEvent;
 import org.hswebframework.web.authorization.token.UserToken;
 import org.hswebframework.web.authorization.token.UserTokenHolder;
 import org.hswebframework.web.authorization.token.UserTokenManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationListener;
+import org.springframework.context.event.EventListener;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,16 +17,16 @@ import java.util.List;
  *
  * @author zhouhao
  * @see org.springframework.context.ApplicationEvent
- * @see org.hswebframework.web.authorization.listener.event.AuthorizationEvent
+ * @see AuthorizationEvent
  * @see UserTokenManager
  * @see UserTokenGenerator
  * @since 3.0
  */
-public class UserOnSignIn implements AuthorizationListener<AuthorizationSuccessEvent>
-        , ApplicationListener<AuthorizationSuccessEvent> {
+public class UserOnSignIn {
 
     /**
      * 默认到令牌类型
+     *
      * @see UserToken#getType()
      * @see SessionIdUserTokenGenerator#getSupportTokenType()
      */
@@ -51,19 +52,14 @@ public class UserOnSignIn implements AuthorizationListener<AuthorizationSuccessE
         this.userTokenGenerators = userTokenGenerators;
     }
 
-    @Override
-    public void on(AuthorizationSuccessEvent event) {
-        onApplicationEvent(event);
-    }
-
-    @Override
+    @EventListener
     public void onApplicationEvent(AuthorizationSuccessEvent event) {
         UserToken token = UserTokenHolder.currentToken();
         String tokenType = (String) event.getParameter("token_type").orElse(defaultTokenType);
 
         if (token != null) {
             //先退出已登陆的用户
-            userTokenManager.signOutByToken(token.getToken());
+            event.async(userTokenManager.signOutByToken(token.getToken()));
         }
         //创建token
         GeneratedToken newToken = userTokenGenerators.stream()
@@ -72,7 +68,7 @@ public class UserOnSignIn implements AuthorizationListener<AuthorizationSuccessE
                 .orElseThrow(() -> new UnsupportedOperationException(tokenType))
                 .generate(event.getAuthentication());
         //登入
-        userTokenManager.signIn(newToken.getToken(), newToken.getType(), event.getAuthentication().getUser().getId(), newToken.getTimeout());
+        event.async(userTokenManager.signIn(newToken.getToken(), newToken.getType(), event.getAuthentication().getUser().getId(), newToken.getTimeout()).then());
 
         //响应结果
         event.getResult().putAll(newToken.getResponse());
