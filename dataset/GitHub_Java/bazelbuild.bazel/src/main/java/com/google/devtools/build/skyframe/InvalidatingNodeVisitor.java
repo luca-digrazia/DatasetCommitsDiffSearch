@@ -110,6 +110,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
             /*keepAliveTime=*/ 1,
             /*units=*/ TimeUnit.SECONDS,
             /*failFastOnException=*/ true,
+            /*failFastOnInterrupt=*/ true,
             "skyframe-invalidator",
             executorFactory,
             errorClassifier,

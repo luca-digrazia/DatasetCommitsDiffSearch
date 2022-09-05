@@ -716,6 +716,7 @@ public final class ParallelEvaluator implements Evaluator {
               /*keepAliveTime=*/ 1,
               TimeUnit.SECONDS,
               /*failFastOnException*/ true,
+              /*failFastOnInterrupt*/ true,
               "skyframe-evaluator",
               VALUE_VISITOR_ERROR_CLASSIFIER,
               errorHandler);
