@@ -151,21 +151,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
           "'proguard_apply_mapping' can only be used when 'proguard_specs' is also set");
     }
 
-    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("rex_package_map")
-        && !ruleContext.attributes().get("rewrite_dexes_with_rex", Type.BOOLEAN)) {
-      ruleContext.throwWithAttributeError(
-          "rex_package_map",
-          "'rex_package_map' can only be used when 'rewrite_dexes_with_rex' is also set");
-    }
-
-    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("rex_package_map")
-        && ruleContext.attributes()
-        .get(ProguardHelper.PROGUARD_SPECS, BuildType.LABEL_LIST)
-        .isEmpty()) {
-      ruleContext.throwWithAttributeError("rex_package_map",
-          "'rex_package_map' can only be used when 'proguard_specs' is also set");
-    }
-
     // TODO(bazel-team): Find a way to simplify this code.
     // treeKeys() means that the resulting map sorts the entries by key, which is necessary to
     // ensure determinism.
@@ -457,9 +442,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 resourceClasses,
                 derivedJarFunction);
 
-    NestedSet<Artifact> nativeLibsZips =
-        AndroidCommon.collectTransitiveNativeLibsZips(ruleContext).build();
-
     Artifact finalDexes;
     Artifact finalProguardMap;
 
@@ -477,19 +459,11 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
           .addOutputArgument(finalDexes);
       if (proguardOutput.getMapping() != null) {
         finalProguardMap = getDxArtifact(ruleContext, "rexed_proguard.map");
-        Artifact finalRexPackageMap = getDxArtifact(ruleContext, "rex_output_package.map");
         rexActionBuilder
             .addArgument("--proguard_input_map")
             .addInputArgument(proguardOutput.getMapping())
             .addArgument("--proguard_output_map")
-            .addOutputArgument(finalProguardMap)
-            .addArgument("--rex_output_package_map")
-            .addOutputArgument(finalRexPackageMap);
-        if (ruleContext.attributes().isAttributeValueExplicitlySpecified("rex_package_map")) {
-          Artifact rexPackageMap =
-              ruleContext.getPrerequisiteArtifact("rex_package_map", Mode.TARGET);
-          rexActionBuilder.addArgument("--rex_input_package_map").addInputArgument(rexPackageMap);
-        }
+            .addOutputArgument(finalProguardMap);
       } else {
         finalProguardMap = proguardOutput.getMapping();
       }
@@ -510,7 +484,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .setClassesDex(finalDexes)
         .setResourceApk(resourceApk.getArtifact())
         .setJavaResourceZip(dexingOutput.javaResourceJar)
-        .setNativeLibsZips(nativeLibsZips)
         .setNativeLibs(nativeLibs)
         .setUnsignedApk(unsignedApk)
         .setSignedApk(zipAlignedApk)
@@ -576,7 +549,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .setClassesDex(stubDex)
         .setResourceApk(incrementalResourceApk.getArtifact())
         .setJavaResourceZip(dexingOutput.javaResourceJar)
-        .setNativeLibsZips(nativeLibsZips)
         .setJavaResourceFile(stubData)
         .setSignedApk(incrementalApk);
 
@@ -689,7 +661,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     ApkActionsBuilder.create("split main apk", signingMethod)
         .setClassesDex(splitStubDex)
         .setResourceApk(splitMainApkResources)
-        .setNativeLibsZips(nativeLibsZips)
         .setSignedApk(splitMainApk)
         .registerActions(ruleContext, androidSemantics);
     splitApkSetBuilder.add(splitMainApk);
