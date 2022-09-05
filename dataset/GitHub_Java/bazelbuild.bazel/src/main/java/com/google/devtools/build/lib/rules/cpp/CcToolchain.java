@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoException;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -187,16 +186,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     boolean supportsParamFiles = ruleContext.attributes().get("supports_param_files", BOOLEAN);
     boolean supportsHeaderParsing =
         ruleContext.attributes().get("supports_header_parsing", BOOLEAN);
-
-    NestedSetBuilder<Pair<String, String>> coverageEnvironment = NestedSetBuilder.compileOrder();
-
-    coverageEnvironment.add(Pair.of(
-        "COVERAGE_GCOV_PATH", cppConfiguration.getGcovExecutable().getPathString()));
-    if (cppConfiguration.getFdoInstrument() != null) {
-      coverageEnvironment.add(Pair.of(
-          "FDO_DIR", cppConfiguration.getFdoInstrument().getPathString()));
-    }
-
     CcToolchainProvider provider =
         new CcToolchainProvider(
             cppConfiguration,
@@ -217,8 +206,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             supportsParamFiles,
             supportsHeaderParsing,
             getBuildVariables(ruleContext),
-            getBuiltinIncludes(ruleContext),
-            coverageEnvironment.build());
+            getBuiltinIncludes(ruleContext));
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
             .add(CcToolchainProvider.class, provider)

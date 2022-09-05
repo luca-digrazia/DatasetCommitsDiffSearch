@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -48,6 +49,7 @@ import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.OsUtils;
+import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -87,15 +89,14 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   @VisibleForTesting
   public static final String INTERMEDIATE_DWP_DIR = "_dwps";
 
-  private static Runfiles collectRunfiles(
-      RuleContext context,
+  private static Runfiles collectRunfiles(RuleContext context,
       CcLinkingOutputs linkingOutputs,
       CppCompilationContext cppCompilationContext,
       LinkStaticness linkStaticness,
       NestedSet<Artifact> filesToBuild,
       Iterable<Artifact> fakeLinkerInputs,
       boolean fake,
-      ImmutableSet<CppSource> cAndCppSources) {
+      ImmutableList<Pair<Artifact, Label>> cAndCppSources) {
     Runfiles.Builder builder = new Runfiles.Builder(
         context.getWorkspaceName(), context.getConfiguration().legacyExternalRunfiles());
     Function<TransitiveInfoCollection, Runfiles> runfilesMapping =
@@ -135,11 +136,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       // We add the headers in the transitive closure and our own sources in the srcs
       // attribute. We do not provide the auxiliary inputs, because they are only used when we
       // do FDO compilation, and cc_fake_binary does not support FDO.
-      ImmutableSet.Builder<Artifact> sourcesBuilder = ImmutableSet.<Artifact>builder();
-      for (CppSource cppSource : cAndCppSources) {
-        sourcesBuilder.add(cppSource.getSource());
-      }
-      builder.addSymlinksToArtifacts(sourcesBuilder.build());
+      builder.addSymlinksToArtifacts(
+          Iterables.transform(cAndCppSources, Pair.<Artifact, Label>firstFunction()));
       builder.addSymlinksToArtifacts(cppCompilationContext.getDeclaredIncludeSrcs());
       // Add additional files that are referenced from the compile command, like module maps
       // or header modules.
@@ -185,11 +183,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // if cc_binary includes "linkshared=1", then gcc will be invoked with
     // linkopt "-shared", which causes the result of linking to be a shared
     // library. In this case, the name of the executable target should end
-    // in ".so" or "dylib" or ".dll".
-    PathFragment binaryPath = new PathFragment(ruleContext.getTarget().getName());
-    if (!isLinkShared(ruleContext)) {
-      binaryPath = new PathFragment(binaryPath.getPathString() + OsUtils.executableExtension());
-    }
+    // in ".so".
+    PathFragment binaryPath =
+        new PathFragment(ruleContext.getTarget().getName() + OsUtils.executableExtension());
     Artifact binary = ruleContext.getPackageRelativeArtifact(
         binaryPath, ruleContext.getConfiguration().getBinDirectory());
     CppLinkAction.Builder linkActionBuilder =
@@ -227,10 +223,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     linkActionBuilder.setLinkStaticness(linkStaticness);
     linkActionBuilder.setFake(fake);
     linkActionBuilder.setFeatureConfiguration(featureConfiguration);
-    CcToolchainFeatures.Variables.Builder buildVariables =
-        new CcToolchainFeatures.Variables.Builder();
-    buildVariables.addAllVariables(CppHelper.getToolchain(ruleContext).getBuildVariables());
-    linkActionBuilder.setBuildVariables(buildVariables.build());
 
     if (CppLinkAction.enableSymbolsCounts(cppConfiguration, fake, linkType)) {
       linkActionBuilder.setSymbolCountsOutput(ruleContext.getPackageRelativeArtifact(
@@ -248,8 +240,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       ruleContext.registerAction(indexAction);
 
       for (LTOBackendArtifacts ltoArtifacts : indexAction.getAllLTOBackendArtifacts()) {
-        boolean usePic = CppHelper.usePic(ruleContext, !isLinkShared(ruleContext));
-        ltoArtifacts.scheduleLTOBackendAction(ruleContext, usePic);
+        ltoArtifacts.scheduleLTOBackendAction(ruleContext);
       }
 
       linkActionBuilder.setLTOIndexing(false);
