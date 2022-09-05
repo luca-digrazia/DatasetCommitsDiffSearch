@@ -23,12 +23,12 @@ import java.lang.annotation.Target;
 @Target({ ElementType.TYPE, ElementType.METHOD })
 public @interface Timed {
     /**
-     * @return The name of the timer.
+     * The name of the timer.
      */
     String name() default "";
 
     /**
-     * @return If {@code true}, use the given name as an absolute name. If {@code false}, use the given name
+     * If {@code true}, use the given name as an absolute name. If {@code false}, use the given name
      * relative to the annotated class.
      */
     boolean absolute() default false;
