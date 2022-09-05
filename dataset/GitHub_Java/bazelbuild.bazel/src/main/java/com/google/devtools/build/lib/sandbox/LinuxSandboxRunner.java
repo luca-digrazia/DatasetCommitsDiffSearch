@@ -45,8 +45,7 @@ final class LinuxSandboxRunner extends SandboxRunner {
   private final Set<Path> writableDirs;
   private final Set<Path> inaccessiblePaths;
   private final Set<Path> tmpfsPaths;
-  // a <target, source> mapping of paths to bind mount
-  private final Map<Path, Path> bindMounts;
+  private final Set<Path> bindMounts;
   private final boolean sandboxDebug;
 
   LinuxSandboxRunner(
@@ -57,7 +56,7 @@ final class LinuxSandboxRunner extends SandboxRunner {
       Set<Path> writableDirs,
       Set<Path> inaccessiblePaths,
       Set<Path> tmpfsPaths,
-      Map<Path, Path> bindMounts,
+      Set<Path> bindMounts,
       boolean verboseFailures,
       boolean sandboxDebug) {
     super(sandboxExecRoot, verboseFailures);
@@ -156,15 +155,9 @@ final class LinuxSandboxRunner extends SandboxRunner {
       fileArgs.add(tmpfsPath.getPathString());
     }
 
-    for (ImmutableMap.Entry<Path, Path> bindMount : bindMounts.entrySet()) {
-      fileArgs.add("-M");
-      fileArgs.add(bindMount.getValue().getPathString());
-
-      // The file is mounted in a custom location inside the sandbox.
-      if (!bindMount.getKey().equals(bindMount.getValue())) {
-        fileArgs.add("-m");
-        fileArgs.add(bindMount.getKey().getPathString());
-      }
+    for (Path bindMount : bindMounts) {
+      fileArgs.add("-b");
+      fileArgs.add(bindMount.getPathString());
     }
 
     if (!allowNetwork) {
