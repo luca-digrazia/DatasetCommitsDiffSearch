@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,14 +15,15 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.skyframe.WalkableGraph;
+
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -42,9 +43,10 @@ abstract class TargetPatternsResultBuilder {
     hasError = true;
   }
 
-  /** Returns final set of targets and sets error flag if required. */
-  public ResolvedTargets<Target> build(WalkableGraph walkableGraph)
-      throws TargetParsingException, InterruptedException {
+  /**
+   * Returns final set of targets and sets error flag if required.
+   */
+  public ResolvedTargets<Target> build(WalkableGraph walkableGraph) throws TargetParsingException {
     precomputePackages(walkableGraph);
     ResolvedTargets.Builder<Target> resolvedTargetsBuilder = buildInternal();
     if (hasError) {
@@ -72,7 +74,7 @@ abstract class TargetPatternsResultBuilder {
     return resolvedTargetsBuilder;
   }
 
-  private void precomputePackages(WalkableGraph walkableGraph) throws InterruptedException {
+  private void precomputePackages(WalkableGraph walkableGraph) {
     Set<PackageIdentifier> packagesToRequest = getPackagesIdentifiers();      
     packages = Maps.newHashMapWithExpectedSize(packagesToRequest.size());
     for (PackageIdentifier pkgIdentifier : packagesToRequest) {
@@ -100,8 +102,8 @@ abstract class TargetPatternsResultBuilder {
     return packagesIdentifiers;
   }
 
-  private static Package findPackageInGraph(
-      PackageIdentifier pkgIdentifier, WalkableGraph walkableGraph) throws InterruptedException {
+  private Package findPackageInGraph(PackageIdentifier pkgIdentifier,
+      WalkableGraph walkableGraph) {
     return Preconditions.checkNotNull(
             ((PackageValue) walkableGraph.getValue(PackageValue.key(pkgIdentifier))), pkgIdentifier)
         .getPackage();

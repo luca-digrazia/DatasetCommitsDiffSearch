@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -65,8 +64,7 @@ abstract class RecursiveDirectoryTraversalFunction
    * {@code excludedSubdirectoriesBeneathSubdirectory}, all of which must be proper subdirectories
    * of {@code subdirectory}.
    */
-  protected abstract SkyKey getSkyKeyForSubdirectory(
-      RepositoryName repository, RootedPath subdirectory,
+  protected abstract SkyKey getSkyKeyForSubdirectory(RootedPath subdirectory,
       ImmutableSet<PathFragment> excludedSubdirectoriesBeneathSubdirectory);
 
   /**
@@ -136,8 +134,8 @@ abstract class RecursiveDirectoryTraversalFunction
       return getEmptyReturn();
     }
 
-    PackageIdentifier packageId = new PackageIdentifier(
-        recursivePkgKey.getRepository(), rootRelativePath);
+    PackageIdentifier packageId =
+        PackageIdentifier.createInDefaultRepo(rootRelativePath.getPathString());
     PackageLookupValue pkgLookupValue;
     try {
       pkgLookupValue = (PackageLookupValue) env.getValueOrThrow(PackageLookupValue.key(packageId),
@@ -250,8 +248,8 @@ abstract class RecursiveDirectoryTraversalFunction
       ImmutableSet<PathFragment> excludedSubdirectoriesBeneathThisSubdirectory =
           PathFragment.filterPathsStartingWith(excludedPaths, subdirectory);
       RootedPath subdirectoryRootedPath = RootedPath.toRootedPath(root, subdirectory);
-      childDeps.add(getSkyKeyForSubdirectory(recursivePkgKey.getRepository(),
-          subdirectoryRootedPath, excludedSubdirectoriesBeneathThisSubdirectory));
+      childDeps.add(getSkyKeyForSubdirectory(subdirectoryRootedPath,
+          excludedSubdirectoriesBeneathThisSubdirectory));
       if (env.valuesMissing()) {
         return null;
       }

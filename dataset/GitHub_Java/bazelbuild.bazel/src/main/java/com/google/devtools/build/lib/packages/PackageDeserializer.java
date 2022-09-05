@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Event;
@@ -37,9 +36,10 @@ import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.RuleClass.ParsedAttributeValue;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.StringDictUnaryEntry;
+import com.google.devtools.build.lib.syntax.FilesetEntry;
 import com.google.devtools.build.lib.syntax.GlobCriteria;
 import com.google.devtools.build.lib.syntax.GlobList;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -178,7 +178,7 @@ public class PackageDeserializer {
     try {
       Rule rule = ruleClass.createRuleWithParsedAttributeValues(
           ruleLabel, context.packageBuilder, ruleLocation, attributeValues,
-          NullEventHandler.INSTANCE, new AttributeContainerWithoutLocation(ruleClass));
+          NullEventHandler.INSTANCE);
       context.packageBuilder.addRule(rule);
 
       Preconditions.checkState(!rule.containsErrors());
@@ -388,8 +388,6 @@ public class PackageDeserializer {
       builder.setContainsErrors();
     }
 
-    builder.setWorkspaceName(packagePb.getWorkspaceName());
-
     deserializeTargets(in, context);
   }
 
@@ -505,7 +503,7 @@ public class PackageDeserializer {
       case STRING:
         if (!attrPb.hasStringValue()) {
           return null;
-        } else if (expectedType == BuildType.NODEP_LABEL) {
+        } else if (expectedType == Type.NODEP_LABEL) {
           return deserializeLabel(attrPb.getStringValue());
         } else {
           return attrPb.getStringValue();
@@ -516,7 +514,7 @@ public class PackageDeserializer {
         return attrPb.hasStringValue() ? deserializeLabel(attrPb.getStringValue()) : null;
 
       case STRING_LIST:
-        if (expectedType == BuildType.NODEP_LABEL_LIST) {
+        if (expectedType == Type.NODEP_LABEL_LIST) {
           return deserializeGlobs(deserializeLabels(attrPb.getStringListValueList()), attrPb);
         } else {
           return deserializeGlobs(ImmutableList.copyOf(attrPb.getStringListValueList()), attrPb);
@@ -620,27 +618,4 @@ public class PackageDeserializer {
         throw new IllegalStateException();
     }
   }
-
-  private static class AttributeContainerWithoutLocation extends AttributeContainer {
-
-    private AttributeContainerWithoutLocation(RuleClass ruleClass) {
-      super(ruleClass, null);
-    }
-
-    @Override
-    public Location getAttributeLocation(String attrName) {
-      return EmptyLocation.INSTANCE;
-    }
-
-    @Override
-    void setAttributeLocation(int attrIndex, Location location) {
-      throw new UnsupportedOperationException("Setting location not supported");
-    }
-
-    @Override
-    void setAttributeLocation(Attribute attribute, Location location) {
-      throw new UnsupportedOperationException("Setting location not supported");
-    }
-  }
-
 }

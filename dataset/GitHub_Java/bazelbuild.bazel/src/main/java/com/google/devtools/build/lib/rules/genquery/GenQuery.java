@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.genquery;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
@@ -21,15 +22,14 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
@@ -38,21 +38,20 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
 import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
-import com.google.devtools.build.lib.query2.engine.DigraphQueryEvalResult;
+import com.google.devtools.build.lib.query2.engine.BlazeQueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.engine.QueryException;
-import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllCallback;
 import com.google.devtools.build.lib.query2.engine.SkyframeRestartQueryException;
 import com.google.devtools.build.lib.query2.output.OutputFormatter;
 import com.google.devtools.build.lib.query2.output.QueryOptions;
@@ -64,10 +63,9 @@ import com.google.devtools.build.lib.skyframe.PrecomputedValue.Precomputed;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue;
 import com.google.devtools.build.lib.skyframe.TransitiveTargetValue;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -150,7 +148,8 @@ public class GenQuery implements RuleConfiguredTargetFactory {
         new AbstractFileWriteAction(
             ruleContext.getActionOwner(), Collections.<Artifact>emptySet(), outputArtifact, false) {
           @Override
-          public DeterministicWriter newDeterministicWriter(ActionExecutionContext ctx) {
+          public DeterministicWriter newDeterministicWriter(EventHandler eventHandler,
+                                                            Executor executor) {
             return new DeterministicWriter() {
               @Override
               public void writeOutputFile(OutputStream out) throws IOException {
@@ -179,7 +178,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
   // The transitive closure of these targets is an upper estimate on the labels
   // the query will touch
   private Set<Target> getScope(RuleContext context) {
-    List<Label> scopeLabels = context.attributes().get("scope", BuildType.LABEL_LIST);
+    List<Label> scopeLabels = context.attributes().get("scope", Type.LABEL_LIST);
     Set<Target> scope = Sets.newHashSetWithExpectedSize(scopeLabels.size());
     for (Label scopePart : scopeLabels) {
       SkyFunction.Environment env = context.getAnalysisEnvironment().getSkyframeEnv();
@@ -260,9 +259,8 @@ public class GenQuery implements RuleConfiguredTargetFactory {
                          String query, RuleContext ruleContext)
       throws InterruptedException {
 
-    DigraphQueryEvalResult<Target> queryResult;
+    BlazeQueryEvalResult<Target> queryResult;
     OutputFormatter formatter;
-    AggregateAllCallback<Target> targets = new AggregateAllCallback<>();
     try {
       Set<Setting> settings = queryOptions.toSettings();
 
@@ -284,20 +282,20 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       // All the packages are already loaded at this point, so there is no need
       // to start up many threads. 4 are started up to make good use of multiple
       // cores.
-      queryResult = (DigraphQueryEvalResult<Target>) AbstractBlazeQueryEnvironment
+      queryResult = (BlazeQueryEvalResult<Target>) AbstractBlazeQueryEnvironment
           .newQueryEnvironment(
               /*transitivePackageLoader=*/null, /*graph=*/null, packageProvider,
               evaluator,
               /*keepGoing=*/false,
               ruleContext.attributes().get("strict", Type.BOOLEAN),
-              /*orderedResults=*/!QueryOutputUtils.shouldStreamResults(queryOptions, formatter),
+              /*orderedResults=*/QueryOutputUtils.orderResults(queryOptions, formatter),
               /*universeScope=*/ImmutableList.<String>of(),
               /*loadingPhaseThreads=*/4,
               labelFilter,
               getEventHandler(ruleContext),
               settings,
               ImmutableList.<QueryFunction>of(),
-              /*packagePath=*/null).evaluateQuery(query, targets);
+              /*packagePath=*/null).evaluateQuery(query);
     } catch (SkyframeRestartQueryException e) {
       // Do not emit errors for skyframe restarts. They make output of the ConfiguredTargetFunction
       // inconsistent from run to run, and make detecting legitimate errors more difficult.
@@ -311,8 +309,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     PrintStream printStream = new PrintStream(outputStream);
 
     try {
-      QueryOutputUtils
-          .output(queryOptions, queryResult, targets.getResult(), formatter, printStream,
+      QueryOutputUtils.output(queryOptions, queryResult, formatter, printStream,
           queryOptions.aspectDeps.createResolver(packageProvider, getEventHandler(ruleContext)));
     } catch (ClosedByInterruptException e) {
       throw new InterruptedException(e.getMessage());
@@ -480,7 +477,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
 
     @Override
     public Target getTarget(EventHandler eventHandler, Label label)
-        throws NoSuchPackageException, NoSuchTargetException {
+        throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
       Preconditions.checkState(targets.contains(label), label);
       Package pkg = Preconditions.checkNotNull(pkgMap.get(label.getPackageIdentifier()), label);
       Target target = Preconditions.checkNotNull(pkg.getTarget(label.getName()), label);

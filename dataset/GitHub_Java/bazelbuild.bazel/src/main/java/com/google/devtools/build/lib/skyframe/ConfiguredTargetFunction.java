@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.StoredEventHandler;
@@ -51,19 +50,22 @@ import com.google.devtools.build.lib.packages.AspectFactory;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
-import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.skyframe.AspectFunction.AspectCreationException;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor.BuildViewProvider;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
@@ -168,7 +170,11 @@ final class ConfiguredTargetFunction implements SkyFunction {
     // that doesn't match; we can even have the same value multiple times. However, I think it's
     // only triggered in tests (i.e., in normal operation, the configuration passed in is already
     // null).
-    if (!target.isConfigurable()) {
+    if (target instanceof InputFile) {
+      // InputFileConfiguredTarget expects its configuration to be null since it's not used.
+      configuration = null;
+    } else if (target instanceof PackageGroup) {
+      // Same for PackageGroupConfiguredTarget.
       configuration = null;
     }
     TargetAndConfiguration ctgValue =
@@ -582,7 +588,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
     RawAttributeMapper attributeMap = RawAttributeMapper.of(((Rule) target));
     for (Attribute a : ((Rule) target).getAttributes()) {
       for (Label configLabel : attributeMap.getConfigurabilityKeys(a.getName(), a.getType())) {
-        if (!BuildType.Selector.isReservedLabel(configLabel)) {
+        if (!Type.Selector.isReservedLabel(configLabel)) {
           configLabelMap.put(a, LabelAndConfiguration.of(
               configLabel, ctgValue.getConfiguration()));
         }

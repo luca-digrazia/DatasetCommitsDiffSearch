@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,15 +18,14 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PackageProviderForConfigurations;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor.SkyframePackageLoader;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -39,17 +38,16 @@ import java.io.IOException;
  * {@link SkyFunction.Environment#getValue} instead of {@link MemoizingEvaluator#evaluate}
  * for node evaluation
  */
-class SkyframePackageLoaderWithValueEnvironment implements PackageProviderForConfigurations {
+class SkyframePackageLoaderWithValueEnvironment implements
+    PackageProviderForConfigurations {
   private final SkyFunction.Environment env;
-  private final RuleClassProvider ruleClassProvider;
 
-  public SkyframePackageLoaderWithValueEnvironment(SkyFunction.Environment env,
-      RuleClassProvider ruleClassProvider) {
+  public SkyframePackageLoaderWithValueEnvironment(SkyFunction.Environment env) {
     this.env = env;
-    this.ruleClassProvider = ruleClassProvider;
   }
 
-  private Package getPackage(final PackageIdentifier pkgIdentifier)
+  @Override
+  public Package getLoadedPackage(final PackageIdentifier pkgIdentifier)
       throws NoSuchPackageException {
     SkyKey key = PackageValue.key(pkgIdentifier);
     PackageValue value = (PackageValue) env.getValueOrThrow(key, NoSuchPackageException.class);
@@ -60,16 +58,21 @@ class SkyframePackageLoaderWithValueEnvironment implements PackageProviderForCon
   }
 
   @Override
-  public Target getTarget(Label label) throws NoSuchPackageException,
+  public Target getLoadedTarget(Label label) throws NoSuchPackageException,
       NoSuchTargetException {
-    Package pkg = getPackage(label.getPackageIdentifier());
+    Package pkg = getLoadedPackage(label.getPackageIdentifier());
     return pkg == null ? null : pkg.getTarget(label.getName());
+  }
+
+  @Override
+  public boolean isTargetCurrent(Target target) {
+    throw new UnsupportedOperationException();
   }
 
   @Override
   public void addDependency(Package pkg, String fileName) throws LabelSyntaxException, IOException {
     RootedPath fileRootedPath = RootedPath.toRootedPath(pkg.getSourceRoot(),
-        pkg.getPackageIdentifier().getPathFragment().getRelative(fileName));
+        pkg.getNameFragment().getRelative(fileName));
     FileValue result = (FileValue) env.getValue(FileValue.key(fileRootedPath));
     if (result != null && !result.exists()) {
       throw new IOException();
@@ -81,7 +84,7 @@ class SkyframePackageLoaderWithValueEnvironment implements PackageProviderForCon
   public <T extends Fragment> T getFragment(BuildOptions buildOptions, Class<T> fragmentType)
       throws InvalidConfigurationException {
     ConfigurationFragmentValue fragmentNode = (ConfigurationFragmentValue) env.getValueOrThrow(
-        ConfigurationFragmentValue.key(buildOptions, fragmentType, ruleClassProvider),
+        ConfigurationFragmentValue.key(buildOptions, fragmentType),
         InvalidConfigurationException.class);
     if (fragmentNode == null) {
       return null;

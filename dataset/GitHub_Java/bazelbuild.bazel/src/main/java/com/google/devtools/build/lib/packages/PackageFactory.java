@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -32,6 +31,7 @@ import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.GlobCache.BadGlobException;
 import com.google.devtools.build.lib.packages.License.DistributionType;
+import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.AssignmentStatement;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
@@ -47,6 +47,7 @@ import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.GlobList;
 import com.google.devtools.build.lib.syntax.Identifier;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.Runtime;
@@ -55,8 +56,6 @@ import com.google.devtools.build.lib.syntax.SkylarkSignature.Param;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor.HackHackEitherList;
 import com.google.devtools.build.lib.syntax.Statement;
-import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -152,27 +151,19 @@ public final class PackageFactory {
     /**
      * Update the global environment with the identifiers this extension contributes.
      */
-    void update(Environment environment);
-
-    /**
-     * Update the global environment of WORKSPACE files.
-     */
-    void updateWorkspace(Environment environment);
+    void update(Environment environment, Label buildFileLabel);
 
     /**
      * Returns the extra functions needed to be added to the Skylark native module.
      */
     ImmutableList<BaseFunction> nativeModuleFunctions();
 
-    /**
-     * Returns the extra arguments to the {@code package()} statement.
-     */
     Iterable<PackageArgument<?>> getPackageArguments();
   }
 
   private static class DefaultVisibility extends PackageArgument<List<Label>> {
     private DefaultVisibility() {
-      super("default_visibility", BuildType.LABEL_LIST);
+      super("default_visibility", Type.LABEL_LIST);
     }
 
     @Override
@@ -220,7 +211,7 @@ public final class PackageFactory {
 
   private static class DefaultLicenses extends PackageArgument<License> {
     private DefaultLicenses() {
-      super("licenses", BuildType.LICENSE);
+      super("licenses", Type.LICENSE);
     }
 
     @Override
@@ -232,7 +223,7 @@ public final class PackageFactory {
 
   private static class DefaultDistribs extends PackageArgument<Set<DistributionType>> {
     private DefaultDistribs() {
-      super("distribs", BuildType.DISTRIBUTIONS);
+      super("distribs", Type.DISTRIBUTIONS);
     }
 
     @Override
@@ -248,7 +239,7 @@ public final class PackageFactory {
    */
   private static class DefaultCompatibleWith extends PackageArgument<List<Label>> {
     private DefaultCompatibleWith() {
-      super(Package.DEFAULT_COMPATIBLE_WITH_ATTRIBUTE, BuildType.LABEL_LIST);
+      super(Package.DEFAULT_COMPATIBLE_WITH_ATTRIBUTE, Type.LABEL_LIST);
     }
 
     @Override
@@ -265,7 +256,7 @@ public final class PackageFactory {
    */
   private static class DefaultRestrictedTo extends PackageArgument<List<Label>> {
     private DefaultRestrictedTo() {
-      super(Package.DEFAULT_RESTRICTED_TO_ATTRIBUTE, BuildType.LABEL_LIST);
+      super(Package.DEFAULT_RESTRICTED_TO_ATTRIBUTE, Type.LABEL_LIST);
     }
 
     @Override
@@ -434,10 +425,6 @@ public final class PackageFactory {
     return ruleClassProvider;
   }
 
-  public ImmutableList<EnvironmentExtension> getEnvironmentExtensions() {
-    return environmentExtensions;
-  }
-
   /**
    * Creates the list of arguments for the 'package' function.
    */
@@ -579,7 +566,7 @@ public final class PackageFactory {
           return new BuiltinFunction("mocksubinclude", this) {
             public Runtime.NoneType invoke(Object labelO, String pathString,
                 Location loc) throws ConversionException {
-              Label label = BuildType.LABEL.convert(labelO, "'mocksubinclude' argument",
+              Label label = Type.LABEL.convert(labelO, "'mocksubinclude' argument",
                   context.pkgBuilder.getBuildFileLabel());
               Path path = pathString.isEmpty()
                   ? null : context.pkgBuilder.getFilename().getRelative(pathString);
@@ -631,9 +618,9 @@ public final class PackageFactory {
           return new BuiltinFunction("environment_group", this) {
             public Runtime.NoneType invoke(String name, Object environmentsO, Object defaultsO,
                 Location loc) throws EvalException, ConversionException {
-              List<Label> environments = BuildType.LABEL_LIST.convert(environmentsO,
+              List<Label> environments = Type.LABEL_LIST.convert(environmentsO,
                   "'environment_group argument'", context.pkgBuilder.getBuildFileLabel());
-              List<Label> defaults = BuildType.LABEL_LIST.convert(defaultsO,
+              List<Label> defaults = Type.LABEL_LIST.convert(defaultsO,
                   "'environment_group argument'", context.pkgBuilder.getBuildFileLabel());
 
               try {
@@ -691,12 +678,12 @@ public final class PackageFactory {
 
     RuleVisibility visibility = EvalUtils.isNullOrNone(visibilityO)
         ? ConstantRuleVisibility.PUBLIC
-        : getVisibility(BuildType.LABEL_LIST.convert(
+        : getVisibility(Type.LABEL_LIST.convert(
               visibilityO,
               "'exports_files' operand",
               pkgBuilder.getBuildFileLabel()));
     // TODO(bazel-team): is licenses plural or singular?
-    License license = BuildType.LICENSE.convertOptional(licensesO, "'exports_files' operand");
+    License license = Type.LICENSE.convertOptional(licensesO, "'exports_files' operand");
 
     for (String file : files) {
       String errorMessage = LabelValidator.validateTargetName(file);
@@ -749,7 +736,7 @@ public final class PackageFactory {
           return new BuiltinFunction("licenses", this) {
             public Runtime.NoneType invoke(Object licensesO, Location loc) {
               try {
-                License license = BuildType.LICENSE.convert(licensesO, "'licenses' operand");
+                License license = Type.LICENSE.convert(licensesO, "'licenses' operand");
                 context.pkgBuilder.setDefaultLicense(license);
               } catch (ConversionException e) {
                 context.eventHandler.handle(Event.error(loc, e.getMessage()));
@@ -781,7 +768,7 @@ public final class PackageFactory {
           return new BuiltinFunction("distribs", this) {
             public Runtime.NoneType invoke(Object object, Location loc) {
               try {
-                Set<DistributionType> distribs = BuildType.DISTRIBUTIONS.convert(object,
+                Set<DistributionType> distribs = Type.DISTRIBUTIONS.convert(object,
                     "'distribs' operand");
                 context.pkgBuilder.setDefaultDistribs(distribs);
               } catch (ConversionException e) {
@@ -826,7 +813,7 @@ public final class PackageFactory {
 
     List<String> packages = Type.STRING_LIST.convert(
         packagesO, "'package_group.packages argument'");
-    List<Label> includes = BuildType.LABEL_LIST.convert(includesO,
+    List<Label> includes = Type.LABEL_LIST.convert(includesO,
         "'package_group.includes argument'", context.pkgBuilder.getBuildFileLabel());
 
     try {
@@ -1002,7 +989,7 @@ public final class PackageFactory {
     // Logged messages are used as a testability hook tracing the parsing progress
     LOG.fine("Starting to parse " + packageId);
     BuildFileAST buildFileAST = BuildFileAST.parseBuildFile(
-        preprocessingResult.result, preludeStatements, localReporter, false);
+        preprocessingResult.result, preludeStatements, localReporter, locator, false);
     LOG.fine("Finished parsing of " + packageId);
 
     MakeEnvironment.Builder makeEnv = new MakeEnvironment.Builder();
@@ -1034,32 +1021,16 @@ public final class PackageFactory {
     }
   }
 
-  @VisibleForTesting
-  public Package createPackageForTesting(
-      PackageIdentifier packageId,
-      Path buildFile,
-      CachingPackageLocator locator,
-      EventHandler eventHandler)
-      throws NoSuchPackageException, InterruptedException {
-    Package externalPkg =
-        Package.newExternalPackageBuilder(buildFile.getRelative("WORKSPACE"), "TESTING").build();
-    return createPackageForTesting(packageId, externalPkg, buildFile, locator, eventHandler);
-  }
-
   /**
    * Same as {@link #createPackage}, but does the required validation of "packageName" first,
    * throwing a {@link NoSuchPackageException} if the name is invalid.
    */
   @VisibleForTesting
-  public Package createPackageForTesting(
-      PackageIdentifier packageId,
-      Package externalPkg,
-      Path buildFile,
-      CachingPackageLocator locator,
-      EventHandler eventHandler)
-      throws NoSuchPackageException, InterruptedException {
-    String error =
-        LabelValidator.validatePackageName(packageId.getPackageFragment().getPathString());
+  public Package createPackageForTesting(PackageIdentifier packageId,
+      Path buildFile, CachingPackageLocator locator, EventHandler eventHandler)
+          throws NoSuchPackageException, InterruptedException {
+    String error = LabelValidator.validatePackageName(
+        packageId.getPackageFragment().getPathString());
     if (error != null) {
       throw new BuildFileNotFoundException(
           packageId, "illegal package name: '" + packageId + "' (" + error + ")");
@@ -1078,6 +1049,9 @@ public final class PackageFactory {
           Event.error(Location.fromFile(buildFile), "preprocessing failed: " + e.getMessage()));
       throw new BuildFileContainsErrorsException(packageId, "preprocessing failed", e);
     }
+    ExternalPackage externalPkg =
+        new ExternalPackage.Builder(
+            buildFile.getRelative("WORKSPACE"), ruleClassProvider.getRunfilesPrefix()).build();
 
     Package result =
         createPackageFromPreprocessingResult(
@@ -1241,7 +1215,7 @@ public final class PackageFactory {
     }
 
     for (EnvironmentExtension extension : environmentExtensions) {
-      extension.update(pkgEnv);
+      extension.update(pkgEnv, context.pkgBuilder.getBuildFileLabel());
     }
   }
 

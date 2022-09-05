@@ -16,9 +16,7 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
@@ -27,6 +25,7 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.RecursivePackageProvider;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
@@ -90,14 +89,13 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
   }
 
   @Override
-  public Iterable<PathFragment> getPackagesUnderDirectory(
-      RepositoryName repository, RootedPath directory,
+  public Iterable<PathFragment> getPackagesUnderDirectory(RootedPath directory,
       ImmutableSet<PathFragment> excludedSubdirectories)
       throws MissingDepException {
     PathFragment rootedPathFragment = directory.getRelativePath();
     PathFragment.checkAllPathsAreUnder(excludedSubdirectories, rootedPathFragment);
     RecursivePkgValue lookup = (RecursivePkgValue) env.getValue(
-        RecursivePkgValue.key(repository, directory, excludedSubdirectories));
+        RecursivePkgValue.key(directory, excludedSubdirectories));
     if (lookup == null) {
       // Typically a null value from Environment.getValue(k) means that either the key k is missing
       // a dependency or an exception was thrown during evaluation of k. Here, if this getValue

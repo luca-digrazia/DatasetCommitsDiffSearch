@@ -24,7 +24,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.CollectionUtils;
@@ -37,6 +36,7 @@ import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.PackageDeserializer.PackageDeserializationException;
 import com.google.devtools.build.lib.packages.PackageFactory.Globber;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Canonicalizer;
 import com.google.devtools.build.lib.vfs.Path;
@@ -66,16 +66,6 @@ import java.util.Set;
  * annotation here.
  */
 public class Package implements Serializable {
-
-  public static PackageIdentifier EXTERNAL_PACKAGE_IDENTIFIER;
-
-  static {
-    try {
-      Package.EXTERNAL_PACKAGE_IDENTIFIER = PackageIdentifier.parse("//external");
-    } catch (LabelSyntaxException e) {
-      throw new IllegalStateException();
-    }
-  }
 
   /**
    * Common superclass for all name-conflict exceptions.
@@ -238,7 +228,7 @@ public class Package implements Serializable {
 
   private void writeObject(ObjectOutputStream out) {
     try {
-      new PackageSerializer().serialize(this, out);
+      PackageSerializer.DEFAULT.serialize(this, out);
     } catch (IOException ioe) {
       throw new IllegalStateException(ioe);
     }
@@ -754,14 +744,7 @@ public class Package implements Serializable {
     }
   }
 
-  public static Builder newExternalPackageBuilder(Path workspacePath, String runfilesPrefix) {
-    Builder b = new Builder(new Package(EXTERNAL_PACKAGE_IDENTIFIER, runfilesPrefix));
-    b.setFilename(workspacePath);
-    b.setMakeEnv(new MakeEnvironment.Builder());
-    return b;
-  }
-
-  public static class Builder {
+  static class Builder {
     protected static Package newPackage(PackageIdentifier packageId, String runfilesPrefix) {
       return new Package(packageId, runfilesPrefix);
     }
@@ -793,8 +776,6 @@ public class Package implements Serializable {
 
     protected Map<Label, Path> subincludes = null;
     protected ImmutableList<Label> skylarkFileDependencies = ImmutableList.of();
-
-    protected ExternalPackageBuilder externalPackageData = new ExternalPackageBuilder();
 
     /**
      * True iff the "package" function has already been called in this package.
@@ -828,7 +809,7 @@ public class Package implements Serializable {
       }
     }
 
-    public Builder(PackageIdentifier id, String runfilesPrefix) {
+    Builder(PackageIdentifier id, String runfilesPrefix) {
       this(newPackage(id, runfilesPrefix));
     }
 
@@ -910,8 +891,7 @@ public class Package implements Serializable {
     /**
      * Uses the workspace name from {@code //external} to set this package's workspace name.
      */
-    @VisibleForTesting
-    public Builder setWorkspaceName(String workspaceName) {
+    Builder setWorkspaceName(String workspaceName) {
       pkg.workspaceName = workspaceName;
       return this;
     }
@@ -1292,9 +1272,9 @@ public class Package implements Serializable {
       for (Rule rule : rules) {
         AttributeMap attributes = NonconfigurableAttributeMapper.of(rule);
         if (rule.getRuleClass().equals("test_suite")
-            && attributes.get("tests", BuildType.LABEL_LIST).isEmpty()
-            && (!attributes.has("suites", BuildType.LABEL_LIST)
-                || attributes.get("suites", BuildType.LABEL_LIST).isEmpty())) {
+            && attributes.get("tests", Type.LABEL_LIST).isEmpty()
+            && (!attributes.has("suites", Type.LABEL_LIST)
+                || attributes.get("suites", Type.LABEL_LIST).isEmpty())) {
           rule.setAttributeValueByName("$implicit_tests", allTests);
         }
       }
@@ -1314,9 +1294,6 @@ public class Package implements Serializable {
       if (alreadyBuilt) {
         return pkg;
       }
-
-      externalPackageData.build(this);
-
       // Freeze targets and distributions.
       targets = ImmutableMap.copyOf(targets);
       defaultDistributionSet =
@@ -1335,10 +1312,6 @@ public class Package implements Serializable {
       pkg.finishInit(this);
       alreadyBuilt = true;
       return pkg;
-    }
-
-    protected ExternalPackageBuilder externalPackageData() {
-      return externalPackageData;
     }
 
     public Package build() {

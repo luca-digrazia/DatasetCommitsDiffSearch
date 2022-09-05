@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,14 +22,14 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
  */
 public abstract class NoSuchPackageException extends NoSuchThingException {
 
-  private final PackageIdentifier packageId;
+  private final com.google.devtools.build.lib.cmdline.PackageIdentifier packageId;
 
   public NoSuchPackageException(PackageIdentifier packageId, String message) {
     this(packageId, "no such package", message);
   }
 
   public NoSuchPackageException(PackageIdentifier packageId, String message,
-      Exception cause) {
+      Throwable cause) {
     this(packageId, "no such package", message, cause);
   }
 
@@ -40,7 +40,7 @@ public abstract class NoSuchPackageException extends NoSuchThingException {
   }
 
   protected NoSuchPackageException(PackageIdentifier packageId, String messagePrefix,
-      String message, Exception cause) {
+      String message, Throwable cause) {
     super(messagePrefix + " '" + packageId + "': " + message, cause);
     this.packageId = packageId;
   }

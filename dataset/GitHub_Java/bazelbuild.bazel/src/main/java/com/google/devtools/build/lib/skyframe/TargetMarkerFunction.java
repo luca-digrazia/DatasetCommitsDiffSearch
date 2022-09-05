@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
@@ -21,6 +20,7 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
@@ -49,7 +49,7 @@ public final class TargetMarkerFunction implements SkyFunction {
       PathFragment containingDirectory = label.toPathFragment().getParentDirectory();
       ContainingPackageLookupValue containingPackageLookupValue = null;
       try {
-        PackageIdentifier newPkgId = PackageIdentifier.create(
+        PackageIdentifier newPkgId = new PackageIdentifier(
             label.getPackageIdentifier().getRepository(), containingDirectory);
         containingPackageLookupValue = (ContainingPackageLookupValue) env.getValueOrThrow(
             ContainingPackageLookupValue.key(newPkgId),

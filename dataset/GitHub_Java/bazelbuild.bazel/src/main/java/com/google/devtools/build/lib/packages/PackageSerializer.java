@@ -13,38 +13,37 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import static com.google.devtools.build.lib.packages.BuildType.DISTRIBUTIONS;
-import static com.google.devtools.build.lib.packages.BuildType.FILESET_ENTRY_LIST;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_DICT_UNARY;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST_DICT;
-import static com.google.devtools.build.lib.packages.BuildType.LICENSE;
-import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL;
-import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL_LIST;
-import static com.google.devtools.build.lib.packages.BuildType.OUTPUT;
-import static com.google.devtools.build.lib.packages.BuildType.OUTPUT_LIST;
-import static com.google.devtools.build.lib.packages.BuildType.TRISTATE;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
-import static com.google.devtools.build.lib.syntax.Type.INTEGER;
-import static com.google.devtools.build.lib.syntax.Type.INTEGER_LIST;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
-import static com.google.devtools.build.lib.syntax.Type.STRING_DICT;
-import static com.google.devtools.build.lib.syntax.Type.STRING_DICT_UNARY;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST_DICT;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.DISTRIBUTIONS;
+import static com.google.devtools.build.lib.packages.Type.FILESET_ENTRY_LIST;
+import static com.google.devtools.build.lib.packages.Type.INTEGER;
+import static com.google.devtools.build.lib.packages.Type.INTEGER_LIST;
+import static com.google.devtools.build.lib.packages.Type.LABEL;
+import static com.google.devtools.build.lib.packages.Type.LABEL_DICT_UNARY;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST_DICT;
+import static com.google.devtools.build.lib.packages.Type.LICENSE;
+import static com.google.devtools.build.lib.packages.Type.NODEP_LABEL;
+import static com.google.devtools.build.lib.packages.Type.NODEP_LABEL_LIST;
+import static com.google.devtools.build.lib.packages.Type.OUTPUT;
+import static com.google.devtools.build.lib.packages.Type.OUTPUT_LIST;
+import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.STRING_DICT;
+import static com.google.devtools.build.lib.packages.Type.STRING_DICT_UNARY;
+import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
+import static com.google.devtools.build.lib.packages.Type.STRING_LIST_DICT;
+import static com.google.devtools.build.lib.packages.Type.TRISTATE;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.MakeEnvironment.Binding;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build;
-import com.google.devtools.build.lib.query2.proto.proto2api.Build.Rule.Builder;
+import com.google.devtools.build.lib.syntax.FilesetEntry;
 import com.google.devtools.build.lib.syntax.GlobCriteria;
 import com.google.devtools.build.lib.syntax.GlobList;
+import com.google.devtools.build.lib.syntax.Label;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -58,34 +57,8 @@ import java.util.Map;
  * Functionality to serialize loaded packages.
  */
 public class PackageSerializer {
-  /** Allows custom serialization logic to be injected. */
-  public interface PackageSerializationEnvironment {
-    /**
-     * Called right before the given builder's {@link Build.Rule.Builder#build} method is called.
-     * Implementations can use this hook to serialize additional data in the proto.
-     */
-    void maybeSerializeAdditionalDataForRule(Rule rule, Build.Rule.Builder builder);
-  }
 
-  // Workaround for Java serialization making it tough to pass in a serialization environment
-  // manually.
-  // volatile is needed to ensure that the objects are published safely.
-  public static volatile PackageSerializationEnvironment defaultPackageSerializationEnvironment =
-      new PackageSerializationEnvironment() {
-        @Override
-        public void maybeSerializeAdditionalDataForRule(Rule rule, Builder builder) {
-        }
-      };
-
-  private final PackageSerializationEnvironment env;
-
-  public PackageSerializer() {
-    this(defaultPackageSerializationEnvironment);
-  }
-
-  public PackageSerializer(PackageSerializationEnvironment env) {
-    this.env = Preconditions.checkNotNull(env);
-  }
+  public static final PackageSerializer DEFAULT = new PackageSerializer();
 
   /**
    * Get protocol buffer representation of the specified attribute.
@@ -97,8 +70,7 @@ public class PackageSerializer {
    */
   public static Build.Attribute getAttributeProto(Attribute attr, Iterable<Object> values,
       Boolean explicitlySpecified) {
-    return new PackageSerializer().serializeAttribute(attr, values, explicitlySpecified,
-        /*includeGlobs=*/ false);
+    return DEFAULT.serializeAttribute(attr, values, explicitlySpecified, /*includeGlobs=*/ false);
   }
 
   /**
@@ -195,8 +167,6 @@ public class PackageSerializer {
 
     builder.setContainsErrors(pkg.containsErrors());
 
-    builder.setWorkspaceName(pkg.getWorkspaceName());
-
     builder.build().writeDelimitedTo(out);
 
     // Targets are emitted separately as individual protocol buffers as to prevent overwhelming
@@ -212,7 +182,7 @@ public class PackageSerializer {
   private Build.Attribute serializeAttribute(Attribute attr, Iterable<Object> values,
       Boolean explicitlySpecified, boolean includeGlobs) {
     // Get the attribute type.  We need to convert and add appropriately
-    com.google.devtools.build.lib.syntax.Type<?> type = attr.getType();
+    com.google.devtools.build.lib.packages.Type<?> type = attr.getType();
 
     Build.Attribute.Builder attrPb = Build.Attribute.newBuilder();
 
@@ -475,7 +445,6 @@ public class PackageSerializer {
           serializeAttribute(attribute, getAttributeValues(rule, attribute),
               rule.isAttributeValueExplicitlySpecified(attribute), /*includeGlobs=*/ true));
     }
-    env.maybeSerializeAdditionalDataForRule(rule, builder);
 
     return Build.Target.newBuilder()
         .setType(Build.Target.Discriminator.RULE)
@@ -546,7 +515,7 @@ public class PackageSerializer {
       if (target instanceof InputFile) {
         emitTarget(serializeInputFile((InputFile) target), out);
       } else if (target instanceof OutputFile) {
-        // Output files are not serialized; they are recreated by the RuleClass on deserialization.
+        // Output files are ignored; they are recorded in rules.
       } else if (target instanceof PackageGroup) {
         emitTarget(serializePackageGroup((PackageGroup) target), out);
       } else if (target instanceof Rule) {

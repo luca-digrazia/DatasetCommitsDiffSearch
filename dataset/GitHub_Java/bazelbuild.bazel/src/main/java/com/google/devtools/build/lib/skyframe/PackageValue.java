@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,9 +22,6 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * A Skyframe value representing a package.
@@ -56,14 +53,6 @@ public class PackageValue implements SkyValue {
 
   public static SkyKey key(PackageIdentifier pkgIdentifier) {
     return new SkyKey(SkyFunctions.PACKAGE, pkgIdentifier);
-  }
-
-  public static List<SkyKey> keys(Iterable<PackageIdentifier> pkgIdentifiers) {
-    List<SkyKey> keys = new ArrayList<>();
-    for (PackageIdentifier pkgIdentifier : pkgIdentifiers) {
-      keys.add(key(pkgIdentifier));
-    }
-    return keys;
   }
 
   /**

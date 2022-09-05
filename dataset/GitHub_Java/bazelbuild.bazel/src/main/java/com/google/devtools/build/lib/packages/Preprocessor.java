@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,8 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.PackageFactory.Globber;
-import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -163,23 +160,4 @@ public interface Preprocessor {
       Environment.Frame globals,
       Set<String> ruleNames)
     throws IOException, InterruptedException;
-
-  /** The result of parsing a preprocessed BUILD file. */
-  static class AstAfterPreprocessing {
-    public final boolean preprocessed;
-    public final boolean containsPreprocessingErrors;
-    public final BuildFileAST ast;
-    public final boolean containsAstParsingErrors;
-    public final Iterable<Event> allEvents;
-
-    public AstAfterPreprocessing(Result preprocessingResult, BuildFileAST ast,
-        StoredEventHandler astParsingEventHandler) {
-      this.ast = ast;
-      this.preprocessed = preprocessingResult.preprocessed;
-      this.containsPreprocessingErrors = preprocessingResult.containsErrors;
-      this.containsAstParsingErrors = astParsingEventHandler.hasErrors();
-      this.allEvents = Iterables.concat(
-          preprocessingResult.events, astParsingEventHandler.getEvents());
-    }
-  }
 }

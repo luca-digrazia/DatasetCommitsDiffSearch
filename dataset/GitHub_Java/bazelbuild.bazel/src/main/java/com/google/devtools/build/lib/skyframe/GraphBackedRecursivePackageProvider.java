@@ -17,9 +17,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
 import com.google.devtools.build.lib.cmdline.TargetPattern.Type;
 import com.google.devtools.build.lib.events.Event;
@@ -33,6 +31,7 @@ import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
 import com.google.devtools.build.lib.pkgcache.RecursivePackageProvider;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -99,8 +98,7 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
   }
 
   @Override
-  public Iterable<PathFragment> getPackagesUnderDirectory(
-      RepositoryName repository, RootedPath directory,
+  public Iterable<PathFragment> getPackagesUnderDirectory(RootedPath directory,
       ImmutableSet<PathFragment> excludedSubdirectories) {
     PathFragment.checkAllPathsAreUnder(excludedSubdirectories, directory.getRelativePath());
 
@@ -122,17 +120,16 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
     // directory wasn't in the universe, so return an empty list.
     ImmutableList.Builder<PathFragment> builder = ImmutableList.builder();
     if (filteringPolicy != null) {
-      collectPackagesUnder(repository, directory, excludedSubdirectories, builder, filteringPolicy);
+      collectPackagesUnder(directory, excludedSubdirectories, builder, filteringPolicy);
     }
     return builder.build();
   }
 
-  private void collectPackagesUnder(RepositoryName repository, RootedPath directory,
+  private void collectPackagesUnder(RootedPath directory,
       ImmutableSet<PathFragment> excludedSubdirectories,
       ImmutableList.Builder<PathFragment> builder, FilteringPolicy policy) {
     SkyKey key =
-        PrepareDepsOfTargetsUnderDirectoryValue.key(
-            repository, directory, excludedSubdirectories, policy);
+        PrepareDepsOfTargetsUnderDirectoryValue.key(directory, excludedSubdirectories, policy);
     // If the key does not exist in the graph, because the SkyQuery environment has
     // already loaded the universe, and we found a TargetsBelowDirectory pattern in the universe
     // that contained it, then we know the directory does not exist in the universe.
@@ -154,8 +151,8 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
         PathFragment subdirectoryRelativePath = subdirectory.getRelativePath();
         ImmutableSet<PathFragment> excludedSubdirectoriesBeneathThisSubdirectory =
             PathFragment.filterPathsStartingWith(excludedSubdirectories, subdirectoryRelativePath);
-        collectPackagesUnder(repository, subdirectory,
-            excludedSubdirectoriesBeneathThisSubdirectory, builder, policy);
+        collectPackagesUnder(subdirectory, excludedSubdirectoriesBeneathThisSubdirectory, builder,
+            policy);
       }
     }
   }
