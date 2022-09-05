@@ -14,16 +14,19 @@
 
 package com.google.devtools.build.workspace;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.bazel.BazelMain;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.WorkspaceFactory;
@@ -48,6 +51,7 @@ import java.util.List;
 public class Resolver {
 
   private final RuleClassProvider ruleClassProvider;
+  private final ImmutableList<EnvironmentExtension> environmentExtensions;
   private final EventHandler handler;
   private final com.google.devtools.build.workspace.maven.Resolver resolver;
 
@@ -57,10 +61,13 @@ public class Resolver {
     ConfiguredRuleClassProvider.Builder ruleClassBuilder =
         new ConfiguredRuleClassProvider.Builder();
     List<BlazeModule> blazeModules = BlazeRuntime.createModules(BazelMain.BAZEL_MODULES);
+    ImmutableList.Builder<EnvironmentExtension> environmentExtensions = ImmutableList.builder();
     for (BlazeModule blazeModule : blazeModules) {
       blazeModule.initializeRuleClasses(ruleClassBuilder);
+      environmentExtensions.add(blazeModule.getPackageEnvironmentExtension());
     }
     this.ruleClassProvider = ruleClassBuilder.build();
+    this.environmentExtensions = environmentExtensions.build();
   }
 
   /**
@@ -68,10 +75,10 @@ public class Resolver {
    */
   public Package parse(Path workspacePath) {
     resolver.addHeader(workspacePath.getPathString());
-    Package.Builder builder =
+    Package.LegacyBuilder builder =
         Package.newExternalPackageBuilder(workspacePath, ruleClassProvider.getRunfilesPrefix());
     try (Mutability mutability = Mutability.create("External Package %s", workspacePath)) {
-      new WorkspaceFactory(builder, ruleClassProvider, mutability)
+      new WorkspaceFactory(builder, ruleClassProvider, environmentExtensions, mutability)
           .parse(ParserInputSource.create(workspacePath));
     } catch (IOException | InterruptedException e) {
       handler.handle(Event.error(Location.fromFile(workspacePath), e.getMessage()));
@@ -87,13 +94,10 @@ public class Resolver {
     Location location = Location.fromFile(externalPackage.getFilename());
     for (Target target : externalPackage.getTargets()) {
       // Targets are //external:foo.
-      if (target.getTargetKind().startsWith("bind")
-          || target.getTargetKind().startsWith("source ")) {
-        continue;
-      } else if (target.getTargetKind().startsWith("maven_jar ")) {
-        PackageIdentifier.RepositoryName repositoryName;
+      if (target.getTargetKind().startsWith("maven_jar ")) {
+        RepositoryName repositoryName;
         try {
-          repositoryName = PackageIdentifier.RepositoryName.create("@" + target.getName());
+          repositoryName = RepositoryName.create("@" + target.getName());
         } catch (LabelSyntaxException e) {
           handler.handle(Event.error(location, "Invalid repository name for " + target + ": "
               + e.getMessage()));
@@ -106,23 +110,16 @@ public class Resolver {
         AttributeMap attributeMap = AggregatingAttributeMapper.of(workspaceRule);
         Rule rule;
         try {
-          if (attributeMap.has("artifact", Type.STRING)
-              && !attributeMap.get("artifact", Type.STRING).isEmpty()) {
-            rule = new Rule(attributeMap.get("artifact", Type.STRING));
-          } else {
-            rule = new Rule(attributeMap.get("group_id", Type.STRING) + ":"
-                + attributeMap.get("artifact_id", Type.STRING) + ":"
-                + attributeMap.get("version", Type.STRING));
-          }
-          if (attributeMap.has("repository", Type.STRING)
-              && !attributeMap.get("repository", Type.STRING).isEmpty()) {
-            modelResolver.addUserRepository(attributeMap.get("repository", Type.STRING));
-            rule.setRepository(attributeMap.get("repository", Type.STRING), handler);
-          }
+          rule = new Rule(attributeMap.get("artifact", Type.STRING));
         } catch (Rule.InvalidRuleException e) {
           handler.handle(Event.error(location, "Couldn't get attribute: " + e.getMessage()));
           return;
         }
+        if (attributeMap.isAttributeValueExplicitlySpecified("repository")) {
+          modelResolver.addUserRepository(attributeMap.get("repository", Type.STRING));
+          rule.setRepository(attributeMap.get("repository", Type.STRING), handler);
+        }
+
         ModelSource modelSource;
 
         try {
@@ -133,8 +130,10 @@ public class Resolver {
               "Could not resolve model for " + target + ": " + e.getMessage()));
           continue;
         }
-        resolver.resolveEffectiveModel(modelSource);
-      } else {
+        resolver.addRootDependency(rule);
+        resolver.resolveEffectiveModel(modelSource, Sets.<String>newHashSet(), rule);
+      } else if (!target.getTargetKind().startsWith("bind")
+          && !target.getTargetKind().startsWith("source ")) {
         handler.handle(Event.warn(location, "Cannot fetch transitive dependencies for " + target
             + " yet, skipping"));
       }
