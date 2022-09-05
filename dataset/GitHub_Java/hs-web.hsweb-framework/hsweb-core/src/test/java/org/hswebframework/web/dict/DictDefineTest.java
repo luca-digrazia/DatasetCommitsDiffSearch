@@ -1,6 +1,5 @@
 package org.hswebframework.web.dict;
 
-import com.alibaba.fastjson.JSON;
 import org.hswebframework.web.dict.defaults.DefaultClassDictDefine;
 import org.hswebframework.web.dict.defaults.DefaultDictDefineRepository;
 import org.hswebframework.web.dict.defaults.DefaultDictSupportApi;
@@ -23,15 +22,6 @@ public class DictDefineTest {
 
     private DictSupportApi api = new DefaultDictSupportApi(repository);
 
-    @Test
-    public void testJson(){
-
-        UserCode code=UserCode.CODE0;
-
-        String json  =JSON.toJSONString(code);
-        Assert.assertNotNull(json);
-        Assert.assertNotNull(JSON.parseObject(json,UserCode.class));
-    }
     @Test
     public void testEnumDict() {
 
@@ -77,7 +67,7 @@ public class DictDefineTest {
         assertFalse(defines.isEmpty());
         assertEquals(defines.size(), 1);
 
-        assertEquals(defines.get(0).getItems().size(), UserCode.values());
+        assertEquals(defines.get(0).getItems().size(), 2);
 
 
     }

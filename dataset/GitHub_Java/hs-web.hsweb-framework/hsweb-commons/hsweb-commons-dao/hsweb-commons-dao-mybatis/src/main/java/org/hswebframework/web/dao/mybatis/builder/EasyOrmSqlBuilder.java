@@ -39,9 +39,12 @@ import org.hswebframework.ezorm.rdb.render.dialect.OracleRDBDatabaseMetaData;
 import org.hswebframework.ezorm.rdb.render.support.simple.CommonSqlRender;
 import org.hswebframework.ezorm.rdb.render.support.simple.SimpleWhereSqlBuilder;
 import org.hswebframework.web.BusinessException;
-import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
 import org.hswebframework.web.dao.mybatis.builder.jpa.JpaAnnotationParser;
+import org.hswebframework.web.dao.mybatis.mapper.EnumDicTermTypeMapper;
+import org.hswebframework.web.dao.mybatis.mapper.h2.H2EnumDicInTermTypeMapper;
+import org.hswebframework.web.dao.mybatis.mapper.mysql.MysqlEnumDicInTermTypeMapper;
+import org.hswebframework.web.dao.mybatis.mapper.oracle.OracleEnumDicInTermTypeMapper;
 import org.hswebframework.web.dao.mybatis.plgins.pager.Pager;
 import org.hswebframework.web.dao.mybatis.MybatisUtils;
 import org.hswebframework.utils.StringUtils;
@@ -53,6 +56,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import static org.hswebframework.ezorm.rdb.render.dialect.term.BoostTermTypeMapper.supportArray;
 
 /**
  * 使用easyorm 动态构建 sql
@@ -66,7 +70,7 @@ public class EasyOrmSqlBuilder {
 
     public EntityFactory entityFactory;
 
-    private static final   EasyOrmSqlBuilder  instance   = new EasyOrmSqlBuilder();
+    private static final EasyOrmSqlBuilder instance = new EasyOrmSqlBuilder();
     protected static final Map<Class, String> simpleName = new HashMap<>();
 
     protected PropertyUtilsBean propertyUtils = BeanUtilsBean.getInstance().getPropertyUtils();
@@ -96,30 +100,30 @@ public class EasyOrmSqlBuilder {
         simpleName.put(short.class, "short");
         simpleName.put(char.class, "char");
         simpleName.put(byte.class, "byte");
-//
-//        Dialect.MYSQL.setTermTypeMapper(TermType.eq, supportArray(new EnumDicTermTypeMapper(Dialect.MYSQL, false)));
-//        Dialect.MYSQL.setTermTypeMapper(TermType.in, supportArray(new MysqlEnumDicInTermTypeMapper(false)));
-//        Dialect.MYSQL.setTermTypeMapper(TermType.not, supportArray(new EnumDicTermTypeMapper(Dialect.MYSQL, true)));
-//        Dialect.MYSQL.setTermTypeMapper(TermType.nin, supportArray(new MysqlEnumDicInTermTypeMapper(true)));
-//
-//        Dialect.MYSQL.setTermTypeMapper("ain", supportArray(new MysqlEnumDicInTermTypeMapper(true, true)));
-//        Dialect.MYSQL.setTermTypeMapper("anin", supportArray(new MysqlEnumDicInTermTypeMapper(false, true)));
-//
-//
-//        Dialect.H2.setTermTypeMapper(TermType.eq, supportArray(new EnumDicTermTypeMapper(Dialect.H2, false)));
-//        Dialect.H2.setTermTypeMapper(TermType.in, supportArray(new H2EnumDicInTermTypeMapper(false)));
-//        Dialect.H2.setTermTypeMapper(TermType.not, supportArray(new EnumDicTermTypeMapper(Dialect.H2, true)));
-//        Dialect.H2.setTermTypeMapper(TermType.nin, supportArray(new H2EnumDicInTermTypeMapper(true)));
-//        Dialect.H2.setTermTypeMapper("ain", supportArray(new H2EnumDicInTermTypeMapper(true, true)));
-//        Dialect.H2.setTermTypeMapper("anin", supportArray(new H2EnumDicInTermTypeMapper(false, true)));
-//
-//
-//        Dialect.ORACLE.setTermTypeMapper(TermType.eq, supportArray(new EnumDicTermTypeMapper(Dialect.ORACLE, false)));
-//        Dialect.ORACLE.setTermTypeMapper(TermType.in, supportArray(new OracleEnumDicInTermTypeMapper(false)));
-//        Dialect.ORACLE.setTermTypeMapper(TermType.not, supportArray(new EnumDicTermTypeMapper(Dialect.ORACLE, true)));
-//        Dialect.ORACLE.setTermTypeMapper(TermType.nin, supportArray(new OracleEnumDicInTermTypeMapper(true)));
-//        Dialect.ORACLE.setTermTypeMapper("ain", supportArray(new OracleEnumDicInTermTypeMapper(true, true)));
-//        Dialect.ORACLE.setTermTypeMapper("anin", supportArray(new OracleEnumDicInTermTypeMapper(false, true)));
+
+        Dialect.MYSQL.setTermTypeMapper(TermType.eq, supportArray(new EnumDicTermTypeMapper(Dialect.MYSQL, false)));
+        Dialect.MYSQL.setTermTypeMapper(TermType.in, supportArray(new MysqlEnumDicInTermTypeMapper(false)));
+        Dialect.MYSQL.setTermTypeMapper(TermType.not, supportArray(new EnumDicTermTypeMapper(Dialect.MYSQL, true)));
+        Dialect.MYSQL.setTermTypeMapper(TermType.nin, supportArray(new MysqlEnumDicInTermTypeMapper(true)));
+
+        Dialect.MYSQL.setTermTypeMapper("ain", supportArray(new MysqlEnumDicInTermTypeMapper(true,true)));
+        Dialect.MYSQL.setTermTypeMapper("anin", supportArray(new MysqlEnumDicInTermTypeMapper(false,true)));
+
+
+        Dialect.H2.setTermTypeMapper(TermType.eq, supportArray(new EnumDicTermTypeMapper(Dialect.H2, false)));
+        Dialect.H2.setTermTypeMapper(TermType.in, supportArray(new H2EnumDicInTermTypeMapper(false)));
+        Dialect.H2.setTermTypeMapper(TermType.not, supportArray(new EnumDicTermTypeMapper(Dialect.H2, true)));
+        Dialect.H2.setTermTypeMapper(TermType.nin, supportArray(new H2EnumDicInTermTypeMapper(true)));
+        Dialect.H2.setTermTypeMapper("ain", supportArray(new H2EnumDicInTermTypeMapper(true,true)));
+        Dialect.H2.setTermTypeMapper("anin", supportArray(new H2EnumDicInTermTypeMapper(false,true)));
+
+
+        Dialect.ORACLE.setTermTypeMapper(TermType.eq, supportArray(new EnumDicTermTypeMapper(Dialect.ORACLE, false)));
+        Dialect.ORACLE.setTermTypeMapper(TermType.in, supportArray(new OracleEnumDicInTermTypeMapper(false)));
+        Dialect.ORACLE.setTermTypeMapper(TermType.not, supportArray(new EnumDicTermTypeMapper(Dialect.ORACLE, true)));
+        Dialect.ORACLE.setTermTypeMapper(TermType.nin, supportArray(new OracleEnumDicInTermTypeMapper(true)));
+        Dialect.ORACLE.setTermTypeMapper("ain", supportArray(new OracleEnumDicInTermTypeMapper(true,true)));
+        Dialect.ORACLE.setTermTypeMapper("anin", supportArray(new OracleEnumDicInTermTypeMapper(false,true)));
 
     }
 
@@ -131,9 +135,9 @@ public class EasyOrmSqlBuilder {
         return javaType;
     }
 
-    private final RDBDatabaseMetaData mysql  = new MysqlMeta();
+    private final RDBDatabaseMetaData mysql = new MysqlMeta();
     private final RDBDatabaseMetaData oracle = new OracleMeta();
-    private final RDBDatabaseMetaData h2     = new H2Meta();
+    private final RDBDatabaseMetaData h2 = new H2Meta();
 
     private final ConcurrentMap<RDBDatabaseMetaData, Map<String, RDBTableMetaData>> metaCache = new ConcurrentHashMap<RDBDatabaseMetaData, Map<String, RDBTableMetaData>>() {
         @Override
@@ -178,7 +182,14 @@ public class EasyOrmSqlBuilder {
         resultMappings.addAll(resultMaps.getIdResultMappings());
         resultMappings.forEach(resultMapping -> {
             if (resultMapping.getNestedQueryId() == null) {
-                RDBColumnMetaData column = new RDBColumnMetaData();
+                RDBColumnMetaData column = new RDBColumnMetaData() {
+                    @Override
+                    public RDBColumnMetaData clone() {
+                        RDBColumnMetaData target = super.clone();
+                        target.setValueConverter(getValueConverter());
+                        return target;
+                    }
+                };
                 column.setJdbcType(JDBCType.valueOf(resultMapping.getJdbcType().name()));
                 column.setName(resultMapping.getColumn());
                 if (!StringUtils.isNullOrEmpty(resultMapping.getProperty())) {
@@ -262,7 +273,7 @@ public class EasyOrmSqlBuilder {
         if (!appender.isEmpty()) {
             appender.removeFirst();
         } else {
-            throw new UnsupportedOperationException("没有列被修改");
+            throw new UnsupportedOperationException("{no_columns_will_be_update}");
         }
         return appender.toString();
     }
@@ -296,11 +307,8 @@ public class EasyOrmSqlBuilder {
         SqlRender<UpdateParam> render = tableMetaData.getDatabaseMetaData().getRenderer(SqlRender.TYPE.UPDATE);
         return render.render(tableMetaData, param).getSql();
     }
-    public String buildSelectFields(String resultMapId, String tableName, Object arg) {
-        QueryParam param = null;
-        if (arg instanceof QueryParam) {
-            param = ((QueryParam) arg);
-        }
+
+    public String buildSelectFields(String resultMapId, String tableName, QueryParam param) {
         if (param == null) {
             return "*";
         }
@@ -340,15 +348,10 @@ public class EasyOrmSqlBuilder {
         return appender.toString();
     }
 
-    public String buildOrder(String resultMapId, String tableName, Object arg) {
-        QueryParam param = null;
-        if (arg instanceof QueryParam) {
-            param = ((QueryParam) arg);
-        }
+    public String buildOrder(String resultMapId, String tableName, QueryParam param) {
         if (param == null) {
             return "";
         }
-
         RDBTableMetaData tableMetaData = createMeta(tableName, resultMapId);
         SqlAppender appender = new SqlAppender(" order by ");
         param.getSorts()
@@ -379,26 +382,6 @@ public class EasyOrmSqlBuilder {
             throw new BusinessException("禁止执行无条件的更新操作");
         }
         return where;
-    }
-
-    public String buildWhereForUpdate(String resultMapId, String tableName, Object param) {
-        String where = buildWhere(resultMapId, tableName, param);
-        if (where.trim().isEmpty()) {
-            throw new BusinessException("禁止执行无条件的更新操作");
-        }
-        return where;
-    }
-
-    public String buildWhere(String resultMapId, String tableName, Object param) {
-        List<Term> terms;
-        if (param instanceof Param) {
-            terms = ((Param) param).getTerms();
-        } else if (param instanceof Entity) {
-            terms = SqlParamParser.parseQueryParam(param).getTerms();
-        } else {
-            terms = new ArrayList<>();
-        }
-        return buildWhere(resultMapId, tableName, terms);
     }
 
     public String buildWhere(String resultMapId, String tableName, List<Term> terms) {

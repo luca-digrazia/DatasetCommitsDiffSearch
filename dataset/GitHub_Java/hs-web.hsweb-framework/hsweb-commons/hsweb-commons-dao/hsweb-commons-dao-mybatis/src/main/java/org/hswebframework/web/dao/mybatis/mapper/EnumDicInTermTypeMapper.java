@@ -33,9 +33,6 @@ public abstract class EnumDicInTermTypeMapper implements TermTypeMapper {
     @Override
     public SqlAppender accept(String wherePrefix, Term term, RDBColumnMetaData column, String tableAlias) {
         Class type = column.getJavaType();
-        if(type==null){
-            return buildNotSupport(wherePrefix,term,column,tableAlias);
-        }
         Object value = term.getValue();
         if (type.isArray()) {
             Class componentType = type.getComponentType();
@@ -69,9 +66,8 @@ public abstract class EnumDicInTermTypeMapper implements TermTypeMapper {
     protected SqlAppender buildNotSupport(String wherePrefix, Term term, RDBColumnMetaData column, String tableAlias) {
         List<Object> values = param2list(term.getValue());
         term.setValue(values);
-        String columnName = dialect.buildColumnName(tableAlias, column.getName());
         SqlAppender appender = new SqlAppender();
-        appender.add(columnName, not ? " NOT" : " ").add("IN(");
+        appender.add(dialect.buildColumnName(tableAlias, column.getName()), not ? " NOT" : " ").add("IN(");
         for (int i = 0; i < values.size(); i++) {
             appender.add("#{", wherePrefix, ".value[", i, "]}", ",");
         }
