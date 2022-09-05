@@ -21,28 +21,25 @@ import static java.lang.Math.min;
 public class ExponentiallyDecayingSample implements Sample {
     private static final int DEFAULT_SAMPLE_SIZE = 1028;
     private static final double DEFAULT_ALPHA = 0.015;
-
-    /**
-     * Creates a new {@link ExponentiallyDecayingSample}  of 1028 elements, which offers a 99.9%
-     * confidence level with a 5% margin of error assuming a normal distribution, and an alpha
-     * factor of 0.015, which heavily biases the sample to the past 5 minutes of measurements.
-     *
-     * @return a new {@link ExponentiallyDecayingSample}
-     */
-    public static ExponentiallyDecayingSample create() {
-        return new ExponentiallyDecayingSample(DEFAULT_SAMPLE_SIZE, DEFAULT_ALPHA);
-    }
-
     private static final long RESCALE_THRESHOLD = TimeUnit.HOURS.toNanos(1);
 
     private final ConcurrentSkipListMap<Double, Long> values;
     private final ReentrantReadWriteLock lock;
     private final double alpha;
     private final int reservoirSize;
-    private final AtomicLong count = new AtomicLong(0);
+    private final AtomicLong count;
     private volatile long startTime;
-    private final AtomicLong nextScaleTime = new AtomicLong(0);
+    private final AtomicLong nextScaleTime;
     private final Clock clock;
+
+    /**
+     * Creates a new {@link ExponentiallyDecayingSample}  of 1028 elements, which offers a 99.9%
+     * confidence level with a 5% margin of error assuming a normal distribution, and an alpha
+     * factor of 0.015, which heavily biases the sample to the past 5 minutes of measurements.
+     */
+    public ExponentiallyDecayingSample() {
+        this(DEFAULT_SAMPLE_SIZE, DEFAULT_ALPHA);
+    }
 
     /**
      * Creates a new {@link ExponentiallyDecayingSample}.
@@ -68,20 +65,9 @@ public class ExponentiallyDecayingSample implements Sample {
         this.alpha = alpha;
         this.reservoirSize = reservoirSize;
         this.clock = clock;
-        clear();
-    }
-
-    @Override
-    public void clear() {
-        lockForRescale();
-        try {
-            values.clear();
-            count.set(0);
-            this.startTime = currentTimeInSeconds();
-            nextScaleTime.set(clock.getTick() + RESCALE_THRESHOLD);
-        } finally {
-            unlockForRescale();
-        }
+        this.count = new AtomicLong(0);
+        this.startTime = currentTimeInSeconds();
+        this.nextScaleTime = new AtomicLong(clock.getTick() + RESCALE_THRESHOLD);
     }
 
     @Override
@@ -101,9 +87,7 @@ public class ExponentiallyDecayingSample implements Sample {
      * @param timestamp the epoch timestamp of {@code value} in seconds
      */
     public void update(long value, long timestamp) {
-
         rescaleIfNeeded();
-
         lockForRegularUsage();
         try {
             final double priority = weight(timestamp - startTime) / ThreadLocalRandom.current()
@@ -123,8 +107,6 @@ public class ExponentiallyDecayingSample implements Sample {
         } finally {
             unlockForRegularUsage();
         }
-
-
     }
 
     private void rescaleIfNeeded() {

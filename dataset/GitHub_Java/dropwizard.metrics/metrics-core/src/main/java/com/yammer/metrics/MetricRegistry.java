@@ -48,24 +48,20 @@ public class MetricRegistry {
 
     private final ConcurrentMap<String, Metric> metrics;
     private final List<MetricRegistryListener> listeners;
+    private final String name;
 
     /**
-     * Creates a new {@link MetricRegistry}.
-     */
-    public MetricRegistry() {
-        this.metrics = buildMap();
-        this.listeners = new CopyOnWriteArrayList<MetricRegistryListener>();
-    }
-
-    /**
-     * Creates a new {@link ConcurrentMap} implementation for use inside the registry. Override this
-     * to create a {@link MetricRegistry} with space- or time-bounded metric lifecycles, for
-     * example.
+     * Creates a new {@link MetricRegistry} with the given name.
      *
-     * @return a new {@link ConcurrentMap}
+     * @param name the name of the registry
      */
-    protected ConcurrentMap<String, Metric> buildMap() {
-        return new ConcurrentHashMap<String, Metric>();
+    public MetricRegistry(String name) {
+        if (name == null || name.isEmpty()) {
+            throw new IllegalArgumentException("A registry needs a name");
+        }
+        this.name = name;
+        this.metrics = new ConcurrentHashMap<String, Metric>();
+        this.listeners = new CopyOnWriteArrayList<MetricRegistryListener>();
     }
 
     /**
@@ -158,21 +154,6 @@ public class MetricRegistry {
     }
 
     /**
-     * Removes all metrics which match the given filter.
-     *
-     * @param filter a filter
-     */
-    public void removeMatching(MetricFilter filter) {
-        final Iterator<Map.Entry<String, Metric>> iterator = metrics.entrySet().iterator();
-        while (iterator.hasNext()) {
-            final Map.Entry<String, Metric> entry = iterator.next();
-            if (filter.matches(entry.getKey(), entry.getValue())) {
-                iterator.remove();
-            }
-        }
-    }
-
-    /**
      * Adds a {@link MetricRegistryListener} to a collection of listeners that will be notified on
      * metric creation.  Listeners will be notified in the order in which they are added.
      * <p/>
@@ -195,6 +176,15 @@ public class MetricRegistry {
      */
     public void removeListener(MetricRegistryListener listener) {
         listeners.remove(listener);
+    }
+
+    /**
+     * Returns the registry's name.
+     *
+     * @return the registry's name
+     */
+    public String getName() {
+        return name;
     }
 
     /**
@@ -406,7 +396,7 @@ public class MetricRegistry {
         MetricBuilder<Histogram> HISTOGRAMS = new MetricBuilder<Histogram>() {
             @Override
             public Histogram newMetric() {
-                return new Histogram(new ExponentiallyDecayingReservoir());
+                return new Histogram(new ExponentiallyDecayingSample());
             }
 
             @Override
