@@ -5,12 +5,13 @@ import org.junit.Test;
 
 import javax.net.SocketFactory;
 import java.io.ByteArrayOutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.UnknownHostException;
 
 import static org.fest.assertions.api.Assertions.assertThat;
 import static org.fest.assertions.api.Fail.failBecauseExceptionWasNotThrown;
+import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Mockito.*;
 
@@ -25,14 +26,17 @@ public class GraphiteTest {
     @Before
     public void setUp() throws Exception {
         when(socket.getOutputStream()).thenReturn(output);
-        when(socketFactory.createSocket(anyString(), anyInt())).thenReturn(socket);
+
+        when(socketFactory.createSocket(any(InetAddress.class),
+                                        anyInt())).thenReturn(socket);
+
     }
 
     @Test
     public void connectsToGraphite() throws Exception {
         graphite.connect();
 
-        verify(socketFactory).createSocket(address.getHostName(), address.getPort());
+        verify(socketFactory).createSocket(address.getAddress(), address.getPort());
     }
 
     @Test
@@ -65,6 +69,7 @@ public class GraphiteTest {
     public void writesValuesToGraphite() throws Exception {
         graphite.connect();
         graphite.send("name", "value", 100);
+        graphite.close();
 
         assertThat(output.toString())
                 .isEqualTo("name value 100\n");
@@ -74,6 +79,7 @@ public class GraphiteTest {
     public void sanitizesNames() throws Exception {
         graphite.connect();
         graphite.send("name woo", "value", 100);
+        graphite.close();
 
         assertThat(output.toString())
                 .isEqualTo("name-woo value 100\n");
@@ -83,24 +89,9 @@ public class GraphiteTest {
     public void sanitizesValues() throws Exception {
         graphite.connect();
         graphite.send("name", "value woo", 100);
+        graphite.close();
 
         assertThat(output.toString())
                 .isEqualTo("name value-woo 100\n");
-    }
-
-    @Test
-    public void notifiesIfGraphiteIsUnavailable() throws Exception {
-        final String UNKNOWN_HOST = "unknown-host-10el6m7yg56ge7dm.com";
-        SocketFactory realSocketFactory = SocketFactory.getDefault();
-        InetSocketAddress unknownHostAddress = new InetSocketAddress(UNKNOWN_HOST, 1234);
-        Graphite graphiteAtUnknownHost = new Graphite(unknownHostAddress, realSocketFactory);
-
-        try {
-            graphiteAtUnknownHost.connect();
-            failBecauseExceptionWasNotThrown(UnknownHostException.class);
-        } catch (Exception e) {
-            assertThat(e.getMessage())
-                .isEqualTo(UNKNOWN_HOST);
-        }
     }
 }
