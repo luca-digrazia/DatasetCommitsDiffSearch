@@ -51,17 +51,12 @@ public abstract class ReadonlyFileSystemWithCustomStat extends AbstractFileSyste
   }
 
   @Override
-  public boolean supportsModifications(Path path) {
+  public boolean supportsModifications() {
     return false;
   }
 
   @Override
-  public boolean supportsSymbolicLinksNatively(Path path) {
-    return false;
-  }
-
-  @Override
-  public boolean supportsHardLinksNatively(Path path) {
+  public boolean supportsSymbolicLinksNatively() {
     return false;
   }
 
@@ -77,12 +72,6 @@ public abstract class ReadonlyFileSystemWithCustomStat extends AbstractFileSyste
 
   @Override
   protected void createSymbolicLink(Path linkPath, PathFragment targetFragment) throws IOException {
-    throw modificationException();
-  }
-
-  @Override
-  protected void createFSDependentHardLink(Path linkPath, Path originalPath)
-      throws IOException {
     throw modificationException();
   }
 

@@ -17,29 +17,33 @@ package com.google.devtools.build.lib.vfs;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.util.StringTrie;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Collection;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
  * Presents a unified view of multiple virtual {@link FileSystem} instances, to which requests are
- * delegated based on a {@link PathFragment} prefix mapping. If multiple prefixes apply to a given
- * path, the *longest* (i.e. most specific) match is used. The order in which the delegates are
- * specified does not influence the mapping.
+ * delegated based on a {@link PathFragment} prefix mapping.
+ * If multiple prefixes apply to a given path, the *longest* (i.e. most specific) match is used.
+ * The order in which the delegates are specified does not influence the mapping.
  *
- * <p>Paths are preserved absolutely, contrary to how "mount" works, e.g.: /foo/bar maps to /foo/bar
- * on the delegate, even if it is mounted at /foo.
+ * <p>Paths are preserved absolutely, contrary to how "mount" works, e.g.:
+ *    /foo/bar maps to /foo/bar on the delegate, even if it is mounted at /foo.
  *
- * <p>For example: "/in" maps to InFileSystem, "/" maps to OtherFileSystem. Reading from
- * "/in/base/BUILD" through the UnionFileSystem will delegate the read operation to InFileSystem,
- * which will read "/in/base/BUILD" relative to its root. ("mount" behavior would remap it to
- * "/base/BUILD" on the delegate).
+ * <p>For example:
+ * "/in" maps to InFileSystem, "/" maps to OtherFileSystem.
+ * Reading from "/in/base/BUILD" through the UnionFileSystem will delegate the read operation to
+ * InFileSystem, which will read "/in/base/BUILD" relative to its root.
+ * ("mount" behavior would remap it to "/base/BUILD" on the delegate).
  *
- * <p>Intra-filesystem symbolic links are resolved to their ultimate targets. Cross-filesystem links
- * are not currently supported.
+ * <p>Intra-filesystem symbolic links are resolved to their ultimate targets.
+ * Cross-filesystem links are not currently supported.
  */
 @ThreadSafety.ThreadSafe
 public class UnionFileSystem extends FileSystem {
@@ -47,7 +51,7 @@ public class UnionFileSystem extends FileSystem {
   // Prefix trie index, allowing children to easily inherit prefix mappings
   // of their parents.
   // This does not currently handle unicode filenames.
-  private final PathTrie<FileSystem> pathDelegate;
+  private StringTrie<FileSystem> pathDelegate;
 
   // True iff the filesystem can be modified. If false, mutating operations
   // will throw UnsupportedOperationExceptions.
@@ -58,35 +62,37 @@ public class UnionFileSystem extends FileSystem {
   private final boolean isCaseSensitive;
 
   /**
-   * Creates a new modifiable UnionFileSystem with prefix mappings specified by a map.
+   * Creates a new modifiable UnionFileSystem with prefix mappings
+   * specified by a map.
    *
    * @param prefixMapping map of path prefixes to {@link FileSystem}s
    */
-  public UnionFileSystem(Map<PathFragment, FileSystem> prefixMapping, FileSystem rootFileSystem) {
+  public UnionFileSystem(Map<PathFragment, FileSystem> prefixMapping,
+                         FileSystem rootFileSystem) {
     this(prefixMapping, rootFileSystem, /* readOnly */ false);
   }
 
   /**
-   * Creates a new modifiable or read-only UnionFileSystem with prefix mappings specified by a map.
+   * Creates a new modifiable or read-only UnionFileSystem with prefix mappings
+   * specified by a map.
    *
-   * @param prefixMapping map of path prefixes to delegate {@link FileSystem} instances to use for
-   *     paths of that prefix. Note that all prefixes must be absolute paths.
+   * @param prefixMapping map of path prefixes to delegate {@link FileSystem}s
    * @param rootFileSystem root for default requests; i.e. mapping of "/"
    * @param readOnly if true, mutating operations will throw
    */
-  public UnionFileSystem(
-      Map<PathFragment, FileSystem> prefixMapping, FileSystem rootFileSystem, boolean readOnly) {
+  public UnionFileSystem(Map<PathFragment, FileSystem> prefixMapping,
+                         FileSystem rootFileSystem, boolean readOnly) {
     super();
     Preconditions.checkNotNull(prefixMapping);
     Preconditions.checkNotNull(rootFileSystem);
     Preconditions.checkArgument(rootFileSystem != this, "Circular root filesystem.");
     Preconditions.checkArgument(
         !prefixMapping.containsKey(PathFragment.EMPTY_FRAGMENT),
-        "Attempted to specify an explicit root prefix mapping; "
-            + "please use the rootFileSystem argument instead.");
+        "Attempted to specify an explicit root prefix mapping; " +
+        "please use the rootFileSystem argument instead.");
 
     this.readOnly = readOnly;
-    this.pathDelegate = new PathTrie<>();
+    this.pathDelegate = new StringTrie<>();
     this.isCaseSensitive = rootFileSystem.isFilePathCaseSensitive();
 
     for (Map.Entry<PathFragment, FileSystem> prefix : prefixMapping.entrySet()) {
@@ -97,24 +103,29 @@ public class UnionFileSystem extends FileSystem {
       PathFragment prefixPath = prefix.getKey();
 
       // Extra slash prevents within-directory mappings, which Path can't handle.
-      pathDelegate.put(prefixPath, delegate);
+      String path = prefixPath.getPathString();
+      pathDelegate.put(path, delegate);
     }
-    pathDelegate.put(PathFragment.ROOT_FRAGMENT, rootFileSystem);
+    pathDelegate.put(PathFragment.EMPTY_FRAGMENT.getPathString(), rootFileSystem);
   }
 
   /**
-   * Retrieves the filesystem delegate of a path mapping. Does not follow symlinks (but you can call
-   * on a path preprocessed with {@link #resolveSymbolicLinks} to support this use case).
+   * Retrieves the filesystem delegate of a path mapping.
+   * Does not follow symlinks (but you can call on a path preprocessed with
+   * {@link #resolveSymbolicLinks} to support this use case).
    *
    * @param path the {@link Path} to map to a filesystem
    * @throws IllegalArgumentException if no delegate exists for the path
    */
   protected FileSystem getDelegate(Path path) {
     Preconditions.checkNotNull(path);
-    FileSystem immediateDelegate = pathDelegate.get(path.asFragment());
+
+    String pathString = path.getPathString();
+    FileSystem immediateDelegate = pathDelegate.get(pathString);
 
     // Should never actually happen if the root delegate is present.
-    Preconditions.checkNotNull(immediateDelegate, "No delegate filesystem exists for %s", path);
+    Preconditions.checkArgument(immediateDelegate != null, "No delegate filesystem exists for %s",
+        pathString);
     return immediateDelegate;
   }
 
@@ -125,8 +136,8 @@ public class UnionFileSystem extends FileSystem {
   }
 
   /**
-   * Follow a symbolic link once using the appropriate delegate filesystem, also resolving parent
-   * directory symlinks.
+   * Follow a symbolic link once using the appropriate delegate filesystem, also
+   * resolving parent directory symlinks.
    *
    * @param path {@link Path} to the symbolic link
    */
@@ -144,25 +155,20 @@ public class UnionFileSystem extends FileSystem {
     return delegate.resolveOneLink(adjustPath(path, delegate));
   }
 
-  private void checkModifiable(Path path) {
-    if (!supportsModifications(path)) {
+  private void checkModifiable() {
+    if (!supportsModifications()) {
       throw new UnsupportedOperationException(
-          String.format("Modifications to this %s are disabled.", getClass().getSimpleName()));
+          "Modifications to this " + getClass().getSimpleName() + " are disabled.");
     }
   }
 
   @Override
-  public boolean supportsModifications(Path path) {
+  public boolean supportsModifications() {
     return !readOnly;
   }
 
   @Override
-  public boolean supportsSymbolicLinksNatively(Path path) {
-    return true;
-  }
-
-  @Override
-  public boolean supportsHardLinksNatively(Path path) {
+  public boolean supportsSymbolicLinksNatively() {
     return true;
   }
 
@@ -178,14 +184,14 @@ public class UnionFileSystem extends FileSystem {
   }
 
   @Override
-  protected byte[] getDigest(Path path, HashFunction hashFunction) throws IOException {
+  protected byte[] getMD5Digest(Path path) throws IOException {
     FileSystem delegate = getDelegate(path);
-    return delegate.getDigest(adjustPath(path, delegate), hashFunction);
+    return delegate.getMD5Digest(adjustPath(path, delegate));
   }
 
   @Override
   protected boolean createDirectory(Path path) throws IOException {
-    checkModifiable(path);
+    checkModifiable();
     // When creating the exact directory that is mapped,
     // create it on both the parent's delegate and the path's delegate.
     // This is necessary both for the parent to see the directory and for the
@@ -217,7 +223,7 @@ public class UnionFileSystem extends FileSystem {
 
   @Override
   protected boolean delete(Path path) throws IOException {
-    checkModifiable(path);
+    checkModifiable();
     FileSystem delegate = getDelegate(path);
     return delegate.delete(adjustPath(path, delegate));
   }
@@ -230,7 +236,7 @@ public class UnionFileSystem extends FileSystem {
 
   @Override
   protected void setLastModifiedTime(Path path, long newTime) throws IOException {
-    checkModifiable(path);
+    checkModifiable();
     FileSystem delegate = getDelegate(path);
     delegate.setLastModifiedTime(adjustPath(path, delegate), newTime);
   }
@@ -262,8 +268,8 @@ public class UnionFileSystem extends FileSystem {
 
   @Override
   protected void createSymbolicLink(Path linkPath, PathFragment targetFragment) throws IOException {
-    checkModifiable(linkPath);
-    if (!supportsSymbolicLinksNatively(linkPath)) {
+    checkModifiable();
+    if (!supportsSymbolicLinksNatively()) {
       throw new UnsupportedOperationException(
           "Attempted to create a symlink, but symlink support is disabled.");
     }
@@ -301,8 +307,9 @@ public class UnionFileSystem extends FileSystem {
   }
 
   /**
-   * Retrieves the directory entries for the specified path under the assumption that {@code
-   * resolvedPath} is the resolved path of {@code path} in one of the underlying file systems.
+   * Retrieves the directory entries for the specified path under the assumption
+   * that {@code resolvedPath} is the resolved path of {@code path} in one of the
+   * underlying file systems.
    *
    * @param path the {@link Path} whose children are to be retrieved
    */
@@ -333,14 +340,14 @@ public class UnionFileSystem extends FileSystem {
 
   @Override
   protected void setReadable(Path path, boolean readable) throws IOException {
-    checkModifiable(path);
+    checkModifiable();
     FileSystem delegate = getDelegate(path);
     delegate.setReadable(adjustPath(path, delegate), readable);
   }
 
   @Override
   protected boolean isWritable(Path path) throws IOException {
-    if (!supportsModifications(path)) {
+    if (!supportsModifications()) {
       return false;
     }
     FileSystem delegate = getDelegate(path);
@@ -349,7 +356,7 @@ public class UnionFileSystem extends FileSystem {
 
   @Override
   protected void setWritable(Path path, boolean writable) throws IOException {
-    checkModifiable(path);
+    checkModifiable();
     FileSystem delegate = getDelegate(path);
     delegate.setWritable(adjustPath(path, delegate), writable);
   }
@@ -362,15 +369,21 @@ public class UnionFileSystem extends FileSystem {
 
   @Override
   protected void setExecutable(Path path, boolean executable) throws IOException {
-    checkModifiable(path);
+    checkModifiable();
     FileSystem delegate = getDelegate(path);
     delegate.setExecutable(adjustPath(path, delegate), executable);
   }
 
   @Override
-  protected byte[] getFastDigest(Path path, HashFunction hashFunction) throws IOException {
+  protected String getFastDigestFunctionType(Path path) {
     FileSystem delegate = getDelegate(path);
-    return delegate.getFastDigest(adjustPath(path, delegate), hashFunction);
+    return delegate.getFastDigestFunctionType(adjustPath(path, delegate));
+  }
+
+  @Override
+  protected byte[] getFastDigest(Path path) throws IOException {
+    FileSystem delegate = getDelegate(path);
+    return delegate.getFastDigest(adjustPath(path, delegate));
   }
 
   @Override
@@ -387,28 +400,27 @@ public class UnionFileSystem extends FileSystem {
 
   @Override
   protected OutputStream getOutputStream(Path path, boolean append) throws IOException {
-    checkModifiable(path);
+    checkModifiable();
     FileSystem delegate = getDelegate(path);
     return delegate.getOutputStream(adjustPath(path, delegate), append);
   }
 
   @Override
   protected void renameTo(Path sourcePath, Path targetPath) throws IOException {
+    checkModifiable();
     FileSystem sourceDelegate = getDelegate(sourcePath);
-    if (!sourceDelegate.supportsModifications(sourcePath)) {
+    if (!sourceDelegate.supportsModifications()) {
       throw new UnsupportedOperationException(
-          String.format(
-              "The filesystem for the source path %s does not support modifications.",
-              sourcePath.getPathString()));
+          "The filesystem for the source path "
+          + sourcePath.getPathString() + " does not support modifications.");
     }
     sourcePath = adjustPath(sourcePath, sourceDelegate);
 
     FileSystem targetDelegate = getDelegate(targetPath);
-    if (!targetDelegate.supportsModifications(targetPath)) {
+    if (!targetDelegate.supportsModifications()) {
       throw new UnsupportedOperationException(
-          String.format(
-              "The filesystem for the target path %s does not support modifications.",
-              targetPath.getPathString()));
+          "The filesystem for the target path "
+          + targetPath.getPathString() + " does not support modifications.");
     }
     targetPath = adjustPath(targetPath, targetDelegate);
 
@@ -422,21 +434,5 @@ public class UnionFileSystem extends FileSystem {
       FileSystemUtils.copyFile(sourcePath, targetPath);
       sourceDelegate.delete(sourcePath);
     }
-  }
-
-  @Override
-  protected void createFSDependentHardLink(Path linkPath, Path originalPath) throws IOException {
-    checkModifiable(linkPath);
-
-    FileSystem originalDelegate = getDelegate(originalPath);
-    FileSystem linkDelegate = getDelegate(linkPath);
-
-    if (!originalDelegate.equals(linkDelegate)
-        || !linkDelegate.supportsHardLinksNatively(linkPath)) {
-      throw new UnsupportedOperationException(
-          "Attempted to create a hard link, but hard link support is disabled.");
-    }
-    linkDelegate.createFSDependentHardLink(
-        adjustPath(linkPath, linkDelegate), adjustPath(originalPath, originalDelegate));
   }
 }

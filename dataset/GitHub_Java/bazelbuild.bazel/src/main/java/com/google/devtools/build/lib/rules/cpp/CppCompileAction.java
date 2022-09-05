@@ -1093,6 +1093,19 @@ public class CppCompileAction extends AbstractAction
     return context.getDeclaredIncludeSrcs();
   }
 
+  /**
+   * Return explicit header files (i.e., header files explicitly listed) in an order
+   * that is stable between builds.
+   */
+  protected final List<PathFragment> getDeclaredIncludeSrcsInStableOrder() {
+    List<PathFragment> paths = new ArrayList<>();
+    for (Artifact declaredIncludeSrc : context.getDeclaredIncludeSrcs()) {
+      paths.add(declaredIncludeSrc.getExecPath());
+    }
+    Collections.sort(paths); // Order is not important, but stability is.
+    return paths;
+  }
+
   @Override
   public ResourceSet estimateResourceConsumption(Executor executor) {
     return executor.getContext(actionContext).estimateResourceConsumption(this);
@@ -1129,13 +1142,8 @@ public class CppCompileAction extends AbstractAction
      */
     f.addPaths(context.getDeclaredIncludeDirs());
     f.addPaths(context.getDeclaredIncludeWarnDirs());
-    for (Artifact declaredIncludeSrc : context.getDeclaredIncludeSrcs()) {
-      f.addPath(declaredIncludeSrc.getExecPath());
-    }
-    f.addInt(0);  // mark the boundary between input types
-    for (Artifact input : getMandatoryInputs()) {
-      f.addPath(input.getExecPath());
-    }
+    f.addPaths(getDeclaredIncludeSrcsInStableOrder());
+    f.addPaths(Artifact.asSortedPathFragments(getMandatoryInputs()));
     return f.hexDigestAndReset();
   }
 
@@ -1244,9 +1252,9 @@ public class CppCompileAction extends AbstractAction
       message.append('\n');
     }
 
-    for (Artifact src : getDeclaredIncludeSrcs()) {
+    for (PathFragment path : getDeclaredIncludeSrcsInStableOrder()) {
       message.append("  Declared include source: ");
-      message.append(ShellEscaper.escapeString(src.getExecPathString()));
+      message.append(ShellEscaper.escapeString(path.getPathString()));
       message.append('\n');
     }
 

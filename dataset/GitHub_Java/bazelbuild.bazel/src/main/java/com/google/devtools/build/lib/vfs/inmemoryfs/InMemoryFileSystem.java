@@ -13,17 +13,17 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs.inmemoryfs;
 
-import com.google.devtools.build.lib.clock.Clock;
-import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.util.OS;
+import com.google.devtools.build.lib.unix.FileAccessException;
+import com.google.devtools.build.lib.util.Clock;
+import com.google.devtools.build.lib.util.JavaClock;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.lib.vfs.FileAccessException;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.ScopeEscapableFileSystem;
 import com.google.devtools.build.lib.vfs.Symlinks;
+
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -32,7 +32,9 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.Stack;
+
 import javax.annotation.Nullable;
 
 /**
@@ -643,23 +645,18 @@ public class InMemoryFileSystem extends ScopeEscapableFileSystem {
   }
 
   @Override
-  public boolean supportsModifications(Path path) {
+  public boolean supportsModifications() {
     return true;
   }
 
   @Override
-  public boolean supportsSymbolicLinksNatively(Path path) {
-    return true;
-  }
-
-  @Override
-  public boolean supportsHardLinksNatively(Path path) {
+  public boolean supportsSymbolicLinksNatively() {
     return true;
   }
 
   @Override
   public boolean isFilePathCaseSensitive() {
-    return OS.getCurrent() != OS.WINDOWS;
+    return true;
   }
 
   /**
@@ -761,7 +758,7 @@ public class InMemoryFileSystem extends ScopeEscapableFileSystem {
           throw new IOException("Directory is not readable");
         }
 
-        Collection<String> allChildren = dirInfo.getAllChildren();
+        Set<String> allChildren = dirInfo.getAllChildren();
         List<Path> result = new ArrayList<>(allChildren.size());
         for (String child : allChildren) {
           if (!(child.equals(".") || child.equals(".."))) {
@@ -933,34 +930,5 @@ public class InMemoryFileSystem extends ScopeEscapableFileSystem {
       // We don't support cross-file system renaming.
       throw Error.EACCES.exception(targetPath);
     }
-  }
-
-  @Override
-  protected void createFSDependentHardLink(Path linkPath, Path originalPath)
-      throws IOException {
-
-    // Same check used when creating a symbolic link
-    if (originalPath.equals(rootPath)) {
-      throw Error.EACCES.exception(originalPath);
-    }
-
-    InMemoryDirectoryInfo linkParent;
-    synchronized (this) {
-      linkParent = getDirectory(linkPath.getParentDirectory());
-      // Same check used when creating a symbolic link
-      if (!linkParent.outOfScope()) {
-        if (linkParent.getChild(linkPath.getBaseName()) != null) {
-          throw Error.EEXIST.exception(linkPath);
-        }
-        insert(
-            linkParent,
-            linkPath.getBaseName(),
-            getDirectory(originalPath.getParentDirectory()).getChild(originalPath.getBaseName()),
-            linkPath);
-        return;
-      }
-    }
-    // If we get here, we're out of scope.
-    getDelegatedPath(linkParent.getEscapingPath(), originalPath).createHardLink(linkPath);
   }
 }
