@@ -237,7 +237,6 @@ public class TestAspects {
   }
 
   private static final AspectDefinition ERROR_ASPECT = new AspectDefinition.Builder("error")
-      .attributeAspect("bar", ErrorAspect.class)
       .build();
 
   /**
@@ -368,7 +367,6 @@ public class TestAspects {
       return builder
           .add(attr("foo", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE)
               .aspect(ErrorAspect.class))
-          .add(attr("bar", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE))
           .build();
     }
 

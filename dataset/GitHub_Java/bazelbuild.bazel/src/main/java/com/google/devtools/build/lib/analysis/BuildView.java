@@ -639,7 +639,7 @@ public class BuildView {
     }
 
     prepareToBuild(new SkyframePackageRootResolver(skyframeExecutor));
-    skyframeExecutor.injectWorkspaceStatusData();
+    skyframeExecutor.injectWorkspaceStatusData(configurations);
     SkyframeAnalysisResult skyframeAnalysisResult;
     try {
       skyframeAnalysisResult =
