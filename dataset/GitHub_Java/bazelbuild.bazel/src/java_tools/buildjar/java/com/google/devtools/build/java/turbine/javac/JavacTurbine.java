@@ -24,7 +24,6 @@ import com.google.devtools.build.buildjar.javac.plugins.dependency.DependencyMod
 import com.google.devtools.build.buildjar.javac.plugins.dependency.StrictJavaDepsPlugin;
 import com.google.devtools.build.java.turbine.TurbineOptions;
 import com.google.devtools.build.java.turbine.TurbineOptionsParser;
-import com.google.devtools.build.java.turbine.javac.JavacTurbineCompileRequest.Prune;
 import com.google.devtools.build.java.turbine.javac.ZipOutputFileManager.OutputFileObject;
 
 import com.sun.tools.javac.util.Context;
@@ -79,7 +78,7 @@ public class JavacTurbine implements AutoCloseable {
   }
 
   /** A header compilation result. */
-  public enum Result {
+  enum Result {
     /** The compilation succeeded with the reduced classpath optimization. */
     OK_WITH_REDUCED_CLASSPATH(true),
 
@@ -95,11 +94,11 @@ public class JavacTurbine implements AutoCloseable {
       this.ok = ok;
     }
 
-    public boolean ok() {
+    boolean ok() {
       return ok;
     }
 
-    public int exitCode() {
+    int exitCode() {
       return ok ? 0 : 1;
     }
   }
@@ -157,15 +156,9 @@ public class JavacTurbine implements AutoCloseable {
             .setBootClassPath(asPaths(turbineOptions.bootClassPath()))
             .setProcessorClassPath(processorpath);
 
-    if (!Collections.disjoint(
-        turbineOptions.processors(), turbineOptions.blacklistedProcessors())) {
-      requestBuilder.setPrune(Prune.NO);
-    }
+    StrictJavaDeps strictDepsMode = StrictJavaDeps.valueOf(turbineOptions.strictDepsMode());
 
-    // JavaBuilder exempts some annotation processors from Strict Java Deps enforcement.
-    // To avoid having to apply the same exemptions here, we just ignore strict deps errors
-    // and leave enforcement to JavaBuilder.
-    DependencyModule dependencyModule = buildDependencyModule(turbineOptions, StrictJavaDeps.WARN);
+    DependencyModule dependencyModule = buildDependencyModule(turbineOptions, strictDepsMode);
 
     if (sources.isEmpty()) {
       // accept compilations with an empty source list for compatibility with JavaBuilder
@@ -179,29 +172,41 @@ public class JavacTurbine implements AutoCloseable {
     JavacTurbineCompileResult compileResult;
     List<String> actualClasspath;
 
-    List<String> originalClasspath = turbineOptions.classPath();
-    List<String> compressedClasspath =
-        dependencyModule.computeStrictClasspath(turbineOptions.classPath());
+    if (strictDepsMode != StrictJavaDeps.OFF) {
 
-    requestBuilder.setStrictDepsPlugin(new StrictJavaDepsPlugin(dependencyModule));
+      List<String> originalClasspath = turbineOptions.classPath();
+      List<String> compressedClasspath =
+          dependencyModule.computeStrictClasspath(turbineOptions.classPath());
 
-    {
-      // compile with reduced classpath
-      actualClasspath = compressedClasspath;
-      requestBuilder.setClassPath(asPaths(actualClasspath));
-      compileResult = JavacTurbineCompiler.compile(requestBuilder.build());
-      if (compileResult.success()) {
-        result = Result.OK_WITH_REDUCED_CLASSPATH;
-        context = compileResult.context();
+      requestBuilder.setStrictDepsPlugin(new StrictJavaDepsPlugin(dependencyModule));
+
+      {
+        // compile with reduced classpath
+        actualClasspath = compressedClasspath;
+        requestBuilder.setClassPath(asPaths(actualClasspath));
+        compileResult = JavacTurbineCompiler.compile(requestBuilder.build());
+        if (compileResult.success()) {
+          result = Result.OK_WITH_REDUCED_CLASSPATH;
+          context = compileResult.context();
+        }
       }
-    }
 
-    if (!compileResult.success() && hasRecognizedError(compileResult.output())) {
-      // fall back to transitive classpath
-      deleteRecursively(tmpdir);
-      extractSourceJars(turbineOptions, tmpdir);
+      if (!compileResult.success() && hasRecognizedError(compileResult.output())) {
+        // fall back to transitive classpath
+        deleteRecursively(tmpdir);
+        extractSourceJars(turbineOptions, tmpdir);
 
-      actualClasspath = originalClasspath;
+        actualClasspath = originalClasspath;
+        requestBuilder.setClassPath(asPaths(actualClasspath));
+        compileResult = JavacTurbineCompiler.compile(requestBuilder.build());
+        if (compileResult.success()) {
+          result = Result.OK_WITH_FULL_CLASSPATH;
+          context = compileResult.context();
+        }
+      }
+
+    } else {
+      actualClasspath = turbineOptions.classPath();
       requestBuilder.setClassPath(asPaths(actualClasspath));
       compileResult = JavacTurbineCompiler.compile(requestBuilder.build());
       if (compileResult.success()) {
@@ -210,13 +215,15 @@ public class JavacTurbine implements AutoCloseable {
       }
     }
 
-    if (result.ok()) {
-      emitClassJar(Paths.get(turbineOptions.outputFile()), compileResult.files());
-      dependencyModule.emitDependencyInformation(
-          CLASSPATH_JOINER.join(actualClasspath), compileResult.success());
+    if (!result.ok()) {
+      out.println(compileResult.output());
+      return result;
     }
 
-    out.println(compileResult.output());
+    emitClassJar(Paths.get(turbineOptions.outputFile()), compileResult.files());
+    dependencyModule.emitDependencyInformation(
+        CLASSPATH_JOINER.join(actualClasspath), compileResult.success());
+
     return result;
   }
 
