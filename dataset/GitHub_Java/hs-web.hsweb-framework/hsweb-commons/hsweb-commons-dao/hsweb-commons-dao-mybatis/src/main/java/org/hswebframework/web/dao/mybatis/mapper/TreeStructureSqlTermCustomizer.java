@@ -19,14 +19,13 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 public abstract class TreeStructureSqlTermCustomizer extends AbstractSqlTermCustomizer {
-    protected boolean not;
+    boolean not = false;
 
-    protected boolean parent;
+    boolean parent = false;
 
     public TreeStructureSqlTermCustomizer(String termType, boolean not, boolean parent) {
         super(termType);
         this.not = not;
-        this.parent = parent;
     }
 
     protected abstract String getTableName();
