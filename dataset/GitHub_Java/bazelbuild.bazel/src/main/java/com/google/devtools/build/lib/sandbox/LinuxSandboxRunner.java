@@ -59,7 +59,7 @@ final class LinuxSandboxRunner extends SandboxRunner {
       Set<Path> bindMounts,
       boolean verboseFailures,
       boolean sandboxDebug) {
-    super(sandboxExecRoot, verboseFailures);
+    super(sandboxPath, sandboxExecRoot, verboseFailures);
     this.execRoot = execRoot;
     this.sandboxExecRoot = sandboxExecRoot;
     this.sandboxTempDir = sandboxTempDir;

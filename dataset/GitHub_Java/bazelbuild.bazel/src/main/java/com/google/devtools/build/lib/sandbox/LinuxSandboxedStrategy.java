@@ -24,14 +24,13 @@ import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -64,12 +63,14 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
   LinuxSandboxedStrategy(
       BuildRequest buildRequest,
       BlazeDirectories blazeDirs,
+      ExecutorService backgroundWorkers,
       boolean verboseFailures,
       String productName,
       boolean fullySupported) {
     super(
         buildRequest,
         blazeDirs,
+        backgroundWorkers,
         verboseFailures,
         buildRequest.getOptions(SandboxOptions.class));
     this.sandboxOptions = buildRequest.getOptions(SandboxOptions.class);
@@ -122,30 +123,14 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
     }
 
     SandboxRunner runner = getSandboxRunner(spawn, sandboxPath, sandboxExecRoot, sandboxTempDir);
-    try {
-      runSpawn(
-          spawn,
-          actionExecutionContext,
-          spawn.getEnvironment(),
-          symlinkedExecRoot,
-          outputs,
-          runner,
-          writeOutputFiles);
-    } finally {
-      if (!sandboxOptions.sandboxDebug) {
-        try {
-          FileSystemUtils.deleteTree(sandboxPath);
-        } catch (IOException e) {
-          executor
-              .getEventHandler()
-              .handle(
-                  Event.error(
-                      String.format(
-                          "Cannot delete sandbox directory after action execution: %s (%s)",
-                          sandboxPath.getPathString(), e)));
-        }
-      }
-    }
+    runSpawn(
+        spawn,
+        actionExecutionContext,
+        spawn.getEnvironment(),
+        symlinkedExecRoot,
+        outputs,
+        runner,
+        writeOutputFiles);
   }
 
   private SandboxRunner getSandboxRunner(
