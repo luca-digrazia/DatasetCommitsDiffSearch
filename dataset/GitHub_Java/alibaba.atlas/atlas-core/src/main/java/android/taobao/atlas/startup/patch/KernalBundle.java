@@ -217,6 +217,7 @@ import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -291,7 +292,6 @@ public class KernalBundle{
 
     public static boolean checkLoadKernalDebugPatch(Application application){
         if(Build.VERSION.SDK_INT<21) {
-            //暂时只支持art设备的debug调试
             return false;
         }
 
@@ -305,10 +305,16 @@ public class KernalBundle{
                 if(patchFile.exists()){
                     loadKernalPatch = true;
                     KernalBundle bundle = new KernalBundle();
-                    DexFile dexFile = (DexFile)KernalConstants.dexBooster.loadDex(KernalConstants.baseContext,patchFile.getAbsolutePath(),
-                            new File(patchFile.getParent(),"patch.dex").getAbsolutePath(),0,true) ;
+                    Class AndroidRuntimeClass = Class.forName("com.taobao.android.runtime.AndroidRuntime");
+                    Method getInstanceMethod = AndroidRuntimeClass.getDeclaredMethod("getInstance");
+                    Object androidRuntimeInstance = getInstanceMethod.invoke(null);
+                    Method initMethod = AndroidRuntimeClass.getDeclaredMethod("init",Context.class);
+                    initMethod.invoke(androidRuntimeInstance,KernalConstants.baseContext);
+                    Method loadDexMethod = AndroidRuntimeClass.getDeclaredMethod("loadDex",Context.class,String.class,String.class,int.class,boolean.class);
+                    DexFile dexFile = (DexFile) loadDexMethod.invoke(androidRuntimeInstance,KernalConstants.baseContext,patchFile.getAbsolutePath(),
+                            new File(patchFile.getParent(),"patch.dex").getAbsolutePath(),0,true);
                     bundle.installKernalBundle(KernalConstants.baseContext.getClassLoader(), patchFile, new DexFile[]{dexFile}, null,
-                                               true /*(app_info.flags & ApplicationInfo.FLAG_VM_SAFE_MODE) != 0*/);
+                                               (app_info.flags & ApplicationInfo.FLAG_VM_SAFE_MODE) != 0);
                     bundle.replacePathClassLoaderIfNeed(application);
                     Class DelegateResourcesClazz = application.getClassLoader().loadClass("android.taobao.atlas.runtime.DelegateResources");
                     DelegateResourcesClazz.getDeclaredMethod("addApkpatchResources", String.class)
@@ -358,22 +364,15 @@ public class KernalBundle{
         if(dexPatchVersion>0) {
             try {
                 bundleDir = dexPatchDir;
-                archive = new KernalBundleArchive(KernalConstants.baseContext, dexPatchDir, "", dexPatchVersion, process);
+                archive = new KernalBundleArchive(KernalConstants.baseContext, dexPatchDir, version, dexPatchVersion, process);
             }catch(Throwable e){
                 bundleDir = updateDir;
-                archive = new KernalBundleArchive(KernalConstants.baseContext, bundleDir, makeMainDexUniqueTag(KernalVersionManager.instance().currentVersionName(),version), dexPatchVersion, process);
+                archive = new KernalBundleArchive(KernalConstants.baseContext, bundleDir, version, dexPatchVersion, process);
             }
         }else{
             bundleDir = updateDir;
-            archive = new KernalBundleArchive(KernalConstants.baseContext, bundleDir, makeMainDexUniqueTag(KernalVersionManager.instance().currentVersionName(),version), dexPatchVersion, process);
+            archive = new KernalBundleArchive(KernalConstants.baseContext, bundleDir, version, dexPatchVersion, process);
         }
-    }
-
-    private String makeMainDexUniqueTag(String appVersion,String maindexTag){
-        if(maindexTag.startsWith(appVersion)){
-            return maindexTag;
-        }
-        return appVersion+"_"+maindexTag;
     }
 
     public void patchKernalDex() throws Exception {
