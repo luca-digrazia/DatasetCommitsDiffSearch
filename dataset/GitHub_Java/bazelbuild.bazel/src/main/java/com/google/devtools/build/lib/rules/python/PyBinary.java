@@ -69,8 +69,7 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
     semantics.createExecutable(ruleContext, common, ccLinkParamsStore);
     Runfiles commonRunfiles = collectCommonRunfiles(ruleContext, common, semantics);
 
-    Runfiles.Builder defaultRunfilesBuilder = new Runfiles.Builder(ruleContext.getWorkspaceName())
-        .merge(commonRunfiles);
+    Runfiles.Builder defaultRunfilesBuilder = new Runfiles.Builder().merge(commonRunfiles);
     semantics.collectDefaultRunfilesForBinary(ruleContext, defaultRunfilesBuilder);
     Runfiles defaultRunfiles = defaultRunfilesBuilder.build();
 
@@ -84,7 +83,7 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
     // Only include common runfiles and middleman. Default runfiles added by semantics are
     // excluded. The middleman is necessary to ensure the runfiles trees are generated for all
     // dependency binaries.
-    Runfiles dataRunfiles = new Runfiles.Builder(ruleContext.getWorkspaceName())
+    Runfiles dataRunfiles = new Runfiles.Builder()
         .merge(commonRunfiles)
         .addArtifact(runfilesSupport.getRunfilesMiddleman())
         .build();
@@ -105,7 +104,7 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
 
   private static Runfiles collectCommonRunfiles(RuleContext ruleContext, PyCommon common,
       PythonSemantics semantics) {
-    Runfiles.Builder builder = new Runfiles.Builder(ruleContext.getWorkspaceName());
+    Runfiles.Builder builder = new Runfiles.Builder();
     builder.addArtifact(common.getExecutable());
     if (common.getConvertedFiles() != null) {
       builder.addSymlinks(common.getConvertedFiles());
