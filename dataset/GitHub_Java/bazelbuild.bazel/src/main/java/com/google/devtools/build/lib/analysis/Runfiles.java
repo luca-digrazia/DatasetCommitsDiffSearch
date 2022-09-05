@@ -19,6 +19,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -220,7 +221,7 @@ public final class Runfiles {
       NestedSet<SymlinkEntry> rootSymlinks,
       NestedSet<PruningManifest> pruningManifests,
       EmptyFilesSupplier emptyFilesSupplier) {
-    this.suffix = suffix;
+    this.suffix = suffix.isEmpty() ? Constants.DEFAULT_RUNFILES_PREFIX : suffix;
     this.unconditionalArtifacts = Preconditions.checkNotNull(artifacts);
     this.symlinks = Preconditions.checkNotNull(symlinks);
     this.rootSymlinks = Preconditions.checkNotNull(rootSymlinks);
@@ -504,7 +505,7 @@ public final class Runfiles {
     /**
      * Only used for Runfiles.EMPTY.
      */
-    private Builder() {
+    public Builder() {
       this.suffix = "";
     }
 
@@ -768,15 +769,12 @@ public final class Runfiles {
      * pruning manifests in the merge.
      */
     private Builder merge(Runfiles runfiles, boolean includePruningManifests) {
-      if (runfiles.isEmpty()) {
-        return this;
-      }
-      // The suffix should be the same within any blaze build, except for the EMPTY runfiles, which
-      // may have an empty suffix, but that is covered above.
-      Preconditions.checkArgument(suffix.equals(runfiles.suffix));
       artifactsBuilder.addTransitive(runfiles.getUnconditionalArtifacts());
       symlinksBuilder.addTransitive(runfiles.getSymlinks());
       rootSymlinksBuilder.addTransitive(runfiles.getRootSymlinks());
+      if (suffix.isEmpty()) {
+        suffix = runfiles.suffix;
+      }
       if (includePruningManifests) {
         pruningManifestsBuilder.addTransitive(runfiles.getPruningManifests());
       }
