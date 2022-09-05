@@ -38,10 +38,8 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.OutputFilter;
 import com.google.devtools.build.lib.flags.CommandNameCache;
-import com.google.devtools.build.lib.packages.AttributeContainer;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.Preprocessor;
-import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.MemoryProfiler;
@@ -302,8 +300,7 @@ public final class BlazeRuntime {
         preprocessorFactorySupplier,
         skyFunctions.build(),
         precomputedValues.build(),
-        customDirtinessCheckers.build(),
-        getProductName());
+        customDirtinessCheckers.build());
     this.workspace = new BlazeWorkspace(
         this, directories, skyframeExecutor, eventBusExceptionHandler, workspaceStatusActionFactory,
         binTools);
@@ -380,7 +377,7 @@ public final class BlazeRuntime {
       }
       if (profiledTasks != ProfiledTaskKinds.NONE) {
         Profiler.instance().start(profiledTasks, out,
-            getProductName() + " profile for " + env.getOutputBase() + " at " + new Date()
+            Constants.PRODUCT_NAME + " profile for " + env.getOutputBase() + " at " + new Date()
             + ", build ID: " + buildID,
             recordFullProfilerData, clock, execStartTimeNanos);
         return true;
@@ -1007,7 +1004,7 @@ public final class BlazeRuntime {
     }
 
     PathFragment outputPathFragment = BlazeDirectories.outputPathFromOutputBase(
-        outputBase, workspaceDirectory, startupOptions.deepExecRoot, Constants.PRODUCT_NAME);
+        outputBase, workspaceDirectory, startupOptions.deepExecRoot);
     FileSystem fs = null;
     for (BlazeModule module : blazeModules) {
       FileSystem moduleFs = module.getFileSystem(options, outputPathFragment);
@@ -1039,8 +1036,7 @@ public final class BlazeRuntime {
 
     BlazeDirectories directories =
         new BlazeDirectories(installBasePath, outputBasePath, workspaceDirectoryPath,
-                             startupOptions.deepExecRoot, startupOptions.installMD5,
-                             Constants.PRODUCT_NAME);
+                             startupOptions.deepExecRoot, startupOptions.installMD5);
 
     Clock clock = BlazeClock.instance();
 
@@ -1154,10 +1150,6 @@ public final class BlazeRuntime {
         new VersionCommand());
   }
 
-  public String getProductName() {
-    return Constants.PRODUCT_NAME;
-  }
-
   /**
    * A builder for {@link BlazeRuntime} objects. The only required fields are the {@link
    * BlazeDirectories}, and the {@link RuleClassProvider} (except for testing). All other fields
@@ -1226,23 +1218,6 @@ public final class BlazeRuntime {
         }
       }
 
-      Function<RuleClass, AttributeContainer> attributeContainerFactory = null;
-      for (BlazeModule module : blazeModules) {
-        Function<RuleClass, AttributeContainer> attrContainerFactory =
-            module.getAttributeContainerSupplier();
-        if (attrContainerFactory != null) {
-          Preconditions.checkState(
-              attributeContainerFactory == null,
-              "At most one attribute container supplier supported. But found two: %s and %s",
-              attrContainerFactory,
-              attributeContainerFactory);
-          attributeContainerFactory = attrContainerFactory;
-        }
-      }
-      if (attributeContainerFactory == null) {
-        attributeContainerFactory = AttributeContainer.ATTRIBUTE_CONTAINER_FACTORY;
-      }
-
       ConfiguredRuleClassProvider ruleClassProvider = ruleClassBuilder.build();
 
       List<PackageFactory.EnvironmentExtension> extensions = new ArrayList<>();
@@ -1250,13 +1225,8 @@ public final class BlazeRuntime {
         extensions.add(module.getPackageEnvironmentExtension());
       }
 
-      PackageFactory packageFactory =
-          new PackageFactory(
-              ruleClassProvider,
-              platformRegexps,
-              attributeContainerFactory,
-              extensions,
-              BlazeVersionInfo.instance().getVersion());
+      PackageFactory packageFactory = new PackageFactory(
+          ruleClassProvider, platformRegexps, extensions, BlazeVersionInfo.instance().getVersion());
 
       if (configurationFactory == null) {
         configurationFactory = new ConfigurationFactory(
@@ -1304,8 +1274,8 @@ public final class BlazeRuntime {
      * parameters.
      */
     public Builder setDirectories(Path installBase, Path outputBase,
-        Path workspace, String productName) {
-      this.directories = new BlazeDirectories(installBase, outputBase, workspace, productName);
+        Path workspace) {
+      this.directories = new BlazeDirectories(installBase, outputBase, workspace);
       return this;
     }
 
