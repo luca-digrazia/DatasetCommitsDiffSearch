@@ -149,10 +149,8 @@ public class ObjcRuleClasses {
   /**
    * Creates a new spawn action builder that requires a darwin architecture to run.
    */
-  static SpawnAction.Builder spawnOnDarwinActionBuilder(RuleContext ruleContext) {
-    ObjcConfiguration objcConfiguration = objcConfiguration(ruleContext);
+  static SpawnAction.Builder spawnOnDarwinActionBuilder() {
     return new SpawnAction.Builder()
-        .setEnvironment(objcConfiguration.getEnvironmentForDarwin())
         .setExecutionInfo(ImmutableMap.of(ExecutionRequirements.REQUIRES_DARWIN, ""));
   }
 
@@ -162,9 +160,8 @@ public class ObjcRuleClasses {
    */
   // TODO(bazel-team): Reference a rule target rather than a jar file when Darwin runfiles work
   // better.
-  static SpawnAction.Builder spawnJavaOnDarwinActionBuilder(RuleContext ruleContext,
-      Artifact deployJarArtifact) {
-    return spawnOnDarwinActionBuilder(ruleContext)
+  static SpawnAction.Builder spawnJavaOnDarwinActionBuilder(Artifact deployJarArtifact) {
+    return spawnOnDarwinActionBuilder()
         .setExecutable(JAVA)
         .addExecutableArguments("-jar", deployJarArtifact.getExecPathString())
         .addInput(deployJarArtifact);
@@ -177,9 +174,8 @@ public class ObjcRuleClasses {
    * directly, but right now we don't have a buildhelpers package on Macs so we must specify
    * the path to /bin/bash explicitly.
    */
-  static SpawnAction.Builder spawnBashOnDarwinActionBuilder(RuleContext ruleContext, String cmd) {
-    return spawnOnDarwinActionBuilder(ruleContext)
-        .setShellCommand(ImmutableList.of("/bin/bash", "-c", cmd));
+  static SpawnAction.Builder spawnBashOnDarwinActionBuilder(String cmd) {
+    return spawnOnDarwinActionBuilder().setShellCommand(ImmutableList.of("/bin/bash", "-c", cmd));
   }
 
   /**
@@ -485,7 +481,7 @@ public class ObjcRuleClasses {
           .add(attr("$ibtoolwrapper", LABEL).cfg(HOST).exec()
               .value(env.getLabel("//tools/objc:ibtoolwrapper")))
           // TODO(dmaclach): Adding realpath here should not be required once
-          // https://github.com/bazelbuild/bazel/issues/285 is fixed.
+          // https://github.com/google/bazel/issues/285 is fixed.
           .add(attr("$realpath", LABEL).cfg(HOST).exec()
               .value(env.getLabel("//tools/objc:realpath")))
           .add(attr("$swiftstdlibtoolzip_deploy", LABEL).cfg(HOST)

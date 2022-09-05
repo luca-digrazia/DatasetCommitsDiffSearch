@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
 
 /**
@@ -30,8 +29,7 @@ public class IosFrameworkBinaryRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
     return builder
-        .requiresConfigurationFragments(ObjcConfiguration.class, J2ObjcConfiguration.class,
-            AppleConfiguration.class)
+        .requiresConfigurationFragments(ObjcConfiguration.class, J2ObjcConfiguration.class)
         /*<!-- #BLAZE_RULE(ios_framework_binary).IMPLICIT_OUTPUTS -->
         <ul>
          <li><code><var>name</var>.xcodeproj/project.pbxproj</code>: An Xcode project file which
@@ -57,9 +55,13 @@ public class IosFrameworkBinaryRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = ios_framework_binary, TYPE = BINARY, FAMILY = Objective-C) -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>This rule produces a dynamic library for a framework by linking one or more Objective-C
 libraries.</p>
 
 ${IMPLICIT_OUTPUTS}
+
+${ATTRIBUTE_DEFINITION}
 
 <!-- #END_BLAZE_RULE -->*/

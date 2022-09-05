@@ -67,10 +67,6 @@ public interface JavaSemantics {
 
   public static final SafeImplicitOutputsFunction JAVA_BINARY_DEPLOY_JAR =
       fromTemplates("%{name}_deploy.jar");
-
-  public static final SafeImplicitOutputsFunction JAVA_UNSTRIPPED_BINARY_DEPLOY_JAR =
-      fromTemplates("%{name}_deploy.jar.unstripped");
-
   public static final SafeImplicitOutputsFunction JAVA_BINARY_DEPLOY_SOURCE_JAR =
       fromTemplates("%{name}_deploy-src.jar");
 
@@ -333,7 +329,7 @@ public interface JavaSemantics {
    */
   Artifact getLauncher(final RuleContext ruleContext, final JavaCommon common,
       DeployArchiveBuilder deployArchiveBuilder, Runfiles.Builder runfilesBuilder,
-      List<String> jvmFlags, JavaTargetAttributes.Builder attributesBuilder, boolean shouldStrip);
+      List<String> jvmFlags, JavaTargetAttributes.Builder attributesBuilder);
 
   /**
    * Add extra dependencies for runfiles of a Java binary.

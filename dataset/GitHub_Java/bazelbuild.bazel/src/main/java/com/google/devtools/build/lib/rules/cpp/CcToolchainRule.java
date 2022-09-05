@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,43 +15,30 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.BuildType.LICENSE;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.LABEL;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.Type.LICENSE;
+import static com.google.devtools.build.lib.packages.Type.STRING;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
-import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.syntax.Label;
 
 /**
  * Rule definition for compiler definition.
  */
 public final class CcToolchainRule implements RuleDefinition {
-
-  /**
-   * Determines if the given target is a cc_toolchain or one of its subclasses. New subclasses
-   * should be added to this method.
-   */
-  static boolean isCcToolchain(Target target) {
-    String ruleClass = ((Rule) target).getRuleClass();
-    return ruleClass.endsWith("cc_toolchain");
-  }
-
-  private static final LateBoundLabel<BuildConfiguration> LIBC_TOP =
+  private static final LateBoundLabel<BuildConfiguration> LIBC_LINK =
       new LateBoundLabel<BuildConfiguration>(CppConfiguration.class) {
         @Override
-        public Label getDefault(
-            Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
+        public Label getDefault(Rule rule, BuildConfiguration configuration) {
           return configuration.getFragment(CppConfiguration.class).getLibcLabel();
         }
       };
@@ -75,7 +62,7 @@ public final class CcToolchainRule implements RuleDefinition {
         .add(attr("supports_param_files", BOOLEAN).value(true))
         .add(attr("supports_header_parsing", BOOLEAN).value(false))
         // TODO(bazel-team): Should be using the TARGET configuration.
-        .add(attr(":libc_top", LABEL).cfg(HOST).value(LIBC_TOP))
+        .add(attr(":libc_link", LABEL).cfg(HOST).value(LIBC_LINK))
         .build();
   }
 
