@@ -1,9 +1,6 @@
 package org.hsweb.web.bean.common;
 
 import java.io.Serializable;
-import java.util.LinkedHashSet;
-import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * Created by 浩 on 2016-01-16 0016.
@@ -29,12 +26,12 @@ public class QueryParam extends SqlParam<QueryParam> implements Serializable {
     /**
      * 排序字段
      */
-    private Set<String> sortField = new LinkedHashSet<>();
+    private String sortField;
 
     /**
      * 排序方式 DESC 反序 ASC 正序
      */
-    private String sortOrder = "asc";
+    private String sortOrder;
 
 
     public QueryParam orderBy(String sortField) {
@@ -43,7 +40,7 @@ public class QueryParam extends SqlParam<QueryParam> implements Serializable {
     }
 
     public QueryParam orderBy(String sortField, boolean asc) {
-        this.sortField.add(sortField);
+        setSortField(sortField);
         setSortOrder(asc ? "asc" : "desc");
         return this;
     }
@@ -95,16 +92,11 @@ public class QueryParam extends SqlParam<QueryParam> implements Serializable {
         this.pageSize = pageSize;
     }
 
-    static String reg = "(?:')|(?:--)|(/\\*(?:.|[\\n\\r])*?\\*/)|"
-            + "(\\b(select|update|and|or|delete|insert|trancate|char|into|substr|ascii|declare|exec|count|master|into|drop|execute)\\b)";
-
-    static Pattern sqlPattern = Pattern.compile(reg, Pattern.CASE_INSENSITIVE);
-
-    public Set<String> getSortField() {
+    public String getSortField() {
         return sortField;
     }
 
-    public void setSortField(Set<String> sortField) {
+    public void setSortField(String sortField) {
         this.sortField = sortField;
     }
 
@@ -113,7 +105,7 @@ public class QueryParam extends SqlParam<QueryParam> implements Serializable {
     }
 
     public void setSortOrder(String sortOrder) {
-        if (sortOrder.contains("desc") || sortOrder.contains("DESC"))
+        if (!sortOrder.equalsIgnoreCase("asc"))
             sortOrder = "desc";
         this.sortOrder = sortOrder;
     }
