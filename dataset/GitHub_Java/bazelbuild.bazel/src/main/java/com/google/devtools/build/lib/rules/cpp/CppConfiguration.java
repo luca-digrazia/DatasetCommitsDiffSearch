@@ -271,6 +271,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
   private final CcToolchainFeatures toolchainFeatures;
   private final boolean supportsGoldLinker;
+  private final boolean supportsThinArchives;
   private final boolean supportsStartEndLib;
   private final boolean supportsDynamicLinker;
   private final boolean supportsInterfaceSharedObjects;
@@ -323,6 +324,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   private final ImmutableList<String> objcopyOptions;
   private final ImmutableList<String> ldOptions;
   private final ImmutableList<String> arOptions;
+  private final ImmutableList<String> arThinArchivesOptions;
 
   private final ImmutableMap<String, String> additionalMakeVariables;
 
@@ -333,7 +335,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   private final boolean stripBinaries;
   private final String solibDirectory;
   private final CompilationMode compilationMode;
-  private final boolean useLLVMCoverageMap;
 
   /**
    *  If true, the ConfiguredTarget is only used to get the necessary cross-referenced
@@ -354,7 +355,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     this.crosstoolTop = params.crosstoolTop;
     this.ccToolchainLabel = params.ccToolchainLabel;
     this.compilationMode = params.commonOptions.compilationMode;
-    this.useLLVMCoverageMap = params.commonOptions.useLLVMCoverageMapFormat;
     this.lipoContextCollector = cppOptions.lipoCollector;
 
 
@@ -409,6 +409,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     toolchain = addLegacyFeatures(toolchain);
     this.toolchainFeatures = new CcToolchainFeatures(toolchain);
     this.supportsGoldLinker = toolchain.getSupportsGoldLinker();
+    this.supportsThinArchives = toolchain.getSupportsThinArchives();
     this.supportsStartEndLib = toolchain.getSupportsStartEndLib();
     this.supportsInterfaceSharedObjects = toolchain.getSupportsInterfaceSharedObjects();
     this.supportsEmbeddedRuntimes = toolchain.getSupportsEmbeddedRuntimes();
@@ -514,6 +515,8 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     this.objcopyOptions = ImmutableList.copyOf(toolchain.getObjcopyEmbedFlagList());
     this.ldOptions = ImmutableList.copyOf(toolchain.getLdEmbedFlagList());
     this.arOptions = copyOrDefaultIfEmpty(toolchain.getArFlagList(), "rcsD");
+    this.arThinArchivesOptions = copyOrDefaultIfEmpty(
+        toolchain.getArThinArchivesFlagList(), "rcsDT");
 
     this.abi = toolchain.getAbiVersion();
     this.abiGlibcVersion = toolchain.getAbiLibcVersion();
@@ -674,8 +677,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
   
   private boolean linkActionsAreConfigured(CToolchain toolchain) {
-    
-    for (LinkTargetType type : Link.MANDATORY_LINK_TARGET_TYPES) {
+    for (LinkTargetType type : LinkTargetType.values()) {
       boolean typeIsConfigured = false;
       for (ActionConfig actionConfig : toolchain.getActionConfigList()) {
         if (actionConfig.getActionName().equals(type.getActionName())) {
@@ -949,30 +951,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
             toolchainBuilder);
       }
       if (!features.contains("coverage")) {
-        String compileFlags;
-        String linkerFlags;
-        if (useLLVMCoverageMap) {
-          compileFlags =
-              "flag_group {"
-              + " flag: '-fprofile-instr-generate'"
-              + " flag: '-fcoverage-mapping'"
-              + "}";
-          linkerFlags =
-              "  flag_group {"
-              + "  flag: '-fprofile-instr-generate'"
-              + "}";
-        } else {
-          compileFlags =
-              "  expand_if_all_available: 'gcov_gcno_file'"
-              + "flag_group {"
-              + "  flag: '-fprofile-arcs'"
-              + "  flag: '-ftest-coverage'"
-              + "}";
-          linkerFlags =
-              "  flag_group {"
-              + "  flag: '-lgcov'"
-              + "}";
-        }
         TextFormat.merge(
             ""
                 + "feature {"
@@ -985,13 +963,19 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
                 + "    action: 'c++-header-parsing'"
                 + "    action: 'c++-header-preprocessing'"
                 + "    action: 'c++-module-compile'"
-                + compileFlags
+                + "    expand_if_all_available: 'gcov_gcno_file'"
+                + "    flag_group {"
+                + "      flag: '-fprofile-arcs'"
+                + "      flag: '-ftest-coverage'"
+                + "    }"
                 + "  }"
                 + "  flag_set {"
                 + "    action: 'c++-link-interface-dynamic-library'"
                 + "    action: 'c++-link-dynamic-library'"
                 + "    action: 'c++-link-executable'"
-                + linkerFlags
+                + "    flag_group {"
+                + "      flag: '-lgcov'"
+                + "    }"
                 + "  }"
                 + "}",
             toolchainBuilder);
@@ -1254,6 +1238,13 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
+   * Returns whether the toolchain supports thin archives.
+   */
+  public boolean supportsThinArchives() {
+    return supportsThinArchives;
+  }
+
+  /**
    * Returns whether the toolchain supports the --start-lib/--end-lib options.
    */
   public boolean supportsStartEndLib() {
@@ -1319,14 +1310,20 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * Returns the type of archives being used.
    */
   public Link.ArchiveType archiveType() {
-    return useStartEndLib() ? Link.ArchiveType.START_END_LIB : Link.ArchiveType.REGULAR;
+    if (useStartEndLib()) {
+      return Link.ArchiveType.START_END_LIB;
+    }
+    if (useThinArchives()) {
+      return Link.ArchiveType.THIN;
+    }
+    return Link.ArchiveType.FAT;
   }
 
   /**
    * Returns the ar flags to be used.
    */
-  public ImmutableList<String> getArFlags() {
-    return arOptions;
+  public ImmutableList<String> getArFlags(boolean thinArchives) {
+    return thinArchives ? arThinArchivesOptions : arOptions;
   }
 
   /**
@@ -1707,6 +1704,10 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
   public boolean useStartEndLib() {
     return cppOptions.useStartEndLib && supportsStartEndLib();
+  }
+
+  public boolean useThinArchives() {
+    return cppOptions.useThinArchives && supportsThinArchives();
   }
 
   /**

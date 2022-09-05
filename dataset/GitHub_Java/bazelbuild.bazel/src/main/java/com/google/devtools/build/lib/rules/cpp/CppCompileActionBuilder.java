@@ -381,13 +381,13 @@ public class CppCompileActionBuilder {
   public CppCompileActionBuilder setOutputs(
       ArtifactCategory outputCategory, String outputName, boolean generateDotd) {
     this.outputFile = CppHelper.getCompileOutputArtifact(
-        ruleContext, CppHelper.getArtifactNameForCategory(ruleContext, outputCategory, outputName));
+        ruleContext, CppHelper.getCompileArtifactName(ruleContext, outputCategory, outputName));
     if (generateDotd) {
       String dotdFileName = CppHelper.getDotdFileName(ruleContext, outputCategory, outputName);
       if (configuration.getFragment(CppConfiguration.class).getInmemoryDotdFiles()) {
         // Just set the path, no artifact is constructed
         dotdFile = new DotdFile(
-            configuration.getBinDirectory(ruleContext.getRule().getRepository()).getExecPath()
+            configuration.getBinDirectory().getExecPath()
                 .getRelative(CppHelper.getObjDirectory(ruleContext.getLabel()))
                 .getRelative(dotdFileName));
       } else {

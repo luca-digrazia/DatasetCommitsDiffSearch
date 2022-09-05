@@ -514,8 +514,10 @@ public class CppHelper {
       return isCppRuntime
         ? SolibSymlinkAction.getCppRuntimeSymlink(
             ruleContext, artifact, solibDirOverride, configuration)
+            .getArtifact()
         : SolibSymlinkAction.getDynamicLibrarySymlink(
-            ruleContext, artifact, false, true, configuration);
+            ruleContext, artifact, false, true, configuration)
+            .getArtifact();
     } else {
       return artifact;
     }

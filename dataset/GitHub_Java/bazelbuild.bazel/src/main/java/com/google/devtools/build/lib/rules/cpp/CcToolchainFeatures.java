@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -731,20 +732,21 @@ public class CcToolchainFeatures implements Serializable {
     }
 
     /**
-     * Returns the artifact name that this pattern selects.
+     * Returns the artifact name that pattern selects for a given rule.
      */
-    public String getArtifactName(Map<String, String> variables) {
-      StringBuilder resultBuilder = new StringBuilder();
+    public String getArtifactName(RuleContext ruleContext, Map<String, String> extraVariables) {
+      StringBuilder result = new StringBuilder();
+      PathFragment nameFragment = new PathFragment(ruleContext.getLabel().getName());
       Variables.View artifactNameVariables =
           new Variables.Builder()
-              .addAllVariables(variables)
+              .addVariable("base_name", nameFragment.getBaseName())
+              .addAllVariables(extraVariables)
               .build()
-              .getView(this.variables);
+              .getView(variables);
       for (StringChunk chunk : chunks) {
-        chunk.expand(artifactNameVariables.getVariables(), resultBuilder);
+        chunk.expand(artifactNameVariables.getVariables(), result);
       }
-      String result = resultBuilder.toString();
-      return result.charAt(0) == '/' ? result.substring(1) : result;
+      return result.toString();
     }
   }
   
@@ -1451,10 +1453,8 @@ public class CcToolchainFeatures implements Serializable {
    * Returns the artifact selected by the toolchain for the given action type and action category,
    * or null if the category is not supported by the action config.
    */
-  String getArtifactNameForCategory(ArtifactCategory artifactCategory, String outputName)
-      throws ExpansionException {
-    PathFragment output = new PathFragment(outputName);
-
+  String getArtifactNameForCategory(ArtifactCategory artifactCategory, RuleContext ruleContext,
+      Map<String, String> extraVariables) throws ExpansionException {
     ArtifactNamePattern patternForCategory = null;
     for (ArtifactNamePattern artifactNamePattern : artifactNamePatterns) {
       if (artifactNamePattern.getArtifactCategory() == artifactCategory) {
@@ -1467,10 +1467,7 @@ public class CcToolchainFeatures implements Serializable {
               MISSING_ARTIFACT_NAME_PATTERN_ERROR_TEMPLATE, artifactCategory.getCategoryName()));
     }
 
-    return patternForCategory.getArtifactName(ImmutableMap.of(
-        "output_name", outputName,
-        "base_name", output.getBaseName(),
-        "output_directory", output.getParentDirectory().getPathString()));
+    return patternForCategory.getArtifactName(ruleContext, extraVariables);
   }
 
   /** Returns true if the toolchain defines an ArtifactNamePattern for the given category. */
