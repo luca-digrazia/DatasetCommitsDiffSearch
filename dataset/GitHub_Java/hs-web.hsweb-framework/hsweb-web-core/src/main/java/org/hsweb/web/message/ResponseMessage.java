@@ -7,16 +7,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.webbuilder.utils.common.DateTimeUtils;
 
-import javax.validation.ValidationException;
 import java.io.Serializable;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 响应消息。controller中处理后，返回此对象，响应请求结果给客户端。
  */
 public class ResponseMessage implements Serializable {
     private static final long serialVersionUID = 8992436576262574064L;
-    private transient static final Logger LOGGER = LoggerFactory.getLogger(ResponseMessage.class);
 
     /**
      * message处理类，可以自定义message处理方案
@@ -48,33 +47,43 @@ public class ResponseMessage implements Serializable {
      * 注册默认的消息处理
      */
     static {
-        registerMessageHandler(Object.class, (message, msg) -> msg);
+        registerMessageHandler(Object.class, new MessageHandler<Object>() {
+            @Override
+            public Object handle(ResponseMessage message, Object msg) {
+                return msg;
+            }
+        });
         //默认异常信息处理
-        registerMessageHandler(Throwable.class, (message, msg) -> {
-            LOGGER.error("", msg);
-            return msg.getMessage();
+        registerMessageHandler(Throwable.class, new MessageHandler<Throwable>() {
+            @Override
+            public Object handle(ResponseMessage message, Throwable e) {
+                LOGGER.error(e.getMessage(), e);
+                return e.getMessage();
+            }
         });
         //默认业务异常信息处理
-        registerMessageHandler(BusinessException.class, (message, msg) -> {
-            LOGGER.error(msg.getMessage());
-            return msg.getMessage();
+        registerMessageHandler(BusinessException.class, new MessageHandler<BusinessException>() {
+            @Override
+            public Object handle(ResponseMessage message, BusinessException e) {
+                LOGGER.error(e.getMessage());
+                return e.getMessage();
+            }
         });
         //权限验证异常
-        registerMessageHandler(AuthorizeException.class, (message, msg) -> {
-            message.setCode("502");
-            return msg.getMessage();
+        registerMessageHandler(AuthorizeException.class, new MessageHandler<AuthorizeException>() {
+            @Override
+            public Object handle(ResponseMessage message, AuthorizeException e) {
+                message.setCode("502");
+                return e.getMessage();
+            }
         });
-        //权限验证异常
-        registerMessageHandler(ValidationException.class, (message, msg) -> {
-            message.setCode("400");
-            return msg.getMessage();
-        });
-
     }
 
     private static final <T> MessageHandler<T> getMessageHandler(Class<T> type) {
         return handlers.get(type);
     }
+
+    private transient static final Logger LOGGER = LoggerFactory.getLogger(ResponseMessage.class);
 
     /**
      * 是否成功
@@ -108,8 +117,6 @@ public class ResponseMessage implements Serializable {
 
     private transient boolean onlyData;
 
-    private transient String callback;
-
     public ResponseMessage(boolean success, Object data) {
         this.code = success ? "200" : "500";
         if (data == null)
@@ -140,25 +147,17 @@ public class ResponseMessage implements Serializable {
 
 
     public ResponseMessage include(Class<?> type, String... fileds) {
-        return include(type, Arrays.asList(fileds));
-    }
-
-    public ResponseMessage include(Class<?> type, Collection<String> fileds) {
         if (includes == null)
             includes = new HashMap<>();
-        getStringListFormMap(includes, type).addAll(fileds);
-        return this;
-    }
-
-    public ResponseMessage exclude(Class type, Collection<String> fileds) {
-        if (excludes == null)
-            excludes = new HashMap<>();
-        getStringListFormMap(excludes, type).addAll(fileds);
+        getStringListFormMap(includes, type).addAll(Arrays.asList(fileds));
         return this;
     }
 
     public ResponseMessage exclude(Class type, String... fileds) {
-        return exclude(type, Arrays.asList(fileds));
+        if (excludes == null)
+            excludes = new HashMap<>();
+        getStringListFormMap(excludes, type).addAll(Arrays.asList(fileds));
+        return this;
     }
 
     protected Set<String> getStringListFormMap(Map<Class<?>, Set<String>> map, Class type) {
@@ -230,14 +229,5 @@ public class ResponseMessage implements Serializable {
 
     public boolean isOnlyData() {
         return onlyData;
-    }
-
-    public ResponseMessage callback(String callback) {
-        this.callback = callback;
-        return this;
-    }
-
-    public String getCallback() {
-        return callback;
     }
 }
