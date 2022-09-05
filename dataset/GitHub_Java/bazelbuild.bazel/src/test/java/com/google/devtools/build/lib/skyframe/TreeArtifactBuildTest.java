@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
@@ -58,17 +57,20 @@ import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+
 import javax.annotation.Nullable;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /** Timestamp builder tests for TreeArtifacts. */
 @RunWith(JUnit4.class)
@@ -131,35 +133,6 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     assertTrue(outOneFileTwo.getPath().exists());
     assertTrue(outTwoFileOne.getPath().exists());
     assertTrue(outTwoFileTwo.getPath().exists());
-  }
-
-  @Test
-  public void testInputTreeArtifactPerActionFileCache() throws Exception {
-    TouchingTestAction actionOne = new TouchingTestAction(outOneFileOne, outOneFileTwo);
-    registerAction(actionOne);
-
-    Artifact normalOutput = createDerivedArtifact("normal/out");
-    Action testAction = new TestAction(
-        TestAction.NO_EFFECT, ImmutableList.of(outOne), ImmutableList.of(normalOutput)) {
-      @Override
-      public void execute(ActionExecutionContext actionExecutionContext)
-          throws ActionExecutionException {
-        try {
-          // Check the file cache for input TreeFileArtifacts.
-          ActionInputFileCache fileCache = actionExecutionContext.getActionInputFileCache();
-          assertThat(fileCache.getDigest(outOneFileOne)).isNotNull();
-          assertThat(fileCache.getDigest(outOneFileTwo)).isNotNull();
-
-          // Touch the action output.
-          touchFile(normalOutput);
-        } catch (Exception e) {
-          throw new RuntimeException(e);
-        }
-      }
-    };
-
-    registerAction(testAction);
-    buildArtifact(normalOutput);
   }
 
   /** Unchanged TreeArtifact outputs should not cause reexecution. */
@@ -287,7 +260,11 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     assertTrue(buttonTwo.pressed);
   }
 
-  /** TreeArtifacts don't care about mtime, even when the file is empty. */
+  /**
+   * TreeArtifacts don't care about mtime, even when the file is empty.
+   * However, actions taking input non-Tree artifacts still care about mtime
+   * (although this behavior should go away).
+   */
   @Test
   public void testMTimeForTreeArtifactsDoesNotMatter() throws Exception {
     // For this test, we only touch the input file.
@@ -314,8 +291,9 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     buttonOne.pressed = buttonTwo.pressed = false;
     touchFile(in);
     buildArtifact(outTwo);
-    // mtime does not matter.
-    assertFalse(buttonOne.pressed);
+    // Per existing behavior, mtime matters for empty file Artifacts.
+    assertTrue(buttonOne.pressed);
+    // But this should be cached.
     assertFalse(buttonTwo.pressed);
 
     // None of the below following should result in anything being built.

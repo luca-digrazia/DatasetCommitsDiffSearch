@@ -18,7 +18,6 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
@@ -33,7 +32,7 @@ import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.actions.cache.Md5Digest;
+import com.google.devtools.build.lib.actions.cache.Digest;
 import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
@@ -44,13 +43,15 @@ import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Tests {@link PopulateTreeArtifactAction}. */
 @RunWith(JUnit4.class)
@@ -78,8 +79,8 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     }
 
     @Override
-    public void setDigestForVirtualArtifact(Artifact artifact, Md5Digest md5Digest) {
-      throw new UnsupportedOperationException(artifact.prettyPrint() + ": " + md5Digest);
+    public void setDigestForVirtualArtifact(Artifact artifact, Digest digest) {
+      throw new UnsupportedOperationException(artifact.prettyPrint() + ": " + digest);
     }
 
     @Override
@@ -316,12 +317,7 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
         .build();
 
     return new ActionExecutionContext(
-        executor,
-        null,
-        new TestMetadataHandler(storingExpandedTreeFileArtifacts),
-        null,
-        ImmutableMap.of(),
-        null);
+        executor, null, new TestMetadataHandler(storingExpandedTreeFileArtifacts), null, null);
   }
 
   private Artifact createTreeArtifact(String rootRelativePath) {
