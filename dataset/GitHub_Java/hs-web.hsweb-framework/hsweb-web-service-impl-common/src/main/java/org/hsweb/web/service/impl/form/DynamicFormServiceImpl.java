@@ -242,10 +242,9 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
     }
 
     protected String getRepeatDataId(String name, Map<String, Object> data) {
-        Table table = getTableByName(name);
         if (dynamicFormDataValidator != null) {
             for (DynamicFormDataValidator validator : dynamicFormDataValidator) {
-                String id = validator.getRepeatDataId(table, data);
+                String id = validator.getRepeatDataId(name, data);
                 if (id != null) {
                     return id;
                 }

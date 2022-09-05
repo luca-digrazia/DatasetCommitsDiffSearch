@@ -1,9 +1,13 @@
 package org.hsweb.web.service.form;
 
-import org.hsweb.web.bean.common.PagerResult;
-import org.hsweb.web.bean.common.QueryParam;
+import org.hsweb.ezorm.meta.TableMetaData;
+import org.hsweb.ezorm.run.Database;
+import org.hsweb.web.bean.common.*;
 import org.hsweb.web.bean.po.form.Form;
 
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
@@ -12,21 +16,39 @@ import java.util.Map;
  */
 public interface DynamicFormService {
 
-    void deploy(Form form) throws Exception;
+    Database getDefaultDatabase();
 
-    void unDeploy(Form form) throws Exception;
+    TableMetaData parseMeta(Form form);
 
-    <T> PagerResult<T> selectPager(String name, QueryParam param) throws Exception;
+    void deploy(Form form) throws SQLException;
 
-    <T> List<T> select(String name, QueryParam param) throws Exception;
+    void unDeploy(Form form);
 
-    int total(String name, QueryParam param) throws Exception;
+    <T> PagerResult<T> selectPager(String name, QueryParam param) throws SQLException;
 
-    int insert(String name, Map<String, Object> data) throws Exception;
+    <T> List<T> select(String name, QueryParam param) throws SQLException;
 
-    int delete(String name, Map<String, Object> data) throws Exception;
+    int total(String name, QueryParam param) throws SQLException;
 
-    int update(String name, Map<String, Object> data) throws Exception;
+    String insert(String name, Map<String, Object> data) throws SQLException;
 
-    <T> T selectByPk(String name, Object pk) throws Exception;
+    List<String> insert(String name, List<Map<String, Object>> dataList) throws SQLException;
+
+    String saveOrUpdate(String name, Map<String, Object> map) throws SQLException;
+
+    String saveOrUpdate(String name, List<Map<String, Object>> map) throws SQLException;
+
+    int delete(String name, DeleteParam param) throws SQLException;
+
+    boolean deleteByPk(String name, String pk) throws SQLException;
+
+    int update(String name, UpdateParam<Map<String, Object>> param) throws SQLException;
+
+    int updateByPk(String name, String pk, UpdateParam<Map<String, Object>> param) throws SQLException;
+
+    <T> T selectByPk(String name, Object pk) throws SQLException;
+
+    void exportExcel(String name, QueryParam param, OutputStream outputStream) throws Exception;
+
+    Map<String, Object> importExcel(String name, InputStream inputStream);
 }
