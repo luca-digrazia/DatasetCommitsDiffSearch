@@ -16,8 +16,10 @@ package com.google.devtools.build.lib.rules.cpp;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCaseForJunit4;
+import com.google.devtools.build.lib.testutil.TestConstants;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -26,7 +28,7 @@ import org.junit.runners.JUnit4;
  * Tests for Skylark providers for cpp rules.
  */
 @RunWith(JUnit4.class)
-public class CcSkylarkApiProviderTest extends BuildViewTestCase {
+public class CcSkylarkApiProviderTest extends BuildViewTestCaseForJunit4 {
   private CcSkylarkApiProvider getApi(String label) throws Exception {
     RuleConfiguredTarget rule = (RuleConfiguredTarget) getConfiguredTarget(label);
     return (CcSkylarkApiProvider) rule.get(CcSkylarkApiProvider.NAME);
@@ -125,6 +127,10 @@ public class CcSkylarkApiProviderTest extends BuildViewTestCase {
         "    name = 'check_lib',",
         "    defines = ['foo'],",
         ")");
-    assertThat(getApi("//pkg:check").getCcFlags()).contains("-Dfoo");
+    // The particular values for include directories are slightly
+    // fragile because the build system changes. But check for at
+    // least one normal include, one system include, and one define.
+    assertThat(getApi("//pkg:check").getCcFlags())
+        .containsAllOf("-iquote .", "-isystem " + TestConstants.GCC_INCLUDE_PATH, "-Dfoo");
   }
 }

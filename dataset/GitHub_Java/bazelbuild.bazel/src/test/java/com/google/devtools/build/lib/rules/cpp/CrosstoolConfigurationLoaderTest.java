@@ -29,14 +29,12 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
-import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.analysis.util.AnalysisMock;
+import com.google.devtools.build.lib.analysis.util.AnalysisTestCaseForJunit4;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.testutil.TestConstants;
-import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 
@@ -53,15 +51,14 @@ import java.util.Collections;
  * Tests for {@link CppConfigurationLoader}.
  */
 @RunWith(JUnit4.class)
-public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
+public class CrosstoolConfigurationLoaderTest extends AnalysisTestCaseForJunit4 {
   private static final Collection<String> NO_FEATURES = Collections.emptySet();
 
   private CppConfiguration create(CppConfigurationLoader loader, String... args) throws Exception {
     ConfigurationEnvironment env =
         new ConfigurationEnvironment.TargetProviderEnvironment(
             skyframeExecutor.getPackageManager(), reporter, directories);
-    return loader.create(env, BuildOptions.of(
-        TestRuleClassProvider.getRuleClassProvider().getOptionFragments(), args));
+    return loader.create(env, BuildOptions.of(AnalysisMock.get().getBuildOptions(), args));
   }
 
   private CppConfigurationLoader loader(String crosstoolFileContents) throws IOException {
@@ -673,7 +670,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
         PackageIdentifier.create(
             TestConstants.TOOLS_REPOSITORY,
             new PathFragment(
-                new PathFragment(TestConstants.TOOLS_REPOSITORY_PATH), new PathFragment(path)));
+                new PathFragment(TestConstants.MOCK_CROSSTOOL_PATH), new PathFragment(path)));
     return packageIdentifier.getPathFragment();
   }
 
@@ -992,17 +989,17 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
                 + "  dynamic_runtimes_filegroup: \"dynamic-group\""
                 + "}\n");
 
-    final PackageIdentifier ctTop = MockCcSupport.getMockCrosstoolsTop();
+    final String ctTop = TestConstants.TOOLS_REPOSITORY + "//" + TestConstants.MOCK_CROSSTOOL_PATH;
 
     CppConfiguration defaultLibs = create(loader, "--cpu=piii");
     assertEquals(
-        Label.create(ctTop, "static-runtime-libs-piii"), defaultLibs.getStaticRuntimeLibsLabel());
+        ctTop + ":static-runtime-libs-piii", defaultLibs.getStaticRuntimeLibsLabel().toString());
     assertEquals(
-        Label.create(ctTop, "dynamic-runtime-libs-piii"), defaultLibs.getDynamicRuntimeLibsLabel());
+        ctTop + ":dynamic-runtime-libs-piii", defaultLibs.getDynamicRuntimeLibsLabel().toString());
 
     CppConfiguration customLibs = create(loader, "--cpu=k8");
-    assertEquals(Label.create(ctTop, "static-group"), customLibs.getStaticRuntimeLibsLabel());
-    assertEquals(Label.create(ctTop, "dynamic-group"), customLibs.getDynamicRuntimeLibsLabel());
+    assertEquals(ctTop + ":static-group", customLibs.getStaticRuntimeLibsLabel().toString());
+    assertEquals(ctTop + ":dynamic-group", customLibs.getDynamicRuntimeLibsLabel().toString());
   }
 
   /*

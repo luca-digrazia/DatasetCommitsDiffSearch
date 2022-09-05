@@ -20,7 +20,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCaseForJunit4;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -31,7 +31,7 @@ import org.junit.runners.JUnit4;
  * Tests for {@link CppCompilationContext}.
  */
 @RunWith(JUnit4.class)
-public class CppCompilationContextTest extends BuildViewTestCase {
+public class CppCompilationContextTest extends BuildViewTestCaseForJunit4 {
 
   @Before
   public final void createBuildFile() throws Exception {
@@ -118,11 +118,6 @@ public class CppCompilationContextTest extends BuildViewTestCase {
         new CppCompilationContext.Builder(getRuleContext(fooBin))
             .setProvideTransitiveModuleMaps(true).build(NULL_ACTION_OWNER, middlemanFactory);
     
-    CppCompilationContext fooContextNotUsingHeaderModules =
-        new CppCompilationContext.Builder(getRuleContext(fooBin))
-            .setUseHeaderModules(true)
-            .build(NULL_ACTION_OWNER, middlemanFactory);
-
     new EqualsTester()
         .addEqualityGroup(fooContextA1, fooContextA2, barContext)
         .addEqualityGroup(fooContextB)
@@ -137,7 +132,6 @@ public class CppCompilationContextTest extends BuildViewTestCase {
         .addEqualityGroup(fooContextWithInheritedHeaderModule)
         .addEqualityGroup(fooContextWithTransitivelyInheritedHeaderModule)
         .addEqualityGroup(fooContextUsingHeaderModules)
-        .addEqualityGroup(fooContextNotUsingHeaderModules)
         .testEquals();
   }
 }
