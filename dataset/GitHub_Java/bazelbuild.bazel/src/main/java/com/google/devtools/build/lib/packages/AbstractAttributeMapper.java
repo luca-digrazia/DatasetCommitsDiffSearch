@@ -15,10 +15,12 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
 import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.vfs.PathFragment;
 
 import javax.annotation.Nullable;
 
@@ -30,6 +32,19 @@ import javax.annotation.Nullable;
  * data before exposing it to consumers.
  */
 public abstract class AbstractAttributeMapper implements AttributeMap {
+
+  /**
+   * Package names that aren't made relative to the current repository because they mean special
+   * things to Bazel.
+   */
+  private static final ImmutableSet<PathFragment> ABSOLUTE_PACKAGE_NAMES = ImmutableSet.of(
+      // dependencies that are a function of the configuration
+      new PathFragment("tools/defaults"),
+      // Visibility is labels aren't actually targets
+      new PathFragment("visibility"),
+      // There is only one //external package
+      Label.EXTERNAL_PACKAGE_NAME);
+
   private final Package pkg;
   private final RuleClass ruleClass;
   private final Label ruleLabel;
@@ -78,7 +93,6 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
    *         type. This happens whether or not it's a computed default.
    */
   @VisibleForTesting // Should be protected
-  @Nullable
   public <T> Attribute.ComputedDefault getComputedDefault(String attributeName, Type<T> type) {
     int index = getIndexWithTypeCheck(attributeName, type);
     Object value = attributes.getAttributeValue(index);
@@ -157,7 +171,13 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
     Object value = get(attribute.getName(), type);
     if (value != null) { // null values are particularly possible for computed defaults.
       for (Label label : extractLabels(type, value)) {
-        Label absoluteLabel = ruleLabel.resolveRepositoryRelative(label);
+        Label absoluteLabel;
+        if (label.getPackageIdentifier().getRepository().isDefault()
+            && ABSOLUTE_PACKAGE_NAMES.contains(label.getPackageIdentifier().getPackageFragment())) {
+          absoluteLabel = label;
+        } else {
+          absoluteLabel = ruleLabel.resolveRepositoryRelative(label);
+        }
         observer.acceptLabelAttribute(absoluteLabel, attribute);
       }
     }
@@ -208,7 +228,7 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
     Attribute attr = ruleClass.getAttribute(index);
     if (attr.getType() != type) {
       throw new IllegalArgumentException("Attribute " + attrName
-          + " is of type " + attr.getType() + " and not of type " + type + " in rule " + ruleLabel);
+          + " is not of type " + type + " in rule " + ruleLabel);
     }
     return index;
   }
