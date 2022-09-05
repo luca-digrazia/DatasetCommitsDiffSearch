@@ -58,7 +58,6 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration.Configuratio
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.apple.Platform;
-import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.objc.BundleSupport.ExtraActoolArgs;
 import com.google.devtools.build.lib.rules.objc.Bundling.Builder;
 import com.google.devtools.build.lib.shell.ShellUtils;
@@ -1334,7 +1333,7 @@ public final class ReleaseBundlingSupport {
         BuildOptions splitOptions = buildOptions.clone();
         setArchitectureOptions(splitOptions, iosCpu);
         setAdditionalOptions(splitOptions, buildOptions);
-        splitOptions.get(AppleCommandLineOptions.class).configurationDistinguisher =
+        splitOptions.get(ObjcCommandLineOptions.class).configurationDistinguisher =
             getConfigurationDistinguisher();
         splitBuildOptions.add(splitOptions);
       }
@@ -1361,8 +1360,7 @@ public final class ReleaseBundlingSupport {
     protected void setAdditionalOptions(BuildOptions splitOptions, BuildOptions originalOptions) {}
 
     private void setArchitectureOptions(BuildOptions splitOptions, String iosCpu) {
-      splitOptions.get(AppleCommandLineOptions.class).applePlatformType = PlatformType.IOS;
-      splitOptions.get(AppleCommandLineOptions.class).appleSplitCpu = iosCpu;
+      splitOptions.get(ObjcCommandLineOptions.class).iosSplitCpu = iosCpu;
       splitOptions.get(AppleCommandLineOptions.class).iosCpu = iosCpu;
       if (splitOptions.get(ObjcCommandLineOptions.class).enableCcDeps) {
         // Only set the (CC-compilation) CPU for dependencies if explicitly required by the user.
