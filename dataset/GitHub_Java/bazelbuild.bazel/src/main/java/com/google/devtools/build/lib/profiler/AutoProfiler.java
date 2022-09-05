@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,16 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.profiler;
 
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.Clock;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
-
-import javax.annotation.Nullable;
 
 /**
  * A convenient way to actively get access to timing information (e.g. for logging and/or
@@ -106,8 +104,7 @@ public class AutoProfiler implements AutoCloseable {
    * {@link #logged} et al.
    */
   public interface LoggingElapsedTimeReceiverFactory {
-    ElapsedTimeReceiver create(
-        String taskDescription, Logger logger, long minTimeForLogging, TimeUnit timeUnit);
+    ElapsedTimeReceiver create(String taskDescription, Logger logger, TimeUnit timeUnit);
   }
 
   /**
@@ -131,31 +128,14 @@ public class AutoProfiler implements AutoCloseable {
   }
 
   /**
-   * Returns an {@link AutoProfiler} that, when closed, logs the elapsed time in the given
+   * Returns an {@link AutoProfiler} that, when closed, logs the elapsed time the given
    * {@link TimeUnit} to the given {@link Logger}.
    *
    * <p>The returned {@link AutoProfiler} is thread-safe.
    */
   public static AutoProfiler logged(String taskDescription, Logger logger, TimeUnit timeUnit) {
-    return create(
-        LOGGING_ELAPSED_TIME_RECEIVER_FACTORY_REF
-            .get()
-            .create(taskDescription, logger, 0L, timeUnit));
-  }
-
-  /**
-   * Returns an {@link AutoProfiler} that, when closed, logs the elapsed time in milliseconds to the
-   * given {@link Logger} if it is greater than {@code minTimeForLoggingInMilliseconds}.
-   *
-   * <p>The returned {@link AutoProfiler} is thread-safe.
-   */
-  public static AutoProfiler logged(
-      String taskDescription, Logger logger, long minTimeForLoggingInMilliseconds) {
-    return create(
-        LOGGING_ELAPSED_TIME_RECEIVER_FACTORY_REF
-            .get()
-            .create(
-                taskDescription, logger, minTimeForLoggingInMilliseconds, TimeUnit.MILLISECONDS));
+    return create(LOGGING_ELAPSED_TIME_RECEIVER_FACTORY_REF.get().create(
+        taskDescription, logger, timeUnit));
   }
 
   /**
@@ -178,10 +158,8 @@ public class AutoProfiler implements AutoCloseable {
       ProfilerTask profilerTaskType, Logger logger) {
     ElapsedTimeReceiver profilingReceiver =
         new ProfilingElapsedTimeReceiver(taskDescription, profilerTaskType);
-    ElapsedTimeReceiver loggingReceiver =
-        LOGGING_ELAPSED_TIME_RECEIVER_FACTORY_REF
-            .get()
-            .create(taskDescription, logger, 0L, TimeUnit.MILLISECONDS);
+    ElapsedTimeReceiver loggingReceiver = LOGGING_ELAPSED_TIME_RECEIVER_FACTORY_REF.get().create(
+        taskDescription, logger, TimeUnit.MILLISECONDS);
     return create(new SequencedElapsedTimeReceiver(profilingReceiver, loggingReceiver));
   }
 
@@ -263,56 +241,33 @@ public class AutoProfiler implements AutoCloseable {
     }
   }
 
-  /**
-   * {@link ElapsedTimeReceiver} that logs a message in {@link #accept} if the elapsed time is at
-   * least a given threshold.
-   */
-  public static class LoggingElapsedTimeReceiver implements ElapsedTimeReceiver {
+  private static class LoggingElapsedTimeReceiver implements ElapsedTimeReceiver {
     private static final LoggingElapsedTimeReceiverFactory FACTORY =
         new LoggingElapsedTimeReceiverFactory() {
           @Override
-          public ElapsedTimeReceiver create(
-              String taskDescription, Logger logger, long minTimeForLogging, TimeUnit timeUnit) {
-            return new LoggingElapsedTimeReceiver(
-                taskDescription, logger, minTimeForLogging, timeUnit);
+          public ElapsedTimeReceiver create(String taskDescription, Logger logger,
+              TimeUnit timeUnit) {
+            return new LoggingElapsedTimeReceiver(taskDescription, logger, timeUnit);
           }
         };
 
     private final String taskDescription;
-    protected final Logger logger;
+    private final Logger logger;
     private final TimeUnit timeUnit;
-    private final long minNanosForLogging;
 
-    protected LoggingElapsedTimeReceiver(
-        String taskDescription, Logger logger, long minTimeForLogging, TimeUnit timeUnit) {
+    private LoggingElapsedTimeReceiver(String taskDescription, Logger logger, TimeUnit timeUnit) {
       this.taskDescription = taskDescription;
       this.logger = logger;
       this.timeUnit = timeUnit;
-      this.minNanosForLogging = timeUnit.toNanos(minTimeForLogging);
-    }
-
-    /**
-     * Returns a message about the amount of time spent doing a task if {@code elapsedTimeNanos} is
-     * at least {@link #minNanosForLogging} and null otherwise.
-     */
-    @Nullable
-    protected String loggingMessage(long elapsedTimeNanos) {
-      if (elapsedTimeNanos >= minNanosForLogging) {
-        return String.format(
-            "Spent %d %s doing %s",
-            timeUnit.convert(elapsedTimeNanos, TimeUnit.NANOSECONDS),
-            timeUnit.toString().toLowerCase(),
-            taskDescription);
-      } else {
-        return null;
-      }
     }
 
     @Override
     public void accept(long elapsedTimeNanos) {
-      String logMessage = loggingMessage(elapsedTimeNanos);
-      if (logMessage != null) {
-        logger.info(logMessage);
+      if (elapsedTimeNanos > 0) {
+        logger.info(String.format("Spent %d %s doing %s",
+            timeUnit.convert(elapsedTimeNanos, TimeUnit.NANOSECONDS),
+            timeUnit.toString().toLowerCase(),
+            taskDescription));
       }
     }
   }

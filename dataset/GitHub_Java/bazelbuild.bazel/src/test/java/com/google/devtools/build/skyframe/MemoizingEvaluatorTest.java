@@ -264,18 +264,6 @@ public class MemoizingEvaluatorTest {
   }
 
   @Test
-  public void deleteDirtyCleanedValue() throws Exception {
-    SkyKey leafKey = GraphTester.skyKey("leafKey");
-    tester.getOrCreate(leafKey).setConstantValue(new StringValue("value"));
-    SkyKey topKey = GraphTester.skyKey("topKey");
-    tester.getOrCreate(topKey).addDependency(leafKey).setComputedValue(CONCATENATE);
-
-    assertThat(tester.evalAndGet(/*keepGoing=*/false, topKey)).isEqualTo(new StringValue("value"));
-    failBuildAndRemoveValue(leafKey);
-    tester.evaluator.deleteDirty(0);
-  }
-
-  @Test
   public void deleteNonexistentValues() throws Exception {
     tester.getOrCreate("d1").setConstantValue(new StringValue("1"));
     tester.delete("d1");
@@ -1478,8 +1466,7 @@ public class MemoizingEvaluatorTest {
         new DeterministicInMemoryGraph(
             new Listener() {
               @Override
-              public void accept(
-                  SkyKey key, EventType type, Order order, @Nullable Object context) {
+              public void accept(SkyKey key, EventType type, Order order, Object context) {
                 if (!delayTopSignaling.get()) {
                   return;
                 }
@@ -1491,7 +1478,7 @@ public class MemoizingEvaluatorTest {
                 }
                 if (key.equals(slowAddingDep)
                     && type == EventType.ADD_REVERSE_DEP
-                    && top.equals(context)
+                    && context.equals(top)
                     && order == Order.BEFORE) {
                   // If top is trying to declare a dep on slowAddingDep, wait until firstKey has
                   // signaled top. Then this add dep will return DONE and top will be signaled,
@@ -1575,25 +1562,6 @@ public class MemoizingEvaluatorTest {
   @Test
   public void dirtyChildEnqueuesParentDuringCheckDependencies_NoThrow() throws Exception {
     dirtyChildEnqueuesParentDuringCheckDependencies(/*throwError=*/false);
-  }
-
-  @Test
-  public void dirtyThenDeleted() throws Exception {
-    initializeTester();
-    SkyKey topKey = GraphTester.skyKey("top");
-    SkyKey leafKey = GraphTester.skyKey("leaf");
-    tester.getOrCreate(topKey).addDependency(leafKey).setComputedValue(CONCATENATE);
-    tester.set(leafKey, new StringValue("leafy"));
-    assertThat(tester.evalAndGet(/*keepGoing=*/false, topKey)).isEqualTo(new StringValue("leafy"));
-    tester.getOrCreate(topKey, /*markAsModified=*/true);
-    tester.invalidate();
-    assertThat(tester.evalAndGet(/*keepGoing=*/false, leafKey))
-        .isEqualTo(new StringValue("leafy"));
-    tester.delete("top");
-    tester.getOrCreate(leafKey, /*markAsModified=*/true);
-    tester.invalidate();
-    assertThat(tester.evalAndGet(/*keepGoing=*/false, leafKey))
-        .isEqualTo(new StringValue("leafy"));
   }
 
   /**
@@ -2488,7 +2456,7 @@ public class MemoizingEvaluatorTest {
     // -> some top key builds.
     result = tester.eval(/*keepGoing=*/false, topErrorFirstKey, topBubbleKey);
     assertTrue(result.hasError());
-    assertWithMessage(result.toString()).that(result.getError(topErrorFirstKey)).isNotNull();
+    assertNotNull(result.getError(topErrorFirstKey));
   }
 
   @Test
@@ -3121,18 +3089,12 @@ public class MemoizingEvaluatorTest {
                 return null;
               }
             });
-    EvaluationResult<StringValue> result =
-        tester.eval(/*keepGoing=*/false, cachedParentKey, uncachedParentKey, waitForShutdownKey);
-    assertWithMessage(result.toString()).that(result.hasError()).isTrue();
+    tester.eval(/*keepGoing=*/false, cachedParentKey, uncachedParentKey, waitForShutdownKey);
     Pair<SkyKey, ? extends Exception> unexpected = unexpectedException.get();
     if (unexpected != null) {
       throw new AssertionError(unexpected.first + ", " + unexpected.second + ", "
           + Arrays.toString(unexpected.second.getStackTrace()));
     }
-    tester.getOrCreate(invalidatedKey, /*markAsModified=*/true);
-    tester.invalidate();
-    result = tester.eval(/*keepGoing=*/false, cachedParentKey, uncachedParentKey);
-    assertWithMessage(result.toString()).that(result.hasError()).isTrue();
   }
 
   @Test

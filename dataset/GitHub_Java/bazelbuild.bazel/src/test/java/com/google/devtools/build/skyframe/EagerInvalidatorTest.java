@@ -183,11 +183,6 @@ public class EagerInvalidatorTest {
       }
 
       @Override
-      public void computed(SkyKey skyKey, long elapsedTimeNanos) {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
       public void evaluated(SkyKey skyKey, Supplier<SkyValue> skyValueSupplier,
           EvaluationState state) {
         throw new UnsupportedOperationException();
@@ -221,11 +216,6 @@ public class EagerInvalidatorTest {
 
       @Override
       public void enqueueing(SkyKey skyKey) {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public void computed(SkyKey skyKey, long elapsedTimeNanos) {
         throw new UnsupportedOperationException();
       }
 
@@ -265,11 +255,6 @@ public class EagerInvalidatorTest {
 
       @Override
       public void enqueueing(SkyKey skyKey) {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public void computed(SkyKey skyKey, long elapsedTimeNanos) {
         throw new UnsupportedOperationException();
       }
 
@@ -385,11 +370,6 @@ public class EagerInvalidatorTest {
       }
 
       @Override
-      public void computed(SkyKey skyKey, long elapsedTimeNanos) {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
       public void evaluated(SkyKey skyKey, Supplier<SkyValue> skyValueSupplier,
           EvaluationState state) {
         throw new UnsupportedOperationException();
@@ -415,11 +395,6 @@ public class EagerInvalidatorTest {
 
       @Override
       public void enqueueing(SkyKey skyKey) {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public void computed(SkyKey skyKey, long elapsedTimeNanos) {
         throw new UnsupportedOperationException();
       }
 
@@ -516,11 +491,6 @@ public class EagerInvalidatorTest {
 
             @Override
             public void enqueueing(SkyKey skyKey) {
-              throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public void computed(SkyKey skyKey, long elapsedTimeNanos) {
               throw new UnsupportedOperationException();
             }
 
