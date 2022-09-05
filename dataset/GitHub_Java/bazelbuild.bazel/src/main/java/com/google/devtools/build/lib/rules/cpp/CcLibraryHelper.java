@@ -760,14 +760,13 @@ public final class CcLibraryHelper {
             collectModuleMaps(),
             additionalExportedHeaders,
             featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES),
-            featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAP_HOME_CWD),
-            featureConfiguration.isEnabled(CppRuleClasses.GENERATE_SUBMODULES));
+            featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAP_HOME_CWD));
         ruleContext.registerAction(action);
       }
       if (model.getGeneratesPicHeaderModule()) {
         contextBuilder.setPicHeaderModule(model.getPicHeaderModule(cppModuleMap.getArtifact()));
       }
-      if (model.getGeneratesNoPicHeaderModule()) {
+      if (model.getGeratesNoPicHeaderModule()) {
         contextBuilder.setHeaderModule(model.getHeaderModule(cppModuleMap.getArtifact()));
       }
     }
