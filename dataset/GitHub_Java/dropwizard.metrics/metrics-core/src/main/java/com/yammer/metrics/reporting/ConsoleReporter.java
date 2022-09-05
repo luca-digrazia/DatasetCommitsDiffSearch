@@ -1,10 +1,5 @@
 package com.yammer.metrics.reporting;
 
-import com.yammer.metrics.Metrics;
-import com.yammer.metrics.core.*;
-import com.yammer.metrics.util.MetricPredicate;
-import com.yammer.metrics.util.Utils;
-
 import java.io.PrintStream;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -13,11 +8,23 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.CounterMetric;
+import com.yammer.metrics.core.GaugeMetric;
+import com.yammer.metrics.core.HistogramMetric;
+import com.yammer.metrics.core.MeterMetric;
+import com.yammer.metrics.core.Metered;
+import com.yammer.metrics.core.Metric;
+import com.yammer.metrics.core.MetricsRegistry;
+import com.yammer.metrics.core.TimerMetric;
+import com.yammer.metrics.util.MetricPredicate;
+import com.yammer.metrics.util.Utils;
+
 /**
  * A simple reporters which prints out application metrics to a
  * {@link PrintStream} periodically.
  */
-public class ConsoleReporter extends AbstractPollingReporter {
+public class ConsoleReporter extends AbstractReporter {
     private final PrintStream out;
     private final MetricPredicate predicate;
 
@@ -65,6 +72,16 @@ public class ConsoleReporter extends AbstractPollingReporter {
         super(metricsRegistry, "console-reporter");
         this.out = out;
         this.predicate = predicate;
+    }
+
+    /**
+     * Starts printing output to the specified {@link PrintStream}.
+     *
+     * @param period the period between successive displays
+     * @param unit the time unit of {@code period}
+     */
+    public void start(long period, TimeUnit unit) {
+        tickThread.scheduleAtFixedRate(this, period, period, unit);
     }
 
     @Override
