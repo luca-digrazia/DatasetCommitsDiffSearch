@@ -161,8 +161,8 @@ final class WorkerSpawnStrategy implements SpawnActionContext {
       expandArgument(requestBuilder, Iterables.getLast(spawn.getArguments()));
 
       List<ActionInput> inputs =
-          ActionInputHelper.expandArtifacts(
-              spawn.getInputFiles(), actionExecutionContext.getArtifactExpander());
+          ActionInputHelper.expandMiddlemen(
+              spawn.getInputFiles(), actionExecutionContext.getMiddlemanExpander());
 
       for (ActionInput input : inputs) {
         ByteString digest = inputFileCache.getDigest(input);
@@ -282,7 +282,7 @@ final class WorkerSpawnStrategy implements SpawnActionContext {
   }
 
   @Override
-  public boolean willExecuteRemotely(boolean remotable) {
+  public boolean isRemotable(String mnemonic, boolean remotable) {
     return false;
   }
 

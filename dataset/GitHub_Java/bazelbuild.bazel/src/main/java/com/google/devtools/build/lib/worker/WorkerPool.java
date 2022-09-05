@@ -14,12 +14,15 @@
 package com.google.devtools.build.lib.worker;
 
 import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableSet;
-import java.io.IOException;
-import java.util.concurrent.atomic.AtomicInteger;
-import javax.annotation.concurrent.ThreadSafe;
+import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.vfs.Path;
+
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
+
+import java.io.IOException;
+
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * A worker pool that spawns multiple workers and delegates work to them.
@@ -29,93 +32,42 @@ import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
  */
 @ThreadSafe
 final class WorkerPool extends GenericKeyedObjectPool<WorkerKey, Worker> {
-  private final AtomicInteger highPriorityWorkersInUse = new AtomicInteger(0);
-  private final ImmutableSet<String> highPriorityWorkerMnemonics;
+  final WorkerFactory workerFactory;
 
-  /**
-   * @param factory worker factory
-   * @param config pool configuration
-   * @param highPriorityWorkers mnemonics of high priority workers
-   */
-  public WorkerPool(
-      WorkerFactory factory,
-      GenericKeyedObjectPoolConfig config,
-      Iterable<String> highPriorityWorkers) {
+  public WorkerPool(WorkerFactory factory, GenericKeyedObjectPoolConfig config) {
     super(factory, config);
-    highPriorityWorkerMnemonics = ImmutableSet.copyOf(highPriorityWorkers);
+    this.workerFactory = factory;
   }
 
-  /**
-   * Gets a worker.
-   *
-   * @param key worker key
-   * @return a worker
-   */
+  public void setLogDirectory(Path logDir) {
+    this.workerFactory.setLogDirectory(logDir);
+  }
+
+  public void setReporter(Reporter reporter) {
+    this.workerFactory.setReporter(reporter);
+  }
+
+  public void setVerbose(boolean verbose) {
+    this.workerFactory.setVerbose(verbose);
+  }
+
   @Override
   public Worker borrowObject(WorkerKey key) throws IOException, InterruptedException {
-    Worker result;
     try {
-      result = super.borrowObject(key);
+      return super.borrowObject(key);
     } catch (Throwable t) {
       Throwables.propagateIfPossible(t, IOException.class, InterruptedException.class);
       throw new RuntimeException("unexpected", t);
     }
-
-    if (highPriorityWorkerMnemonics.contains(key.getMnemonic())) {
-      highPriorityWorkersInUse.incrementAndGet();
-    } else {
-      try {
-        waitForHighPriorityWorkersToFinish();
-      } catch (InterruptedException e) {
-        returnObject(key, result);
-        throw e;
-      }
-    }
-
-    return result;
-  }
-
-  @Override
-  public void returnObject(WorkerKey key, Worker obj) {
-    if (highPriorityWorkerMnemonics.contains(key.getMnemonic())) {
-      decrementHighPriorityWorkerCount();
-    }
-    super.returnObject(key, obj);
   }
 
   @Override
   public void invalidateObject(WorkerKey key, Worker obj) throws IOException, InterruptedException {
-    if (highPriorityWorkerMnemonics.contains(key.getMnemonic())) {
-      decrementHighPriorityWorkerCount();
-    }
     try {
       super.invalidateObject(key, obj);
     } catch (Throwable t) {
       Throwables.propagateIfPossible(t, IOException.class, InterruptedException.class);
       throw new RuntimeException("unexpected", t);
-    }
-  }
-
-  // Decrements the high-priority workers counts and pings waiting threads if appropriate.
-  private void decrementHighPriorityWorkerCount() {
-    if (highPriorityWorkersInUse.decrementAndGet() <= 1) {
-      synchronized (highPriorityWorkersInUse) {
-        highPriorityWorkersInUse.notifyAll();
-      }
-    }
-  }
-
-  // Returns once less than two high-priority workers are running.
-  private void waitForHighPriorityWorkersToFinish() throws InterruptedException {
-    // Fast path for the case where the high-priority workers feature is not in use.
-    if (highPriorityWorkerMnemonics.isEmpty()) {
-      return;
-    }
-
-    while (highPriorityWorkersInUse.get() > 1) {
-      synchronized (highPriorityWorkersInUse) {
-        highPriorityWorkersInUse.wait();
-      }
     }
   }
 }
