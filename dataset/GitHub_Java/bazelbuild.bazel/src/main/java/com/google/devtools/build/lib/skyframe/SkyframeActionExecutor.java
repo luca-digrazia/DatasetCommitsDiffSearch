@@ -92,7 +92,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -100,8 +99,6 @@ import javax.annotation.Nullable;
  * all output artifacts were created, error reporting, etc.
  */
 public final class SkyframeActionExecutor implements ActionExecutionContextFactory {
-  private static final Logger logger = Logger.getLogger(SkyframeActionExecutor.class.getName());
-
   private Reporter reporter;
   private final AtomicReference<EventBus> eventBus;
   private final ResourceManager resourceManager;
@@ -877,22 +874,23 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
   }
 
   /**
-   * For each of the action's outputs that is a regular file (not a symbolic link or directory),
-   * make it read-only and executable.
+   * For each of the action's outputs that is a regular file (not a symbolic
+   * link or directory), make it read-only and executable.
    *
-   * <p>Making the outputs read-only helps preventing accidental editing of them (e.g. in case of
-   * generated source code), while making them executable helps running generated files (such as
-   * generated shell scripts) on the command line.
+   * <p>Making the outputs read-only helps preventing accidental editing of
+   * them (e.g. in case of generated source code), while making them executable
+   * helps running generated files (such as generated shell scripts) on the
+   * command line.
    *
    * <p>May execute in a worker thread.
    *
-   * <p>Note: setting these bits maintains transparency regarding the locality of the build; because
-   * the remote execution engine sets them, they should be set for local builds too.
+   * <p>Note: setting these bits maintains transparency regarding the locality of the build;
+   * because the remote execution engine sets them, they should be set for local builds too.
    *
    * @throws IOException if an I/O error occurred.
    */
-  private static void setOutputsReadOnlyAndExecutable(
-      Action action, MetadataHandler metadataHandler) throws IOException {
+  private final void setOutputsReadOnlyAndExecutable(Action action, MetadataHandler metadataHandler)
+      throws IOException {
     Preconditions.checkState(!action.getActionType().isMiddleman());
 
     for (Artifact output : action.getOutputs()) {
@@ -907,14 +905,13 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     }
   }
 
-  private static void reportMissingOutputFile(
-      Action action, Artifact output, Reporter reporter, boolean isSymlink) {
+  private void reportMissingOutputFile(Action action, Artifact output, Reporter reporter,
+      boolean isSymlink) {
     boolean genrule = action.getMnemonic().equals("Genrule");
     String prefix = (genrule ? "declared output '" : "output '") + output.prettyPrint() + "' ";
     if (isSymlink) {
-      String msg = prefix + "is a dangling symbolic link";
-      logger.warning(msg);
-      reporter.handle(Event.error(action.getOwner().getLocation(), msg));
+      reporter.handle(Event.error(
+          action.getOwner().getLocation(), prefix + "is a dangling symbolic link"));
     } else {
       String suffix = genrule ? " by genrule. This is probably "
           + "because the genrule actually didn't create this output, or because the output was a "
@@ -925,8 +922,8 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     }
   }
 
-  private static void reportOutputTreeArtifactErrors(
-      Action action, Artifact output, Reporter reporter, IOException e) {
+  private void reportOutputTreeArtifactErrors(Action action, Artifact output, Reporter reporter,
+      IOException e) {
     String errorMessage;
     if (e instanceof FileNotFoundException) {
       errorMessage = String.format("TreeArtifact %s was not created", output.prettyPrint());
