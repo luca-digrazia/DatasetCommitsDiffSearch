@@ -18,10 +18,11 @@
 
 package org.hswebframework.web.commons.entity.factory;
 
-import lombok.SneakyThrows;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson.serializer.SerializerFeature;
 import org.hswebframework.web.NotFoundException;
 import org.hswebframework.utils.ClassUtils;
-import org.hswebframework.web.bean.FastBeanCopier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,7 +51,11 @@ public class MapperEntityFactory implements EntityFactory {
     };
 
     private static final DefaultPropertyCopier DEFAULT_PROPERTY_COPIER = (source, target) -> {
-        return FastBeanCopier.copy(source, target);
+        Object sourcePar = JSON.toJSON(source);
+        if (sourcePar instanceof JSONObject) {
+            return ((JSONObject) sourcePar).toJavaObject(target.getClass());
+        }
+        return JSON.parseObject(JSON.toJSONString(source, SerializerFeature.DisableCircularReferenceDetect), target.getClass());
     };
 
     private DefaultMapperFactory defaultMapperFactory = DEFAULT_MAPPER_FACTORY;
@@ -98,11 +103,15 @@ public class MapperEntityFactory implements EntityFactory {
         Objects.requireNonNull(target);
         try {
             PropertyCopier<S, T> copier = copierCache.<S, T>get(getCopierCacheKey(source.getClass(), target.getClass()));
-            if (null != copier) {
-                return copier.copyProperties(source, target);
-            }
+            if (null != copier) return copier.copyProperties(source, target);
 
             return (T) defaultPropertyCopier.copyProperties(source, target);
+//
+//            Object sourcePar = JSON.toJSON(source);
+//            if (sourcePar instanceof JSONObject) {
+//                return ((JSONObject) sourcePar).toJavaObject((Class<T>) target.getClass());
+//            }
+//            return JSON.parseObject(JSON.toJSONString(source), (Class<T>) target.getClass());
         } catch (Exception e) {
             logger.warn("copy properties error", e);
         }
@@ -120,14 +129,20 @@ public class MapperEntityFactory implements EntityFactory {
         //尝试使用 Simple类，如: package.SimpleUserBean
         if (realType == null) {
             mapper = defaultMapperFactory.apply(beanClass);
+//
+//            String simpleClassName = beanClass.getPackage().getName().concat(".Simple").concat(beanClass.getSimpleName());
+//            try {
+//                realType = (Class<T>) Class.forName(simpleClassName);
+//            } catch (ClassNotFoundException e) {
+//                // throw new NotFoundException(e.getMessage());
+//            }
         }
         if (!Modifier.isInterface(beanClass.getModifiers()) && !Modifier.isAbstract(beanClass.getModifiers())) {
             realType = beanClass;
         }
         if (mapper == null && realType != null) {
-            if (logger.isDebugEnabled()) {
+            if (logger.isDebugEnabled())
                 logger.debug("use instance {} for {}", realType, beanClass);
-            }
             mapper = new Mapper<>(realType, new DefaultInstanceGetter(realType));
         }
         if (mapper != null) {
@@ -143,20 +158,12 @@ public class MapperEntityFactory implements EntityFactory {
 
     @Override
     public <T> T newInstance(Class<T> beanClass, Class<? extends T> defaultClass) {
-        if (beanClass == null) {
-            return null;
-        }
+        if (beanClass == null) return null;
         Mapper<T> mapper = realTypeMapper.get(beanClass);
-        if (mapper != null) {
-            return mapper.getInstanceGetter().get();
-        }
+        if (mapper != null) return mapper.getInstanceGetter().get();
         mapper = initCache(beanClass);
-        if (mapper != null) {
-            return mapper.getInstanceGetter().get();
-        }
-        if (defaultClass != null) {
-            return newInstance(defaultClass);
-        }
+        if (mapper != null) return mapper.getInstanceGetter().get();
+        if (defaultClass != null) return newInstance(defaultClass);
 
         throw new NotFoundException("can't create instance for " + beanClass);
     }
@@ -169,13 +176,9 @@ public class MapperEntityFactory implements EntityFactory {
             return mapper.getTarget();
         }
         mapper = initCache(beanClass);
-        if (mapper != null) {
+        if (mapper != null)
             return mapper.getTarget();
-        }
-
-        return Modifier.isAbstract(beanClass.getModifiers())
-                || Modifier.isInterface(beanClass.getModifiers())
-                ? null : beanClass;
+        return beanClass;
     }
 
     public void setDefaultMapperFactory(DefaultMapperFactory defaultMapperFactory) {
@@ -221,9 +224,12 @@ public class MapperEntityFactory implements EntityFactory {
         }
 
         @Override
-        @SneakyThrows
         public T get() {
-            return type.newInstance();
+            try {
+                return type.newInstance();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 }
