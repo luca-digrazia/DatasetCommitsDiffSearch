@@ -752,10 +752,10 @@ public class BuildView {
       Collection<ConfiguredTarget> configuredTargets) {
     NestedSetBuilder<Artifact> baselineCoverageArtifacts = NestedSetBuilder.stableOrder();
     for (ConfiguredTarget target : configuredTargets) {
-      OutputGroupProvider provider = target.getProvider(OutputGroupProvider.class);
+      TopLevelArtifactProvider provider = target.getProvider(TopLevelArtifactProvider.class);
       if (provider != null) {
         baselineCoverageArtifacts.addTransitive(provider.getOutputGroup(
-            OutputGroupProvider.BASELINE_COVERAGE
+            TopLevelArtifactProvider.BASELINE_COVERAGE
         ));
       }
     }
@@ -790,8 +790,8 @@ public class BuildView {
       Collection<ConfiguredTarget> targetsToTestExclusive, TopLevelArtifactContext topLevelOptions,
       Collection<ConfiguredTarget> allTestTargets) {
     Set<String> outputGroups = topLevelOptions.outputGroups();
-    if (!outputGroups.contains(OutputGroupProvider.FILES_TO_COMPILE)
-        && !outputGroups.contains(OutputGroupProvider.COMPILATION_PREREQUISITES)
+    if (!outputGroups.contains(TopLevelArtifactProvider.FILES_TO_COMPILE)
+        && !outputGroups.contains(TopLevelArtifactProvider.COMPILATION_PREREQUISITES)
         && allTestTargets != null) {
       scheduleTests(targetsToTest, targetsToTestExclusive, allTestTargets,
           topLevelOptions.runTestsExclusively());
