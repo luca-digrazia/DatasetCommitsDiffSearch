@@ -1678,8 +1678,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public ImmutableList<Artifact> getBuildInfo(RuleContext ruleContext, BuildInfoKey key,
-        BuildConfiguration config) {
+    public ImmutableList<Artifact> getBuildInfo(RuleContext ruleContext, BuildInfoKey key) {
       throw new UnsupportedOperationException();
     }
 

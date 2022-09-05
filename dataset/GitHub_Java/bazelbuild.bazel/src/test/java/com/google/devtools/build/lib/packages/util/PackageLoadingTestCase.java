@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -49,13 +50,15 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.common.options.OptionsParser;
+
+import org.junit.Before;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.Before;
 
 /**
  * This is a specialization of {@link FoundationTestCase} that's useful for
@@ -65,14 +68,12 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
 
   private static final int GLOBBING_THREADS = 7;
 
-  protected LoadingMock loadingMock;
   protected ConfiguredRuleClassProvider ruleClassProvider;
   protected PackageFactory packageFactory;
   protected SkyframeExecutor skyframeExecutor;
 
   @Before
   public final void initializeSkyframeExecutor() throws Exception {
-    loadingMock = LoadingMock.get();
     List<RuleDefinition> extraRules = getExtraRules();
     if (!extraRules.isEmpty()) {
       ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
@@ -82,12 +83,10 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
       }
       ruleClassProvider = builder.build();
     } else {
-      ruleClassProvider = loadingMock.createRuleClassProvider();
+      ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
     }
-    packageFactory =
-        loadingMock
-            .getPackageFactoryForTesting()
-            .create(ruleClassProvider, null, getEnvironmentExtensions(), scratch.getFileSystem());
+    packageFactory = TestConstants.PACKAGE_FACTORY_FACTORY_FOR_TESTING.create(
+        ruleClassProvider, null, getEnvironmentExtensions(), scratch.getFileSystem());
     skyframeExecutor = createSkyframeExecutor(getPreprocessorFactorySupplier());
     setUpSkyframe(parsePackageCacheOptions());
   }
@@ -102,8 +101,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
     SkyframeExecutor skyframeExecutor =
         SequencedSkyframeExecutor.create(
             packageFactory,
-            new BlazeDirectories(
-                outputBase, outputBase, rootDirectory, loadingMock.getProductName()),
+            new BlazeDirectories(outputBase, outputBase, rootDirectory, TestConstants.PRODUCT_NAME),
             null, /* BinTools */
             null, /* workspaceStatusActionFactory */
             ruleClassProvider.getBuildInfoFactories(),
@@ -113,7 +111,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
             ImmutableMap.<SkyFunctionName, SkyFunction>of(),
             ImmutableList.<PrecomputedValue.Injected>of(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
-            loadingMock.getProductName());
+            TestConstants.PRODUCT_NAME);
     return skyframeExecutor;
   }
 
@@ -129,8 +127,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
     skyframeExecutor.preparePackageLoading(
         new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
         defaultVisibility, true, GLOBBING_THREADS, defaultsPackageContents,
-        UUID.randomUUID(), ImmutableMap.<String, String>of(),
-        new TimestampGranularityMonitor(BlazeClock.instance()));
+        UUID.randomUUID(), new TimestampGranularityMonitor(BlazeClock.instance()));
   }
 
   private void setUpSkyframe(PackageCacheOptions packageCacheOptions) {
@@ -141,12 +138,10 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
         packageCacheOptions.defaultVisibility,
         true,
         GLOBBING_THREADS,
-        loadingMock.getDefaultsPackageContent(),
+        ruleClassProvider.getDefaultsPackageContent(TestConstants.TEST_INVOCATION_POLICY),
         UUID.randomUUID(),
-        ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
-    skyframeExecutor.setDeletedPackages(
-        ImmutableSet.copyOf(packageCacheOptions.getDeletedPackages()));
+    skyframeExecutor.setDeletedPackages(ImmutableSet.copyOf(packageCacheOptions.getDeletedPackages()));
   }
 
   private PackageCacheOptions parsePackageCacheOptions(String... options) throws Exception {

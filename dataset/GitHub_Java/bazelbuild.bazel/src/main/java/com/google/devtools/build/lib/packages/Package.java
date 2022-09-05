@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.util.SpellChecker;
 import com.google.devtools.build.lib.vfs.Canonicalizer;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -46,6 +47,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -103,7 +105,7 @@ public class Package {
 
   /**
    * The root of the source tree in which this package was found. It is an invariant that
-   * {@code sourceRoot.getRelative(packageId.getSourceRoot()).equals(packageDirectory)}.
+   * {@code sourceRoot.getRelative(packageId.getPathFragment()).equals(packageDirectory)}.
    */
   private Path sourceRoot;
 
@@ -139,10 +141,10 @@ public class Package {
    */
   private String defaultHdrsCheck;
 
-  /** See getter. */
-  private TriState defaultStrictDepsJavaProtos = TriState.AUTO;
-
-  /** Default copts for cc_* rules. The rules' individual copts will append to this value. */
+  /**
+   * Default copts for cc_* rules.  The rules' individual copts will append to
+   * this value.
+   */
   private ImmutableList<String> defaultCopts;
 
   /**
@@ -292,9 +294,9 @@ public class Package {
     this.filename = builder.getFilename();
     this.packageDirectory = filename.getParentDirectory();
 
-    this.sourceRoot = getSourceRoot(filename, packageIdentifier.getSourceRoot());
+    this.sourceRoot = getSourceRoot(filename, packageIdentifier.getPathFragment());
     if ((sourceRoot == null
-        || !sourceRoot.getRelative(packageIdentifier.getSourceRoot()).equals(packageDirectory))
+        || !sourceRoot.getRelative(packageIdentifier.getPathFragment()).equals(packageDirectory))
         && !filename.getBaseName().equals("WORKSPACE")) {
       throw new IllegalArgumentException(
           "Invalid BUILD file name for package '" + packageIdentifier + "': " + filename);
@@ -345,7 +347,7 @@ public class Package {
    * Returns the source root (a directory) beneath which this package's BUILD file was found.
    *
    * <p> Assumes invariant:
-   * {@code getSourceRoot().getRelative(packageId.getSourceRoot()).equals(getPackageDirectory())}
+   * {@code getSourceRoot().getRelative(packageId.getPathFragment()).equals(getPackageDirectory())}
    */
   public Path getSourceRoot() {
     return sourceRoot;
@@ -588,15 +590,8 @@ public class Package {
   }
 
   /**
-   * Default for 'strict_deps' of Java proto rules, when they aren't explicitly specified.
-   *
-   * <p>A value of AUTO is returned when the package didn't itself explicitly specify this value.
+   * Gets the default header checking mode.
    */
-  public TriState getDefaultStrictDepsJavaProtos() {
-    return defaultStrictDepsJavaProtos;
-  }
-
-  /** Gets the default header checking mode. */
   public String getDefaultHdrsCheck() {
     return defaultHdrsCheck != null ? defaultHdrsCheck : "strict";
   }
@@ -912,12 +907,9 @@ public class Package {
       return this;
     }
 
-    public Builder setDefaultStrictDepsJavaProtos(TriState value) {
-      pkg.defaultStrictDepsJavaProtos = value;
-      return this;
-    }
-
-    /** Sets the default value of copts. Rule-level copts will append to this. */
+    /**
+     * Sets the default value of copts. Rule-level copts will append to this.
+     */
     public Builder setDefaultCopts(List<String> defaultCopts) {
       this.defaultCopts = defaultCopts;
       return this;
