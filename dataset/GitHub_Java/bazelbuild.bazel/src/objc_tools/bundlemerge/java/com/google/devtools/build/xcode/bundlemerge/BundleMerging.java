@@ -27,11 +27,11 @@ import com.google.devtools.build.xcode.bundlemerge.proto.BundleMergeProtos.Contr
 import com.google.devtools.build.xcode.bundlemerge.proto.BundleMergeProtos.MergeZip;
 import com.google.devtools.build.xcode.bundlemerge.proto.BundleMergeProtos.VariableSubstitution;
 import com.google.devtools.build.xcode.common.Platform;
+import com.google.devtools.build.xcode.common.TargetDeviceFamily;
 import com.google.devtools.build.xcode.plmerge.KeysToRemoveIfEmptyString;
 import com.google.devtools.build.xcode.plmerge.PlistMerging;
 import com.google.devtools.build.xcode.zip.ZipFiles;
 import com.google.devtools.build.xcode.zip.ZipInputEntry;
-import com.google.devtools.build.zip.ZipFileEntry;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -112,7 +112,7 @@ public final class BundleMerging {
     PlistMerging plistMerging = PlistMerging.from(
         sourcePlistFiles,
         PlistMerging.automaticEntries(
-            control.getTargetDeviceFamilyList(),
+            TargetDeviceFamily.fromBundleMergeNames(control.getTargetDeviceFamilyList()),
             Platform.valueOf(control.getPlatform()),
             control.getSdkVersion(),
             control.getMinimumOsVersion()),
@@ -197,11 +197,9 @@ public final class BundleMerging {
         if (externalFileAttr == null) {
           externalFileAttr = ZipInputEntry.DEFAULT_EXTERNAL_FILE_ATTRIBUTE;
         }
-        ZipFileEntry zipOutEntry = new ZipFileEntry(entryNamesPrefix + zipInEntry.getName());
-        zipOutEntry.setTime(DOS_EPOCH.getTime());
-        zipOutEntry.setVersion(ZipInputEntry.MADE_BY_VERSION);
-        zipOutEntry.setExternalAttributes(externalFileAttr);
-        combiner.addFile(zipOutEntry, zipIn);
+        combiner.addFile(
+            entryNamesPrefix + zipInEntry.getName(), DOS_EPOCH, zipIn,
+            ZipInputEntry.DEFAULT_DIRECTORY_ENTRY_INFO.withExternalFileAttribute(externalFileAttr));
       }
     }
   }
