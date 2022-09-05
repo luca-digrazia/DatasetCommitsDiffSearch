@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,12 +15,10 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Strings;
-import com.google.common.hash.HashCode;
-import com.google.common.hash.Hashing;
+import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
@@ -49,57 +47,43 @@ import javax.annotation.Nullable;
 @Immutable
 public final class BlazeDirectories {
 
+  // Output directory name, relative to the execRoot.
+  // TODO(bazel-team): (2011) make this private?
+  public static final String RELATIVE_OUTPUT_PATH = StringCanonicalizer.intern(
+      Constants.PRODUCT_NAME + "-out");
+
   // Include directory name, relative to execRoot/blaze-out/configuration.
   public static final String RELATIVE_INCLUDE_DIR = StringCanonicalizer.intern("include");
   @VisibleForTesting
   static final String DEFAULT_EXEC_ROOT = "default-exec-root";
 
-  private final Path installBase;     // Where Blaze gets unpacked
-  private final HashCode installMD5;  // The content hash of everything in installBase
-  private final Path workspace;       // Workspace root and server CWD
-  private final Path outputBase;      // The root of the temp and output trees
-  private final Path execRoot;        // the root of all build actions
+  private final Path installBase;  // Where Blaze gets unpacked
+  private final Path workspace;    // Workspace root and server CWD
+  private final Path outputBase;   // The root of the temp and output trees
+  private final Path execRoot;     // the root of all build actions
 
   // These two are kept to avoid creating new objects every time they are accessed. This showed up
   // in a profiler.
   private final Path outputPath;
   private final Path localOutputPath;
 
-  public BlazeDirectories(Path installBase, Path outputBase, Path workspace,
-      boolean deepExecRoot, @Nullable String installMD5, String productName) {
+  public BlazeDirectories(Path installBase, Path outputBase, @Nullable Path workspace) {
     this.installBase = installBase;
     this.workspace = workspace;
     this.outputBase = outputBase;
-    this.installMD5 =
-        Strings.isNullOrEmpty(installMD5) ? null : checkMD5(HashCode.fromString(installMD5));
     boolean useDefaultExecRootName = this.workspace == null || this.workspace.isRootDirectory();
-    Path execRootBase = deepExecRoot
-        ? outputBase.getChild("execroot") : outputBase;
     if (useDefaultExecRootName) {
       // TODO(bazel-team): if workspace is null execRoot should be null, but at the moment there is
       // a lot of code that depends on it being non-null.
-      this.execRoot = execRootBase.getChild(DEFAULT_EXEC_ROOT);
+      this.execRoot = outputBase.getChild(DEFAULT_EXEC_ROOT);
     } else {
-      this.execRoot = execRootBase.getChild(workspace.getBaseName());
+      this.execRoot = outputBase.getChild(workspace.getBaseName());
     }
-    String relativeOutputPath = getRelativeOutputPath(productName);
-    this.outputPath = execRoot.getRelative(relativeOutputPath);
+    this.outputPath = execRoot.getRelative(RELATIVE_OUTPUT_PATH);
     Preconditions.checkState(useDefaultExecRootName || outputPath.asFragment().equals(
-        outputPathFromOutputBase(outputBase.asFragment(), workspace.asFragment(), deepExecRoot,
-            productName)));
+        outputPathFromOutputBase(outputBase.asFragment(), workspace.asFragment())));
 
-    this.localOutputPath = outputBase.getRelative(relativeOutputPath);
-  }
-
-  private static HashCode checkMD5(HashCode hash) {
-    Preconditions.checkArgument(hash.bits() == Hashing.md5().bits(),
-                                "Hash '%s' has %s bits", hash, hash.bits());
-    return hash;
-  }
-
-  @VisibleForTesting
-  public BlazeDirectories(Path installBase, Path outputBase, Path workspace, String productName) {
-    this(installBase, outputBase, workspace, false, null, productName);
+    this.localOutputPath = outputBase.getRelative(BlazeDirectories.RELATIVE_OUTPUT_PATH);
   }
 
   /**
@@ -161,13 +145,11 @@ public final class BlazeDirectories {
    * @return the outputPath as a path fragment, given the outputBase.
    */
   public static PathFragment outputPathFromOutputBase(
-      PathFragment outputBase, PathFragment workspace, boolean deepExecRoot, String productName) {
-    PathFragment execRoot = deepExecRoot ? outputBase.getChild("execroot") : outputBase;
-
+      PathFragment outputBase, PathFragment workspace) {
     if (workspace.equals(PathFragment.EMPTY_FRAGMENT)) {
-      return execRoot;
+      return outputBase;
     }
-    return execRoot.getRelative(workspace.getBaseName() + "/" + getRelativeOutputPath(productName));
+    return outputBase.getRelative(workspace.getBaseName() + "/" + RELATIVE_OUTPUT_PATH);
   }
 
   /**
@@ -201,21 +183,4 @@ public final class BlazeDirectories {
   public Root getBuildDataDirectory() {
     return Root.asDerivedRoot(getExecRoot(), getOutputPath());
   }
-
- /**
-  * Returns the MD5 content hash of the blaze binary (includes deploy JAR, embedded binaries, and
-  * anything else that ends up in the install_base).
-  */
-  public HashCode getInstallMD5() {
-    return installMD5;
-  }
-
-  /**
-   * Returns the output directory name, relative to the execRoot.
-   * TODO(bazel-team): (2011) make this private?
-   */
-  public static String getRelativeOutputPath(String productName) {
-    return StringCanonicalizer.intern(productName + "-out");
-  }
-
 }
