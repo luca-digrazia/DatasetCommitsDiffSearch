@@ -110,11 +110,11 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
     public void deploy(Form form) throws Exception {
         TableMetaData metaData = formParser.parse(form);
         initDefaultField(metaData);
-        TableMetaData lastDeployMetaData;
+        TableMetaData lastDeployMetaData = null;
         if (tableMetaParser == null) {
             History history = historyService.selectLastHistoryByType("form.deploy." + form.getName());
             Form lastDeploy = JSON.parseObject(history.getChangeAfter(), Form.class);
-            lastDeployMetaData = formParser.parse(lastDeploy);
+            formParser.parse(lastDeploy);
             initDefaultField(lastDeployMetaData);
         } else {
             lastDeployMetaData = tableMetaParser.parse(form.getName());
