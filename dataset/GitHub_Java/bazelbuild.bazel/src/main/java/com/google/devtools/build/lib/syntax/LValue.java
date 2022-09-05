@@ -91,7 +91,7 @@ public class LValue implements Serializable {
       return;
     }
     throw new EvalException(loc,
-        "cannot assign to '" + lvalue + "'");
+        "can only assign to variables and tuples, not to '" + lvalue + "'");
   }
 
   @SuppressWarnings("unchecked")
@@ -155,7 +155,7 @@ public class LValue implements Serializable {
       return;
     }
     throw new EvalException(loc,
-        "cannot assign to '" + expr + "'");
+        "can only assign to variables and tuples, not to '" + expr + "'");
   }
 
   @Override
