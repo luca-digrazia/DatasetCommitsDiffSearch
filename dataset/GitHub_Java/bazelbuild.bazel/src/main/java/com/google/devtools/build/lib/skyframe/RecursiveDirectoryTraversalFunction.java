@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -44,6 +45,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * RecursiveDirectoryTraversalFunction traverses the subdirectories of a directory, looking for
@@ -137,7 +139,13 @@ abstract class RecursiveDirectoryTraversalFunction
    */
   TReturn visitDirectory(RecursivePkgKey recursivePkgKey, Environment env) {
     RootedPath rootedPath = recursivePkgKey.getRootedPath();
-    ImmutableSet<PathFragment> excludedPaths = recursivePkgKey.getExcludedPaths();
+    BlacklistedPackagePrefixesValue blacklist =
+        (BlacklistedPackagePrefixesValue) env.getValue(BlacklistedPackagePrefixesValue.key());
+    if (blacklist == null) {
+      return null;
+    }
+    Set<PathFragment> excludedPaths =
+        Sets.union(recursivePkgKey.getExcludedPaths(), blacklist.getPatterns());
     Path root = rootedPath.getRoot();
     PathFragment rootRelativePath = rootedPath.getRelativePath();
 
