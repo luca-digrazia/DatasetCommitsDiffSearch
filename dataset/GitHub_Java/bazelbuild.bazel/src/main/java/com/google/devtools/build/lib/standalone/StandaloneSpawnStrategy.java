@@ -48,14 +48,12 @@ public class StandaloneSpawnStrategy implements SpawnActionContext {
   private final boolean verboseFailures;
   private final Path processWrapper;
   private final Path execRoot;
-  private final String productName;
 
-  public StandaloneSpawnStrategy(Path execRoot, boolean verboseFailures, String productName) {
+  public StandaloneSpawnStrategy(Path execRoot, boolean verboseFailures) {
     this.verboseFailures = verboseFailures;
     this.execRoot = execRoot;
     this.processWrapper = execRoot.getRelative(
         "_bin/process-wrapper" + OsUtils.executableExtension());
-    this.productName = productName;
   }
 
   /**
@@ -146,14 +144,14 @@ public class StandaloneSpawnStrategy implements SpawnActionContext {
   /**
    * Adds to the given environment all variables that are dependent on system state of the host
    * machine.
-   *
+   * 
    * <p> Admittedly, hermeticity is "best effort" in such cases; these environment values
    * should be as tied to configuration parameters as possible.
-   *
+   * 
    * <p>For example, underlying iOS toolchains require that SDKROOT resolve to an absolute
    * system path, but, when selecting which SDK to resolve, the version number comes from
    * build configuration.
-   *
+   * 
    * @return the new environment, comprised of the old environment plus any new variables
    * @throws UserExecException if any variables dependent on system state could not be
    *     resolved
@@ -188,8 +186,7 @@ public class StandaloneSpawnStrategy implements SpawnActionContext {
       throw new UserExecException(
           "Cannot locate xcode developer directory on non-darwin operating system");
     }
-    return AppleHostInfo.getDeveloperDir(execRoot, DottedVersion.fromString(xcodeVersion),
-        productName);
+    return AppleHostInfo.getDeveloperDir(execRoot, DottedVersion.fromString(xcodeVersion));
   }
 
   private String getSdkRootEnv(String developerDir,
@@ -197,12 +194,6 @@ public class StandaloneSpawnStrategy implements SpawnActionContext {
     if (OS.getCurrent() != OS.DARWIN) {
       throw new UserExecException("Cannot locate iOS SDK on non-darwin operating system");
     }
-    return AppleHostInfo.getSdkRoot(execRoot, developerDir, iosSdkVersion, appleSdkPlatform,
-        productName);
-  }
-
-  @Override
-  public boolean shouldPropagateExecException() {
-    return false;
+    return AppleHostInfo.getSdkRoot(execRoot, developerDir, iosSdkVersion, appleSdkPlatform);
   }
 }

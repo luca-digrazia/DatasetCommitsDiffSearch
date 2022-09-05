@@ -18,6 +18,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.google.common.eventbus.EventBus;
+import com.google.common.eventbus.Subscribe;
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
@@ -26,6 +28,7 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
+import com.google.devtools.build.lib.actions.ChangedFilesMessage;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
@@ -34,6 +37,7 @@ import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.standalone.StandaloneSpawnStrategy;
@@ -45,42 +49,48 @@ import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
 import com.google.devtools.common.options.OptionsClassProvider;
 import com.google.protobuf.ByteString;
+
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A spawn action context that launches Spawns the first time they are used in a persistent mode and
  * then shards work over all the processes.
  */
-@ExecutionStrategy(
-  name = {"worker"},
-  contextType = SpawnActionContext.class
-)
-public final class WorkerSpawnStrategy implements SpawnActionContext {
-  public static final String ERROR_MESSAGE_PREFIX =
-      "Worker strategy cannot execute this %s action, ";
+@ExecutionStrategy(name = { "worker" }, contextType = SpawnActionContext.class)
+final class WorkerSpawnStrategy implements SpawnActionContext {
+  public static final String REASON_HEURISTIC =
+      "Not using worker strategy, because incrementalHeuristic says no";
   public static final String REASON_NO_FLAGFILE =
-      "because the last argument does not contain a @flagfile";
-  public static final String REASON_NO_TOOLS = "because the action has no tools";
-  public static final String REASON_NO_EXECUTION_INFO =
-      "because the action's execution info does not contain 'supports-workers=1'";
+      "Not using worker strategy, because last argument does not contain a @flagfile";
+  public static final String REASON_NO_TOOLS =
+      "Not using worker strategy, because the action has no tools";
 
   private final Path execRoot;
   private final WorkerPool workers;
+  private final IncrementalHeuristic incrementalHeuristic;
+  private final StandaloneSpawnStrategy standaloneStrategy;
+  private final WorkerOptions options;
   private final boolean verboseFailures;
   private final int maxRetries;
 
   public WorkerSpawnStrategy(
       BlazeDirectories blazeDirs,
       OptionsClassProvider optionsProvider,
+      EventBus eventBus,
       WorkerPool workers,
       boolean verboseFailures,
       int maxRetries) {
     Preconditions.checkNotNull(optionsProvider);
+    this.options = optionsProvider.getOptions(WorkerOptions.class);
+    this.incrementalHeuristic = new IncrementalHeuristic(options.workerMaxChangedFiles);
+    eventBus.register(incrementalHeuristic);
     this.workers = Preconditions.checkNotNull(workers);
+    this.standaloneStrategy = new StandaloneSpawnStrategy(blazeDirs.getExecRoot(), verboseFailures);
     this.execRoot = blazeDirs.getExecRoot();
     this.verboseFailures = verboseFailures;
     this.maxRetries = maxRetries;
@@ -91,8 +101,6 @@ public final class WorkerSpawnStrategy implements SpawnActionContext {
       throws ExecException, InterruptedException {
     Executor executor = actionExecutionContext.getExecutor();
     EventHandler eventHandler = executor.getEventHandler();
-    StandaloneSpawnStrategy standaloneStrategy =
-        Preconditions.checkNotNull(executor.getContext(StandaloneSpawnStrategy.class));
 
     if (executor.reportsSubcommands()) {
       executor.reportSubcommand(
@@ -103,11 +111,10 @@ public final class WorkerSpawnStrategy implements SpawnActionContext {
           spawn.asShellCommand(executor.getExecRoot()));
     }
 
-    if (!spawn.getExecutionInfo().containsKey("supports-workers")
-        || !spawn.getExecutionInfo().get("supports-workers").equals("1")) {
-      eventHandler.handle(
-          Event.warn(
-              String.format(ERROR_MESSAGE_PREFIX + REASON_NO_EXECUTION_INFO, spawn.getMnemonic())));
+    if (!incrementalHeuristic.shouldUseWorkers()) {
+      if (options.workerVerbose) {
+        eventHandler.handle(Event.info(REASON_HEURISTIC));
+      }
       standaloneStrategy.exec(spawn, actionExecutionContext);
       return;
     }
@@ -117,13 +124,19 @@ public final class WorkerSpawnStrategy implements SpawnActionContext {
     // Thus, we can extract the last element from its args (which will be the @flagfile), expand it
     // and put that into the WorkRequest instead.
     if (!Iterables.getLast(spawn.getArguments()).startsWith("@")) {
-      throw new UserExecException(
-          String.format(ERROR_MESSAGE_PREFIX + REASON_NO_FLAGFILE, spawn.getMnemonic()));
+      if (options.workerVerbose) {
+        eventHandler.handle(Event.info(REASON_NO_FLAGFILE));
+      }
+      standaloneStrategy.exec(spawn, actionExecutionContext);
+      return;
     }
 
     if (Iterables.isEmpty(spawn.getToolFiles())) {
-      throw new UserExecException(
-          String.format(ERROR_MESSAGE_PREFIX + REASON_NO_TOOLS, spawn.getMnemonic()));
+      if (options.workerVerbose) {
+        eventHandler.handle(Event.info(REASON_NO_TOOLS));
+      }
+      standaloneStrategy.exec(spawn, actionExecutionContext);
+      return;
     }
 
     executor
@@ -152,12 +165,9 @@ public final class WorkerSpawnStrategy implements SpawnActionContext {
               spawn.getInputFiles(), actionExecutionContext.getArtifactExpander());
 
       for (ActionInput input : inputs) {
-        byte[] digestBytes = inputFileCache.getDigest(input);
-        ByteString digest;
-        if (digestBytes == null) {
+        ByteString digest = inputFileCache.getDigest(input);
+        if (digest == null) {
           digest = ByteString.EMPTY;
-        } else {
-          digest = ByteString.copyFromUtf8(HashCode.fromBytes(digestBytes).toString());
         }
 
         requestBuilder
@@ -211,7 +221,7 @@ public final class WorkerSpawnStrategy implements SpawnActionContext {
     Hasher hasher = Hashing.sha256().newHasher();
     for (ActionInput tool : toolFiles) {
       hasher.putString(tool.getExecPathString(), Charset.defaultCharset());
-      hasher.putBytes(actionInputFileCache.getDigest(tool));
+      hasher.putBytes(actionInputFileCache.getDigest(tool).toByteArray());
     }
     return hasher.hash();
   }
@@ -276,8 +286,27 @@ public final class WorkerSpawnStrategy implements SpawnActionContext {
     return false;
   }
 
-  @Override
-  public boolean shouldPropagateExecException() {
-    return false;
+  /**
+   * For installation with remote execution, non-incremental builds may be slowed down by the
+   * persistent worker system. To avoid this we only use workers for builds where few files
+   * changed.
+   */
+  @ThreadSafety.ThreadSafe
+  private static class IncrementalHeuristic {
+    private final AtomicBoolean fewFilesChanged = new AtomicBoolean(false);
+    private int limit = 0;
+
+    public boolean shouldUseWorkers() {
+      return limit == 0 || fewFilesChanged.get();
+    }
+
+    IncrementalHeuristic(int limit) {
+      this.limit = limit;
+    }
+
+    @Subscribe
+    public void changedFiles(ChangedFilesMessage msg) {
+      fewFilesChanged.set(msg.getChangedFiles().size() <= limit);
+    }
   }
 }
