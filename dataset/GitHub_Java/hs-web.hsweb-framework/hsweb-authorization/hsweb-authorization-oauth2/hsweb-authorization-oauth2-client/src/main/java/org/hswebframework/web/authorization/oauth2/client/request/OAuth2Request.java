@@ -20,6 +20,9 @@ package org.hswebframework.web.authorization.oauth2.client.request;
 
 import org.hswebframework.web.authorization.oauth2.client.response.OAuth2Response;
 
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -41,6 +44,12 @@ public interface OAuth2Request {
      * @return request自身
      */
     OAuth2Request param(String name, Object value);
+
+    OAuth2Request params(Map<String, String> params);
+
+    OAuth2Response upload(String name, InputStream inputStream);
+
+    OAuth2Response upload(String name, InputStream inputStream,String fileName);
 
     /**
      * 设置请求体,将内容根据contentType(默认application/json)序列化为对应的请求数据
