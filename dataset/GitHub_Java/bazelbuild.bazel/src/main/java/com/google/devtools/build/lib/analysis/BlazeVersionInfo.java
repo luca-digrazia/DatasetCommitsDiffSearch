@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.util.StringUtilities;
+
 import java.util.Date;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -35,7 +36,7 @@ public class BlazeVersionInfo {
   private final Map<String, String> buildData = Maps.newTreeMap();
   private static BlazeVersionInfo instance = null;
 
-  private static final Logger logger = Logger.getLogger(BlazeVersionInfo.class.getName());
+  private static final Logger LOG = Logger.getLogger(BlazeVersionInfo.class.getName());
 
   /** Key for the release timestamp is seconds. */
   public static final String BUILD_TIMESTAMP = "Build timestamp as int";
@@ -59,9 +60,9 @@ public class BlazeVersionInfo {
 
   private static void logVersionInfo(BlazeVersionInfo info) {
     if (info.getSummary() == null) {
-      logger.warning("Blaze release version information not available");
+      LOG.warning("Blaze release version information not available");
     } else {
-      logger.info("Blaze version info: " + info.getSummary());
+      LOG.info("Blaze version info: " + info.getSummary());
     }
   }
 
@@ -114,15 +115,6 @@ public class BlazeVersionInfo {
     return (buildLabel != null && buildLabel.length() > 0)
         ? "release " + buildLabel
         : "development version";
-  }
-
-  /**
-   * Returns the version, if any, or HEAD. The returned version number is easier to
-   * process than the version returned by #getReleaseName().
-   */
-  public String getVersion() {
-    String buildLabel = buildData.get(BUILD_LABEL);
-    return buildLabel != null ? buildLabel : "";
   }
 
   /**
