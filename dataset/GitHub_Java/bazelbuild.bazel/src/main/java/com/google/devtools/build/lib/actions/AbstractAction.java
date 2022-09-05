@@ -230,12 +230,6 @@ public abstract class AbstractAction implements Action, SkylarkValue {
 
   @Override
   public abstract String getMnemonic();
-
-  /**
-   * See the javadoc for {@link com.google.devtools.build.lib.actions.Action} and
-   * {@link com.google.devtools.build.lib.actions.ActionMetadata#getKey()} for the contract for
-   * {@link #computeKey()}.
-   */
   protected abstract String computeKey();
 
   @Override
