@@ -25,7 +25,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.Constants;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.ImmutableSortedKeyMap;
 import com.google.devtools.build.lib.events.Event;
@@ -234,7 +233,7 @@ public class Package implements Serializable {
 
   private void writeObject(ObjectOutputStream out) {
     try {
-      PackageSerializer.DEFAULT.serialize(this, out);
+      PackageSerializer.serializePackage(this, out);
     } catch (IOException ioe) {
       throw new IllegalStateException(ioe);
     }
@@ -242,7 +241,7 @@ public class Package implements Serializable {
 
   private void readObject(ObjectInputStream in) throws IOException {
     try {
-      deserializedPkg = new PackageDeserializer().deserialize(in);
+      deserializedPkg = new PackageDeserializer(null, null).deserialize(in);
     } catch (PackageDeserializationException e) {
       throw new IllegalStateException(e);
     }
@@ -451,7 +450,7 @@ public class Package implements Serializable {
    * though not necessarily: data in a subdirectory of a test package may use a
    * different filename to avoid inadvertently creating a new package.
    */
-  public Label getBuildFileLabel() {
+  Label getBuildFileLabel() {
     return buildFile.getLabel();
   }
 
