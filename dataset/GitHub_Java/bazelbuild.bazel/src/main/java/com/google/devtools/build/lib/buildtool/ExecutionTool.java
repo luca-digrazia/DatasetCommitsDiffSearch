@@ -686,8 +686,7 @@ public class ExecutionTool {
         new ActionCacheChecker(actionCache, env.getView().getArtifactFactory(), executionFilter,
             verboseExplanations),
         keepGoing, actualJobs,
-        request.getPackageCacheOptions().checkOutputFiles
-            ? modifiedOutputFiles : ModifiedFileSet.NOTHING_MODIFIED,
+        options.checkOutputFiles ? modifiedOutputFiles : ModifiedFileSet.NOTHING_MODIFIED,
         options.finalizeActions, fileCache, request.getBuildOptions().progressReportInterval);
   }
 
