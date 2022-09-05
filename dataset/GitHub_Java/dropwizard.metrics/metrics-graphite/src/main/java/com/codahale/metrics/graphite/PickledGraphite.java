@@ -226,19 +226,12 @@ public class PickledGraphite implements GraphiteSender {
 
     @Override
     public void close() throws IOException {
-        try {
-            flush();
-            if (writer != null) {
-                writer.close();
-            }
-        } catch (IOException ex) {
-            if (socket != null) {
-                socket.close();
-            }
-        } finally {
-            this.socket = null;
-            this.writer = null;
+        flush();
+        if (socket != null) {
+            socket.close();
         }
+        this.socket = null;
+        this.writer = null;
     }
 
     @Override
