@@ -100,7 +100,7 @@ public class Timer implements Metered, Stoppable, Sampling, Summarizable {
      * @return a new {@link TimerContext}
      */
     public TimerContext time() {
-        return new TimerContext(this, clock);
+        return new TimerContext(this);
     }
 
     @Override
@@ -166,16 +166,6 @@ public class Timer implements Metered, Stoppable, Sampling, Summarizable {
     @Override
     public double stdDev() {
         return convertFromNS(histogram.stdDev());
-    }
-
-    /**
-     * Returns the sum of all recorded durations.
-     *
-     * @return the sum of all recorded durations
-     */
-    @Override
-    public double sum() {
-        return convertFromNS(histogram.sum());
     }
 
     @Override
