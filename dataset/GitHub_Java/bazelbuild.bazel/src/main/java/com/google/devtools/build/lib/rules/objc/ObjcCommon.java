@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -103,17 +103,6 @@ public final class ObjcCommon {
         return ImmutableList.of();
       }
       return ImmutableList.copyOf(CcCommon.getHeaders(ruleContext));
-    }
-
-    /**
-     * Returns headers that cannot be compiled individually.
-     */
-    ImmutableList<Artifact> textualHdrs() {
-      // Some rules may compile but not have the "textual_hdrs" attribute.
-      if (!ruleContext.attributes().has("textual_hdrs", BuildType.LABEL_LIST)) {
-        return ImmutableList.of();
-      }
-      return ruleContext.getPrerequisiteArtifacts("textual_hdrs", Mode.TARGET).list();
     }
 
     Optional<Artifact> bridgingHeader() {
@@ -491,7 +480,6 @@ public final class ObjcCommon {
             TO_PATH_FRAGMENT);
         objcProvider
             .addAll(HEADER, attributes.hdrs())
-            .addAll(HEADER, attributes.textualHdrs())
             .addAll(INCLUDE, attributes.headerSearchPaths())
             .addAll(INCLUDE, sdkIncludes)
             .addAll(SDK_FRAMEWORK, attributes.sdkFrameworks())

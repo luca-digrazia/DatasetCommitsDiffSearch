@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -206,6 +206,11 @@ public final class ObjcProvider implements TransitiveInfoProvider {
    * Linking information from cc dependencies.
    */
   public static final Key<LinkerInputs.LibraryToLink> CC_LIBRARY = new Key<>(LINK_ORDER);
+
+  /**
+   * Linking options from dependencies.
+   */
+  public static final Key<String> LINKOPT = new Key<>(LINK_ORDER);
 
   /**
    * Flags that apply to a transitive build dependency tree. Each item in the enum corresponds to a
