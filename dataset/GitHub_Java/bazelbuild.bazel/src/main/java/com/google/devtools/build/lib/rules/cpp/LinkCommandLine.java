@@ -1013,7 +1013,6 @@ public final class LinkCommandLine extends CommandLine {
     @Nullable private Iterable<LTOBackendArtifacts> allLTOBackendArtifacts;
     @Nullable private Artifact paramFile;
     @Nullable private Artifact interfaceSoBuilder;
-    @Nullable private CcToolchainProvider toolchain;
 
     // This interface is needed to support tests that don't create a
     // ruleContext, in which case the configuration and action owner
@@ -1041,11 +1040,7 @@ public final class LinkCommandLine extends CommandLine {
       FeatureConfiguration featureConfiguration = null;
       // The ruleContext can be null for some tests.
       if (ruleContext != null) {
-        if (toolchain != null) {
-          featureConfiguration = CcCommon.configureFeatures(ruleContext, toolchain);
-        } else {
-          featureConfiguration = CcCommon.configureFeatures(ruleContext);
-        }
+        featureConfiguration = CcCommon.configureFeatures(ruleContext);
         CcToolchainFeatures.Variables.Builder buildVariables =
             new CcToolchainFeatures.Variables.Builder();
         CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
@@ -1076,15 +1071,6 @@ public final class LinkCommandLine extends CommandLine {
           interfaceSoBuilder,
           variables,
           featureConfiguration);
-    }
-
-    /**
-     * Sets the toolchain to use for link flags. If this is not called, the toolchain
-     * is retrieved from the rule.
-     */
-    public Builder setToolchain(CcToolchainProvider toolchain) {
-      this.toolchain = toolchain;
-      return this;
     }
 
     /**

@@ -209,7 +209,7 @@ public final class CcLibraryHelper {
         .addPicIndependentObjectFiles(common.getLinkerScripts())
         .addSystemIncludeDirs(common.getSystemIncludeDirs())
         .setNoCopts(common.getNoCopts())
-        .setHeadersCheckingMode(semantics.determineHeadersCheckingMode(ruleContext));
+        .setHeadersCheckingMode(common.determineHeadersCheckingMode());
     return this;
   }
 
@@ -394,9 +394,13 @@ public final class CcLibraryHelper {
    */
   public CcLibraryHelper addDeps(Iterable<? extends TransitiveInfoCollection> deps) {
     for (TransitiveInfoCollection dep : deps) {
-      Preconditions.checkState(dep.getConfiguration() == null
-          || configuration.equalsOrIsSupersetOf(dep.getConfiguration()),
-          "dep " + dep.getLabel() + " has a different config than " + ruleContext.getLabel());
+      BuildConfiguration depConfig = dep.getConfiguration();
+      if (depConfig != null && depConfig.hasFragment(CppConfiguration.class)) {
+        // We can't just check for configuration equality because the dep configuration may
+        // not have all the fragments that rule's configuration does.
+        Preconditions.checkState(depConfig.getFragment(CppConfiguration.class).equals(
+            configuration.getFragment(CppConfiguration.class)));
+      }
       this.deps.add(dep);
     }
     return this;
@@ -739,11 +743,8 @@ public final class CcLibraryHelper {
     // generated files. It is important that the execRoot (EMPTY_FRAGMENT) comes
     // before the genfilesFragment to preferably pick up source files. Otherwise
     // we might pick up stale generated files.
-    PathFragment repositoryPath =
-        ruleContext.getLabel().getPackageIdentifier().getRepository().getPathFragment();
-    contextBuilder.addQuoteIncludeDir(repositoryPath);
-    contextBuilder.addQuoteIncludeDir(
-        ruleContext.getConfiguration().getGenfilesFragment().getRelative(repositoryPath));
+    contextBuilder.addQuoteIncludeDir(PathFragment.EMPTY_FRAGMENT);
+    contextBuilder.addQuoteIncludeDir(ruleContext.getConfiguration().getGenfilesFragment());
 
     for (PathFragment systemIncludeDir : systemIncludeDirs) {
       contextBuilder.addSystemIncludeDir(systemIncludeDir);

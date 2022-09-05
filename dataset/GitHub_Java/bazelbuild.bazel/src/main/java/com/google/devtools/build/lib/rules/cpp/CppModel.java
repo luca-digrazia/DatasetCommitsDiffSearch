@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -32,7 +33,6 @@ import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -124,9 +124,9 @@ public final class CppModel {
 
   /**
    * Adds a single source file to be compiled. Note that this should only be called for primary
-   * compilation units, including module files or headers to be parsed or preprocessed.
+   * compilation units, not for header files or files that are otherwise included.
    */
-  public CppModel addCompilationUnitSources(Iterable<Artifact> sourceFiles, Label sourceLabel) {
+  public CppModel addSources(Iterable<Artifact> sourceFiles, Label sourceLabel) {
     for (Artifact sourceFile : sourceFiles) {
       this.sourceFiles.add(Pair.of(sourceFile, sourceLabel));
     }
@@ -134,10 +134,10 @@ public final class CppModel {
   }
 
   /**
-   * Adds all the source files. Note that this should only be called for primary
-   * compilation units, including module files or headers to be parsed or preprocessed.
+   * Adds all the source files. Note that this should only be called for primary compilation units,
+   * not for header files or files that are otherwise included.
    */
-  public CppModel addCompilationUnitSources(Iterable<Pair<Artifact, Label>> sources) {
+  public CppModel addSources(Iterable<Pair<Artifact, Label>> sources) {
     Iterables.addAll(this.sourceFiles, sources);
     return this;
   }
