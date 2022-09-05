@@ -192,7 +192,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             analysisMock.getInvocationPolicyEnforcer().getInvocationPolicy()),
         UUID.randomUUID(),
         ImmutableMap.<String, String>of(),
-        ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
     packageManager = skyframeExecutor.getPackageManager();
     loadingPhaseRunner = skyframeExecutor.getLoadingPhaseRunner(
@@ -280,8 +279,8 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     BuildConfiguration targetConfig =
         Iterables.getOnlyElement(masterConfig.getTargetConfigurations());
     if (useDynamicVersionIfEnabled && targetConfig.useDynamicConfigurations()) {
-      return skyframeExecutor.getConfigurationForTesting(
-          reporter, targetConfig.fragmentClasses(), targetConfig.getOptions());
+      return skyframeExecutor.getConfigurationForTesting(eventCollector,
+          targetConfig.fragmentClasses(), targetConfig.getOptions());
     } else {
       return targetConfig;
     }
@@ -322,7 +321,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         ruleClassProvider.getDefaultsPackageContent(
             analysisMock.getInvocationPolicyEnforcer().getInvocationPolicy()),
         UUID.randomUUID(),
-        ImmutableMap.<String, String>of(),
         ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
     skyframeExecutor.invalidateFilesUnderPathForTesting(reporter,
