@@ -4,12 +4,13 @@ import org.hsweb.web.bean.po.GenericPo;
 
 import java.util.Date;
 
+/**
+ * Created by zhouhao on 16-6-2.
+ */
 public class Draft extends GenericPo<String> {
     private String name;
 
     private Object value;
-
-    private String key;
 
     private Date createDate;
 
@@ -45,13 +46,5 @@ public class Draft extends GenericPo<String> {
 
     public void setCreateDate(Date createDate) {
         this.createDate = createDate;
-    }
-
-    public String getKey() {
-        return key;
-    }
-
-    public void setKey(String key) {
-        this.key = key;
     }
 }

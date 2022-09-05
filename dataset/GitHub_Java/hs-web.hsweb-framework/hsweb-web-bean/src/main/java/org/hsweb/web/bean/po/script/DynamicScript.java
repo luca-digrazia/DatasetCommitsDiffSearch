@@ -1,8 +1,9 @@
 package org.hsweb.web.bean.po.script;
 
 import org.hibernate.validator.constraints.Length;
-import org.hibernate.validator.constraints.NotBlank;
+import org.hibernate.validator.constraints.NotEmpty;
 import org.hsweb.web.bean.po.GenericPo;
+import org.webbuilder.utils.common.StringUtils;
 
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
@@ -15,24 +16,23 @@ public class DynamicScript extends GenericPo<String> {
     private static final long serialVersionUID = 8910856253780046561L;
 
     //名称
-    @NotNull
     @Length(min = 4, message = "名称长度不能少于4")
-    @Pattern(regexp = "^[a-zA-Z0-9_-]+$", message = "名称只能为大小写字母,数字,下划线和-组成")
+    @NotNull
+    @Pattern(regexp = "^[a-zA-Z0-9_-]+$", message = "名称只能为大小写字母和下划线组成")
     private String name;
 
     //类型
-    @Pattern(regexp = "(js)|(groovy)|(java)|(javascript)", message = "类型仅支持js(javascript),groovy,java")
+    @Pattern(regexp = "(js)|(groovy)|(spel)|(ognl)|(java)", message = "类型仅支持js,groovy,spel,ognl,java")
     private String type;
 
     //内容
-    @NotBlank(message = "脚本内容不能为空")
     private String content;
 
     //备注
     private String remark;
 
-    //分类
-    private String classifiedId;
+    //路径
+    private String path;
 
     //状态
     private int status;
@@ -107,12 +107,22 @@ public class DynamicScript extends GenericPo<String> {
         this.remark = remark;
     }
 
-    public void setClassifiedId(String classifiedId) {
-        this.classifiedId = classifiedId;
+    /**
+     * 获取 路径
+     *
+     * @return String 路径
+     */
+    public String getPath() {
+        if (this.path == null)
+            return "root";
+        return this.path;
     }
 
-    public String getClassifiedId() {
-        return classifiedId;
+    /**
+     * 设置 路径
+     */
+    public void setPath(String path) {
+        this.path = path;
     }
 
     /**
