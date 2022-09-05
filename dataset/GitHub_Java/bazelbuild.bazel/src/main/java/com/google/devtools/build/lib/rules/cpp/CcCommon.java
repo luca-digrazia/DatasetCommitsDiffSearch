@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
-import static com.google.devtools.build.lib.rules.cpp.CcLibraryHelper.SourceCategory;
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -30,7 +28,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
@@ -209,7 +206,7 @@ public final class CcCommon {
         Label oldLabel = map.put(artifact, provider.getLabel());
         boolean isHeader = CppFileTypes.CPP_HEADER.matches(artifact.getExecPath());
         if (!isHeader
-            && SourceCategory.CC_AND_OBJC.getSourceTypes().matches(artifact.getExecPathString())
+            && CcLibraryHelper.SOURCE_TYPES.matches(artifact.getExecPathString())
             && oldLabel != null
             && !oldLabel.equals(provider.getLabel())) {
           ruleContext.attributeError("srcs", String.format(
@@ -430,16 +427,6 @@ public final class CcCommon {
                 + packageFragment
                 + "'. This will be an error in the future");
         // TODO(janakr): Add a link to a page explaining the problem and fixes?
-      } else if (!packageFragment.startsWith(RuleClass.THIRD_PARTY_PREFIX)) {
-        ruleContext.attributeWarning(
-            "includes",
-            "'"
-                + includesAttr
-                + "' resolves to '"
-                + includesPath
-                + "' not in '"
-                + RuleClass.THIRD_PARTY_PREFIX
-                + "'. This will be an error in the future");
       }
       result.add(includesPath);
       result.add(ruleContext.getConfiguration().getGenfilesFragment().getRelative(includesPath));
@@ -461,8 +448,7 @@ public final class CcCommon {
       for (FileProvider provider :
           ruleContext.getPrerequisites("srcs", Mode.TARGET, FileProvider.class)) {
         prerequisites.addAll(
-            FileType.filter(
-                provider.getFilesToBuild(), SourceCategory.CC_AND_OBJC.getSourceTypes()));
+            FileType.filter(provider.getFilesToBuild(), CcLibraryHelper.SOURCE_TYPES));
       }
     }
     prerequisites.addTransitive(context.getDeclaredIncludeSrcs());
