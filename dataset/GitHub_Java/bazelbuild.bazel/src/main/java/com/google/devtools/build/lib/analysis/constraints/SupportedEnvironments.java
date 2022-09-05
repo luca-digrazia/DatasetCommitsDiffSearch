@@ -15,8 +15,9 @@
 package com.google.devtools.build.lib.analysis.constraints;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.LabelAndLocation;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.packages.Target;
+
 import java.util.Map;
 
 /**
@@ -25,12 +26,10 @@ import java.util.Map;
 public class SupportedEnvironments implements SupportedEnvironmentsProvider {
   private final EnvironmentCollection staticEnvironments;
   private final EnvironmentCollection refinedEnvironments;
-  private final ImmutableMap<Label, LabelAndLocation> removedEnvironmentCulprits;
+  private final ImmutableMap<Label, Target> removedEnvironmentCulprits;
 
-  public SupportedEnvironments(
-      EnvironmentCollection staticEnvironments,
-      EnvironmentCollection refinedEnvironments,
-      Map<Label, LabelAndLocation> removedEnvironmentCulprits) {
+  public SupportedEnvironments(EnvironmentCollection staticEnvironments,
+      EnvironmentCollection refinedEnvironments, Map<Label, Target> removedEnvironmentCulprits) {
     this.staticEnvironments = staticEnvironments;
     this.refinedEnvironments = refinedEnvironments;
     this.removedEnvironmentCulprits = ImmutableMap.copyOf(removedEnvironmentCulprits);
@@ -47,7 +46,7 @@ public class SupportedEnvironments implements SupportedEnvironmentsProvider {
   }
 
   @Override
-  public LabelAndLocation getRemovedEnvironmentCulprit(Label environment) {
+  public Target getRemovedEnvironmentCulprit(Label environment) {
     return removedEnvironmentCulprits.get(environment);
   }
 }
