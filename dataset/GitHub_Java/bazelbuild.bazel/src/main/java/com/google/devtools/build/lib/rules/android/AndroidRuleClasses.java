@@ -556,6 +556,10 @@ public final class AndroidRuleClasses {
           </p>
           <p>This rule currently forces source and class compatibility with Java 6.
           </p>
+          <p><code>srcs</code> files of type <code>.jar</code> are linked in.
+          (This is useful if you have third-party <code>.jar</code> files
+          with no source.)
+          </p>
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(attr("srcs", LABEL_LIST)
               .direct_compile_time_input()

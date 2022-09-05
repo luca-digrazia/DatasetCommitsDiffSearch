@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.bazel.rules.android;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.rules.android.AndroidRuleClasses.getAndroidSdkLabel;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
@@ -37,9 +36,7 @@ public class BazelAndroidRuleClasses {
           .add(
               attr(":android_sdk", LABEL)
                   .allowedRuleClasses("android_sdk", "filegroup")
-                  .value(
-                      getAndroidSdkLabel(
-                          environment.getToolsLabel(AndroidRuleClasses.DEFAULT_SDK))))
+                  .value(AndroidRuleClasses.ANDROID_SDK))
           .build();
     }
 
