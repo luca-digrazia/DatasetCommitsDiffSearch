@@ -18,13 +18,9 @@ public class DefaultDatabaseSwitcher implements DatabaseSwitcher {
     //默认数据源标识
     private static final String DEFAULT_DATASOURCE_ID = DatabaseSwitcher.class.getName() + "_default_";
 
-    protected Logger logger = LoggerFactory.getLogger(this.getClass());
+    private Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    protected String getDefaultDataSourceIdKey(){
-        return DEFAULT_DATASOURCE_ID;
-    }
-
-    protected Deque<String> getUsedHistoryQueue() {
+    private Deque<String> getUsedHistoryQueue() {
         // 从ThreadLocal中获取一个使用记录
         return ThreadLocalUtils.get(DefaultDatabaseSwitcher.class.getName() + "_queue", LinkedList::new);
     }
@@ -58,7 +54,7 @@ public class DefaultDatabaseSwitcher implements DatabaseSwitcher {
 
     @Override
     public void useDefault() {
-        getUsedHistoryQueue().addLast(getDefaultDataSourceIdKey());
+        getUsedHistoryQueue().addLast(DEFAULT_DATASOURCE_ID);
         if (logger.isDebugEnabled()) {
             logger.debug("try use default database");
         }
@@ -71,7 +67,7 @@ public class DefaultDatabaseSwitcher implements DatabaseSwitcher {
         }
 
         String activeId = getUsedHistoryQueue().getLast();
-        if (getDefaultDataSourceIdKey().equals(activeId)) {
+        if (DEFAULT_DATASOURCE_ID.equals(activeId)) {
             return null;
         }
         return activeId;
