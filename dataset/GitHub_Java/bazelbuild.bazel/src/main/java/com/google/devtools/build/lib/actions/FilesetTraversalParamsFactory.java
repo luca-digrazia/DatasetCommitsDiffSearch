@@ -105,10 +105,7 @@ public final class FilesetTraversalParamsFactory {
   }
 
   /**
-   * Creates traversal request parameters for a FilesetEntry wrapping another Fileset. If possible,
-   * the original {@code nested} is returned to avoid unnecessary object creation. In that case, the
-   * {@code ownerLabelForErrorMessages} may be ignored. Since the wrapping traversal could not have
-   * an error on its own, any error messages printed will still be correct.
+   * Creates traversal request parameters for a FilesetEntry wrapping another Fileset.
    *
    * @param ownerLabel the rule that created this object
    * @param nested the traversal params that were used for the nested (inner) Fileset
@@ -117,31 +114,22 @@ public final class FilesetTraversalParamsFactory {
    * @param excludes optional; set of files directly below (not in a subdirectory of) the nested
    *     Fileset that should be excluded from the outer Fileset
    */
-  public static FilesetTraversalParams nestedTraversal(
-      Label ownerLabel,
-      FilesetTraversalParams nested,
-      PathFragment destDir,
-      @Nullable Set<String> excludes) {
-    if (destDir.segmentCount() == 0 && (excludes == null || excludes.isEmpty())) {
-      // Wrapping the traversal here would not lead to a different result: the output location is
-      // the same and there are no additional excludes.
-      return nested;
-    }
+  public static FilesetTraversalParams nestedTraversal(Label ownerLabel,
+      FilesetTraversalParams nested, PathFragment destDir, @Nullable Set<String> excludes) {
     // When srcdir is another Fileset, then files must be null so strip_prefix must also be null.
     return new NestedTraversalParams(ownerLabel, nested, destDir, excludes);
   }
 
   private abstract static class ParamsCommon implements FilesetTraversalParams {
-    private final Label ownerLabelForErrorMessages;
+    private final Label ownerLabel;
     private final PathFragment destDir;
     private final ImmutableSet<String> excludes;
 
-    ParamsCommon(
-        Label ownerLabelForErrorMessages, PathFragment destDir, @Nullable Set<String> excludes) {
-      this.ownerLabelForErrorMessages = ownerLabelForErrorMessages;
+    ParamsCommon(Label ownerLabel, PathFragment destDir, @Nullable Set<String> excludes) {
+      this.ownerLabel = ownerLabel;
       this.destDir = destDir;
       if (excludes == null) {
-        this.excludes = ImmutableSet.of();
+        this.excludes = ImmutableSet.<String>of();
       } else {
         // Order the set for the sake of deterministic fingerprinting.
         this.excludes = ImmutableSet.copyOf(Ordering.natural().immutableSortedCopy(excludes));
@@ -149,8 +137,8 @@ public final class FilesetTraversalParamsFactory {
     }
 
     @Override
-    public Label getOwnerLabelForErrorMessages() {
-      return ownerLabelForErrorMessages;
+    public Label getOwnerLabel() {
+      return ownerLabel;
     }
 
     @Override
@@ -172,24 +160,17 @@ public final class FilesetTraversalParamsFactory {
 
     @Override
     public String toString() {
-      return super.toString()
-          + "["
-          + destDir
-          + ", "
-          + ownerLabelForErrorMessages
-          + ", "
-          + excludes
-          + "]";
+      return super.toString() + "[" + destDir + ", " + ownerLabel + ", " + excludes + "]";
     }
 
     protected boolean internalEquals(ParamsCommon that) {
-      return Objects.equals(this.ownerLabelForErrorMessages, that.ownerLabelForErrorMessages)
+      return Objects.equals(this.ownerLabel, that.ownerLabel)
           && Objects.equals(this.destDir, that.destDir)
           && Objects.equals(this.excludes, that.excludes);
     }
 
     protected int internalHashCode() {
-      return Objects.hash(ownerLabelForErrorMessages, destDir, excludes);
+      return Objects.hash(ownerLabel, destDir, excludes);
     }
   }
 
@@ -306,11 +287,8 @@ public final class FilesetTraversalParamsFactory {
   private static final class NestedTraversalParams extends ParamsCommon {
     private final FilesetTraversalParams nested;
 
-    NestedTraversalParams(
-        Label ownerLabel,
-        FilesetTraversalParams nested,
-        PathFragment destDir,
-        @Nullable Set<String> excludes) {
+    public NestedTraversalParams(Label ownerLabel, FilesetTraversalParams nested,
+        PathFragment destDir, @Nullable Set<String> excludes) {
       super(ownerLabel, destDir, excludes);
       this.nested = nested;
     }
