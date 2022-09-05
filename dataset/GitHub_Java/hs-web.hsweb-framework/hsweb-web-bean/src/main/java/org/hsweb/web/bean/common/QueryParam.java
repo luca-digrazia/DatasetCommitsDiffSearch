@@ -1,8 +1,8 @@
 package org.hsweb.web.bean.common;
 
 import java.io.Serializable;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /**
  * Created by 浩 on 2016-01-16 0016.
@@ -28,38 +28,32 @@ public class QueryParam extends SqlParam<QueryParam> implements Serializable {
     /**
      * 排序字段
      */
-    @Deprecated
     private Set<String> sortField = new LinkedHashSet<>();
-
-    /**
-     * 排序字段
-     */
-    private List<Sort> sorts = new LinkedList<>();
 
     /**
      * 排序方式 DESC 反序 ASC 正序
      */
-    @Deprecated
     private String sortOrder = "asc";
 
-    public QueryParam select(String... fields) {
-        return this.includes(fields);
+
+    public QueryParam orderBy(String sortField) {
+        this.sortField.add(sortField);
+        return this;
     }
 
-    public Sort orderBy(String sortField) {
-        Sort sort = new Sort(this, sortField);
-        sorts.add(sort);
-        return sort;
+    public QueryParam asc() {
+        setSortOrder("asc");
+        return this;
+    }
+
+    public QueryParam desc() {
+        setSortOrder("desc");
+        return this;
     }
 
     public QueryParam doPaging(int pageIndex) {
         this.pageIndex = pageIndex;
         this.paging = true;
-        return this;
-    }
-
-    public QueryParam noPaging() {
-        this.paging = false;
         return this;
     }
 
@@ -126,15 +120,4 @@ public class QueryParam extends SqlParam<QueryParam> implements Serializable {
         return new QueryParam();
     }
 
-    public List<Sort> getSorts() {
-        return sorts;
-    }
-
-    public void setSorts(List<Sort> sorts) {
-        this.sorts = sorts;
-    }
-
-    public static QueryParam build() {
-        return new QueryParam();
-    }
 }
