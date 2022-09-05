@@ -209,11 +209,11 @@
 
 package com.taobao.android.builder.adapter;
 
-import com.taobao.android.builder.tools.classinject.ApkInjectInfoCreator;
-import com.taobao.android.builder.tools.sign.AndroidSigner;
-
 import java.util.ArrayList;
 import java.util.List;
+
+import com.taobao.android.builder.tools.classinject.ApkInjectInfoCreator;
+import com.taobao.android.builder.tools.sign.AndroidSigner;
 
 /**
  * Created by wuzhong on 2017/3/29.
@@ -233,17 +233,17 @@ public class BuilderAdapter {
     public boolean packageRemoteAwbInJni = true;
 
     /**
-     * Add the atlas and atlasupdate dependencies to the main dex
+     * 添加atlas和atlasupdate的依赖到主dex
      */
     public boolean addAtlasDependency = true;
 
     /**
-     * bundleAllows local jars to be used by default, Taobao does not open
-     * The local jar of the main bundle is always open
+     * bundle中允许使用本地jar，默认打开， 淘宝不打开
+     * 主bundle的本地jar一直开启
      */
     public boolean localJarEnabled = true;
     /**
-     * Reliance on standard formats
+     * 标准格式的依赖
      */
     public boolean prettyDependencyFormat = true;
 

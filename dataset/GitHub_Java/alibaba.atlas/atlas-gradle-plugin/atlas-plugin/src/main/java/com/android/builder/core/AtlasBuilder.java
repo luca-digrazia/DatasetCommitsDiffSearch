@@ -209,6 +209,21 @@
 
 package com.android.builder.core;
 
+import java.io.File;
+import java.io.FilenameFilter;
+import java.io.IOException;
+import java.lang.reflect.Method;
+import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import com.android.SdkConstants;
 import com.android.annotations.NonNull;
 import com.android.annotations.Nullable;
@@ -239,7 +254,12 @@ import com.android.dex.Dex;
 import com.android.dx.command.dexer.DxContext;
 import com.android.dx.merge.CollisionPolicy;
 import com.android.dx.merge.DexMerger;
-import com.android.ide.common.process.*;
+import com.android.ide.common.process.JavaProcessExecutor;
+import com.android.ide.common.process.ProcessException;
+import com.android.ide.common.process.ProcessExecutor;
+import com.android.ide.common.process.ProcessInfo;
+import com.android.ide.common.process.ProcessOutputHandler;
+import com.android.ide.common.process.ProcessResult;
 import com.android.ide.common.res2.FileStatus;
 import com.android.ide.common.signing.KeytoolException;
 import com.android.io.FileWrapper;
@@ -256,6 +276,7 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.taobao.android.AaptLib;
+import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.extension.AtlasExtension;
 import com.taobao.android.builder.hook.dex.DexByteCodeConverterHook;
 import com.taobao.android.builder.tools.FileNameUtils;
@@ -276,14 +297,6 @@ import org.gradle.api.tasks.StopExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FilenameFilter;
-import java.io.IOException;
-import java.lang.reflect.Method;
-import java.security.PrivateKey;
-import java.security.cert.X509Certificate;
-import java.util.*;
-
 import static com.android.builder.model.AndroidProject.FD_INTERMEDIATES;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
@@ -296,7 +309,7 @@ public class AtlasBuilder extends AndroidBuilder {
 
     private static Logger sLogger = LoggerFactory.getLogger(AtlasBuilder.class);
 
-    public static final String PRE_DEXCACHE_TYPE = "pre-dex-0.10";
+    public static final String PRE_DEXCACHE_TYPE = "pre-dex-0.11";
 
     protected AtlasExtension atlasExtension;
 
@@ -1027,7 +1040,7 @@ public class AtlasBuilder extends AndroidBuilder {
                 myDexOptions.setDexInProcess(true);
                 useMyDex = true;
                 //if (inputs.size() > 1){
-//                myDexOptions.setJavaMaxHeapSize("500m");
+                myDexOptions.setJavaMaxHeapSize("500m");
                 //}
             }
 
@@ -1160,7 +1173,7 @@ public class AtlasBuilder extends AndroidBuilder {
 
         if (StringUtils.isNotEmpty(md5) && dexFile.exists()) {
             try {
-                FileCacheCenter.cacheFile(PRE_DEXCACHE_TYPE,md5, dexFile, atlasExtension.getTBuildConfig().isDexNetworkCacheEnabled());
+                FileCacheCenter.cacheFile(PRE_DEXCACHE_TYPE, md5, dexFile, AtlasBuildContext.sBuilderAdapter.pushCacheToNetwork && atlasExtension.getTBuildConfig().isDexNetworkCacheEnabled());
             } catch (FileCacheException e) {
                 sLogger.error(e.getMessage(),e);
             }
