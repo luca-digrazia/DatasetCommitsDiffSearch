@@ -16,7 +16,9 @@ import org.osgi.framework.BundleException;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -84,10 +86,10 @@ public class AtlasUpdater {
                     Pair<String, UpdateInfo.Item> pair = patchMerger.mergeOutputs.get(item.name);
                     if (new File(pair.first).exists()) {
                         result.add(item);
-                        monitor.merge(true, item.name, item.dexPatchVersion, "");
+                        monitor.merge(true, item.name, "");
                     } else {
                         if (monitor != null) {
-                            monitor.merge(false, item.name, item.dexPatchVersion, "");
+                            monitor.merge(false, item.name, "");
                         }
                     }
                 }
@@ -111,12 +113,12 @@ public class AtlasUpdater {
                 UpdateInfo.Item item = updateInfo.updateBundles.get(j);
                 if (installList.containsKey(item.name)) {
                     if (item.dexPatchVersion == installList.get(item.name)) {
-                        if (monitor != null) monitor.install(true, item.name, item.dexPatchVersion, "");
+                        if (monitor != null) monitor.install(true, item.name, "");
                     } else {
-                        if (monitor != null) monitor.install(false, item.name, item.dexPatchVersion, "");
+                        if (monitor != null) monitor.install(false, item.name, "");
                     }
                 } else {
-                    if (monitor != null) monitor.install(false, item.name, item.dexPatchVersion, "");
+                    if (monitor != null) monitor.install(false, item.name, "");
                 }
             }
         }
@@ -125,8 +127,8 @@ public class AtlasUpdater {
     }
 
     public interface IDexpatchMonitor {
-        public void merge(boolean success, String bundleName, long version, String errMsg);
-        public void install(boolean success, String bundleName, long version, String errMsg);
+        public void merge(boolean success, String bundleName, String errMsg);
+        public void install(boolean success, String bundleName, String errMsg);
     }
 
 }
