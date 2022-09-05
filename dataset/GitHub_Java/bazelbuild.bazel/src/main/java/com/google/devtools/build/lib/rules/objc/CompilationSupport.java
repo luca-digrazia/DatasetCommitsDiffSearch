@@ -77,7 +77,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
@@ -1309,9 +1308,8 @@ public final class CompilationSupport {
    * Validates compilation-related attributes on this rule.
    *
    * @return this compilation support
-   * @throws RuleErrorException if there are attribute errors
    */
-  CompilationSupport validateAttributes() throws RuleErrorException {
+  CompilationSupport validateAttributes() {
     for (PathFragment absoluteInclude :
         Iterables.filter(attributes.includes(), PathFragment.IS_ABSOLUTE)) {
       ruleContext.attributeError(
@@ -1340,7 +1338,6 @@ public final class CompilationSupport {
       }
     }
 
-    ruleContext.assertNoErrors();
     return this;
   }
 
