@@ -16,15 +16,15 @@ import java.util.Date;
  */
 public class OneDayDecorator implements DayViewDecorator {
 
-    private CalendarDay date;
+    Date date;
 
     public OneDayDecorator() {
-        date = new CalendarDay();
+        date = new Date();
     }
 
     @Override
     public boolean shouldDecorate(CalendarDay day) {
-        return date != null && day.equals(date);
+        return date != null && day.equals(new CalendarDay(date));
     }
 
     @Override
@@ -37,6 +37,6 @@ public class OneDayDecorator implements DayViewDecorator {
      * We're changing the internals, so make sure to call {@linkplain MaterialCalendarView#invalidateDecorators()}
      */
     public void setDate(Date date) {
-        this.date = new CalendarDay(date);
+        this.date = date;
     }
 }
