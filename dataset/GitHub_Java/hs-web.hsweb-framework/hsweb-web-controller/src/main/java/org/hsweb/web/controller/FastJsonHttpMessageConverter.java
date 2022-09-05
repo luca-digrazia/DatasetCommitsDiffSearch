@@ -95,7 +95,6 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
         }
         byte[] bytes = text.getBytes(charset);
         out.write(bytes);
-        out.flush();
     }
 
     protected PropertyPreFilter[] parseFilter(ResponseMessage responseMessage) {

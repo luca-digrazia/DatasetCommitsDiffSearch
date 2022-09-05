@@ -1,7 +1,6 @@
 package org.hsweb.web.controller;
 
 import com.alibaba.fastjson.serializer.SerializerFeature;
-import org.hsweb.web.core.message.FastJsonHttpMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.converter.HttpMessageConverter;
@@ -14,11 +13,12 @@ public class MessageConverterConfiguration {
 
     @Bean
     public HttpMessageConverter<Object> converter() {
-        FastJsonHttpMessageConverter converter = new FastJsonHttpMessageConverter();
+        FastJsonHttpMessageConverter converter =  new FastJsonHttpMessageConverter();
         converter.setFeatures(SerializerFeature.WriteNullListAsEmpty);
         converter.setFeatures(SerializerFeature.WriteNullNumberAsZero);
         converter.setFeatures(SerializerFeature.WriteNullBooleanAsFalse);
         converter.setFeatures(SerializerFeature.WriteDateUseDateFormat);
+
         return converter;
     }
 }
