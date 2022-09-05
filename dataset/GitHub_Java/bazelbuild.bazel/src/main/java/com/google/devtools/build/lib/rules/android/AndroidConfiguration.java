@@ -411,12 +411,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         help = "Implementation to use to sign APKs")
     public ApkSigningMethod apkSigningMethod;
 
-    @Option(name = "use_singlejar_apkbuilder",
-        defaultValue = "false",
-        category = "undocumented",
-        help = "Build Android APKs with SingleJar.")
-    public boolean useSingleJarApkBuilder;
-
     @Override
     public void addAllLabels(Multimap<String, Label> labelMap) {
       if (androidCrosstoolTop != null) {
@@ -485,7 +479,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final boolean useParallelResourceProcessing;
   private final AndroidManifestMerger manifestMerger;
   private final ApkSigningMethod apkSigningMethod;
-  private final boolean useSingleJarApkBuilder;
 
   AndroidConfiguration(Options options, Label androidSdk) {
     this.sdk = androidSdk;
@@ -511,7 +504,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.useParallelResourceProcessing = options.useParallelResourceProcessing;
     this.manifestMerger = options.manifestMerger;
     this.apkSigningMethod = options.apkSigningMethod;
-    this.useSingleJarApkBuilder = options.useSingleJarApkBuilder;
   }
 
   public String getCpu() {
@@ -594,10 +586,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public ApkSigningMethod getApkSigningMethod() {
     return apkSigningMethod;
-  }
-
-  public boolean useSingleJarApkBuilder() {
-    return useSingleJarApkBuilder;
   }
 
   @Override
