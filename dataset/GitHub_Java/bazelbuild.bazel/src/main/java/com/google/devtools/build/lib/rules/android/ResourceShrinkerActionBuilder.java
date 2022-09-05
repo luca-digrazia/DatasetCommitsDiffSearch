@@ -22,6 +22,8 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
+import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
+
 import java.util.Collections;
 import java.util.List;
 
@@ -144,15 +146,10 @@ public class ResourceShrinkerActionBuilder {
     ImmutableList.Builder<Artifact> outputs = ImmutableList.builder();
 
     CustomCommandLine.Builder commandLine = new CustomCommandLine.Builder();
-    
-    // Set the busybox tool.
-    commandLine.add("--tool").add("SHRINK").add("--");
 
-    inputs.addAll(
-        ruleContext
-            .getExecutablePrerequisite("$android_resources_busybox", Mode.HOST)
-            .getRunfilesSupport()
-            .getRunfilesArtifactsWithoutMiddlemen());
+    inputs.addAll(ruleContext.getExecutablePrerequisite("$android_resource_shrinker", Mode.HOST)
+        .getRunfilesSupport()
+        .getRunfilesArtifactsWithoutMiddlemen());
 
     commandLine.addExecPath("--aapt", sdk.getAapt().getExecutable());
 
@@ -177,10 +174,7 @@ public class ResourceShrinkerActionBuilder {
 
     checkNotNull(resourceFilesZip);
     checkNotNull(shrunkJar);
-    checkNotNull(proguardMapping);
     checkNotNull(primaryResources);
-    checkNotNull(primaryResources.getRTxt());
-    checkNotNull(primaryResources.getManifest());
     checkNotNull(resourceApkOut);
 
     commandLine.addExecPath("--resources", resourceFilesZip);
@@ -189,8 +183,10 @@ public class ResourceShrinkerActionBuilder {
     commandLine.addExecPath("--shrunkJar", shrunkJar);
     inputs.add(shrunkJar);
 
-    commandLine.addExecPath("--proguardMapping", proguardMapping);
-    inputs.add(proguardMapping);
+    if (proguardMapping != null) {
+      commandLine.addExecPath("--proguardMapping", proguardMapping);
+      inputs.add(proguardMapping);
+    }
 
     commandLine.addExecPath("--rTxt", primaryResources.getRTxt());
     inputs.add(primaryResources.getRTxt());
@@ -214,17 +210,16 @@ public class ResourceShrinkerActionBuilder {
     commandLine.addExecPath("--log", logOut);
     outputs.add(logOut);
 
-    ruleContext.registerAction(
-        spawnActionBuilder
-            .addTool(sdk.getAapt())
-            .addInputs(inputs.build())
-            .addOutputs(outputs.build())
-            .setCommandLine(commandLine.build())
-            .setExecutable(
-                ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST))
-            .setProgressMessage("Shrinking resources for " + ruleContext.getLabel())
-            .setMnemonic("ResourceShrinker")
-            .build(ruleContext));
+    ruleContext.registerAction(spawnActionBuilder
+        .addTool(sdk.getAapt())
+        .addInputs(inputs.build())
+        .addOutputs(outputs.build())
+        .setCommandLine(commandLine.build())
+        .setExecutable(ruleContext.getExecutablePrerequisite(
+            "$android_resource_shrinker", Mode.HOST))
+        .setProgressMessage("Shrinking resources for " + ruleContext.getLabel())
+        .setMnemonic("ResourceShrinker")
+        .build(ruleContext));
 
     return resourceApkOut;
   }
