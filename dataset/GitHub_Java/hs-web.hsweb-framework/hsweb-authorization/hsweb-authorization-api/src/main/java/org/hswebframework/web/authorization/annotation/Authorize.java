@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2016 http://www.hswebframework.org
+ *  * Copyright 2019 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ package org.hswebframework.web.authorization.annotation;
 import org.hswebframework.web.authorization.Permission;
 import org.hswebframework.web.authorization.Role;
 import org.hswebframework.web.authorization.User;
+import org.hswebframework.web.authorization.define.Phased;
 
 import java.lang.annotation.*;
 
@@ -28,6 +29,8 @@ import java.lang.annotation.*;
  * 基础权限控制注解,提供基本的控制配置
  *
  * @author zhouhao
+ * @see org.hswebframework.web.authorization.Authentication
+ * @see org.hswebframework.web.authorization.define.AuthorizeDefinition
  * @since 3.0
  */
 @Target({ElementType.TYPE, ElementType.METHOD})
@@ -63,8 +66,8 @@ public @interface Authorize {
     /**
      * 验证是否为指定user
      *
-     * @return user id array
-     * @see User#getId()
+     * @return username array
+     * @see User#getUsername()
      */
     String[] user() default {};
 
@@ -73,23 +76,7 @@ public @interface Authorize {
      *
      * @return 验证失败提示的消息
      */
-    String message() default "{unauthorized}";
-
-    /**
-     * 表达式验证
-     *
-     * @return 表达式
-     * @see RequiresExpression#value()
-     */
-    String expression() default "";
-
-    /**
-     * 表达式语言，默认spring表达式
-     *
-     * @return 表达式语言
-     * @see RequiresExpression#language()
-     */
-    String expressionLanguage() default "spel";
+    String message() default "无权限";
 
     /**
      * 是否合并类上的注解
@@ -103,6 +90,22 @@ public @interface Authorize {
      *
      * @return logical
      */
-    Logical logical() default Logical.OR;
+    Logical logical() default Logical.DEFAULT;
 
+    /**
+     * @return 验证时机，在方法调用前还是调用后s
+     */
+    Phased phased() default Phased.before;
+
+    /**
+     * @return 是否忽略, 忽略后将不进行权限控制
+     */
+    boolean ignore() default false;
+
+    /**
+     * @return 数据权限控制
+     */
+    RequiresDataAccess dataAccess() default @RequiresDataAccess(ignore = true);
+
+    String[] description() default {};
 }
