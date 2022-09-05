@@ -209,7 +209,8 @@ public final class RuleContext extends TargetContext
   }
 
   /**
-   * Returns the host configuration for this rule. 
+   * Returns the host configuration for this rule; keep in mind that there may be multiple different
+   * host configurations, even during a single build.
    */
   public BuildConfiguration getHostConfiguration() {
     return hostConfiguration;

@@ -350,14 +350,8 @@ public class BuildView {
     return getDirectPrerequisites(ct, null);
   }
 
-  public Iterable<ConfiguredTarget> getDirectPrerequisites(
-      ConfiguredTarget ct, @Nullable final LoadingCache<Label, Target> targetCache) {
-    return skyframeExecutor.getConfiguredTargets(
-        getDirectPrerequisiteDependencies(ct, targetCache));
-  }
-
-  public Iterable<Dependency> getDirectPrerequisiteDependencies(
-      ConfiguredTarget ct, @Nullable final LoadingCache<Label, Target> targetCache) {
+  public Iterable<ConfiguredTarget> getDirectPrerequisites(ConfiguredTarget ct,
+      @Nullable final LoadingCache<Label, Target> targetCache) {
     if (!(ct.getTarget() instanceof Rule)) {
       return ImmutableList.of();
     }
@@ -391,7 +385,8 @@ public class BuildView {
     DependencyResolver dependencyResolver = new SilentDependencyResolver();
     TargetAndConfiguration ctgNode =
         new TargetAndConfiguration(ct.getTarget(), ct.getConfiguration());
-    return dependencyResolver.dependentNodes(ctgNode, getConfigurableAttributeKeys(ctgNode));
+    return skyframeExecutor.getConfiguredTargets(
+        dependencyResolver.dependentNodes(ctgNode, getConfigurableAttributeKeys(ctgNode)));
   }
 
   /**

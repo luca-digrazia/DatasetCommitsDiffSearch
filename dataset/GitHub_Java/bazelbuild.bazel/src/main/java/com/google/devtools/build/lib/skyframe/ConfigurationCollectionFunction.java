@@ -15,8 +15,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Supplier;
 import com.google.common.base.Verify;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
@@ -88,18 +86,11 @@ public class ConfigurationCollectionFunction implements SkyFunction {
       PackageProviderForConfigurations loadedPackageProvider, BuildOptions buildOptions,
       ImmutableSet<String> multiCpu)
           throws InvalidConfigurationException {
-    // We cache all the related configurations for this target configuration in a cache that is
-    // dropped at the end of this method call. We instead rely on the cache for entire collections
-    // for caching the target and related configurations, and on a dedicated host configuration
-    // cache for the host configuration.
-    Cache<String, BuildConfiguration> cache =
-        CacheBuilder.newBuilder().<String, BuildConfiguration>build();
     List<BuildConfiguration> targetConfigurations = new ArrayList<>();
-
     if (!multiCpu.isEmpty()) {
       for (String cpu : multiCpu) {
         BuildConfiguration targetConfiguration = createConfiguration(
-            cache, eventHandler, loadedPackageProvider, buildOptions, cpu);
+            eventHandler, loadedPackageProvider, buildOptions, cpu);
         if (targetConfiguration == null || targetConfigurations.contains(targetConfiguration)) {
           continue;
         }
@@ -110,7 +101,7 @@ public class ConfigurationCollectionFunction implements SkyFunction {
       }
     } else {
       BuildConfiguration targetConfiguration = createConfiguration(
-          cache, eventHandler, loadedPackageProvider, buildOptions, null);
+          eventHandler, loadedPackageProvider, buildOptions, null);
       if (targetConfiguration == null) {
         return null;
       }
@@ -131,8 +122,7 @@ public class ConfigurationCollectionFunction implements SkyFunction {
   }
 
   @Nullable
-  private BuildConfiguration createConfiguration(
-      Cache<String, BuildConfiguration> cache,
+  public BuildConfiguration createConfiguration(
       EventHandler originalEventListener,
       PackageProviderForConfigurations loadedPackageProvider,
       BuildOptions buildOptions, String cpuOverride) throws InvalidConfigurationException {
@@ -143,8 +133,8 @@ public class ConfigurationCollectionFunction implements SkyFunction {
       buildOptions.get(BuildConfiguration.Options.class).cpu = cpuOverride;
     }
 
-    BuildConfiguration targetConfig = configurationFactory.get().createConfigurations(
-        cache, loadedPackageProvider, buildOptions, errorEventListener);
+    BuildConfiguration targetConfig = configurationFactory.get().createConfiguration(
+        loadedPackageProvider, buildOptions, errorEventListener);
     if (targetConfig == null) {
       return null;
     }

@@ -43,7 +43,6 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.SkylarkRuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.rules.fileset.FilesetProvider;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -139,9 +138,7 @@ public final class ConfiguredTargetFactory {
         : configuration.getGenfilesDirectory();
     ArtifactOwner owner =
         new ConfiguredTargetKey(rule.getLabel(), configuration.getArtifactOwnerConfiguration());
-    PathFragment rootRelativePath =
-        outputFile.getLabel().getPackageIdentifier().getPathFragment().getRelative(
-            outputFile.getLabel().getName());
+    PathFragment rootRelativePath = Util.getWorkspaceRelativePath(outputFile);
     Artifact result = isFileset
         ? artifactFactory.getFilesetArtifact(rootRelativePath, root, owner)
         : artifactFactory.getDerivedArtifact(rootRelativePath, root, owner);
@@ -179,12 +176,7 @@ public final class ConfiguredTargetFactory {
       TransitiveInfoCollection rule = targetContext.findDirectPrerequisite(
           outputFile.getGeneratingRule().getLabel(), config);
       if (isFileset) {
-        return new FilesetOutputConfiguredTarget(
-            targetContext,
-            outputFile,
-            rule,
-            artifact,
-            rule.getProvider(FilesetProvider.class).getTraversals());
+        return new FilesetOutputConfiguredTarget(targetContext, outputFile, rule, artifact);
       } else {
         return new OutputFileConfiguredTarget(targetContext, outputFile, rule, artifact);
       }

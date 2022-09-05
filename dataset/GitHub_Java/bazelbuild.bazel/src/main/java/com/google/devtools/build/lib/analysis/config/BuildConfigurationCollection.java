@@ -52,7 +52,7 @@ import java.util.Set;
  * <p>The "related" configurations are also contained in this class.
  */
 @ThreadSafe
-public final class BuildConfigurationCollection {
+public final class BuildConfigurationCollection implements Serializable {
   private final ImmutableList<BuildConfiguration> targetConfigurations;
   private final BuildConfiguration hostConfiguration;
 
@@ -66,12 +66,11 @@ public final class BuildConfigurationCollection {
     // configurations must all have different cache keys or we will end up with problems.
     HashMap<String, BuildConfiguration> cacheKeyConflictDetector = new HashMap<>();
     for (BuildConfiguration config : getAllConfigurations()) {
-      String cacheKey = config.optionsCacheKey();
-      if (cacheKeyConflictDetector.containsKey(cacheKey)) {
+      if (cacheKeyConflictDetector.containsKey(config.cacheKey())) {
         throw new InvalidConfigurationException("Conflicting configurations: " + config + " & "
-            + cacheKeyConflictDetector.get(cacheKey));
+            + cacheKeyConflictDetector.get(config.cacheKey()));
       }
-      cacheKeyConflictDetector.put(cacheKey, config);
+      cacheKeyConflictDetector.put(config.cacheKey(), config);
     }
   }
 
@@ -136,14 +135,14 @@ public final class BuildConfigurationCollection {
     out.println("digraph g {");
     out.println("  ratio = 0.3;");
     for (BuildConfiguration config : getAllConfigurations()) {
-      String from = config.checksum();
+      String from = config.shortCacheKey();
       for (Map.Entry<? extends Transition, ConfigurationHolder> entry :
           config.getTransitions().getTransitionTable().entrySet()) {
         BuildConfiguration toConfig = entry.getValue().getConfiguration();
         if (toConfig == config) {
           continue;
         }
-        String to = toConfig == null ? "ERROR" : toConfig.checksum();
+        String to = toConfig == null ? "ERROR" : toConfig.shortCacheKey();
         out.println("  \"" + from + "\" -> \"" + to + "\" [label=\"" + entry.getKey() + "\"]");
       }
     }
