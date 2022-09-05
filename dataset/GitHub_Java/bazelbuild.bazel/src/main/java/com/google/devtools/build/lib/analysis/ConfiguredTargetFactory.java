@@ -45,7 +45,6 @@ import com.google.devtools.build.lib.packages.PackageGroupsRuleVisibility;
 import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.SkylarkRuleConfiguredTargetBuilder;
@@ -267,15 +266,7 @@ public final class ConfiguredTargetFactory {
       RuleClass.ConfiguredTargetFactory<ConfiguredTarget, RuleContext> factory =
           rule.getRuleClassObject().<ConfiguredTarget, RuleContext>getConfiguredTargetFactory();
       Preconditions.checkNotNull(factory, rule.getRuleClassObject());
-      try {
-        return factory.create(ruleContext);
-      } catch (RuleErrorException ruleErrorException) {
-        // Returning null in this method is an indication an error occurred. Exceptions are not
-        // propagated, as this would show a nasty stack trace to users, and only provide info
-        // on one specific failure with poor messaging. By returning null, the caller can
-        // inspect ruleContext for multiple errors and output thorough messaging on each.
-        return null;
-      }
+      return factory.create(ruleContext);
     }
   }
 
