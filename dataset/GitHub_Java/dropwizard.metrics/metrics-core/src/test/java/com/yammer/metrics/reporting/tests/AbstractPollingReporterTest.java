@@ -2,9 +2,9 @@ package com.yammer.metrics.reporting.tests;
 
 import com.yammer.metrics.core.*;
 import com.yammer.metrics.reporting.AbstractPollingReporter;
-import com.yammer.metrics.stats.Snapshot;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.mockito.stubbing.Stubber;
@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyDouble;
 import static org.mockito.Mockito.*;
 
 public abstract class AbstractPollingReporterTest {
@@ -74,9 +75,9 @@ public abstract class AbstractPollingReporterTest {
     public final void counter() throws Exception {
         final long count = new Random().nextInt(Integer.MAX_VALUE);
         assertReporterOutput(
-                new Callable<Counter>() {
+                new Callable<CounterMetric>() {
                     @Override
-                    public Counter call() throws Exception {
+                    public CounterMetric call() throws Exception {
                         return createCounter(count);
                     }
                 },
@@ -86,9 +87,9 @@ public abstract class AbstractPollingReporterTest {
     @Test
     public final void histogram() throws Exception {
         assertReporterOutput(
-                new Callable<Histogram>() {
+                new Callable<HistogramMetric>() {
                     @Override
-                    public Histogram call() throws Exception {
+                    public HistogramMetric call() throws Exception {
                         return createHistogram();
                     }
                 },
@@ -98,9 +99,9 @@ public abstract class AbstractPollingReporterTest {
     @Test
     public final void meter() throws Exception {
         assertReporterOutput(
-                new Callable<Meter>() {
+                new Callable<MeterMetric>() {
                     @Override
-                    public Meter call() throws Exception {
+                    public MeterMetric call() throws Exception {
                         return createMeter();
                     }
                 },
@@ -110,9 +111,9 @@ public abstract class AbstractPollingReporterTest {
     @Test
     public final void timer() throws Exception {
         assertReporterOutput(
-                new Callable<Timer>() {
+                new Callable<TimerMetric>() {
                     @Override
-                    public Timer call() throws Exception {
+                    public TimerMetric call() throws Exception {
                         return createTimer();
                     }
                 },
@@ -123,72 +124,74 @@ public abstract class AbstractPollingReporterTest {
     public final void gauge() throws Exception {
         final String value = "gaugeValue";
         assertReporterOutput(
-                new Callable<Gauge<String>>() {
+                new Callable<GaugeMetric<String>>() {
                     @Override
-                    public Gauge<String> call() throws Exception {
+                    public GaugeMetric<String> call() throws Exception {
                         return createGauge();
                     }
                 },
                 expectedGaugeResult(value));
     }
 
-    static Counter createCounter(long count) throws Exception {
-        final Counter mock = mock(Counter.class);
+    @SuppressWarnings("unchecked")
+    static CounterMetric createCounter(long count) throws Exception {
+        final CounterMetric mock = mock(CounterMetric.class);
         when(mock.count()).thenReturn(count);
         return configureMatcher(mock, doAnswer(new MetricsProcessorAction() {
             @Override
-            void delegateToProcessor(MetricProcessor<Object> processor, MetricName name, Object context) throws Exception {
+            void delegateToProcessor(MetricsProcessor processor, MetricName name, Object context) throws Exception {
                 processor.processCounter(name, mock, context);
             }
         }));
     }
 
-    static Histogram createHistogram() throws Exception {
-        final Histogram mock = mock(Histogram.class);
-        setupSummarizableMock(mock);
-        setupSamplingMock(mock);
+    @SuppressWarnings("unchecked")
+    static HistogramMetric createHistogram() throws Exception {
+        final HistogramMetric mock = mock(HistogramMetric.class);
+        setupSummarizedMock(mock);
+        setupPercentiledMock(mock);
         return configureMatcher(mock, doAnswer(new MetricsProcessorAction() {
             @Override
-            void delegateToProcessor(MetricProcessor<Object> processor, MetricName name, Object context) throws Exception {
+            void delegateToProcessor(MetricsProcessor processor, MetricName name, Object context) throws Exception {
                 processor.processHistogram(name, mock, context);
             }
         }));
     }
 
-    
-    static Gauge<String> createGauge() throws Exception {
-        @SuppressWarnings("unchecked")
-        final Gauge<String> mock = mock(Gauge.class);
+    @SuppressWarnings("unchecked")
+    static GaugeMetric<String> createGauge() throws Exception {
+        final GaugeMetric<String> mock = mock(GaugeMetric.class);
         when(mock.value()).thenReturn("gaugeValue");
         return configureMatcher(mock, doAnswer(new MetricsProcessorAction() {
             @Override
-            void delegateToProcessor(MetricProcessor<Object> processor, MetricName name, Object context) throws Exception {
+            void delegateToProcessor(MetricsProcessor processor, MetricName name, Object context) throws Exception {
                 processor.processGauge(name, mock, context);
             }
         }));
     }
 
-
-    static Timer createTimer() throws Exception {
-        final Timer mock = mock(Timer.class);
+    @SuppressWarnings("unchecked")
+    static TimerMetric createTimer() throws Exception {
+        final TimerMetric mock = mock(TimerMetric.class);
         when(mock.durationUnit()).thenReturn(TimeUnit.MILLISECONDS);
-        setupSummarizableMock(mock);
+        setupSummarizedMock(mock);
         setupMeteredMock(mock);
-        setupSamplingMock(mock);
+        setupPercentiledMock(mock);
         return configureMatcher(mock, doAnswer(new MetricsProcessorAction() {
             @Override
-            void delegateToProcessor(MetricProcessor<Object> processor, MetricName name, Object context) throws Exception {
+            void delegateToProcessor(MetricsProcessor processor, MetricName name, Object context) throws Exception {
                 processor.processTimer(name, mock, context);
             }
         }));
     }
 
-    static Meter createMeter() throws Exception {
-        final Meter mock = mock(Meter.class);
+    @SuppressWarnings("unchecked")
+    static MeterMetric createMeter() throws Exception {
+        final MeterMetric mock = mock(MeterMetric.class);
         setupMeteredMock(mock);
         return configureMatcher(mock, doAnswer(new MetricsProcessorAction() {
             @Override
-            void delegateToProcessor(MetricProcessor<Object> processor, MetricName name, Object context) throws Exception {
+            void delegateToProcessor(MetricsProcessor processor, MetricName name, Object context) throws Exception {
                 processor.processMeter(name, mock, context);
             }
         }));
@@ -196,29 +199,28 @@ public abstract class AbstractPollingReporterTest {
 
     @SuppressWarnings("unchecked")
     static <T extends Metric> T configureMatcher(T mock, Stubber stub) throws Exception {
-        stub.when(mock).processWith(any(MetricProcessor.class), any(MetricName.class), any());
+        stub.when(mock).processWith(any(MetricsProcessor.class), any(MetricName.class), any());
         return mock;
     }
 
     static abstract class MetricsProcessorAction implements Answer<Object> {
         @Override
         public Object answer(InvocationOnMock invocation) throws Throwable {
-            @SuppressWarnings("unchecked")
-            final MetricProcessor<Object> processor = (MetricProcessor<Object>) invocation.getArguments()[0];
+            final MetricsProcessor<?> processor = (MetricsProcessor<?>) invocation.getArguments()[0];
             final MetricName name = (MetricName) invocation.getArguments()[1];
             final Object context = invocation.getArguments()[2];
             delegateToProcessor(processor, name, context);
             return null;
         }
 
-        abstract void delegateToProcessor(MetricProcessor<Object> processor, MetricName name, Object context) throws Exception;
+        abstract void delegateToProcessor(MetricsProcessor<?> processor, MetricName name, Object context) throws Exception;
     }
 
-    static void setupSummarizableMock(Summarizable summarizable) {
-        when(summarizable.min()).thenReturn(1d);
-        when(summarizable.max()).thenReturn(3d);
-        when(summarizable.mean()).thenReturn(2d);
-        when(summarizable.stdDev()).thenReturn(1.5d);
+    static void setupSummarizedMock(Summarized summarized) {
+        when(summarized.min()).thenReturn(1d);
+        when(summarized.max()).thenReturn(3d);
+        when(summarized.mean()).thenReturn(2d);
+        when(summarized.stdDev()).thenReturn(1.5d);
     }
 
     static void setupMeteredMock(Metered metered) {
@@ -231,12 +233,20 @@ public abstract class AbstractPollingReporterTest {
         when(metered.rateUnit()).thenReturn(TimeUnit.SECONDS);
     }
 
-    static void setupSamplingMock(Sampling sampling) {
-        final double[] values = new double[1000];
-        for (int i = 0; i < values.length; i++) {
-            values[i] = i / 1000.0;
-        }
-        when(sampling.getSnapshot()).thenReturn(new Snapshot(values));
+    static void setupPercentiledMock(Percentiled percentiled) {
+        when(percentiled.percentile(anyDouble())).thenAnswer(new Answer<Double>() {
+            @Override
+            public Double answer(InvocationOnMock invocation) throws Throwable {
+                return (Double) invocation.getArguments()[0];
+            }
+        });
+        doAnswer(new Answer<Double[]>() {
+            @Override
+            public Double[] answer(InvocationOnMock invocation) throws Throwable {
+                final Object[] arguments = invocation.getArguments();
+                return Arrays.copyOf(arguments, arguments.length, Double[].class);
+            }
+        }).when(percentiled).percentiles(Mockito.<Double>anyVararg());
     }
 
     public abstract String[] expectedGaugeResult(String value);
