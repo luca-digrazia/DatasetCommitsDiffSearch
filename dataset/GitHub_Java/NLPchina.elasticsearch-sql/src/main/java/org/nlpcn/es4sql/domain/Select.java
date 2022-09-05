@@ -9,13 +9,15 @@ import java.util.List;
  * 
  * @author ansj
  */
-public class Select extends Query {
+public class Select {
 
 	// Using this functions, will cause query to execute as aggregation.
 	private final List<String> aggsFunctions = Arrays.asList("SUM", "MAX", "MIN", "AVG", "TOPHITS", "COUNT", "STATS");
 
+	private List<Index> indexs = new ArrayList<>();
 	private List<Field> fields = new ArrayList<>();
-	private List<List<Field>> groupBys = new ArrayList<>();
+	private Where where = null;
+	private List<Field> groupBys = new ArrayList<>();
 	private List<Order> orderBys = new ArrayList<>();
 	private int offset;
 	private int rowCount = 200;
@@ -25,6 +27,10 @@ public class Select extends Query {
 	public boolean isAgg = false;
 
 	public Select() {
+	}
+
+	public List<Index> getIndexs() {
+		return indexs;
 	}
 
 	public List<Field> getFields() {
@@ -39,18 +45,27 @@ public class Select extends Query {
 		this.rowCount = rowCount;
 	}
 
+	public void addIndexAndType(String from) {
+		if (from == null || from.trim().length() == 0) {
+			return;
+		}
+		indexs.add(new Index(from));
+	}
+
 	public void addGroupBy(Field field) {
-		List<Field> wrapper = new ArrayList<>();
-		wrapper.add(field);
-		addGroupBy(wrapper);
-	}
-
-	public void addGroupBy(List<Field> fields) {
 		isAgg = true;
-		this.groupBys.add(fields);
+		this.groupBys.add(field);
 	}
 
-	public List<List<Field>> getGroupBys() {
+	public Where getWhere() {
+		return this.where;
+	}
+
+	public void setWhere(Where where) {
+		this.where = where;
+	}
+
+	public List<Field> getGroupBys() {
 		return groupBys;
 	}
 
@@ -73,6 +88,29 @@ public class Select extends Query {
 		this.orderBys.add(new Order(name, type));
 	}
 
+	public String[] getIndexArr() {
+		String[] indexArr = new String[this.indexs.size()];
+		for (int i = 0; i < indexArr.length; i++) {
+			indexArr[i] = this.indexs.get(i).getIndex();
+		}
+		return indexArr;
+	}
+
+	public String[] getTypeArr() {
+		List<String> list = new ArrayList<>();
+		Index index = null;
+		for (int i = 0; i < indexs.size(); i++) {
+			index = indexs.get(i);
+			if (index.getType() != null && index.getType().trim().length() > 0) {
+				list.add(index.getType());
+			}
+		}
+		if (list.size() == 0) {
+			return null;
+		}
+
+		return list.toArray(new String[list.size()]);
+	}
 
 	public void addField(Field field) {
 		if (field == null) {
