@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.analysis.CommandHelper;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
@@ -29,7 +28,6 @@ import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -45,7 +43,7 @@ import java.util.Set;
 @Immutable
 public final class ExtraActionSpec implements TransitiveInfoProvider {
   private final ImmutableList<Artifact> resolvedTools;
-  private final RunfilesSupplier runfilesSupplier;
+  private final ImmutableMap<PathFragment, Artifact> manifests;
   private final ImmutableList<Artifact> resolvedData;
   private final ImmutableList<String> outputTemplates;
   private final ImmutableMap<String, String> executionInfo;
@@ -55,7 +53,7 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
 
   ExtraActionSpec(
       Iterable<Artifact> resolvedTools,
-      RunfilesSupplier runfilesSupplier,
+      Map<PathFragment, Artifact> manifests,
       Iterable<Artifact> resolvedData,
       Iterable<String> outputTemplates,
       String command,
@@ -63,7 +61,7 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
       Map<String, String> executionInfo,
       boolean requiresActionOutput) {
     this.resolvedTools = ImmutableList.copyOf(resolvedTools);
-    this.runfilesSupplier = runfilesSupplier;
+    this.manifests = ImmutableMap.copyOf(manifests);
     this.resolvedData = ImmutableList.copyOf(resolvedData);
     this.outputTemplates = ImmutableList.copyOf(outputTemplates);
     this.command = command;
@@ -85,10 +83,9 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
     NestedSetBuilder<Artifact> extraActionInputs = NestedSetBuilder.stableOrder();
 
     Label ownerLabel = owningRule.getLabel();
-    if (requiresActionOutput || actionToShadow.discoversInputs()) {
+    if (requiresActionOutput) {
       extraActionInputs.addAll(actionToShadow.getOutputs());
     }
-
     extraActionInputs.addAll(resolvedTools);
     extraActionInputs.addAll(resolvedData);
 
@@ -140,7 +137,7 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
     owningRule.registerAction(
         new ExtraAction(
             ImmutableSet.copyOf(extraActionInputs.build()),
-            runfilesSupplier,
+            manifests,
             extraActionOutputs,
             actionToShadow,
             createDummyOutput,
@@ -239,10 +236,10 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
   public static String getActionId(ActionOwner owner, Action action) {
     Fingerprint f = new Fingerprint();
     f.addString(owner.getLabel().toString());
-    ImmutableList<AspectDescriptor> aspectDescriptors = owner.getAspectDescriptors();
-    f.addInt(aspectDescriptors.size());
-    for (AspectDescriptor aspectDescriptor : aspectDescriptors) {
-      f.addString(aspectDescriptor.getDescription());
+    f.addNullableString(owner.getAspectName());
+    f.addBoolean(owner.getAspectParameters() != null);
+    if (owner.getAspectParameters() != null) {
+      f.addString(owner.getAspectParameters().toString());
     }
     f.addString(action.getKey());
     return f.hexDigestAndReset();

@@ -549,7 +549,6 @@ public class AspectTest extends AnalysisTestCase {
     scratch.file(
         "x/BUILD",
         "load(':extension.bzl', 'injector1', 'injector2', 'null_rule')",
-        "injector2(name='i2_a', deps = [':i1_a'])",
         "injector1(name='i1_a', deps=[':n'], param = 'a')",
         "injector1(name='i1_b', deps=[':n'], param = 'b')",
         "injector2(name='i2', deps=[':n'])",
@@ -576,7 +575,7 @@ public class AspectTest extends AnalysisTestCase {
         "extra_action(name='xa', cmd='echo dont-care')",
         "action_listener(name='listener', mnemonics=['Mnemonic'], extra_actions=[':xa'])");
 
-    update("//x:i1_a", "//x:i1_b", "//x:i2", "//x:i2_a");
+      update("//x:i1_a", "//x:i1_b", "//x:i2");
 
     // Implicitly check that update() didn't throw an exception because of two actions producing
     // the same outputs.
@@ -683,30 +682,5 @@ public class AspectTest extends AnalysisTestCase {
     assertThat(a.getProvider(RuleInfo.class).getData())
         .containsExactly(
             "aspect //a:a", "aspect //a:b", "aspect //a:c", "aspect //a:tool", "rule //a:x");
-  }
-
-  @Test
-  public void aspectTruthInAdvertisement() throws Exception {
-    reporter.removeHandler(failFastHandler); // expect errors
-    setRulesAvailableInTests(
-        new TestAspects.BaseRule(),
-        new TestAspects.SimpleRule(),
-        new TestAspects.FalseAdvertisementAspectRule());
-    pkg(
-        "a",
-        "simple(name = 's')",
-        "false_advertisement_aspect(name = 'x', deps = [':s'])"
-    );
-    try {
-      update("//a:x");
-    } catch (ViewCreationFailedException e) {
-      // expected.
-    }
-    assertContainsEvent(
-        "Aspect 'FalseAdvertisementAspect', applied to '//a:s',"
-            + " does not provide advertised provider 'RequiredProvider'");
-    assertContainsEvent(
-        "Aspect 'FalseAdvertisementAspect', applied to '//a:s',"
-            + " does not provide advertised provider 'advertised_provider'");
   }
 }
