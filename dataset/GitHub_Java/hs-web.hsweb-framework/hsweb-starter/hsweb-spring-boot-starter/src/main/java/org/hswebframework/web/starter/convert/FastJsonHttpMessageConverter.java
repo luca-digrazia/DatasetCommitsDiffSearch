@@ -1,14 +1,10 @@
 package org.hswebframework.web.starter.convert;
 
 import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONPObject;
-import com.alibaba.fastjson.parser.ParserConfig;
 import com.alibaba.fastjson.serializer.PropertyPreFilter;
 import com.alibaba.fastjson.serializer.SerializerFeature;
 import com.alibaba.fastjson.serializer.SimplePropertyPreFilter;
 import org.hswebframework.web.ThreadLocalUtils;
-import org.hswebframework.web.commons.entity.Entity;
-import org.hswebframework.web.commons.entity.factory.EntityFactory;
 import org.hswebframework.web.controller.message.ResponseMessage;
 import org.hswebframwork.utils.StringUtils;
 import org.springframework.http.HttpInputMessage;
@@ -30,30 +26,15 @@ import java.util.Set;
 
 public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<Object> {
 
-    static {
-        // TODO: 17-3-16  白名单应可配置
-        ParserConfig.getGlobalInstance().addAccept("org.hswebframework.web.entity.");
-    }
-
     public final static Charset UTF8 = Charset.forName("UTF-8");
 
     private Charset charset = UTF8;
 
     private SerializerFeature[] features = new SerializerFeature[0];
 
-    private EntityFactory entityFactory;
-
     public FastJsonHttpMessageConverter() {
         super(new MediaType("application", "json", UTF8),
                 new MediaType("application", "*+json", UTF8));
-    }
-
-    public void setEntityFactory(EntityFactory entityFactory) {
-        this.entityFactory = entityFactory;
-    }
-
-    public EntityFactory getEntityFactory() {
-        return entityFactory;
     }
 
     @Override
@@ -77,20 +58,6 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
         this.features = features;
     }
 
-    public Object readByString(Class<?> clazz, String jsonStr) {
-        return readByBytes(clazz, jsonStr.getBytes());
-    }
-
-    public Object readByBytes(Class<?> clazz, byte[] bytes) {
-        if (clazz == String.class) return new String(bytes, charset);
-        if (entityFactory != null && Entity.class.isAssignableFrom(clazz)) {
-            @SuppressWarnings("unchecked")
-            Class<Entity> tmp = entityFactory.getInstanceType((Class<Entity>) clazz);
-            if (tmp != null) clazz = tmp;
-        }
-        return JSON.parseObject(bytes, 0, bytes.length, charset.newDecoder(), clazz);
-    }
-
     @Override
     protected Object readInternal(Class<?> clazz, HttpInputMessage inputMessage) throws IOException,
             HttpMessageNotReadableException {
@@ -107,16 +74,25 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
             }
         }
         byte[] bytes = baos.toByteArray();
-        return readByBytes(clazz, bytes);
+        if (clazz == String.class) return new String(bytes, charset);
+        // TODO: 16-12-24 clazz应该使用beanFactory获取
+        return JSON.parseObject(bytes, 0, bytes.length, charset.newDecoder(), clazz);
     }
 
     public String converter(Object obj) {
         if (obj instanceof String) return (String) obj;
         String text;
-        String callback = ThreadLocalUtils.getAndRemove("jsonp-callback");
+        String callback = ThreadLocalUtils.get("jsonp-callback");
+        ThreadLocalUtils.remove("jsonp-callback");
         if (obj instanceof ResponseMessage) {
             ResponseMessage message = (ResponseMessage) obj;
-            text = JSON.toJSONString(obj, parseFilter(message), features);
+            if (message.getCode() == 200 && message.isOnlyData())
+                obj = message.getData();
+            if (obj instanceof String)
+                text = ((String) obj);
+            else
+                text = JSON.toJSONString(obj, parseFilter(message), features);
+            if (callback == null) callback = message.getCallback();
         } else {
             text = JSON.toJSONString(obj, features);
         }
@@ -133,12 +109,13 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
     protected void writeInternal(Object obj, HttpOutputMessage outputMessage) throws IOException,
             HttpMessageNotWritableException {
         OutputStream out = outputMessage.getBody();
+
         byte[] bytes = converter(obj).getBytes(charset);
         out.write(bytes);
         out.flush();
     }
 
-    protected PropertyPreFilter[] parseFilter(ResponseMessage<?> responseMessage) {
+    protected PropertyPreFilter[] parseFilter(ResponseMessage responseMessage) {
         List<PropertyPreFilter> filters = new ArrayList<>();
         if (responseMessage.getIncludes() != null)
             for (Map.Entry<Class<?>, Set<String>> classSetEntry : responseMessage.getIncludes().entrySet()) {

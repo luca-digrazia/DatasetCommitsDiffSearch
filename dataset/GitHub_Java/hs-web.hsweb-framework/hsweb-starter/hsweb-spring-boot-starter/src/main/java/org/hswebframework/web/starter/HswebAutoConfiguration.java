@@ -19,29 +19,11 @@
 package org.hswebframework.web.starter;
 
 import com.alibaba.fastjson.serializer.SerializerFeature;
-import org.hswebframework.web.authorization.AuthorizationHolder;
-import org.hswebframework.web.authorization.AuthorizationSupplier;
-import org.hswebframework.web.commons.entity.factory.EntityFactory;
-import org.hswebframework.web.commons.entity.factory.MapperEntityFactory;
 import org.hswebframework.web.starter.convert.FastJsonHttpMessageConverter;
-import org.hswebframework.web.starter.resolver.AuthorizationArgumentResolver;
-import org.hswebframework.web.starter.resolver.JsonParamResolver;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
-import org.springframework.web.method.support.HandlerMethodArgumentResolver;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
-
-import javax.validation.Validation;
-import javax.validation.Validator;
-import javax.validation.ValidatorFactory;
-import java.util.List;
+import org.springframework.http.converter.HttpMessageConverter;
 
 /**
  * TODO 完成注释
@@ -50,63 +32,18 @@ import java.util.List;
  */
 @Configuration
 @ComponentScan("org.hswebframework.web")
-@EnableConfigurationProperties(EntityProperties.class)
 public class HswebAutoConfiguration {
 
-    @Autowired(required = false)
-    private EntityProperties entityProperties;
-
-
     @Bean
-    @Primary
-    public FastJsonHttpMessageConverter fastJsonHttpMessageConverter(@Autowired(required = false) EntityFactory entityFactory) {
+    public HttpMessageConverter<Object> converter() {
         FastJsonHttpMessageConverter converter = new FastJsonHttpMessageConverter();
         // TODO: 16-12-24  应该可配置
         converter.setFeatures(
                 SerializerFeature.WriteNullListAsEmpty,
                 SerializerFeature.WriteNullNumberAsZero,
-                SerializerFeature.WriteNullBooleanAsFalse
-//                SerializerFeature.WriteDateUseDateFormat
+                SerializerFeature.WriteNullBooleanAsFalse,
+                SerializerFeature.WriteDateUseDateFormat
         );
-        converter.setEntityFactory(entityFactory);
         return converter;
     }
-
-    @Bean
-    public JsonParamResolver jsonParamResolver(FastJsonHttpMessageConverter fastJsonHttpMessageConverter) {
-        return new JsonParamResolver(fastJsonHttpMessageConverter);
-    }
-
-    @Bean
-    @ConditionalOnBean(AuthorizationSupplier.class)
-    public AuthorizationArgumentResolver authorizationArgumentResolver(AuthorizationSupplier authorizationSupplier) {
-        AuthorizationHolder.setSupplier(authorizationSupplier);
-        return new AuthorizationArgumentResolver(authorizationSupplier);
-    }
-
-    @Bean
-    public WebMvcConfigurer webMvcConfigurer(List<HandlerMethodArgumentResolver> handlerMethodArgumentResolvers) {
-        return new WebMvcConfigurerAdapter() {
-            @Override
-            public void addArgumentResolvers(List<HandlerMethodArgumentResolver> argumentResolvers) {
-                super.addArgumentResolvers(argumentResolvers);
-                argumentResolvers.addAll(handlerMethodArgumentResolvers);
-            }
-        };
-    }
-
-    @Bean(name = "validator")
-    @ConditionalOnMissingBean(Validator.class)
-    public Validator validator() {
-        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
-        Validator validator = factory.getValidator();
-        return validator;
-    }
-
-    @Bean(name = "entityFactory")
-    @ConditionalOnMissingBean(EntityFactory.class)
-    public EntityFactory entityFactory() {
-        return new MapperEntityFactory(entityProperties.createMappers());
-    }
-
 }
