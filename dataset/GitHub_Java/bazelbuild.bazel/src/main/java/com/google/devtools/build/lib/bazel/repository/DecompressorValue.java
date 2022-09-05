@@ -41,8 +41,15 @@ public class DecompressorValue implements SkyValue {
 
   @Override
   public boolean equals(Object other) {
-    return this == other || (other instanceof DecompressorValue
-        && directory.equals(((DecompressorValue) other).directory));
+    if (this == other) {
+      return true;
+    }
+
+    if (!(other instanceof DecompressorValue)) {
+      return false;
+    }
+
+    return directory.equals(((DecompressorValue) other).directory);
   }
 
   @Override
@@ -54,7 +61,7 @@ public class DecompressorValue implements SkyValue {
       throws RepositoryFunctionException {
     String baseName = archivePath.getBaseName();
     if (baseName.endsWith(".zip") || baseName.endsWith(".jar") || baseName.endsWith(".war")) {
-      return ZipDecompressor.INSTANCE;
+      return ZipFunction.INSTANCE;
     } else if (baseName.endsWith(".tar.gz") || baseName.endsWith(".tgz")) {
       return TarGzFunction.INSTANCE;
     } else if (baseName.endsWith(".tar.xz")) {
