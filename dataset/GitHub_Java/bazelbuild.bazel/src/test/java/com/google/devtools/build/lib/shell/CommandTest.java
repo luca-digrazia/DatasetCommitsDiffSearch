@@ -456,8 +456,7 @@ public class CommandTest {
 
   @Test
   public void testOnlyReadsPartialInput() throws Exception {
-    // -c == --bytes, but -c also works on Darwin.
-    Command command = new Command(new String[] {"head", "-c", "500"});
+    Command command = new Command(new String[] {"head", "--bytes", "500"});
     OutputStream out = new ByteArrayOutputStream();
     InputStream in = new InputStream() {
 
