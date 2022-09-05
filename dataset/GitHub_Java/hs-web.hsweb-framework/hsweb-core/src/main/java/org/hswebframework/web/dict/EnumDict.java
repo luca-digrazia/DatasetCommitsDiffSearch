@@ -16,8 +16,6 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.hswebframework.web.exception.ValidationException;
@@ -27,7 +25,6 @@ import org.springframework.util.StringUtils;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.*;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -126,6 +123,11 @@ public interface EnumDict<V> extends JSONSerializable {
         return getText();
     }
 
+    @JsonCreator
+    default EnumDict<V> fromJsonNode(Object val) {
+
+        return null;
+    }
 
 
     /**
@@ -292,10 +294,7 @@ public interface EnumDict<V> extends JSONSerializable {
      * 自定义fastJson枚举序列化
      */
     @Slf4j
-    @AllArgsConstructor
-    @NoArgsConstructor
     class EnumDictJSONDeserializer extends JsonDeserializer implements ObjectDeserializer {
-        private Function<Object,Object> mapper;
 
         @Override
         @SuppressWarnings("all")
@@ -347,14 +346,7 @@ public interface EnumDict<V> extends JSONSerializable {
         @SneakyThrows
         public Object deserialize(JsonParser jp, DeserializationContext ctxt) throws IOException, JsonProcessingException {
             JsonNode node = jp.getCodec().readTree(jp);
-            if(mapper!=null){
-                if(node.isTextual()){
-                    return mapper.apply(node.asText());
-                }
-                if(node.isNumber()){
-                    return mapper.apply(node.asLong());
-                }
-            }
+
             String currentName = jp.currentName();
             Object currentValue = jp.getCurrentValue();
             Class findPropertyType;
