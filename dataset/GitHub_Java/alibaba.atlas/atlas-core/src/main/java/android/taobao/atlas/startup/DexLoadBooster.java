@@ -212,7 +212,6 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import android.content.Context;
-import android.os.Build;
 import android.taobao.atlas.framework.Framework;
 import android.text.TextUtils;
 import android.util.Log;
@@ -251,9 +250,6 @@ public class DexLoadBooster {
             return;
         }
         Log.e("AndroidRuntime",Dex2OatService.class.toString());
-        if (Build.VERSION.SDK_INT > 20) {
-            return;
-        }
         DalvikPatch.patchIfPossible();
     }
 
