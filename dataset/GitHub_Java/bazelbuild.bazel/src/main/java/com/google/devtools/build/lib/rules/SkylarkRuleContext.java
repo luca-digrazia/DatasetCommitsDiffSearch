@@ -308,6 +308,24 @@ public final class SkylarkRuleContext {
     return filesObject;
   }
 
+  /**
+   * See {@link RuleContext#getPrerequisite(String, Mode)}.
+   */
+  @SkylarkCallable(name = "target", structField = true, documented = false)
+  public SkylarkClassObject getTarget() throws FuncallException {
+    // TODO(bazel-team): Remove function in June 2015.
+    throw new FuncallException("ctx.target has been removed, use ctx.attr instead");
+  }
+
+  /**
+   * See {@link RuleContext#getPrerequisites(String, Mode)}.
+   */
+  @SkylarkCallable(name = "targets", structField = true, documented = false)
+  public SkylarkClassObject getTargets() throws FuncallException {
+    // TODO(bazel-team): Remove function in June 2015.
+    throw new FuncallException("ctx.targets has been removed, use ctx.attr instead");
+  }
+
   @SkylarkCallable(name = "workspace_name", structField = true,
       doc = "Returns the workspace name as defined in the WORKSPACE file.")
   public String getWorkspaceName() {
@@ -453,7 +471,7 @@ public final class SkylarkRuleContext {
 
   @SkylarkCallable(doc =
         "Returns a string after expanding all references to \"Make variables\". The variables "
-      + "must have the following format: <code>$(VAR_NAME)</code>. Also, <code>$$VAR_NAME"
+      + "have to have the following format: <code>$(VAR_NAME)</code>. Also, <code>$$VAR_NAME"
       + "</code> expands to <code>$VAR_NAME</code>. Parameters:"
       + "<ul><li>The name of the attribute (<code>string</code>). It's only used for error "
       + "reporting.</li>\n"
