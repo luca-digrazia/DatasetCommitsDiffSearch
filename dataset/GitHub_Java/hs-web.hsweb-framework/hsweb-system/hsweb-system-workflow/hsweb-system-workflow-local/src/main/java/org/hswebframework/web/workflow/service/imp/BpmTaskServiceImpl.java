@@ -1,10 +1,7 @@
 package org.hswebframework.web.workflow.service.imp;
 
-import lombok.SneakyThrows;
-import org.activiti.engine.history.HistoricActivityInstance;
 import org.activiti.engine.history.HistoricProcessInstance;
 import org.activiti.engine.history.HistoricTaskInstance;
-import org.activiti.engine.history.HistoricVariableInstance;
 import org.activiti.engine.impl.RepositoryServiceImpl;
 import org.activiti.engine.impl.TaskServiceImpl;
 import org.activiti.engine.impl.persistence.entity.ProcessDefinitionEntity;
@@ -16,14 +13,11 @@ import org.activiti.engine.impl.pvm.process.TransitionImpl;
 import org.activiti.engine.runtime.Execution;
 import org.activiti.engine.runtime.ProcessInstance;
 import org.activiti.engine.task.Task;
-import org.hswebframework.ezorm.rdb.executor.SqlExecutor;
 import org.hswebframework.utils.StringUtils;
 import org.hswebframework.web.BusinessException;
-import org.hswebframework.web.Maps;
 import org.hswebframework.web.NotFoundException;
 import org.hswebframework.web.authorization.Authentication;
-import org.hswebframework.web.workflow.dao.entity.ProcessHistoryEntity;
-import org.hswebframework.web.workflow.service.ProcessHistoryService;
+import org.hswebframework.web.authorization.User;
 import org.hswebframework.web.workflow.service.config.ProcessConfigurationService;
 import org.hswebframework.web.workflow.service.BpmActivityService;
 import org.hswebframework.web.workflow.service.BpmTaskService;
@@ -31,27 +25,19 @@ import org.hswebframework.web.workflow.flowable.utils.JumpTaskCmd;
 import org.hswebframework.web.workflow.service.WorkFlowFormService;
 import org.hswebframework.web.workflow.service.config.CandidateInfo;
 import org.hswebframework.web.workflow.service.request.CompleteTaskRequest;
-import org.hswebframework.web.workflow.service.request.JumpTaskRequest;
-import org.hswebframework.web.workflow.service.request.RejectTaskRequest;
 import org.hswebframework.web.workflow.service.request.SaveFormRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.CollectionUtils;
 
 import java.util.*;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 
 /**
- * @author wangwei
- * @author zhouhao
+ * @Author wangwei
+ * @Date 2017/8/7.
  */
 @Service
 @Transactional(rollbackFor = Throwable.class)
@@ -68,36 +54,21 @@ public class BpmTaskServiceImpl extends AbstractFlowableService implements BpmTa
     @Autowired
     private WorkFlowFormService workFlowFormService;
 
-    @Autowired
-    private ProcessHistoryService processHistoryService;
-
-    @Autowired
-    private SqlExecutor sqlExecutor;
-
     @Override
     public List<Task> selectNowTask(String procInstId) {
         return taskService.createTaskQuery()
                 .processInstanceId(procInstId)
-                .active()
-                .list();
+                .active().list();
     }
 
     @Override
     public List<Task> selectTaskByProcessId(String procInstId) {
-        return taskService
-                .createTaskQuery()
-                .processInstanceId(procInstId)
-                .active()
-                .list();
+        return taskService.createTaskQuery().processInstanceId(procInstId).active().list();
     }
 
     @Override
     public Task selectTaskByTaskId(String taskId) {
-        return taskService
-                .createTaskQuery()
-                .taskId(taskId)
-                .active()
-                .singleResult();
+        return taskService.createTaskQuery().taskId(taskId).active().singleResult();
     }
 
     @Override
@@ -109,12 +80,34 @@ public class BpmTaskServiceImpl extends AbstractFlowableService implements BpmTa
                 .singleResult();
         if (task == null) {
             throw new NotFoundException("无法签收此任务");
+            //return; // fix null point
         }
         if (!StringUtils.isNullOrEmpty(task.getAssignee())) {
-            throw new BusinessException("任务已签售");
+            logger.warn("该任务已被签收!");
         } else {
             taskService.claim(taskId, userId);
         }
+    }
+
+
+    @Override
+    public List<Task> claimList(String userId) {
+        // 等待签收的任务
+        return taskService.createTaskQuery()
+                .taskCandidateUser(userId)
+                .includeProcessVariables()
+                .active()
+                .list();
+    }
+
+    @Override
+    public List<Task> todoList(String userId) {
+        // 已经签收的任务
+        return taskService.createTaskQuery()
+                .taskAssignee(userId)
+                .includeProcessVariables()
+                .active()
+                .list();
     }
 
     @Override
@@ -134,7 +127,7 @@ public class BpmTaskServiceImpl extends AbstractFlowableService implements BpmTa
             throw new BusinessException("只能完成自己的任务");
         }
         Map<String, Object> variable = new HashMap<>();
-        variable.put("preTaskId", task.getId());
+        variable.put("oldTaskId", task.getId());
         Map<String, Object> transientVariables = new HashMap<>();
 
         if (null != request.getVariables()) {
@@ -142,12 +135,8 @@ public class BpmTaskServiceImpl extends AbstractFlowableService implements BpmTa
             transientVariables.putAll(request.getVariables());
         }
 
-        ProcessInstance instance = runtimeService.createProcessInstanceQuery()
-                .processInstanceId(task.getProcessInstanceId())
-                .singleResult();
-
         //保存表单数据
-        workFlowFormService.saveTaskForm(instance, task, SaveFormRequest.builder()
+        workFlowFormService.saveTaskForm(task, SaveFormRequest.builder()
                 .userName(request.getCompleteUserName())
                 .userId(request.getCompleteUserId())
                 .formData(request.getFormData())
@@ -157,246 +146,119 @@ public class BpmTaskServiceImpl extends AbstractFlowableService implements BpmTa
             transientVariables.putAll(request.getFormData());
         }
 
-        taskService.complete(task.getId(), null, transientVariables);
+        taskService.complete(task.getId(), variable, transientVariables);
 
         //跳转
         if (!StringUtils.isNullOrEmpty(request.getNextActivityId())) {
-            doJumpTask(task, request.getNextActivityId(), (t) -> {
-            });
+            jumpTask(task, request.getNextActivityId());
         }
 
         //下一步候选人
         List<Task> tasks = selectNowTask(task.getProcessInstanceId());
         for (Task next : tasks) {
-            setVariablesLocal(next.getId(), variable);
             if (!StringUtils.isNullOrEmpty(request.getNextClaimUserId())) {
                 taskService.addCandidateUser(next.getId(), request.getNextClaimUserId());
             } else {
                 setCandidate(request.getCompleteUserId(), next);
             }
         }
-
-        ProcessHistoryEntity history = ProcessHistoryEntity.builder()
-                .businessKey(instance.getBusinessKey())
-                .type("complete")
-                .typeText("完成任务")
-                .creatorId(request.getCompleteUserId())
-                .creatorName(request.getCompleteUserName())
-                .processDefineId(instance.getProcessDefinitionId())
-                .processInstanceId(instance.getProcessInstanceId())
-                .taskId(task.getId())
-                .taskDefineKey(task.getTaskDefinitionKey())
-                .taskName(task.getName())
-                .build();
-
-        processHistoryService.insert(history);
     }
+
 
     @Override
-    @SneakyThrows
-    public void reject(RejectTaskRequest request) {
-        request.tryValidate();
-        String taskId = request.getTaskId();
-        Task curTask = selectTaskByTaskId(taskId);
-        if (curTask == null) {
-            throw new NotFoundException("任务不存在或未激活");
-        }
-        ProcessInstance processInstance = runtimeService
-                .createProcessInstanceQuery()
-                .processInstanceId(curTask.getProcessInstanceId())
-                .singleResult();
-
-        ProcessDefinitionEntity entity = (ProcessDefinitionEntity)
-                ((RepositoryServiceImpl) repositoryService)
-                        .getDeployedProcessDefinition(curTask.getProcessDefinitionId());
-
-        ActivityImpl currActivity = entity.findActivity(curTask.getTaskDefinitionKey());
-
-        List<PvmActivity> transitions = new ArrayList<>();
-        //查找上一个环节
-        findActivity(currActivity,
-                activity ->
-                        activity.getIncomingTransitions()
-                                .stream()
-                                .map(PvmTransition::getSource)
-                                .collect(Collectors.toList()),
-                activity -> transitions.isEmpty() && "userTask".equals(activity.getProperty("type")),
-                transitions::add);
-
-        if (!transitions.isEmpty()) {
-            //跳转到上一环节
-            PvmActivity transition = transitions.get(transitions.size() - 1);
-            doJumpTask(curTask, transition.getId(), newTask -> {
-            });
-        } else {
-            throw new BusinessException("无法获取上一步任务");
+    public void reject(String taskId) {
+        // 先判定是否存在历史环节
+        String oldTaskId = selectVariableLocalByTaskId(taskId, "oldTaskId").toString();
+        HistoricTaskInstance taskInstance = historyService.createHistoricTaskInstanceQuery().taskId(oldTaskId).singleResult();
+        if (taskInstance == null) {
+            throw new NotFoundException("历史任务环节不存在,taskId:" + oldTaskId);
         }
 
-        //记录日志
-        ProcessHistoryEntity history = ProcessHistoryEntity.builder()
-                .businessKey(processInstance.getBusinessKey())
-                .type("reject")
-                .typeText("驳回")
-                .creatorId(request.getRejectUserId())
-                .creatorName(request.getRejectUserName())
-                .processDefineId(processInstance.getProcessDefinitionId())
-                .processInstanceId(processInstance.getProcessInstanceId())
-                .taskId(taskId)
-                .taskDefineKey(curTask.getTaskDefinitionKey())
-                .taskName(curTask.getName())
-                .data(request.getData())
-                .build();
+        Task task = selectTaskByTaskId(taskId);
 
-        processHistoryService.insert(history);
+        ProcessInstance processInstance = runtimeService.createProcessInstanceQuery().processInstanceId(task.getProcessInstanceId()).singleResult();
+        if (processInstance == null) {
+            throw new NotFoundException("流程已经结束");
+        }
+
+        Map<String, Object> variables = processInstance.getProcessVariables();
+
+        ProcessDefinitionEntity definition = (ProcessDefinitionEntity) ((RepositoryServiceImpl) repositoryService).getDeployedProcessDefinition(task.getProcessDefinitionId());
+        if (definition == null) {
+            throw new NotFoundException("流程定义未找到");
+        }
+
+        ActivityExecution execution = (ActivityExecution) runtimeService.createExecutionQuery()
+                .executionId(task.getExecutionId()).singleResult();
+        // 是否并行节点
+        if (execution.isConcurrent()) {
+            throw new NotFoundException("并行节点不允许驳回,taskId:" + task.getId());
+        }
+
+        // 是否存在定时任务
+        long num = managementService.createJobQuery().executionId(task.getExecutionId()).count();
+        if (num > 0) {
+            throw new NotFoundException("当前环节不允许驳回");
+        }
+
+        // 驳回
+
+
+        // 取得上一步活动
+        ActivityImpl currActivity = definition.findActivity(task.getTaskDefinitionKey());
+        List<PvmTransition> nextTransitionList = currActivity.getIncomingTransitions();
+        // 清除当前活动的出口
+        List<PvmTransition> oriPvmTransitionList = new ArrayList<>();
+        List<PvmTransition> pvmTransitionList = currActivity.getOutgoingTransitions();
+        oriPvmTransitionList.addAll(pvmTransitionList);
+        pvmTransitionList.clear();
+
+        // 建立新出口
+        List<TransitionImpl> newTransitions = new ArrayList<>();
+        for (PvmTransition nextTransition : nextTransitionList) {
+            PvmActivity nextActivity = nextTransition.getSource();
+            ActivityImpl nextActivityImpl = definition.findActivity(nextActivity.getId());
+            TransitionImpl newTransition = currActivity.createOutgoingTransition();
+            newTransition.setDestination(nextActivityImpl);
+            newTransitions.add(newTransition);
+        }
+        // 完成任务
+        List<Task> tasks = taskService.createTaskQuery()
+                .processInstanceId(processInstance.getId())
+                .taskDefinitionKey(task.getTaskDefinitionKey()).list();
+        for (Task t : tasks) {
+            taskService.complete(t.getId(), variables);
+            historyService.deleteHistoricTaskInstance(t.getId());
+        }
+        // 恢复方向
+        for (TransitionImpl transitionImpl : newTransitions) {
+            currActivity.getOutgoingTransitions().remove(transitionImpl);
+        }
+        pvmTransitionList.addAll(oriPvmTransitionList);
+
     }
 
-    protected void findActivity(
-            PvmActivity activity,
-            Function<PvmActivity, List<PvmActivity>> function,
-            Predicate<PvmActivity> predicate,
-            Consumer<PvmActivity> consumer) {
-
-        List<PvmActivity> activities = function.apply(activity);
-        for (PvmActivity pvmActivity : activities) {
-            consumer.accept(pvmActivity);
-            if (predicate.test(pvmActivity)) {
-                return;
-            }
-            //往下查找
-            findActivity(pvmActivity, function, predicate, consumer);
-        }
-    }
-
-    @SneakyThrows
-    public void doJumpTask(Task task, String activityId, Consumer<Task> newTaskConsumer) {
-
-        ProcessDefinitionEntity entity = (ProcessDefinitionEntity)
-                ((RepositoryServiceImpl) repositoryService)
-                        .getDeployedProcessDefinition(task.getProcessDefinitionId());
-
-        String sourceId = task.getTaskDefinitionKey();
-
-        ActivityImpl targetActivity = entity.findActivity(activityId);
-        ActivityImpl sourceActivity = entity.findActivity(sourceId);
-
-        if (logger.isDebugEnabled()) {
-            logger.debug("流程[{}({})]跳转[{}]->[{}]",
-                    entity.getName(),
-                    entity.getId(),
-                    sourceActivity.getId(),
-                    targetActivity.getId());
-        }
-
-        //回退的节点
-        List<PvmActivity> backActivities = new ArrayList<>();
-        //如果目标节点的Outgoing中有源节点,说明是回退需要删除对应的连线
-        findActivity(targetActivity,
-                activity -> activity
-                        .getOutgoingTransitions()
-                        .stream()
-                        .map(PvmTransition::getDestination)
-                        .collect(Collectors.toList()),
-                activity -> sourceActivity.getId().equals(activity.getId()),
-                backActivities::add);
-
-        //回退
-        if (!backActivities.isEmpty()) {
-            for (PvmActivity pvmTransition : backActivities) {
-                if (logger.isDebugEnabled()) {
-                    logger.debug("流程[{}({})]回退[{}]->[{}],删除链接线:{}",
-                            entity.getName(),
-                            entity.getId(),
-                            sourceActivity.getId(),
-                            targetActivity.getId(),
-                            pvmTransition.getId());
-                }
-                //删除连线
-                List<HistoricActivityInstance> instance = historyService
-                        .createHistoricActivityInstanceQuery()
-                        .processInstanceId(task.getProcessInstanceId())
-                        .activityId(pvmTransition.getId())
-                        .list();
-                for (HistoricActivityInstance historicActivityInstance : instance) {
-                    sqlExecutor.delete("delete from act_hi_actinst where id_= #{id}", historicActivityInstance);
-                }
-            }
-        }
-        //执行回退命令
+    public Task jumpTask(Task task, String activityId) {
         TaskServiceImpl taskServiceImpl = (TaskServiceImpl) taskService;
         taskServiceImpl.getCommandExecutor().execute(new JumpTaskCmd(task.getExecutionId(), activityId));
-        //设置候选人并回调
-        selectNowTask(task.getProcessInstanceId())
-                .forEach(t -> {
-                    //设置候选人
-                    setCandidate(task.getAssignee(), t);
-                    newTaskConsumer.accept(t);
-                });
-
+        return task;
     }
 
     @Override
-    public void jumpTask(JumpTaskRequest request) {
-        request.tryValidate();
+    public Task jumpTask(String taskId, String activity) {
+        return jumpTask(selectTaskByTaskId(taskId), activity);
+    }
 
-        Task task = taskService.createTaskQuery()
-                .taskId(request.getTaskId())
-                .singleResult();
-
-        //记录跳转后的节点到日志
-        List<Map<String, String>> targetTask = new ArrayList<>();
-
-        doJumpTask(task, request.getTargetActivityId(), t -> {
-            Map<String, String> target = new HashMap<>();
-            target.put("taskId", t.getId());
-            target.put("taskName", t.getName());
-            target.put("activityId", t.getTaskDefinitionKey());
-            targetTask.add(target);
-        });
-
-        if (request.isRecordLog()) {
-
-            ProcessInstance processInstance = runtimeService
-                    .createProcessInstanceQuery()
-                    .processInstanceId(task.getProcessInstanceId())
-                    .singleResult();
-
-            Map<String, Object> data = new HashMap<>();
-            data.put("targetTask", targetTask);
-            if (request.getData() != null) {
-                data.putAll(request.getData());
-            }
-
-            ProcessHistoryEntity history = ProcessHistoryEntity.builder()
-                    .businessKey(processInstance.getBusinessKey())
-                    .type("jump")
-                    .typeText("流程跳转")
-                    .creatorId(request.getJumpUserId())
-                    .creatorName(request.getJumpUserName())
-                    .processDefineId(processInstance.getProcessDefinitionId())
-                    .processInstanceId(processInstance.getProcessInstanceId())
-                    .taskId(task.getId())
-                    .taskDefineKey(task.getTaskDefinitionKey())
-                    .taskName(task.getName())
-                    .data(data)
-                    .build();
-
-            processHistoryService.insert(history);
-        }
+    @Override
+    public void setAssignee(String taskId, String userId) {
+        taskService.setAssignee(taskId, userId);
     }
 
     @Override
     public void endProcess(String procInstId) {
-//        ProcessInstance processInstance = runtimeService
-//                .createProcessInstanceQuery()
-//                .processInstanceId(procInstId)
-//                .singleResult();
-//        ActivityImpl activity = bpmActivityService.getEndEvent(processInstance.getProcessDefinitionId());
-//        List<Task> tasks = selectNowTask(procInstId);
-//
-//        if (!tasks.isEmpty()) {
-//            doJumpTask(tasks.get(0).getId(), activity.getId());
-//        }
-
+        ProcessInstance processInstance = runtimeService.createProcessInstanceQuery().processInstanceId(procInstId).singleResult();
+        ActivityImpl activity = bpmActivityService.getEndEvent(processInstance.getProcessDefinitionId());
+        jumpTask(procInstId, activity.getId());
     }
 
     @Override
@@ -410,8 +272,8 @@ public class BpmTaskServiceImpl extends AbstractFlowableService implements BpmTa
     }
 
     @Override
-    public String selectVariableLocalByTaskId(String taskId, String variableName) {
-        return (String) taskService.getVariableLocal(taskId, variableName);
+    public Object selectVariableLocalByTaskId(String taskId, String variableName) {
+        return taskService.getVariableLocal(taskId, variableName);
     }
 
     @Override
@@ -429,14 +291,11 @@ public class BpmTaskServiceImpl extends AbstractFlowableService implements BpmTa
             List<CandidateInfo> candidateInfoList = processConfigurationService
                     .getActivityConfiguration(doingUserId, task.getProcessDefinitionId(), task.getTaskDefinitionKey())
                     .getCandidateInfo(task);
-            if (CollectionUtils.isEmpty(candidateInfoList)) {
-                logger.warn("任务:{}未能设置候选人,此任务可能无法办理!", task);
-            } else {
-                for (CandidateInfo candidateInfo : candidateInfoList) {
-                    Authentication user = candidateInfo.user();
-                    if (user != null) {
-                        taskService.addCandidateUser(task.getId(), user.getUser().getId());
-                    }
+
+            for (CandidateInfo candidateInfo : candidateInfoList) {
+                Authentication user = candidateInfo.user();
+                if (user != null) {
+                    taskService.addCandidateUser(task.getId(), user.getUser().getId());
                 }
             }
         } else {
