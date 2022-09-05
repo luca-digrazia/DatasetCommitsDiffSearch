@@ -712,12 +712,11 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     }
 
     postEvent(new ActionStartedEvent(action, actionStartTime));
-    ResourceSet estimate =
-        Preconditions.checkNotNull(action.estimateResourceConsumption(executorEngine));
+    ResourceSet estimate = action.estimateResourceConsumption(executorEngine);
     ActionExecutionStatusReporter statusReporter = statusReporterRef.get();
     ResourceHandle handle = null;
     try {
-      if (estimate == ResourceSet.ZERO) {
+      if (estimate == null || estimate == ResourceSet.ZERO) {
         statusReporter.setRunningFromBuildData(action);
       } else {
         // If estimated resource consumption is null, action will manually call

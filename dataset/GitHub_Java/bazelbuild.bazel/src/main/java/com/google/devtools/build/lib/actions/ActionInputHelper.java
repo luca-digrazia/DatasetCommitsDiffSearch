@@ -21,7 +21,6 @@ import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -42,7 +41,7 @@ public final class ActionInputHelper {
       final ActionGraph actionGraph) {
     return new ArtifactExpander() {
       @Override
-      public void expand(Artifact mm, Collection<? super Artifact> output) {
+      public void expand(Artifact mm, Collection<? super ArtifactFile> output) {
         // Skyframe is stricter in that it checks that "mm" is a input of the action, because
         // it cannot expand arbitrary middlemen without access to a global action graph.
         // We could check this constraint here too, but it seems unnecessary. This code is
@@ -130,57 +129,60 @@ public final class ActionInputHelper {
   }
 
   /**
-   * Instantiates a concrete TreeFileArtifact with the given parent Artifact and path
+   * Instantiates a concrete ArtifactFile with the given parent Artifact and path
    * relative to that Artifact.
    */
-  public static TreeFileArtifact treeFileArtifact(
-      Artifact parent, PathFragment relativePath) {
+  public static ArtifactFile artifactFile(Artifact parent, PathFragment relativePath) {
     Preconditions.checkState(parent.isTreeArtifact(),
         "Given parent %s must be a TreeArtifact", parent);
-    return new TreeFileArtifact(parent, relativePath);
-  }
-
-  public static TreeFileArtifact treeFileArtifact(
-      Artifact parent, PathFragment relativePath, ArtifactOwner artifactOwner) {
-    Preconditions.checkState(parent.isTreeArtifact(),
-        "Given parent %s must be a TreeArtifact", parent);
-    return new TreeFileArtifact(
-        parent,
-        relativePath,
-        artifactOwner);
+    return new TreeArtifactFile(parent, relativePath);
   }
 
   /**
-   * Instantiates a concrete TreeFileArtifact with the given parent Artifact and path
+   * Instantiates a concrete ArtifactFile with the given parent Artifact and path
    * relative to that Artifact.
    */
-  public static TreeFileArtifact treeFileArtifact(Artifact parent, String relativePath) {
-    return treeFileArtifact(parent, new PathFragment(relativePath));
+  public static ArtifactFile artifactFile(Artifact parent, String relativePath) {
+    return artifactFile(parent, new PathFragment(relativePath));
   }
 
-  /** Returns an Iterable of TreeFileArtifacts with the given parent and parent relative paths. */
-  public static Iterable<TreeFileArtifact> asTreeFileArtifacts(
+  /** Returns an Iterable of ArtifactFiles with the given parent and parent relative paths. */
+  public static Iterable<ArtifactFile> asArtifactFiles(
       final Artifact parent, Iterable<? extends PathFragment> parentRelativePaths) {
     Preconditions.checkState(parent.isTreeArtifact(),
         "Given parent %s must be a TreeArtifact", parent);
     return Iterables.transform(parentRelativePaths,
-        new Function<PathFragment, TreeFileArtifact>() {
+        new Function<PathFragment, ArtifactFile>() {
           @Override
-          public TreeFileArtifact apply(PathFragment pathFragment) {
-            return treeFileArtifact(parent, pathFragment);
+          public ArtifactFile apply(PathFragment pathFragment) {
+            return artifactFile(parent, pathFragment);
           }
         });
   }
 
-  /** Returns a Set of TreeFileArtifacts with the given parent and parent-relative paths. */
-  public static Set<TreeFileArtifact> asTreeFileArtifacts(
+  /** Returns an Collection of ArtifactFiles with the given parent and parent-relative paths. */
+  public static Collection<ArtifactFile> asArtifactFiles(
+      final Artifact parent, Collection<? extends PathFragment> parentRelativePaths) {
+    Preconditions.checkState(parent.isTreeArtifact(),
+        "Given parent %s must be a TreeArtifact", parent);
+    return Collections2.transform(parentRelativePaths,
+        new Function<PathFragment, ArtifactFile>() {
+          @Override
+          public ArtifactFile apply(PathFragment pathFragment) {
+            return artifactFile(parent, pathFragment);
+          }
+        });
+  }
+
+  /** Returns a Set of ArtifactFiles with the given parent and parent relative paths. */
+  public static Set<ArtifactFile> asArtifactFiles(
       final Artifact parent, Set<? extends PathFragment> parentRelativePaths) {
     Preconditions.checkState(parent.isTreeArtifact(),
         "Given parent %s must be a TreeArtifact", parent);
 
-    ImmutableSet.Builder<TreeFileArtifact> builder = ImmutableSet.builder();
+    ImmutableSet.Builder<ArtifactFile> builder = ImmutableSet.builder();
     for (PathFragment path : parentRelativePaths) {
-      builder.add(treeFileArtifact(parent, path));
+      builder.add(artifactFile(parent, path));
     }
 
     return builder.build();
