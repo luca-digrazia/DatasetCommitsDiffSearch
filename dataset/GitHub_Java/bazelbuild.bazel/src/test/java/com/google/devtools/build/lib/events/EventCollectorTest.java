@@ -17,12 +17,15 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
+import com.google.devtools.build.lib.events.Event;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
 
 /**
  * Tests the {@link EventCollector} class.
@@ -41,8 +44,8 @@ public class EventCollectorTest extends EventTestTemplate {
     assertEquals(event.getKind(), onlyEvent.getKind());
     assertEquals(event.getLocation().getStartOffset(),
         onlyEvent.getLocation().getStartOffset());
-    assertEquals(1, collector.count());
-    assertEquals(1, events.size());
+    assertEquals(collector.count(), 1);
+    assertEquals(events.size(), 1);
   }
 
   @Test

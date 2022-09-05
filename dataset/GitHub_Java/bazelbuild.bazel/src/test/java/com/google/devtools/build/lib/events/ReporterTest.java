@@ -33,8 +33,10 @@ public class ReporterTest extends EventTestTemplate {
   private StringBuilder out;
   private AbstractEventHandler outAppender;
 
+  @Override
   @Before
-  public final void initializeOutput() throws Exception  {
+  public void setUp() throws Exception {
+    super.setUp();
     reporter = new Reporter();
     out = new StringBuilder();
     outAppender = new AbstractEventHandler(EventKind.ERRORS) {
