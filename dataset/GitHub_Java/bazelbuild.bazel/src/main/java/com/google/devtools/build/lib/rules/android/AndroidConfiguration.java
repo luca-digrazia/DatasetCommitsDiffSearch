@@ -324,11 +324,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         help = "Enables resource shrinking for android_binary APKs that use proguard.")
     public boolean useAndroidResourceShrinking;
 
-    // TODO(jimbrooks): Remove this flag after it is removed from the global blazerc.
     @Option(name = "experimental_use_proguard_previous_obfuscation_map",
         defaultValue = "false",
         category = "undocumented",
-        help = "Does nothing (obsolete).")
+        help = "Enables the use of an obfuscation map when generating the main dex jar file")
     public boolean useProguardPreviousObfuscationMap;
 
     @Option(name = "android_manifest_merger",
@@ -417,6 +416,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final ImmutableList<String> targetDexoptsThatPreventIncrementalDexing;
   private final boolean allowAndroidLibraryDepsWithoutSrcs;
   private final boolean useAndroidResourceShrinking;
+  private final boolean useProguardPreviousObfuscationMap;
   private final boolean useRClassGenerator;
   private final AndroidManifestMerger manifestMerger;
 
@@ -441,6 +441,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         ImmutableList.copyOf(options.nonIncrementalPerTargetDexopts);
     this.allowAndroidLibraryDepsWithoutSrcs = options.allowAndroidLibraryDepsWithoutSrcs;
     this.useAndroidResourceShrinking = options.useAndroidResourceShrinking;
+    this.useProguardPreviousObfuscationMap = options.useProguardPreviousObfuscationMap;
     this.useRClassGenerator = options.useRClassGenerator;
     this.manifestMerger = options.manifestMerger;
   }
@@ -513,6 +514,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public boolean useAndroidResourceShrinking() {
     return useAndroidResourceShrinking;
+  }
+
+  public boolean useProguardPreviousObfuscationMap() {
+    return useProguardPreviousObfuscationMap;
   }
 
   public boolean useRClassGenerator() {
