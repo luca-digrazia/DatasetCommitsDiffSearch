@@ -50,7 +50,7 @@ import javax.annotation.Nullable;
  * Pluggable Java compilation semantics.
  */
 public interface JavaSemantics {
-
+  
   public static final LibraryLanguage LANGUAGE = new LibraryLanguage("Java");
 
   public static final SafeImplicitOutputsFunction JAVA_LIBRARY_CLASS_JAR =
@@ -65,7 +65,7 @@ public interface JavaSemantics {
       fromTemplates("%{name}_deploy.jar");
   public static final SafeImplicitOutputsFunction JAVA_BINARY_DEPLOY_SOURCE_JAR =
       fromTemplates("%{name}_deploy-src.jar");
-
+  
   public static final FileType JAVA_SOURCE = FileType.of(".java");
   public static final FileType JAR = FileType.of(".jar");
   public static final FileType PROPERTIES = FileType.of(".properties");
@@ -77,14 +77,11 @@ public interface JavaSemantics {
    * Label to the Java Toolchain rule. It is resolved from a label given in the java options.
    */
   static final String JAVA_TOOLCHAIN_LABEL = "//tools/defaults:java_toolchain";
-
+  
   public static final LateBoundLabel<BuildConfiguration> JAVA_TOOLCHAIN =
       new LateBoundLabel<BuildConfiguration>(JAVA_TOOLCHAIN_LABEL) {
         @Override
         public Label getDefault(Rule rule, BuildConfiguration configuration) {
-          if (!configuration.hasFragment(JavaConfiguration.class)) {
-            return null;
-          }
           return configuration.getFragment(JavaConfiguration.class).getToolchainLabel();
         }
       };
@@ -105,11 +102,6 @@ public interface JavaSemantics {
    * Label of a pseudo-filegroup that contains the boot-classpath entries.
    */
   public static final String JAVAC_BOOTCLASSPATH_LABEL = "//tools/defaults:javac_bootclasspath";
-
-  /**
-   * Label of the javac extdir used for compiling Java source code.
-   */
-  public static final String JAVAC_EXTDIR_LABEL = "//tools/defaults:javac_extdir";
 
   /**
    * Label of the JavaBuilder JAR used for compiling Java source code.
@@ -135,9 +127,6 @@ public interface JavaSemantics {
       new LateBoundLabel<BuildConfiguration>(JDK_LABEL) {
         @Override
         public Label getDefault(Rule rule, BuildConfiguration configuration) {
-          if (!configuration.hasFragment(Jvm.class)) {
-            return null;
-          }
           return configuration.getFragment(Jvm.class).getJvmLabel();
         }
       };
@@ -154,9 +143,6 @@ public interface JavaSemantics {
 
         @Override
         public Label getDefault(Rule rule, BuildConfiguration configuration) {
-          if (!configuration.hasFragment(Jvm.class)) {
-            return null;
-          }
           return configuration.getFragment(Jvm.class).getJvmLabel();
         }
       };
@@ -169,9 +155,6 @@ public interface JavaSemantics {
       new LateBoundLabel<BuildConfiguration>() {
         @Override
         public Label getDefault(Rule rule, BuildConfiguration configuration) {
-          if (!configuration.hasFragment(JavaConfiguration.class)) {
-            return null;
-          }
           return configuration.getFragment(JavaConfiguration.class).getJavaLauncherLabel();
         }
       };
@@ -308,7 +291,7 @@ public interface JavaSemantics {
    */
   Collection<Artifact> translate(RuleContext ruleContext, JavaConfiguration javaConfig,
       List<Artifact> messages);
-
+  
   /**
    * Get the launcher artifact for a java binary, creating the necessary actions for it.
    *
