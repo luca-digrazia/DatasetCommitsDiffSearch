@@ -161,7 +161,7 @@ public final class QueryCommand implements BlazeCommand {
         streamedFormatter.setOptions(
             queryOptions,
             queryOptions.aspectDeps.createResolver(env.getPackageManager(), env.getReporter()));
-        callback = streamedFormatter.createStreamCallback(output, queryOptions, queryEnv);
+        callback = streamedFormatter.createStreamCallback(output, queryOptions);
       } else {
         callback = new AggregateAllOutputFormatterCallback<>();
       }

@@ -14,6 +14,8 @@
 package com.google.devtools.build.lib.query2.engine;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 
 import java.util.Map;
 import java.util.Set;
@@ -21,6 +23,8 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 /** An immutable context of variable bindings for variables introduced by {@link LetExpression}s. */
+@Immutable
+@ThreadSafe
 public class VariableContext<T> {
   private final ImmutableMap<String, Set<T>> context;
 
@@ -52,7 +56,7 @@ public class VariableContext<T> {
       Set<T> value) {
     ImmutableMap.Builder<String, Set<T>> newContextBuilder = ImmutableMap.builder();
     for (Map.Entry<String, Set<T>> entry : variableContext.context.entrySet()) {
-      if (entry.getKey().equals(name)) {
+      if (!entry.getKey().equals(name)) {
         // The binding of 'name' to 'value' should override any existing binding of name in
         // 'variableContext'. These are the semantics we want in order for nested let-expressions
         // to have the semantics we want.

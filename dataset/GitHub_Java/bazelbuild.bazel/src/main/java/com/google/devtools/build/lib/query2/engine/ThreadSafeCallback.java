@@ -14,10 +14,8 @@
 package com.google.devtools.build.lib.query2.engine;
 
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.util.ThreadSafeBatchCallback;
 
 /** Marker interface for a {@link Callback} that is {@link ThreadSafe}. */
 @ThreadSafe
-public interface ThreadSafeCallback<T>
-    extends Callback<T>, ThreadSafeBatchCallback<T, QueryException> {
+public interface ThreadSafeCallback<T> extends Callback<T> {
 }
