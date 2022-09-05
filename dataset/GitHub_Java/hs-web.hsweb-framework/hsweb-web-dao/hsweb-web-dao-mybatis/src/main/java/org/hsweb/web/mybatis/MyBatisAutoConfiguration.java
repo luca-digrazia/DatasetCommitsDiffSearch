@@ -19,9 +19,13 @@ package org.hsweb.web.mybatis;
 import org.apache.ibatis.mapping.DatabaseIdProvider;
 import org.apache.ibatis.plugin.Interceptor;
 import org.apache.ibatis.session.SqlSessionFactory;
+import org.apache.ibatis.session.TransactionIsolationLevel;
+import org.apache.ibatis.transaction.Transaction;
 import org.hsweb.web.mybatis.dynamic.DynamicDataSourceSqlSessionFactoryBuilder;
+import org.hsweb.web.mybatis.dynamic.DynamicSpringManagedTransaction;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.boot.autoconfigure.SpringBootVFS;
+import org.mybatis.spring.transaction.SpringManagedTransactionFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -54,15 +58,20 @@ public class MyBatisAutoConfiguration {
     @Bean(name = "sqlSessionFactory")
     public SqlSessionFactory sqlSessionFactory(@Qualifier("dataSource") DataSource dataSource) throws Exception {
         SqlSessionFactoryBean factory = new SqlSessionFactoryBean();
-
-        if (properties.isDynamicDatasource())
+        if (properties.isDynamicDatasource()) {
             factory.setSqlSessionFactoryBuilder(new DynamicDataSourceSqlSessionFactoryBuilder());
-
+            factory.setTransactionFactory(new SpringManagedTransactionFactory() {
+                @Override
+                public Transaction newTransaction(DataSource dataSource, TransactionIsolationLevel level, boolean autoCommit) {
+                    return new DynamicSpringManagedTransaction();
+                }
+            });
+        }
         factory.setDataSource(dataSource);
         factory.setVfs(SpringBootVFS.class);
-        if (StringUtils.hasText(this.properties.getConfigLocation())) {
+        if (StringUtils.hasText(this.properties.getConfig())) {
             factory.setConfigLocation(this.resourceLoader.getResource(this.properties
-                    .getConfigLocation()));
+                    .getConfig()));
         }
         if (this.interceptors != null && this.interceptors.length > 0) {
             factory.setPlugins(this.interceptors);
@@ -79,5 +88,13 @@ public class MyBatisAutoConfiguration {
         factory.setMapperLocations(this.properties.resolveMapperLocations());
         return factory.getObject();
     }
+
+//    @Bean(name = "sqlSessionTemplate")
+//    public SqlSessionTemplate sqlSessionTemplate(SqlSessionFactory sqlSessionFactory) {
+//        if (this.properties.isDynamicDatasource()) {
+//            return new DynamicSqlSessionTemplate(sqlSessionFactory);
+//        }
+//        return new SqlSessionTemplate(sqlSessionFactory);
+//    }
 
 }
