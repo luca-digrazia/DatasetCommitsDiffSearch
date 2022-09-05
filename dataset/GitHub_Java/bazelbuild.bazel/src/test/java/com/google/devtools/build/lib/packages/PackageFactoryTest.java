@@ -500,8 +500,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
       assertThat(e)
           .hasMessage(
               "no such target '//x:z.cc': "
-                  + "target 'z.cc' not declared in package 'x' (did you mean 'x.cc'?) "
-                  + "defined by /x/BUILD");
+                  + "target 'z.cc' not declared in package 'x' defined by /x/BUILD");
     }
 
     try {
@@ -558,14 +557,17 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     List<Label> yesFiles = attributes(pkg.getRule("yes")).get("srcs", BuildType.LABEL_LIST);
     List<Label> noFiles = attributes(pkg.getRule("no")).get("srcs", BuildType.LABEL_LIST);
 
-    assertThat(yesFiles).containsExactly(
-        Label.parseAbsolute("@//fruit:data/apple"),
-        Label.parseAbsolute("@//fruit:data/pear"));
+    assertThat(
+            Lists.newArrayList(
+                Label.create("fruit", "data/apple"), Label.create("fruit", "data/pear")))
+        .containsExactlyElementsIn(yesFiles);
 
-    assertThat(noFiles).containsExactly(
-        Label.parseAbsolute("@//fruit:data/apple"),
-        Label.parseAbsolute("@//fruit:data/pear"),
-        Label.parseAbsolute("@//fruit:data/berry"));
+    assertThat(
+            Lists.newArrayList(
+                Label.create("fruit", "data/apple"),
+                Label.create("fruit", "data/pear"),
+                Label.create("fruit", "data/berry")))
+        .containsExactlyElementsIn(noFiles);
   }
 
   // TODO(bazel-team): This is really a test for GlobCache.
@@ -584,21 +586,6 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
             "cc_library(name = 're', srcs = glob(['*.cc'], ['**/*.c']))");
     Package pkg = packages.eval("rg", file);
     events.assertNoWarningsOrErrors();
-
-    assertEvaluates(
-        pkg,
-        ImmutableList.of(
-            "BUILD",
-            "a.cc",
-            "foo",
-            "foo/bar.cc",
-            "foo/foo.cc",
-            "foo/wiz",
-            "foo/wiz/bam.cc",
-            "foo/wiz/bum.cc",
-            "foo/wiz/quid",
-            "foo/wiz/quid/gav.cc"),
-        "**");
 
     assertEvaluates(
         pkg,
@@ -824,7 +811,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
 
   @Test
   public void testPackageGroupSpecBad() throws Exception {
-    expectEvalError("invalid package name", "package_group(name='skin', packages=['--25:17--'])");
+    expectEvalError("invalid package label", "package_group(name='skin', packages=['--25:17--'])");
   }
 
   @Test
