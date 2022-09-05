@@ -397,9 +397,10 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
       eventBus.post(new LoadingFailureEvent(entry.getKey(), entry.getValue()));
     }
 
-    LoadedPackageProvider packageProvider = new LoadedPackageProvider(packageManager, eventHandler);
+    LoadedPackageProvider.Bridge bridge =
+        new LoadedPackageProvider.Bridge(packageManager, eventHandler);
     return ImmutableSet.copyOf(Sets.difference(ImmutableSet.copyOf(targetsToLoad),
-        getTargetsForLabels(packageProvider, rootCauses.keySet())));
+        getTargetsForLabels(bridge, rootCauses.keySet())));
   }
 
   /**
