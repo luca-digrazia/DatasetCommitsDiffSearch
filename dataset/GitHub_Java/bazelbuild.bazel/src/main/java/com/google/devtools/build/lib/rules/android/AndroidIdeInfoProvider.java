@@ -63,7 +63,7 @@ public final class AndroidIdeInfoProvider implements TransitiveInfoProvider {
     }
 
     /** Indicates if the directory is in the gen files tree. */
-    public boolean isSource() {
+    boolean isSource() {
       return isSource;
     }
 
@@ -197,11 +197,12 @@ public final class AndroidIdeInfoProvider implements TransitiveInfoProvider {
     }
 
     public Builder addResourceSource(Artifact resource) {
-      PathFragment resourceDir = LocalResourceContainer.Builder.findResourceDir(resource);
       resourceDirs.add(
           new SourceDirectory(
               resource.getRoot().getPath().asFragment(),
-              trimTo(resource.getRootRelativePath(), resourceDir),
+              trimTo(
+                  resource.getRootRelativePath(),
+                  LocalResourceContainer.Builder.findResourceDir(resource)),
               resource.isSourceArtifact()));
       return this;
     }

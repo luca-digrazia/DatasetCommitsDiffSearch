@@ -246,6 +246,7 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
         "java_library(",
         "    name = 'complex',",
         "    srcs = ['complex/Complex.java'],",
+        "    deps = [':simple'],",
         "    exports = [':simple'],",
         ")",
         "java_library(",
@@ -260,17 +261,13 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
     getRuleInfoAndVerifyLabel("//com/google/example:simple", ruleIdeInfos);
     getRuleInfoAndVerifyLabel("//com/google/example:complex", ruleIdeInfos);
 
-    RuleIdeInfo complexRuleIdeInfo = getRuleInfoAndVerifyLabel("//com/google/example:complex",
-        ruleIdeInfos);
     RuleIdeInfo extraComplexRuleIdeInfo = getRuleInfoAndVerifyLabel(target, ruleIdeInfos);
 
-    assertThat(complexRuleIdeInfo.getDependenciesList())
-        .containsExactly("//com/google/example:simple");
-    assertThat(complexRuleIdeInfo.getTransitiveDependenciesList())
-        .containsExactly("//com/google/example:simple");
-
+    assertThat(relativePathsForSourcesOf(extraComplexRuleIdeInfo))
+        .containsExactly("com/google/example/extracomplex/ExtraComplex.java");
     assertThat(extraComplexRuleIdeInfo.getDependenciesList())
         .containsExactly("//com/google/example:complex", "//com/google/example:simple");
+
     assertThat(extraComplexRuleIdeInfo.getTransitiveDependenciesList())
         .containsExactly(
             "//com/google/example:complex",
@@ -287,11 +284,13 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
         "java_library(",
         "    name = 'complex',",
         "    srcs = ['complex/Complex.java'],",
+        "    deps = [':simple'],",
         "    exports = [':simple'],",
         ")",
         "java_library(",
         "    name = 'extracomplex',",
         "    srcs = ['extracomplex/ExtraComplex.java'],",
+        "    deps = [':complex'],",
         "    exports = [':complex'],",
         ")",
         "java_library(",
@@ -375,28 +374,10 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
     Map<String, RuleIdeInfo> ruleIdeInfos = buildRuleIdeInfo("//com/google/example:lib");
     RuleIdeInfo libInfo = getRuleInfoAndVerifyLabel("//com/google/example:lib", ruleIdeInfos);
     RuleIdeInfo impInfo = getRuleInfoAndVerifyLabel("//com/google/example:imp", ruleIdeInfos);
-
     assertThat(impInfo.getKind()).isEqualTo(Kind.JAVA_IMPORT);
     assertThat(impInfo.getDependenciesList()).containsExactly("//com/google/example:foobar");
     assertThat(libInfo.getDependenciesList())
         .containsExactly("//com/google/example:imp", "//com/google/example:foobar");
-  }
-
-  public void testAspectIsPropagatedAcrossExports() throws Exception {
-    scratch.file(
-        "com/google/example/BUILD",
-        "java_library(",
-        "   name = 'foobar',",
-        "   srcs = ['FooBar.java'],",
-        ")",
-        "java_library(",
-        "   name = 'lib',",
-        "   srcs = ['Lib.java'],",
-        "   exports = [':foobar'],",
-        ")");
-
-    Map<String, RuleIdeInfo> ruleIdeInfos = buildRuleIdeInfo("//com/google/example:lib");
-    getRuleInfoAndVerifyLabel("//com/google/example:foobar", ruleIdeInfos);
   }
 
   public void testJavaTest() throws Exception {
@@ -514,7 +495,7 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
     assertThat(relativePathsForSourcesOf(ruleInfo)).containsExactly("com/google/example/Main.java");
     assertThat(transform(ruleInfo.getJavaRuleIdeInfo().getJarsList(), LIBRARY_ARTIFACT_TO_STRING))
         .containsExactly(jarString("com/google/example",
-            "libb.jar", "libb-ijar.jar", "libb-src.jar"));
+                "libb.jar", "libb-ijar.jar", "libb-src.jar"));
     assertThat(
             transform(
                 ruleInfo.getAndroidRuleIdeInfo().getResourcesList(), ARTIFACT_TO_RELATIVE_PATH))
@@ -648,21 +629,6 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
 
     assertThat(ruleInfo.getAndroidRuleIdeInfo().getJavaPackage())
         .isEqualTo("bad.package.google.example");
-  }
-
-  public void testTags() throws Exception {
-    scratch.file(
-        "com/google/example/BUILD",
-        "java_library(",
-        "    name = 'lib',",
-        "    srcs = ['Test.java'],",
-        "    tags = ['d', 'b', 'c', 'a'],",
-        ")");
-    String target = "//com/google/example:lib";
-    Map<String, RuleIdeInfo> ruleIdeInfos = buildRuleIdeInfo(target);
-    RuleIdeInfo ruleIdeInfo = getRuleInfoAndVerifyLabel(target, ruleIdeInfos);
-    assertThat(ruleIdeInfo.getTagsList())
-        .containsExactly("a", "b", "c", "d");
   }
 
   private Map<String, RuleIdeInfo> buildRuleIdeInfo(String target) throws Exception {

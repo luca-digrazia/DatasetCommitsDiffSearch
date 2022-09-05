@@ -19,6 +19,7 @@ import static com.google.devtools.build.lib.analysis.config.BuildConfiguration.S
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
@@ -66,7 +67,9 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.annotation.Nullable;
 
@@ -468,6 +471,10 @@ public class AndroidCommon {
 
   JackCompilationHelper initJack(JavaTargetAttributes attributes, JavaSemantics javaSemantics)
       throws InterruptedException {
+    Map<PathFragment, Artifact> resourcesMap = new LinkedHashMap<>();
+    for (Artifact resource : attributes.getResources()) {
+      resourcesMap.put(javaSemantics.getJavaResourcePath(resource.getRootRelativePath()), resource);
+    }
     AndroidSdkProvider sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
     return new JackCompilationHelper.Builder()
         // blaze infrastructure
@@ -481,7 +488,7 @@ public class AndroidCommon {
         .addJavaSources(attributes.getSourceFiles())
         .addSourceJars(attributes.getSourceJars())
         .addCompiledJars(attributes.getJarFiles())
-        .addResources(attributes.getResources())
+        .addResources(ImmutableMap.copyOf(resourcesMap))
         .addProcessorNames(attributes.getProcessorNames())
         .addProcessorClasspathJars(attributes.getProcessorPath())
         .addExports(JavaCommon.getExports(ruleContext))
