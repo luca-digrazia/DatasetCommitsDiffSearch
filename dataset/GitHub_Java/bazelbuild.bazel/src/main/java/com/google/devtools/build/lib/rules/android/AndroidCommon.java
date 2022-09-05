@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -549,9 +548,6 @@ public class AndroidCommon {
                 idlHelper.getIdlGeneratedJavaSources(),
                 androidSemantics.getJavacArguments(ruleContext))
             .setBootClassPath(bootclasspath);
-    if (DataBinding.isEnabled(ruleContext)) {
-      DataBinding.addAnnotationProcessor(ruleContext, attributes);
-    }
 
     JavaCompilationArtifacts.Builder artifactsBuilder = new JavaCompilationArtifacts.Builder();
     NestedSetBuilder<Artifact> jarsProducedForRuntime = NestedSetBuilder.<Artifact>stableOrder();
@@ -563,7 +559,9 @@ public class AndroidCommon {
       // Use a fast-path R class generator for android_binary with local resources, where there is
       // a bottleneck. For legacy resources, the srcjar and R class compiler don't match up
       // (the legacy srcjar requires the createJarJar step below).
-      boolean useRClassGenerator = isBinary && !resourceApk.isLegacy();
+      boolean useRClassGenerator =
+          getAndroidConfig(ruleContext).useRClassGenerator()
+          && isBinary && !resourceApk.isLegacy();
       compileResources(javaSemantics, resourceApk, resourcesJar, artifactsBuilder, attributes,
           filesBuilder, jarsProducedForRuntime, useRClassGenerator);
       if (resourceApk.isLegacy()) {
@@ -609,10 +607,8 @@ public class AndroidCommon {
 
   private JavaCompilationHelper initAttributes(
       JavaTargetAttributes.Builder attributes, JavaSemantics semantics) {
-    JavaCompilationHelper helper = new JavaCompilationHelper(ruleContext, semantics,
-        javaCommon.getJavacOpts(), attributes,
-        DataBinding.isEnabled(ruleContext)
-            ? DataBinding.processDeps(ruleContext, attributes) : ImmutableList.<Artifact>of());
+    JavaCompilationHelper helper = new JavaCompilationHelper(
+        ruleContext, semantics, javaCommon.getJavacOpts(), attributes);
 
     helper.addLibrariesToAttributes(javaCommon.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
     attributes.setRuleKind(ruleContext.getRule().getRuleClass());
@@ -964,49 +960,5 @@ public class AndroidCommon {
       builder.addTransitive(provider.getOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL));
     }
     return builder.build();
-  }
-
-  /**
-   * Returns a {@link JavaCommon} instance with Android data binding support.
-   *
-   * <p>Binaries need both compile-time and runtime support, while libraries only need compile-time
-   * support.
-   *
-   * <p>No rule needs <i>any</i> support if data binding is disabled.
-   */
-  static JavaCommon createJavaCommonWithAndroidDataBinding(RuleContext ruleContext,
-      JavaSemantics semantics, boolean isLibrary) {
-    boolean useDataBinding = DataBinding.isEnabled(ruleContext);
-
-    ImmutableList<Artifact> srcs =
-        ruleContext.getPrerequisiteArtifacts("srcs", RuleConfiguredTarget.Mode.TARGET).list();
-    if (useDataBinding) {
-      srcs = ImmutableList.<Artifact>builder().addAll(srcs)
-          .add(DataBinding.createAnnotationFile(ruleContext, isLibrary)).build();
-    }
-
-    ImmutableList<TransitiveInfoCollection> compileDeps;
-    ImmutableList<TransitiveInfoCollection> runtimeDeps;
-    ImmutableList<TransitiveInfoCollection> bothDeps;
-
-    if (isLibrary) {
-      compileDeps = JavaCommon.defaultDeps(ruleContext, semantics, ClasspathType.COMPILE_ONLY);
-      if (useDataBinding) {
-        compileDeps = DataBinding.addSupportLibs(ruleContext, compileDeps);
-      }
-      runtimeDeps = JavaCommon.defaultDeps(ruleContext, semantics, ClasspathType.RUNTIME_ONLY);
-      bothDeps = JavaCommon.defaultDeps(ruleContext, semantics, ClasspathType.BOTH);
-    } else {
-      // Binary:
-      List<? extends TransitiveInfoCollection> ruleDeps =
-          ruleContext.getPrerequisites("deps", RuleConfiguredTarget.Mode.TARGET);
-      compileDeps = useDataBinding
-          ? DataBinding.addSupportLibs(ruleContext, ruleDeps)
-          : ImmutableList.<TransitiveInfoCollection>copyOf(ruleDeps);
-      runtimeDeps = compileDeps;
-      bothDeps = compileDeps;
-    }
-
-    return new JavaCommon(ruleContext, semantics, srcs, compileDeps, runtimeDeps, bothDeps);
   }
 }
