@@ -7,7 +7,8 @@ import org.hswebframework.web.authorization.simple.DefaultAuthorizationAutoConfi
 import org.hswebframework.web.system.authorization.api.UserDimensionProvider;
 import org.hswebframework.web.system.authorization.api.service.reactive.ReactiveUserService;
 import org.hswebframework.web.system.authorization.defaults.service.*;
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.hswebframework.web.system.authorization.defaults.service.terms.DimensionTerm;
+import org.hswebframework.web.system.authorization.defaults.service.terms.UserDimensionTerm;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
@@ -54,15 +55,33 @@ public class AuthorizationServiceAutoConfiguration {
         }
 
         @Bean
-        public DefaultDimensionUserService defaultDimensionUserService(){
+        public DefaultDimensionUserService defaultDimensionUserService() {
             return new DefaultDimensionUserService();
         }
 
         @Bean
-        public DefaultAuthorizationSettingService defaultAuthorizationSettingService(){
+        public DefaultAuthorizationSettingService defaultAuthorizationSettingService() {
             return new DefaultAuthorizationSettingService();
         }
+
+        @Bean
+        public DefaultPermissionService defaultPermissionService() {
+            return new DefaultPermissionService();
+        }
+
     }
 
+    @Bean
+    public UserDimensionTerm userDimensionTerm() {
+        return new UserDimensionTerm();
+    }
 
+    @Bean
+    public DimensionTerm dimensionTerm(){
+        return new DimensionTerm();
+    }
+    @Bean
+    public PermissionProperties permissionProperties(){
+        return new PermissionProperties();
+    }
 }
