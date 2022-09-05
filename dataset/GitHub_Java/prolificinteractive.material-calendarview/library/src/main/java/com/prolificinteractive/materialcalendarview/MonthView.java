@@ -5,7 +5,6 @@ import android.content.Context;
 import android.view.View;
 import android.widget.LinearLayout;
 
-import com.prolificinteractive.materialcalendarview.format.DayFormatter;
 import com.prolificinteractive.materialcalendarview.format.WeekDayFormatter;
 
 import java.util.ArrayList;
@@ -172,12 +171,6 @@ class MonthView extends LinearLayout implements View.OnClickListener {
     public void setWeekDayFormatter(WeekDayFormatter formatter) {
         for(WeekDayView dayView : weekDayViews) {
             dayView.setWeekDayFormatter(formatter);
-        }
-    }
-
-    public void setDayFormatter(DayFormatter formatter) {
-        for(DayView dayView : monthDayViews) {
-            dayView.setDayFormatter(formatter);
         }
     }
 

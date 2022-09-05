@@ -4,10 +4,8 @@ import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.res.ColorStateList;
-import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
-import android.graphics.Rect;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.RippleDrawable;
@@ -35,7 +33,6 @@ class DayView extends CheckedTextView {
 
     private final int fadeTime;
     private Drawable customBackground = null;
-    private Drawable selectionDrawable;
 
     public DayView(Context context, CalendarDay day) {
         super(context);
@@ -67,20 +64,9 @@ class DayView extends CheckedTextView {
         regenerateBackground();
     }
 
-    /**
-     * @param selectionDrawable custom selection drawable
-     */
-    public void setSelectionDrawable(Drawable selectionDrawable) {
-        this.selectionDrawable = selectionDrawable;
-        invalidate();
-    }
-
-    /**
-     * @param customBackground background to draw behind everything else
-     */
     public void setCustomBackground(Drawable customBackground) {
         this.customBackground = customBackground;
-        invalidate();
+        regenerateBackground();
     }
 
     public CalendarDay getDate() {
@@ -98,29 +84,11 @@ class DayView extends CheckedTextView {
         setVisibility(enabled || showOtherDates ? View.VISIBLE : View.INVISIBLE);
     }
 
-    private final Rect tempRect = new Rect();
-
-    @Override
-    protected void onDraw(@NonNull Canvas canvas) {
-        if(customBackground != null) {
-            canvas.getClipBounds(tempRect);
-            customBackground.setBounds(tempRect);
-            customBackground.setState(getDrawableState());
-            customBackground.draw(canvas);
-        }
-        super.onDraw(canvas);
-    }
-
     private void regenerateBackground() {
-        if(selectionDrawable != null) {
-            setBackgroundDrawable(selectionDrawable);
-        }
-        else {
-            setBackgroundDrawable(generateBackground(selectionColor, fadeTime));
-        }
+        setBackgroundDrawable(generateBackground(selectionColor, fadeTime, customBackground));
     }
 
-    private static Drawable generateBackground(int color, int fadeTime) {
+    private static Drawable generateBackground(int color, int fadeTime, Drawable customBackground) {
         StateListDrawable drawable = new StateListDrawable();
         drawable.setExitFadeDuration(fadeTime);
         drawable.addState(new int[]{android.R.attr.state_checked}, generateCircleDrawable(color));
@@ -130,7 +98,12 @@ class DayView extends CheckedTextView {
             drawable.addState(new int[] { android.R.attr.state_pressed }, generateCircleDrawable(color));
         }
 
-        drawable.addState(new int[]{}, generateCircleDrawable(Color.TRANSPARENT));
+        if(customBackground == null) {
+            drawable.addState(new int[]{}, generateCircleDrawable(Color.TRANSPARENT));
+        }
+        else {
+            drawable.addState(new int[]{}, customBackground);
+        }
 
         return drawable;
     }
@@ -153,14 +126,24 @@ class DayView extends CheckedTextView {
         return new RippleDrawable(list, null, mask);
     }
 
-    /**
-     * @param facade apply the facade to us
-     */
     void applyFacade(DayViewFacade facade) {
-        setCustomBackground(facade.getBackgroundDrawable());
-        setSelectionDrawable(facade.getSelectionDrawable());
+        if(facade.isReset()) {
+            regenerateBackground();
+            setText(getLabel());
+            return;
+        }
 
-        // Facade has spans
+        Drawable background = facade.getBackground();
+        Drawable unselectedBackground = facade.getUnselectedBackground();
+        if (background != null) {
+            setBackgroundDrawable(background);
+        } else if (unselectedBackground != null) {
+            setCustomBackground(unselectedBackground);
+        }
+        else {
+            regenerateBackground();
+        }
+
         List<DayViewFacade.Span> spans = facade.getSpans();
         if(!spans.isEmpty()) {
             String label = getLabel();
@@ -170,7 +153,6 @@ class DayView extends CheckedTextView {
             }
             setText(formattedLabel);
         }
-        // Reset in case it was customized previously
         else {
             setText(getLabel());
         }
