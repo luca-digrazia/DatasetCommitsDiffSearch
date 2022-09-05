@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 
 /**
@@ -30,17 +30,18 @@ import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 public class ObjcXcodeproj implements RuleConfiguredTargetFactory {
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
-    XcodeProvider.Project project = XcodeProvider.Project.fromTopLevelTargets(
-        ruleContext.getPrerequisites("deps", Mode.TARGET, XcodeProvider.class));
-    Artifact pbxproj = ruleContext.getImplicitOutputArtifact(XcodeSupport.PBXPROJ);
+  public ConfiguredTarget create(RuleContext ruleContext)
+      throws InterruptedException, RuleErrorException {
+    ruleContext.ruleWarning("This rule is deprecated, and is not supported by Skylark rules. "
+        + "Please use Tulsi (https://tulsi.bazel.build/) to manage Xcode projects.");
 
-    ObjcActionsBuilder actionsBuilder = ObjcRuleClasses.actionsBuilder(ruleContext);
-    actionsBuilder.registerXcodegenActions(
-        new ObjcRuleClasses.Tools(ruleContext), pbxproj, project);
+    NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
+    new XcodeSupport(ruleContext)
+        .addFilesToBuild(filesToBuild)
+        .registerActions(ruleContext.getPrerequisites("deps", Mode.TARGET, XcodeProvider.class));
 
     return new RuleConfiguredTargetBuilder(ruleContext)
-        .setFilesToBuild(NestedSetBuilder.create(Order.STABLE_ORDER, pbxproj))
+        .setFilesToBuild(filesToBuild.build())
         .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
         .build();
   }
