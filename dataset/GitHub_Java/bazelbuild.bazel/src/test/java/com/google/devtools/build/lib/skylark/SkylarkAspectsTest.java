@@ -15,26 +15,20 @@ package com.google.devtools.build.lib.skylark;
 
 import static com.google.common.collect.Iterables.transform;
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.fail;
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
+import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.SkylarkProviders;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
-import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.packages.AspectDefinition;
-import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
-import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.skyframe.AspectValue;
-import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
 import org.junit.Test;
@@ -47,7 +41,7 @@ import javax.annotation.Nullable;
  * Tests for Skylark aspects
  */
 @RunWith(JUnit4.class)
-public class SkylarkAspectsTest extends AnalysisTestCase {
+public class SkylarkAspectsTest extends BuildViewTestCase {
   @Test
   public void testAspect() throws Exception {
     scratch.file(
@@ -59,7 +53,13 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     scratch.file("test/BUILD", "java_library(name = 'xxx',)");
 
     AnalysisResult analysisResult =
-        update(ImmutableList.of("test/aspect.bzl%MyAspect"), "//test:xxx");
+        update(
+            ImmutableList.of("//test:xxx"),
+            ImmutableList.of("test/aspect.bzl%MyAspect"),
+            false,
+            LOADING_PHASE_THREADS,
+            true,
+            new EventBus());
     assertThat(
             transform(
                 analysisResult.getTargetsToBuild(),
@@ -85,39 +85,6 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
                   }
                 }))
         .containsExactly("//test:aspect.bzl%MyAspect(//test:xxx)");
-  }
-
-  @Test
-  public void testAspectAllowsFragmentsToBeSpecified() throws Exception {
-    scratch.file(
-        "test/aspect.bzl",
-        "def _impl(target, ctx):",
-        "   print('This aspect does nothing')",
-        "   return struct()",
-        "MyAspect = aspect(implementation=_impl, fragments=['jvm'], host_fragments=['cpp'])");
-    scratch.file("test/BUILD", "java_library(name = 'xxx',)");
-
-    AnalysisResult analysisResult =
-        update(ImmutableList.of("test/aspect.bzl%MyAspect"), "//test:xxx");
-    AspectValue aspectValue = Iterables.getOnlyElement(analysisResult.getAspects());
-    AspectKey aspectKey = aspectValue.getKey();
-    AspectDefinition aspectDefinition = aspectKey.getAspect().getDefinition();
-    assertThat(
-        aspectDefinition.getConfigurationFragmentPolicy()
-            .isLegalConfigurationFragment(Jvm.class, ConfigurationTransition.NONE))
-        .isTrue();
-    assertThat(
-        aspectDefinition.getConfigurationFragmentPolicy()
-            .isLegalConfigurationFragment(Jvm.class, ConfigurationTransition.HOST))
-        .isFalse();
-    assertThat(
-        aspectDefinition.getConfigurationFragmentPolicy()
-            .isLegalConfigurationFragment(CppConfiguration.class, ConfigurationTransition.NONE))
-        .isFalse();
-    assertThat(
-        aspectDefinition.getConfigurationFragmentPolicy()
-            .isLegalConfigurationFragment(CppConfiguration.class, ConfigurationTransition.HOST))
-        .isTrue();
   }
 
   @Test
@@ -148,7 +115,13 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
         ")");
 
     AnalysisResult analysisResult =
-        update(ImmutableList.of("test/aspect.bzl%MyAspect"), "//test:xxx");
+        update(
+            ImmutableList.of("//test:xxx"),
+            ImmutableList.of("test/aspect.bzl%MyAspect"),
+            false,
+            LOADING_PHASE_THREADS,
+            true,
+            new EventBus());
     assertThat(
             transform(
                 analysisResult.getTargetsToBuild(),
@@ -204,7 +177,13 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
         ")");
 
     AnalysisResult analysisResult =
-        update(ImmutableList.of("test/aspect.bzl%MyAspect"), "//test:xxx");
+        update(
+            ImmutableList.of("//test:xxx"),
+            ImmutableList.of("test/aspect.bzl%MyAspect"),
+            false,
+            LOADING_PHASE_THREADS,
+            true,
+            new EventBus());
     assertThat(
         transform(
             analysisResult.getTargetsToBuild(),
@@ -227,6 +206,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
         .getOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL);
     assertThat(names).containsExactlyElementsIn(expectedSet);
   }
+
 
   @Test
   public void testAspectsFromSkylarkRules() throws Exception {
@@ -265,7 +245,14 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
         "     attr = [':yyy'],",
         ")");
 
-    AnalysisResult analysisResult = update("//test:xxx");
+    AnalysisResult analysisResult =
+        update(
+            ImmutableList.of("//test:xxx"),
+            ImmutableList.<String>of(),
+            false,
+            LOADING_PHASE_THREADS,
+            true,
+            new EventBus());
     assertThat(
         transform(
             analysisResult.getTargetsToBuild(),
@@ -308,8 +295,13 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
 
     reporter.removeHandler(failFastHandler);
     try {
-      update(ImmutableList.of("test/aspect.bzl%MyAspect"), "//test:xxx");
-      fail();
+      update(
+          ImmutableList.of("//test:xxx"),
+          ImmutableList.of("test/aspect.bzl%MyAspect"),
+          false,
+          LOADING_PHASE_THREADS,
+          true,
+          new EventBus());
     } catch (ViewCreationFailedException e) {
       // expect to fail.
     }
@@ -335,8 +327,13 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
 
     reporter.removeHandler(failFastHandler);
     try {
-      update(ImmutableList.of("test/aspect.bzl%MyAspect"), "//test:xxx");
-      fail();
+      update(
+          ImmutableList.of("//test:xxx"),
+          ImmutableList.of("test/aspect.bzl%MyAspect"),
+          false,
+          LOADING_PHASE_THREADS,
+          true,
+          new EventBus());
     } catch (ViewCreationFailedException e) {
       // expect to fail.
     }
@@ -357,8 +354,13 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
 
     reporter.removeHandler(failFastHandler);
     try {
-      update(ImmutableList.of("test/aspect.bzl%MyAspect"), "//test:xxx");
-      fail();
+      update(
+          ImmutableList.of("//test:xxx"),
+          ImmutableList.of("test/aspect.bzl%MyAspect"),
+          false,
+          LOADING_PHASE_THREADS,
+          true,
+          new EventBus());
     } catch (ViewCreationFailedException e) {
       // expect to fail.
     }
@@ -382,8 +384,13 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
 
     reporter.removeHandler(failFastHandler);
     try {
-      update(ImmutableList.of("test/aspect.bzl%MyAspect"), "//test:xxx");
-      fail();
+      update(
+          ImmutableList.of("//test:xxx"),
+          ImmutableList.of("test/aspect.bzl%MyAspect"),
+          false,
+          LOADING_PHASE_THREADS,
+          true,
+          new EventBus());
     } catch (ViewCreationFailedException e) {
       // expect to fail.
     }
@@ -393,68 +400,5 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
             + "\n"
             + "The following files have no generating action:\n"
             + "test/missing_in_action.txt\n");
-  }
-
-  @Test
-  public void topLevelAspectIsNotAnAspect() throws Exception {
-    scratch.file("test/aspect.bzl", "MyAspect = 4");
-    scratch.file("test/BUILD", "java_library(name = 'xxx')");
-
-    reporter.removeHandler(failFastHandler);
-    try {
-      update(ImmutableList.of("test/aspect.bzl%MyAspect"), "//test:xxx");
-      fail();
-    } catch (ViewCreationFailedException e) {
-      // expect to fail.
-    }
-    assertContainsEvent("MyAspect from //test:aspect.bzl is not an aspect");
-  }
-
-  @Test
-  public void topLevelAspectDoesNotExist() throws Exception {
-    scratch.file("test/aspect.bzl", "");
-    scratch.file("test/BUILD", "java_library(name = 'xxx')");
-
-    reporter.removeHandler(failFastHandler);
-    try {
-      update(ImmutableList.of("test/aspect.bzl%MyAspect"), "//test:xxx");
-      fail();
-    } catch (ViewCreationFailedException e) {
-      // expect to fail.
-    }
-    assertContainsEvent("MyAspect from //test:aspect.bzl is not an aspect");
-  }
-
-  @Test
-  public void topLevelAspectDoesNotExist2() throws Exception {
-    scratch.file("test/BUILD", "java_library(name = 'xxx')");
-
-    reporter.removeHandler(failFastHandler);
-    try {
-      update(ImmutableList.of("test/aspect.bzl%MyAspect"), "//test:xxx");
-      fail();
-    } catch (ViewCreationFailedException e) {
-      // expect to fail.
-    }
-    assertContainsEvent(
-        "Extension file not found. Unable to load file '//test:aspect.bzl': "
-        + "file doesn't exist or isn't a file");
-  }
-
-  @Test
-  public void topLevelAspectDoesNotExistNoBuildFile() throws Exception {
-    scratch.file("test/BUILD", "java_library(name = 'xxx')");
-
-    reporter.removeHandler(failFastHandler);
-    try {
-      update(ImmutableList.of("foo/aspect.bzl%MyAspect"), "//test:xxx");
-      fail();
-    } catch (ViewCreationFailedException e) {
-      // expect to fail.
-    }
-    assertContainsEvent(
-        "Every .bzl file must have a corresponding package, but 'foo' does not have one. "
-        + "Please create a BUILD file in the same or any parent directory. "
-        + "Note that this BUILD file does not need to do anything except exist.");
   }
 }
