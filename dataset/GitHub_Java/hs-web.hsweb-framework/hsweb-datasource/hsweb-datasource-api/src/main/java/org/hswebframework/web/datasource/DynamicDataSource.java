@@ -10,7 +10,7 @@ import javax.sql.DataSource;
  * @author zhouhao
  * @since 3.0
  */
-public interface DynamicDataSource {
+public interface DynamicDataSource extends DataSource {
 
     /**
      * @return 数据源ID
