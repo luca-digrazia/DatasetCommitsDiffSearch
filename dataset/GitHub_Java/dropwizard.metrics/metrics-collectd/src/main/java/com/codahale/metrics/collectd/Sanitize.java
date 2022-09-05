@@ -8,7 +8,7 @@ import java.util.List;
  */
 class Sanitize {
 
-    static final int DEFAULT_MAX_LENGTH = 63;
+    private static final int MAX_LENGTH = 63;
 
     private static final char DASH = '-';
     private static final char SLASH = '/';
@@ -18,23 +18,20 @@ class Sanitize {
     private static final List<Character> INSTANCE_RESERVED = Arrays.asList(SLASH, NULL);
     private static final List<Character> NAME_RESERVED = Arrays.asList(DASH, SLASH, NULL);
 
-    private final int maxLength;
-
-    Sanitize(int maxLength) {
-        this.maxLength = maxLength;
+    private Sanitize() {
     }
 
-    String name(String name) {
+    static String name(String name) {
         return sanitize(name, NAME_RESERVED);
     }
 
-    String instanceName(String instanceName) {
+    static String instanceName(String instanceName) {
         return sanitize(instanceName, INSTANCE_RESERVED);
     }
 
-    private String sanitize(String string, List<Character> reservedChars) {
+    private static String sanitize(String string, List<Character> reservedChars) {
         final StringBuilder buffer = new StringBuilder(string.length());
-        final int len = Math.min(string.length(), maxLength);
+        final int len = Math.min(string.length(), MAX_LENGTH);
         for (int i = 0; i < len; i++) {
             final char c = string.charAt(i);
             final boolean legal = ((int) c) < 128 && !reservedChars.contains(c);

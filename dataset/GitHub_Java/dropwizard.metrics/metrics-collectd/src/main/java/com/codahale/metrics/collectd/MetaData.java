@@ -58,36 +58,30 @@ class MetaData {
         private String typeInstance;
         private long timestamp;
         private long period;
-        private Sanitize sanitize;
 
         Builder(String host, long timestamp, long duration) {
-            this(new Sanitize(Sanitize.DEFAULT_MAX_LENGTH), host, timestamp, duration);
-        }
-
-        Builder(Sanitize sanitize, String host, long timestamp, long duration) {
-            this.sanitize = sanitize;
-            this.host = sanitize.instanceName(host);
+            this.host = Sanitize.instanceName(host);
             this.timestamp = timestamp;
             period = duration;
         }
 
         Builder plugin(String name) {
-            plugin = sanitize.name(name);
+            plugin = Sanitize.name(name);
             return this;
         }
 
         Builder pluginInstance(String name) {
-            pluginInstance = sanitize.instanceName(name);
+            pluginInstance = Sanitize.instanceName(name);
             return this;
         }
 
         Builder type(String name) {
-            type = sanitize.name(name);
+            type = Sanitize.name(name);
             return this;
         }
 
         Builder typeInstance(String name) {
-            typeInstance = sanitize.instanceName(name);
+            typeInstance = Sanitize.instanceName(name);
             return this;
         }
 

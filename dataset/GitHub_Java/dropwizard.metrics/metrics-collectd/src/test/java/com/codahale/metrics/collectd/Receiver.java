@@ -6,9 +6,6 @@ import org.collectd.protocol.Dispatcher;
 import org.collectd.protocol.UdpReceiver;
 import org.junit.rules.ExternalResource;
 
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -18,7 +15,6 @@ public final class Receiver extends ExternalResource {
     private final int port;
 
     private UdpReceiver receiver;
-    private DatagramSocket socket;
     private BlockingQueue<ValueList> queue = new LinkedBlockingQueue<>();
 
     public Receiver(int port) {
@@ -27,9 +23,6 @@ public final class Receiver extends ExternalResource {
 
     @Override
     protected void before() throws Throwable {
-        socket = new DatagramSocket(null);
-        socket.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
-
         receiver = new UdpReceiver(new Dispatcher() {
             @Override
             public void dispatch(ValueList values) {
@@ -44,7 +37,7 @@ public final class Receiver extends ExternalResource {
         receiver.setPort(port);
         new Thread(() -> {
             try {
-                receiver.listen(socket);
+                receiver.listen();
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -52,12 +45,11 @@ public final class Receiver extends ExternalResource {
     }
 
     public ValueList next() throws InterruptedException {
-        return queue.poll(2, TimeUnit.SECONDS);
+        return queue.poll(1, TimeUnit.SECONDS);
     }
 
     @Override
     protected void after() {
         receiver.shutdown();
-        socket.close();
     }
 }
