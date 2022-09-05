@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.collect.nestedset;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,7 +29,8 @@ public class OrderTest {
   @Test
   public void testParsing() throws Exception {
     for (Order current : Order.values()) {
-      assertThat(Order.parse(current.getStarlarkName())).isEqualTo(current);
+      assertThat(Order.parse(current.getSkylarkName())).isEqualTo(current);
+      assertThat(Order.parse(current.getDeprecatedSkylarkName())).isEqualTo(current);
     }
   }
 
@@ -43,8 +44,11 @@ public class OrderTest {
   }
 
   private void causeError(String invalidName) throws Exception {
-    IllegalArgumentException ex =
-        assertThrows(IllegalArgumentException.class, () -> Order.parse(invalidName));
-    assertThat(ex).hasMessageThat().startsWith("Invalid order");
+    try {
+      Order.parse(invalidName);
+      fail();
+    } catch (IllegalArgumentException ex) {
+      assertThat(ex.getMessage()).startsWith("Invalid order");
+    }
   }
 }

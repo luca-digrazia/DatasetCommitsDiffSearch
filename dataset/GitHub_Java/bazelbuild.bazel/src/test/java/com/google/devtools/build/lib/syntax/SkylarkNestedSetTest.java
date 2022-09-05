@@ -62,19 +62,6 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testToCollection() throws Exception {
-    eval("s = depset(['a', 'b'])");
-    assertThat(get("s").toCollection(String.class)).containsExactly("a", "b").inOrder();
-    assertThat(get("s").toCollection(Object.class)).containsExactly("a", "b").inOrder();
-    assertThat(get("s").toCollection()).containsExactly("a", "b").inOrder();
-    try {
-      get("s").toCollection(Integer.class);
-      Assert.fail("toCollection() with wrong type should have raised IllegalArgumentException");
-    } catch (IllegalArgumentException expected) {
-    }
-  }
-
-  @Test
   public void testOrder() throws Exception {
     eval("s = depset(['a', 'b'], order='postorder')");
     assertThat(get("s").getSet(String.class).getOrder()).isEqualTo(Order.COMPILE_ORDER);
@@ -107,9 +94,13 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
 
   @Test
   public void testBadGenericType() throws Exception {
-    new BothModesTest().testIfExactError(
-        "cannot add an item of type 'int' to a depset of 'string'",
-        "depset(['a', 5])");
+    new BothModesTest()
+        .testIfExactError(
+            "cannot add an item of type 'int' to a depset of 'string'",
+            "depset(['a', 5])")
+        .testIfExactError(
+            "cannot add value of type 'string' to a depset",
+            "depset() + 'a'");
   }
 
   @Test
@@ -139,8 +130,7 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
 
   private void assertContainsInOrder(String statement, Object... expectedElements)
       throws Exception {
-    assertThat(((SkylarkNestedSet) eval(statement)).toCollection())
-        .containsExactly(expectedElements);
+    new BothModesTest().testCollection(statement, expectedElements);
   }
 
   @Test
@@ -168,10 +158,12 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   public void testUnionWithNonsequence() throws Exception {
     new BothModesTest()
         .testIfExactError(
-            "cannot union value of type 'int' to a depset",
+            "method depset.union(new_elements: Iterable) is not applicable for arguments (int): "
+            + "'new_elements' is 'int', but should be 'Iterable'",
             "depset([]).union(5)")
         .testIfExactError(
-            "cannot union value of type 'string' to a depset",
+            "method depset.union(new_elements: Iterable) is not applicable for arguments (string): "
+            + "'new_elements' is 'string', but should be 'Iterable'",
             "depset(['a']).union('b')");
   }
 
