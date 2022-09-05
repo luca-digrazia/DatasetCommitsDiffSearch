@@ -30,9 +30,7 @@ public enum BuildPhase {
   BLAZE_HALTED("blaze-halted", false),
   COMPLETE("built", true),
   // We skip a target when a previous target has failed to build with --nokeep_going.
-  BUILD_SKIPPED("build-skipped", false),
-  // The target was skipped due to CPU constraints.
-  TARGET_SKIPPED("target-skipped", true);
+  BUILD_SKIPPED("build-skipped", false);
 
   private final String msg;
   private final boolean success;
