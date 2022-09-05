@@ -41,9 +41,7 @@ import com.google.devtools.build.lib.query2.output.AspectResolver.BuildFileDepen
 import com.google.devtools.build.lib.query2.output.OutputFormatter.AbstractUnorderedFormatter;
 import com.google.devtools.build.lib.query2.output.QueryOptions.OrderOutput;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build;
-import com.google.devtools.build.lib.query2.proto.proto2api.Build.GeneratedFile;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.QueryResult.Builder;
-import com.google.devtools.build.lib.query2.proto.proto2api.Build.SourceFile;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.util.BinaryPredicate;
 
@@ -137,11 +135,8 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       Rule rule = (Rule) target;
       Build.Rule.Builder rulePb = Build.Rule.newBuilder()
           .setName(rule.getLabel().toString())
-          .setRuleClass(rule.getRuleClass());
-      if (includeLocation()) {
-        rulePb.setLocation(location);
-      }
-
+          .setRuleClass(rule.getRuleClass())
+          .setLocation(location);
       for (Attribute attr : rule.getAttributes()) {
         if (!includeDefaultValues && !rule.isAttributeValueExplicitlySpecified(attr)
             || !includeAttribute(rule, attr)) {
@@ -165,7 +160,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       postProcess(rule, rulePb);
 
       Environment env = rule.getRuleClassObject().getRuleDefinitionEnvironment();
-      if (env != null && includeRuleDefinitionEnvironment()) {
+      if (env != null) {
         // The RuleDefinitionEnvironment is always defined for Skylark rules and
         // always null for non Skylark rules.
         rulePb.addAttribute(
@@ -181,9 +176,6 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       // Add information about additional attributes from aspects.
       for (Entry<Attribute, Collection<Label>> entry : aspectsDependencies.asMap().entrySet()) {
         Attribute attribute = entry.getKey();
-        if (!includeAttribute(rule, attribute)) {
-          continue;
-        }
         Collection<Label> labels = entry.getValue();
         Object attributeValue = getAspectAttributeValue(attribute, labels);
         Build.Attribute serializedAttribute =
@@ -195,23 +187,21 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
                 /*encodeBooleanAndTriStateAsIntegerAndString=*/ true);
         rulePb.addAttribute(serializedAttribute);
       }
-      if (includeRuleInputsAndOutputs()) {
-        // Add all deps from aspects as rule inputs of current target.
-        for (Label label : aspectsDependencies.values()) {
-          rulePb.addRuleInput(label.toString());
-        }
+      // Add all deps from aspects as rule inputs of current target.
+      for (Label label : aspectsDependencies.values()) {
+        rulePb.addRuleInput(label.toString());
+      }
 
-        // Include explicit elements for all direct inputs and outputs of a rule;
-        // this goes beyond what is available from the attributes above, since it
-        // may also (depending on options) include implicit outputs,
-        // host-configuration outputs, and default values.
-        for (Label label : rule.getLabels(dependencyFilter)) {
-          rulePb.addRuleInput(label.toString());
-        }
-        for (OutputFile outputFile : rule.getOutputFiles()) {
-          Label fileLabel = outputFile.getLabel();
-          rulePb.addRuleOutput(fileLabel.toString());
-        }
+      // Include explicit elements for all direct inputs and outputs of a rule;
+      // this goes beyond what is available from the attributes above, since it
+      // may also (depending on options) include implicit outputs,
+      // host-configuration outputs, and default values.
+      for (Label label : rule.getLabels(dependencyFilter)) {
+        rulePb.addRuleInput(label.toString());
+      }
+      for (OutputFile outputFile : rule.getOutputFiles()) {
+        Label fileLabel = outputFile.getLabel();
+        rulePb.addRuleOutput(fileLabel.toString());
       }
       for (String feature : rule.getFeatures()) {
         rulePb.addDefaultSetting(feature);
@@ -224,26 +214,21 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       Label label = outputFile.getLabel();
 
       Rule generatingRule = outputFile.getGeneratingRule();
-      GeneratedFile.Builder output =
-          GeneratedFile.newBuilder()
-                       .setGeneratingRule(generatingRule.getLabel().toString())
-                       .setName(label.toString());
+      Build.GeneratedFile output = Build.GeneratedFile.newBuilder()
+          .setLocation(location)
+          .setGeneratingRule(generatingRule.getLabel().toString())
+          .setName(label.toString())
+          .build();
 
-      if (includeLocation()) {
-        output.setLocation(location);
-      }
       targetPb.setType(GENERATED_FILE);
-      targetPb.setGeneratedFile(output.build());
+      targetPb.setGeneratedFile(output);
     } else if (target instanceof InputFile) {
       InputFile inputFile = (InputFile) target;
       Label label = inputFile.getLabel();
 
       Build.SourceFile.Builder input = Build.SourceFile.newBuilder()
+          .setLocation(location)
           .setName(label.toString());
-
-      if (includeLocation()) {
-        input.setLocation(location);
-      }
 
       if (inputFile.getName().equals("BUILD")) {
         Set<Label> subincludeLabels = new LinkedHashSet<>();
@@ -279,14 +264,13 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       targetPb.setSourceFile(input);
     } else if (target instanceof FakeSubincludeTarget) {
       Label label = target.getLabel();
-      SourceFile.Builder input = SourceFile.newBuilder()
-                                           .setName(label.toString());
+      Build.SourceFile input = Build.SourceFile.newBuilder()
+          .setLocation(location)
+          .setName(label.toString())
+          .build();
 
-      if (includeLocation()) {
-        input.setLocation(location);
-      }
       targetPb.setType(SOURCE_FILE);
-      targetPb.setSourceFile(input.build());
+      targetPb.setSourceFile(input);
     } else if (target instanceof PackageGroup) {
       PackageGroup packageGroup = (PackageGroup) target;
       Build.PackageGroup.Builder packageGroupPb = Build.PackageGroup.newBuilder()
@@ -342,18 +326,6 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
 
   /** Filter out some attributes */
   protected boolean includeAttribute(Rule rule, Attribute attr) {
-    return true;
-  }
-
-  protected boolean includeRuleDefinitionEnvironment() {
-    return true;
-  }
-
-  protected boolean includeRuleInputsAndOutputs() {
-    return true;
-  }
-
-  protected boolean includeLocation() {
     return true;
   }
 }
