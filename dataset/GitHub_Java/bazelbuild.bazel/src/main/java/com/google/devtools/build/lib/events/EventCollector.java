@@ -13,8 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.events;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
@@ -82,7 +84,12 @@ public final class EventCollector extends AbstractEventHandler implements Iterab
    * scenario where there may still be concurrent modifications to the collector.
    */
   public Iterable<Event> filtered(final EventKind eventKind) {
-    return Iterables.filter(collected, event -> event.getKind() == eventKind);
+    return Iterables.filter(collected, new Predicate<Event>() {
+      @Override
+      public boolean apply(Event event) {
+        return event.getKind() == eventKind;
+      }
+    });
   }
 
   /**
