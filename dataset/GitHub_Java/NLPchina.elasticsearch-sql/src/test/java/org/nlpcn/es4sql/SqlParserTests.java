@@ -499,8 +499,8 @@ public class SqlParserTests {
         Assert.assertEquals(2,scriptMethod.getParams().size());
         Assert.assertEquals("doc['field1'].value + doc['field2'].value" ,scriptMethod.getParams().get(1).toString());
     }
-
     @Test
+
     public void implicitScriptOnAggregation() throws SqlParseException {
         String query = "SELECT avg(field1 + field2) FROM index/type";
         SQLExpr sqlExpr = queryToExpr(query);
@@ -517,71 +517,6 @@ public class SqlParserTests {
         Assert.assertEquals(2,scriptMethod.getParams().size());
         Assert.assertEquals("doc['field1'].value + doc['field2'].value" ,scriptMethod.getParams().get(1).toString());
     }
-
-    @Test
-    public void nestedFieldOnWhereNoPathSimpleField() throws SqlParseException {
-        String query = "select * from myIndex where nested(message.name) = 'hey'";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Where where = select.getWhere().getWheres().get(0);
-        Assert.assertTrue("where should be condition", where instanceof Condition);
-        Condition condition = (Condition) where;
-        Assert.assertTrue("condition should be nested",condition.isNested());
-        Assert.assertEquals("message",condition.getNestedPath());
-        Assert.assertEquals("message.name",condition.getName());
-    }
-
-
-    @Test
-    public void nestedFieldOnWhereNoPathComplexField() throws SqlParseException {
-        String query = "select * from myIndex where nested(message.moreNested.name) = 'hey'";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Where where = select.getWhere().getWheres().get(0);
-        Assert.assertTrue("where should be condition", where instanceof Condition);
-        Condition condition = (Condition) where;
-        Assert.assertTrue("condition should be nested",condition.isNested());
-        Assert.assertEquals("message.moreNested",condition.getNestedPath());
-        Assert.assertEquals("message.moreNested.name",condition.getName());
-    }
-
-    @Test
-    public void nestedFieldOnWhereGivenPath() throws SqlParseException {
-        String query = "select * from myIndex where nested(message.name,message) = 'hey'";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Where where = select.getWhere().getWheres().get(0);
-        Assert.assertTrue("where should be condition", where instanceof Condition);
-        Condition condition = (Condition) where;
-        Assert.assertTrue("condition should be nested",condition.isNested());
-        Assert.assertEquals("message",condition.getNestedPath());
-        Assert.assertEquals("message.name",condition.getName());
-    }
-
-    @Test
-    public void nestedFieldOnGroupByNoPath() throws SqlParseException {
-        String query = "select * from myIndex group by nested(message.name)";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Field field = select.getGroupBys().get(0).get(0);
-        Assert.assertTrue("condition should be nested",field.isNested());
-        Assert.assertEquals("message",field.getNestedPath());
-        Assert.assertEquals("message.name",field.getName());
-    }
-
-    @Test
-    public void nestedFieldOnGroupByWithPath() throws SqlParseException {
-        String query = "select * from myIndex group by nested(message.name,message)";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Field field = select.getGroupBys().get(0).get(0);
-        Assert.assertTrue("condition should be nested",field.isNested());
-        Assert.assertEquals("message",field.getNestedPath());
-        Assert.assertEquals("message.name",field.getName());
-    }
-
-
-
     private SQLExpr queryToExpr(String query) {
         return new ElasticSqlExprParser(query).expr();
     }
