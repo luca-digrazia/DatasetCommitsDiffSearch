@@ -15,7 +15,8 @@ package com.google.devtools.build.lib.worker;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.Subscribe;
-import com.google.devtools.build.lib.actions.ExecutorBuilder;
+import com.google.devtools.build.lib.actions.ActionContextConsumer;
+import com.google.devtools.build.lib.actions.ActionContextProvider;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildInterruptedEvent;
@@ -27,6 +28,7 @@ import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsBase;
+
 import java.io.IOException;
 
 /**
@@ -34,11 +36,12 @@ import java.io.IOException;
  */
 public class WorkerModule extends BlazeModule {
   private CommandEnvironment env;
+  private BuildRequest buildRequest;
+  private boolean verbose;
 
   private WorkerFactory workerFactory;
   private WorkerPool workerPool;
   private WorkerPoolConfig workerPoolConfig;
-  private WorkerOptions options;
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
@@ -55,35 +58,34 @@ public class WorkerModule extends BlazeModule {
 
   @Subscribe
   public void buildStarting(BuildStartingEvent event) {
-    options = event.getRequest().getOptions(WorkerOptions.class);
+    buildRequest = event.getRequest();
+    WorkerOptions options = buildRequest.getOptions(WorkerOptions.class);
+    verbose = options.workerVerbose;
 
     if (workerFactory == null) {
-      Path workerDir =
-          env.getOutputBase().getRelative(env.getRuntime().getProductName() + "-workers");
+      Path logDir = env.getOutputBase().getRelative("worker-logs");
       try {
-        if (!workerDir.createDirectory()) {
+        if (!logDir.createDirectory()) {
           // Clean out old log files.
-          for (Path logFile : workerDir.getDirectoryEntries()) {
-            if (logFile.getBaseName().endsWith(".log")) {
-              try {
-                logFile.delete();
-              } catch (IOException e) {
-                env.getReporter()
-                    .handle(Event.error("Could not delete old worker log: " + logFile));
-              }
+          for (Path logFile : logDir.getDirectoryEntries()) {
+            try {
+              logFile.delete();
+            } catch (IOException e) {
+              env.getReporter().handle(Event.error("Could not delete old worker log: " + logFile));
             }
           }
         }
       } catch (IOException e) {
-        env.getReporter()
-            .handle(Event.error("Could not create base directory for workers: " + workerDir));
+        env
+            .getReporter()
+            .handle(Event.error("Could not create directory for worker logs: " + logDir));
       }
 
-      workerFactory = new WorkerFactory(options, workerDir);
+      workerFactory = new WorkerFactory(logDir);
     }
 
     workerFactory.setReporter(env.getReporter());
-    workerFactory.setOptions(options);
+    workerFactory.setVerbose(options.workerVerbose);
 
     WorkerPoolConfig newConfig = createWorkerPoolConfig(options);
 
@@ -130,17 +132,25 @@ public class WorkerModule extends BlazeModule {
   }
 
   @Override
-  public void executorInit(CommandEnvironment env, BuildRequest request, ExecutorBuilder builder) {
+  public Iterable<ActionContextProvider> getActionContextProviders() {
+    Preconditions.checkNotNull(env);
+    Preconditions.checkNotNull(buildRequest);
     Preconditions.checkNotNull(workerPool);
-    builder.addActionContextProvider(
-        new WorkerActionContextProvider(env, request, workerPool));
-    builder.addActionContextConsumer(new WorkerActionContextConsumer());
+
+    return ImmutableList.<ActionContextProvider>of(
+        new WorkerActionContextProvider(env, buildRequest, workerPool));
+  }
+
+  @Override
+  public Iterable<ActionContextConsumer> getActionContextConsumers() {
+    return ImmutableList.<ActionContextConsumer>of(new WorkerActionContextConsumer());
   }
 
   @Subscribe
   public void buildComplete(BuildCompleteEvent event) {
-    if (options != null
-        && options.workerQuitAfterBuild) {
+    if (buildRequest != null
+        && buildRequest.getOptions(WorkerOptions.class) != null
+        && buildRequest.getOptions(WorkerOptions.class).workerQuitAfterBuild) {
       shutdownPool("Build completed, shutting down worker pool...");
     }
   }
@@ -160,7 +170,7 @@ public class WorkerModule extends BlazeModule {
     Preconditions.checkArgument(!reason.isEmpty());
 
     if (workerPool != null) {
-      if (options != null && options.workerVerbose) {
+      if (verbose) {
         env.getReporter().handle(Event.info(reason));
       }
       workerPool.close();
@@ -171,7 +181,8 @@ public class WorkerModule extends BlazeModule {
   @Override
   public void afterCommand() {
     this.env = null;
-    this.options = null;
+    this.buildRequest = null;
+    this.verbose = false;
 
     if (this.workerFactory != null) {
       this.workerFactory.setReporter(null);

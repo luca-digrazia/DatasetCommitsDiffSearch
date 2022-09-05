@@ -36,19 +36,7 @@ import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser.UnparsedOptionValueDescription;
 import com.google.devtools.common.options.OptionsProvider;
 import com.google.protobuf.ByteString;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermission;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ThreadFactory;
+
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpStatus;
@@ -60,6 +48,19 @@ import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
 import org.apache.http.params.HttpParams;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 /**
  * Dashboard for a build.
@@ -346,19 +347,17 @@ public class DashModule extends BlazeModule {
 
     @Override
     public void send(final String suffix, final BuildData message) {
-      @SuppressWarnings("unused") 
-      Future<?> possiblyIgnoredError =
-          executorService.submit(
-              new Runnable() {
-                @Override
-                public void run() {
-                  try {
-                    sendMessage(suffix, new ByteArrayEntity(message.toByteArray()));
-                  } catch (SenderException ex) {
-                    reporter.handle(ex.toEvent());
-                  }
-                }
-              });
+      executorService.submit(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            sendMessage(suffix, new ByteArrayEntity(message.toByteArray()));
+          } catch (SenderException ex) {
+            reporter.handle(ex.toEvent());
+          }
+        }
+
+      });
     }
   }
 
