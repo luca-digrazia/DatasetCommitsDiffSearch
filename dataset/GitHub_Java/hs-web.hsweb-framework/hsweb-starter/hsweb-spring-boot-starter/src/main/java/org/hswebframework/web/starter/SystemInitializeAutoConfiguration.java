@@ -18,15 +18,15 @@
 
 package org.hswebframework.web.starter;
 
-import org.hswebframework.ezorm.rdb.executor.SqlExecutor;
-import org.hswebframework.ezorm.rdb.meta.RDBDatabaseMetaData;
-import org.hswebframework.ezorm.rdb.meta.parser.H2TableMetaParser;
-import org.hswebframework.ezorm.rdb.meta.parser.MysqlTableMetaParser;
-import org.hswebframework.ezorm.rdb.meta.parser.OracleTableMetaParser;
-import org.hswebframework.ezorm.rdb.render.dialect.H2RDBDatabaseMetaData;
-import org.hswebframework.ezorm.rdb.render.dialect.MysqlRDBDatabaseMetaData;
-import org.hswebframework.ezorm.rdb.render.dialect.OracleRDBDatabaseMetaData;
-import org.hswebframework.ezorm.rdb.simple.SimpleDatabase;
+import org.hsweb.ezorm.rdb.executor.SqlExecutor;
+import org.hsweb.ezorm.rdb.meta.RDBDatabaseMetaData;
+import org.hsweb.ezorm.rdb.meta.parser.H2TableMetaParser;
+import org.hsweb.ezorm.rdb.meta.parser.MysqlTableMetaParser;
+import org.hsweb.ezorm.rdb.meta.parser.OracleTableMetaParser;
+import org.hsweb.ezorm.rdb.render.dialect.H2RDBDatabaseMetaData;
+import org.hsweb.ezorm.rdb.render.dialect.MysqlRDBDatabaseMetaData;
+import org.hsweb.ezorm.rdb.render.dialect.OracleRDBDatabaseMetaData;
+import org.hsweb.ezorm.rdb.simple.SimpleDatabase;
 import org.hswebframework.expands.script.engine.DynamicScriptEngine;
 import org.hswebframework.expands.script.engine.DynamicScriptEngineFactory;
 import org.hswebframework.web.ScriptScope;
@@ -44,9 +44,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.core.annotation.Order;
-import org.springframework.core.env.Environment;
 import org.springframework.util.ClassUtils;
-import org.springframework.util.StringUtils;
 
 import javax.annotation.PostConstruct;
 import javax.sql.DataSource;
@@ -78,9 +76,6 @@ public class SystemInitializeAutoConfiguration implements CommandLineRunner, Bea
     private ApplicationContext applicationContext;
 
     private List<DynamicScriptEngine> engines;
-
-    @Autowired
-    private Environment environment;
 
     @PostConstruct
     public void init() {
@@ -115,9 +110,7 @@ public class SystemInitializeAutoConfiguration implements CommandLineRunner, Bea
             connection = DataSourceHolder.currentDataSource().getNative().getConnection();
             jdbcUserName = connection.getMetaData().getUserName();
         } finally {
-            if (null != connection) {
-                connection.close();
-            }
+            if (null != connection) connection.close();
         }
         RDBDatabaseMetaData metaData;
         switch (type) {
@@ -126,13 +119,8 @@ public class SystemInitializeAutoConfiguration implements CommandLineRunner, Bea
                 metaData.setParser(new OracleTableMetaParser(sqlExecutor));
                 break;
             case mysql:
-                String engine = environment.getProperty("mysql.engine");
-
                 metaData = new MysqlRDBDatabaseMetaData();
                 metaData.setParser(new MysqlTableMetaParser(sqlExecutor));
-                if (StringUtils.hasText(engine)) {
-                    ((MysqlRDBDatabaseMetaData) metaData).setEngine(engine);
-                }
                 break;
             default:
                 metaData = new H2RDBDatabaseMetaData();
@@ -156,7 +144,7 @@ public class SystemInitializeAutoConfiguration implements CommandLineRunner, Bea
     }
 
     @Override
-    public Object postProcessAfterInitialization(Object bean, String beanName) {
+    public Object postProcessAfterInitialization(Object bean, String beanName)  {
         ScriptScope scope;
         if (bean instanceof Service) {
             addGlobalVariable(beanName, bean);
