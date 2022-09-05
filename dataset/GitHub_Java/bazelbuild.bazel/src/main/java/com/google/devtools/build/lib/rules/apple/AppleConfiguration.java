@@ -79,11 +79,10 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
           "experimental_objc_library");
 
   /**
-   * Rule classes that need a top level transition to the apple crosstool.  Dynamic configurations
-   * must be in place until these can be used - for static configurations, use
-   * {@code APPLE_CROSSTOOL_RULE_CLASSES_FOR_STATIC_CONFIGS}.
+   * Rule classes that need a top level transition to the apple crosstool if dynamic configurations
+   * are being used.
    */
-  public static final ImmutableList<String> APPLE_CROSSTOOL_RULE_CLASSES =
+  public static final ImmutableList<String> APPLE_CROSSTOOL_RULE_CLASSES_FOR_DYNAMIC_CONFIGS =
       ImmutableList.of(
           "apple_binary",
           "apple_dynamic_library",
@@ -114,7 +113,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
   private final ImmutableList<String> tvosCpus;
   private final AppleBitcodeMode bitcodeMode;
   private final Label xcodeConfigLabel;
-  private final boolean enableAppleCrosstool;
   @Nullable private final String xcodeToolchain;
   @Nullable private final Label defaultProvisioningProfileLabel;
 
@@ -157,7 +155,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     this.bitcodeMode = appleOptions.appleBitcodeMode;
     this.xcodeConfigLabel =
         Preconditions.checkNotNull(appleOptions.xcodeVersionConfig, "xcodeConfigLabel");
-    this.enableAppleCrosstool = appleOptions.enableAppleCrosstoolTransition;
     this.defaultProvisioningProfileLabel = appleOptions.defaultProvisioningProfile;
     this.xcodeToolchain = appleOptions.xcodeToolchain;
   }
@@ -559,11 +556,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
   )
   public String getXcodeToolchain() {
     return xcodeToolchain;
-  }
-
-  /** Returns true if {@link AppleCrosstoolTransition} should be applied to every apple rule. */
-  public boolean isAppleCrosstoolEnabled() {
-    return enableAppleCrosstool;
   }
 
   /**
