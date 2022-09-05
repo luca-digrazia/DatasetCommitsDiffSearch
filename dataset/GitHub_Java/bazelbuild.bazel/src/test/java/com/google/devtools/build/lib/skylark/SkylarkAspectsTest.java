@@ -58,7 +58,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   private static final String LINE_SEPARATOR = System.lineSeparator();
 
   @Test
-  public void simpleAspect() throws Exception {
+  public void testAspect() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -90,7 +90,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectCommandLineLabel() throws Exception {
+  public void testAspectCommandLineLabel() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -107,7 +107,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectCommandLineRepoLabel() throws Exception {
+  public void testAspectCommandLineRepoLabel() throws Exception {
     scratch.overwriteFile(
         "WORKSPACE",
         scratch.readFile("WORKSPACE"),
@@ -144,7 +144,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
 
 
   @Test
-  public void aspectAllowsFragmentsToBeSpecified() throws Exception {
+  public void testAspectAllowsFragmentsToBeSpecified() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -176,7 +176,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectPropagating() throws Exception {
+  public void testAspectPropagating() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -287,7 +287,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectWithOutputGroups() throws Exception {
+  public void testAspectWithOutputGroups() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -320,7 +320,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectWithOutputGroupsAsList() throws Exception {
+  public void testAspectWithOutputGroupsAsList() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -364,7 +364,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
 
 
   @Test
-  public void aspectsFromSkylarkRules() throws Exception {
+  public void testAspectsFromSkylarkRules() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _aspect_impl(target, ctx):",
@@ -422,7 +422,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectOnLabelAttr() throws Exception {
+  public void testAspectOnLabelAttr() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _aspect_impl(target, ctx):",
@@ -459,7 +459,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectsDoNotAttachToFiles() throws Exception {
+  public void testAspectsDoNotAttachToFiles() throws Exception {
     FileSystemUtils.appendIsoLatin1(scratch.resolve("WORKSPACE"),
         "bind(name = 'yyy', actual = '//test:zzz.jar')");
     scratch.file(
@@ -495,7 +495,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectFailingExecution() throws Exception {
+  public void testAspectFailingExecution() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -529,7 +529,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectFailingReturnsNotAStruct() throws Exception {
+  public void testAspectFailingReturnsNotAStruct() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -550,7 +550,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectFailingReturnsUnsafeObject() throws Exception {
+  public void testAspectFailingReturnsUnsafeObject() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def foo():",
@@ -578,7 +578,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectFailingOrphanArtifacts() throws Exception {
+  public void testAspectFailingOrphanArtifacts() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -846,7 +846,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectParametersUncovered() throws Exception {
+  public void testAspectParametersUncovered() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -879,7 +879,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectParametersTypeMismatch() throws Exception {
+  public void testAspectParametersTypeMismatch() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -913,7 +913,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectParametersBadDefault() throws Exception {
+  public void testAspectParametersBadDefault() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -946,7 +946,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectParametersBadValue() throws Exception {
+  public void testAspectParametersBadValue() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -979,7 +979,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectParameters() throws Exception {
+  public void testAspectParameters() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -1004,7 +1004,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectParametersOptional() throws Exception {
+  public void testAspectParametersOptional() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -1028,7 +1028,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectParametersOptionalOverride() throws Exception {
+  public void testAspectParametersOptionalOverride() throws Exception {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
@@ -1086,21 +1086,21 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
 
 
   @Test
-  public void aspectFragmentAccessSuccess() throws Exception {
+  public void testAspectFragmentAccessSuccess() throws Exception {
     getConfiguredTargetForAspectFragment(
         "ctx.fragments.cpp.compiler", "'cpp'", "", "", "");
     assertNoEvents();
   }
 
   @Test
-  public void aspectHostFragmentAccessSuccess() throws Exception {
+  public void testAspectHostFragmentAccessSuccess() throws Exception {
     getConfiguredTargetForAspectFragment(
         "ctx.host_fragments.cpp.compiler", "", "'cpp'", "", "");
     assertNoEvents();
   }
 
   @Test
-  public void aspectFragmentAccessError() throws Exception {
+  public void testAspectFragmentAccessError() throws Exception {
     reporter.removeHandler(failFastHandler);
     try {
       getConfiguredTargetForAspectFragment(
@@ -1117,7 +1117,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectHostFragmentAccessError() throws Exception {
+  public void testAspectHostFragmentAccessError() throws Exception {
     reporter.removeHandler(failFastHandler);
     try {
       getConfiguredTargetForAspectFragment(

@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
@@ -31,7 +30,6 @@ import javax.annotation.Nullable;
  */
 public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   private final ConfiguredTarget base;
-  private final ImmutableList<AspectDescriptor> aspects;
   private final TransitiveInfoProviderMap providers;
 
   /**
@@ -45,12 +43,9 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
     }
   }
 
-  private MergedConfiguredTarget(ConfiguredTarget base,
-      ImmutableList<AspectDescriptor> aspects,
-      TransitiveInfoProviderMap providers) {
+  private MergedConfiguredTarget(ConfiguredTarget base, TransitiveInfoProviderMap providers) {
     super(base.getTarget(), base.getConfiguration());
     this.base = base;
-    this.aspects = aspects;
     this.providers = providers;
   }
 
@@ -76,13 +71,6 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
     }
 
     return provider;
-  }
-
-  /**
-   * List of aspects applied to the target.
-   */
-  public ImmutableList<AspectDescriptor> getAspects() {
-    return aspects;
   }
 
   /** Creates an instance based on a configured target and a set of aspects. */
@@ -123,8 +111,6 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
       aspectProviders.add(mergedExtraActionProviders);
     }
 
-    ImmutableList.Builder<AspectDescriptor> aspectRepresentations = ImmutableList.builder();
-
     for (ConfiguredAspect aspect : aspects) {
       for (Map.Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> entry :
           aspect.getProviders().entrySet()) {
@@ -140,11 +126,9 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
         }
 
         aspectProviders.add(entry.getValue());
-        aspectRepresentations.add(aspect.getDescriptor());
       }
-
     }
-    return new MergedConfiguredTarget(base, aspectRepresentations.build(), aspectProviders.build());
+    return new MergedConfiguredTarget(base, aspectProviders.build());
   }
 
   private static <T extends TransitiveInfoProvider> List<T> getAllProviders(

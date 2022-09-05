@@ -18,8 +18,8 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.MergedConfiguredTarget.DuplicateException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
 import com.google.devtools.build.lib.rules.SkylarkApiProvider;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkType;
@@ -34,13 +34,13 @@ import java.util.Set;
  */
 @Immutable
 public final class SkylarkProviders implements TransitiveInfoProvider {
-  private final ImmutableMap<ClassObjectConstructor.Key, SkylarkClassObject>
+  private final ImmutableMap<SkylarkClassObjectConstructor.Key, SkylarkClassObject>
       declaredProviders;
   private final ImmutableMap<String, Object> skylarkProviders;
 
   SkylarkProviders(
       ImmutableMap<String, Object> skylarkProviders,
-      ImmutableMap<ClassObjectConstructor.Key, SkylarkClassObject> declaredProviders) {
+      ImmutableMap<SkylarkClassObjectConstructor.Key, SkylarkClassObject> declaredProviders) {
     this.declaredProviders = Preconditions.checkNotNull(declaredProviders);
     this.skylarkProviders = Preconditions.checkNotNull(skylarkProviders);
   }
@@ -79,7 +79,7 @@ public final class SkylarkProviders implements TransitiveInfoProvider {
     return type.cast(obj);
   }
 
-  public SkylarkClassObject getDeclaredProvider(ClassObjectConstructor.Key key) {
+  public SkylarkClassObject getDeclaredProvider(SkylarkClassObjectConstructor.Key key) {
     return declaredProviders.get(key);
   }
 
@@ -93,11 +93,11 @@ public final class SkylarkProviders implements TransitiveInfoProvider {
       };
 
   public static final Function<SkylarkProviders,
-                               Map<ClassObjectConstructor.Key, SkylarkClassObject>>
+                               Map<SkylarkClassObjectConstructor.Key, SkylarkClassObject>>
       DECLARED_PROVIDERS_MAP_FUNCTION =
-      new Function<SkylarkProviders, Map<ClassObjectConstructor.Key, SkylarkClassObject>>() {
+      new Function<SkylarkProviders, Map<SkylarkClassObjectConstructor.Key, SkylarkClassObject>>() {
         @Override
-        public Map<ClassObjectConstructor.Key, SkylarkClassObject> apply(
+        public Map<SkylarkClassObjectConstructor.Key, SkylarkClassObject> apply(
             SkylarkProviders skylarkProviders) {
           return skylarkProviders.declaredProviders;
         }
@@ -125,9 +125,9 @@ public final class SkylarkProviders implements TransitiveInfoProvider {
         SKYLARK_PROVIDERS_MAP_FUNCTION,
         premergedProviders);
 
-    ImmutableMap<ClassObjectConstructor.Key, SkylarkClassObject> declaredProviders =
+    ImmutableMap<SkylarkClassObjectConstructor.Key, SkylarkClassObject> declaredProviders =
         mergeMaps(providers, DECLARED_PROVIDERS_MAP_FUNCTION,
-            ImmutableMap.<ClassObjectConstructor.Key, SkylarkClassObject>of());
+            ImmutableMap.<SkylarkClassObjectConstructor.Key, SkylarkClassObject>of());
 
     return new SkylarkProviders(skylarkProviders, declaredProviders);
   }
