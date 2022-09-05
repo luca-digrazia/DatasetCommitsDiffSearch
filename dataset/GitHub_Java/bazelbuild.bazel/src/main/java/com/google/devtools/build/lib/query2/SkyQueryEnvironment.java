@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
@@ -150,7 +149,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
     return allowedLabels;
   }
 
-  @Override
   public Collection<Target> getFwdDeps(Target target) {
     Collection<Target> unfilteredDeps = getRawFwdDeps(target);
     if (!(target instanceof Rule)) {
@@ -166,7 +164,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
         });
   }
 
-  @Override
   public Collection<Target> getReverseDeps(final Target target) {
     return Collections2.filter(getRawReverseDeps(target), new Predicate<Target>() {
       @Override
@@ -317,42 +314,22 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
     }
   }
 
-  private static Target getExistingTarget(Label label,
-      GraphBackedRecursivePackageProvider provider) {
-    StoredEventHandler handler = new StoredEventHandler();
-    try {
-      return provider.getTarget(handler, label);
-    } catch (NoSuchThingException e) {
-      throw new IllegalStateException(e);
-    }
-  }
-
-  @Override
   protected Map<String, ResolvedTargets<Target>> preloadOrThrow(QueryExpression caller,
       Collection<String> patterns) throws QueryException, TargetParsingException {
-    GraphBackedRecursivePackageProvider provider =
-        new GraphBackedRecursivePackageProvider(graph);
     Map<String, ResolvedTargets<Target>> result = Maps.newHashMapWithExpectedSize(patterns.size());
     for (String pattern : patterns) {
       SkyKey patternKey = TargetPatternValue.key(pattern,
           TargetPatternEvaluator.DEFAULT_FILTERING_POLICY, parserPrefix);
 
-      TargetPatternValue.TargetPatternKey targetPatternKey =
-          ((TargetPatternValue.TargetPatternKey) patternKey.argument());
+      TargetPatternValue.TargetPattern targetPattern =
+          ((TargetPatternValue.TargetPattern) patternKey.argument());
 
       TargetParsingException targetParsingException = null;
       if (graph.exists(patternKey)) {
-        // The graph already contains a value or exception for this target pattern, so we use it.
+        // If the graph already contains a value for this target pattern, use it.
         TargetPatternValue value = (TargetPatternValue) graph.getValue(patternKey);
         if (value != null) {
-          ResolvedTargets.Builder<Target> targetsBuilder = ResolvedTargets.builder();
-          for (Label label : value.getTargets().getTargets()) {
-            targetsBuilder.add(getExistingTarget(label, provider));
-          }
-          for (Label label : value.getTargets().getFilteredTargets()) {
-            targetsBuilder.remove(getExistingTarget(label, provider));
-          }
-          result.put(pattern, targetsBuilder.build());
+          result.put(pattern, value.getTargets());
         } else {
           targetParsingException =
               (TargetParsingException)
@@ -361,11 +338,13 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
       } else {
         // If the graph doesn't contain a value for this target pattern, try to directly evaluate
         // it, by making use of packages already present in the graph.
-        TargetPattern.Parser parser = new TargetPattern.Parser(targetPatternKey.getOffset());
+        TargetPattern.Parser parser = new TargetPattern.Parser(targetPattern.getOffset());
+        GraphBackedRecursivePackageProvider provider =
+            new GraphBackedRecursivePackageProvider(graph);
         RecursivePackageProviderBackedTargetPatternResolver resolver =
             new RecursivePackageProviderBackedTargetPatternResolver(provider, eventHandler,
-                targetPatternKey.getPolicy(), pkgPath);
-        TargetPattern parsedPattern = parser.parse(targetPatternKey.getPattern());
+                targetPattern.getPolicy(), pkgPath);
+        TargetPattern parsedPattern = parser.parse(targetPattern.getPattern());
         try {
           result.put(pattern, parsedPattern.eval(resolver));
         } catch (TargetParsingException e) {
