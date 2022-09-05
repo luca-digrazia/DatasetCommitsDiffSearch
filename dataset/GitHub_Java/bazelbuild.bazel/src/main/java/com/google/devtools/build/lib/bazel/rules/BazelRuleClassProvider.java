@@ -52,7 +52,6 @@ import com.google.devtools.build.lib.bazel.rules.java.BazelJavaImportRule;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaLibraryRule;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaPluginRule;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaRuleClasses;
-import com.google.devtools.build.lib.bazel.rules.java.BazelJavaSemantics;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaTestRule;
 import com.google.devtools.build.lib.bazel.rules.java.proto.BazelJavaLiteProtoAspect;
 import com.google.devtools.build.lib.bazel.rules.java.proto.BazelJavaLiteProtoLibraryRule;
@@ -100,8 +99,6 @@ import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.XcodeConfigRule;
 import com.google.devtools.build.lib.rules.apple.XcodeVersionRule;
 import com.google.devtools.build.lib.rules.apple.cpp.AppleCcToolchainRule;
-import com.google.devtools.build.lib.rules.apple.swift.SwiftCommandLineOptions;
-import com.google.devtools.build.lib.rules.apple.swift.SwiftConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcIncLibraryRule;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainRule;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainSuiteRule;
@@ -551,9 +548,8 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new BazelAarImportRule());
 
           builder.addSkylarkAccessibleTopLevels("android_common", new AndroidSkylarkCommon());
-          builder.addSkylarkAccessibleTopLevels(
-              "java_common", new JavaSkylarkCommon(BazelJavaSemantics.INSTANCE));
           builder.addSkylarkAccessibleTopLevels("java_proto_common", JavaProtoSkylarkCommon.class);
+          builder.addSkylarkAccessibleTopLevels("java_common", JavaSkylarkCommon.INSTANCE);
 
           try {
             builder.addWorkspaceFilePrefix(
@@ -605,7 +601,6 @@ public class BazelRuleClassProvider {
 
           builder.addConfig(ObjcCommandLineOptions.class, new ObjcConfigurationLoader());
           builder.addConfig(AppleCommandLineOptions.class, new AppleConfiguration.Loader());
-          builder.addConfig(SwiftCommandLineOptions.class, new SwiftConfiguration.Loader());
           // j2objc shouldn't be here!
           builder.addConfig(J2ObjcCommandLineOptions.class, new J2ObjcConfiguration.Loader());
 

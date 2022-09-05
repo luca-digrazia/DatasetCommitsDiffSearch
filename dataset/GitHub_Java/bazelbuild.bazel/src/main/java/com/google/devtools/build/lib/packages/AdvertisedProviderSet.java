@@ -155,9 +155,8 @@ public final class AdvertisedProviderSet {
           ImmutableSet.copyOf(nativeProviders), ImmutableSet.copyOf(skylarkProviders));
     }
 
-    public Builder addSkylark(String providerName) {
+    public void addSkylark(String providerName) {
       skylarkProviders.add(providerName);
-      return this;
     }
   }
 }
