@@ -190,7 +190,7 @@ public class ExecutionTool {
         getActionContextProvidersFromModules(
             runtime,
             new FilesetActionContextImpl.Provider(
-                env.getReporter(), env.getWorkspaceName()),
+                env.getReporter(), runtime.getWorkspaceName()),
             new SimpleActionContextProvider(
                 new SymlinkTreeStrategy(env.getOutputService(), runtime.getBinTools())));
     StrategyConverter strategyConverter = new StrategyConverter(actionContextProviders);
@@ -300,8 +300,8 @@ public class ExecutionTool {
   private BlazeExecutor createExecutor()
       throws ExecutorInitException {
     return new BlazeExecutor(
-        env.getExecRoot(),
-        env.getOutputPath(),
+        runtime.getDirectories().getExecRoot(),
+        runtime.getDirectories().getOutputPath(),
         getReporter(),
         env.getEventBus(),
         runtime.getClock(),
@@ -360,8 +360,8 @@ public class ExecutionTool {
         ? targetConfigurations.get(0) : null;
     if (targetConfigurations.size() == 1) {
       OutputDirectoryLinksUtils.createOutputDirectoryLinks(
-          env.getWorkspaceName(), env.getWorkspace(), getExecRoot(),
-          env.getOutputPath(), getReporter(), targetConfiguration,
+          runtime.getWorkspaceName(), getWorkspace(), getExecRoot(),
+          runtime.getOutputPath(), getReporter(), targetConfiguration,
           request.getBuildOptions().getSymlinkPrefix());
     }
 
@@ -531,7 +531,7 @@ public class ExecutionTool {
   }
 
   private void createActionLogDirectory() throws ExecutorInitException {
-    Path directory = env.getDirectories().getActionConsoleOutputDirectory();
+    Path directory = runtime.getDirectories().getActionConsoleOutputDirectory();
     try {
       if (directory.exists()) {
         FileSystemUtils.deleteTree(directory);
@@ -547,8 +547,8 @@ public class ExecutionTool {
    */
   private void startLocalOutputBuild() throws ExecutorInitException {
     try (AutoProfiler p = AutoProfiler.profiled("Starting local output build", ProfilerTask.INFO)) {
-      Path outputPath = env.getOutputPath();
-      Path localOutputPath = env.getDirectories().getLocalOutputPath();
+      Path outputPath = runtime.getOutputPath();
+      Path localOutputPath = runtime.getDirectories().getLocalOutputPath();
 
       if (outputPath.isSymbolicLink()) {
         try {
@@ -671,7 +671,7 @@ public class ExecutionTool {
     boolean verboseExplanations = options.verboseExplanations;
     boolean keepGoing = request.getViewOptions().keepGoing;
 
-    Path actionOutputRoot = env.getDirectories().getActionConsoleOutputDirectory();
+    Path actionOutputRoot = runtime.getDirectories().getActionConsoleOutputDirectory();
     Predicate<Action> executionFilter = CheckUpToDateFilter.fromOptions(
         request.getOptions(ExecutionOptions.class));
 
@@ -735,7 +735,7 @@ public class ExecutionTool {
 
   private ActionInputFileCache createBuildSingleFileCache(Path execRoot) {
     String cwd = execRoot.getPathString();
-    FileSystem fs = env.getDirectories().getFileSystem();
+    FileSystem fs = runtime.getDirectories().getFileSystem();
 
     ActionInputFileCache cache = null;
     for (BlazeModule module : runtime.getBlazeModules()) {
@@ -757,10 +757,10 @@ public class ExecutionTool {
   }
 
   private Path getWorkspace() {
-    return env.getWorkspace();
+    return runtime.getWorkspace();
   }
 
   private Path getExecRoot() {
-    return env.getExecRoot();
+    return runtime.getExecRoot();
   }
 }

@@ -463,8 +463,7 @@ public final class BuildTool {
     getReporter().handle(Event.progress("Loading complete.  Analyzing..."));
     Profiler.instance().markPhase(ProfilePhase.ANALYZE);
 
-    BuildView view = new BuildView(runtime.getDirectories(), runtime.getRuleClassProvider(),
-        runtime.getSkyframeExecutor(), runtime.getCoverageReportActionFactory());
+    BuildView view = env.getView();
     AnalysisResult analysisResult =
         view.update(
             loadingResult,
