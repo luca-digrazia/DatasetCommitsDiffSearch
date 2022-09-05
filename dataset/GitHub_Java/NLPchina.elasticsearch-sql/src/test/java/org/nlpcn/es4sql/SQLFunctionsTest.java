@@ -247,24 +247,16 @@ public class SQLFunctionsTest {
 
     @Test
     public void functionLogs() throws Exception {
+        MainTestSuite.setUp();
         String query = "SELECT log10(100) as a, log(1) as b, log(2, 4) as c, log2(8) as d from "
-                + TEST_INDEX_ACCOUNT + "/account limit 1";
+                + TestsConstants.TEST_INDEX + "/account limit 1";
         CSVResult csvResult = getCsvResult(false, query);
         List<String> content = csvResult.getLines();
+        System.out.println(content.toString());
         Assert.assertTrue(content.toString().contains("2.0"));
         Assert.assertTrue(content.toString().contains("1.0"));
         Assert.assertTrue(content.toString().contains("0.0"));
         Assert.assertTrue(content.toString().contains("3.0"));
-    }
-
-    @Test
-    public void functionPow() throws Exception {
-        String query = "SELECT pow(account_number, 2) as key,"+
-                "abs(age - 60) as new_age from " + TEST_INDEX_ACCOUNT + "/account limit 1";
-        CSVResult csvResult = getCsvResult(false, query);
-        List<String> content = csvResult.getLines();
-        Assert.assertTrue(content.toString().contains("625"));
-        Assert.assertTrue(content.toString().contains("21"));
     }
 
     // todo: change when split is back on language
