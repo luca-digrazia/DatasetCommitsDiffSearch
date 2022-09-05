@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
+
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.skyframe.SkyframeExecutor.DEFAULT_THREAD_COUNT;
 import static org.junit.Assert.assertArrayEquals;
@@ -87,7 +88,6 @@ import javax.annotation.Nullable;
 public class FileFunctionTest {
   private CustomInMemoryFs fs;
   private Path pkgRoot;
-  private Path outputBase;
   private PathPackageLocator pkgLocator;
   private TimestampGranularityMonitor tsgm;
   private boolean fastMd5;
@@ -95,7 +95,8 @@ public class FileFunctionTest {
   private RecordingDifferencer differencer;
 
   @Before
-  public final void createMonitor() throws Exception  {
+  public void setUp() throws Exception {
+
     fastMd5 = true;
     manualClock = new ManualClock();
     createFsAndRoot(new CustomInMemoryFs(manualClock));
@@ -105,8 +106,7 @@ public class FileFunctionTest {
   private void createFsAndRoot(CustomInMemoryFs fs) throws IOException {
     this.fs = fs;
     pkgRoot = fs.getRootDirectory().getRelative("root");
-    outputBase = fs.getRootDirectory().getRelative("output_base");
-    pkgLocator = new PathPackageLocator(outputBase, ImmutableList.of(pkgRoot));
+    pkgLocator = new PathPackageLocator(pkgRoot);
     FileSystemUtils.createDirectoryAndParents(pkgRoot);
   }
 
@@ -531,7 +531,7 @@ public class FileFunctionTest {
   @Test
   public void testSymlinkAcrossPackageRoots() throws Exception {
     Path otherPkgRoot = fs.getRootDirectory().getRelative("other_root");
-    pkgLocator = new PathPackageLocator(outputBase, ImmutableList.of(pkgRoot, otherPkgRoot));
+    pkgLocator = new PathPackageLocator(pkgRoot, otherPkgRoot);
     symlink("a", "/other_root/b");
     assertValueChangesIfContentsOfFileChanges("/other_root/b", true, "a");
   }

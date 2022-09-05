@@ -14,11 +14,11 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
 import static org.junit.Assert.assertEquals;
 
 import com.google.devtools.build.lib.skyframe.ActionExecutionInactivityWatchdog.InactivityMonitor;
 import com.google.devtools.build.lib.skyframe.ActionExecutionInactivityWatchdog.InactivityReporter;
+import com.google.devtools.build.lib.testutil.MoreAsserts;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -132,9 +132,10 @@ public class ActionExecutionInactivityWatchdogTest {
           try {
             monitorFinishedIndicator.wait(5000);
             done = true;
-            assertWithMessage("test didn't finish under 5 seconds")
-                .that(System.currentTimeMillis() - startTime)
-                .isLessThan(5000L);
+            MoreAsserts.assertLessThan(
+                "test didn't finish under 5 seconds",
+                5000L,
+                System.currentTimeMillis() - startTime);
           } catch (InterruptedException ie) {
             // so-called Spurious Wakeup; ignore
           }
