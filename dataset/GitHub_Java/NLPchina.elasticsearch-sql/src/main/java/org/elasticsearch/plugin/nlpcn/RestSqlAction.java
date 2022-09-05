@@ -19,7 +19,7 @@ public class RestSqlAction extends BaseRestHandler {
 
 	@Inject
 	public RestSqlAction(Settings settings, Client client, RestController restController) {
-		super(settings, restController, client);
+		super(settings, client);
 		restController.registerHandler(RestRequest.Method.POST, "/_sql/_explain", this);
 		restController.registerHandler(RestRequest.Method.GET, "/_sql/_explain", this);
 		restController.registerHandler(RestRequest.Method.POST, "/_sql", this);
@@ -37,13 +37,13 @@ public class RestSqlAction extends BaseRestHandler {
 
 		SearchDao searchDao = new SearchDao(client);
 
-		SearchRequestBuilder searchRequestBuilder = searchDao.explain(sql);
+		SearchRequestBuilder explan = searchDao.explan(sql);
 
 		if (request.path().endsWith("/_explain")) {
-			BytesRestResponse bytesRestResponse = new BytesRestResponse(RestStatus.OK, searchRequestBuilder.toString());
+			BytesRestResponse bytesRestResponse = new BytesRestResponse(RestStatus.OK, explan.toString());
 			channel.sendResponse(bytesRestResponse);
 		} else {
-			SearchRequest searchRequest = searchRequestBuilder.request();
+			SearchRequest searchRequest = explan.request();
 			searchRequest.listenerThreaded(false);
 			client.search(searchRequest, new RestStatusToXContentListener<SearchResponse>(channel));
 		}
