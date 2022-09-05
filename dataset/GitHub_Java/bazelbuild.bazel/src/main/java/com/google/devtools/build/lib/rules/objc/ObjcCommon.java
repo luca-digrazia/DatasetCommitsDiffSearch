@@ -62,7 +62,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
@@ -264,7 +263,9 @@ public final class ObjcCommon {
     }
 
     ImmutableList<Artifact> xibs() {
-      return ruleContext.getPrerequisiteArtifacts("xibs", Mode.TARGET).list();
+      return ruleContext.getPrerequisiteArtifacts("xibs", Mode.TARGET)
+          .errorsForNonMatching(ObjcRuleClasses.XIB_TYPE)
+          .list();
     }
 
     ImmutableList<Artifact> storyboards() {
@@ -498,9 +499,10 @@ public final class ObjcCommon {
 
       if (compilationAttributes.isPresent()) {
         CompilationAttributes attributes = compilationAttributes.get();
+        ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(context);
         Iterable<PathFragment> sdkIncludes = Iterables.transform(
             Interspersing.prependEach(
-                AppleToolchain.sdkDir() + "/usr/include/",
+                IosSdkCommands.sdkDir(objcConfiguration) + "/usr/include/",
                 PathFragment.safePathStrings(attributes.sdkIncludes())),
             TO_PATH_FRAGMENT);
         objcProvider
@@ -534,17 +536,6 @@ public final class ObjcCommon {
             .addAll(XIB, attributes.xibs())
             .addAll(STRINGS, attributes.strings())
             .addAll(STORYBOARD, attributes.storyboards());
-      }
-
-      if (ObjcRuleClasses.useLaunchStoryboard(context)) {
-        Artifact launchStoryboard =
-            context.getPrerequisiteArtifact("launch_storyboard", Mode.TARGET);
-        objcProvider.add(GENERAL_RESOURCE_FILE, launchStoryboard);
-        if (ObjcRuleClasses.STORYBOARD_TYPE.matches(launchStoryboard.getPath())) {
-          objcProvider.add(STORYBOARD, launchStoryboard);
-        } else {
-          objcProvider.add(XIB, launchStoryboard);
-        }
       }
 
       for (CompilationArtifacts artifacts : compilationArtifacts.asSet()) {
