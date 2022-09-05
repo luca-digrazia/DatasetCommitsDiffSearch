@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,16 +82,6 @@ public class BlazeServerStartupOptions extends OptionsBase {
       help = "This launcher option is intended for use only by tests.")
   public PathFragment installBase;
 
-  /*
-   * The installation MD5 - a content hash of the blaze binary (includes the Blaze deploy JAR and
-   * any other embedded binaries - anything that ends up in the install_base).
-   */
-  @Option(name = "install_md5",
-                 defaultValue = "", // NOTE: purely decorative!  See class docstring.
-                 category = "hidden",
-                 help = "This launcher option is intended for use only by tests.")
-  public String installMD5;
-
   /* Note: The help string in this option applies to the client code; not
    * the server code. The server code will only accept a non-empty path; it's
    * the responsibility of the client to compute a proper default if
@@ -159,19 +149,12 @@ public class BlazeServerStartupOptions extends OptionsBase {
              "such as continuous builds.")
   public boolean batch;
 
-  @Option(name = "deep_execroot",
-      defaultValue = "false", // NOTE: purely decorative!  See class docstring.
-      category = "server startup",
-      help = "If set, the execution root will be under $OUTPUT_BASE/execroot instead of "
-          + "$OUTPUT_BASE")
-  public boolean deepExecRoot;
-
   @Option(name = "block_for_lock",
       defaultValue = "true", // NOTE: purely decorative!  See class docstring.
       category = "server startup",
-      help = "If unset with --noblock_for_lock, Blaze will exit immediately instead of "
-            + "waiting for other Blaze commands holding the server lock to complete.")
-  public boolean blockForLock;
+      help = "If set, Blaze will exit immediately instead of waiting for other " +
+             "Blaze commands holding the server lock to complete.")
+  public boolean noblock_for_lock;
 
   @Option(name = "io_nice_level",
       defaultValue = "-1",  // NOTE: purely decorative!
@@ -242,12 +225,9 @@ public class BlazeServerStartupOptions extends OptionsBase {
           + "changes instead of scanning every file for a change.")
   public boolean watchFS;
 
-
-  @Option(name = "invocation_policy",
-      defaultValue = "",
-      category = "undocumented",
-      help = "A base64-encoded-binary-serialized or text-formated "
-          + "invocation_policy.InvocationPolicy proto. Unlike other options, it is an error to "
-          + "specify --invocation_policy multiple times.")
-  public String invocationPolicy;
+  @Option(name = "use_webstatusserver",
+      defaultValue = "0",
+      category = "server startup",
+      help = "Specifies port to run web status server on (0 to disable, which is default).")
+  public int useWebStatusServer;
 }
