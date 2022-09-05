@@ -17,10 +17,10 @@ import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Interner;
+import com.google.common.collect.Interners;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.collect.CompactHashSet;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.ArrayList;
@@ -46,8 +46,7 @@ public abstract class ReverseDepsUtilImpl<T> implements ReverseDepsUtil<T> {
 
   static final int MAYBE_CHECK_THRESHOLD = 10;
 
-  private static final Interner<KeyToConsolidate> consolidateInterner =
-      BlazeInterners.newWeakInterner();
+  private static final Interner<KeyToConsolidate> consolidateInterner = Interners.newWeakInterner();
 
   abstract void setReverseDepsObject(T container, Object object);
 
