@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.skyframe.RecursivePkgValue.RecursivePkgKey;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -46,7 +45,6 @@ public class RecursivePkgFunction implements SkyFunction {
     this.directories = directories;
   }
 
-  /** N.B.: May silently throw {@link NoSuchPackageException} in nokeep_going mode! */
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env) {
     return new MyTraversalFunction().visitDirectory((RecursivePkgKey) skyKey.argument(), env);
@@ -81,7 +79,9 @@ public class RecursivePkgFunction implements SkyFunction {
         Map<SkyKey, SkyValue> subdirectorySkyValues) {
       // Aggregate the transitive subpackages.
       for (SkyValue childValue : subdirectorySkyValues.values()) {
-        visitor.addTransitivePackages(((RecursivePkgValue) childValue).getPackages());
+        if (childValue != null) {
+          visitor.addTransitivePackages(((RecursivePkgValue) childValue).getPackages());
+        }
       }
       return visitor.createRecursivePkgValue();
     }

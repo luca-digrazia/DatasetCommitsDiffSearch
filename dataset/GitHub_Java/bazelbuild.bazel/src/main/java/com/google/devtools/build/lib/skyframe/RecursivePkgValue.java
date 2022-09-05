@@ -23,9 +23,9 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
-import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -58,8 +58,8 @@ public class RecursivePkgValue implements SkyValue {
   @ThreadSafe
   public static SkyKey key(RepositoryName repositoryName, RootedPath rootedPath,
       ImmutableSet<PathFragment> excludedPaths) {
-    return LegacySkyKey.create(
-        SkyFunctions.RECURSIVE_PKG, new RecursivePkgKey(repositoryName, rootedPath, excludedPaths));
+    return new SkyKey(SkyFunctions.RECURSIVE_PKG,
+        new RecursivePkgKey(repositoryName, rootedPath, excludedPaths));
   }
 
   public NestedSet<String> getPackages() {
@@ -70,7 +70,7 @@ public class RecursivePkgValue implements SkyValue {
    * A RecursivePkgKey is a tuple of a {@link RootedPath}, {@code rootedPath}, defining the
    * directory to recurse beneath in search of packages, and an {@link ImmutableSet} of {@link
    * PathFragment}s, {@code excludedPaths}, relative to {@code rootedPath.getRoot}, defining the
-   * set of subdirectories strictly beneath {@code rootedPath} to skip.
+   * set of subdirectories beneath {@code rootedPath} to skip.
    *
    * <p>Throws {@link IllegalArgumentException} if {@code excludedPaths} contains any paths that
    * are equal to {@code rootedPath} or that are not beneath {@code rootedPath}.
@@ -85,7 +85,6 @@ public class RecursivePkgValue implements SkyValue {
         ImmutableSet<PathFragment> excludedPaths) {
       PathFragment.checkAllPathsAreUnder(excludedPaths,
           rootedPath.getRelativePath());
-      Preconditions.checkState(!repositoryName.isDefault());
       this.repositoryName = repositoryName;
       this.rootedPath = Preconditions.checkNotNull(rootedPath);
       this.excludedPaths = Preconditions.checkNotNull(excludedPaths);

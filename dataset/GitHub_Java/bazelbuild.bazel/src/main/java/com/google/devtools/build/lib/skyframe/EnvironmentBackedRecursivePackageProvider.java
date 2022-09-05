@@ -21,7 +21,7 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
@@ -29,13 +29,13 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.RecursivePackageProvider;
-import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -54,8 +54,8 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
   }
 
   @Override
-  public Package getPackage(ExtendedEventHandler eventHandler, PackageIdentifier packageName)
-      throws NoSuchPackageException, MissingDepException, InterruptedException {
+  public Package getPackage(EventHandler eventHandler, PackageIdentifier packageName)
+      throws NoSuchPackageException, MissingDepException {
     SkyKey pkgKey = PackageValue.key(packageName);
     PackageValue pkgValue =
         (PackageValue) env.getValueOrThrow(pkgKey, NoSuchPackageException.class);
@@ -80,9 +80,9 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
   }
 
   @Override
-  public Map<PackageIdentifier, Package> bulkGetPackages(
-      ExtendedEventHandler eventHandler, Iterable<PackageIdentifier> pkgIds)
-      throws NoSuchPackageException, InterruptedException {
+  public Map<PackageIdentifier, Package> bulkGetPackages(EventHandler eventHandler,
+          Iterable<PackageIdentifier> pkgIds)
+          throws NoSuchPackageException, InterruptedException {
     ImmutableMap.Builder<PackageIdentifier, Package> builder = ImmutableMap.builder();
     for (PackageIdentifier pkgId : pkgIds) {
       builder.put(pkgId, getPackage(eventHandler, pkgId));
@@ -91,8 +91,8 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
   }
 
   @Override
-  public boolean isPackage(ExtendedEventHandler eventHandler, PackageIdentifier packageId)
-      throws MissingDepException, InterruptedException {
+  public boolean isPackage(EventHandler eventHandler, PackageIdentifier packageId)
+      throws MissingDepException {
     SkyKey packageLookupKey = PackageLookupValue.key(packageId);
     try {
       PackageLookupValue packageLookupValue =
@@ -110,21 +110,20 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
 
   @Override
   public Iterable<PathFragment> getPackagesUnderDirectory(
-      RepositoryName repository,
-      PathFragment directory,
+      RepositoryName repository, PathFragment directory,
       ImmutableSet<PathFragment> excludedSubdirectories)
-      throws MissingDepException, InterruptedException {
+      throws MissingDepException {
     PathPackageLocator packageLocator = PrecomputedValue.PATH_PACKAGE_LOCATOR.get(env);
     if (packageLocator == null) {
       throw new MissingDepException();
     }
 
     List<Path> roots = new ArrayList<>();
-    if (repository.isMain()) {
+    if (repository.isDefault()) {
       roots.addAll(packageLocator.getPathEntries());
     } else {
-      RepositoryDirectoryValue repositoryValue =
-          (RepositoryDirectoryValue) env.getValue(RepositoryDirectoryValue.key(repository));
+      RepositoryValue repositoryValue =
+          (RepositoryValue) env.getValue(RepositoryValue.key(repository));
       if (repositoryValue == null) {
         throw new MissingDepException();
       }
@@ -156,9 +155,8 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
   }
 
   @Override
-  public Target getTarget(ExtendedEventHandler eventHandler, Label label)
-      throws NoSuchPackageException, NoSuchTargetException, MissingDepException,
-          InterruptedException {
+  public Target getTarget(EventHandler eventHandler, Label label) throws NoSuchPackageException,
+      NoSuchTargetException, MissingDepException {
     return getPackage(eventHandler, label.getPackageIdentifier()).getTarget(label.getName());
   }
 

@@ -82,8 +82,8 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
       TargetPattern parsedPattern = patternKey.getParsedPattern();
       DepsOfPatternPreparer preparer = new DepsOfPatternPreparer(env, pkgPath.get());
       ImmutableSet<PathFragment> excludedSubdirectories = patternKey.getExcludedSubdirectories();
-      parsedPattern.eval(
-          preparer, excludedSubdirectories, NullCallback.<Void>instance(), RuntimeException.class);
+      parsedPattern.<Void, RuntimeException>eval(
+          preparer, excludedSubdirectories, NullCallback.<Void>instance());
     } catch (TargetParsingException e) {
       throw new PrepareDepsOfPatternFunctionException(e);
     } catch (MissingDepException e) {
@@ -216,7 +216,7 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
         String directory,
         boolean rulesOnly,
         ImmutableSet<PathFragment> excludedSubdirectories,
-        BatchCallback<Void, E> callback, Class<E> exceptionClass)
+        BatchCallback<Void, E> callback)
         throws TargetParsingException, E, InterruptedException {
       FilteringPolicy policy =
           rulesOnly ? FilteringPolicies.RULES_ONLY : FilteringPolicies.NO_FILTER;

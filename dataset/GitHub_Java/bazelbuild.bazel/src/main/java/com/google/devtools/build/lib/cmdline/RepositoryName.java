@@ -35,9 +35,6 @@ import java.util.regex.Pattern;
  * A human-readable name for the repository.
  */
 public final class RepositoryName implements Serializable {
-  public static final String DEFAULT_REPOSITORY = "";
-  public static final RepositoryName DEFAULT;
-  public static final RepositoryName MAIN;
   private static final Pattern VALID_REPO_NAME = Pattern.compile("@[\\w\\-.]*");
 
   /** Helper for serializing {@link RepositoryName}. */
@@ -95,15 +92,6 @@ public final class RepositoryName implements Serializable {
               }
             });
 
-  static {
-    try {
-      DEFAULT = RepositoryName.create(RepositoryName.DEFAULT_REPOSITORY);
-      MAIN = RepositoryName.create("@");
-    } catch (LabelSyntaxException e) {
-      throw new IllegalStateException(e);
-    }
-  }
-
   /**
    * Makes sure that name is a valid repository name and creates a new RepositoryName using it.
    *
@@ -120,7 +108,7 @@ public final class RepositoryName implements Serializable {
 
   /**
    * Extracts the repository name from a PathFragment that was created with
-   * {@code PackageIdentifier.getSourceRoot}.
+   * {@code PackageIdentifier.getPathFragment}.
    *
    * @return a {@code Pair} of the extracted repository name and the path fragment with stripped
    * of "external/"-prefix and repository name, or null if none was found or the repository name
@@ -190,13 +178,6 @@ public final class RepositoryName implements Serializable {
   }
 
   /**
-   * Returns if this is the default repository, that is, {@link #name} is "@".
-   */
-  public boolean isMain() {
-    return name.equals("@");
-  }
-
-  /**
    * Returns the repository name, with leading "{@literal @}" (or "" for the default repository).
    */
   // TODO(bazel-team): Use this over toString()- easier to track its usage.
@@ -205,23 +186,12 @@ public final class RepositoryName implements Serializable {
   }
 
   /**
-   * Returns the relative path to the repository source. Returns "" for the main repository and
-   * external/[repository name] for external repositories.
+   * Returns the path at which this repository is mapped within the exec root.
    */
-  public PathFragment getSourceRoot() {
-    return isDefault() || isMain()
+  public PathFragment getPathFragment() {
+    return isDefault()
         ? PathFragment.EMPTY_FRAGMENT
         : new PathFragment(Label.EXTERNAL_PATH_PREFIX).getRelative(strippedName());
-  }
-
-  /**
-   * Returns the runfiles/execRoot path for this repository (relative to the x.runfiles/main-repo/
-   * directory). If we don't know the name of this repo (i.e., it is in the main repository),
-   * return an empty path fragment.
-   */
-  public PathFragment getPathUnderExecRoot() {
-    return isDefault() || isMain()
-        ? PathFragment.EMPTY_FRAGMENT : new PathFragment("..").getRelative(strippedName());
   }
 
   /**

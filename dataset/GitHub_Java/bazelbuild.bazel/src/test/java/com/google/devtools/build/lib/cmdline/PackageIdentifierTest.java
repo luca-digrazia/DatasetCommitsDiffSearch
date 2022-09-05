@@ -39,21 +39,17 @@ public class PackageIdentifierTest {
     PackageIdentifier fooA = PackageIdentifier.parse("@foo//a");
     assertThat(fooA.getRepository().strippedName()).isEqualTo("foo");
     assertThat(fooA.getPackageFragment().getPathString()).isEqualTo("a");
-    assertThat(fooA.getRepository().getSourceRoot()).isEqualTo(
-        new PathFragment("external/foo"));
 
     PackageIdentifier absoluteA = PackageIdentifier.parse("//a");
     assertThat(absoluteA.getRepository().strippedName()).isEqualTo("");
-    assertThat(absoluteA.getPackageFragment().getPathString()).isEqualTo("a");
+    assertThat(fooA.getPackageFragment().getPathString()).isEqualTo("a");
 
     PackageIdentifier plainA = PackageIdentifier.parse("a");
     assertThat(plainA.getRepository().strippedName()).isEqualTo("");
-    assertThat(plainA.getPackageFragment().getPathString()).isEqualTo("a");
+    assertThat(fooA.getPackageFragment().getPathString()).isEqualTo("a");
 
     PackageIdentifier mainA = PackageIdentifier.parse("@//a");
-    assertThat(mainA.getRepository()).isEqualTo(RepositoryName.MAIN);
-    assertThat(mainA.getPackageFragment().getPathString()).isEqualTo("a");
-    assertThat(mainA.getRepository().getSourceRoot()).isEqualTo(PathFragment.EMPTY_FRAGMENT);
+    assertThat(mainA.getRepository()).isEqualTo(PackageIdentifier.MAIN_REPOSITORY_NAME);
   }
 
   @Test
@@ -98,13 +94,5 @@ public class PackageIdentifierTest {
     PackageIdentifier p1 = PackageIdentifier.create("@whatever", new PathFragment("foo/bar"));
     PackageIdentifier p2 = PackageIdentifier.create("@whatever", new PathFragment("foo/bar"));
     assertSame(p2.getPackageFragment(), p1.getPackageFragment());
-  }
-
-  @Test
-  public void testRunfilesDir() throws Exception {
-    assertThat(PackageIdentifier.create("@foo", new PathFragment("bar/baz")).getPathUnderExecRoot())
-        .isEqualTo(new PathFragment("../foo/bar/baz"));
-    assertThat(PackageIdentifier.create("@", new PathFragment("bar/baz")).getPathUnderExecRoot())
-        .isEqualTo(new PathFragment("bar/baz"));
   }
 }

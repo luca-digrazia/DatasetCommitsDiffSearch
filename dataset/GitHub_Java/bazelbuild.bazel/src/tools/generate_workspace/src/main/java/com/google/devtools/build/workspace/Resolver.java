@@ -94,7 +94,10 @@ public class Resolver {
     Location location = Location.fromFile(externalPackage.getFilename());
     for (Target target : externalPackage.getTargets()) {
       // Targets are //external:foo.
-      if (target.getTargetKind().startsWith("maven_jar ")) {
+      if (target.getTargetKind().startsWith("bind")
+          || target.getTargetKind().startsWith("source ")) {
+        continue;
+      } else if (target.getTargetKind().startsWith("maven_jar ")) {
         RepositoryName repositoryName;
         try {
           repositoryName = RepositoryName.create("@" + target.getName());
@@ -110,16 +113,23 @@ public class Resolver {
         AttributeMap attributeMap = AggregatingAttributeMapper.of(workspaceRule);
         Rule rule;
         try {
-          rule = new Rule(attributeMap.get("artifact", Type.STRING));
+          if (attributeMap.has("artifact", Type.STRING)
+              && !attributeMap.get("artifact", Type.STRING).isEmpty()) {
+            rule = new Rule(attributeMap.get("artifact", Type.STRING));
+          } else {
+            rule = new Rule(attributeMap.get("group_id", Type.STRING) + ":"
+                + attributeMap.get("artifact_id", Type.STRING) + ":"
+                + attributeMap.get("version", Type.STRING));
+          }
+          if (attributeMap.has("repository", Type.STRING)
+              && !attributeMap.get("repository", Type.STRING).isEmpty()) {
+            modelResolver.addUserRepository(attributeMap.get("repository", Type.STRING));
+            rule.setRepository(attributeMap.get("repository", Type.STRING), handler);
+          }
         } catch (Rule.InvalidRuleException e) {
           handler.handle(Event.error(location, "Couldn't get attribute: " + e.getMessage()));
           return;
         }
-        if (attributeMap.isAttributeValueExplicitlySpecified("repository")) {
-          modelResolver.addUserRepository(attributeMap.get("repository", Type.STRING));
-          rule.setRepository(attributeMap.get("repository", Type.STRING), handler);
-        }
-
         ModelSource modelSource;
 
         try {
@@ -132,8 +142,7 @@ public class Resolver {
         }
         resolver.addRootDependency(rule);
         resolver.resolveEffectiveModel(modelSource, Sets.<String>newHashSet(), rule);
-      } else if (!target.getTargetKind().startsWith("bind")
-          && !target.getTargetKind().startsWith("source ")) {
+      } else {
         handler.handle(Event.warn(location, "Cannot fetch transitive dependencies for " + target
             + " yet, skipping"));
       }

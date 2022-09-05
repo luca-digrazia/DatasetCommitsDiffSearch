@@ -79,7 +79,6 @@ public interface TargetPatternResolver<T> {
    * @param excludedSubdirectories a set of transitive subdirectories beneath {@code directory}
    *    to ignore
    * @param callback the callback to receive the result, possibly in multiple batches.
-   * @param exceptionClass The class type of the parameterized exception.
    * @throws TargetParsingException under implementation-specific failure conditions
    */
   <E extends Exception> void findTargetsBeneathDirectory(
@@ -88,7 +87,7 @@ public interface TargetPatternResolver<T> {
       String directory,
       boolean rulesOnly,
       ImmutableSet<PathFragment> excludedSubdirectories,
-      BatchCallback<T, E> callback, Class<E> exceptionClass)
+      BatchCallback<T, E> callback)
       throws TargetParsingException, E, InterruptedException;
 
   /**
