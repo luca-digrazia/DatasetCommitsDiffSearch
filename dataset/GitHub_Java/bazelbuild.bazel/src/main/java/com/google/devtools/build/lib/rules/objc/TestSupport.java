@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Su
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.rules.test.TestEnvironmentProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
@@ -220,9 +219,7 @@ public class TestSupport {
   /**
    * Adds all files needed to run this test to the passed Runfiles builder.
    */
-  public TestSupport addRunfiles(
-      Builder runfilesBuilder, InstrumentedFilesProvider instrumentedFilesProvider)
-      throws InterruptedException {
+  public TestSupport addRunfiles(Builder runfilesBuilder) throws InterruptedException {
     runfilesBuilder
         .addArtifact(testBundleIpa())
         .addArtifacts(testHarnessIpa().asSet())
@@ -238,11 +235,6 @@ public class TestSupport {
       runfilesBuilder.addTransitiveArtifacts(labDeviceRunfiles());
     }
 
-    if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
-      runfilesBuilder.addArtifact(ruleContext.getHostPrerequisiteArtifact(IosTest.MCOV_TOOL_ATTR));
-      runfilesBuilder.addTransitiveArtifacts(instrumentedFilesProvider.getInstrumentedFiles());
-    }
-
     return this;
   }
 
@@ -255,7 +247,7 @@ public class TestSupport {
 
     ImmutableMap.Builder<String, String> envBuilder = ImmutableMap.builder();
 
-    envBuilder.putAll(configuration.getTargetAppleEnvironment(configuration.getIosCpuPlatform()));
+    envBuilder.putAll(configuration.getEnvironmentForIosAction());
     envBuilder.putAll(configuration.getAppleHostSystemEnv());
 
     if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
