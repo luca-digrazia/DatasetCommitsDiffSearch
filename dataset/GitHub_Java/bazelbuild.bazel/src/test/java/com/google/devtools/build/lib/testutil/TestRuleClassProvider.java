@@ -43,9 +43,6 @@ public class TestRuleClassProvider {
   public static void addStandardRules(ConfiguredRuleClassProvider.Builder builder) {
     try {
       Class<?> providerClass = Class.forName(TestConstants.TEST_RULE_CLASS_PROVIDER);
-      // The method setup in the rule class provider requires the tools repository to be set
-      // beforehand.
-      builder.setToolsRepository(TestConstants.TOOLS_REPOSITORY);
       Method setupMethod = providerClass.getMethod("setup",
           ConfiguredRuleClassProvider.Builder.class);
       setupMethod.invoke(null, builder);
@@ -95,20 +92,20 @@ public class TestRuleClassProvider {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          .setUndocumented()
-          .add(attr("srcs", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE))
-          .override(builder.copy("deps").mandatoryProvidersList(ImmutableList.of(
-              ImmutableList.of("a"), ImmutableList.of("b", "c"))))
-          .build();
+              .setUndocumented()
+              .add(attr("srcs", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE))
+              .override(builder.copy("deps").mandatoryProvidersList(ImmutableList.of(
+                      ImmutableList.of("a"), ImmutableList.of("b", "c"))))
+              .build();
     }
 
     @Override
     public Metadata getMetadata() {
       return RuleDefinition.Metadata.builder()
-          .name("testing_rule_for_mandatory_providers")
-          .ancestors(BaseRuleClasses.RuleBase.class)
-          .factoryClass(UnknownRuleConfiguredTarget.class)
-          .build();
+              .name("testing_rule_for_mandatory_providers")
+              .ancestors(BaseRuleClasses.RuleBase.class)
+              .factoryClass(UnknownRuleConfiguredTarget.class)
+              .build();
     }
   }
 }

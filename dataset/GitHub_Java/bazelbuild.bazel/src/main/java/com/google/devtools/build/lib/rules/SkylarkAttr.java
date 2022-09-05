@@ -22,7 +22,7 @@ import com.google.devtools.build.lib.packages.Attribute.AllowedValueSet;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.Attribute.SkylarkLateBound;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.SkylarkAspect;
+import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions.SkylarkAspect;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature.Param;
@@ -65,7 +65,7 @@ public final class SkylarkAttr {
 
   private static final String ALLOW_FILES_ARG = "allow_files";
   private static final String ALLOW_FILES_DOC =
-      "whether File targets are allowed. Can be True, False (default), or a FileType filter.";
+      "whether File targets are allowed. Can be True, False (default), or " + "a FileType filter.";
 
   private static final String ALLOW_RULES_ARG = "allow_rules";
   private static final String ALLOW_RULES_DOC =
@@ -78,7 +78,7 @@ public final class SkylarkAttr {
 
   private static final String CONFIGURATION_ARG = "cfg";
   private static final String CONFIGURATION_DOC =
-      "configuration of the attribute. For example, use DATA_CFG or HOST_CFG.";
+      "configuration of the attribute. " + "For example, use DATA_CFG or HOST_CFG.";
 
   private static final String DEFAULT_ARG = "default";
   private static final String DEFAULT_DOC = "the default value of the attribute.";
@@ -100,10 +100,10 @@ public final class SkylarkAttr {
 
   private static final String PROVIDERS_ARG = "providers";
   private static final String PROVIDERS_DOC =
-      "mandatory providers list. It should be either a list of providers, or a "
-          + "list of lists of providers. Every dependency should provide ALL providers "
-          + "from at least ONE of these lists. A single list of providers will be "
-          + "automatically converted to a list containing one list of providers.";
+          "mandatory providers list. It should be either a list of providers, or a "
+                  + "list of lists of providers. Every dependency should provide ALL providers "
+                  + "from at least ONE of these lists. A single list of providers will be "
+                  + "automatically converted to a list containing one list of providers.";
 
   private static final String SINGLE_FILE_ARG = "single_file";
 
@@ -212,18 +212,18 @@ public final class SkylarkAttr {
   private static List<List<String>> getProvidersList(SkylarkList skylarkList) throws EvalException {
     List<List<String>> providersList = new ArrayList<>();
     String errorMsg = "Illegal argument: element in '%s' is of unexpected type. "
-        + "Should be list of string, but got %s. "
-        + "Notice: one single list of string as 'providers' is still supported.";
+            + "Should be list of string, but got %s. "
+            + "Notice: one single list of string as 'providers' is still supported.";
     for (Object o : skylarkList) {
       if (!(o instanceof SkylarkList)) {
         throw new EvalException(null, String.format(errorMsg, PROVIDERS_ARG,
-            EvalUtils.getDataTypeName(o, true)));
+                EvalUtils.getDataTypeName(o, true)));
       }
       for (Object value : (SkylarkList) o) {
         if (!(value instanceof String)) {
           throw new EvalException(null, String.format(errorMsg, PROVIDERS_ARG,
               "list with an element of type "
-                  + EvalUtils.getDataTypeNameFromClass(value.getClass())));
+                      + EvalUtils.getDataTypeNameFromClass(value.getClass())));
         }
       }
       providersList.add(((SkylarkList<?>) o).getContents(String.class, PROVIDERS_ARG));
@@ -265,7 +265,7 @@ public final class SkylarkAttr {
         name = DEFAULT_ARG,
         type = Integer.class,
         defaultValue = "0",
-        doc = DEFAULT_DOC
+        doc = DEFAULT_DOC + " If not specified, default is 0."
       ),
       @Param(name = MANDATORY_ARG, type = Boolean.class, defaultValue = "False", doc = MANDATORY_DOC
       ),
@@ -302,7 +302,7 @@ public final class SkylarkAttr {
 
   @SkylarkSignature(
     name = "string",
-    doc = "Creates an attribute of type <a href=\"string.html\">string</a>.",
+    doc = "Creates an attribute of type string.",
     objectType = SkylarkAttr.class,
     returnType = Descriptor.class,
     optionalNamedOnly = {
@@ -310,7 +310,7 @@ public final class SkylarkAttr {
         name = DEFAULT_ARG,
         type = String.class,
         defaultValue = "''",
-        doc = DEFAULT_DOC
+        doc = DEFAULT_DOC + " If not specified, default is \"\"."
       ),
       @Param(name = MANDATORY_ARG, type = Boolean.class, defaultValue = "False", doc = MANDATORY_DOC
       ),
@@ -347,11 +347,10 @@ public final class SkylarkAttr {
   @SkylarkSignature(
     name = "label",
     doc =
-        "Creates an attribute of type <a href=\"Target.html\">Target</a> which is the target "
-            + "referred to by the label. "
+        "Creates an attribute of type Label. "
             + "It is the only way to specify a dependency to another target. "
-            + "If you need a dependency that the user cannot overwrite, "
-            + "<a href=\"../rules.html#private-attributes\">make the attribute private</a>.",
+            + "If you need a dependency that the user cannot overwrite, make the attribute "
+            + "private (starts with <code>_</code>).",
     objectType = SkylarkAttr.class,
     returnType = Descriptor.class,
     optionalNamedOnly = {
@@ -363,9 +362,8 @@ public final class SkylarkAttr {
         defaultValue = "None",
         doc =
             DEFAULT_DOC
-                + " Use the <a href=\"globals.html#Label\"><code>Label</code></a> function to "
-                + "specify a default value ex:</p>"
-                + "<code>attr.label(default = Label(\"//a:b\"))</code>"
+                + " If not specified, default is None. "
+                + "Use the <code>Label</code> function to specify a default value."
       ),
       @Param(
         name = EXECUTABLE_ARG,
@@ -395,7 +393,7 @@ public final class SkylarkAttr {
         type = Boolean.class,
         defaultValue = "False",
         doc =
-            "if True, the label must correspond to a single <a href=\"file.html\">File</a>. "
+            "if True, the label must correspond to a single File. "
                 + "Access it through <code>ctx.file.&lt;attribute_name&gt;</code>."
       ),
       @Param(
@@ -451,8 +449,7 @@ public final class SkylarkAttr {
 
   @SkylarkSignature(
     name = "string_list",
-    doc = "Creates an attribute which is a <a href=\"list.html\">list</a> of "
-        + "<a href=\"string.html\">strings</a>.",
+    doc = "Creates an attribute of type list of strings",
     objectType = SkylarkAttr.class,
     returnType = Descriptor.class,
     optionalPositionals = {
@@ -461,7 +458,7 @@ public final class SkylarkAttr {
         type = SkylarkList.class,
         generic1 = String.class,
         defaultValue = "[]",
-        doc = DEFAULT_DOC
+        doc = DEFAULT_DOC + " If not specified, default is []."
       ),
       @Param(name = MANDATORY_ARG, type = Boolean.class, defaultValue = "False", doc = MANDATORY_DOC
       ),
@@ -498,7 +495,7 @@ public final class SkylarkAttr {
 
   @SkylarkSignature(
     name = "int_list",
-    doc = "Creates an attribute which is a <a href=\"list.html\">list</a> of ints",
+    doc = "Creates an attribute of type list of ints",
     objectType = SkylarkAttr.class,
     returnType = Descriptor.class,
     optionalPositionals = {
@@ -507,7 +504,7 @@ public final class SkylarkAttr {
         type = SkylarkList.class,
         generic1 = Integer.class,
         defaultValue = "[]",
-        doc = DEFAULT_DOC
+        doc = DEFAULT_DOC + " If not specified, default is []."
       ),
       @Param(name = MANDATORY_ARG, type = Boolean.class, defaultValue = "False", doc = MANDATORY_DOC
       ),
@@ -545,8 +542,7 @@ public final class SkylarkAttr {
   @SkylarkSignature(
     name = "label_list",
     doc =
-        "Creates an attribute which is a <a href=\"list.html\">list</a> of type "
-            + "<a href=\"Target.html\">Target</a> which are specified by the labels in the list. "
+        "Creates an attribute of type list of labels. "
             + "See <a href=\"attr.html#label\">label</a> for more information.",
     objectType = SkylarkAttr.class,
     returnType = Descriptor.class,
@@ -559,9 +555,8 @@ public final class SkylarkAttr {
         defaultValue = "[]",
         doc =
             DEFAULT_DOC
-                + " Use the <a href=\"globals.html#Label\"><code>Label</code></a> function to "
-                + "specify default values ex:</p>"
-                + "<code>attr.label_list(default = [ Label(\"//a:b\"), Label(\"//a:c\") ])</code>"
+                + " If not specified, default is []. "
+                + "Use the <code>Label</code> function to specify a default value."
       ),
       @Param(
         name = ALLOW_FILES_ARG, // bool or FileType filter
@@ -659,7 +654,7 @@ public final class SkylarkAttr {
 
   @SkylarkSignature(
     name = "bool",
-    doc = "Creates an attribute of type bool.",
+    doc = "Creates an attribute of type bool. Its default value is False.",
     objectType = SkylarkAttr.class,
     returnType = Descriptor.class,
     optionalNamedOnly = {
@@ -688,7 +683,7 @@ public final class SkylarkAttr {
   @SkylarkSignature(
     name = "output",
     doc =
-        "Creates an attribute of type output. "
+        "Creates an attribute of type output. Its default value is None. "
             + "The user provides a file name (string) and the rule must create an action that "
             + "generates the file.",
     objectType = SkylarkAttr.class,
@@ -726,8 +721,8 @@ public final class SkylarkAttr {
   @SkylarkSignature(
     name = "output_list",
     doc =
-        "Creates an attribute which is a <a href=\"list.html\">list</a> of outputs. "
-            + "See <a href=\"attr.html#output\">output</a> for more information.",
+        "Creates an attribute of type list of outputs. Its default value is <code>[]</code>. "
+            + "See <a href=\"attr.html#output\">output</a> above for more information.",
     objectType = SkylarkAttr.class,
     returnType = Descriptor.class,
     optionalNamedOnly = {
@@ -773,8 +768,9 @@ public final class SkylarkAttr {
 
   @SkylarkSignature(
     name = "string_dict",
-    doc = "Creates an attribute of type <a href=\"dict.html\">dict</a>, mapping from "
-        + "<a href=\"string.html\">string</a> to <a href=\"string.html\">string</a>.",
+    doc =
+        "Creates an attribute of type dictionary, mapping from string to string. "
+            + "Its default value is dict().",
     objectType = SkylarkAttr.class,
     returnType = Descriptor.class,
     optionalNamedOnly = {
@@ -808,9 +804,9 @@ public final class SkylarkAttr {
 
   @SkylarkSignature(
     name = "string_list_dict",
-    doc = "Creates an attribute of type <a href=\"dict.html\">dict</a>, mapping from "
-        + "<a href=\"string.html\">string</a> to <a href=\"list.html\">list</a> of "
-        + "<a href=\"string.html\">string</a>.",
+    doc =
+        "Creates an attribute of type dictionary, mapping from string to list of string. "
+            + "Its default value is dict().",
     objectType = SkylarkAttr.class,
     returnType = Descriptor.class,
     optionalNamedOnly = {
@@ -844,7 +840,7 @@ public final class SkylarkAttr {
 
   @SkylarkSignature(
     name = "license",
-    doc = "Creates an attribute of type license.",
+    doc = "Creates an attribute of type license. Its default value is NO_LICENSE.",
     // TODO(bazel-team): Implement proper license support for Skylark.
     objectType = SkylarkAttr.class,
     returnType = Descriptor.class,

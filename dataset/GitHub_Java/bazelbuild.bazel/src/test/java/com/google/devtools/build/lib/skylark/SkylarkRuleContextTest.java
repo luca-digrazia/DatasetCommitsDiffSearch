@@ -25,13 +25,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FileConfiguredTarget;
-import com.google.devtools.build.lib.analysis.SkylarkProviders;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.SkylarkRuleContext;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
-import com.google.devtools.build.lib.rules.python.PyCommon;
+import com.google.devtools.build.lib.rules.python.PythonSourcesProvider;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
@@ -56,7 +55,6 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   public final void generateBuildFile() throws Exception {
     scratch.file(
         "foo/BUILD",
-        "package(features = ['-f1', 'f2', 'f3'])",
         "genrule(name = 'foo',",
         "  cmd = 'dummy_cmd',",
         "  srcs = ['a.txt', 'b.img'],",
@@ -80,12 +78,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         "  srcs = ['a.go'],",
         "  outs = [ 'gl.a', 'gl.gcgox', ],",
         "  output_to_bindir = 1,",
-        ")",
-        "cc_library(name = 'cc_with_features',",
-        "           srcs = ['dummy.cc'],",
-        "           features = ['f1', '-f3'],",
-        ")"
-    );
+        ")");
   }
 
   private void setUpAttributeErrorTest() throws Exception {
@@ -423,8 +416,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     TransitiveInfoCollection tic1 = (TransitiveInfoCollection) ((SkylarkList) result).get(0);
     assertNotNull(tic1.getProvider(JavaSourceJarsProvider.class));
     // Check an unimplemented provider too
-    assertNull(tic1.getProvider(SkylarkProviders.class)
-            .getValue(PyCommon.PYTHON_SKYLARK_PROVIDER_NAME));
+    assertNull(tic1.getProvider(PythonSourcesProvider.class));
   }
 
   @Test
@@ -686,14 +678,6 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     Object result = evalRuleContextCode(ruleContext, "ruleContext.configuration");
     assertSame(result, ruleContext.getRuleContext().getConfiguration());
   }
-
-  @Test
-  public void testFeatures() throws Exception {
-    SkylarkRuleContext ruleContext = createRuleContext("//foo:cc_with_features");
-    Object result = evalRuleContextCode(ruleContext, "ruleContext.features");
-    assertThat((SkylarkList) result).containsExactly("f1", "f2");
-  }
-
 
   @Test
   public void testHostConfiguration() throws Exception {
