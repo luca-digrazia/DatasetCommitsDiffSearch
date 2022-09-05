@@ -225,27 +225,40 @@ import com.alibaba.fastjson.JSON;
 import com.android.annotations.NonNull;
 import com.android.annotations.Nullable;
 import com.android.build.gradle.AndroidGradleOptions;
+import com.android.build.gradle.api.BaseVariantOutput;
+import com.android.build.gradle.internal.ApkDataUtils;
+import com.android.build.gradle.internal.TaskContainerAdaptor;
+import com.android.build.gradle.internal.aapt.AaptGeneration;
+import com.android.build.gradle.internal.aapt.AaptGradleFactory;
 import com.android.build.gradle.internal.api.ApContext;
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.android.build.gradle.internal.core.GradleVariantConfiguration;
 import com.android.build.gradle.internal.dsl.AaptOptions;
+import com.android.build.gradle.internal.dsl.DslAdaptersKt;
 import com.android.build.gradle.internal.scope.ConventionMappingHelper;
+import com.android.build.gradle.internal.scope.SplitList;
+import com.android.build.gradle.internal.scope.TaskOutputHolder;
 import com.android.build.gradle.internal.tasks.BaseTask;
 import com.android.build.gradle.internal.variant.BaseVariantData;
-import com.android.build.gradle.internal.variant.BaseVariantOutputData;
-import com.android.build.gradle.internal.variant.SplitHandlingPolicy;
-import com.android.builder.core.AaptPackageProcessBuilder;
+import com.android.build.gradle.internal.variant.MultiOutputPolicy;
+import com.android.build.gradle.options.StringOption;
 import com.android.builder.core.AndroidBuilder;
 import com.android.builder.core.AtlasBuilder;
 import com.android.builder.core.VariantType;
+import com.android.builder.internal.aapt.Aapt;
+import com.android.builder.internal.aapt.AaptPackageConfig;
 import com.android.builder.model.AndroidLibrary;
+import com.android.builder.utils.FileCache;
 import com.android.ide.common.blame.MergingLog;
 import com.android.ide.common.blame.MergingLogRewriter;
 import com.android.ide.common.blame.ParsingProcessOutputHandler;
 import com.android.ide.common.blame.parser.ToolOutputParser;
+import com.android.ide.common.blame.parser.aapt.Aapt2OutputParser;
 import com.android.ide.common.blame.parser.aapt.AaptOutputParser;
+import com.android.ide.common.build.ApkData;
 import com.android.ide.common.process.ProcessException;
 import com.android.ide.common.process.ProcessOutputHandler;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterators;
 import com.taobao.android.builder.extension.PatchConfig;
 import com.taobao.android.builder.tasks.manager.MtlBaseTaskAction;
@@ -256,16 +269,13 @@ import org.apache.commons.beanutils.BeanUtils;
 import org.apache.commons.io.FileUtils;
 import org.dom4j.DocumentException;
 import org.gradle.api.GradleException;
-import org.gradle.api.tasks.InputDirectory;
-import org.gradle.api.tasks.InputFile;
-import org.gradle.api.tasks.OutputFile;
-import org.gradle.api.tasks.StopExecutionException;
-import org.gradle.api.tasks.TaskAction;
+import org.gradle.api.file.FileCollection;
+import org.gradle.api.tasks.*;
 
 import static com.android.build.gradle.internal.api.ApContext.APK_FILE_LIST;
 
 /**
- * 处理diff.ap_的task
+ * Deal with the task of diff. Ap_
  * Created by wuzhong
  */
 public class TPatchDiffResAPBuildTask extends BaseTask {
@@ -282,12 +292,26 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
 
     private String packageForR;
 
+    private AppVariantContext appVariantContext;
+    private FileCache fileCache;
+
+    private FileCollection splitListInput;
+    private ApkData apkData;
+
     @OutputFile
+    public File getPackageOutputFile() {
+
+        return packageOutputFile;
+    }
+
     private File packageOutputFile;
 
     private VariantType type;
 
     private boolean debuggable;
+
+    private MultiOutputPolicy multiOutputPolicy;
+
 
     private boolean pseudoLocalesEnabled;
 
@@ -298,6 +322,15 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
     private String preferredDensity;
 
     private File mergeBlameLogFolder;
+
+    private String buildTargetDensity;
+
+
+    @NonNull
+    @Internal
+    private Set<String> getSplits(@NonNull SplitList splitList) throws IOException {
+        return SplitList.getSplits(splitList, multiOutputPolicy);
+    }
 
     private boolean enforceUniquePackageName;
 
@@ -310,6 +343,8 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
         diffResDir = getDiffResDir();
         resourceConfigs = getResourceConfigs();
         preferredDensity = getPreferredDensity();
+        SplitList splitList = SplitList.load(splitListInput);
+
 
         //TODO  minifyManifest
         File miniManifest = new File(packageOutputFile.getParentFile(), "AndroidManifest.xml");
@@ -318,6 +353,17 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
         } catch (DocumentException e) {
             throw new GradleException(e.getMessage());
         }
+
+        String splitFilter = apkData.getFilter(com.android.build.OutputFile.FilterType.DENSITY);
+
+        String preferredDensity =
+                splitFilter != null
+                        ? splitFilter
+                        // if resConfigs is set, we should not use our preferredDensity.
+                        : splitList.getFilters(SplitList.RESOURCE_CONFIGS).isEmpty()
+                        ? buildTargetDensity
+                        : null;
+
 
         File assetsFolder = new File(diffResDir, "assets");
         File resFolder = new File(diffResDir, "res");
@@ -329,51 +375,45 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
             resFolder.mkdirs();
         }
 
-        AaptPackageProcessBuilder aaptPackageCommandBuilder = new AaptPackageProcessBuilder(
-            miniManifest,
-            aaptOptions).setAssetsFolder(assetsFolder)
-            .setResFolder(resFolder)
-            .setLibraries(libraries)
-            .setPackageForR(packageForR)
-            .setResPackageOutput(packageOutputFile.getAbsolutePath())
-            .setType(type)
-            .setDebuggable(debuggable)
-            .setPseudoLocalesEnabled(pseudoLocalesEnabled)
-            .setResourceConfigs(resourceConfigs)
-            .setSplits(splits)
-            .setPreferredDensity(preferredDensity);
+        aaptOptions.getAdditionalParameters().add("-A");
+        aaptOptions.getAdditionalParameters().add(assetsFolder.getAbsolutePath());
+        AaptGeneration aaptGeneration = AaptGeneration.fromProjectOptions(appVariantContext.getScope().getGlobalScope().getProjectOptions());
+        Aapt aapt = makeAapt(aaptGeneration);
+        AaptPackageConfig.Builder config =
+                new AaptPackageConfig.Builder()
+                        .setManifestFile(miniManifest)
+                        .setOptions(DslAdaptersKt.convert(aaptOptions))
+                        .setResourceDir(resFolder)
+                        .setLibrarySymbolTableFiles(
+                                ImmutableSet.of())
+                        .setCustomPackageForR(packageForR)
+                        .setResourceOutputApk(packageOutputFile)
+                        .setVariantType(type)
+                        .setDebuggable(debuggable)
+                        .setResourceConfigs(
+                                splitList.getFilters(SplitList.RESOURCE_CONFIGS))
+                        .setSplits(getSplits(splitList))
+                        .setPreferredDensity(preferredDensity)
+                        .setListResourceFiles(aaptGeneration == AaptGeneration.AAPT_V2);
 
-        @NonNull
-        AndroidBuilder builder = getBuilder();
-
-        MergingLog mergingLog = new MergingLog(mergeBlameLogFolder);
-        ProcessOutputHandler processOutputHandler = new ParsingProcessOutputHandler(new ToolOutputParser(
-            new AaptOutputParser(),
-            getILogger()), new MergingLogRewriter(mergingLog, builder.getErrorReporter()));
         try {
-
-            if (builder instanceof AtlasBuilder) {
-                ((AtlasBuilder)builder).processResources(aaptPackageCommandBuilder,
-                                                         enforceUniquePackageName,
-                                                         processOutputHandler);
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+            getBuilder().processResources(aapt, config);
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
         } catch (ProcessException e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
         }
+
     }
+
 
     public static class ConfigAction extends MtlBaseTaskAction<TPatchDiffResAPBuildTask> {
 
-        private AppVariantContext appVariantContext;
+        private final AppVariantContext appVariantContext;
 
-        public ConfigAction(AppVariantContext appVariantContext,
-                            BaseVariantOutputData baseVariantOutputData) {
+        public ConfigAction(AppVariantContext appVariantContext, BaseVariantOutput baseVariantOutput) {
 
-            super(appVariantContext, baseVariantOutputData);
+            super(appVariantContext, baseVariantOutput);
             this.appVariantContext = appVariantContext;
         }
 
@@ -391,6 +431,19 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
         public void execute(TPatchDiffResAPBuildTask processDiffResources) {
 
             super.execute(processDiffResources);
+            processDiffResources.appVariantContext = appVariantContext;
+
+            processDiffResources.packageForR = baseVariantData.getVariantConfiguration().getApplicationId();
+
+            processDiffResources.fileCache = scope.getGlobalScope().getBuildCache();
+
+            processDiffResources.buildTargetDensity =
+                    scope.getGlobalScope().getProjectOptions().get(StringOption.IDE_BUILD_TARGET_DENSITY);
+
+            processDiffResources.apkData = ApkDataUtils.get(baseVariantOutput);
+
+            processDiffResources.multiOutputPolicy =
+                    scope.getVariantData().getOutputScope().getMultiOutputPolicy();
 
             PatchConfig patchConfig = appVariantContext.getBuildType().getPatchConfig();
             if (null == patchConfig || !patchConfig.isCreateTPatch()) {
@@ -401,126 +454,62 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
             //AAPT command params
             final BaseVariantData variantData = appVariantContext.getVariantData();
             final GradleVariantConfiguration config = variantData.getVariantConfiguration();
-            final BaseVariantOutputData variantOutputData = scope.getVariantOutputData();
-
-            if (variantData.getSplitHandlingPolicy() ==
-                SplitHandlingPolicy.RELEASE_21_AND_AFTER_POLICY) {
-                Set<String> allFilters = new HashSet<String>();
-                allFilters.addAll(variantData.getFilters(com.android.build.OutputFile.FilterType.DENSITY));
-                allFilters.addAll(variantData.getFilters(com.android.build.OutputFile.FilterType.LANGUAGE));
-                processDiffResources.splits = allFilters;
-            }
-            processDiffResources.mergeBlameLogFolder = scope.getVariantScope()
-                .getResourceBlameLogDir();
-            processDiffResources.pseudoLocalesEnabled = config.getBuildType()
-                .isPseudoLocalesEnabled();
-            //设置ap的输出
+            processDiffResources.mergeBlameLogFolder = scope.getResourceBlameLogDir();
+            processDiffResources.pseudoLocalesEnabled = config.getBuildType().isPseudoLocalesEnabled();
+            //Setting ap output
             processDiffResources.packageOutputFile = (getAppVariantOutputContext().getDiffResourceAp());
             processDiffResources.type = (config.getType());
             processDiffResources.debuggable = (config.getBuildType().isDebuggable());
 
-            //TODO
-            //            processDiffResources.setAndroidBuilder(scope.getGlobalScope().getAndroidBuilder());
-
             ConventionMappingHelper.map(processDiffResources, "manifestFile", new Callable<File>() {
                 @Override
                 public File call() throws Exception {
-                    return variantOutputData.manifestProcessorTask.getOutputFile();
+                    return new File(scope.getManifestProcessorTask().get(new TaskContainerAdaptor(scope.getGlobalScope().getProject().getTasks())).getManifestOutputDirectory(),"AndroidManifest.xml");
                 }
             });
 
             ConventionMappingHelper.map(processDiffResources, "baseManifestFile", new Callable<File>() {
                 @Override
                 public File call() throws Exception {
-                    return new File(appVariantContext.apContext.getApExploredFolder(),  "AndroidManifest.xml");
+                    return new File(appVariantContext.apContext.getApExploredFolder(), "AndroidManifest.xml");
                 }
             });
 
-            ConventionMappingHelper.map(processDiffResources,
-                                        "aaptOptions",
-                                        new Callable<AaptOptions>() {
-                                            @Override
-                                            public AaptOptions call() throws Exception {
-                                                //设置aapt参数
-                                                AaptOptions aaptOptions = scope.getGlobalScope()
-                                                    .getExtension()
-                                                    .getAaptOptions();
-                                                if (null == aaptOptions.getAdditionalParameters() ||
-                                                    !aaptOptions.getAdditionalParameters()
-                                                        .contains("-B")) {
+            ConventionMappingHelper.map(processDiffResources, "aaptOptions", new Callable<AaptOptions>() {
+                @Override
+                public AaptOptions call() throws Exception {
+                    //Set aapt parameters
+                    AaptOptions aaptOptions = scope.getGlobalScope().getExtension().getAaptOptions();
+                    // if (null == aaptOptions.getAdditionalParameters() || !aaptOptions.getAdditionalParameters()
+                    //     .contains("-B")) {
+                    //
+                    //     PatchConfig patchConfig = appVariantContext.getBuildType().getPatchConfig();
+                    //     if (patchConfig == null || !(patchConfig.isCreateAPatch() || patchConfig.isCreateTPatch())) {
+                    //         return aaptOptions;
+                    //     }
+                    //
+                    //     AaptOptions cloneAaptOptions = new AaptOptions();
+                    //     try {
+                    //         BeanUtils.copyProperties(cloneAaptOptions, aaptOptions);
+                    //     } catch (Throwable e) {
+                    //         throw new StopExecutionException(e.getMessage());
+                    //     }
+                    //     aaptOptions = cloneAaptOptions;
+                    //
+                    //     List<String> additionParameters = aaptOptions.getAdditionalParameters();
+                    //     if (null == additionParameters) {
+                    //         additionParameters = new ArrayList<String>();
+                    //     }
+                    //     additionParameters.add("-B");
+                    //     additionParameters.add(appVariantContext.apContext.getBaseApk().getAbsolutePath());
+                    // }
+                    return aaptOptions;
+                }
+            });
 
-                                                    PatchConfig patchConfig = appVariantContext.getBuildType()
-                                                        .getPatchConfig();
-                                                    if (patchConfig == null ||
-                                                        !(patchConfig.isCreateAPatch() ||
-                                                            patchConfig.isCreateTPatch())) {
-                                                        return aaptOptions;
-                                                    }
+            processDiffResources.splitListInput =
+                    scope.getOutput(TaskOutputHolder.TaskOutputType.SPLIT_LIST);
 
-                                                    AaptOptions cloneAaptOptions = new AaptOptions();
-                                                    try {
-                                                        BeanUtils.copyProperties(cloneAaptOptions,
-                                                                                 aaptOptions);
-                                                    } catch (Throwable e) {
-                                                        throw new StopExecutionException(e.getMessage());
-                                                    }
-                                                    aaptOptions = cloneAaptOptions;
-
-                                                    List<String> additionParameters = aaptOptions
-                                                        .getAdditionalParameters();
-                                                    if (null == additionParameters) {
-                                                        additionParameters = new ArrayList<String>();
-                                                    }
-                                                    additionParameters.add("-B");
-                                                    additionParameters.add(appVariantContext.apContext
-                                                                               .getBaseApk()
-                                                                               .getAbsolutePath());
-                                                }
-                                                return aaptOptions;
-                                            }
-                                        });
-
-            ConventionMappingHelper.map(processDiffResources,
-                                        "resourceConfigs",
-                                        new Callable<Collection<String>>() {
-                                            @Override
-                                            public Collection<String> call() throws Exception {
-                                                Collection<String> resConfigs = config.getMergedFlavor()
-                                                    .getResourceConfigurations();
-                                                if (resConfigs.size() == 1 &&
-                                                    Iterators.getOnlyElement(resConfigs.iterator())
-                                                        .equals("auto")) {
-                                                    if (scope.getGlobalScope()
-                                                        .getAndroidBuilder()
-                                                        .getTargetInfo()
-                                                        .getBuildTools()
-                                                        .getRevision()
-                                                        .getMajor() >= 21) {
-                                                        return variantData.discoverListOfResourceConfigsNotDensities();
-                                                    } else {
-                                                        return variantData.discoverListOfResourceConfigs();
-                                                    }
-                                                }
-                                                return config.getMergedFlavor()
-                                                    .getResourceConfigurations();
-                                            }
-                                        });
-
-            ConventionMappingHelper.map(processDiffResources,
-                                        "preferredDensity",
-                                        new Callable<String>() {
-                                            @Override
-                                            @Nullable
-                                            public String call() throws Exception {
-                                                String variantFilter = variantOutputData.getMainOutputFile()
-                                                    .getFilter(com.android.build.OutputFile.DENSITY);
-                                                if (variantFilter != null) {
-                                                    return variantFilter;
-                                                }
-                                                return AndroidGradleOptions.getBuildTargetDensity(
-                                                    scope.getGlobalScope().getProject());
-                                            }
-                                        });
 
             ConventionMappingHelper.map(processDiffResources, "diffResDir", new Callable<File>() {
                 @Override
@@ -533,8 +522,7 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
 
                     File baseApk = new File(appVariantContext.apContext.getApExploredFolder(),
                                             ApContext.AP_INLINE_APK_FILENAME);
-                    File baseApkFileList = new File(appVariantContext.apContext.getApExploredFolder(),
-                                                    APK_FILE_LIST);
+                    File baseApkFileList = new File(appVariantContext.apContext.getApExploredFolder(), APK_FILE_LIST);
                     File currentApk = getAppVariantOutputContext().getApkOutputFile(true);
 
                     if (!baseApk.exists() || !currentApk.exists() || !baseApkFileList.exists()) {
@@ -542,17 +530,17 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
                     }
 
                     File rawResDir = new File(scope.getGlobalScope().getIntermediatesDir(),
-                                              "tpatch" +
-                                                  File.separator +
-                                                  config.getFullName() +
-                                                  File.separator +
-                                                  "raw-res");
+                                              "tpatch"
+                                                  + File.separator
+                                                  + config.getFullName()
+                                                  + File.separator
+                                                  + "raw-res");
                     File diffDir = new File(scope.getGlobalScope().getIntermediatesDir(),
-                                            "tpatch" +
-                                                File.separator +
-                                                config.getFullName() +
-                                                File.separator +
-                                                "diff-res");
+                                            "tpatch"
+                                                + File.separator
+                                                + config.getFullName()
+                                                + File.separator
+                                                + "diff-res");
 
                     if (diffDir.exists()) {
                         return diffDir;
@@ -562,8 +550,8 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
                     rawResDir.mkdirs();
 
                     //TODO
-                    ApkFileList baseApkFiles = JSON.parseObject(FileUtils.readFileToString(
-                        baseApkFileList), ApkFileList.class);
+                    ApkFileList baseApkFiles = JSON.parseObject(FileUtils.readFileToString(baseApkFileList),
+                                                                ApkFileList.class);
                     ApkFileList currentApkFiles = appVariantContext.getApkFiles().finalApkFileList;
 
                     Set<String> diffFiles = new HashSet<String>();
@@ -583,16 +571,16 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
                         }
                     }
 
-                    FileUtils.copyDirectory(scope.getVariantScope().getFinalResourcesDir(),
-                                            new File(rawResDir, "res"));
-                    FileUtils.copyDirectory(variantData.mergeAssetsTask.getOutputDir(),
-                                            new File(rawResDir, "assets"));
+                    FileUtils.copyDirectory(scope.getFinalResourcesDir(), new File(rawResDir, "res"));
+                    FileUtils.copyDirectory(variantData.mergeAssetsTask.getOutputDir(), new File(rawResDir, "assets"));
 
-                    DiffResExtractor.extractDiff( appVariantContext, diffFiles,
+                    DiffResExtractor.extractDiff(appVariantContext,
+                                                 diffFiles,
                                                  currentApk,
                                                  baseApk,
                                                  rawResDir,
-                                                 diffDir);
+                                                 diffDir,
+                                                 patchConfig.isFullResValues());
 
                     return diffDir;
                 }
@@ -626,4 +614,30 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
     public String getPreferredDensity() {
         return preferredDensity;
     }
+
+    private Aapt makeAapt(AaptGeneration aaptGeneration) throws IOException {
+        AndroidBuilder builder = getBuilder();
+        MergingLog mergingLog = new MergingLog(mergeBlameLogFolder);
+
+        ProcessOutputHandler processOutputHandler =
+                new ParsingProcessOutputHandler(
+                        new ToolOutputParser(
+                                aaptGeneration == AaptGeneration.AAPT_V1
+                                        ? new AaptOutputParser()
+                                        : new Aapt2OutputParser(),
+                                getILogger()),
+                        new MergingLogRewriter(mergingLog::find, builder.getErrorReporter()));
+
+        return AaptGradleFactory.make(
+                aaptGeneration,
+                builder,
+            processOutputHandler,
+            fileCache,
+            true,
+            com.android.utils.FileUtils.mkdirs(new File(appVariantContext.getScope().getIncrementalDir(getName()),
+                "aapt-temp")),
+                aaptOptions.getCruncherProcesses());
+    }
+
+
 }
