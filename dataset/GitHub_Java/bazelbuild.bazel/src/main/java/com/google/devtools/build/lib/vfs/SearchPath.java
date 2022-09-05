@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ public class SearchPath {
       return paths;
     }
     for (String p : SEPARATOR.split(searchPath)) {
-      PathFragment pf = PathFragment.create(p);
+      PathFragment pf = new PathFragment(p);
 
       if (pf.isAbsolute()) {
         paths.add(fs.getPath(pf));
@@ -53,7 +53,7 @@ public class SearchPath {
    */
   @Nullable
   public static Path which(List<Path> searchPath, String exe) {
-    PathFragment fragment = PathFragment.create(exe);
+    PathFragment fragment = new PathFragment(exe);
     if (fragment.segmentCount() != 1 || fragment.isAbsolute()) {
       return null;
     }
