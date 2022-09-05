@@ -41,27 +41,17 @@ class BuildFilesFunction implements QueryFunction {
   }
 
   @Override
-  public <T> void eval(
-      final QueryEnvironment<T> env,
-      VariableContext<T> context,
-      final QueryExpression expression,
-      List<Argument> args,
-      final Callback<T> callback)
+  public <T> void eval(final QueryEnvironment<T> env, final QueryExpression expression,
+      List<Argument> args, final Callback<T> callback)
       throws QueryException, InterruptedException {
-    env.eval(
-        args.get(0).getExpression(),
-        context,
-        new Callback<T>() {
-          @Override
-          public void process(Iterable<T> partialResult)
-              throws QueryException, InterruptedException {
-            Set<T> result = CompactHashSet.create();
-            Iterables.addAll(result, partialResult);
-            callback.process(
-                env.getBuildFiles(
-                    expression, result, /* BUILD */ true, /* subinclude */ true, /* load */ true));
-          }
-        });
+    env.eval(args.get(0).getExpression(), new Callback<T>() {
+      @Override
+      public void process(Iterable<T> partialResult) throws QueryException, InterruptedException {
+        Set<T> result = CompactHashSet.create();
+        Iterables.addAll(result, partialResult);
+        callback.process(env.getBuildFiles(expression, result));
+      }
+    });
   }
 
   @Override

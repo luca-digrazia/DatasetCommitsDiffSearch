@@ -55,7 +55,7 @@ public abstract class QueryExpression {
   protected QueryExpression() {}
 
   /**
-   * Evaluates this query in the specified environment, and notifies the callback with a result.
+   * Evaluates this query in the specified environment, and notifies the callback with a the result.
    * Note that it is allowed to notify the callback with partial results instead of just one final
    * result.
    *

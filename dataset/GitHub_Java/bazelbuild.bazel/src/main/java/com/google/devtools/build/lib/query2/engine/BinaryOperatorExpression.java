@@ -13,9 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.engine;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.query2.engine.Lexer.TokenKind;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.Collection;
 import java.util.List;
@@ -43,14 +43,6 @@ class BinaryOperatorExpression extends QueryExpression {
     Preconditions.checkState(operands.size() > 1);
     this.operator = operator;
     this.operands = ImmutableList.copyOf(operands);
-  }
-
-  Lexer.TokenKind getOperator() {
-    return operator;
-  }
-
-  ImmutableList<QueryExpression> getOperands() {
-    return operands;
   }
 
   @Override
@@ -90,11 +82,6 @@ class BinaryOperatorExpression extends QueryExpression {
     for (QueryExpression subExpression : operands) {
       subExpression.collectTargetPatterns(literals);
     }
-  }
-
-  @Override
-  public QueryExpression getMapped(QueryExpressionMapper mapper) {
-    return mapper.map(this);
   }
 
   @Override

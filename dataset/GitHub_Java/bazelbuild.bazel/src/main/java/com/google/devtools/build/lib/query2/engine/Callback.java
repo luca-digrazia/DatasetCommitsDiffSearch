@@ -13,19 +13,23 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.engine;
 
-import com.google.devtools.build.lib.util.BatchCallback;
-
 /**
  * Query callback to be called by a {@link QueryExpression} when it has part of the computation
  * result. Assuming the {@code QueryEnvironment} supports it, it would allow the caller
  * to stream the results.
  */
-public interface Callback<T> extends BatchCallback<T, QueryException> {
+public interface Callback<T> {
 
   /**
-   * According to the {@link BatchCallback} interface, repeated elements may be passed in here.
-   * However, {@code QueryExpression}s calling the callback do not need to maintain this property,
-   * as the {@code QueryEnvironment} should filter out duplicates.
+   * Called by {@code QueryExpression} when it has been able to compute part of the result.
+   *
+   * <p>Note that this method can be called several times for a QueryExpression. Callers
+   * implementing this method should assume that multiple calls can happen.
+   *
+   * @param partialResult Part of the result. Note that from the caller's perspective, it is
+   * guaranteed that no repeated elements will be returned. However {@code QueryExpression}s calling
+   * the callback do not need to maintain this property, as the {@code QueryEnvironment} should
+   * handle the uniqueness.
    */
   void process(Iterable<T> partialResult) throws QueryException, InterruptedException;
 }

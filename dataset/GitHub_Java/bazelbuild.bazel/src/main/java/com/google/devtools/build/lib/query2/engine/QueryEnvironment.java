@@ -135,10 +135,10 @@ public interface QueryEnvironment<T> {
   }
 
   /**
-   * Invokes {@code callback} with the set of target nodes in the graph for the specified target
+   * Returns the set of target nodes in the graph for the specified target
    * pattern, in 'blaze build' syntax.
    */
-  void getTargetsMatchingPattern(QueryExpression owner, String pattern, Callback<T> callback)
+  Set<T> getTargetsMatchingPattern(QueryExpression owner, String pattern)
       throws QueryException;
 
   /** Ensures the specified target exists. */
@@ -207,12 +207,10 @@ public interface QueryEnvironment<T> {
   void reportBuildFileError(QueryExpression expression, String msg) throws QueryException;
 
   /**
-   * Returns the set of BUILD, and optionally sub-included and Skylark files that define the given set of
+   * Returns the set of BUILD, included, sub-included and Skylark files that define the given set of
    * targets. Each such file is itself represented as a target in the result.
    */
-  Set<T> getBuildFiles(
-      QueryExpression caller, Set<T> nodes, boolean buildFiles, boolean subincludes, boolean loads)
-      throws QueryException;
+  Set<T> getBuildFiles(QueryExpression caller, Set<T> nodes) throws QueryException;
 
   /**
    * Returns an object that can be used to query information about targets. Implementations should
@@ -361,7 +359,6 @@ public interface QueryEnvironment<T> {
       ImmutableList.of(
           new AllPathsFunction(),
           new BuildFilesFunction(),
-          new LoadFilesFunction(),
           new AttrFunction(),
           new FilterFunction(),
           new LabelsFunction(),

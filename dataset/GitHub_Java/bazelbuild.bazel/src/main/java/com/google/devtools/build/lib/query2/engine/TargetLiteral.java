@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.engine;
 
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.common.base.Preconditions;
 
 import java.util.Collection;
 import java.util.Set;
@@ -51,7 +51,7 @@ final class TargetLiteral extends QueryExpression {
       }
       callback.process(value);
     } else {
-      env.getTargetsMatchingPattern(this, pattern, callback);
+      callback.process(env.getTargetsMatchingPattern(this, pattern));
     }
   }
 
