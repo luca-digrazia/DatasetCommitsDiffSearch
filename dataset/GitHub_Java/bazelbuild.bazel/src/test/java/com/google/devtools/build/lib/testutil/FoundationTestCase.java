@@ -72,7 +72,7 @@ public abstract class FoundationTestCase extends TestCase {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    scratch = new Scratch(createFileSystem(), "/workspace");
+    scratch = new Scratch(createFileSystem());
     outputBase = scratch.dir("/usr/local/google/_blaze_jrluser/FAKEMD5/");
     rootDirectory = scratch.dir("/workspace");
     scratchFile(rootDirectory.getRelative("WORKSPACE").getPathString(),
@@ -140,13 +140,20 @@ public abstract class FoundationTestCase extends TestCase {
     return scratch.getFileSystem();
   }
 
+  private String workspaceRelative(String pathName) {
+    if (!pathName.startsWith("/")) {
+      return "/workspace/" + pathName;
+    }
+    return pathName;
+  }
+
   /**
    * Create a scratch file in the scratch filesystem, with the given pathName,
    * consisting of a set of lines. The method returns a Path instance for the
    * scratch file.
    */
   protected Path scratchFile(String pathName, String... lines) throws IOException {
-    return scratch.file(pathName, lines);
+    return scratch.file(workspaceRelative(pathName), lines);
   }
 
   /**
@@ -154,7 +161,7 @@ public abstract class FoundationTestCase extends TestCase {
    * returns a Path instance for the scratch directory.
    */
   protected Path scratchDir(String pathName) throws IOException {
-    return scratch.dir(pathName);
+    return scratch.dir(workspaceRelative(pathName));
   }
 
   /**
@@ -162,7 +169,7 @@ public abstract class FoundationTestCase extends TestCase {
    * exists.
    */
   protected Path overwriteScratchFile(String pathName, String... lines) throws IOException {
-    return scratch.overwriteFile(pathName, lines);
+    return scratch.overwriteFile(workspaceRelative(pathName), lines);
   }
 
   /**
@@ -170,9 +177,19 @@ public abstract class FoundationTestCase extends TestCase {
    * consisting of a set of lines. The method returns a Path instance for the
    * scratch file.
    */
-  protected Path scratchFile(String pathName, byte[] content)
+  protected Path scratchFile(FileSystem fs, String pathName, String... lines)
       throws IOException {
-    return scratch.file(pathName, content);
+    return scratch.file(fs, workspaceRelative(pathName), lines);
+  }
+
+  /**
+   * Create a scratch file in the given filesystem, with the given pathName,
+   * consisting of a set of lines. The method returns a Path instance for the
+   * scratch file.
+   */
+  protected Path scratchFile(FileSystem fs, String pathName, byte[] content)
+      throws IOException {
+    return scratch.file(fs, workspaceRelative(pathName), content);
   }
 
   /**
@@ -181,7 +198,7 @@ public abstract class FoundationTestCase extends TestCase {
    * scratch file.
    */
   protected void deleteFile(String pathName) throws IOException {
-    scratch.deleteFile(pathName);
+    scratch.deleteFile(workspaceRelative(pathName));
   }
 
   // Mix-in assertions:
