@@ -14,56 +14,37 @@
 
 package com.google.devtools.build.lib.remote;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.actions.ActionContext;
-import com.google.devtools.build.lib.actions.ActionInputFileCache;
-import com.google.devtools.build.lib.actions.ResourceManager;
-import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
-import com.google.devtools.build.lib.exec.ActionContextProvider;
-import com.google.devtools.build.lib.exec.ActionInputPrefetcher;
+import com.google.common.collect.ImmutableList.Builder;
+import com.google.devtools.build.lib.actions.ActionContextProvider;
+import com.google.devtools.build.lib.actions.Executor.ActionContext;
+import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
-import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.standalone.StandaloneSpawnStrategy;
 
 /**
  * Provide a remote execution context.
  */
 final class RemoteActionContextProvider extends ActionContextProvider {
-  private final CommandEnvironment env;
-  private ActionInputPrefetcher actionInputPrefetcher;
+  private final ImmutableList<ActionContext> strategies;
 
-  RemoteActionContextProvider(CommandEnvironment env) {
-    this.env = env;
-  }
-
-  @Override
-  public void init(
-      ActionInputFileCache actionInputFileCache, ActionInputPrefetcher actionInputPrefetcher) {
-    this.actionInputPrefetcher = Preconditions.checkNotNull(actionInputPrefetcher);
-  }
-
-  @Override
-  public Iterable<? extends ActionContext> getActionContexts() {
-    ExecutionOptions executionOptions = env.getOptions().getOptions(ExecutionOptions.class);
-    LocalExecutionOptions localExecutionOptions =
-        env.getOptions().getOptions(LocalExecutionOptions.class);
-    SpawnActionContext fallbackStrategy =
-        new StandaloneSpawnStrategy(
-            env.getExecRoot(),
-            actionInputPrefetcher,
-            localExecutionOptions,
-            executionOptions.verboseFailures,
-            env.getRuntime().getProductName(),
-            ResourceManager.instance());
-    return ImmutableList.of(
+  RemoteActionContextProvider(
+      CommandEnvironment env,
+      BuildRequest buildRequest) {
+    boolean verboseFailures = buildRequest.getOptions(ExecutionOptions.class).verboseFailures;
+    Builder<ActionContext> strategiesBuilder = ImmutableList.builder();
+    strategiesBuilder.add(
         new RemoteSpawnStrategy(
+            env.getClientEnv(),
             env.getExecRoot(),
-            env.getOptions().getOptions(RemoteOptions.class),
-            env.getOptions().getOptions(AuthAndTLSOptions.class),
-            executionOptions.verboseFailures,
-            fallbackStrategy));
+            buildRequest.getOptions(RemoteOptions.class),
+            verboseFailures,
+            env.getRuntime().getProductName()));
+    this.strategies = strategiesBuilder.build();
+  }
+
+  @Override
+  public Iterable<ActionContext> getActionContexts() {
+    return strategies;
   }
 }
