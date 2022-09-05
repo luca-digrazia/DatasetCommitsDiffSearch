@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,6 +66,8 @@ public final class AndroidRuleClasses {
       JavaSemantics.JAVA_LIBRARY_SOURCE_JAR;
   public static final SafeImplicitOutputsFunction ANDROID_LIBRARY_CLASS_JAR =
       JavaSemantics.JAVA_LIBRARY_CLASS_JAR;
+  public static final SafeImplicitOutputsFunction ANDROID_LIBRARY_GEN_JAR =
+      JavaSemantics.JAVA_LIBRARY_GEN_JAR;
   public static final SafeImplicitOutputsFunction ANDROID_LIBRARY_JACK_FILE =
       fromTemplates("lib%{name}.jack");
   public static final SafeImplicitOutputsFunction ANDROID_LIBRARY_AAR =
@@ -84,6 +86,8 @@ public final class AndroidRuleClasses {
       fromTemplates("%{name}_unsigned.apk");
   public static final SafeImplicitOutputsFunction ANDROID_BINARY_SIGNED_APK =
       fromTemplates("%{name}_signed.apk");
+  public static final SafeImplicitOutputsFunction ANDROID_BINARY_GEN_JAR =
+      JavaSemantics.JAVA_BINARY_GEN_JAR;
   public static final SafeImplicitOutputsFunction ANDROID_BINARY_DEPLOY_JAR =
       fromTemplates("%{name}_deploy.jar");
   public static final SafeImplicitOutputsFunction ANDROID_BINARY_PROGUARD_JAR =
@@ -180,12 +184,12 @@ public final class AndroidRuleClasses {
           output.get(AndroidConfiguration.Options.class);
 
       CppOptions cppOptions = output.get(CppOptions.class);
-      if (inputAndroidOptions.androidCrosstoolTop != null
-          && !cppOptions.crosstoolTop().equals(inputAndroidOptions.androidCrosstoolTop)) {
+      if (inputAndroidOptions.realAndroidCrosstoolTop() != null
+          && !cppOptions.crosstoolTop.equals(inputAndroidOptions.realAndroidCrosstoolTop())) {
         if (cppOptions.hostCrosstoolTop == null) {
           cppOptions.hostCrosstoolTop = cppOptions.crosstoolTop;
         }
-        cppOptions.crosstoolTop = inputAndroidOptions.androidCrosstoolTop;
+        cppOptions.crosstoolTop = inputAndroidOptions.realAndroidCrosstoolTop();
       }
 
       outputAndroidOptions.configurationDistinguisher = ConfigurationDistinguisher.ANDROID;
@@ -196,10 +200,9 @@ public final class AndroidRuleClasses {
       AndroidConfiguration.Options androidOptions =
           buildOptions.get(AndroidConfiguration.Options.class);
       CppOptions cppOptions = buildOptions.get(CppOptions.class);
-      Label androidCrosstoolTop = androidOptions.androidCrosstoolTop;
+      Label androidCrosstoolTop = androidOptions.realAndroidCrosstoolTop();
       if (androidOptions.realFatApkCpus().isEmpty()
-          && (androidCrosstoolTop == null
-          || androidCrosstoolTop.equals(cppOptions.crosstoolTop()))) {
+          && (androidCrosstoolTop == null || androidCrosstoolTop.equals(cppOptions.crosstoolTop))) {
         return ImmutableList.of();
       }
 
@@ -245,6 +248,7 @@ public final class AndroidRuleClasses {
           functions.add(AndroidRuleClasses.ANDROID_BINARY_APK);
           functions.add(AndroidRuleClasses.ANDROID_BINARY_UNSIGNED_APK);
           functions.add(AndroidRuleClasses.ANDROID_BINARY_DEPLOY_JAR);
+          functions.add(AndroidRuleClasses.ANDROID_BINARY_GEN_JAR);
 
           // The below is a hack to support configurable attributes (proguard_specs seems like
           // too valuable an attribute to make nonconfigurable, and we don't currently
@@ -287,6 +291,7 @@ public final class AndroidRuleClasses {
           
           implicitOutputs.add(
               AndroidRuleClasses.ANDROID_LIBRARY_CLASS_JAR,
+              AndroidRuleClasses.ANDROID_LIBRARY_GEN_JAR,
               AndroidRuleClasses.ANDROID_LIBRARY_SOURCE_JAR,
               AndroidRuleClasses.ANDROID_LIBRARY_JACK_FILE,
               AndroidRuleClasses.ANDROID_LIBRARY_AAR);
@@ -331,8 +336,7 @@ public final class AndroidRuleClasses {
                   .allowedFileTypes(ANY_FILE)
                   // TODO(bazel-team): Remove defaults and make mandatory when android_sdk targets
                   // have been updated to include manually specified Jack attributes.
-                  .value(environment.getLabel(
-                      Constants.TOOLS_REPOSITORY + "//tools/android/jack:android_jack")))
+                  .value(environment.getLabel("//tools/android/jack:android_jack")))
           .add(attr("annotations_jar", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE))
           .add(attr("main_dex_classes", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE))
           .add(attr("apkbuilder", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE).exec())
@@ -342,22 +346,19 @@ public final class AndroidRuleClasses {
                   .cfg(HOST)
                   .allowedFileTypes(ANY_FILE)
                   .exec()
-                  .value(environment.getLabel(
-                      Constants.TOOLS_REPOSITORY + "//tools/android/jack:jack")))
+                  .value(environment.getLabel("//tools/android/jack:jack")))
           .add(
               attr("jill", LABEL)
                   .cfg(HOST)
                   .allowedFileTypes(ANY_FILE)
                   .exec()
-                  .value(environment.getLabel(
-                      Constants.TOOLS_REPOSITORY + "//tools/android/jack:jill")))
+                  .value(environment.getLabel("//tools/android/jack:jill")))
           .add(
               attr("resource_extractor", LABEL)
                   .cfg(HOST)
                   .allowedFileTypes(ANY_FILE)
                   .exec()
-                  .value(environment.getLabel(
-                      Constants.TOOLS_REPOSITORY + "//tools/android/jack:resource_extractor")))
+                  .value(environment.getLabel("//tools/android/jack:resource_extractor")))
           .build();
     }
 
@@ -536,8 +537,6 @@ public final class AndroidRuleClasses {
           // like all the rest of android tools.
           .add(attr("$jarjar_bin", LABEL).cfg(HOST).exec()
               .value(env.getLabel("//third_party/java/jarjar:jarjar_bin")))
-          .add(attr("$idlclass", LABEL).cfg(HOST).exec()
-              .value(env.getLabel(Constants.ANDROID_DEP_PREFIX + "IdlClass")))
           .build();
     }
 

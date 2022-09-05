@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
@@ -41,6 +40,7 @@ import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
+import com.google.devtools.build.lib.analysis.AnalysisHooks;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView;
@@ -272,8 +272,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       BuildOptions buildOptions = ruleClassProvider.createBuildOptions(optionsParser);
       ensureTargetsVisited(buildOptions.getAllLabels().values());
       skyframeExecutor.invalidateConfigurationCollection();
-      return skyframeExecutor.createConfigurations(reporter, configurationFactory, buildOptions,
-          directories, ImmutableSet.<String>of(), false);
+      return skyframeExecutor.createConfigurations(configurationFactory, buildOptions, directories,
+          ImmutableSet.<String>of(), false);
     } catch (InvalidConfigurationException | OptionsParsingException e) {
       throw new IllegalArgumentException(e);
     }
@@ -321,13 +321,29 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return skyframeExecutor.getPackageManager();
   }
 
+  protected AnalysisHooks getAnalysisHooks() {
+    return new AnalysisHooks() {
+      @Override
+      public PackageManager getPackageManager() {
+        return BuildViewTestCase.this.getPackageManager();
+      }
+
+      @Override
+      public ConfiguredTarget getExistingConfiguredTarget(Target target,
+          BuildConfiguration configuration) {
+        return view.getExistingConfiguredTarget(target, configuration);
+      }
+
+    };
+  }
+
   /**
    * Invalidates all existing packages.
    * @throws InterruptedException
    */
   protected void invalidatePackages() throws InterruptedException {
-    skyframeExecutor.invalidateFilesUnderPathForTesting(reporter,
-        ModifiedFileSet.EVERYTHING_MODIFIED, rootDirectory);
+    skyframeExecutor.invalidateFilesUnderPathForTesting(ModifiedFileSet.EVERYTHING_MODIFIED,
+        rootDirectory);
   }
 
   /**
@@ -491,17 +507,13 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return ImmutableList.copyOf(result);
   }
 
-  protected ActionGraph getActionGraph() {
-    return skyframeExecutor.getActionGraph();
-  }
-
   protected final Action getGeneratingAction(Artifact artifact) {
     Preconditions.checkNotNull(artifact);
     Action action = mutableActionGraph.getGeneratingAction(artifact);
     if (action != null) {
       return action;
     }
-    return getActionGraph().getGeneratingAction(artifact);
+    return view.getActionGraph().getGeneratingAction(artifact);
   }
 
   protected void simulateLoadingPhase() {
@@ -513,7 +525,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   protected ActionsTestUtil actionsTestUtil() {
-    return new ActionsTestUtil(getActionGraph());
+    return new ActionsTestUtil(view.getActionGraph());
   }
 
   private Set<Target> getTargets(Iterable<Label> labels) throws InterruptedException,
@@ -666,7 +678,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     String buildFilePathString = packageName + "/BUILD";
     scratch.file(buildFilePathString, lines);
     skyframeExecutor.invalidateFilesUnderPathForTesting(
-        reporter,
         new ModifiedFileSet.Builder().modify(new PathFragment(buildFilePathString)).build(),
         rootDirectory);
     return (Rule) getTarget("//" + packageName + ":" + ruleName);
