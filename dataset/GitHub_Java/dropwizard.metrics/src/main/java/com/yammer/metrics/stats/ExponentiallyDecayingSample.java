@@ -80,11 +80,11 @@ public class ExponentiallyDecayingSample implements Sample {
 			} else {
 				Double first = values.firstKey();
 				if (first < priority) {
-					if (values.putIfAbsent(priority, value) == null) {
-						// ensure we always remove an item
-						while (values.remove(first) == null) {
-							first = values.firstKey();
-						}
+					values.put(priority, value);
+
+					// ensure we always remove an item
+					while (values.remove(first) == null) {
+						first = values.firstKey();
 					}
 				}
 			}
