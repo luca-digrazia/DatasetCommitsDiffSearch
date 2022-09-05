@@ -17,26 +17,27 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.concurrent.KeyedLocker.AutoUnlocker;
 import com.google.devtools.build.lib.concurrent.KeyedLocker.AutoUnlocker.IllegalUnlockException;
 import com.google.devtools.build.lib.testutil.TestUtils;
-import com.google.devtools.build.lib.util.Preconditions;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
 
 /** Base class for tests for {@link KeyedLocker} implementations. */
 public abstract class KeyedLockerTest {
@@ -65,7 +66,7 @@ public abstract class KeyedLockerTest {
     return new Supplier<KeyedLocker.AutoUnlocker>() {
       @Override
       public AutoUnlocker get() {
-        return locker.writeLock(key);
+        return locker.lock(key);
       }
     };
   }
@@ -162,8 +163,7 @@ public abstract class KeyedLockerTest {
       }
     };
     for (int i = 0; i < NUM_EXECUTOR_THREADS; i++) {
-      @SuppressWarnings("unused") 
-      Future<?> possiblyIgnoredError = executorService.submit(wrapper.wrap(runnable));
+      executorService.submit(wrapper.wrap(runnable));
     }
     boolean interrupted = ExecutorUtil.interruptibleShutdown(executorService);
     Throwables.propagateIfPossible(wrapper.getFirstThrownError());
@@ -208,10 +208,8 @@ public abstract class KeyedLockerTest {
         }
       }
     };
-    @SuppressWarnings("unused")
-    Future<?> possiblyIgnoredError = executorService.submit(wrapper.wrap(runnable1));
-    @SuppressWarnings("unused")
-    Future<?> possiblyIgnoredError1 = executorService.submit(wrapper.wrap(runnable2));
+    executorService.submit(wrapper.wrap(runnable1));
+    executorService.submit(wrapper.wrap(runnable2));
     boolean interrupted = ExecutorUtil.interruptibleShutdown(executorService);
     Throwables.propagateIfPossible(wrapper.getFirstThrownError());
     if (interrupted || runnableInterrupted.get()) {
@@ -264,8 +262,7 @@ public abstract class KeyedLockerTest {
       }
     };
     for (int i = 0; i < NUM_EXECUTOR_THREADS; i++) {
-      @SuppressWarnings("unused")
-      Future<?> possiblyIgnoredError = executorService.submit(wrapper.wrap(runnable));
+      executorService.submit(wrapper.wrap(runnable));
     }
     boolean interrupted = ExecutorUtil.interruptibleShutdown(executorService);
     Throwables.propagateIfPossible(wrapper.getFirstThrownError());
