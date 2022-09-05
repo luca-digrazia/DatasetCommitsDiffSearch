@@ -5,12 +5,12 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A {@link ThreadFactory} that monitors the number of threads created, running and terminated.
- * <p>
+ * <p/>
  * It will register the metrics using the given (or auto-generated) name as classifier, e.g:
  * "your-thread-delegate.created", "your-thread-delegate.running", etc.
  */
 public class InstrumentedThreadFactory implements ThreadFactory {
-    private static final AtomicLong NAME_COUNTER = new AtomicLong();
+    private static final AtomicLong nameCounter = new AtomicLong();
 
     private final ThreadFactory delegate;
     private final Meter created;
@@ -24,7 +24,7 @@ public class InstrumentedThreadFactory implements ThreadFactory {
      * @param registry {@link MetricRegistry} that will contain the metrics.
      */
     public InstrumentedThreadFactory(ThreadFactory delegate, MetricRegistry registry) {
-        this(delegate, registry, "instrumented-thread-delegate-" + NAME_COUNTER.incrementAndGet());
+        this(delegate, registry, "instrumented-thread-delegate-" + nameCounter.incrementAndGet());
     }
 
     /**
