@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
-import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -109,8 +108,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
 
     CppConfiguration cppConfiguration = ruleContext.getConfiguration().getFragment(
         CppConfiguration.class);
-    boolean stripAsDefault = cppConfiguration.useFission()
-        && cppConfiguration.getCompilationMode() == CompilationMode.OPT;
+    boolean stripAsDefault = cppConfiguration.useFission();
     Artifact launcher = semantics.getLauncher(ruleContext, common, deployArchiveBuilder,
         runfilesBuilder, jvmFlags, attributesBuilder, stripAsDefault);
 
