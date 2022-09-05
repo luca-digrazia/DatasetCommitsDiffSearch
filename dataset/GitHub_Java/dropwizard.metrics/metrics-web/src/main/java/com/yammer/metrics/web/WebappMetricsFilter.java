@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit;
  * codes being returned.
  */
 public abstract class WebappMetricsFilter implements Filter {
+
     private final Map<Integer, MeterMetric> metersByStatusCode;
     private final MeterMetric otherMeterMetric;
     private final CounterMetric activeRequests;
