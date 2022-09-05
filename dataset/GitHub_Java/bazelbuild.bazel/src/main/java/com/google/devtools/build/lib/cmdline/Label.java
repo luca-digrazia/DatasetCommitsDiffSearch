@@ -41,12 +41,7 @@ import java.io.Serializable;
 @SkylarkModule(name = "Label", doc = "A BUILD target identifier.")
 @Immutable @ThreadSafe
 public final class Label implements Comparable<Label>, Serializable, SkylarkPrintableValue {
-  public static final PathFragment EXTERNAL_PACKAGE_NAME = new PathFragment("external");
-
-  public static final PackageIdentifier EXTERNAL_PACKAGE_IDENTIFIER =
-      PackageIdentifier.createInDefaultRepo(EXTERNAL_PACKAGE_NAME);
-
-  public static final String EXTERNAL_PATH_PREFIX = "external";
+  private static final PathFragment EXTERNAL = new PathFragment("external");
 
   /**
    * Factory for Labels from absolute string form. e.g.
@@ -385,7 +380,7 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkPrin
 
     if (packageIdentifier.getRepository().isDefault()
         || !relative.packageIdentifier.getRepository().isDefault()
-        || relative.packageIdentifier.getPackageFragment().equals(EXTERNAL_PACKAGE_NAME)) {
+        || relative.packageIdentifier.getPackageFragment().equals(EXTERNAL)) {
       return relative;
     } else {
       try {
