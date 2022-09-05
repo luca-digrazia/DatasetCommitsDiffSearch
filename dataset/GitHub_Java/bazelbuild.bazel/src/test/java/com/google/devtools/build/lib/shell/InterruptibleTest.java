@@ -54,15 +54,16 @@ public class InterruptibleTest {
     };
 
   private Command command;
+  private long before;
+
   @Before
   public void setUp() throws Exception {
 
     Thread.interrupted(); // side effect: clear interrupted status
     assertFalse("Unexpected interruption!", mainThread.isInterrupted());
 
-    // We interrupt after 1 sec, so this gives us plenty of time for the library to notice the
-    // subprocess exit.
-    this.command = new Command(new String[] { "/bin/sleep", "20" });
+    this.command = new Command(new String[] { "/bin/sleep", "2" });
+    this.before = System.nanoTime();
 
     interrupter.start();
   }
@@ -71,6 +72,16 @@ public class InterruptibleTest {
   public void tearDown() throws Exception {
     interrupter.join();
     Thread.interrupted(); // Clear interrupted status, or else other tests may fail.
+  }
+
+  private void assertDuration(long minMillis, long maxMillis)
+      throws Exception {
+    long after = System.nanoTime();
+    long millis = (after - before) / 1000000;
+    if (millis < minMillis || millis > maxMillis) {
+      fail("Duration " + millis + "ms was not in range "
+           + minMillis + "-" + maxMillis + "ms");
+    }
   }
 
   /**
@@ -109,6 +120,9 @@ public class InterruptibleTest {
       assertEquals("Process terminated by signal 15", // SIGINT
                    e.getMessage());
     }
+
+    // Subprocess execution should be around 1000ms, but less than 2000, the subprocess sleep time.
+    assertDuration(1000, 1900);
 
     // We don't assert that the interrupter thread has exited; due to prompt
     // termination it might still be running.
