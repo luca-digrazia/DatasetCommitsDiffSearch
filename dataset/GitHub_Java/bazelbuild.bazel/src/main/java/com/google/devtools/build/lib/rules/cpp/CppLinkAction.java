@@ -54,6 +54,7 @@ import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -66,8 +67,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import javax.annotation.Nullable;
 
 /**
  * Action that represents an ELF linking step.
@@ -205,7 +204,16 @@ public final class CppLinkAction extends AbstractAction {
    */
   public final List<String> getCommandLine()
       throws ExecException {
-    return linkCommandLine.getCommandLine();
+    List<String> commandlineArgs;
+    // Try to shorten the command line by use of a parameter file.
+    // This makes the output with --subcommands (et al) more readable.
+    if (linkCommandLine.canBeSplit()) {
+      Pair<List<String>, List<String>> split = linkCommandLine.splitCommandline();
+      commandlineArgs = split.first;
+    } else {
+      commandlineArgs = linkCommandLine.getRawLinkArgv();
+    }
+    return linkCommandLine.finalizeWithLinkstampCommands(commandlineArgs);
   }
 
   @Override
@@ -448,9 +456,7 @@ public final class CppLinkAction extends AbstractAction {
     private final RuleContext ruleContext;
     private final AnalysisEnvironment analysisEnvironment;
     private final PathFragment outputPath;
-
-    // can be null for CppLinkAction.createTestBuilder()
-    @Nullable private final CcToolchainProvider toolchain;
+    private final CcToolchainProvider toolchain;
     private PathFragment interfaceOutputPath;
     private PathFragment runtimeSolibDir;
     protected final BuildConfiguration configuration;
@@ -473,6 +479,7 @@ public final class CppLinkAction extends AbstractAction {
     private boolean isNativeDeps;
     private boolean useTestOnlyFlags;
     private boolean wholeArchive;
+    private boolean supportsParamFiles = true;
 
     /**
      * Creates a builder that builds {@link CppLinkAction} instances.
@@ -517,8 +524,13 @@ public final class CppLinkAction extends AbstractAction {
       this.configuration = Preconditions.checkNotNull(configuration);
       this.cppConfiguration = configuration.getFragment(CppConfiguration.class);
       this.toolchain = toolchain;
+
+      // The toolchain != null is here for CppLinkAction.createTestBuilder(). Meh.
       if (cppConfiguration.supportsEmbeddedRuntimes() && toolchain != null) {
         runtimeSolibDir = toolchain.getDynamicRuntimeSolibDir();
+      }
+      if (toolchain != null) {
+        supportsParamFiles = toolchain.supportsParamFiles();
       }
     }
 
@@ -554,29 +566,6 @@ public final class CppLinkAction extends AbstractAction {
       this.useTestOnlyFlags = linkContext.useTestOnlyFlags;
     }
 
-    @VisibleForTesting
-    boolean canSplitCommandLine() {
-      if (toolchain == null || !toolchain.supportsParamFiles()) {
-        return false;
-      }
-
-      switch (linkType) {
-          // We currently can't split dynamic library links if they have interface outputs. That was
-          // probably an unintended side effect of the change that introduced interface outputs.
-        case DYNAMIC_LIBRARY:
-          return (interfaceOutputPath == null);
-        case EXECUTABLE:
-        case STATIC_LIBRARY:
-        case PIC_STATIC_LIBRARY:
-        case ALWAYS_LINK_STATIC_LIBRARY:
-        case ALWAYS_LINK_PIC_STATIC_LIBRARY:
-          return true;
-
-        default:
-          return false;
-      }
-    }
-
     /**
      * Builds the Action as configured and returns it.
      *
@@ -606,8 +595,8 @@ public final class CppLinkAction extends AbstractAction {
           linkStaticness, linkType, linkopts, isNativeDeps, cppConfiguration);
 
       NestedSet<LibraryToLink> uniqueLibraries = libraries.build();
-      final Iterable<Artifact> filteredNonLibraryArtifacts =
-          filterLinkerInputArtifacts(LinkerInputs.toLibraryArtifacts(nonLibraries));
+      final Iterable<Artifact> filteredNonLibraryArtifacts = filterLinkerInputArtifacts(
+          LinkerInputs.toLibraryArtifacts(nonLibraries));
       final Iterable<LinkerInput> linkerInputs = IterablesChain.<LinkerInput>builder()
           .add(ImmutableList.copyOf(filterLinkerInputs(nonLibraries)))
           .add(ImmutableIterable.from(Link.mergeInputsCmdLine(
@@ -627,42 +616,37 @@ public final class CppLinkAction extends AbstractAction {
       final ImmutableMap<Artifact, Artifact> linkstampMap =
           mapLinkstampsToOutputs(linkstamps, ruleContext, output);
 
-      final ImmutableList<Artifact> actionOutputs =
-          constructOutputs(
-              outputLibrary.getArtifact(),
-              linkstampMap.values(),
-              interfaceOutputLibrary == null ? null : interfaceOutputLibrary.getArtifact(),
-              symbolCountOutput);
+      final ImmutableList<Artifact> actionOutputs = constructOutputs(
+          outputLibrary.getArtifact(),
+          linkstampMap.values(),
+          interfaceOutputLibrary == null ? null : interfaceOutputLibrary.getArtifact(),
+          symbolCountOutput);
 
-      @Nullable
-      final Artifact paramFile =
-          canSplitCommandLine()
-              ? createArtifact(
-                  ParameterFile.derivePath(outputLibrary.getArtifact().getRootRelativePath()))
+      final PathFragment paramFileFragment =
+          supportsParamFiles
+              ? ParameterFile.derivePath(outputLibrary.getArtifact().getExecPath())
               : null;
 
-      LinkCommandLine linkCommandLine =
-          new LinkCommandLine.Builder(configuration, getOwner())
-              .setOutput(outputLibrary.getArtifact())
-              .setInterfaceOutput(interfaceOutput)
-              .setSymbolCountsOutput(symbolCountOutput)
-              .setBuildInfoHeaderArtifacts(buildInfoHeaderArtifacts)
-              .setLinkerInputs(linkerInputs)
-              .setRuntimeInputs(
-                  ImmutableList.copyOf(LinkerInputs.simpleLinkerInputs(runtimeInputs)))
-              .setLinkTargetType(linkType)
-              .setLinkStaticness(linkStaticness)
-              .setLinkopts(ImmutableList.copyOf(linkopts))
-              .setFeatures(features)
-              .setLinkstamps(linkstampMap)
-              .addLinkstampCompileOptions(linkstampOptions)
-              .setRuntimeSolibDir(linkType.isStaticLibraryLink() ? null : runtimeSolibDir)
-              .setNativeDeps(isNativeDeps)
-              .setUseTestOnlyFlags(useTestOnlyFlags)
-              .setNeedWholeArchive(needWholeArchive)
-              .setInterfaceSoBuilder(getInterfaceSoBuilder())
-              .setParamFile(paramFile)
-              .build();
+      LinkCommandLine linkCommandLine = new LinkCommandLine.Builder(configuration, getOwner())
+          .setOutput(outputLibrary.getArtifact())
+          .setInterfaceOutput(interfaceOutput)
+          .setSymbolCountsOutput(symbolCountOutput)
+          .setBuildInfoHeaderArtifacts(buildInfoHeaderArtifacts)
+          .setLinkerInputs(linkerInputs)
+          .setRuntimeInputs(ImmutableList.copyOf(LinkerInputs.simpleLinkerInputs(runtimeInputs)))
+          .setLinkTargetType(linkType)
+          .setLinkStaticness(linkStaticness)
+          .setLinkopts(ImmutableList.copyOf(linkopts))
+          .setFeatures(features)
+          .setLinkstamps(linkstampMap)
+          .addLinkstampCompileOptions(linkstampOptions)
+          .setRuntimeSolibDir(linkType.isStaticLibraryLink() ? null : runtimeSolibDir)
+          .setNativeDeps(isNativeDeps)
+          .setUseTestOnlyFlags(useTestOnlyFlags)
+          .setNeedWholeArchive(needWholeArchive)
+          .setInterfaceSoBuilder(getInterfaceSoBuilder())
+          .setParamFileFragment(paramFileFragment)
+          .build();
 
       // Compute the set of inputs - we only need stable order here.
       NestedSetBuilder<Artifact> dependencyInputsBuilder = NestedSetBuilder.stableOrder();
@@ -684,15 +668,13 @@ public final class CppLinkAction extends AbstractAction {
           .add(dependencyInputsBuilder.build())
           .add(ImmutableIterable.from(expandedInputs));
 
-      if (linkCommandLine.getParamFile() != null) {
-        inputsBuilder.add(ImmutableList.of(linkCommandLine.getParamFile()));
-        Action parameterFileWriteAction =
-            new ParameterFileWriteAction(
-                getOwner(),
-                paramFile,
-                linkCommandLine.paramCmdLine(),
-                ParameterFile.ParameterFileType.UNQUOTED,
-                ISO_8859_1);
+      if (linkCommandLine.canBeSplit()) {
+        Artifact paramFile = createArtifact(
+            ParameterFile.derivePath(outputLibrary.getArtifact().getRootRelativePath()));
+        inputsBuilder.add(ImmutableList.of(paramFile));
+        Action parameterFileWriteAction = new ParameterFileWriteAction(
+            getOwner(), paramFile, linkCommandLine.paramCmdLine(),
+            ParameterFile.ParameterFileType.UNQUOTED, ISO_8859_1);
         analysisEnvironment.registerAction(parameterFileWriteAction);
       }
 
@@ -766,9 +748,8 @@ public final class CppLinkAction extends AbstractAction {
       return ruleContext.getActionOwner();
     }
 
-    protected Artifact createArtifact(PathFragment rootRelativePath) {
-      return analysisEnvironment.getDerivedArtifact(
-          rootRelativePath, configuration.getBinDirectory());
+    protected Artifact createArtifact(PathFragment path) {
+      return analysisEnvironment.getDerivedArtifact(path, configuration.getBinDirectory());
     }
 
     protected Artifact getInterfaceSoBuilder() {

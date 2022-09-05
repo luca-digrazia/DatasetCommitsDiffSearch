@@ -274,7 +274,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   private void setUpSkyframe() {
     PathPackageLocator pkgLocator = PathPackageLocator.create(
-        null, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
+        packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
     skyframeExecutor.preparePackageLoading(pkgLocator,
         packageCacheOptions.defaultVisibility, true,
         7, ruleClassProvider.getDefaultsPackageContent(optionsParser),
@@ -348,8 +348,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected final void createBuildView() throws Exception {
     Preconditions.checkNotNull(masterConfig);
     Preconditions.checkState(getHostConfiguration() == getTargetConfiguration()
-        || getHostConfiguration().isHostConfiguration(),
-        "Host configuration %s is not a host configuration' "
+        || getHostConfiguration().getShortName().equals("host"),
+        "Host configuration %s does not have name 'host' "
         + "and does not match target configuration %s",
         getHostConfiguration(), getTargetConfiguration());
 
@@ -1067,16 +1067,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   /**
    * Utility method for asserting that a list contains the elements of a
-   * sublist. This is useful for checking that a list of arguments contains a
-   * particular set of arguments.
-   */
-  protected void assertContainsSublist(List<String> list, String... sublist) {
-    assertContainsSublist(null, list, Arrays.asList(sublist));
-  }
-
-  /**
-   * Utility method for asserting that a list contains the elements of a
-   * sublist. This is useful for checking that a list of arguments contains a
+   * sublist This is useful for checking that a list of arguments contains a
    * particular set of arguments.
    */
   protected void assertContainsSublist(List<String> list, List<String> sublist) {
@@ -1085,7 +1076,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   /**
    * Utility method for asserting that a list contains the elements of a
-   * sublist. This is useful for checking that a list of arguments contains a
+   * sublist This is useful for checking that a list of arguments contains a
    * particular set of arguments.
    */
   protected void assertContainsSublist(String message, List<String> list, List<String> sublist) {
