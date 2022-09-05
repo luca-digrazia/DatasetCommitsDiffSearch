@@ -217,8 +217,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.taobao.atlas.framework.Atlas;
 import android.taobao.atlas.framework.BundleImpl;
-import android.taobao.atlas.util.FileUtils;
-import android.taobao.atlas.util.log.impl.AtlasMonitor;
+import android.taobao.atlas.versionInfo.BaselineInfoManager;
 import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Toast;
@@ -274,7 +273,7 @@ public class SecurityHandler implements BundleListener {
             /**
              * Skip bundle security check once updated.
              */
-            if(((BundleImpl)bundle).getArchive().getCurrentRevision().isUpdated()){
+            if(BaselineInfoManager.instance().isUpdated(bundle.getLocation()) || BaselineInfoManager.instance().isDexPatched(bundle.getLocation())){
                 return;
             }
 
@@ -287,12 +286,13 @@ public class SecurityHandler implements BundleListener {
                 }
             }
             if(file!=null){
+                Log.e(TAG, "Security check File: " + file.getAbsolutePath());
                 if (!RuntimeVariables.verifyBundle(file.getAbsolutePath())) {
                     Log.e(TAG, "Security check failed. " + location);
                     Handler handler = new Handler(Looper.getMainLooper());
                     handler.post(new postInvalidBundle());
-                    AtlasMonitor.getInstance().trace(AtlasMonitor.BUNDLE_INSTALL_FAIL, location, AtlasMonitor.SECURITY_CHECK_FAILED,
-                            FileUtils.getDataAvailableSpace());
+//                    AtlasMonitor.getInstance().trace(AtlasMonitor.BUNDLE_INSTALL_FAIL, location, AtlasMonitor.SECURITY_CHECK_FAILED,
+//                            FileUtils.getDataAvailableSpace());
                     isSecurityCheckFailed = true;
                 }
                 if (isSecurityCheckFailed == false) {
