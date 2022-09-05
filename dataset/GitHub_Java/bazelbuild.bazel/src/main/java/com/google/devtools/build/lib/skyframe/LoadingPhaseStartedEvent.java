@@ -13,25 +13,31 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
-
+import java.util.concurrent.atomic.AtomicInteger;
 /**
  * This event is fired at the beginning of the loading phase.
  */
-public final class LoadingPhaseStartedEvent implements ExtendedEventHandler.Postable {
+public final class LoadingPhaseStartedEvent {
 
-  final PackageProgressReceiver packageProgress;
+  final LoadingProgressReceiver loadingProgressReceiver;
+  final AtomicInteger numPackagesLoaded;
 
   /**
    * Construct the event
    *
    * @param loadingProgressReceiver a receiver that gets updated about the progress of loading
    */
-  public LoadingPhaseStartedEvent(PackageProgressReceiver packageProgress) {
-    this.packageProgress = packageProgress;
+  public LoadingPhaseStartedEvent(
+      LoadingProgressReceiver loadingProgressReceiver, AtomicInteger numPackagesLoaded) {
+    this.loadingProgressReceiver = loadingProgressReceiver;
+    this.numPackagesLoaded = numPackagesLoaded;
   }
 
-  public PackageProgressReceiver getPackageProgressReceiver() {
-    return packageProgress;
+  public LoadingProgressReceiver getLoadingProgressReceiver() {
+    return loadingProgressReceiver;
+  }
+
+  public AtomicInteger getNumPackagesLoaded() {
+    return numPackagesLoaded;
   }
 }
