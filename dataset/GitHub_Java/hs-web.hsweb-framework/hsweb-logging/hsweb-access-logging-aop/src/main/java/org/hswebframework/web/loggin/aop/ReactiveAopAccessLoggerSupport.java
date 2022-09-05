@@ -10,7 +10,6 @@ import org.hswebframework.web.logging.AccessLoggerListener;
 import org.hswebframework.web.logging.LoggerDefine;
 import org.hswebframework.web.logging.events.AccessLoggerAfterEvent;
 import org.hswebframework.web.logging.events.AccessLoggerBeforeEvent;
-import org.hswebframework.web.utils.ReactiveWebUtils;
 import org.springframework.aop.support.StaticMethodMatcherPointcutAdvisor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -50,9 +49,9 @@ public class ReactiveAopAccessLoggerSupport extends StaticMethodMatcherPointcutA
             AccessLoggerInfo info = createLogger(methodInterceptorHolder);
             Object response = methodInvocation.proceed();
             if (response instanceof Mono) {
-                return wrapMonoResponse(((Mono<?>) response), info);
+                return wrapMonoResponse(((Mono) response), info);
             } else if (response instanceof Flux) {
-                return wrapFluxResponse(((Flux<?>) response), info);
+                return wrapFluxResponse(((Flux) response), info);
             }
             return response;
         });
@@ -60,15 +59,14 @@ public class ReactiveAopAccessLoggerSupport extends StaticMethodMatcherPointcutA
 
     protected Flux<?> wrapFluxResponse(Flux<?> flux, AccessLoggerInfo loggerInfo) {
         return Mono.subscriberContext()
-                .<RequestInfo>flatMap(ctx -> Mono.<RequestInfo>justOrEmpty(ctx.getOrEmpty(RequestInfo.class))
-                        .doOnNext(info -> ReactiveLogger.log(ctx, info::setContext)))
+                .<RequestInfo>flatMap(ctx -> Mono.justOrEmpty(ctx.getOrEmpty(RequestInfo.class)))
                 .doOnNext(loggerInfo::putAccessInfo)
                 .thenMany(flux)
                 .doOnError(loggerInfo::setException)
                 .doFinally(f -> {
                     loggerInfo.setResponseTime(System.currentTimeMillis());
                     eventPublisher.publishEvent(new AccessLoggerAfterEvent(loggerInfo));
-                }).subscriberContext(ReactiveLogger.start("accessLogId", loggerInfo.getId()));
+                }).subscriberContext(ReactiveLogger.start("accessLogId",loggerInfo.getId()));
     }
 
     protected Mono<?> wrapMonoResponse(Mono<?> mono, AccessLoggerInfo loggerInfo) {
@@ -82,7 +80,7 @@ public class ReactiveAopAccessLoggerSupport extends StaticMethodMatcherPointcutA
                 .doFinally(f -> {
                     loggerInfo.setResponseTime(System.currentTimeMillis());
                     eventPublisher.publishEvent(new AccessLoggerAfterEvent(loggerInfo));
-                }).subscriberContext(ReactiveLogger.start("accessLogId", loggerInfo.getId()));
+                }).subscriberContext(ReactiveLogger.start("accessLogId",loggerInfo.getId()));
     }
 
     @SuppressWarnings("all")
@@ -164,7 +162,9 @@ public class ReactiveAopAccessLoggerSupport extends StaticMethodMatcherPointcutA
         info.setRequestMethod(request.getMethodValue());
         info.setHeaders(request.getHeaders().toSingleValueMap());
 
-        Optional.ofNullable(ReactiveWebUtils.getIpAddr(request))
+        Optional.ofNullable(request.getRemoteAddress())
+                .map(InetSocketAddress::getAddress)
+                .map(InetAddress::getHostAddress)
                 .ifPresent(info::setIpAddr);
 
         return info;
