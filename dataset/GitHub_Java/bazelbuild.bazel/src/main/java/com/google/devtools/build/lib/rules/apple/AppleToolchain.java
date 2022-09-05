@@ -135,7 +135,7 @@ public class AppleToolchain {
           relativePath = DEVELOPER_FRAMEWORK_PATH;
         }
         break;
-      case MACOS:
+      case MACOS_X:
         relativePath = DEVELOPER_FRAMEWORK_PATH;
         break;
       case WATCHOS_DEVICE:
