@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.android.ide.common.resources.configuration.FolderConfiguration;
 import com.android.ide.common.resources.configuration.ResourceQualifier;
 import com.android.resources.ResourceType;
@@ -25,9 +23,10 @@ import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.PeekingIterator;
 import com.google.devtools.build.android.proto.SerializeFormat;
-import com.google.devtools.build.android.xml.ResourcesAttribute;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -49,161 +48,6 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 public class FullyQualifiedName implements DataKey {
-  /** Represents the type of a {@link FullyQualifiedName}. */
-  public interface Type {
-    /**
-     * The category of type that a {@link Type} can be.
-     *
-     * <p>
-     * <em>Note:</em> used for strict ordering of {@link FullyQualifiedName}s.
-     */
-    public enum ConcreteType {
-      RESOURCE_TYPE,
-      VIRTUAL_TYPE;
-    }
-
-    public String getName();
-    public ConcreteType getType();
-    public boolean isOverwritable(FullyQualifiedName fqn);
-    public int compareTo(Type other);
-    @Override public boolean equals(Object obj);
-    @Override public int hashCode();
-    @Override public String toString();
-  }
-
-  private static Type createTypeFrom(String rawType) {
-    ResourceType resourceType = ResourceType.getEnum(rawType);
-    VirtualType virtualType = VirtualType.getEnum(rawType);
-    if (resourceType != null) {
-      return new ResourceTypeWrapper(resourceType);
-    } else if (virtualType != null) {
-      return virtualType;
-    }
-    return null;
-  }
-
-  private static class ResourceTypeWrapper implements Type {
-    private final ResourceType resourceType;
-
-    public ResourceTypeWrapper(ResourceType resourceType) {
-      this.resourceType = resourceType;
-    }
-
-    @Override
-    public String getName() {
-      return resourceType.getName();
-    }
-
-    @Override
-    public ConcreteType getType() {
-      return ConcreteType.RESOURCE_TYPE;
-    }
-
-    @Override
-    public boolean isOverwritable(FullyQualifiedName fqn) {
-      return !(resourceType == ResourceType.ID
-          || resourceType == ResourceType.PUBLIC
-          || resourceType == ResourceType.STYLEABLE);
-    }
-
-    @Override
-    public int compareTo(Type other) {
-      if (!(other instanceof ResourceTypeWrapper)) {
-        return getType().compareTo(other.getType());
-      }
-      return resourceType.compareTo(((ResourceTypeWrapper) other).resourceType);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (!(obj instanceof ResourceTypeWrapper)) {
-        return false;
-      }
-      ResourceTypeWrapper other = (ResourceTypeWrapper) obj;
-      return Objects.equals(resourceType, other.resourceType);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hashCode(resourceType);
-    }
-
-    @Override
-    public String toString() {
-      return resourceType.toString();
-    }
-  }
-
-  /** The non-resource {@link Type}s of a {@link FullyQualifiedName}. */
-  public enum VirtualType implements Type {
-    RESOURCES_ATTRIBUTE("<resources>", "Resources Attribute");
-
-    /** Returns the enum represented by the {@code name}. */
-    public static VirtualType getEnum(String name) {
-      for (VirtualType type : values()) {
-        if (type.name.equals(name)) {
-          return type;
-        }
-      }
-      return null;
-    }
-
-    /** Returns an array with all the names defined by this enum. */
-    public static String[] getNames() {
-        VirtualType[] values = values();
-        String[] names = new String[values.length];
-        for (int i = values.length - 1; i >= 0; --i) {
-            names[i] = values[i].getName();
-        }
-        return names;
-    }
-
-    private final String name;
-    private final String displayName;
-
-    private VirtualType(String name, String displayName) {
-      this.name = name;
-      this.displayName = displayName;
-    }
-
-    /** Returns the resource type name. */
-    @Override
-    public String getName() {
-        return name;
-    }
-
-    /** Returns a translated display name for the resource type. */
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    @Override
-    public ConcreteType getType() {
-      return ConcreteType.VIRTUAL_TYPE;
-    }
-
-    @Override
-    public boolean isOverwritable(FullyQualifiedName fqn) {
-      if (this == RESOURCES_ATTRIBUTE) {
-        return !ResourcesAttribute.AttributeType.from(fqn.name()).isCombining();
-      }
-      return true;
-    }
-
-    @Override
-    public int compareTo(Type other) {
-      if (!(other instanceof VirtualType)) {
-        return getType().compareTo(other.getType());
-      }
-      return compareTo(((VirtualType) other));
-    }
-
-    @Override
-    public String toString() {
-        return getName();
-    }
-  }
-
   public static final String DEFAULT_PACKAGE = "res-auto";
   private static final Joiner DASH_JOINER = Joiner.on('-');
 
@@ -217,25 +61,19 @@ public class FullyQualifiedName implements DataKey {
    * A factory for parsing an generating FullyQualified names with qualifiers and package.
    */
   public static class Factory {
-
+    private static final String BCP_PREFIX = "b+";
     private static final Pattern PARSING_REGEX =
         Pattern.compile("(?:(?<package>[^:]+):){0,1}(?<type>[^-/]+)(?:[^/]*)/(?<name>.+)");
     public static final String INVALID_QUALIFIED_NAME_MESSAGE_NO_MATCH =
         String.format(
             "%%s is not a valid qualified name. "
-                + "It should be in the pattern [package:]{%s}/name",
-            Joiner.on(",").join(ImmutableList.<String>builder()
-                .add(ResourceType.getNames())
-                .add(VirtualType.getNames())
-                .build()));
+                + "It should be in the pattern [package:]{%s}/resourcename",
+            Joiner.on(",").join(ResourceType.values()));
     public static final String INVALID_QUALIFIED_NAME_MESSAGE_NO_TYPE_OR_NAME =
         String.format(
             "Could not find either resource type (%%s) or name (%%s) in %%s. "
-                + "It should be in the pattern [package:]{%s}/name",
-            Joiner.on(",").join(ImmutableList.<String>builder()
-                .add(ResourceType.getNames())
-                .add(VirtualType.getNames())
-                .build()));
+                + "It should be in the pattern [package:]{%s}/resourcename",
+            Joiner.on(",").join(ResourceType.values()));
     public static final String INVALID_QUALIFIERS = "%s contains invalid qualifiers.";
     private final ImmutableList<String> qualifiers;
     private final String pkg;
@@ -255,29 +93,40 @@ public class FullyQualifiedName implements DataKey {
           Iterators.peekingIterator(Iterators.forArray(dirNameAndQualifiers));
       // Remove directory name
       rawQualifiers.next();
-      List<String> transformedLocaleQualifiers = new ArrayList<>();
+      List<String> unHandledLanguageRegionQualifiers = new ArrayList<>();
+      List<String> unHandledDensityQualifiers = new ArrayList<>();
+      List<String> unHandledUIModeQualifiers = new ArrayList<>();
       List<String> handledQualifiers = new ArrayList<>();
-      // Do some substitution of language/region qualifiers.
+      // TODO(corysmith): Remove when FolderConfiguration is updated to handle BCP prefixes.
+      // TODO(corysmith): Add back in handling for anydpi
       while (rawQualifiers.hasNext()) {
         String qualifier = rawQualifiers.next();
-        if ("es".equalsIgnoreCase(qualifier)
+        if (qualifier.startsWith(BCP_PREFIX)) {
+          // The b+local+script/region can't be handled.
+          unHandledLanguageRegionQualifiers.add(qualifier);
+        } else if ("es".equalsIgnoreCase(qualifier)
             && rawQualifiers.hasNext()
             && "419".equalsIgnoreCase(rawQualifiers.peek())) {
           // Replace the es-419.
-          transformedLocaleQualifiers.add("b+es+419");
+          unHandledLanguageRegionQualifiers.add("b+es+419");
           // Consume the next value, as it's been replaced.
           rawQualifiers.next();
         } else if ("sr".equalsIgnoreCase(qualifier)
             && rawQualifiers.hasNext()
             && "rlatn".equalsIgnoreCase(rawQualifiers.peek())) {
           // Replace the sr-rLatn.
-          transformedLocaleQualifiers.add("b+sr+Latn");
+          unHandledLanguageRegionQualifiers.add("b+sr+Latn");
           // Consume the next value, as it's been replaced.
           rawQualifiers.next();
+        } else if (qualifier.equals("anydpi")) {
+          unHandledDensityQualifiers.add(qualifier);
+        } else if (qualifier.equals("watch")) {
+          unHandledUIModeQualifiers.add(qualifier);
         } else {
           // This qualifier can probably be handled by FolderConfiguration.
           handledQualifiers.add(qualifier);
         }
+        
       }
       // Create a configuration
       FolderConfiguration config = FolderConfiguration.getConfigFromQualifiers(handledQualifiers);
@@ -290,20 +139,61 @@ public class FullyQualifiedName implements DataKey {
       config.normalize();
 
       // This is fragile but better than the Gradle scheme of just dropping
-      // entire subtrees.
+      // entire subtrees. 
       Builder<String> builder = ImmutableList.<String>builder();
       addIfNotNull(config.getCountryCodeQualifier(), builder);
       addIfNotNull(config.getNetworkCodeQualifier(), builder);
-      if (transformedLocaleQualifiers.isEmpty()) {
-        addIfNotNull(config.getLocaleQualifier(), builder);
+      if (unHandledLanguageRegionQualifiers.isEmpty()) {
+        addIfNotNull(config.getLanguageQualifier(), builder);
+        addIfNotNull(config.getRegionQualifier(), builder);
       } else {
-        builder.addAll(transformedLocaleQualifiers);
+        builder.addAll(unHandledLanguageRegionQualifiers);
       }
-      // index 3 is past the country code, network code, and locale indices.
-      for (int i = 3; i < FolderConfiguration.getQualifierCount(); ++i) {
-        addIfNotNull(config.getQualifier(i), builder);
+      addIfNotNull(config.getLayoutDirectionQualifier(), builder);
+      addIfNotNull(config.getSmallestScreenWidthQualifier(), builder);
+      addIfNotNull(config.getScreenWidthQualifier(), builder);
+      addIfNotNull(config.getScreenHeightQualifier(), builder);
+      addIfNotNull(config.getScreenSizeQualifier(), builder);
+      addIfNotNull(config.getScreenRatioQualifier(), builder);
+      addIfNotNullAndExist(config, "getScreenRoundQualifier", builder);
+      addIfNotNull(config.getScreenOrientationQualifier(), builder);
+      if (unHandledUIModeQualifiers.isEmpty()) {
+        addIfNotNull(config.getUiModeQualifier(), builder);
+      } else {
+        builder.addAll(unHandledUIModeQualifiers);
       }
+      addIfNotNull(config.getNightModeQualifier(), builder);
+      if (unHandledDensityQualifiers.isEmpty()) {
+        addIfNotNull(config.getDensityQualifier(), builder);
+      } else {
+        builder.addAll(unHandledDensityQualifiers);
+      }
+      addIfNotNull(config.getTouchTypeQualifier(), builder);
+      addIfNotNull(config.getKeyboardStateQualifier(), builder);
+      addIfNotNull(config.getTextInputMethodQualifier(), builder);
+      addIfNotNull(config.getNavigationStateQualifier(), builder);
+      addIfNotNull(config.getNavigationMethodQualifier(), builder);
+      addIfNotNull(config.getScreenDimensionQualifier(), builder);
+      addIfNotNull(config.getVersionQualifier(), builder);
+
       return builder.build();
+    }
+
+    private static void addIfNotNullAndExist(
+        FolderConfiguration config, String methodName, Builder<String> builder) {
+      try {
+        Method method = config.getClass().getMethod(methodName);
+        ResourceQualifier qualifier = (ResourceQualifier) method.invoke(config);
+        if (qualifier != null) {
+          builder.add(qualifier.getFolderSegment());
+        }
+      } catch (NoSuchMethodException
+          | IllegalAccessException
+          | IllegalArgumentException
+          | InvocationTargetException e) {
+        // Suppress the error and continue.
+        return;
+      }
     }
 
     private static void addIfNotNull(
@@ -321,16 +211,12 @@ public class FullyQualifiedName implements DataKey {
       return from(ImmutableList.copyOf(qualifiers), DEFAULT_PACKAGE);
     }
 
-    public FullyQualifiedName create(Type type, String name, String pkg) {
-      return FullyQualifiedName.of(pkg, qualifiers, type, name);
+    public FullyQualifiedName create(ResourceType resourceType, String resourceName) {
+      return create(resourceType, resourceName, pkg);
     }
 
-    public FullyQualifiedName create(ResourceType type, String name) {
-      return create(new ResourceTypeWrapper(type), name, pkg);
-    }
-
-    public FullyQualifiedName create(VirtualType type, String name) {
-      return create(type, name, pkg);
+    public FullyQualifiedName create(ResourceType resourceType, String resourceName, String pkg) {
+      return FullyQualifiedName.of(pkg, qualifiers, resourceType, resourceName);
     }
 
     /**
@@ -347,16 +233,16 @@ public class FullyQualifiedName implements DataKey {
             String.format(INVALID_QUALIFIED_NAME_MESSAGE_NO_MATCH, raw));
       }
       String parsedPackage = matcher.group("package");
-      Type type = createTypeFrom(matcher.group("type"));
-      String name = matcher.group("name");
+      ResourceType resourceType = ResourceType.getEnum(matcher.group("type"));
+      String resourceName = matcher.group("name");
 
-      if (type == null || name == null) {
+      if (resourceType == null || resourceName == null) {
         throw new IllegalArgumentException(
             String.format(
-                INVALID_QUALIFIED_NAME_MESSAGE_NO_TYPE_OR_NAME, type, name, raw));
+                INVALID_QUALIFIED_NAME_MESSAGE_NO_TYPE_OR_NAME, resourceType, resourceName, raw));
       }
       return FullyQualifiedName.of(
-          parsedPackage == null ? pkg : parsedPackage, qualifiers, type, name);
+          parsedPackage == null ? pkg : parsedPackage, qualifiers, resourceType, resourceName);
     }
 
     /**
@@ -398,56 +284,44 @@ public class FullyQualifiedName implements DataKey {
     }
   }
 
+  public static boolean isOverwritable(FullyQualifiedName name) {
+    return !(name.resourceType == ResourceType.ID
+        || name.resourceType == ResourceType.PUBLIC
+        || name.resourceType == ResourceType.STYLEABLE);
+  }
+
   /**
-   * Creates a new FullyQualifiedName with normalized qualifiers.
+   * Creates a new FullyQualifiedName with sorted qualifiers.
    *
    * @param pkg The resource package of the name. If unknown the default should be "res-auto"
    * @param qualifiers The resource qualifiers of the name, such as "en" or "xhdpi".
-   * @param type The type of the name.
-   * @param name The name of the name.
+   * @param resourceType The resource type of the name.
+   * @param resourceName The resource name of the name.
    * @return A new FullyQualifiedName.
    */
   public static FullyQualifiedName of(
-      String pkg, List<String> qualifiers, Type type, String name) {
-    checkNotNull(pkg);
-    checkNotNull(qualifiers);
-    checkNotNull(type);
-    checkNotNull(name);
+      String pkg, List<String> qualifiers, ResourceType resourceType, String resourceName) {
     ImmutableList<String> immutableQualifiers = ImmutableList.copyOf(qualifiers);
     // TODO(corysmith): Address the GC thrash this creates by managing a simplified, mutable key to
     // do the instance check.
-    FullyQualifiedName fqn =
-        new FullyQualifiedName(pkg, immutableQualifiers, type, name);
+    FullyQualifiedName name =
+        new FullyQualifiedName(pkg, immutableQualifiers, resourceType, resourceName);
     // Use putIfAbsent to get the canonical instance, if there. If it isn't, putIfAbsent will
     // return null, and we should return the current instance.
-    FullyQualifiedName cached = instanceCache.putIfAbsent(fqn, fqn);
+    FullyQualifiedName cached = instanceCache.putIfAbsent(name, name);
     if (cached == null) {
-      return fqn;
+      return name;
     } else {
       cacheHit.incrementAndGet();
       return cached;
     }
   }
 
-  /**
-   * Creates a new FullyQualifiedName with normalized qualifiers.
-   *
-   * @param pkg The resource package of the name. If unknown the default should be "res-auto"
-   * @param qualifiers The resource qualifiers of the name, such as "en" or "xhdpi".
-   * @param type The resource type of the name.
-   * @param name The name of the name.
-   * @return A new FullyQualifiedName.
-   */
-  static FullyQualifiedName of(
-      String pkg, List<String> qualifiers, ResourceType type, String name) {
-    return of(pkg, qualifiers, new ResourceTypeWrapper(type), name);
-  }
-
   public static FullyQualifiedName fromProto(SerializeFormat.DataKey protoKey) {
     return of(
         protoKey.getKeyPackage(),
         protoKey.getQualifiersList(),
-        createTypeFrom(protoKey.getResourceType()),
+        ResourceType.valueOf(protoKey.getResourceType()),
         protoKey.getKeyValue());
   }
 
@@ -461,19 +335,8 @@ public class FullyQualifiedName implements DataKey {
 
   private final String pkg;
   private final ImmutableList<String> qualifiers;
-  private final Type type;
-  private final String name;
-
-  private FullyQualifiedName(
-      String pkg,
-      ImmutableList<String> qualifiers,
-      Type type,
-      String name) {
-    this.pkg = pkg;
-    this.qualifiers = qualifiers;
-    this.type = type;
-    this.name = name;
-  }
+  private final ResourceType resourceType;
+  private final String resourceName;
 
   /**
    * Returns a string path representation of the FullyQualifiedName.
@@ -489,10 +352,10 @@ public class FullyQualifiedName implements DataKey {
     return Paths.get(
             DASH_JOINER.join(
                 ImmutableList.<String>builder()
-                    .add(type.getName())
+                    .add(resourceType.getName())
                     .addAll(qualifiers)
                     .build()),
-            name + sourceExtension)
+            resourceName + sourceExtension)
         .toString();
   }
 
@@ -502,8 +365,8 @@ public class FullyQualifiedName implements DataKey {
     return String.format(
         "%s/%s",
         DASH_JOINER.join(
-            ImmutableList.<String>builder().add(type.getName()).addAll(qualifiers).build()),
-        name);
+            ImmutableList.<String>builder().add(resourceType.getName()).addAll(qualifiers).build()),
+        resourceName);
   }
 
   /**
@@ -524,18 +387,22 @@ public class FullyQualifiedName implements DataKey {
   }
 
   public String name() {
-    return name;
+    return resourceName;
   }
 
   public ResourceType type() {
-    if (type instanceof ResourceTypeWrapper) {
-      return ((ResourceTypeWrapper) type).resourceType;
-    }
-    return null;
+    return resourceType;
   }
 
-  public boolean isOverwritable() {
-    return type.isOverwritable(this);
+  private FullyQualifiedName(
+      String pkg,
+      ImmutableList<String> qualifiers,
+      ResourceType resourceType,
+      String resourceName) {
+    this.pkg = pkg;
+    this.qualifiers = qualifiers;
+    this.resourceType = resourceType;
+    this.resourceName = resourceName;
   }
 
   /** Creates a FullyQualifiedName from this one with a different package. */
@@ -544,12 +411,12 @@ public class FullyQualifiedName implements DataKey {
     if (pkg.equals(newPackage)) {
       return this;
     }
-    return of(newPackage, qualifiers, type, name);
+    return of(newPackage, qualifiers, resourceType, resourceName);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(pkg, qualifiers, type, name);
+    return Objects.hash(pkg, qualifiers, resourceType, resourceName);
   }
 
   @Override
@@ -559,8 +426,8 @@ public class FullyQualifiedName implements DataKey {
     }
     FullyQualifiedName other = getClass().cast(obj);
     return Objects.equals(pkg, other.pkg)
-        && Objects.equals(type, other.type)
-        && Objects.equals(name, other.name)
+        && Objects.equals(resourceType, other.resourceType)
+        && Objects.equals(resourceName, other.resourceName)
         && Objects.equals(qualifiers, other.qualifiers);
   }
 
@@ -569,8 +436,8 @@ public class FullyQualifiedName implements DataKey {
     return MoreObjects.toStringHelper(getClass())
         .add("pkg", pkg)
         .add("qualifiers", qualifiers)
-        .add("type", type)
-        .add("name", name)
+        .add("resourceType", resourceType)
+        .add("resourceName", resourceName)
         .toString();
   }
 
@@ -583,11 +450,11 @@ public class FullyQualifiedName implements DataKey {
     if (!pkg.equals(other.pkg)) {
       return pkg.compareTo(other.pkg);
     }
-    if (!type.equals(other.type)) {
-      return type.compareTo(other.type);
+    if (!resourceType.equals(other.resourceType)) {
+      return resourceType.compareTo(other.resourceType);
     }
-    if (!name.equals(other.name)) {
-      return name.compareTo(other.name);
+    if (!resourceName.equals(other.resourceName)) {
+      return resourceName.compareTo(other.resourceName);
     }
     if (!qualifiers.equals(other.qualifiers)) {
       if (qualifiers.size() != other.qualifiers.size()) {
@@ -612,8 +479,8 @@ public class FullyQualifiedName implements DataKey {
   public SerializeFormat.DataKey.Builder toSerializedBuilder() {
     return SerializeFormat.DataKey.newBuilder()
         .setKeyPackage(pkg)
-        .setResourceType(type.getName())
+        .setResourceType(resourceType.getName().toUpperCase())
         .addAllQualifiers(qualifiers)
-        .setKeyValue(name);
+        .setKeyValue(resourceName);
   }
 }
