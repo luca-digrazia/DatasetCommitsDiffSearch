@@ -85,9 +85,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
         // We just go with the default, this is just an experimental option so it's fine.
       }
 
-      if (symlinkLogFile != null) {
-        writeLogMessage("Logging started");
-      }
+      writeLogMessage("Logging started");
     }
 
     this.symlinkStrategy = symlinkStrategy;
