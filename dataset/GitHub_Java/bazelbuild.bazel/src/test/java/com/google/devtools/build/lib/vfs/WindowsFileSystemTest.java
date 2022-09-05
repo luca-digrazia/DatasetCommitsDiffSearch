@@ -21,13 +21,11 @@ import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.windows.util.WindowsTestUtil;
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -159,12 +157,7 @@ public class WindowsFileSystemTest {
         .isFalse();
     assertThat(WindowsFileSystem.isJunction(new File(root, "longta~1/file2.txt")))
         .isFalse();
-    try {
-      WindowsFileSystem.isJunction(new File(root, "non-existent"));
-      Assert.fail("expected failure");
-    } catch (IOException e) {
-      assertThat(e.getMessage()).contains("cannot find");
-    }
+    assertThat(WindowsFileSystem.isJunction(new File(root, "non-existent"))).isFalse();
 
     assertThat(Arrays.asList(new File(root + "/shrtpath/a").list())).containsExactly("file1.txt");
     assertThat(Arrays.asList(new File(root + "/shrtpath/b").list())).containsExactly("file2.txt");
@@ -206,24 +199,5 @@ public class WindowsFileSystemTest {
             Files.exists(
                 linkPath.toPath(), WindowsFileSystem.symlinkOpts(/* followSymlinks */ true)))
         .isFalse();
-  }
-
-  @Test
-  public void testIsJunctionHandlesFilesystemChangesCorrectly() throws Exception {
-    File longPath =
-        testUtil.scratchFile("target\\helloworld.txt", "hello").toAbsolutePath().toFile();
-    File shortPath = new File(longPath.getParentFile(), "hellow~1.txt");
-    assertThat(WindowsFileSystem.isJunction(longPath)).isFalse();
-    assertThat(WindowsFileSystem.isJunction(shortPath)).isFalse();
-
-    assertThat(longPath.delete()).isTrue();
-    testUtil.createJunctions(ImmutableMap.of("target\\helloworld.txt", "target"));
-    assertThat(WindowsFileSystem.isJunction(longPath)).isTrue();
-    assertThat(WindowsFileSystem.isJunction(shortPath)).isTrue();
-
-    assertThat(longPath.delete()).isTrue();
-    assertThat(longPath.mkdir()).isTrue();
-    assertThat(WindowsFileSystem.isJunction(longPath)).isFalse();
-    assertThat(WindowsFileSystem.isJunction(shortPath)).isFalse();
   }
 }
