@@ -14,7 +14,7 @@ import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -38,7 +38,12 @@ public class MetricsServletTest extends AbstractServletTest {
     public void setUp() throws Exception {
         when(clock.getTick()).thenReturn(100L, 200L, 300L, 400L);
 
-        registry.register("g1", (Gauge<Long>) () -> 100L);
+        registry.register("g1", new Gauge<Long>() {
+            @Override
+            public Long getValue() {
+                return 100L;
+            }
+        });
         registry.counter("c").inc();
         registry.histogram("h").update(1);
         registry.register("m", new Meter(clock)).mark();
@@ -60,7 +65,7 @@ public class MetricsServletTest extends AbstractServletTest {
                 .isEqualTo("*");
         assertThat(response.getContent())
                 .isEqualTo("{" +
-                                   "\"version\":\"4.0.0\"," +
+                                   "\"version\":\"3.1.3\"," +
                                    "\"gauges\":{" +
                                        "\"g1\":{\"value\":100}" +
                                    "}," +
@@ -91,7 +96,7 @@ public class MetricsServletTest extends AbstractServletTest {
                 .isEqualTo("*");
         assertThat(response.getContent())
                 .isEqualTo("{" +
-                                   "\"version\":\"4.0.0\"," +
+                                   "\"version\":\"3.1.3\"," +
                                    "\"gauges\":{" +
                                        "\"g1\":{\"value\":100}" +
                                    "}," +
@@ -122,7 +127,7 @@ public class MetricsServletTest extends AbstractServletTest {
                 .isEqualTo("*");
         assertThat(response.getContent())
                 .isEqualTo(callbackParamVal + "({" +
-                                   "\"version\":\"4.0.0\"," +
+                                   "\"version\":\"3.1.3\"," +
                                    "\"gauges\":{" +
                                        "\"g1\":{\"value\":100}" +
                                    "}," +
@@ -152,7 +157,7 @@ public class MetricsServletTest extends AbstractServletTest {
                 .isEqualTo("*");
         assertThat(response.getContent())
                 .isEqualTo(String.format("{%n" +
-                                                 "  \"version\" : \"4.0.0\",%n" +
+                                                 "  \"version\" : \"3.1.3\",%n" +
                                                  "  \"gauges\" : {%n" +
                                                  "    \"g1\" : {%n" +
                                                  "      \"value\" : 100%n" +
