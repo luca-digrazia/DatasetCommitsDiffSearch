@@ -14,15 +14,16 @@
 
 package com.google.testing.junit.runner.model;
 
+import com.google.common.base.Optional;
+import com.google.common.base.Strings;
+import com.google.common.collect.Iterables;
+
+import org.joda.time.Interval;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map.Entry;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import org.joda.time.Interval;
 
 /**
  * Writes the JUnit test nodes and their results into Ant-JUnit XML. Ant-JUnit XML is not a
@@ -58,9 +59,6 @@ public final class AntXmlResultWriter implements XmlResultWriter {
 
   private int testSuiteId;
 
-  @Inject
-  public AntXmlResultWriter() {}
-
   @Override
   public void writeTestSuites(XmlWriter writer, TestResult result) throws IOException {
     testSuiteId = 0;
@@ -76,12 +74,7 @@ public final class AntXmlResultWriter implements XmlResultWriter {
   private void writeTestSuite(XmlWriter writer, TestResult result,
       Iterable<Throwable> parentFailures)
       throws IOException {
-    List<Throwable> allFailures = new ArrayList<>();
-    for (Throwable failure : parentFailures) {
-      allFailures.add(failure);
-    }
-    allFailures.addAll(result.getFailures());
-    parentFailures = allFailures;
+    parentFailures = Iterables.concat(parentFailures, result.getFailures());
 
     writer.startElement(JUNIT_ELEMENT_TESTSUITE);
 
@@ -146,13 +139,13 @@ public final class AntXmlResultWriter implements XmlResultWriter {
     writer.writeAttribute(JUNIT_ATTR_TESTSUITE_ID, this.testSuiteId++);
   }
 
-  private static String getFormattedRunTime(@Nullable Interval runTimeInterval) {
-    return runTimeInterval == null ? "0.0"
-        : String.valueOf(runTimeInterval.toDurationMillis() / 1000.0D);
+  private static String getFormattedRunTime(Optional<Interval> runTimeInterval) {
+    return !runTimeInterval.isPresent() ? "0.0"
+        : String.valueOf(runTimeInterval.get().toDurationMillis() / 1000.0D);
   }
 
-  private static String getFormattedTimestamp(@Nullable Interval runTimeInterval) {
-    return runTimeInterval == null ? "" : runTimeInterval.getStart().toString();
+  private static String getFormattedTimestamp(Optional<Interval> runTimeInterval) {
+    return !runTimeInterval.isPresent() ? "" : runTimeInterval.get().getStart().toString();
   }
 
   private void writeTestCase(XmlWriter writer, TestResult result,
@@ -164,24 +157,14 @@ public final class AntXmlResultWriter implements XmlResultWriter {
     writer.writeAttribute(JUNIT_ATTR_TESTCASE_TIME, getFormattedRunTime(
             result.getRunTimeInterval()));
 
-    for (Throwable failure : parentFailures) {
-      writeThrowableToXmlWriter(writer, failure);
+    for (Throwable failure : Iterables.concat(parentFailures, result.getFailures())) {
+      writer.startElement(JUNIT_ELEMENT_FAILURE);
+      writer.writeAttribute(JUNIT_ATTR_FAILURE_MESSAGE, Strings.nullToEmpty(failure.getMessage()));
+      writer.writeAttribute(JUNIT_ATTR_FAILURE_TYPE, failure.getClass().getName());
+      writer.writeCharacters(formatStackTrace(failure));
+      writer.endElement();
     }
 
-    for (Throwable failure : result.getFailures()) {
-      writeThrowableToXmlWriter(writer, failure);
-    }
-
-    writer.endElement();
-  }
-
-  private static void writeThrowableToXmlWriter(XmlWriter writer, Throwable failure)
-      throws IOException {
-    writer.startElement(JUNIT_ELEMENT_FAILURE);
-    writer.writeAttribute(
-        JUNIT_ATTR_FAILURE_MESSAGE, (failure.getMessage() == null) ? "" : failure.getMessage());
-    writer.writeAttribute(JUNIT_ATTR_FAILURE_TYPE, failure.getClass().getName());
-    writer.writeCharacters(formatStackTrace(failure));
     writer.endElement();
   }
 
