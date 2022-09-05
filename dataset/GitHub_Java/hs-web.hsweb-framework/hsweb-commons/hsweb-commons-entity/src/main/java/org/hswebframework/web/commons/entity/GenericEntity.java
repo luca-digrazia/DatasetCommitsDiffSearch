@@ -18,13 +18,10 @@
 
 package org.hswebframework.web.commons.entity;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 通用实体,提供实体常用属性
- *
  * @author zhouhao
  * @since 3.0
  */
@@ -37,20 +34,14 @@ public interface GenericEntity<PK> extends CloneableEntity {
 
     void setId(PK id);
 
-    default Map<String, Object> getProperties() {
-        return Collections.emptyMap();
-    }
+    Map<String, Object> getProperties();
 
-    default void setProperties(Map<String, Object> properties) {
-        throw new UnsupportedOperationException("不支持此操作");
-    }
+    void setProperties(Map<String, Object> properties);
 
     @SuppressWarnings("unchecked")
     default <T> T getProperty(String propertyName, T defaultValue) {
         Map<String, Object> map = getProperties();
-        if (map == null) {
-            return null;
-        }
+        if (map == null) return null;
         return (T) map.getOrDefault(propertyName, defaultValue);
     }
 
@@ -70,9 +61,7 @@ public interface GenericEntity<PK> extends CloneableEntity {
     default Map<String, Object> cloneProperties() {
         Map<String, Object> target = new LinkedHashMap<>();
         Map<String, Object> old = getProperties();
-        if (old == null || old.isEmpty()) {
-            return target;
-        }
+        if (old == null || old.isEmpty()) return target;
         old.forEach((k, v) -> {
             if (v instanceof CloneableEntity) {
                 target.put(k, ((CloneableEntity) v).clone());

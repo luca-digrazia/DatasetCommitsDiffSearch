@@ -16,37 +16,13 @@
  *
  */
 
-package org.hswebframework.web.entity.authorization;
-
-import org.hswebframework.web.commons.entity.GenericEntity;
-
-import java.util.Date;
+package org.hswebframework.web.dao.mybatis.builder;
 
 /**
- * TODO 完成注释
- *
  * @author zhouhao
  */
-public interface UserEntity extends UserReadEntity, GenericEntity<String> {
-    void setName(String name);
-
-    void setUsername(String username);
-
-    void setPassword(String password);
-
-    void setSalt(String salt);
-
-    String getPassword();
-
-    String getSalt();
-
-    void setCreateDate(Date createDate);
-
-    void setLastLoginDate(Date lastLoginDate);
-
-    void setEnabled(boolean enabled);
-
-    void setLastLoginIp(String lastLoginIp);
-
-    UserEntity clone();
+public class SqlBuilder {
+    public static final Object current() {
+        return EasyOrmSqlBuilder.getInstance();
+    }
 }

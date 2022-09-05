@@ -70,12 +70,5 @@ public abstract class SimpleGenericEntity<PK> implements GenericEntity<PK> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public SimpleGenericEntity<PK> clone() {
-        try {
-            return (SimpleGenericEntity) super.clone();
-        } catch (CloneNotSupportedException e) {
-            throw new RuntimeException(e);
-        }
-    }
+    public abstract CloneableEntity clone();
 }
