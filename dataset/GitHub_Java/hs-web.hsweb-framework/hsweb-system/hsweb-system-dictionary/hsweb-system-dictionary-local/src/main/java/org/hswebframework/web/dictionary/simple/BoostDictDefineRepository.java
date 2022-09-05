@@ -2,7 +2,6 @@ package org.hswebframework.web.dictionary.simple;
 
 import lombok.extern.slf4j.Slf4j;
 import org.hswebframework.web.commons.entity.DataStatus;
-import org.hswebframework.web.commons.entity.param.QueryParamEntity;
 import org.hswebframework.web.dict.DictDefine;
 import org.hswebframework.web.dict.EnumDict;
 import org.hswebframework.web.dict.defaults.DefaultDictDefine;
@@ -10,7 +9,6 @@ import org.hswebframework.web.dict.defaults.DefaultDictDefineRepository;
 import org.hswebframework.web.dictionary.api.DictionaryItemService;
 import org.hswebframework.web.dictionary.api.DictionaryService;
 import org.hswebframework.web.dictionary.api.entity.DictionaryEntity;
-import org.hswebframework.web.dictionary.api.entity.DictionaryItemEntity;
 import org.hswebframework.web.dictionary.api.events.ClearDictionaryCacheEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
@@ -22,7 +20,6 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -68,26 +65,16 @@ public class BoostDictDefineRepository extends DefaultDictDefineRepository {
 
     @Override
     public List<DictDefine> getAllDefine() {
-        //查询所有的字典项并按字典ID分组
-        Map<String, List<DictionaryItemEntity>> items = QueryParamEntity.newQuery()
-                .where(DictionaryItemEntity::getStatus, DataStatus.STATUS_ENABLED)
-                .noPaging()
-                .execute(itemService::select)
-                .stream().collect(Collectors.groupingBy(DictionaryItemEntity::getDictId));
-
-        //转换为字段
-        List<DictDefine> all =QueryParamEntity.newQuery()
-                .where(DictionaryEntity::getStatus,DataStatus.STATUS_ENABLED)
-                .noPaging()
-                .execute(dictionaryService::select)
+        List<DictDefine> all = dictionaryService.select()
                 .stream()
+                .filter(e -> DataStatus.STATUS_ENABLED.equals(e.getStatus()))
                 .map(dict -> DefaultDictDefine.builder()
                         .id(dict.getId())
                         .comments(dict.getDescribe())
-                        .items((List) items.getOrDefault(dict.getId(),Collections.emptyList()))
+                        .items(dict.getItems() == null ? Collections.emptyList() : (List) new ArrayList<>(dict.getItems()))
                         .build())
                 .collect(Collectors.toList());
-        //添加默认的字典
+
         all.addAll(super.getAllDefine());
         return all;
     }
