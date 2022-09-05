@@ -62,7 +62,7 @@ public class MetricRegistry implements MetricSet {
      */
     public MetricRegistry() {
         this.metrics = buildMap();
-        this.listeners = new CopyOnWriteArrayList<>();
+        this.listeners = new CopyOnWriteArrayList<MetricRegistryListener>();
     }
 
     /**
@@ -73,7 +73,7 @@ public class MetricRegistry implements MetricSet {
      * @return a new {@link ConcurrentMap}
      */
     protected ConcurrentMap<String, Metric> buildMap() {
-        return new ConcurrentHashMap<>();
+        return new ConcurrentHashMap<String, Metric>();
     }
 
     /**
@@ -325,7 +325,7 @@ public class MetricRegistry implements MetricSet {
      * @return the names of all the metrics
      */
     public SortedSet<String> getNames() {
-        return Collections.unmodifiableSortedSet(new TreeSet<>(metrics.keySet()));
+        return Collections.unmodifiableSortedSet(new TreeSet<String>(metrics.keySet()));
     }
 
     /**
@@ -447,7 +447,7 @@ public class MetricRegistry implements MetricSet {
 
     @SuppressWarnings("unchecked")
     private <T extends Metric> SortedMap<String, T> getMetrics(Class<T> klass, MetricFilter filter) {
-        final TreeMap<String, T> timers = new TreeMap<>();
+        final TreeMap<String, T> timers = new TreeMap<String, T>();
         for (Map.Entry<String, Metric> entry : metrics.entrySet()) {
             if (klass.isInstance(entry.getValue()) && filter.matches(entry.getKey(),
                     entry.getValue())) {
