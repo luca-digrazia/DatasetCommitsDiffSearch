@@ -85,20 +85,23 @@ public class AtlasMultiDexListTransform extends BaseProguardAction {
 
     @Override
     public boolean isIncremental() {
-        return false;
+        return true;
     }
 
     public void transform(@NonNull TransformInvocation transformInvocation)
             throws TransformException, InterruptedException, IOException {
 
-        if (mainDexListFile.exists() && !variantScope.getVariantData().getName().toLowerCase().endsWith("release")){
+        if (mainDexListFile.exists() && !variantScope.getVariantData().getName().equals("release")){
             return;
         }
         LoggingManager loggingManager = transformInvocation.getContext().getLogging();
         loggingManager.captureStandardOutput(LogLevel.INFO);
         loggingManager.captureStandardError(LogLevel.WARN);
-        Collection<File> inputs =AtlasBuildContext.atlasMainDexHelper.getAllMainDexJars();
-        inputs.addAll(AtlasBuildContext.atlasMainDexHelper.getInputDirs());
+        Collection<File> inputs =
+                TransformInputUtil.getAllFiles(transformInvocation.getReferencedInputs());
+
+        inputs = AtlasBuildContext.atlasMainDexHelper.getAllMainDexJars();
+
         if (AtlasBuildContext.androidBuilderMap.get(variantScope.getGlobalScope().getProject()) == null) {
             super.transform(transformInvocation);
         } else if (AtlasBuildContext.androidBuilderMap.get(variantScope.getGlobalScope().getProject()).multiDexer == null) {
@@ -106,7 +109,7 @@ public class AtlasMultiDexListTransform extends BaseProguardAction {
         }
         FastMultiDexer fastMultiDexer = (FastMultiDexer) AtlasBuildContext.androidBuilderMap.get(variantScope.getGlobalScope().getProject()).multiDexer;
 
-        Collection<File>files = fastMultiDexer.repackageJarList(inputs, mainDexListFile,variantScope.getVariantData().getName().toLowerCase().endsWith("release"));
+        Collection<File>files = fastMultiDexer.repackageJarList(inputs, mainDexListFile,variantScope.getVariantData().getName().equals("release"));
 
         if (files!= null && files.size() > 0){
             AtlasBuildContext.atlasMainDexHelper.addAllMainDexJars(files);

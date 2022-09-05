@@ -207,97 +207,212 @@
  *
  */
 
-package com.taobao.android.builder.tools.multidex;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+package com.taobao.android.builder.tools.multidex.mutli;
 
 import com.android.build.gradle.internal.api.AppVariantContext;
-import com.android.builder.core.AtlasBuilder.MultiDexer;
-import com.android.dex.Dex;
-import com.android.dx.command.dexer.DxContext;
-import com.android.dx.merge.CollisionPolicy;
-import com.android.dx.merge.DexMerger;
+import com.android.builder.packaging.JarMerger;
 import com.taobao.android.builder.extension.MultiDexConfig;
-import com.taobao.android.builder.tools.multidex.dex.DexGroup;
-import com.taobao.android.builder.tools.multidex.mutli.JarRefactor;
+import com.taobao.android.builder.tools.FileNameUtils;
+import com.taobao.android.builder.tools.multidex.dex.DexMerger;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.*;
+import java.util.*;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import java.util.jar.JarOutputStream;
+import java.util.zip.ZipEntry;
+
 /**
- * Created by wuzhong on 2017/5/8.
+ * Created by wuzhong on 2017/6/16.
  */
-public class FastMultiDexer implements MultiDexer {
+public class JarRefactor {
 
-    private static final Logger logger = LoggerFactory.getLogger(FastMultiDexer.class);
+    private static Logger logger = LoggerFactory.getLogger(JarRefactor.class);
 
-    private final AppVariantContext appVariantContext;
+    private AppVariantContext appVariantContext;
+    private MultiDexConfig multiDexConfig;
+    private boolean splitJar = false;
 
-    private final MultiDexConfig multiDexConfig;
+    private static final int MAX_CLASSES = 1000;
 
-    public FastMultiDexer(AppVariantContext appVariantContext) {
+    public JarRefactor(AppVariantContext appVariantContext,
+                       MultiDexConfig multiDexConfig) {
         this.appVariantContext = appVariantContext;
-        this.multiDexConfig = (MultiDexConfig)appVariantContext.getAtlasExtension().getMultiDexConfigs().findByName(
-            appVariantContext.getVariantConfiguration().getBuildType().getName());
+        this.multiDexConfig = multiDexConfig;
     }
 
-    public boolean isFastMultiDexEnabled() {
-        if (null == multiDexConfig) {
-            return false;
-        }
-        boolean fastMultiDex = multiDexConfig.isFastMultiDex();
-
-        return fastMultiDex&&appVariantContext.getVariantData().getVariantConfiguration().isMultiDexEnabled();
-
-//        if (fastMultiDex && appVariantContext.getVariantData().getVariantConfiguration().isMultiDexEnabled()) {
-//            return true;
-//
-////            if (appVariantContext.getVariantData().getVariantConfiguration().isMultiDexEnabled()) {
-////                throw new GradleException(
-////                    "atlas fast multi dex must close android's default multi dex , please `multiDexEnabled false`");
-////            }
-////
-////            if (appVariantContext.getAtlasExtension().getTBuildConfig().isAtlasMultiDex()) {
-////                logger.error("atlasMultiDex is ignored");
-////            }
-//        }
-//        return fastMultiDex;
-    }
-
-    @Override
     public Collection<File> repackageJarList(Collection<File> files, File mainDexListFile, boolean release) throws IOException {
 
-        return new JarRefactor(appVariantContext, multiDexConfig).repackageJarList(files,mainDexListFile,release);
+
+        List<String> mainDexList = new MainDexLister(appVariantContext, multiDexConfig).getMainDexList(files,mainDexListFile);
+        if (release){
+            return generateFirstDexJar(mainDexList,files);
+
+        }else {
+            return null;
+        }
+
 
     }
 
-    @Override
-    public void dexMerge(Map<File, Dex> fileDexMap, File outDexFolder) throws IOException {
+    private Collection<File> generateFirstDexJar(List<String>mainDexList,Collection<File> files)throws IOException {
 
-       com.taobao.android.builder.tools.multidex.dex.DexMerger dexMerger
-            = new com.taobao.android.builder.tools.multidex.dex.DexMerger(multiDexConfig, fileDexMap);
+        List<File> jarList = new ArrayList<>();
+        List<File> folderList = new ArrayList<>();
+        for (File file : files) {
+            if (file.isDirectory()) {
+                folderList.add(file);
+            } else {
+                jarList.add(file);
+            }
+        }
 
-        List<DexGroup> dexDtos = dexMerger.group();
+        File dir = new File(appVariantContext.getScope().getGlobalScope().getIntermediatesDir(),
+                "fastmultidex/" + appVariantContext.getVariantName());
+        FileUtils.deleteDirectory(dir);
+        dir.mkdirs();
 
-        dexMerger.executeMerge(outDexFolder, dexDtos);
+        if (!folderList.isEmpty()) {
+            File mergedJar = new File(dir, "jarmerging/combined.jar");
+            mergedJar.getParentFile().mkdirs();
+            mergedJar.delete();
+            mergedJar.createNewFile();
+            JarMerger jarMerger = new JarMerger(mergedJar.toPath());
+            for (File folder : folderList) {
+                jarMerger.addDirectory(folder.toPath());
+            }
+            jarMerger.close();
+            if (mergedJar.length() > 0) {
+                jarList.add(mergedJar);
+            }
+        }
+
+        List<File> result = new ArrayList<>();
+        File maindexJar = new File(dir, DexMerger.FASTMAINDEX_JAR + ".jar");
+
+        JarOutputStream mainJarOuputStream = new JarOutputStream(
+                new BufferedOutputStream(new FileOutputStream(maindexJar)));
+
+        //First order
+        Collections.sort(jarList, new NameComparator());
+
+        for (File jar : jarList) {
+            File outJar = new File(dir, FileNameUtils.getUniqueJarName(jar) + ".jar");
+
+            result.add(outJar);
+            JarFile jarFile = new JarFile(jar);
+            JarOutputStream jos = new JarOutputStream(new BufferedOutputStream(new FileOutputStream(outJar)));
+            Enumeration<JarEntry> jarFileEntries = jarFile.entries();
+
+            List<String> pathList = new ArrayList<>();
+            while (jarFileEntries.hasMoreElements()) {
+                JarEntry ze = jarFileEntries.nextElement();
+                String pathName = ze.getName();
+                if (mainDexList.contains(pathName)) {
+                    copyStream(jarFile.getInputStream(ze), mainJarOuputStream, ze, pathName);
+                    pathList.add(pathName);
+                }
+            }
+
+            if (!pathList.isEmpty()) {
+                jarFileEntries = jarFile.entries();
+                while (jarFileEntries.hasMoreElements()) {
+                    JarEntry ze = jarFileEntries.nextElement();
+                    String pathName = ze.getName();
+                    if (!pathList.contains(pathName)) {
+                        copyStream(jarFile.getInputStream(ze), jos, ze, pathName);
+                    }
+                }
+            }
+
+            jarFile.close();
+            IOUtils.closeQuietly(jos);
+
+            if (pathList.isEmpty()) {
+                FileUtils.copyFile(jar, outJar);
+            }
+            if (!appVariantContext.getAtlasExtension().getTBuildConfig().isFastProguard() && outJar.getName().equals("main.jar")){
+                splitMainJar(result,outJar,1);
+            }
+        }
+
+        IOUtils.closeQuietly(mainJarOuputStream);
+
+        Collections.sort(result, new NameComparator());
+
+        result.add(0, maindexJar);
+
+        return result;
+    }
+
+    private void splitMainJar(List<File> result, File outJar, int index) throws IOException {
+        boolean hasClass = false;
+        File splitOutJar = new File(outJar.getParentFile(), FileNameUtils.getUniqueJarName(outJar) + "-" + (index + 1) + ".jar");
+        File splitOutJarMain = new File(outJar.getParentFile(), FileNameUtils.getUniqueJarName(outJar) + "-" + (index) + ".jar");
+        JarOutputStream jos = new JarOutputStream(
+                new BufferedOutputStream(new FileOutputStream(splitOutJar)));
+        JarOutputStream josMain = new JarOutputStream(
+                new BufferedOutputStream(new FileOutputStream(splitOutJarMain)));
+        JarFile jarFile = new JarFile(outJar);
+        try {
+
+
+            Enumeration<JarEntry> entryEnumeration = jarFile.entries();
+            int i = 0;
+            while (entryEnumeration.hasMoreElements()) {
+                JarEntry jarEntry = entryEnumeration.nextElement();
+                if (jarEntry.getName().endsWith(".class")) {
+                    i++;
+                    }
+                if (i > MAX_CLASSES) {
+                    hasClass = true;
+                    copyStream(jarFile.getInputStream(jarEntry), jos, jarEntry, jarEntry.getName());
+                } else {
+                    copyStream(jarFile.getInputStream(jarEntry), josMain, jarEntry, jarEntry.getName());
+                }
+            }
+            IOUtils.closeQuietly(jos);
+            IOUtils.closeQuietly(josMain);
+            jarFile.close();
+            if (!hasClass) {
+                FileUtils.deleteQuietly(splitOutJar);
+                return;
+            } else {
+                FileUtils.deleteQuietly(outJar);
+                result.remove(outJar);
+                result.add(splitOutJar);
+                result.add(splitOutJarMain);
+            }
+            splitMainJar(result, splitOutJar, index + 1);
+        }catch (Exception e){
+
+        }finally {
+
+        }
 
     }
 
-    private void mergeDex(File outDexFolder, List<Dex> tmpList, int index, Dex[] mergedList) throws IOException {
+    private void copyStream(InputStream inputStream, JarOutputStream jos, JarEntry ze, String pathName) {
+        try {
 
-        DexMerger dexMerger = new DexMerger(tmpList.toArray(new Dex[0]), CollisionPolicy.KEEP_FIRST,new DxContext());
-        Dex dex = dexMerger.merge();
-
-        mergedList[index] = dex;
-
-        String name = "classes" + (0 == index ? "" : String.valueOf(index + 1)) + ".dex";
-
-        File dexFile = new File(outDexFolder, name);
-
-        dex.writeTo(dexFile);
+            ZipEntry newEntry = new ZipEntry(pathName);
+            // Make sure there is date and time set.
+            if (ze.getTime() != -1) {
+                newEntry.setTime(ze.getTime());
+                newEntry.setCrc(ze.getCrc()); // If found set it into output file.
+            }
+            jos.putNextEntry(newEntry);
+            IOUtils.copy(inputStream, jos);
+            IOUtils.closeQuietly(inputStream);
+        } catch (Exception e) {
+            //throw new GradleException("copy stream exception", e);
+            //e.printStackTrace();
+            logger.error("copy stream exception >>> " + pathName + " >>>" + e.getMessage());
+        }
     }
 
 }

@@ -427,8 +427,7 @@ public class BundleProguarder {
             configuration.printConfiguration = input.printConfiguration;
         }
 
-        configuration.printSeeds = null;
-        configuration.dump = null;
+        configuration.printSeeds = input.printSeeds;
         configuration.printUsage = input.printUsage;
         configuration.printMapping = input.printMapping;
 
@@ -519,8 +518,6 @@ public class BundleProguarder {
                 inputLibraries.add(obsJar);
                 configs.add(OUTJARS_OPTION + " " + obsJar.getAbsolutePath());
                 AtlasBuildContext.atlasMainDexHelper.updateMainDexFile(inputLibrary,obsJar);
-
-
             }
 
             //configs.add();
