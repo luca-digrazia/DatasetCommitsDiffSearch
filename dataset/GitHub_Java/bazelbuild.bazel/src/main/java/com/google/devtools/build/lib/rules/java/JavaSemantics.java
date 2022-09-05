@@ -39,8 +39,10 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.java.DeployArchiveBuilder.Compression;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.Collection;
 import java.util.List;
+
 import javax.annotation.Nullable;
 
 /**
@@ -383,10 +385,9 @@ public interface JavaSemantics {
   Artifact getProtoMapping(RuleContext ruleContext) throws InterruptedException;
 
   /**
-   * Returns true if the given Label is of the pseudo-cc_binary that tells Blaze a java target's
-   * JAVABIN is never to be replaced by the contents of --java_launcher; only the JDK's launcher
-   * will ever be used.
+   * @return Label of pseudo-cc_binary that tells Blaze a java target's JAVABIN is never to be
+   * replaced by the contents of --java_launcher; only the JDK's launcher will ever be used.
    */
-  boolean isJdkLauncher(Label label);
+  Label getJdkLauncherLabel();
 }
 

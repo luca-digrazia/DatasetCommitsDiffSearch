@@ -13,34 +13,50 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
-import com.google.auto.value.AutoValue;
+import static com.google.devtools.build.lib.util.Preconditions.checkNotNull;
+
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableListMultimap;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+
 import java.util.List;
+
 import javax.annotation.Nullable;
 
 /**
  * Information about the JDK used by the <code>java_*</code> rules.
  */
-@AutoValue
 @Immutable
-public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
+public final class JavaToolchainProvider implements TransitiveInfoProvider {
 
   /** Returns the Java Toolchain associated with the rule being analyzed or {@code null}. */
   public static JavaToolchainProvider fromRuleContext(RuleContext ruleContext) {
     return ruleContext.getPrerequisite(":java_toolchain", Mode.TARGET, JavaToolchainProvider.class);
   }
 
-  public static JavaToolchainProvider create(
-      Label label,
+  private final String sourceVersion;
+  private final String targetVersion;
+  private final NestedSet<Artifact> bootclasspath;
+  private final NestedSet<Artifact> extclasspath;
+  private final String encoding;
+  private final ImmutableList<String> javacOptions;
+  private final ImmutableList<String> javacJvmOptions;
+  private final boolean javacSupportsWorkers;
+  private final Artifact javac;
+  private final Artifact javaBuilder;
+  private final Artifact headerCompiler;
+  @Nullable private final Artifact singleJar;
+  private final Artifact genClass;
+  private final FilesToRunProvider ijar;
+  private final ImmutableMap<String, ImmutableList<String>> compatibleJavacOptions;
+
+  public JavaToolchainProvider(
       JavaToolchainData data,
       NestedSet<Artifact> bootclasspath,
       NestedSet<Artifact> extclasspath,
@@ -51,84 +67,113 @@ public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
       Artifact singleJar,
       Artifact genClass,
       FilesToRunProvider ijar,
-      ImmutableListMultimap<String, String> compatibleJavacOptions) {
-    return new AutoValue_JavaToolchainProvider(
-        label,
-        data.getSourceVersion(),
-        data.getTargetVersion(),
-        bootclasspath,
-        extclasspath,
-        data.getEncoding(),
-        javac,
-        javaBuilder,
-        headerCompiler,
-        singleJar,
-        genClass,
-        ijar,
-        compatibleJavacOptions,
-        // merges the defaultJavacFlags from
-        // {@link JavaConfiguration} with the flags from the {@code java_toolchain} rule.
+      ImmutableMap<String, ImmutableList<String>> compatibleJavacOptions) {
+    this.sourceVersion = checkNotNull(data.getSourceVersion(), "sourceVersion must not be null");
+    this.targetVersion = checkNotNull(data.getTargetVersion(), "targetVersion must not be null");
+    this.bootclasspath = checkNotNull(bootclasspath, "bootclasspath must not be null");
+    this.extclasspath = checkNotNull(extclasspath, "extclasspath must not be null");
+    this.encoding = checkNotNull(data.getEncoding(), "encoding must not be null");
+    this.javac = checkNotNull(javac, "javac must not be null");
+    this.javaBuilder = checkNotNull(javaBuilder, "javaBuilder must not be null");
+    this.headerCompiler = headerCompiler;
+    this.singleJar = checkNotNull(singleJar, "singleJar must not be null");
+    this.genClass = checkNotNull(genClass, "genClass must not be null");
+    this.ijar = checkNotNull(ijar, "ijar must not be null");
+    this.compatibleJavacOptions =
+        checkNotNull(compatibleJavacOptions, "compatible javac options must not be null");
+
+    // merges the defaultJavacFlags from
+    // {@link JavaConfiguration} with the flags from the {@code java_toolchain} rule.
+    this.javacOptions =
         ImmutableList.<String>builder()
             .addAll(data.getJavacOptions())
             .addAll(defaultJavacFlags)
-            .build(),
-        data.getJvmOptions(),
-        data.getJavacSupportsWorkers());
-  }
-
-  /** Returns the label for this {@code java_toolchain}. */
-  public abstract Label getToolchainLabel();
-
-  /** @return the input Java language level */
-  public abstract String getSourceVersion();
-
-  /** @return the target Java language level */
-  public abstract String getTargetVersion();
-
-  /** @return the target Java bootclasspath */
-  public abstract NestedSet<Artifact> getBootclasspath();
-
-  /** @return the target Java extclasspath */
-  public abstract NestedSet<Artifact> getExtclasspath();
-
-  /** @return the encoding for Java source files */
-  public abstract String getEncoding();
-
-  /** Returns the {@link Artifact} of the javac jar */
-  public abstract Artifact getJavac();
-
-  /** Returns the {@link Artifact} of the JavaBuilder deploy jar */
-  public abstract Artifact getJavaBuilder();
-
-  /** @return the {@link Artifact} of the Header Compiler deploy jar */
-  @Nullable public abstract Artifact getHeaderCompiler();
-
-  /** Returns the {@link Artifact} of the SingleJar deploy jar */
-  public abstract Artifact getSingleJar();
-
-  /** Returns the {@link Artifact} of the GenClass deploy jar */
-  public abstract Artifact getGenClass();
-
-  /** Returns the ijar executable */
-  public abstract FilesToRunProvider getIjar();
-
-  abstract ImmutableListMultimap<String, String> getCompatibleJavacOptions();
-
-  /** @return the map of target environment-specific javacopts. */
-  public ImmutableList<String> getCompatibleJavacOptions(String key) {
-    return getCompatibleJavacOptions().get(key);
+            .build();
+    this.javacJvmOptions = data.getJavacJvmOptions();
+    this.javacSupportsWorkers = data.getJavacSupportsWorkers();
   }
 
   /** @return the list of default options for the java compiler */
-  public abstract ImmutableList<String> getJavacOptions();
+  public ImmutableList<String> getJavacOptions() {
+    return javacOptions;
+  }
 
-  /**
-   * @return the list of default options for the JVM running the java compiler and associated tools.
-   */
-  public abstract ImmutableList<String> getJvmOptions();
+  /** @return the list of default options for the JVM running the java compiler */
+  public ImmutableList<String> getJavacJvmOptions() {
+    return javacJvmOptions;
+  }
 
   /** @return whether JavaBuilders supports running as a persistent worker or not */
-  public abstract boolean getJavacSupportsWorkers();
+  public boolean getJavacSupportsWorkers() {
+    return javacSupportsWorkers;
+  }
 
-  JavaToolchainProvider() {}
+  /** @return the input Java language level */
+  public String getSourceVersion() {
+    return sourceVersion;
+  }
+
+  /** @return the target Java language level */
+  public String getTargetVersion() {
+    return targetVersion;
+  }
+
+  /** @return the target Java bootclasspath */
+  public NestedSet<Artifact> getBootclasspath() {
+    return bootclasspath;
+  }
+
+  /** @return the target Java extclasspath */
+  public NestedSet<Artifact> getExtclasspath() {
+    return extclasspath;
+  }
+
+  /** @return the encoding for Java source files */
+  @Nullable
+  public String getEncoding() {
+    return encoding;
+  }
+
+  /** Returns the {@link Artifact} of the javac jar */
+  @Nullable
+  public Artifact getJavac() {
+    return javac;
+  }
+
+  /** Returns the {@link Artifact} of the JavaBuilder deploy jar */
+  @Nullable
+  public Artifact getJavaBuilder() {
+    return javaBuilder;
+  }
+
+  /** @return the {@link Artifact} of the Header Compiler deploy jar */
+  @Nullable
+  public Artifact getHeaderCompiler() {
+    return headerCompiler;
+  }
+
+  /** Returns the {@link Artifact} of the SingleJar deploy jar */
+  @Nullable
+  public Artifact getSingleJar() {
+    return singleJar;
+  }
+
+  /** Returns the {@link Artifact} of the GenClass deploy jar */
+  @Nullable
+  public Artifact getGenClass() {
+    return genClass;
+  }
+
+  /** Returns the ijar executable */
+  @Nullable
+  public FilesToRunProvider getIjar() {
+    return ijar;
+  }
+
+  /** @return the map of target environment-specific javacopts. */
+  public ImmutableList<String> getCompatibleJavacOptions(String key) {
+    return compatibleJavacOptions.containsKey(key)
+        ? compatibleJavacOptions.get(key)
+        : ImmutableList.<String>of();
+  }
 }
