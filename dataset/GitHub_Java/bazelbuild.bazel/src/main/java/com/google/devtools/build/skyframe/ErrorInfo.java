@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.skyframe.SkyFunctionException.ReifiedSkyFunctionException;
 
+import java.io.IOException;
 import java.util.Collection;
 
 import javax.annotation.Nullable;
@@ -88,7 +89,8 @@ public class ErrorInfo {
         isCatastrophic);
   }
 
-  private final NestedSet<SkyKey> rootCauses;
+  // Non-final only to allow for serialization.
+  private transient NestedSet<SkyKey> rootCauses;
 
   @Nullable private final Exception exception;
   private final SkyKey rootCauseOfException;
@@ -177,4 +179,8 @@ public class ErrorInfo {
     return isCatastrophic;
   }
 
+  private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
+    in.defaultReadObject();
+    rootCauses = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+  }
 }
