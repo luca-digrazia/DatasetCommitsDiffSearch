@@ -178,7 +178,7 @@ public final class CcLibraryHelper {
   private final List<LibraryToLink> picStaticLibraries = new ArrayList<>();
   private final List<LibraryToLink> dynamicLibraries = new ArrayList<>();
 
-  private boolean emitLinkActionsIfEmpty;
+  private boolean emitCompileActionsIfEmpty = true;
   private boolean emitCcNativeLibrariesProvider;
   private boolean emitCcSpecificLinkParamsProvider;
   private boolean emitInterfaceSharedObjects;
@@ -517,14 +517,12 @@ public final class CcLibraryHelper {
   }
 
   /**
-   * Enables or disables generation of link actions if there are no object files. Some rules declare
-   * a <code>.a</code> or <code>.so</code> implicit output, which requires that these files are
-   * created even if there are no object files, so be careful when calling this.
-   *
-   * <p>This is disabled by default.
+   * Enables or disables generation of compile actions if there are no sources. Some rules declare a
+   * .a or .so implicit output, which requires that these files are created even if there are no
+   * source files, so be careful when calling this.
    */
-  public CcLibraryHelper setGenerateLinkActionsIfEmpty(boolean emitLinkActionsIfEmpty) {
-    this.emitLinkActionsIfEmpty = emitLinkActionsIfEmpty;
+  public CcLibraryHelper setGenerateCompileActionsIfEmpty(boolean emitCompileActionsIfEmpty) {
+    this.emitCompileActionsIfEmpty = emitCompileActionsIfEmpty;
     return this;
   }
 
@@ -595,6 +593,9 @@ public final class CcLibraryHelper {
       }
     }
 
+    CcLinkingOutputs ccLinkingOutputs = CcLinkingOutputs.EMPTY;
+    CcCompilationOutputs ccOutputs = new CcCompilationOutputs.Builder().build();
+    
     CppModel model = new CppModel(ruleContext, semantics)
         .addSources(sources)
         .addCopts(copts)
@@ -614,30 +615,19 @@ public final class CcLibraryHelper {
         initializeCppCompilationContext(model, featureConfiguration);
     model.setContext(cppCompilationContext);
     boolean compileHeaderModules = featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES);
-    Preconditions.checkState(
-        !compileHeaderModules || cppCompilationContext.getCppModuleMap() != null,
-        "All cc rules must support module maps.");
-
-    // Create compile actions (both PIC and non-PIC).
-    CcCompilationOutputs ccOutputs = model.createCcCompileActions();
-    if (!objectFiles.isEmpty() || !picObjectFiles.isEmpty()) {
-      // Merge the pre-compiled object files into the compiler outputs.
-      ccOutputs = new CcCompilationOutputs.Builder()
-          .merge(ccOutputs)
-          .addObjectFiles(objectFiles)
-          .addPicObjectFiles(picObjectFiles)
-          .build();
-    }
-
-    // Create link actions (only if there are object files or if explicitly requested).
-    CcLinkingOutputs ccLinkingOutputs = CcLinkingOutputs.EMPTY;
-    if (emitLinkActionsIfEmpty || !ccOutputs.isEmpty()) {
-      // On some systems, the linker gives an error message if there are no input files. Even with
-      // the check above, this can still happen if there is a .nopic.o or .o files in srcs, but no
-      // other files. To fix that, we'd have to check for each link action individually.
-      //
-      // An additional pre-existing issue is that the header check tokens are dropped if we don't
-      // generate any link actions, effectively disabling header checking in some cases.
+    if (emitCompileActionsIfEmpty || !sources.isEmpty() || compileHeaderModules) {
+      Preconditions.checkState(
+          !compileHeaderModules || cppCompilationContext.getCppModuleMap() != null,
+          "All cc rules must support module maps.");
+      ccOutputs = model.createCcCompileActions();
+      if (!objectFiles.isEmpty() || !picObjectFiles.isEmpty()) {
+        // Merge the pre-compiled object files into the compiler outputs.
+        ccOutputs = new CcCompilationOutputs.Builder()
+            .merge(ccOutputs)
+            .addObjectFiles(objectFiles)
+            .addPicObjectFiles(picObjectFiles)
+            .build();
+      }
       if (linkType.isStaticLibraryLink()) {
         // TODO(bazel-team): This can't create the link action for a cc_binary yet.
         ccLinkingOutputs = model.createCcLinkActions(ccOutputs);

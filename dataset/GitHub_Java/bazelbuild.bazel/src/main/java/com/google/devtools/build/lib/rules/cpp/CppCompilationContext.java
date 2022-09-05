@@ -53,19 +53,15 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
   private final Artifact headerModule;
   private final Artifact picHeaderModule;
   
-  // True if this context is for a compilation that needs transitive module maps.
-  private final boolean provideTransitiveModuleMaps;
+  // True if this context is for a compilation that uses header modules.
+  private final boolean usingHeaderModules;
 
   // Derived from depsContexts; no need to consider it for equals/hashCode.
   private final ImmutableSet<Artifact> compilationPrerequisites;
 
-  private CppCompilationContext(
-      CommandLineContext commandLineContext,
-      List<DepsContext> depsContexts,
-      CppModuleMap cppModuleMap,
-      Artifact headerModule,
-      Artifact picHeaderModule,
-      boolean provideTransitiveModuleMaps) {
+  private CppCompilationContext(CommandLineContext commandLineContext,
+      List<DepsContext> depsContexts, CppModuleMap cppModuleMap, Artifact headerModule,
+      Artifact picHeaderModule, boolean usingHeaderModules) {
     Preconditions.checkNotNull(commandLineContext);
     Preconditions.checkArgument(!depsContexts.isEmpty());
     this.commandLineContext = commandLineContext;
@@ -73,7 +69,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
     this.cppModuleMap = cppModuleMap;
     this.headerModule = headerModule;
     this.picHeaderModule = picHeaderModule;
-    this.provideTransitiveModuleMaps = provideTransitiveModuleMaps;
+    this.usingHeaderModules = usingHeaderModules;
 
     if (depsContexts.size() == 1) {
       // Only LIPO targets have more than one DepsContexts. This codepath avoids creating
@@ -259,7 +255,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
       builder.addTransitive(depsContext.topLevelHeaderModules);
       builder.addTransitive(depsContext.impliedHeaderModules);
       builder.addTransitive(depsContext.directModuleMaps);
-      if (provideTransitiveModuleMaps) {
+      if (usingHeaderModules) {
         builder.addTransitive(depsContext.transitiveModuleMaps);
       }
     }
@@ -362,18 +358,13 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
         && Objects.equals(picHeaderModule, other.picHeaderModule)
         && commandLineContext.equals(other.commandLineContext)
         && depsContexts.equals(other.depsContexts)
-        && (provideTransitiveModuleMaps == other.provideTransitiveModuleMaps);
+        && (usingHeaderModules == other.usingHeaderModules);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(
-        headerModule,
-        picHeaderModule,
-        commandLineContext,
-        depsContexts,
-        cppModuleMap,
-        provideTransitiveModuleMaps);
+    return Objects.hash(headerModule, picHeaderModule, commandLineContext, depsContexts,
+        cppModuleMap, usingHeaderModules);
   }
 
   /**
@@ -396,13 +387,9 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
           depsContext.transitiveModuleMaps,
           depsContext.directModuleMaps));
     }
-    return new CppCompilationContext(
-        context.commandLineContext,
-        builder.build(),
-        context.cppModuleMap,
-        context.headerModule,
-        context.picHeaderModule,
-        context.provideTransitiveModuleMaps);
+    return new CppCompilationContext(context.commandLineContext, builder.build(),
+        context.cppModuleMap, context.headerModule, context.picHeaderModule,
+        context.usingHeaderModules);
   }
 
   /**
@@ -432,13 +419,10 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
    */
   public static CppCompilationContext mergeForLipo(CppCompilationContext ownerContext,
       CppCompilationContext libContext) {
-    return new CppCompilationContext(
-        libContext.commandLineContext,
+    return new CppCompilationContext(libContext.commandLineContext,
         ImmutableList.copyOf(Iterables.concat(ownerContext.depsContexts, libContext.depsContexts)),
-        libContext.cppModuleMap,
-        libContext.headerModule,
-        libContext.picHeaderModule,
-        /*providesTransitiveModuleMaps=*/ false);
+        libContext.cppModuleMap, libContext.headerModule, libContext.picHeaderModule,
+        /*usingHeaderModules=*/false);
   }
 
   /**
@@ -646,7 +630,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
     private CppModuleMap cppModuleMap;
     private Artifact headerModule;
     private Artifact picHeaderModule;
-    private boolean provideTransitiveModuleMaps = false;
+    private boolean usingHeaderModules = false;
 
     /** The rule that owns the context */
     private final RuleContext ruleContext;
@@ -890,10 +874,10 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
     }
     
     /**
-     * Sets that the context will be used by a compilation that needs transitive module maps.
+     * Sets that the context will be used by a compilation that uses header modules.
      */
-    public Builder setProvideTransitiveModuleMaps(boolean provideTransitiveModuleMaps) {
-      this.provideTransitiveModuleMaps = provideTransitiveModuleMaps;
+    public Builder setUsingHeaderModules(boolean usingHeaderModules) {
+      this.usingHeaderModules = usingHeaderModules;
       return this;
     }
 
@@ -927,28 +911,24 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
           : createMiddleman(owner, middlemanFactory);
 
       return new CppCompilationContext(
-          new CommandLineContext(
-              ImmutableList.copyOf(includeDirs),
-              ImmutableList.copyOf(quoteIncludeDirs),
-              ImmutableList.copyOf(systemIncludeDirs),
+          new CommandLineContext(ImmutableList.copyOf(includeDirs),
+              ImmutableList.copyOf(quoteIncludeDirs), ImmutableList.copyOf(systemIncludeDirs),
               ImmutableList.copyOf(defines)),
-          ImmutableList.of(
-              new DepsContext(
-                  prerequisiteStampFile,
-                  declaredIncludeDirs.build(),
-                  declaredIncludeWarnDirs.build(),
-                  declaredIncludeSrcs.build(),
-                  pregreppedHdrs.build(),
-                  headerModuleSrcs.build(),
-                  topLevelHeaderModules.build(),
-                  impliedHeaderModules,
-                  transitiveHeaderModuleSrcs.build(),
-                  transitiveModuleMaps.build(),
-                  directModuleMaps.build())),
+          ImmutableList.of(new DepsContext(prerequisiteStampFile,
+              declaredIncludeDirs.build(),
+              declaredIncludeWarnDirs.build(),
+              declaredIncludeSrcs.build(),
+              pregreppedHdrs.build(),
+              headerModuleSrcs.build(),
+              topLevelHeaderModules.build(),
+              impliedHeaderModules,
+              transitiveHeaderModuleSrcs.build(),
+              transitiveModuleMaps.build(),
+              directModuleMaps.build())),
           cppModuleMap,
           headerModule,
           picHeaderModule,
-          provideTransitiveModuleMaps);
+          usingHeaderModules);
     }
 
     /**
