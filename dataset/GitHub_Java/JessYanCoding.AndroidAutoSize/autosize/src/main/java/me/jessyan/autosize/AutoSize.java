@@ -30,7 +30,7 @@ import me.jessyan.autosize.utils.Preconditions;
  * <a href="https://github.com/JessYanCoding">Follow me</a>
  * ================================================
  */
-public final class AutoSize {
+public class AutoSize {
 
     private AutoSize() {
         throw new IllegalStateException("you can't instantiate me!");
