@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,11 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.util.Clock;
-import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.concurrent.TimeUnit;
+
 import javax.annotation.Nullable;
 
 /**
@@ -76,10 +78,12 @@ public class AbstractCriticalPathComponent<C extends AbstractCriticalPathCompone
   }
 
   /**
-   * Add statistics for one dependency of this action. Caller should ensure {@code dep} not
-   * running.
+   * Add statistics for one dependency of this action.
    */
-  synchronized void addDepInfo(C dep) {
+  public synchronized void addDepInfo(C dep) {
+    Preconditions.checkState(!dep.isRunning,
+        "Cannot add critical path stats when the action is not finished. %s. %s", action,
+        dep.getAction());
     long childAggregatedWallTime = dep.getAggregatedElapsedTimeNanos();
     // Replace the child if its critical path had the maximum elapsed time.
     if (child == null || childAggregatedWallTime > this.childAggregatedElapsedTime) {
