@@ -1,11 +1,6 @@
 package com.codahale.metrics.servlets;
 
-import com.codahale.metrics.Clock;
-import com.codahale.metrics.ExponentiallyDecayingReservoir;
-import com.codahale.metrics.Gauge;
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
+import com.codahale.metrics.*;
 import org.eclipse.jetty.http.HttpHeader;
 import org.eclipse.jetty.servlet.ServletTester;
 import org.junit.Before;
@@ -26,7 +21,7 @@ public class MetricsServletContextListenerTest extends AbstractServletTest {
     protected void setUp(ServletTester tester) {
         tester.setAttribute("com.codahale.metrics.servlets.MetricsServlet.registry", registry);
         tester.addServlet(MetricsServlet.class, "/metrics");
-        tester.getContext().addEventListener(new MetricsServlet.ContextListener() {
+        tester.getContext().addEventListener(new MetricsServlet.ContextListener(){
             @Override
             protected MetricRegistry getMetricRegistry() {
                 return registry;
@@ -50,7 +45,7 @@ public class MetricsServletContextListenerTest extends AbstractServletTest {
     }
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         when(clock.getTick()).thenReturn(100L, 200L, 300L, 400L);
 
         registry.register("g1", (Gauge<Long>) () -> 100L);

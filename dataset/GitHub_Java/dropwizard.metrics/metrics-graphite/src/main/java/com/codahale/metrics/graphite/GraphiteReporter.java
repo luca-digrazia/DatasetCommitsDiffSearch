@@ -157,7 +157,7 @@ public class GraphiteReporter extends ScheduledReporter {
         /**
          * Builds a {@link GraphiteReporter} with the given properties, sending metrics using the
          * given {@link GraphiteSender}.
-         * <p>
+         *
          * Present for binary compatibility
          *
          * @param graphite a {@link Graphite}
@@ -176,14 +176,14 @@ public class GraphiteReporter extends ScheduledReporter {
          */
         public GraphiteReporter build(GraphiteSender graphite) {
             return new GraphiteReporter(registry,
-                    graphite,
-                    clock,
-                    prefix,
-                    rateUnit,
-                    durationUnit,
-                    filter,
-                    executor,
-                    shutdownExecutorOnStop,
+                                        graphite,
+                                        clock,
+                                        prefix,
+                                        rateUnit,
+                                        durationUnit,
+                                        filter,
+                                        executor,
+                                        shutdownExecutorOnStop,
                     disabledMetricAttributes);
         }
     }
@@ -210,15 +210,15 @@ public class GraphiteReporter extends ScheduledReporter {
      * @param shutdownExecutorOnStop if true, then executor will be stopped in same time with this reporter
      */
     protected GraphiteReporter(MetricRegistry registry,
-                               GraphiteSender graphite,
-                               Clock clock,
-                               String prefix,
-                               TimeUnit rateUnit,
-                               TimeUnit durationUnit,
-                               MetricFilter filter,
-                               ScheduledExecutorService executor,
-                               boolean shutdownExecutorOnStop,
-                               Set<MetricAttribute> disabledMetricAttributes) {
+                             GraphiteSender graphite,
+                             Clock clock,
+                             String prefix,
+                             TimeUnit rateUnit,
+                             TimeUnit durationUnit,
+                             MetricFilter filter,
+                             ScheduledExecutorService executor,
+                             boolean shutdownExecutorOnStop,
+                             Set<MetricAttribute> disabledMetricAttributes) {
         super(registry, "graphite-reporter", filter, rateUnit, durationUnit, executor, shutdownExecutorOnStop,
                 disabledMetricAttributes);
         this.graphite = graphite;
@@ -300,10 +300,10 @@ public class GraphiteReporter extends ScheduledReporter {
 
     private void reportMetered(String name, Metered meter, long timestamp) throws IOException {
         sendIfEnabled(COUNT, name, meter.getCount(), timestamp);
-        sendIfEnabled(M1_RATE, name, convertRate(meter.getOneMinuteRate()), timestamp);
-        sendIfEnabled(M5_RATE, name, convertRate(meter.getFiveMinuteRate()), timestamp);
-        sendIfEnabled(M15_RATE, name, convertRate(meter.getFifteenMinuteRate()), timestamp);
-        sendIfEnabled(MEAN_RATE, name, convertRate(meter.getMeanRate()), timestamp);
+        sendIfEnabled(M1_RATE, name, meter.getOneMinuteRate(), timestamp);
+        sendIfEnabled(M5_RATE, name, meter.getFiveMinuteRate(), timestamp);
+        sendIfEnabled(M15_RATE, name, meter.getFifteenMinuteRate(), timestamp);
+        sendIfEnabled(MEAN_RATE, name, meter.getMeanRate(), timestamp);
     }
 
     private void reportHistogram(String name, Histogram histogram, long timestamp) throws IOException {
@@ -322,14 +322,14 @@ public class GraphiteReporter extends ScheduledReporter {
     }
 
     private void sendIfEnabled(MetricAttribute type, String name, double value, long timestamp) throws IOException {
-        if (getDisabledMetricAttributes().contains(type)) {
+        if (getDisabledMetricAttributes().contains(type)){
             return;
         }
         graphite.send(prefix(name, type.getCode()), format(value), timestamp);
     }
 
     private void sendIfEnabled(MetricAttribute type, String name, long value, long timestamp) throws IOException {
-        if (getDisabledMetricAttributes().contains(type)) {
+        if (getDisabledMetricAttributes().contains(type)){
             return;
         }
         graphite.send(prefix(name, type.getCode()), format(value), timestamp);

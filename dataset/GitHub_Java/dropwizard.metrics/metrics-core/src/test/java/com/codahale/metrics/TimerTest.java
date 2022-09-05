@@ -7,10 +7,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.offset;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 public class TimerTest {
     private final Reservoir reservoir = mock(Reservoir.class);
@@ -57,19 +54,6 @@ public class TimerTest {
     @Test
     public void timesCallableInstances() throws Exception {
         final String value = timer.time(() -> "one");
-
-        assertThat(timer.getCount())
-                .isEqualTo(1);
-
-        assertThat(value)
-                .isEqualTo("one");
-
-        verify(reservoir).update(50000000);
-    }
-
-    @Test
-    public void timesSuppliedInstances() {
-        final String value = timer.timeSupplier(() -> "one");
 
         assertThat(timer.getCount())
                 .isEqualTo(1);

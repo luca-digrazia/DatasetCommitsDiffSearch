@@ -143,8 +143,9 @@ public class GraphiteTest {
     public void notifiesIfGraphiteIsUnavailable() throws Exception {
         final String unavailableHost = "unknown-host-10el6m7yg56ge7dmcom";
         InetSocketAddress unavailableAddress = new InetSocketAddress(unavailableHost, 1234);
+        Graphite unavailableGraphite = new Graphite(unavailableAddress, socketFactory);
 
-        try (Graphite unavailableGraphite = new Graphite(unavailableAddress, socketFactory)) {
+        try {
             unavailableGraphite.connect();
             failBecauseExceptionWasNotThrown(UnknownHostException.class);
         } catch (Exception e) {

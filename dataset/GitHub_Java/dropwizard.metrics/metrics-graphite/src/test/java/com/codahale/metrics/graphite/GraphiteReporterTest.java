@@ -27,7 +27,7 @@ public class GraphiteReporterTest {
                                                               .convertRatesTo(TimeUnit.SECONDS)
                                                               .convertDurationsTo(TimeUnit.MILLISECONDS)
                                                               .filter(MetricFilter.ALL)
-                                                              .disabledMetricAttributes(Collections.emptySet())
+                                                              .disabledMetricAttributes(Collections.<MetricAttribute>emptySet())
                                                               .build(graphite);
 
     @Before

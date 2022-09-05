@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 
 public class SlidingTimeWindowReservoirTest {
     @Test
-    public void storesMeasurementsWithDuplicateTicks() {
+    public void storesMeasurementsWithDuplicateTicks() throws Exception {
         final Clock clock = mock(Clock.class);
         final SlidingTimeWindowReservoir reservoir = new SlidingTimeWindowReservoir(10, NANOSECONDS, clock);
 
@@ -26,7 +26,7 @@ public class SlidingTimeWindowReservoirTest {
     }
 
     @Test
-    public void boundsMeasurementsToATimeWindow() {
+    public void boundsMeasurementsToATimeWindow() throws Exception {
         final Clock clock = mock(Clock.class);
         final SlidingTimeWindowReservoir reservoir = new SlidingTimeWindowReservoir(10, NANOSECONDS, clock);
 
@@ -50,7 +50,7 @@ public class SlidingTimeWindowReservoirTest {
     }
 
     @Test
-    public void testGetTickOverflow() {
+    public void testGetTickOverflow () {
         final Random random = new Random(0);
         final int window = 128;
 
@@ -63,7 +63,7 @@ public class SlidingTimeWindowReservoirTest {
 
                 // Set the clock to overflow in (2*window+1)ns
                 final ManualClock clock = new ManualClock();
-                clock.addNanos(Long.MAX_VALUE / 256 - 2 * window - clock.getTick());
+                clock.addNanos(Long.MAX_VALUE/256 - 2*window - clock.getTick());
                 assertThat(clock.getTick() * 256).isGreaterThan(0);
 
                 // Create the reservoir

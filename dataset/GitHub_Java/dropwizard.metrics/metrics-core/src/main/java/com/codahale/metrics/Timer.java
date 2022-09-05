@@ -2,7 +2,6 @@ package com.codahale.metrics;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
 
 /**
  * A timer metric which aggregates timing durations and provides duration statistics, plus
@@ -28,7 +27,6 @@ public class Timer implements Metered, Sampling {
         /**
          * Updates the timer with the difference between current and start time. Call to this method will
          * not reset the start time. Multiple calls result in multiple updates.
-         *
          * @return the elapsed time in nanoseconds
          */
         public long stop() {
@@ -37,9 +35,7 @@ public class Timer implements Metered, Sampling {
             return elapsed;
         }
 
-        /**
-         * Equivalent to calling {@link #stop()}.
-         */
+        /** Equivalent to calling {@link #stop()}. */
         @Override
         public void close() {
             stop();
@@ -71,7 +67,7 @@ public class Timer implements Metered, Sampling {
      * Creates a new {@link Timer} that uses the given {@link Reservoir} and {@link Clock}.
      *
      * @param reservoir the {@link Reservoir} implementation the timer should use
-     * @param clock     the {@link Clock} implementation the timer should use
+     * @param clock  the {@link Clock} implementation the timer should use
      */
     public Timer(Reservoir reservoir, Clock clock) {
         this.meter = new Meter(clock);
@@ -102,24 +98,6 @@ public class Timer implements Metered, Sampling {
         final long startTime = clock.getTick();
         try {
             return event.call();
-        } finally {
-            update(clock.getTick() - startTime);
-        }
-    }
-
-    /**
-     * Times and records the duration of event. Should not throw exceptions, for that use the
-     * {@link #time(Callable)} method.
-     *
-     * @param event a {@link Supplier} whose {@link Supplier#get()} method implements a process
-     *              whose duration should be timed
-     * @param <T>   the type of the value returned by {@code event}
-     * @return the value returned by {@code event}
-     */
-    public <T> T timeSupplier(Supplier<T> event) {
-        final long startTime = clock.getTick();
-        try {
-            return event.get();
         } finally {
             update(clock.getTick() - startTime);
         }
