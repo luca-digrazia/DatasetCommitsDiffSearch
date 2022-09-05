@@ -217,7 +217,6 @@ public class AndroidCommon {
             .setIdlSourceJar(idlHelper.getIdlSourceJar())
             .addIdlParcelables(idlHelper.getIdlParcelables())
             .addIdlSrcs(idlHelper.getIdlSources())
-            .addIdlGeneratedJavaFiles(idlHelper.getIdlGeneratedJavaSources())
             .addAllApksUnderTest(apksUnderTest);
 
     if (zipAlignedApk != null) {

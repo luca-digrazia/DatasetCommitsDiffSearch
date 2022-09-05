@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -226,8 +225,6 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     common.addTransitiveInfoProviders(builder, filesToBuild, classJar);
     common.addGenJarsProvider(builder, genClassJar, genSourceJar);
 
-    NestedSet<Artifact> proguardSpecs = new ProguardLibrary(ruleContext).collectProguardSpecs();
-
     builder
         .add(JavaRuleOutputJarsProvider.class, new JavaRuleOutputJarsProvider(
             classJar, iJar, srcJar))
@@ -251,9 +248,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
         // TODO(bazel-team): this should only happen for java_plugin
         .add(JavaPluginInfoProvider.class, new JavaPluginInfoProvider(
             exportedProcessorClasses, exportedProcessorClasspath))
-        .add(ProguardSpecProvider.class, new ProguardSpecProvider(proguardSpecs))
-        .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars)
-        .addOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL, proguardSpecs);
+        .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars);
 
     if (ruleContext.hasErrors()) {
       return null;
