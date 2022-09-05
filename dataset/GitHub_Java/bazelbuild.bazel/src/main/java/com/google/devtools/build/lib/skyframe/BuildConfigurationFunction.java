@@ -19,11 +19,8 @@ import com.google.common.collect.ClassToInstanceMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.MutableClassToInstanceMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.ConfigurationCollectionFactory;
-import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -40,13 +37,9 @@ import java.util.Set;
 public class BuildConfigurationFunction implements SkyFunction {
 
   private final BlazeDirectories directories;
-  private final ConfigurationCollectionFactory collectionFactory;
 
-  public BuildConfigurationFunction(BlazeDirectories directories,
-      RuleClassProvider ruleClassProvider) {
+  public BuildConfigurationFunction(BlazeDirectories directories) {
     this.directories = directories;
-    collectionFactory =
-        ((ConfiguredRuleClassProvider) ruleClassProvider).getConfigurationCollectionFactory();
   }
 
   @Override
@@ -68,22 +61,13 @@ public class BuildConfigurationFunction implements SkyFunction {
       fragmentsMap.put(fragment.getClass(), fragment);
     }
 
-    BuildConfiguration config = new BuildConfiguration(directories, fragmentsMap,
-        key.getBuildOptions(), !key.actionsEnabled());
-    // Unlike static configurations, dynamic configurations don't need to embed transition logic
-    // within the configuration itself. However we still use this interface to provide a mapping
-    // between Transition types (e.g. HOST) and the dynamic transitions that apply those
-    // transitions. Once static configurations are cleaned out we won't need this interface
-    // any more (all the centralized logic that maintains the transition logic can be distributed
-    // to the actual rule code that uses it).
-    config.setConfigurationTransitions(collectionFactory.getDynamicTransitionLogic(config));
-
-    return new BuildConfigurationValue(config);
+    return new BuildConfigurationValue(
+        new BuildConfiguration(directories, fragmentsMap, key.getBuildOptions(),
+            !key.actionsEnabled()));
   }
 
   private Set<Fragment> getConfigurationFragments(BuildConfigurationValue.Key key, Environment env)
       throws InvalidConfigurationException {
-
     // Get SkyKeys for the fragments we need to load.
     Set<SkyKey> fragmentKeys = new LinkedHashSet<>();
     for (Class<? extends BuildConfiguration.Fragment> fragmentClass : key.getFragments()) {
@@ -100,11 +84,7 @@ public class BuildConfigurationFunction implements SkyFunction {
     // Collect and return the results.
     ImmutableSet.Builder<Fragment> fragments = ImmutableSet.builder();
     for (ValueOrException<InvalidConfigurationException> value : fragmentDeps.values()) {
-      BuildConfiguration.Fragment fragment =
-          ((ConfigurationFragmentValue) value.get()).getFragment();
-      if (fragment != null) {
-        fragments.add(fragment);
-      }
+      fragments.add(((ConfigurationFragmentValue) value.get()).getFragment());
     }
     return fragments.build();
   }

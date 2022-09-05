@@ -75,9 +75,6 @@ public class TransitiveTargetFunction implements SkyFunction {
     NestedSetBuilder<Label> transitiveRootCauses = NestedSetBuilder.stableOrder();
     NoSuchTargetException errorLoadingTarget = null;
     try {
-      // TODO(bazel-team): Why not NoSuchTargetException and NoSuchPackageException explicitly?
-      // Please note that the exception values declared thrown by TargetMarkerFunction are exactly
-      // those two.
       TargetMarkerValue targetValue = (TargetMarkerValue) env.getValueOrThrow(targetKey,
           NoSuchThingException.class);
       if (targetValue == null) {
@@ -278,7 +275,7 @@ public class TransitiveTargetFunction implements SkyFunction {
       }
     } else if (e instanceof NoSuchPackageException) {
       NoSuchPackageException nspe = (NoSuchPackageException) e;
-      if (nspe.getPackageId().equals(depLabel.getPackageIdentifier())) {
+      if (nspe.getPackageName().equals(depLabel.getPackageName())) {
         eventHandler.handle(Event.error(TargetUtils.getLocationMaybe(target),
             TargetUtils.formatMissingEdge(target, depLabel, e)));
       }
@@ -367,8 +364,8 @@ public class TransitiveTargetFunction implements SkyFunction {
      * In nokeep_going mode, used to propagate an error from a direct target dependency to the
      * target that depended on it.
      *
-     * <p>In keep_going mode, used the same way, but only for targets that could not be loaded at
-     * all (we proceed with transitive loading on targets that contain errors).</p>
+     * In keep_going mode, used the same way, but only for targets that could not be loaded at all
+     * (we proceed with transitive loading on targets that contain errors).
      */
     public TransitiveTargetFunctionException(NoSuchTargetException e) {
       super(e, Transience.PERSISTENT);

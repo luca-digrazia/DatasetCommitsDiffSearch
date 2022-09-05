@@ -19,8 +19,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Throwables;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -121,6 +119,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -159,14 +158,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       // performance.
       System.getenv("TEST_TMPDIR") == null ? 200 : 5;
 
-  // Cache of partially constructed Package instances, stored between reruns of the PackageFunction
-  // (because of missing dependencies, within the same evaluate() run) to avoid loading the same
-  // package twice (first time loading to find subincludes and declare value dependencies).
+  // Stores Packages between reruns of the PackageFunction (because of missing dependencies,
+  // within the same evaluate() run) to avoid loading the same package twice (first time loading
+  // to find subincludes and declare value dependencies).
   // TODO(bazel-team): remove this cache once we have skyframe-native package loading
   // [skyframe-loading]
-  private final Cache<PackageIdentifier, Package.LegacyBuilder> packageFunctionCache =
-      newPkgFunctionCache();
-
+  private final ConcurrentMap<PackageIdentifier, Package.LegacyBuilder> packageFunctionCache =
+      Maps.newConcurrentMap();
   private final AtomicInteger numPackagesLoaded = new AtomicInteger(0);
 
   protected SkyframeBuildView skyframeBuildView;
@@ -561,10 +559,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     }
   }
 
-  protected Cache<PackageIdentifier, Package.LegacyBuilder> newPkgFunctionCache() {
-    return CacheBuilder.newBuilder().build();
-  }
-
   /**
    * Injects the build info factory map that will be used when constructing build info
    * actions/artifacts. Unchanged across the life of the Blaze server, although it must be injected
@@ -766,7 +760,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     emittedEventState.clear();
 
     // If the PackageFunction was interrupted, there may be stale entries here.
-    packageFunctionCache.invalidateAll();
+    packageFunctionCache.clear();
     numPackagesLoaded.set(0);
 
     // Reset the stateful SkyframeCycleReporter, which contains cycles from last run.
@@ -1291,7 +1285,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
     /** Same as {@link PackageManager#partiallyClear}. */
     void partiallyClear() {
-      packageFunctionCache.invalidateAll();
+      packageFunctionCache.clear();
     }
   }
 
