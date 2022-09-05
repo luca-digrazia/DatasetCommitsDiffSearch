@@ -19,7 +19,7 @@ public final class DayViewFacade {
     private final LinkedList<Span> spans = new LinkedList<>();
     private boolean daysDisabled = false;
 
-    DayViewFacade() {
+    public DayViewFacade() {
         isDecorated = false;
     }
 
@@ -68,15 +68,13 @@ public final class DayViewFacade {
      *
      * <p>Note, passing true here will <b>not</b> override minimum and maximum dates, if set.
      * This will only re-enable disabled dates.</p>
-     *
-     * @param daysDisabled true to disable days, false to re-enable days
      */
     public void setDaysDisabled(boolean daysDisabled) {
         this.daysDisabled = daysDisabled;
         this.isDecorated = true;
     }
 
-    void reset() {
+    protected void reset() {
         backgroundDrawable = null;
         selectionDrawable = null;
         spans.clear();
@@ -88,7 +86,7 @@ public final class DayViewFacade {
      * Apply things set this to other
      * @param other facade to apply our data to
      */
-    void applyTo(DayViewFacade other) {
+    protected void applyTo(DayViewFacade other) {
         if(selectionDrawable != null) {
             other.setSelectionDrawable(selectionDrawable);
         }
@@ -100,31 +98,27 @@ public final class DayViewFacade {
         other.daysDisabled = daysDisabled;
     }
 
-    boolean isDecorated() {
+    protected boolean isDecorated() {
         return isDecorated;
     }
 
-    Drawable getSelectionDrawable() {
+    protected Drawable getSelectionDrawable() {
         return selectionDrawable;
     }
 
-    Drawable getBackgroundDrawable() {
+    protected Drawable getBackgroundDrawable() {
         return backgroundDrawable;
     }
 
-    List<Span> getSpans() {
+    protected List<Span> getSpans() {
         return Collections.unmodifiableList(spans);
     }
 
-    /**
-     * Are days from this facade disabled
-     * @return true if disabled, false if not re-enabled
-     */
     public boolean areDaysDisabled() {
         return daysDisabled;
     }
 
-    static class Span {
+    protected static class Span {
 
         final Object span;
 
