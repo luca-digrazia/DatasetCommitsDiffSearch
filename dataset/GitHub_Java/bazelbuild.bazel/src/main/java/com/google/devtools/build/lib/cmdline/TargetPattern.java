@@ -81,7 +81,6 @@ public abstract class TargetPattern implements Serializable {
   @VisibleForTesting
   static String normalize(String path) {
     Preconditions.checkArgument(!path.startsWith("/"));
-    Preconditions.checkArgument(!path.startsWith("@"));
     Iterator<String> it = SLASH_SPLITTER.split(path).iterator();
     List<String> pieces = new ArrayList<>();
     while (it.hasNext()) {
@@ -148,18 +147,11 @@ public abstract class TargetPattern implements Serializable {
 
   /**
    * Returns {@code true} iff this pattern has type {@code Type.TARGETS_BELOW_DIRECTORY} and
-   * {@param directory} is contained by or equals this pattern's directory. For example,
-   * returns {@code true} for {@code this = TargetPattern ("//...")} and {@code directory
-   * = "foo")}.
+   * {@code containedPattern} is contained by or equals this pattern. For example,
+   * returns {@code true} for {@code this = TargetPattern ("//...")} and {@code containedPattern
+   * = TargetPattern ("//foo/...")}.
    */
-  public abstract boolean containsBelowDirectory(String directory);
-
-  /**
-   * Shorthand for {@code containsBelowDirectory(containedPattern.getDirectory())}.
-   */
-  public boolean containsBelowDirectory(TargetPattern containedPattern) {
-    return containsBelowDirectory(containedPattern.getDirectory());
-  }
+  public abstract boolean containsBelowDirectory(TargetPattern containedPattern);
 
   /**
    * Returns the most specific containing directory of the patterns that could be matched by this
@@ -171,13 +163,6 @@ public abstract class TargetPattern implements Serializable {
    * <p>The returned value always has no leading "//" and no trailing "/".
    */
   public abstract String getDirectory();
-
-  /**
-   * Returns {@code true} iff this pattern has type {@code Type.TARGETS_BELOW_DIRECTORY} or
-   * {@code Type.TARGETS_IN_PACKAGE} and the target pattern suffix specified it should match
-   * rules only.
-   */
-  public abstract boolean getRulesOnly();
 
   private static final class SingleTarget extends TargetPattern {
 
@@ -201,18 +186,13 @@ public abstract class TargetPattern implements Serializable {
     }
 
     @Override
-    public boolean containsBelowDirectory(String directory) {
+    public boolean containsBelowDirectory(TargetPattern containedPattern) {
       return false;
     }
 
     @Override
     public String getDirectory() {
       return directory;
-    }
-
-    @Override
-    public boolean getRulesOnly() {
-      return false;
     }
 
     @Override
@@ -270,7 +250,7 @@ public abstract class TargetPattern implements Serializable {
     }
 
     @Override
-    public boolean containsBelowDirectory(String directory) {
+    public boolean containsBelowDirectory(TargetPattern containedPattern) {
       return false;
     }
 
@@ -278,11 +258,6 @@ public abstract class TargetPattern implements Serializable {
     public String getDirectory() {
       int lastSlashIndex = path.lastIndexOf('/');
       return lastSlashIndex < 0 ? "" : path.substring(0, lastSlashIndex);
-    }
-
-    @Override
-    public boolean getRulesOnly() {
-      return false;
     }
 
     @Override
@@ -339,18 +314,13 @@ public abstract class TargetPattern implements Serializable {
     }
 
     @Override
-    public boolean containsBelowDirectory(String directory) {
+    public boolean containsBelowDirectory(TargetPattern containedPattern) {
       return false;
     }
 
     @Override
     public String getDirectory() {
       return removeSuffix(pattern, suffix);
-    }
-
-    @Override
-    public boolean getRulesOnly() {
-      return rulesOnly;
     }
 
     @Override
@@ -428,21 +398,17 @@ public abstract class TargetPattern implements Serializable {
     }
 
     @Override
-    public boolean containsBelowDirectory(String containedDirectory) {
-      // Note that merely checking to see if the directory startsWith the TargetsBelowDirectory's
-      // directory is insufficient. "food" begins with "foo", but "//foo/..." does not contain
-      // "//food/...".
-      return directory.isEmpty() || (containedDirectory + "/").startsWith(directory + "/");
+    public boolean containsBelowDirectory(TargetPattern containedPattern) {
+      // Note that merely checking to see if the containedPattern's string expression beginsWith
+      // the TargetsBelowDirectory's directory is insufficient. "food" begins with "foo", but
+      // "//foo/..." does not contain "//food/...".
+      String containedDirectory = containedPattern.getDirectory() + "/";
+      return containedDirectory.startsWith(directory + "/");
     }
 
     @Override
     public String getDirectory() {
       return directory;
-    }
-
-    @Override
-    public boolean getRulesOnly() {
-      return rulesOnly;
     }
 
     @Override
@@ -536,16 +502,6 @@ public abstract class TargetPattern implements Serializable {
       // constant (see lib/blaze/commands/target-syntax.txt).
 
       String originalPattern = pattern;
-      final boolean includesRepo = pattern.startsWith("@");
-      String repoName = "";
-      if (includesRepo) {
-        int pkgStart = pattern.indexOf("//");
-        if (pkgStart < 0) {
-          throw new TargetParsingException("Couldn't find package in target " + pattern);
-        }
-        repoName = pattern.substring(0, pkgStart);
-        pattern = pattern.substring(pkgStart);
-      }
       final boolean isAbsolute = pattern.startsWith("//");
 
       // We now absolutize non-absolute target patterns.
@@ -597,9 +553,9 @@ public abstract class TargetPattern implements Serializable {
       }
 
 
-      if (includesRepo || isAbsolute || pattern.contains(":")) {
+      if (isAbsolute || pattern.contains(":")) {
         PackageAndTarget packageAndTarget;
-        String fullLabel = repoName + "//" + pattern;
+        String fullLabel = "//" + pattern;
         try {
           packageAndTarget = LabelValidator.validateAbsoluteLabel(fullLabel);
         } catch (BadLabelException e) {
