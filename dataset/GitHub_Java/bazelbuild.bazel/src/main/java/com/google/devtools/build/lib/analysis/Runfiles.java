@@ -46,7 +46,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeSet;
 
 import javax.annotation.Nullable;
 
@@ -78,31 +77,8 @@ public final class Runfiles {
         }
       };
 
-  private static final Function<Artifact, PathFragment> GET_ROOT_RELATIVE_PATH =
-      new Function<Artifact, PathFragment>() {
-        @Override
-        public PathFragment apply(Artifact input) {
-          return input.getRootRelativePath();
-        }
-      };
-
-  private static final Function<PathFragment, String> PATH_FRAGMENT_TO_STRING =
-      new Function<PathFragment, String>() {
-        @Override
-        public String apply(PathFragment input) {
-          return input.toString();
-        }
-      };
-
   /**
    * An entry in the runfiles map.
-   *
-   * <p>build-runfiles.cc enforces the following constraints: The PathFragment must not be an
-   * absolute path, nor contain "..".  Overlapping runfiles links are also refused. This is the case
-   * where you ask to create a link to "foo" and also "foo/bar.txt". I.e. you're asking it to make
-   * "foo" both a file (symlink) and a directory.
-   *
-   * <p>Links to directories are heavily discouraged.
    */
   //
   // O intrepid fixer or bugs and implementor of features, dare not to add a .equals() method
@@ -195,8 +171,7 @@ public final class Runfiles {
   /**
    * Behavior upon finding a conflict between two runfile entries. A conflict means that two
    * different artifacts have the same runfiles path specified.  For example, adding artifact
-   * "a.foo" at path "bar" when there is already an artifact "b.foo" at path "bar".  The policies
-   * are ordered from least strict to most strict.
+   * "a.foo" at path "bar" when there is already an artifact "b.foo" at path "bar".
    *
    * <p>Note that conflicts are found relatively late, when the manifest file is created, not when
    * the symlinks are added to runfiles.
@@ -267,15 +242,13 @@ public final class Runfiles {
       NestedSet<SymlinkEntry> symlinks,
       NestedSet<SymlinkEntry> rootSymlinks,
       NestedSet<PruningManifest> pruningManifests,
-      EmptyFilesSupplier emptyFilesSupplier,
-      ConflictPolicy conflictPolicy) {
+      EmptyFilesSupplier emptyFilesSupplier) {
     this.suffix = suffix;
     this.unconditionalArtifacts = Preconditions.checkNotNull(artifacts);
     this.symlinks = Preconditions.checkNotNull(symlinks);
     this.rootSymlinks = Preconditions.checkNotNull(rootSymlinks);
     this.pruningManifests = Preconditions.checkNotNull(pruningManifests);
     this.emptyFilesSupplier = Preconditions.checkNotNull(emptyFilesSupplier);
-    this.conflictPolicy = conflictPolicy;
   }
 
   /**
@@ -334,20 +307,6 @@ public final class Runfiles {
   @SkylarkCallable(name = "symlinks", doc = "Returns the set of symlinks", structField = true)
   public NestedSet<SymlinkEntry> getSymlinks() {
     return symlinks;
-  }
-
-  @SkylarkCallable(
-    name = "empty_filenames",
-    doc = "Returns names of empty files to create.",
-    structField = true
-  )
-  public NestedSet<String> getEmptyFilenames() {
-    Set<PathFragment> manifest = new TreeSet();
-    Iterables.addAll(
-        manifest, Iterables.transform(getArtifacts().toCollection(), GET_ROOT_RELATIVE_PATH));
-    return NestedSetBuilder.wrap(
-        Order.STABLE_ORDER,
-        Iterables.transform(emptyFilesSupplier.getExtraPaths(manifest), PATH_FRAGMENT_TO_STRING));
   }
 
   /**
@@ -560,15 +519,9 @@ public final class Runfiles {
     return map;
   }
 
-  /** Returns currently policy for conflicting symlink entries. */
-  public ConflictPolicy getConflictPolicy() {
-    return this.conflictPolicy;
-  }
-
   /** Set whether we should warn about conflicting symlink entries. */
-  public Runfiles setConflictPolicy(ConflictPolicy conflictPolicy) {
+  public void setConflictPolicy(ConflictPolicy conflictPolicy) {
     this.conflictPolicy = conflictPolicy;
-    return this;
   }
 
   /**
@@ -652,9 +605,6 @@ public final class Runfiles {
         NestedSetBuilder.stableOrder();
     private EmptyFilesSupplier emptyFilesSupplier = DUMMY_EMPTY_FILES_SUPPLIER;
 
-    /** Build the Runfiles object with this policy */
-    private ConflictPolicy conflictPolicy = ConflictPolicy.IGNORE;
-
     /**
      * Only used for Runfiles.EMPTY.
      */
@@ -676,7 +626,7 @@ public final class Runfiles {
     public Runfiles build() {
       return new Runfiles(suffix, artifactsBuilder.build(), symlinksBuilder.build(),
           rootSymlinksBuilder.build(), pruningManifestsBuilder.build(),
-          emptyFilesSupplier, conflictPolicy);
+          emptyFilesSupplier);
     }
 
     /**
@@ -744,16 +694,6 @@ public final class Runfiles {
      */
     public Builder addSymlinks(NestedSet<SymlinkEntry> symlinks) {
       symlinksBuilder.addTransitive(symlinks);
-      return this;
-    }
-
-    /**
-     * Adds a root symlink.
-     */
-    public Builder addRootSymlink(PathFragment link, Artifact target) {
-      Preconditions.checkNotNull(link);
-      Preconditions.checkNotNull(target);
-      rootSymlinksBuilder.add(new SymlinkEntry(link, target));
       return this;
     }
 
@@ -936,10 +876,6 @@ public final class Runfiles {
      * pruning manifests in the merge.
      */
     private Builder merge(Runfiles runfiles, boolean includePruningManifests) {
-      // Propagate the most strict conflict checking from merged-in runfiles
-      if (runfiles.conflictPolicy.compareTo(conflictPolicy) > 0) {
-        conflictPolicy = runfiles.conflictPolicy;
-      }
       if (runfiles.isEmpty()) {
         return this;
       }
