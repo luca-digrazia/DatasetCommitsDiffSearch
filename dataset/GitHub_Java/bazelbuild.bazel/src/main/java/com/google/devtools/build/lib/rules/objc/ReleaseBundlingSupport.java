@@ -21,7 +21,6 @@ import static com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.UI_DEV
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -45,11 +44,10 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.objc.BundleSupport.ExtraActoolArgs;
 import com.google.devtools.build.lib.shell.ShellUtils;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.XcodeprojBuildSetting;
 
 import java.util.List;
@@ -304,22 +302,32 @@ public final class ReleaseBundlingSupport {
   private void registerEnvironmentPlistAction() {
     ObjcConfiguration configuration = ObjcRuleClasses.objcConfiguration(ruleContext);
     // Generates a .plist that contains environment values (such as the SDK used to build, the Xcode
-    // version, etc), which are parsed from various .plist files of the OS, namely Xcodes' and
+    // version, etc), which are parsed from various .plist files of the OS, namely XCodes' and
     // Platforms' plists.
     // The resulting file is meant to be merged with the final bundle.
-    String platformWithVersion =
-        String.format("%s%s", configuration.getBundlingPlatform().getLowerCaseNameInPlist(),
-            Strings.nullToEmpty(configuration.getIosSdkVersion()));
-    ruleContext.registerAction(
-        ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
-            .setMnemonic("EnvironmentPlist")
-            .addInput(attributes.environmentPlistScript())
-            .setExecutable(attributes.environmentPlistScript())
-            .addArguments("--platform", platformWithVersion)
-            .addArguments(
-                "--output", getGeneratedEnvironmentPlist().getShellEscapedExecPathString())
-            .addOutput(getGeneratedEnvironmentPlist())
-            .build(ruleContext));
+    String command = Joiner.on(" && ").join(
+        "PLATFORM_PLIST=" + IosSdkCommands.platformDir(configuration) + "/Info.plist",
+        "PLIST=$(mktemp -d -t bazel_environment)/env.plist",
+        "os_build=$(/usr/bin/defaults read \"${PLATFORM_PLIST}\" BuildMachineOSBuild)",
+        "compiler=$(/usr/bin/defaults read \"${PLATFORM_PLIST}\" DTCompiler)",
+        "platform_version=$(/usr/bin/defaults read \"${PLATFORM_PLIST}\" Version)",
+        "sdk_build=$(/usr/bin/defaults read \"${PLATFORM_PLIST}\" DTSDKBuild)",
+        "platform_build=$(/usr/bin/defaults read \"${PLATFORM_PLIST}\" DTPlatformBuild)",
+        "xcode_build=$(/usr/bin/defaults read \"${PLATFORM_PLIST}\" DTXcodeBuild)",
+        "xcode_version=$(/usr/bin/defaults read \"${PLATFORM_PLIST}\" DTXcode)",
+        "/usr/bin/defaults write \"${PLIST}\" DTPlatformBuild -string ${platform_build}",
+        "/usr/bin/defaults write \"${PLIST}\" DTSDKBuild -string ${sdk_build}",
+        "/usr/bin/defaults write \"${PLIST}\" DTPlatformVersion -string ${platform_version}",
+        "/usr/bin/defaults write \"${PLIST}\" DTXcode -string ${xcode_version}",
+        "/usr/bin/defaults write \"${PLIST}\" DTXCodeBuild -string ${xcode_build}",
+        "/usr/bin/defaults write \"${PLIST}\" DTCompiler -string ${compiler}",
+        "/usr/bin/defaults write \"${PLIST}\" BuildMachineOSBuild -string ${os_build}",
+        "cat \"${PLIST}\" > " + getGeneratedEnvironmentPlist().getShellEscapedExecPathString(),
+        "rm -rf \"${PLIST}\"");
+    ruleContext.registerAction(ObjcRuleClasses.spawnBashOnDarwinActionBuilder(ruleContext, command)
+        .setMnemonic("EnvironmentPlist")
+        .addOutput(getGeneratedEnvironmentPlist())
+        .build(ruleContext));
   }
 
   private Artifact registerBundleSigningActions(Artifact ipaOutput) throws InterruptedException {
@@ -402,8 +410,10 @@ public final class ReleaseBundlingSupport {
     // want to link anything since that stuff is shared automatically by way of the
     // -bundle_loader linker flag.
     ObjcProvider partialObjcProvider = new ObjcProvider.Builder()
+        .addTransitiveAndPropagate(ObjcProvider.GCNO, objcProvider)
         .addTransitiveAndPropagate(ObjcProvider.HEADER, objcProvider)
         .addTransitiveAndPropagate(ObjcProvider.INCLUDE, objcProvider)
+        .addTransitiveAndPropagate(ObjcProvider.INSTRUMENTED_SOURCE, objcProvider)
         .addTransitiveAndPropagate(ObjcProvider.SDK_DYLIB, objcProvider)
         .addTransitiveAndPropagate(ObjcProvider.SDK_FRAMEWORK, objcProvider)
         .addTransitiveAndPropagate(ObjcProvider.SOURCE, objcProvider)
@@ -867,21 +877,13 @@ public final class ReleaseBundlingSupport {
       return ruleContext.getPrerequisiteArtifact("$swiftstdlibtoolzip_deploy", Mode.HOST);
     }
 
-    /**
-     * Returns the location of the environment_plist.sh.
-     */
-    public Artifact environmentPlistScript() {
-      return checkNotNull(
-          ruleContext.getPrerequisiteArtifact("$environment_plist_sh", Mode.HOST));
-    }
-
     String bundleId() {
       return checkNotNull(stringAttribute("bundle_id"));
     }
 
     ImmutableMap<String, Artifact> cpuSpecificBreakpadFiles() {
       ImmutableMap.Builder<String, Artifact> results = ImmutableMap.builder();
-      if (ruleContext.attributes().has("binary", BuildType.LABEL)) {
+      if (ruleContext.attributes().has("binary", Type.LABEL)) {
         for (TransitiveInfoCollection prerequisite
             : ruleContext.getPrerequisites("binary", Mode.DONT_CHECK)) {
           ObjcProvider prerequisiteProvider =  prerequisite.getProvider(ObjcProvider.class);

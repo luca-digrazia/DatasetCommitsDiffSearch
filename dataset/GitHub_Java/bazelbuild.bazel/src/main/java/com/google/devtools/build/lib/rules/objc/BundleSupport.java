@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.ASSET_CATALO
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.BUNDLE_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STRINGS;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCASSETS_DIR;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.XCRUN;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Verify;
@@ -32,10 +31,10 @@ import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.InvalidFamilyNameException;
 import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.RepeatedFamilyNameException;
 import com.google.devtools.build.lib.rules.objc.XcodeProvider.Builder;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -226,7 +225,7 @@ final class BundleSupport {
       ruleContext.registerAction(
           ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
               .setMnemonic("StoryboardCompile")
-              .setExecutable(attributes.ibtoolWrapper())
+              .setExecutable(attributes.ibtoolwrapper())
               .setCommandLine(ibActionsCommandLine(archiveRoot, zipOutput, storyboardInput))
               .addOutput(zipOutput)
               .addInput(storyboardInput)
@@ -264,17 +263,15 @@ final class BundleSupport {
     for (Xcdatamodel datamodel : xcdatamodels) {
       Artifact outputZip = datamodel.getOutputZip();
       ruleContext.registerAction(
-          ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
+          ObjcRuleClasses.spawnJavaOnDarwinActionBuilder(ruleContext, attributes.momczipDeployJar())
               .setMnemonic("MomCompile")
-              .setExecutable(attributes.momcWrapper())
               .addOutput(outputZip)
               .addInputs(datamodel.getInputs())
-              // TODO(dmaclach): Adding realpath here should not be required once
-              // https://github.com/google/bazel/issues/285 is fixed.
-              .addInput(attributes.realpath())
               .setCommandLine(CustomCommandLine.builder()
                   .addPath(outputZip.getExecPath())
                   .add(datamodel.archiveRootForMomczip())
+                  .add(IosSdkCommands.MOMC_PATH)
+
                   .add("-XD_MOMC_SDKROOT=" + IosSdkCommands.sdkDir(objcConfiguration))
                   .add("-XD_MOMC_IOS_TARGET_VERSION=" + bundling.getMinimumOsVersion())
                   .add("-MOMC_PLATFORMS")
@@ -297,7 +294,7 @@ final class BundleSupport {
       ruleContext.registerAction(
           ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
               .setMnemonic("XibCompile")
-              .setExecutable(attributes.ibtoolWrapper())
+              .setExecutable(attributes.ibtoolwrapper())
               .setCommandLine(ibActionsCommandLine(archiveRoot, zipOutput, original))
               .addOutput(zipOutput)
               .addInput(original)
@@ -313,15 +310,12 @@ final class BundleSupport {
         ObjcRuleClasses.intermediateArtifacts(ruleContext);
     for (Artifact strings : objcProvider.get(ObjcProvider.STRINGS)) {
       Artifact bundled = intermediateArtifacts.convertedStringsFile(strings);
-      ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
+      ruleContext.registerAction(new SpawnAction.Builder()
           .setMnemonic("ConvertStringsPlist")
-          .setExecutable(XCRUN)
+          .setExecutable(attributes.plmerge())
           .setCommandLine(CustomCommandLine.builder()
-              .add("plutil")
-              .add("-convert").add("binary1")
-              .addExecPath("-o", bundled)
-              .add("--")
-              .addPath(strings.getExecPath())
+              .addExecPath("--source_file", strings)
+              .addExecPath("--out_file", bundled)
               .build())
           .addInput(strings)
           .addOutput(bundled)
@@ -379,15 +373,11 @@ final class BundleSupport {
     // zip file will be rooted at the bundle root, and we have to prepend the bundle root to each
     // entry when merging it with the final .ipa file.
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
+        ObjcRuleClasses.spawnJavaOnDarwinActionBuilder(ruleContext, attributes.actoolzipDeployJar())
             .setMnemonic("AssetCatalogCompile")
-            .setExecutable(attributes.actoolWrapper())
             .addTransitiveInputs(objcProvider.get(ASSET_CATALOG))
             .addOutput(zipOutput)
             .addOutput(actoolPartialInfoplist)
-            // TODO(dmaclach): Adding realpath here should not be required once
-            // https://github.com/google/bazel/issues/285 is fixed.
-            .addInput(attributes.realpath())
             .setCommandLine(actoolzipCommandLine(
                 objcProvider,
                 zipOutput,
@@ -401,6 +391,9 @@ final class BundleSupport {
     CustomCommandLine.Builder commandLine = CustomCommandLine.builder()
         // The next three arguments are positional, i.e. they don't have flags before them.
         .addPath(zipOutput.getExecPath())
+        .add("") // archive root
+        .add(IosSdkCommands.ACTOOL_PATH)
+
         .add("--platform").add(objcConfiguration.getBundlingPlatform().getLowerCaseNameInPlist())
         .addExecPath("--output-partial-info-plist", partialInfoPlist)
         .add("--minimum-deployment-target").add(bundling.getMinimumOsVersion());
@@ -471,7 +464,7 @@ final class BundleSupport {
     /**
      * Returns the location of the ibtoolwrapper tool.
      */
-    FilesToRunProvider ibtoolWrapper() {
+    FilesToRunProvider ibtoolwrapper() {
       return ruleContext.getExecutablePrerequisite("$ibtoolwrapper", Mode.HOST);
     }
 
@@ -485,17 +478,17 @@ final class BundleSupport {
     }
 
     /**
-     * Returns the location of the momcwrapper.
+     * Returns the location of the momczip deploy jar.
      */
-    FilesToRunProvider momcWrapper() {
-      return ruleContext.getExecutablePrerequisite("$momcwrapper", Mode.HOST);
+    Artifact momczipDeployJar() {
+      return ruleContext.getPrerequisiteArtifact("$momczip_deploy", Mode.HOST);
     }
 
     /**
-     * Returns the location of the actoolwrapper.
+     * Returns the location of the actoolzip deploy jar.
      */
-    FilesToRunProvider actoolWrapper() {
-      return ruleContext.getExecutablePrerequisite("$actoolwrapper", Mode.HOST);
+    Artifact actoolzipDeployJar() {
+      return ruleContext.getPrerequisiteArtifact("$actoolzip_deploy", Mode.HOST);
     }
   }
 }

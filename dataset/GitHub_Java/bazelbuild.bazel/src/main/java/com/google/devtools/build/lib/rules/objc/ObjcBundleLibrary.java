@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,20 +17,13 @@ package com.google.devtools.build.lib.rules.objc;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.NESTED_BUNDLE;
 import static com.google.devtools.build.lib.rules.objc.XcodeProductType.BUNDLE;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
-import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.InvalidFamilyNameException;
-import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.RepeatedFamilyNameException;
-import com.google.devtools.build.lib.syntax.Type;
-
-import java.util.List;
 
 /**
  * Implementation for {@code objc_bundle_library}.
@@ -82,29 +75,14 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
     IntermediateArtifacts intermediateArtifacts =
         ObjcRuleClasses.intermediateArtifacts(ruleContext);
     ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
-
-    ImmutableSet<TargetDeviceFamily> families = null;
-    List<String> rawFamilies = ruleContext.attributes().get("families", Type.STRING_LIST);
-    try {
-      families = ImmutableSet.copyOf(TargetDeviceFamily.fromNamesInRule(rawFamilies));
-    } catch (InvalidFamilyNameException | RepeatedFamilyNameException e) {
-      families = ImmutableSet.of();
-    }
-
-    if (families.isEmpty()) {
-      ruleContext.attributeError("families", ReleaseBundling.INVALID_FAMILIES_ERROR);
-    }
-
     return new Bundling.Builder()
         .setName(ruleContext.getLabel().getName())
-        .setArchitecture(appleConfiguration.getIosCpu())
+        .setArchitecture(objcConfiguration.getIosCpu())
         .setBundleDirFormat("%s.bundle")
         .setObjcProvider(common.getObjcProvider())
         .addInfoplistInputFromRule(ruleContext)
         .setIntermediateArtifacts(intermediateArtifacts)
         .setMinimumOsVersion(objcConfiguration.getMinimumOs())
-        .setTargetDeviceFamilies(families)
         .build();
   }
 
