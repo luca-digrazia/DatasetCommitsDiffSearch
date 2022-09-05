@@ -27,7 +27,7 @@ import org.junit.runners.JUnit4;
 /**
  * Tests of the interaction of Thread.interrupt and Command.execute.
  *
- * Read http://www.ibm.com/developerworks/java/library/j-jtp05236/
+ * Read http://www-128.ibm.com/developerworks/java/library/j-jtp05236.html
  * for background material.
  *
  * NOTE: This test is dependent on thread timings.  Under extreme machine load
