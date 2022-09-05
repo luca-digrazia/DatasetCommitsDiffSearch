@@ -28,10 +28,8 @@ import org.hswebframework.web.authorization.simple.SimpleRole;
 import org.hswebframework.web.authorization.simple.SimpleUser;
 import org.hswebframework.web.bean.FastBeanCopier;
 import org.hswebframework.web.commons.entity.DataStatus;
-import org.hswebframework.web.commons.entity.QueryEntity;
 import org.hswebframework.web.commons.entity.TreeSupportEntity;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
-import org.hswebframework.web.commons.entity.param.QueryParamEntity;
 import org.hswebframework.web.dao.authorization.AuthorizationSettingDao;
 import org.hswebframework.web.dao.authorization.AuthorizationSettingDetailDao;
 import org.hswebframework.web.entity.authorization.*;
@@ -205,7 +203,6 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
         for (AuthorizationSettingEntity setting : settings) {
             AuthorizationSettingEntity old = select(setting.getType(), setting.getSettingFor());
             if (old == null) {
-                setting.setStatus(STATUS_ENABLED);
                 insert(setting);
                 continue;
             }
@@ -223,18 +220,9 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
                         authorizationSettingDetailDao.insert(detail);
                     }
                 }
-            }
-            if (!CollectionUtils.isEmpty(setting.getMenus())) {
-                Set<String> menus = old.getMenus().stream()
-                        .map(AuthorizationSettingMenuEntity::getMenuId)
-                        .collect(Collectors.toSet());
+            } else if (!CollectionUtils.isEmpty(setting.getMenus())) {
                 for (AuthorizationSettingMenuEntity menu : setting.getMenus()) {
                     menu.setSettingId(setting.getId());
-                    if (menus.contains(menu.getMenuId())) {
-                        continue;
-                    }
-                    menu.setStatus(STATUS_ENABLED);
-                    menus.add(menu.getMenuId());
                     authorizationSettingMenuService.saveOrUpdate(menu);
                 }
             }
