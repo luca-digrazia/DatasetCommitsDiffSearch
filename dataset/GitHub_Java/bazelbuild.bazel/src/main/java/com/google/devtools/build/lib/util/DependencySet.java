@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.util;
 
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -54,11 +55,11 @@ public final class DependencySet {
   private static final Pattern DOTD_DEP = Pattern.compile("(?:[^\\s\\\\]++|\\\\ |\\\\)+");
 
   /**
-   * The set of dependent files that this DependencySet embodies. They are all
-   * Path with the same FileSystem  A tree set is used to ensure that we
+   * The set of dependent files that this DependencySet embodies. May be
+   * relative or absolute PathFragments.  A tree set is used to ensure that we
    * write them out in a consistent order.
    */
-  private final Collection<Path> dependencies = new ArrayList<>();
+  private final Collection<PathFragment> dependencies = new ArrayList<>();
 
   private final Path root;
   private String outputFileName;
@@ -85,7 +86,7 @@ public final class DependencySet {
    * Gets an unmodifiable view of the set of dependencies in PathFragment form
    * from this DependencySet instance.
    */
-  public Collection<Path> getDependencies() {
+  public Collection<PathFragment> getDependencies() {
     return Collections.unmodifiableCollection(dependencies);
   }
 
@@ -103,9 +104,8 @@ public final class DependencySet {
    * Adds a given dependency in PathFragment form to this DependencySet
    * instance.
    */
-  private void addDependency(PathFragment dep) {
-    Path depPath = root.getRelative(Preconditions.checkNotNull(dep));
-    dependencies.add(depPath);
+  public void addDependency(PathFragment dep) {
+    dependencies.add(Preconditions.checkNotNull(dep));
   }
 
   /**
@@ -194,7 +194,7 @@ public final class DependencySet {
         if (token.contains("\\ ")) {
           token = token.replace("\\ ", " ");
         }
-        addDependency(new PathFragment(token).normalize());
+        dependencies.add(new PathFragment(token).normalize());
       }
     }
     return this;
@@ -211,7 +211,7 @@ public final class DependencySet {
     PrintStream out = new PrintStream(dotdFile.getOutputStream());
     try {
       out.print(outFile.relativeTo(root) + ": ");
-      for (Path d : dependencies) {
+      for (PathFragment d : dependencies) {
         out.print(" \\\n  " + d.getPathString());  // should already be root relative
       }
       out.println();
