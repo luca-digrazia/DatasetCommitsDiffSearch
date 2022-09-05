@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,9 +38,6 @@ import java.util.List;
  * </pre>
  */
 public final class SelectorList {
-  // TODO(build-team): Selectors are currently split between .packages and .syntax . They should
-  // really all be in .packages, but then we'd need to figure out a way how to extend binary
-  // operators, which is a non-trivial problem.
   private final Class<?> type;
   private final List<Object> elements;
 
@@ -60,7 +57,7 @@ public final class SelectorList {
   /**
    * Returns the native type contained by this expression.
    */
-  public Class<?> getType() {
+  private Class<?> getType() {
     return type;
   }
 
@@ -83,16 +80,11 @@ public final class SelectorList {
     Class<?> type1 = addValue(value1, builder);
     Class<?> type2 = addValue(value2, builder);
     if (!canConcatenate(type1, type2)) {
-      throw new EvalException(
-          location,
-          String.format(
-              "'+' operator applied to incompatible types (%s, %s)",
-              EvalUtils.getDataTypeName(value1, true),
-              EvalUtils.getDataTypeName(value2, true)));
+      throw new EvalException(location, "'+' operator applied to incompatible types");
     }
     return new SelectorList(type1, builder.build());
   }
-
+  
   // TODO(bazel-team): match on the List interface, not the actual implementation. For now,
   // we verify this is the right class through test coverage.
   private static final Class<?> NATIVE_LIST_TYPE = ArrayList.class;
