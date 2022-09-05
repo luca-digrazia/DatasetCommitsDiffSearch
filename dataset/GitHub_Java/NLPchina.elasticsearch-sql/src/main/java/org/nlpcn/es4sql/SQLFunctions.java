@@ -27,7 +27,7 @@ public class SQLFunctions {
     );
 
 
-    public static Tuple<String, String> function(String methodName, List<KVValue> paramers, String name,boolean returnValue) {
+    public static Tuple<String, String> function(String methodName, List<KVValue> paramers, String name) {
         Tuple<String, String> functionStr = null;
         switch (methodName) {
             case "split":
@@ -52,6 +52,9 @@ public class SQLFunctions {
 
                 break;
 
+            case "floor":
+                functionStr = floor(Util.expr2Object((SQLExpr) paramers.get(0).value).toString(), name);
+                break;
 
             case "date_format":
                 functionStr = date_format(
@@ -60,19 +63,20 @@ public class SQLFunctions {
                         name);
                 break;
 
-            case "floor":
             case "round":
+                functionStr = round(Util.expr2Object((SQLExpr) paramers.get(0).value).toString(), name);
+                break;
             case "log":
-            case "log10":
-            case "ceil":
-            case "cbrt":
-            case "rint":
-            case "pow":
-            case "exp":
-            case "sqrt":
-                functionStr = mathSingleValueTemplate("Math."+methodName,methodName,Util.expr2Object((SQLExpr) paramers.get(0).value).toString(), name);
+                functionStr = log(Util.expr2Object((SQLExpr) paramers.get(0).value).toString(), name);
                 break;
 
+            case "log10":
+                functionStr = log10(Util.expr2Object((SQLExpr) paramers.get(0).value).toString(), name);
+                break;
+
+            case "sqrt":
+                functionStr = sqrt(Util.expr2Object((SQLExpr) paramers.get(0).value).toString(), name);
+                break;
 
             case "substring":
                 functionStr = substring(Util.expr2Object((SQLExpr) paramers.get(0).value).toString(),
@@ -109,12 +113,6 @@ public class SQLFunctions {
             default:
 
         }
-        if(returnValue){
-            String generatedFieldName = functionStr.v1();
-            String returnCommand = ";return " + generatedFieldName +";" ;
-            String newScript = functionStr.v2() + returnCommand;
-            functionStr = new Tuple(generatedFieldName, newScript);
-        }
         return functionStr;
     }
 
@@ -145,14 +143,12 @@ public class SQLFunctions {
     //split(Column str, java.lang.String pattern)
     public static Tuple<String, String> split(String strColumn, String pattern, int index, String valueName) {
         String name = "split_" + random();
-        String script = "";
         if (valueName == null) {
-            script = "def " + name + " = doc['" + strColumn + "'].value.split('" + pattern + "')[" + index + "]";
-
+            return new Tuple(name, "def " + name + " = doc['" + strColumn + "'].value.split('" + pattern + "')[" + index + "]");
         } else {
-            script = "; def " + name + " = " + valueName + ".split('" + pattern + "')[" + index + "]";
+            return new Tuple(name, strColumn + "; def " + name + " = " + valueName + ".split('" + pattern + "')[" + index + "]");
         }
-        return new Tuple(name, script);
+
     }
 
     public static Tuple<String, String> date_format(String strColumn, String pattern, String valueName) {
@@ -194,10 +190,11 @@ public class SQLFunctions {
     public static Tuple<String, String> binaryOpertator(String methodName, String operator, SQLExpr a, SQLExpr b) {
 
         String name = methodName + "_" + random();
+
         return new Tuple(name,
                 scriptDeclare(a) + scriptDeclare(b) +
                         convertType(a) + convertType(b) +
-                        " def " + name + " = " + extractName(a) + " " + operator + " " + extractName(b) ) ;
+                        " def " + name + " = " + extractName(a) + " " + operator + " " + extractName(b));
     }
 
     private static boolean isProperty(SQLExpr expr) {
@@ -230,8 +227,7 @@ public class SQLFunctions {
         if (newScript.trim().startsWith("def ")) {
             //for now ,if variant is string,then change to double.
             String temp = newScript.substring(4).split("=")[0].trim();
-
-            return " if( " + temp + " instanceof String) " + temp + "= Double.parseDouble(" + temp.trim() + "); ";
+            return " if( " + temp + " instanceof String) " + temp + "=" + temp.trim() + ".toDouble(); ";
         } else return "";
 
 
@@ -252,13 +248,13 @@ public class SQLFunctions {
 
     public static Tuple<String, String> sqrt(String strColumn, String valueName) {
 
-        return mathSingleValueTemplate("Math.sqrt", "sqrt",  strColumn, valueName);
+        return mathSingleValueTemplate("sqrt", strColumn, valueName);
 
     }
 
     public static Tuple<String, String> round(String strColumn, String valueName) {
 
-        return mathSingleValueTemplate("Math.round","round", strColumn, valueName);
+        return mathSingleValueTemplate("round", strColumn, valueName);
 
     }
 
@@ -269,10 +265,7 @@ public class SQLFunctions {
     }
 
     public static Tuple<String, String> mathSingleValueTemplate(String methodName, String strColumn, String valueName) {
-        return mathSingleValueTemplate(methodName,methodName, strColumn,valueName);
-    }
-    public static Tuple<String, String> mathSingleValueTemplate(String methodName,String fieldName, String strColumn, String valueName) {
-        String name = fieldName + "_" + random();
+        String name = methodName + "_" + random();
         if (valueName == null) {
             return new Tuple(name, "def " + name + " = " + methodName + "(doc['" + strColumn + "'].value)");
         } else {
@@ -284,7 +277,7 @@ public class SQLFunctions {
     public static Tuple<String, String> strSingleValueTemplate(String methodName, String strColumn, String valueName) {
         String name = methodName + "_" + random();
         if (valueName == null) {
-            return new Tuple(name, "def " + name + " = doc['" + strColumn + "'].value." + methodName + "()" );
+            return new Tuple(name, "def " + name + " = doc['" + strColumn + "'].value." + methodName + "()");
         } else {
             return new Tuple(name, strColumn + "; def " + name + " = " + valueName + "." + methodName + "()");
         }
@@ -293,7 +286,7 @@ public class SQLFunctions {
 
     public static Tuple<String, String> floor(String strColumn, String valueName) {
 
-        return mathSingleValueTemplate("Math.floor", "floor",strColumn, valueName);
+        return mathSingleValueTemplate("floor", strColumn, valueName);
 
     }
 
@@ -313,7 +306,7 @@ public class SQLFunctions {
     public static Tuple<String, String> split(String strColumn, String pattern, String valueName) {
         String name = "split_" + random();
         if (valueName == null) {
-            return new Tuple(name, "def " + name + " = doc['" + strColumn + "'].value.split('" + pattern + "')" );
+            return new Tuple(name, "def " + name + " = doc['" + strColumn + "'].value.split('" + pattern + "')");
         } else {
             return new Tuple(name, strColumn + "; def " + name + " = " + valueName + ".split('" + pattern + "')");
         }
