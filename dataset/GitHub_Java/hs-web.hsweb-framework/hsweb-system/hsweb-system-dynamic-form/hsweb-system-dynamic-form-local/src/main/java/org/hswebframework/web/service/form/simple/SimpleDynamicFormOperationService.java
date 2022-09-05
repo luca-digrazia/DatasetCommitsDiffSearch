@@ -56,8 +56,7 @@ public class SimpleDynamicFormOperationService implements DynamicFormOperationSe
             throw new NotFoundException("表单不存在");
         }
         RDBDatabase database = StringUtils.isEmpty(form.getDataSourceId()) ?
-                databaseRepository.getDefaultDatabase(form.getDatabaseName()) :
-                databaseRepository.getDatabase(form.getDataSourceId(),form.getDatabaseName());
+                databaseRepository.getDefaultDatabase() : databaseRepository.getDatabase(form.getDataSourceId());
         return database.getTable(form.getDatabaseTableName());
     }
 
@@ -67,8 +66,8 @@ public class SimpleDynamicFormOperationService implements DynamicFormOperationSe
             throw new NotFoundException("表单不存在");
         }
         return StringUtils.isEmpty(form.getDataSourceId()) ?
-                databaseRepository.getDefaultDatabase(form.getDatabaseName()) :
-                databaseRepository.getDatabase(form.getDataSourceId(),form.getDatabaseName());
+                databaseRepository.getDefaultDatabase() :
+                databaseRepository.getDatabase(form.getDataSourceId());
     }
 
     @Override
@@ -140,7 +139,7 @@ public class SimpleDynamicFormOperationService implements DynamicFormOperationSe
                 .filter(RDBColumnMetaData::isPrimaryKey)
                 .findFirst()
                 .map(RDBColumnMetaData::getAlias)
-                .orElseThrow(() -> new BusinessException("表[" + tableMetaData.getName() + "]未设置主键字段"));
+                .orElseThrow(() -> new BusinessException("表[" + tableMetaData.getComment() + "]未设置主键字段"));
     }
 
     @SneakyThrows
