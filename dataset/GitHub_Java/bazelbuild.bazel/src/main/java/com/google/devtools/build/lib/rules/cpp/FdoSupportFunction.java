@@ -50,7 +50,6 @@ public class FdoSupportFunction implements SkyFunction {
       return null;
     }
 
-    // TODO(kchodorow): create a SkyFunction to get the main repository name and pass it in here.
     Path execRoot = blazeDirectories.getExecRoot();
     FdoSupportValue.Key key = (FdoSupportValue.Key) skyKey.argument();
     FdoSupport fdoSupport;
