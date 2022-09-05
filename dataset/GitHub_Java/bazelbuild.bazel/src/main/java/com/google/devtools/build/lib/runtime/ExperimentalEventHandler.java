@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionProgressReceiverAvailableEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.TestFilteringCompleteEvent;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseCompleteEvent;
 import com.google.devtools.build.lib.skyframe.LoadingPhaseStartedEvent;
@@ -49,8 +48,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.logging.Logger;
 
-/** An experimental new output stream. */
-public class ExperimentalEventHandler implements EventHandler {
+/**
+ * An experimental new output stream.
+ */
+public class ExperimentalEventHandler extends BlazeCommandEventHandler {
   private static Logger LOG = Logger.getLogger(ExperimentalEventHandler.class.getName());
   /** Latest refresh of the progress bar, if contents other than time changed */
   static final long MAXIMAL_UPDATE_DELAY_MILLIS = 200L;
@@ -72,7 +73,6 @@ public class ExperimentalEventHandler implements EventHandler {
   private final boolean showProgress;
   private final boolean progressInTermTitle;
   private final boolean showTimestamp;
-  private final OutErr outErr;
   private long lastRefreshMillis;
   private long mustRefreshAfterMillis;
   private int numLinesProgressBar;
@@ -86,7 +86,7 @@ public class ExperimentalEventHandler implements EventHandler {
 
   public ExperimentalEventHandler(
       OutErr outErr, BlazeCommandEventHandler.Options options, Clock clock) {
-    this.outErr = outErr;
+    super(outErr, options);
     this.cursorControl = options.useCursorControl();
     this.terminal = new AnsiTerminal(outErr.getErrorStream());
     this.terminalWidth = (options.terminalColumns > 0 ? options.terminalColumns : 80);
