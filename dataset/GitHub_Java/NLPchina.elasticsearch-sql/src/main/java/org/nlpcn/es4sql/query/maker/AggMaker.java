@@ -1,7 +1,11 @@
 package org.nlpcn.es4sql.query.maker;
 
-import org.apache.commons.lang.StringUtils;
-import org.elasticsearch.common.ParsingException;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.ZoneOffset;
+import java.util.*;
+import java.util.stream.Collectors;
+
 import org.elasticsearch.common.xcontent.LoggingDeprecationHandler;
 import org.elasticsearch.common.xcontent.NamedXContentRegistry;
 import org.elasticsearch.common.xcontent.XContentParser;
@@ -9,49 +13,37 @@ import org.elasticsearch.common.xcontent.json.JsonXContent;
 import org.elasticsearch.join.aggregations.JoinAggregationBuilders;
 import org.elasticsearch.script.Script;
 import org.elasticsearch.script.ScriptType;
-import org.elasticsearch.search.aggregations.*;
+import org.elasticsearch.search.aggregations.AbstractAggregationBuilder;
+import org.elasticsearch.search.aggregations.AggregationBuilder;
+import org.elasticsearch.search.aggregations.AggregationBuilders;
+import org.elasticsearch.search.aggregations.BucketOrder;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGridAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramInterval;
-import org.elasticsearch.search.aggregations.bucket.histogram.ExtendedBounds;
-import org.elasticsearch.search.aggregations.bucket.histogram.HistogramAggregationBuilder;
+
+import org.elasticsearch.search.aggregations.bucket.histogram.*;
 import org.elasticsearch.search.aggregations.bucket.nested.ReverseNestedAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.range.DateRangeAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.range.RangeAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.significant.SignificantTextAggregationBuilder;
+import org.elasticsearch.search.aggregations.bucket.range.DateRangeAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.terms.IncludeExclude;
 import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.GeoBoundsAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.PercentilesAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.ScriptedMetricAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.TopHitsAggregationBuilder;
-import org.elasticsearch.search.aggregations.pipeline.BucketSelectorPipelineAggregationBuilder;
-import org.elasticsearch.search.aggregations.pipeline.MovFnPipelineAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.geobounds.GeoBoundsAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.percentiles.PercentilesAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.scripted.ScriptedMetricAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.tophits.TopHitsAggregationBuilder;
 import org.elasticsearch.search.aggregations.support.ValuesSourceAggregationBuilder;
 import org.elasticsearch.search.sort.SortOrder;
+import org.joda.time.DateTimeZone;
 import org.nlpcn.es4sql.Util;
-import org.nlpcn.es4sql.domain.*;
+import org.nlpcn.es4sql.domain.Field;
+import org.nlpcn.es4sql.domain.KVValue;
+import org.nlpcn.es4sql.domain.MethodField;
+import org.nlpcn.es4sql.domain.Where;
 import org.nlpcn.es4sql.exception.SqlParseException;
 import org.nlpcn.es4sql.parse.ChildrenType;
 import org.nlpcn.es4sql.parse.NestedType;
 
-import java.io.IOException;
-import java.math.BigDecimal;
-import java.time.ZoneOffset;
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
 public class AggMaker {
 
-    //question 这个groupMap用来干嘛？？
     private Map<String, KVValue> groupMap = new HashMap<>();
-    /**
-     * insert_time_dhg : {"date_histogram":{"field":"insert_time","format":"yyyy-MM-dd HH:mm:ss","interval":"1d","offset":0,"order":{"_key":"asc"},"keyed":false,"min_doc_count":0},"aggregations":{"avg_age":{"avg":{"field":"age"}}}}
-     */
-
-    private InsertTimeDhgBean insert_time_dhg;
 
     /**
      * 分组查的聚合函数
@@ -60,21 +52,18 @@ public class AggMaker {
      * @return
      * @throws SqlParseException
      */
-    public AggregationBuilder makeGroupAgg(Field field, Select select) throws SqlParseException {
-        AggregationBuilder aggsBuilder = null;
-        //zhongshu-comment script类型的MethodField
-        /*
-                TermsAggregationBuilder termsBuilder的样例：
-                来自这条sql的group by子句的gg字段解析结果：
-                select a,case when c='1' then 'haha' when c='2' then 'book' else 'hbhb' end as gg from tbl_a group by a,gg
-        */
+    public AggregationBuilder makeGroupAgg(Field field) throws SqlParseException {
+
         if (field instanceof MethodField && field.getName().equals("script")) {
             MethodField methodField = (MethodField) field;
             TermsAggregationBuilder termsBuilder = AggregationBuilders.terms(methodField.getAlias()).script(new Script(methodField.getParams().get(1).value.toString()));
-            //question 这里为什么要将这些信息加到groupMap中？
             groupMap.put(methodField.getAlias(), new KVValue("KEY", termsBuilder));
-            aggsBuilder = termsBuilder;
-        } else if (field instanceof MethodField) {  //zhongshu-comment filter类型的MethodField
+            return termsBuilder;
+        }
+
+
+        if (field instanceof MethodField) {
+
             MethodField methodField = (MethodField) field;
             if (methodField.getName().equals("filter")) {
                 Map<String, Object> paramsAsMap = methodField.getParamsAsMap();
@@ -82,85 +71,25 @@ public class AggMaker {
                 return AggregationBuilders.filter(paramsAsMap.get("alias").toString(),
                         QueryMaker.explan(where));
             }
-            aggsBuilder =  makeRangeGroup(methodField);
+            return makeRangeGroup(methodField);
         } else {
             TermsAggregationBuilder termsBuilder = AggregationBuilders.terms(field.getName()).field(field.getName());
             groupMap.put(field.getName(), new KVValue("KEY", termsBuilder));
-            aggsBuilder =  termsBuilder;
+            return termsBuilder;
         }
-
-        //added by xzb 如果 group by 后面有having 条件，则创建BucketSelector
-        String having = select.getHaving();
-        if (!StringUtils.isEmpty(having)) {
-            String kvRegex = "\\s*(?<key>[^><=!\\s&|]+)\\s*(?<oprator>>=|>|<=|<|==|!=)\\s*(?<value>[^><=!\\s&|]+)\\s*";
-            List<String> havingFields = new ArrayList<>();
-            Pattern pattern = Pattern.compile(kvRegex);
-            Matcher matcher = pattern.matcher(having);
-            while (matcher.find()) {
-                havingFields.add(matcher.group("key"));
-            }
-
-            //声明BucketPath，用于后面的bucket筛选
-            Map<String, String> bucketsPathsMap = new HashMap<>();
-            for (String key : havingFields) {
-                bucketsPathsMap.put(key, key);
-                //将key前面加上 param.参数
-                having = having.replace(key, "params." + key);
-            }
-            //将having语句中的  AND 和 OR 替换为&& 和 || ,painless 脚本只支持程序中的 && 和 || 逻辑判断
-            having = having.replace("AND", "&&").replace("OR", "||").replace("\\n", " ");
-
-            //设置脚本
-            Script script = new Script(having);
-
-            //构建bucket选择器
-            BucketSelectorPipelineAggregationBuilder bs = PipelineAggregatorBuilders.bucketSelector("having", bucketsPathsMap, script);
-            aggsBuilder.subAggregation(bs);
-        }
-
-        return aggsBuilder;
     }
-    public MovFnPipelineAggregationBuilder makeMovingFieldAgg(MethodField field, AggregationBuilder parent) throws SqlParseException {
-        //question 加到groupMap里是为了什么
-        groupMap.put(field.getAlias(), new KVValue("FIELD", parent));
 
-        String bucketPath = field.getParams().get(0).value.toString();
-        int window = Integer.parseInt(field.getParams().get(1).value.toString());
-
-        ValuesSourceAggregationBuilder builder;
-        field.setAlias(fixAlias(field.getAlias()));
-        switch (field.getName().toUpperCase()) {
-            //added by xzb 增加 movingavg和rollingstd
-            case "MOVINGAVG":
-                MovFnPipelineAggregationBuilder mvAvg =
-                        //PipelineAggregatorBuilders.movingFunction("movingAvgIncome", new Script("MovingFunctions.unweightedAvg(values)"), "incomeSum", 2);
-                        PipelineAggregatorBuilders.movingFunction(field.getAlias(),  new Script("MovingFunctions.unweightedAvg(values)"), bucketPath, window);
-
-                return mvAvg;
-
-            case "ROLLINGSTD":
-                MovFnPipelineAggregationBuilder stdDev =
-                        //PipelineAggregatorBuilders.movingFunction("stdDevIncome", new Script("MovingFunctions.stdDev(values, MovingFunctions.unweightedAvg(values))"), "incomeSum", 2);
-                        PipelineAggregatorBuilders.movingFunction(field.getAlias() , new Script("MovingFunctions.stdDev(values, MovingFunctions.unweightedAvg(values))"), bucketPath, window);
-
-                return stdDev;
-        }
-        return  null;
-    }
 
     /**
      * Create aggregation according to the SQL function.
-     * zhongshu-comment 根据sql中的函数来生成一些agg，例如sql中的count()、sum()函数，这是agg链中最里边的那个agg了，eg：
-     *                  select a,b,count(c),sum(d) from tbl group by a,b
+     *
      * @param field  SQL function
      * @param parent parentAggregation
      * @return AggregationBuilder represents the SQL function
      * @throws SqlParseException in case of unrecognized function
      */
     public AggregationBuilder makeFieldAgg(MethodField field, AggregationBuilder parent) throws SqlParseException {
-        //question 加到groupMap里是为了什么
         groupMap.put(field.getAlias(), new KVValue("FIELD", parent));
-
         ValuesSourceAggregationBuilder builder;
         field.setAlias(fixAlias(field.getAlias()));
         switch (field.getName().toUpperCase()) {
@@ -186,10 +115,6 @@ public class AggMaker {
                 builder = AggregationBuilders.percentiles(field.getAlias());
                 addSpecificPercentiles((PercentilesAggregationBuilder) builder, field.getParams());
                 return addFieldToAgg(field, builder);
-            case "PERCENTILE_RANKS":
-                double[] rankVals = getSpecificPercentileRankVals(field.getParams());
-                builder = AggregationBuilders.percentileRanks(field.getAlias(), rankVals);
-                return addFieldToAgg(field, builder);
             case "TOPHITS":
                 return makeTopHitsAgg(field);
             case "SCRIPTED_METRIC":
@@ -208,8 +133,7 @@ public class AggMaker {
             if (kValue.value.getClass().equals(BigDecimal.class)) {
                 BigDecimal percentile = (BigDecimal) kValue.value;
                 percentiles.add(percentile.doubleValue());
-            } else if (kValue.value instanceof Integer) {
-                percentiles.add(((Integer) kValue.value).doubleValue());
+
             }
         }
         if (percentiles.size() > 0) {
@@ -221,26 +145,6 @@ public class AggMaker {
             }
             percentilesBuilder.percentiles(percentilesArr);
         }
-    }
-
-
-    private  double[]  getSpecificPercentileRankVals(List<KVValue> params) {
-        List<Double> rankVals = new ArrayList<>();
-        //added by xzb 找出 percentile_ranks 类型的MethodField 中要求取百分位的值
-        for (KVValue kValue : params) {
-            if (kValue.value.getClass().equals(BigDecimal.class)) {
-                BigDecimal percentile = (BigDecimal) kValue.value;
-                rankVals.add(percentile.doubleValue());
-            } else if (kValue.value instanceof Integer) {
-                rankVals.add(((Integer) kValue.value).doubleValue());
-            }
-        }
-        double[] _rankVals = new double[rankVals.size()];
-        for (int i = 0; i < rankVals.size(); i++) {
-            _rankVals[i] =  rankVals.get(i);
-        }
-
-        return _rankVals;
     }
 
     private String fixAlias(String alias) {
@@ -309,15 +213,11 @@ public class AggMaker {
                 return rangeBuilder(field);
             case "date_histogram":
                 return dateHistogram(field);
-            case "dhg":
-                return dateHistogram(field);
             case "date_range":
                 return dateRange(field);
             case "month":
                 return dateRange(field);
             case "histogram":
-                return histogram(field);
-            case "hg":
                 return histogram(field);
             case "geohash_grid":
                 return geohashGrid(field);
@@ -325,8 +225,6 @@ public class AggMaker {
                 return geoBounds(field);
             case "terms":
                 return termsAgg(field);
-            case "significant_text":
-                return significantTextAgg(field);
             default:
                 throw new SqlParseException("can define this method " + field);
         }
@@ -391,24 +289,7 @@ public class AggMaker {
                         } else if ("desc".equalsIgnoreCase(value)) {
                             terms.order(BucketOrder.key(false));
                         } else {
-                            List<BucketOrder> orderElements = new ArrayList<>();
-                            try (XContentParser parser = JsonXContent.jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, value)) {
-                                XContentParser.Token currentToken = parser.nextToken();
-                                if (currentToken == XContentParser.Token.START_OBJECT) {
-                                    orderElements.add(InternalOrder.Parser.parseOrderParam(parser));
-                                } else if (currentToken == XContentParser.Token.START_ARRAY) {
-                                    for (currentToken = parser.nextToken(); currentToken != XContentParser.Token.END_ARRAY; currentToken = parser.nextToken()) {
-                                        if (currentToken == XContentParser.Token.START_OBJECT) {
-                                            orderElements.add(InternalOrder.Parser.parseOrderParam(parser));
-                                        } else {
-                                            throw new ParsingException(parser.getTokenLocation(), "Invalid token in order array");
-                                        }
-                                    }
-                                }
-                            } catch (IOException e) {
-                                throw new SqlParseException("couldn't parse order: " + e.getMessage());
-                            }
-                            terms.order(orderElements);
+                            throw new SqlParseException("order can only support asc/desc " + kv.toString());
                         }
                         break;
                     case "alias":
@@ -442,55 +323,6 @@ public class AggMaker {
         }
         terms.includeExclude(IncludeExclude.merge(include, exclude));
         return terms;
-    }
-
-    private AggregationBuilder significantTextAgg(MethodField field) throws SqlParseException {
-        String aggName = gettAggNameFromParamsOrAlias(field);
-        SignificantTextAggregationBuilder significantText = AggregationBuilders.significantText(aggName, null);
-        String value;
-        IncludeExclude include = null, exclude = null;
-        for (KVValue kv : field.getParams()) {
-            value = kv.value.toString();
-            switch (kv.key.toLowerCase()) {
-                case "field":
-                    significantText.fieldName(value);
-                    break;
-                case "size":
-                    significantText.size(Integer.parseInt(value));
-                    break;
-                case "shard_size":
-                    significantText.shardSize(Integer.parseInt(value));
-                    break;
-                case "min_doc_count":
-                    significantText.minDocCount(Integer.parseInt(value));
-                    break;
-                case "include":
-                    try (XContentParser parser = JsonXContent.jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, value)) {
-                        parser.nextToken();
-                        include = IncludeExclude.parseInclude(parser);
-                    } catch (IOException e) {
-                        throw new SqlParseException("parse include[" + value + "] error: " + e.getMessage());
-                    }
-                    break;
-                case "exclude":
-                    try (XContentParser parser = JsonXContent.jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, value)) {
-                        parser.nextToken();
-                        exclude = IncludeExclude.parseExclude(parser);
-                    } catch (IOException e) {
-                        throw new SqlParseException("parse exclude[" + value + "] error: " + e.getMessage());
-                    }
-                    break;
-                case "alias":
-                case "nested":
-                case "reverse_nested":
-                case "children":
-                    break;
-                default:
-                    throw new SqlParseException("significant_text aggregation err or not define field " + kv.toString());
-            }
-        }
-        significantText.includeExclude(IncludeExclude.merge(include, exclude));
-        return significantText;
     }
 
     private AbstractAggregationBuilder scriptedMetric(MethodField field) throws SqlParseException {
@@ -603,7 +435,7 @@ public class AggMaker {
                 dateRange.format(value);
                 continue;
             } else if ("time_zone".equals(kv.key)) {
-                dateRange.timeZone(ZoneOffset.of(value));
+                dateRange.timeZone(DateTimeZone.forTimeZone(TimeZone.getTimeZone(ZoneOffset.of(value))));
                 continue;
             } else if ("from".equals(kv.key)) {
                 dateRange.addUnboundedFrom(kv.value.toString());
@@ -633,7 +465,6 @@ public class AggMaker {
      * @throws SqlParseException
      */
     private DateHistogramAggregationBuilder dateHistogram(MethodField field) throws SqlParseException {
-
         String alias = gettAggNameFromParamsOrAlias(field);
         DateHistogramAggregationBuilder dateHistogram = AggregationBuilders.dateHistogram(alias).format(TIME_FARMAT);
         String value = null;
@@ -654,7 +485,7 @@ public class AggMaker {
                         dateHistogram.format(value);
                         break;
                     case "time_zone":
-                        dateHistogram.timeZone(ZoneOffset.of(value));
+                        dateHistogram.timeZone(DateTimeZone.forTimeZone(TimeZone.getTimeZone(ZoneOffset.of(value))));
                         break;
                     case "min_doc_count":
                         dateHistogram.minDocCount(Long.parseLong(value));
@@ -663,26 +494,10 @@ public class AggMaker {
                         dateHistogram.order("desc".equalsIgnoreCase(value) ? BucketOrder.key(false) : BucketOrder.key(true));
                         break;
                     case "extended_bounds":
-                        ExtendedBounds extendedBounds = null;
-                        try (XContentParser parser = JsonXContent.jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, value)) {
-                            extendedBounds = ExtendedBounds.PARSER.parse(parser, null);
-                        } catch (IOException ex) {
-                            List<Integer> indexList = new LinkedList<>();
-                            int index = -1;
-                            while ((index = value.indexOf(':', index + 1)) != -1) {
-                                indexList.add(index);
-                            }
-                            if (!indexList.isEmpty()) {
-                                index = indexList.get(indexList.size() / 2);
-                                extendedBounds = new ExtendedBounds(value.substring(0, index), value.substring(index + 1));
-                            }
+                        String[] bounds = value.split(":");
+                        if (bounds.length == 2) {
+                            dateHistogram.extendedBounds(new ExtendedBounds(bounds[0], bounds[1]));
                         }
-                        if (extendedBounds != null) {
-                            dateHistogram.extendedBounds(extendedBounds);
-                        }
-                        break;
-                    case "offset":
-                        dateHistogram.offset(value);
                         break;
 
                     case "alias":
@@ -799,15 +614,9 @@ public class AggMaker {
 
         // Cardinality is approximate DISTINCT.
         if ("DISTINCT".equals(field.getOption())) {
+
             if (field.getParams().size() == 1) {
-                String fieldValue = field.getParams().get(0).value.toString();
-                //modified by xzb 去除 cardinality 下面的 fields字段，否则会导致计算结果为 0
-                //防止 SELECT  count(distinct age%2) as distCnt FROM bank group by gender 出现计算错误问题
-                if (fieldValue.contains("def") && fieldValue.contains("return")) {
-                    return  AggregationBuilders.cardinality(field.getAlias());
-                } else {
-                    return AggregationBuilders.cardinality(field.getAlias()).field(field.getParams().get(0).value.toString());
-                }
+                return AggregationBuilders.cardinality(field.getAlias()).field(field.getParams().get(0).value.toString());
             } else {
                 Integer precision_threshold = (Integer) (field.getParams().get(1).value);
                 return AggregationBuilders.cardinality(field.getAlias()).precisionThreshold(precision_threshold).field(field.getParams().get(0).value.toString());
@@ -817,38 +626,13 @@ public class AggMaker {
 
         String fieldName = field.getParams().get(0).value.toString();
 
-        /*
-        zhongshu-comment count(1) count(0)这种应该是查不到东西的，除非你的字段名就叫做1、0这样
-            es的count是针对某个字段做count的，见下面的dsl，对os这个字段做count
-                "aggregations": {
-                    "COUNT(os)": {
-                      "value_count": {
-                        "field": "os"
-                      }
-                    }
-                 }
-
-            假如你是写count(*)，那es-sql就帮你转成对"_index"字段做count，每一条数据都会有"_index"字段，该字段存储的是索引的名字
-         */
         // In case of count(*) we use '_index' as field parameter to count all documents
         if ("*".equals(fieldName)) {
             KVValue kvValue = new KVValue(null, "_index");
             field.getParams().set(0, kvValue);
-            /*
-            zhongshu-comment 这个看起来有点多此一举：先将"_index"字符串封装到KVValue中，然后再kv.toString()得到"_index"字符串，还不如直接将"_index"传进去AggregationBuilders.count(field.getAlias()).field("_index");
-            其实目的是为了改变形参MethodField field的params参数中的值，由"*"改为"_index"
-             */
             return AggregationBuilders.count(field.getAlias()).field(kvValue.toString());
         } else {
-            String fieldValue = field.getParams().get(0).value.toString();
-            //modified by xzb 去除 cardinality 下面的 fields字段，否则会导致计算结果为 0
-            //防止 SELECT  count(distinct age%2) as distCnt FROM bank group by gender 出现计算错误问题
-            if (fieldValue.contains("def") && fieldValue.contains("return")) {
-                return AggregationBuilders.count(field.getAlias());
-            } else {
-                return AggregationBuilders.count(field.getAlias()).field(fieldName);
-            }
-
+            return AggregationBuilders.count(field.getAlias()).field(fieldName);
         }
     }
 
@@ -898,177 +682,4 @@ public class AggMaker {
         return this.groupMap;
     }
 
-    public InsertTimeDhgBean getInsert_time_dhg() {
-        return insert_time_dhg;
-    }
-
-    public void setInsert_time_dhg(InsertTimeDhgBean insert_time_dhg) {
-        this.insert_time_dhg = insert_time_dhg;
-    }
-
-    public static class InsertTimeDhgBean {
-        /**
-         * date_histogram : {"field":"insert_time","format":"yyyy-MM-dd HH:mm:ss","interval":"1d","offset":0,"order":{"_key":"asc"},"keyed":false,"min_doc_count":0}
-         * aggregations : {"avg_age":{"avg":{"field":"age"}}}
-         */
-
-        private DateHistogramBean date_histogram;
-        private AggregationsBean aggregations;
-
-        public DateHistogramBean getDate_histogram() {
-            return date_histogram;
-        }
-
-        public void setDate_histogram(DateHistogramBean date_histogram) {
-            this.date_histogram = date_histogram;
-        }
-
-        public AggregationsBean getAggregations() {
-            return aggregations;
-        }
-
-        public void setAggregations(AggregationsBean aggregations) {
-            this.aggregations = aggregations;
-        }
-
-        public static class DateHistogramBean {
-            /**
-             * field : insert_time
-             * format : yyyy-MM-dd HH:mm:ss
-             * interval : 1d
-             * offset : 0
-             * order : {"_key":"asc"}
-             * keyed : false
-             * min_doc_count : 0
-             */
-
-            private String field;
-            private String format;
-            private String interval;
-            private int offset;
-            private OrderBean order;
-            private boolean keyed;
-            private int min_doc_count;
-
-            public String getField() {
-                return field;
-            }
-
-            public void setField(String field) {
-                this.field = field;
-            }
-
-            public String getFormat() {
-                return format;
-            }
-
-            public void setFormat(String format) {
-                this.format = format;
-            }
-
-            public String getInterval() {
-                return interval;
-            }
-
-            public void setInterval(String interval) {
-                this.interval = interval;
-            }
-
-            public int getOffset() {
-                return offset;
-            }
-
-            public void setOffset(int offset) {
-                this.offset = offset;
-            }
-
-            public OrderBean getOrder() {
-                return order;
-            }
-
-            public void setOrder(OrderBean order) {
-                this.order = order;
-            }
-
-            public boolean isKeyed() {
-                return keyed;
-            }
-
-            public void setKeyed(boolean keyed) {
-                this.keyed = keyed;
-            }
-
-            public int getMin_doc_count() {
-                return min_doc_count;
-            }
-
-            public void setMin_doc_count(int min_doc_count) {
-                this.min_doc_count = min_doc_count;
-            }
-
-            public static class OrderBean {
-                /**
-                 * _key : asc
-                 */
-
-                private String _key;
-
-                public String get_key() {
-                    return _key;
-                }
-
-                public void set_key(String _key) {
-                    this._key = _key;
-                }
-            }
-        }
-
-        public static class AggregationsBean {
-            /**
-             * avg_age : {"avg":{"field":"age"}}
-             */
-
-            private AvgAgeBean avg_age;
-
-            public AvgAgeBean getAvg_age() {
-                return avg_age;
-            }
-
-            public void setAvg_age(AvgAgeBean avg_age) {
-                this.avg_age = avg_age;
-            }
-
-            public static class AvgAgeBean {
-                /**
-                 * avg : {"field":"age"}
-                 */
-
-                private AvgBean avg;
-
-                public AvgBean getAvg() {
-                    return avg;
-                }
-
-                public void setAvg(AvgBean avg) {
-                    this.avg = avg;
-                }
-
-                public static class AvgBean {
-                    /**
-                     * field : age
-                     */
-
-                    private String field;
-
-                    public String getField() {
-                        return field;
-                    }
-
-                    public void setField(String field) {
-                        this.field = field;
-                    }
-                }
-            }
-        }
-    }
 }
