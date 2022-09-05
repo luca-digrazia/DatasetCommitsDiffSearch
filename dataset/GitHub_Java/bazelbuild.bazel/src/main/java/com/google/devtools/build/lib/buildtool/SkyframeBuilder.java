@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.buildtool.buildevent.ExecutionProgressReceiverAvailableEvent;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
@@ -104,9 +103,6 @@ public class SkyframeBuilder implements Builder {
     ExecutionProgressReceiver executionProgressReceiver =
         new ExecutionProgressReceiver(Preconditions.checkNotNull(builtTargets),
             countTestActions(exclusiveTests), skyframeExecutor.getEventBus());
-    skyframeExecutor
-        .getEventBus()
-        .post(new ExecutionProgressReceiverAvailableEvent(executionProgressReceiver));
     ResourceManager.instance().setEventBus(skyframeExecutor.getEventBus());
 
     boolean success = false;
