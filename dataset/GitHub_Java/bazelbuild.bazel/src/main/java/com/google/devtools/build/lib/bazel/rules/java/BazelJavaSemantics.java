@@ -80,19 +80,24 @@ public class BazelJavaSemantics implements JavaSemantics {
   @Override
   public void checkRule(RuleContext ruleContext, JavaCommon javaCommon) {
   }
-
+  
   private String getMainClassInternal(RuleContext ruleContext, ImmutableList<Artifact> sources) {
-    if (!ruleContext.attributes().get("create_executable", Type.BOOLEAN)) {
-      return null;
+    String mainClass = ruleContext.getRule().isAttrDefined("main_class", Type.STRING)
+        ? ruleContext.attributes().get("main_class", Type.STRING) : "";
+    boolean createExecutable = ruleContext.attributes().get("create_executable", Type.BOOLEAN);
+    boolean useTestrunner = ruleContext.attributes().get("use_testrunner", Type.BOOLEAN)
+        && !useLegacyJavaTest(ruleContext);
+
+    if (createExecutable) {
+      if (useTestrunner) {
+        mainClass = "com.google.testing.junit.runner.BazelTestRunner";
+      } else { /* java_binary or non-Junit java_test */
+        if (mainClass.isEmpty()) {
+          mainClass = JavaCommon.determinePrimaryClass(ruleContext, sources);
+        }
+      }
     }
-    if (ruleContext.attributes().get("use_testrunner", Type.BOOLEAN)
-        && !useLegacyJavaTest(ruleContext)) {
-      return "com.google.testing.junit.runner.BazelTestRunner";
-    }
-    String mainClass = ruleContext.attributes().get("main_class", Type.STRING);
-    if (mainClass.isEmpty()) {
-      mainClass = JavaCommon.determinePrimaryClass(ruleContext, sources);
-    }
+
     return mainClass;
   }
 
@@ -176,7 +181,7 @@ public class BazelJavaSemantics implements JavaSemantics {
 
     arguments.add(Substitution.of("%java_start_class%",
         ShellEscaper.escapeString(javaStartClass)));
-    arguments.add(Substitution.ofSpaceSeparatedList("%jvm_flags%", ImmutableList.copyOf(jvmFlags)));
+    arguments.add(Substitution.ofSpaceSeparatedList("%jvm_flags%", jvmFlags));
 
     ruleContext.registerAction(new TemplateExpansionAction(
         ruleContext.getActionOwner(), executable, STUB_SCRIPT, arguments, true));
@@ -199,7 +204,7 @@ public class BazelJavaSemantics implements JavaSemantics {
         buffer.append(delimiter);
       }
       buffer.append("${RUNPATH}");
-      buffer.append(artifact.getRunfilesPath().getPathString());
+      buffer.append(artifact.getRootRelativePath().getPathString());
     }
   }
 
