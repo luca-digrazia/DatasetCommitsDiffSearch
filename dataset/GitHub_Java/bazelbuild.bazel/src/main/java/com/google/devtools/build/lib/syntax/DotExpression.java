@@ -27,9 +27,9 @@ public final class DotExpression extends Expression {
 
   private final Expression obj;
 
-  private final Identifier field;
+  private final Ident field;
 
-  public DotExpression(Expression obj, Identifier field) {
+  public DotExpression(Expression obj, Ident field) {
     this.obj = obj;
     this.field = field;
   }
@@ -38,7 +38,7 @@ public final class DotExpression extends Expression {
     return obj;
   }
 
-  public Identifier getField() {
+  public Ident getField() {
     return field;
   }
 
