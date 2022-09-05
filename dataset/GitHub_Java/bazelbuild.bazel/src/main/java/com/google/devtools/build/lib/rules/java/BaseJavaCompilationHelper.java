@@ -54,15 +54,9 @@ public class BaseJavaCompilationHelper {
       "--warn_duplicate_resources");
 
   protected final RuleContext ruleContext;
-  private final String implicitAttributesSuffix;
 
   public BaseJavaCompilationHelper(RuleContext ruleContext) {
-    this(ruleContext, "");
-  }
-
-  public BaseJavaCompilationHelper(RuleContext ruleContext, String implicitAttributesSuffix) {
     this.ruleContext = ruleContext;
-    this.implicitAttributesSuffix = implicitAttributesSuffix;
   }
 
   /**
@@ -73,16 +67,6 @@ public class BaseJavaCompilationHelper {
     // This must have a different name than above, because the middleman creation uses the rule's
     // configuration, although it should use the host configuration.
     return AnalysisUtils.getMiddlemanFor(ruleContext, ":host_jdk");
-  }
-
-  /**
-   * Returns the artifacts required to invoke {@code javahome} relative binary
-   * in the action.
-   */
-  public NestedSet<Artifact> getHostJavabaseInputsNonStatic(RuleContext ruleContext) {
-    // This must have a different name than above, because the middleman creation uses the rule's
-    // configuration, although it should use the host configuration.
-    return AnalysisUtils.getMiddlemanFor(ruleContext, ":host_jdk" + implicitAttributesSuffix);
   }
 
   private CommandLine sourceJarCommandLine(Artifact outputJar,
@@ -111,7 +95,7 @@ public class BaseJavaCompilationHelper {
         .addOutput(outputJar)
         .addInputs(resources.values())
         .addInputs(resourceJars)
-        .addTransitiveInputs(getHostJavabaseInputsNonStatic(ruleContext))
+        .addTransitiveInputs(getHostJavabaseInputs(ruleContext))
         .setJarExecutable(
             ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable(),
             ruleContext.getPrerequisiteArtifact("$singlejar", Mode.HOST),
@@ -127,19 +111,18 @@ public class BaseJavaCompilationHelper {
    * Returns the langtools jar Artifact.
    */
   protected final Artifact getLangtoolsJar() {
-    return ruleContext.getHostPrerequisiteArtifact("$java_langtools" + implicitAttributesSuffix);
+    return ruleContext.getHostPrerequisiteArtifact("$java_langtools");
   }
 
   /**
    * Returns the JavaBuilder jar Artifact.
    */
   protected final Artifact getJavaBuilderJar() {
-    return ruleContext.getPrerequisiteArtifact(
-        "$javabuilder" + implicitAttributesSuffix, Mode.HOST);
+    return ruleContext.getPrerequisiteArtifact("$javabuilder", Mode.HOST);
   }
 
   protected FilesToRunProvider getIJar() {
-    return ruleContext.getExecutablePrerequisite("$ijar" + implicitAttributesSuffix, Mode.HOST);
+    return ruleContext.getExecutablePrerequisite("$ijar", Mode.HOST);
   }
 
   /**
@@ -147,7 +130,7 @@ public class BaseJavaCompilationHelper {
    */
   protected Iterable<Artifact> getInstrumentationJars() {
     TransitiveInfoCollection instrumentationTarget = ruleContext.getPrerequisite(
-        "$jacoco_instrumentation" + implicitAttributesSuffix, Mode.HOST);
+        "$jacoco_instrumentation", Mode.HOST);
     if (instrumentationTarget == null) {
       return ImmutableList.<Artifact>of();
     }
@@ -160,16 +143,14 @@ public class BaseJavaCompilationHelper {
    * Returns the javac bootclasspath artifacts.
    */
   protected final ImmutableList<Artifact> getBootClasspath() {
-    return ruleContext.getPrerequisiteArtifacts(
-        "$javac_bootclasspath" + implicitAttributesSuffix, Mode.HOST).list();
+    return ruleContext.getPrerequisiteArtifacts("$javac_bootclasspath", Mode.HOST).list();
   }
 
   /**
    * Returns the extdir artifacts.
    */
   protected final ImmutableList<Artifact> getExtdirInputs() {
-    return ruleContext.getPrerequisiteArtifacts(
-        "$javac_extdir" + implicitAttributesSuffix, Mode.HOST).list();
+    return ruleContext.getPrerequisiteArtifacts("$javac_extdir", Mode.HOST).list();
   }
 
   private Artifact getIjarArtifact(Artifact jar, boolean addPrefix) {

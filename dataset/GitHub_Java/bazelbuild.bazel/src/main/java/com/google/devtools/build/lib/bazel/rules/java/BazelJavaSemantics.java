@@ -18,6 +18,7 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -41,6 +42,7 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaHelper;
+import com.google.devtools.build.lib.rules.java.JavaPrimaryClassProvider;
 import com.google.devtools.build.lib.rules.java.JavaRunfilesProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
@@ -55,6 +57,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Semantics for Bazel Java rules
@@ -80,11 +83,11 @@ public class BazelJavaSemantics implements JavaSemantics {
   @Override
   public void checkRule(RuleContext ruleContext, JavaCommon javaCommon) {
     if (isJavaBinaryOrJavaTest(ruleContext)) {
-      checkMainClass(ruleContext, javaCommon.getSrcsArtifacts());
+      checkMainClass(ruleContext, javaCommon);
     }
   }
   
-  private String getMainClassInternal(RuleContext ruleContext, ImmutableList<Artifact> sources) {
+  private String getMainClassInternal(RuleContext ruleContext, JavaCommon javaCommon) {
     String mainClass = ruleContext.getRule().isAttrDefined("main_class", Type.STRING)
         ? ruleContext.attributes().get("main_class", Type.STRING) : "";
     boolean createExecutable = ruleContext.attributes().get("create_executable", Type.BOOLEAN);
@@ -96,7 +99,7 @@ public class BazelJavaSemantics implements JavaSemantics {
         mainClass = "com.google.testing.junit.runner.BazelTestRunner";
       } else { /* java_binary or non-Junit java_test */
         if (mainClass.isEmpty()) {
-          mainClass = JavaCommon.determinePrimaryClass(ruleContext, sources);
+          mainClass = javaCommon.determinePrimaryClass(javaCommon.getSrcsArtifacts());
         }
       }
     }
@@ -104,19 +107,19 @@ public class BazelJavaSemantics implements JavaSemantics {
     return mainClass;
   }
 
-  private void checkMainClass(RuleContext ruleContext, ImmutableList<Artifact> sources) {
+  private void checkMainClass(RuleContext ruleContext, JavaCommon javaCommon) {
     boolean createExecutable = ruleContext.attributes().get("create_executable", Type.BOOLEAN);
-    String mainClass = getMainClassInternal(ruleContext, sources);
+    String mainClass = getMainClassInternal(ruleContext, javaCommon);
 
     if (!createExecutable && !isNullOrEmpty(mainClass)) {
       ruleContext.ruleError("main class must not be specified when executable is not created");
     }
 
     if (createExecutable && isNullOrEmpty(mainClass)) {
-      if (sources.isEmpty()) {
+      if (javaCommon.getSrcsArtifacts().isEmpty()) {
         ruleContext.ruleError("need at least one of 'main_class' or Java source files");
       }
-      mainClass = JavaCommon.determinePrimaryClass(ruleContext, sources);
+      mainClass = javaCommon.determinePrimaryClass(javaCommon.getSrcsArtifacts());
       if (mainClass == null) {
         ruleContext.ruleError("cannot determine main class for launching "
                   + "(found neither a source file '" + ruleContext.getTarget().getName()
@@ -127,9 +130,9 @@ public class BazelJavaSemantics implements JavaSemantics {
   }
 
   @Override
-  public String getMainClass(RuleContext ruleContext, ImmutableList<Artifact> sources) {
-    checkMainClass(ruleContext, sources);
-    return getMainClassInternal(ruleContext, sources);
+  public String getMainClass(RuleContext ruleContext, JavaCommon javaCommon) {
+    checkMainClass(ruleContext, javaCommon);
+    return getMainClassInternal(ruleContext, javaCommon);
   }
 
   @Override
@@ -269,19 +272,25 @@ public class BazelJavaSemantics implements JavaSemantics {
       ImmutableMap<Artifact, Artifact> compilationToRuntimeJarMap,
       NestedSetBuilder<Artifact> filesBuilder,
       RuleConfiguredTargetBuilder ruleBuilder) {
+    if (isJavaBinaryOrJavaTest(ruleContext)) {
+      ruleBuilder.add(
+          JavaPrimaryClassProvider.class,
+          new JavaPrimaryClassProvider(getPrimaryClass(ruleContext, javaCommon)));
+    }
   }
 
   // TODO(dmarting): simplify that logic when we remove the legacy Bazel java_test behavior.
-  private String getPrimaryClassLegacy(RuleContext ruleContext, ImmutableList<Artifact> sources) {
+  private String getPrimaryClassLegacy(RuleContext ruleContext, JavaCommon javaCommon) {
     boolean createExecutable = ruleContext.attributes().get("create_executable", Type.BOOLEAN);
     if (!createExecutable) {
       return null;
     }
-    return getMainClassInternal(ruleContext, sources);
+    return getMainClassInternal(ruleContext, javaCommon);
   }
 
-  private String getPrimaryClassNew(RuleContext ruleContext, ImmutableList<Artifact> sources) {
+  private String getPrimaryClassNew(RuleContext ruleContext, JavaCommon javaCommon) {
     boolean createExecutable = ruleContext.attributes().get("create_executable", Type.BOOLEAN);
+    Set<Artifact> sourceFiles = ImmutableSet.copyOf(javaCommon.getSrcsArtifacts());
 
     if (!createExecutable) {
       return null;
@@ -294,7 +303,7 @@ public class BazelJavaSemantics implements JavaSemantics {
 
     if (useTestrunner) {
       if (testClass.isEmpty()) {
-        testClass = JavaCommon.determinePrimaryClass(ruleContext, sources);
+        testClass = javaCommon.determinePrimaryClass(sourceFiles);
         if (testClass == null) {
           ruleContext.ruleError("cannot determine junit.framework.Test class "
                     + "(Found no source file '" + ruleContext.getTarget().getName()
@@ -310,15 +319,13 @@ public class BazelJavaSemantics implements JavaSemantics {
             + "BazelTestRunner, but you are not using it (use_testrunner = 0)");
       }
 
-      return getMainClassInternal(ruleContext, sources);
+      return getMainClassInternal(ruleContext, javaCommon);
     }
   }
-
-  @Override
-  public String getPrimaryClass(RuleContext ruleContext, ImmutableList<Artifact> sources) {
-    return useLegacyJavaTest(ruleContext)
-        ? getPrimaryClassLegacy(ruleContext, sources)
-        : getPrimaryClassNew(ruleContext, sources);
+  
+  private String getPrimaryClass(RuleContext ruleContext, JavaCommon javaCommon) {
+    return useLegacyJavaTest(ruleContext) ? getPrimaryClassLegacy(ruleContext, javaCommon)
+        : getPrimaryClassNew(ruleContext, javaCommon);
   }
   
   @Override
@@ -332,7 +339,7 @@ public class BazelJavaSemantics implements JavaSemantics {
         String testClass = ruleContext.getRule().isAttrDefined("test_class", Type.STRING)
             ? ruleContext.attributes().get("test_class", Type.STRING) : "";
         if (testClass.isEmpty()) {
-          testClass = JavaCommon.determinePrimaryClass(ruleContext, javaCommon.getSrcsArtifacts());
+          testClass = javaCommon.determinePrimaryClass(javaCommon.getSrcsArtifacts());
         }
 
         if (testClass == null) {
