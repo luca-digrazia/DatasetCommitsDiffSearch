@@ -69,7 +69,11 @@ public class DeterministicInMemoryGraph extends NotifyingInMemoryGraph {
     @Override
     public synchronized Collection<SkyKey> getReverseDeps() {
       TreeSet<SkyKey> result = new TreeSet<>(ALPHABETICAL_SKYKEY_COMPARATOR);
-      result.addAll(super.getReverseDeps());
+      if (reverseDeps instanceof List) {
+        result.addAll((Collection<? extends SkyKey>) reverseDeps);
+      } else {
+        result.add((SkyKey) reverseDeps);
+      }
       return result;
     }
 
