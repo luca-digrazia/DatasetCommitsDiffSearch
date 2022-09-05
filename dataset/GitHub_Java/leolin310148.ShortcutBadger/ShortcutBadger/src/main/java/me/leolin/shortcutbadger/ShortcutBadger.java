@@ -19,7 +19,7 @@ import java.util.List;
  */
 public final class ShortcutBadger {
 
-    private static final String LOG_TAG = "ShortcutBadger";
+    private static final String LOG_TAG = ShortcutBadger.class.getSimpleName();
 
     private static final List<Class<? extends Badger>> BADGERS = new LinkedList<Class<? extends Badger>>();
 
@@ -50,7 +50,7 @@ public final class ShortcutBadger {
             applyCountOrThrow(context, badgeCount);
             return true;
         } catch (ShortcutBadgeException e) {
-            Log.e(LOG_TAG, "Unable to execute badge", e);
+            Log.e(LOG_TAG, "Unable to execute badge:" + e.getMessage());
             return false;
         }
     }
@@ -61,17 +61,13 @@ public final class ShortcutBadger {
      * @param badgeCount Desired badge count
      */
     public static void applyCountOrThrow(Context context, int badgeCount) throws ShortcutBadgeException {
-        if (sShortcutBadger == null) {
-            boolean launcherReady = initBadger(context);
-
-            if (!launcherReady)
-                throw new ShortcutBadgeException("No default launcher available");
-        }
+        if (sShortcutBadger == null)
+            initBadger(context);
 
         try {
             sShortcutBadger.executeBadge(context, sComponentName, badgeCount);
-        } catch (Exception e) {
-            throw new ShortcutBadgeException("Unable to execute badge", e);
+        } catch (Throwable e) {
+            throw new ShortcutBadgeException("Unable to execute badge:" + e.getMessage());
         }
     }
 
@@ -92,37 +88,38 @@ public final class ShortcutBadger {
         applyCountOrThrow(context, 0);
     }
 
-    // Initialize Badger if a launcher is availalble (eg. set as default on the device)
-    // Returns true if a launcher is available, in this case, the Badger will be set and sShortcutBadger will be non null.
-    private static boolean initBadger(Context context) {
+    private static void initBadger(Context context) {
+        //find the home launcher Package
+        try {
+            sComponentName = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName()).getComponent();
 
-        sComponentName = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName()).getComponent();
+            Log.d(LOG_TAG, "Finding badger");
+            Intent intent = new Intent(Intent.ACTION_MAIN);
+            intent.addCategory(Intent.CATEGORY_HOME);
+            ResolveInfo resolveInfo = context.getPackageManager().resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY);
+            String currentHomePackage = resolveInfo.activityInfo.packageName;
 
-        Intent intent = new Intent(Intent.ACTION_MAIN);
-        intent.addCategory(Intent.CATEGORY_HOME);
-        ResolveInfo resolveInfo = context.getPackageManager().resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY);
-
-        if (resolveInfo == null || resolveInfo.activityInfo.name.toLowerCase().contains("resolver"))
-            return false;
-
-        String currentHomePackage = resolveInfo.activityInfo.packageName;
-
-        for (Class<? extends Badger> badger : BADGERS) {
-            Badger shortcutBadger = badger.newInstance();
-            if (shortcutBadger.getSupportLaunchers().contains(currentHomePackage)) {
-                sShortcutBadger = shortcutBadger;
-                break;
+            for (Class<? extends Badger> badger : BADGERS) {
+                Badger shortcutBadger = badger.newInstance();
+                if (shortcutBadger.getSupportLaunchers().contains(currentHomePackage)) {
+                    sShortcutBadger = shortcutBadger;
+                    break;
+                }
             }
-        }
 
-        if (sShortcutBadger == null) {
-            if (Build.MANUFACTURER.equalsIgnoreCase("Xiaomi"))
+            if (sShortcutBadger == null && Build.MANUFACTURER.equalsIgnoreCase("Xiaomi")) {
                 sShortcutBadger = new XiaomiHomeBadger();
-            else
-                sShortcutBadger = new DefaultBadger();
+                return;
+            }
+        } catch (Exception e) {
+            Log.e(LOG_TAG, e.getMessage(), e);
         }
 
-        return true;
+        if (sShortcutBadger == null)
+            sShortcutBadger = new DefaultBadger();
+
+
+        Log.d(LOG_TAG, "Current badger:" + sShortcutBadger.getClass().getCanonicalName());
     }
 
     // Avoid anybody to instantiate this class
