@@ -14,6 +14,7 @@
 package com.google.devtools.build.android;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
@@ -130,7 +131,7 @@ public class FileDeDuplicator implements DirectoryModifier {
     try {
       return conditionallyCopy(directories);
     } catch (IOException e) {
-      throw new RuntimeException(e);
+      throw Throwables.propagate(e);
     }
   }
 }
