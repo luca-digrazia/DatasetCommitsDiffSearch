@@ -254,10 +254,6 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.*;
 
-import static com.android.SdkConstants.CURRENT_PLATFORM;
-import static com.android.SdkConstants.FN_AAPT;
-import static com.android.SdkConstants.PLATFORM_WINDOWS;
-
 /**
  * 1. Custom Android BuilderTool classes that support custom aapt operations
  * 2. Cache optimization for dex , Adjust the dexOptions parameter
@@ -377,7 +373,6 @@ public class AtlasBuilder extends AndroidBuilder {
 
         if (aaptGeneration == AaptGeneration.AAPT_V1) {
             s = "--non-constant-id";
-
         } else {
             s = "--non-final-ids";
         }
@@ -389,15 +384,9 @@ public class AtlasBuilder extends AndroidBuilder {
             aaptConfigBuilder.build().getOptions().getAdditionalParameters().add(s);
         } else {
             aaptConfigBuilder.build().getOptions().getAdditionalParameters().remove(s);
+
         }
         super.processResources(aapt, aaptConfigBuilder);
-
-
-        File symboFile = new File(aaptConfigBuilder.build().getSymbolOutputDir(),"R.txt");
-        if (!symboFile.exists()){
-            throw new ProcessException(symboFile.getAbsolutePath() + "is not exist!");
-        }
-
 
     }
 
@@ -447,6 +436,12 @@ public class AtlasBuilder extends AndroidBuilder {
                 FileUtils.writeLines(mergedSymbolFile, FileUtils.readLines(mainSymbolFile), true);
             } catch (IOException e) {
                 throw new RuntimeException("Could not load file ", e);
+            }
+            for (File file:aaptConfig.getLibrarySymbolTableFiles()){
+                List<String>lines = FileUtils.readLines(file);
+                if (lines.size() > 1) {
+                    FileUtils.writeLines(mergedSymbolFile, lines.subList(1, lines.size() - 1), true);
+                }
             }
 
             SymbolTable mainSymbols =
@@ -553,7 +548,7 @@ public class AtlasBuilder extends AndroidBuilder {
 
         Profiler.start();
 
-        if (atlasExtension.getTBuildConfig().isDexCacheEnabled() && inputs.size() > 0) {
+        if (atlasExtension.getTBuildConfig().isDexCacheEnabled() && inputs.size() > 1) {
 
             Profiler.enter("jar2dex");
 
