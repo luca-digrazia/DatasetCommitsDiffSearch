@@ -15,9 +15,11 @@ package com.google.devtools.build.skyframe;
 
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
+import com.google.common.base.MoreObjects;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Maps.EntryTransformer;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.util.GroupedList;
 
 import java.util.Map;
 import java.util.Set;
@@ -115,6 +117,7 @@ public class NotifyingGraph<TGraph extends ThinNodeQueryableGraph> implements Pr
     CREATE_IF_ABSENT,
     ADD_REVERSE_DEP,
     REMOVE_REVERSE_DEP,
+    GET_TEMPORARY_DIRECT_DEPS,
     SIGNAL,
     SET_VALUE,
     MARK_DIRTY,
@@ -204,6 +207,12 @@ public class NotifyingGraph<TGraph extends ThinNodeQueryableGraph> implements Pr
     }
 
     @Override
+    public GroupedList<SkyKey> getTemporaryDirectDeps() {
+      graphListener.accept(myKey, EventType.GET_TEMPORARY_DIRECT_DEPS, Order.BEFORE, null);
+      return super.getTemporaryDirectDeps();
+    }
+
+    @Override
     public boolean signalDep(Version childVersion) {
       graphListener.accept(myKey, EventType.SIGNAL, Order.BEFORE, childVersion);
       boolean result = super.signalDep(childVersion);
@@ -270,6 +279,11 @@ public class NotifyingGraph<TGraph extends ThinNodeQueryableGraph> implements Pr
       graphListener.accept(
           myKey, EventType.GET_ALL_DIRECT_DEPS_FOR_INCOMPLETE_NODE, Order.BEFORE, this);
       return super.getAllDirectDepsForIncompleteNode();
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this).add("delegate", getThinDelegate()).toString();
     }
   }
 }

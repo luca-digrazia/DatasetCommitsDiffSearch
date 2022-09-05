@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
@@ -36,10 +35,12 @@ import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+
 import javax.annotation.Nullable;
 
 /**
@@ -90,15 +91,8 @@ import javax.annotation.Nullable;
  */
 @Immutable
 @SkylarkModule(name = "File",
-    category = SkylarkModuleCategory.BUILTIN,
-    doc = "<p>This type represents a file used by the build system. It can be "
-        + "either a source file or a derived file produced by a rule.</p>"
-        + "<p>The File constructor is private, so you cannot call it directly to create new "
-        + "Files. If you have a Skylark rule that needs to create a new File, you might need to "
-        + "add the label to the attrs (if it's an input) or the outputs (if it's an output). Then "
-        + "you can access the File through the rule's <a href='ctx.html'>context</a>. You can "
-        + "also use <a href='ctx.html#new_file'>ctx.new_file</a> to create a new file in the rule "
-        + "implementation.</p>")
+    doc = "This type represents a file used by the build system. It can be "
+        + "either a source file or a derived file produced by a rule.")
 public class Artifact
     implements FileType.HasFilename, ActionInput, SkylarkValue, Comparable<Object> {
 
@@ -150,16 +144,6 @@ public class Artifact
     @Override
     public boolean apply(Artifact input) {
       return !input.isMiddlemanArtifact();
-    }
-  };
-
-  /**
-   * A Predicate that evaluates to true if the Artifact <b>is</b> a tree artifact.
-   */
-  public static final Predicate<Artifact> IS_TREE_ARTIFACT = new Predicate<Artifact>() {
-    @Override
-    public boolean apply(Artifact input) {
-      return input.isTreeArtifact();
     }
   };
 
