@@ -72,7 +72,7 @@ public class AtlasUpdater {
     }
 
 
-    public static void dexpatchUpdate(Context context, UpdateInfo updateInfo, File patchFile, final IDexpatchMonitor monitor) throws Exception {
+    public static void dexpatchUpdate(Context context, UpdateInfo updateInfo, File patchFile, final IDexpatchMonitor monitor) {
 
         if (null == updateInfo || !updateInfo.dexPatch){
             return;
@@ -105,6 +105,9 @@ public class AtlasUpdater {
         try {
             patchMerger = new PatchMerger(updateInfo, patchFile, null);
             patchMerger.merge();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         if (patchMerger == null) {
             return;
@@ -126,10 +129,12 @@ public class AtlasUpdater {
             updateInfo.updateBundles = result;
         }
 
+
+        try {
             PatchInstaller patchInstaller = new PatchInstaller(patchMerger.mergeOutputs, updateInfo);
             patchInstaller.install();
-        } catch (Exception e) {
-                throw e;
+        } catch (BundleException e) {
+            e.printStackTrace();
         }
 
         ConcurrentHashMap<String, Long> installList = BaselineInfoManager.instance().getDexPatchBundles();
