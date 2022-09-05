@@ -365,7 +365,7 @@ public class BazelJavaSemantics implements JavaSemantics {
   }
 
   @Override
-  public ImmutableList<Artifact> translate(RuleContext ruleContext, JavaConfiguration javaConfig,
+  public Collection<Artifact> translate(RuleContext ruleContext, JavaConfiguration javaConfig,
       List<Artifact> messages) {
     return ImmutableList.<Artifact>of();
   }
