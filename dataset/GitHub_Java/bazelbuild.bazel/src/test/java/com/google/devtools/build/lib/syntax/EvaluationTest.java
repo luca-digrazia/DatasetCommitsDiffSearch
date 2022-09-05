@@ -18,9 +18,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
-import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import com.google.devtools.build.lib.testutil.TestMode;
 
@@ -29,6 +28,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -324,15 +324,15 @@ public class EvaluationTest extends EvaluationTestCase {
     // list
     Object x = eval("[1,2] + [3,4]");
     assertThat((Iterable<Object>) x).containsExactly(1, 2, 3, 4).inOrder();
-    assertEquals(MutableList.of(env, 1, 2, 3, 4), x);
+    assertEquals(Arrays.asList(1, 2, 3, 4), x);
     assertFalse(EvalUtils.isImmutable(x));
 
     // tuple
     x = eval("(1,2) + (3,4)");
-    assertEquals(Tuple.of(1, 2, 3, 4), x);
+    assertEquals(Arrays.asList(1, 2, 3, 4), x);
     assertTrue(EvalUtils.isImmutable(x));
 
-    checkEvalError("unsupported operand type(s) for +: 'tuple' and 'list'",
+    checkEvalError("can only concatenate Tuple (not \"List\") to Tuple",
         "(1,2) + [3,4]"); // list + tuple
   }
 
@@ -392,8 +392,8 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testListComprehensionsMultipleVariables() throws Exception {
-    newTest().testEval("[x + y for x, y in [(1, 2), (3, 4)]]", "[3, 7]")
-        .testEval("[z + t for (z, t) in [[1, 2], [3, 4]]]", "[3, 7]");
+    newTest().testEval("[x + y for x, y in [(1, 2), (3, 4)]]", "[3, 7]").testEval(
+        "[z + t for (z, t) in [[1, 2], [3, 4]]]", "[3, 7]");
   }
 
   @Test
@@ -510,12 +510,10 @@ public class EvaluationTest extends EvaluationTestCase {
   @Test
   public void testListConcatenation() throws Exception {
     newTest()
-        .testStatement("[1, 2] + [3, 4]", MutableList.of(env, 1, 2, 3, 4))
-        .testStatement("(1, 2) + (3, 4)", Tuple.of(1, 2, 3, 4))
-        .testIfExactError("unsupported operand type(s) for +: 'list' and 'tuple'",
-            "[1, 2] + (3, 4)")
-        .testIfExactError("unsupported operand type(s) for +: 'tuple' and 'list'",
-            "(1, 2) + [3, 4]");
+        .testStatement("[1, 2] + [3, 4]", Arrays.asList(1, 2, 3, 4))
+        .testStatement("(1, 2) + (3, 4)", ImmutableList.of(1, 2, 3, 4))
+        .testIfExactError("can only concatenate List (not \"Tuple\") to List", "[1, 2] + (3, 4)")
+        .testIfExactError("can only concatenate Tuple (not \"List\") to Tuple", "(1, 2) + [3, 4]");
   }
 
   @SuppressWarnings("unchecked")
@@ -554,7 +552,7 @@ public class EvaluationTest extends EvaluationTestCase {
   public void testListComprehensionOnDictionaryCompositeExpression() throws Exception {
     new BuildTest()
         .setUp("d = {1:'a',2:'b'}", "l = [d[x] for x in d]")
-        .testLookup("l", MutableList.of(env, "a", "b"));
+        .testLookup("l", ImmutableList.of("a", "b"));
   }
 
   @Test
