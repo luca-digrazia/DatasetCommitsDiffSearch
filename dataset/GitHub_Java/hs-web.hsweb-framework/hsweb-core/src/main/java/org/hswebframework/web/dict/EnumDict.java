@@ -1,6 +1,7 @@
 package org.hswebframework.web.dict;
 
 import com.alibaba.fastjson.JSONException;
+import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.annotation.JSONType;
 import com.alibaba.fastjson.parser.DefaultJSONParser;
 import com.alibaba.fastjson.parser.JSONLexer;
@@ -8,31 +9,17 @@ import com.alibaba.fastjson.parser.JSONToken;
 import com.alibaba.fastjson.parser.deserializer.ObjectDeserializer;
 import com.alibaba.fastjson.serializer.JSONSerializable;
 import com.alibaba.fastjson.serializer.JSONSerializer;
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonValue;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.JsonDeserializer;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
-import org.hswebframework.web.exception.ValidationException;
-import org.springframework.beans.BeanUtils;
-import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.*;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * 枚举字典,使用枚举来实现数据字典,可通过集成此接口来实现一些有趣的功能.
  * ⚠️:如果使用了位运算来判断枚举,枚举数量不要超过64个,且顺序不要随意变动!
+ * 如果枚举数量大于64,你应该使用{@link org.hswebframework.web.dict.apply.DictApply}来处理.
  * ⚠️:如果要开启在反序列化json的时候,支持将对象反序列化枚举,由于fastJson目前的版本还不支持从父类获取注解,
  * 所以需要在实现类上注解:<code>@JSONType(deserializer = EnumDict.EnumDictJSONDeserializer.class)</code>.
  *
@@ -42,7 +29,6 @@ import java.util.stream.Stream;
  * @see JSONSerializable
  */
 @JSONType(deserializer = EnumDict.EnumDictJSONDeserializer.class)
-@JsonDeserialize(contentUsing = EnumDict.EnumDictJSONDeserializer.class)
 public interface EnumDict<V> extends JSONSerializable {
 
     /**
@@ -62,7 +48,7 @@ public interface EnumDict<V> extends JSONSerializable {
     String getText();
 
     /**
-     * {@link Enum#ordinal()}
+     * {@link Enum#ordinal}
      *
      * @return 枚举序号, 如果枚举顺序改变, 此值将被变动
      */
@@ -123,13 +109,6 @@ public interface EnumDict<V> extends JSONSerializable {
         return getText();
     }
 
-    @JsonCreator
-    default EnumDict<V> fromJsonNode(Object val) {
-
-        return null;
-    }
-
-
     /**
      * 从指定的枚举类中查找想要的枚举,并返回一个{@link Optional},如果未找到,则返回一个{@link Optional#empty()}
      *
@@ -147,15 +126,6 @@ public interface EnumDict<V> extends JSONSerializable {
             }
         }
         return Optional.empty();
-    }
-
-    static <T extends Enum & EnumDict> List<T> findList(Class<T> type, Predicate<T> predicate) {
-        if (type.isEnum()) {
-            return Arrays.stream(type.getEnumConstants())
-                    .filter(predicate)
-                    .collect(Collectors.toList());
-        }
-        return Collections.emptyList();
     }
 
     /**
@@ -267,18 +237,13 @@ public interface EnumDict<V> extends JSONSerializable {
      * @return 最终序列化的值
      * @see this#isWriteJSONObjectEnabled()
      */
-    @JsonValue
     default Object getWriteJSONObject() {
-        if (isWriteJSONObjectEnabled()) {
-            Map<String, Object> jsonObject = new HashMap<>();
-            jsonObject.put("value", getValue());
-            jsonObject.put("text", getText());
-            // jsonObject.put("index", index());
-            // jsonObject.put("mask", getMask());
-            return jsonObject;
-        }
-
-        return this.getValue();
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("value", getValue());
+        jsonObject.put("text", getText());
+        jsonObject.put("index", index());
+        jsonObject.put("mask", getMask());
+        return jsonObject;
     }
 
     @Override
@@ -293,8 +258,7 @@ public interface EnumDict<V> extends JSONSerializable {
     /**
      * 自定义fastJson枚举序列化
      */
-    @Slf4j
-    class EnumDictJSONDeserializer extends JsonDeserializer implements ObjectDeserializer {
+    class EnumDictJSONDeserializer implements ObjectDeserializer {
 
         @Override
         @SuppressWarnings("all")
@@ -339,74 +303,6 @@ public interface EnumDict<V> extends JSONSerializable {
         @Override
         public int getFastMatchToken() {
             return JSONToken.LITERAL_STRING;
-        }
-
-        @Override
-        @SuppressWarnings("all")
-        @SneakyThrows
-        public Object deserialize(JsonParser jp, DeserializationContext ctxt) throws IOException, JsonProcessingException {
-            JsonNode node = jp.getCodec().readTree(jp);
-
-            String currentName = jp.currentName();
-            Object currentValue = jp.getCurrentValue();
-            Class findPropertyType;
-            if (StringUtils.isEmpty(currentName) || StringUtils.isEmpty(currentValue)) {
-                return null;
-            } else {
-                findPropertyType = BeanUtils.findPropertyType(currentName, currentValue.getClass());
-            }
-            Supplier<ValidationException> exceptionSupplier = () -> {
-               List<Object> values= Stream.of(findPropertyType.getEnumConstants())
-                        .map(Enum.class::cast)
-                        .map(e->{
-                            if(e instanceof EnumDict){
-                                return ((EnumDict) e).getValue();
-                            }
-                            return e.name();
-                        }).collect(Collectors.toList());
-
-                return new ValidationException("参数[" + currentName + "]在选项中不存在",
-                        Arrays.asList(
-                                new ValidationException.Detail(currentName, "选项中不存在此值", values)
-                        ));
-            };
-            if (EnumDict.class.isAssignableFrom(findPropertyType) && findPropertyType.isEnum()) {
-                if (node.isObject()) {
-                    return (EnumDict) EnumDict
-                            .findByValue(findPropertyType, node.get("value").textValue())
-                            .orElseThrow(exceptionSupplier);
-                }
-                if (node.isNumber()) {
-                    return (EnumDict) EnumDict
-                            .find(findPropertyType, node.numberValue())
-                            .orElseThrow(exceptionSupplier);
-                }
-                if (node.isTextual()) {
-                    return (EnumDict) EnumDict
-                            .find(findPropertyType, node.textValue())
-                            .orElseThrow(exceptionSupplier);
-                }
-                throw new ValidationException("参数[" + currentName + "]在选项中不存在", Arrays.asList(
-                        new ValidationException.Detail(currentName, "选项中不存在此值", null)
-                ));
-            }
-            if (findPropertyType.isEnum()) {
-                return Stream.of(findPropertyType.getEnumConstants())
-                        .filter(o -> {
-                            if (node.isTextual()) {
-                                return node.textValue().equalsIgnoreCase(((Enum) o).name());
-                            }
-                            if (node.isNumber()) {
-                                return node.intValue() == ((Enum) o).ordinal();
-                            }
-                            return false;
-                        })
-                        .findAny()
-                        .orElseThrow(exceptionSupplier);
-            }
-
-            log.warn("unsupported deserialize enum json : {}", node);
-            return null;
         }
     }
 
