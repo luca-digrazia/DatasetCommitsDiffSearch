@@ -19,26 +19,23 @@ package org.hswebframework.web.authorization.oauth2.client;
 
 import com.alibaba.fastjson.annotation.JSONField;
 
-import java.io.Serializable;
-
 /**
  * 默认的服务实现
  *
  * @author zhouhao
  */
-public class AccessTokenInfo implements Serializable {
-    private String id;
+public class AccessTokenInfo {
     //授权码
     @JSONField(name = "access_token")
-    private String accessToken;
+    private String  accessToken;
     //更新码
     @JSONField(name = "refresh_token")
-    private String refreshToken;
+    private String  refreshToken;
     //有效期
     @JSONField(name = "expires_in")
     private Integer expiresIn;
     //授权范围
-    private String scope;
+    private String  scope;
 
     private Long createTime;
 
@@ -47,17 +44,8 @@ public class AccessTokenInfo implements Serializable {
     @JSONField(name = "token_type")
     private String tokenType;
 
-    private String grantType;
-
-    private String serverId;
-
     public boolean isExpire() {
-        if (expiresIn == null) {
-            return true;
-        }
-        long time = updateTime==null?createTime:updateTime;
-
-        return System.currentTimeMillis() - time > expiresIn * 1000;
+        return updateTime != null && System.currentTimeMillis() - updateTime > expiresIn * 1000;
     }
 
     public String getTokenType() {
@@ -138,29 +126,5 @@ public class AccessTokenInfo implements Serializable {
 
     public void setUpdateTime(Long updateTime) {
         this.updateTime = updateTime;
-    }
-
-    public void setId(String id) {
-        this.id = id;
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public void setGrantType(String grantType) {
-        this.grantType = grantType;
-    }
-
-    public String getGrantType() {
-        return grantType;
-    }
-
-    public String getServerId() {
-        return serverId;
-    }
-
-    public void setServerId(String serverId) {
-        this.serverId = serverId;
     }
 }

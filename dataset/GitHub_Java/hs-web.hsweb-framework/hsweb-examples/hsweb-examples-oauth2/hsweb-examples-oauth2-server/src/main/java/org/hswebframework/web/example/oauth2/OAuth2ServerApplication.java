@@ -31,6 +31,7 @@ import org.hswebframework.web.dao.datasource.DataSourceHolder;
 import org.hswebframework.web.dao.datasource.DatabaseType;
 import org.hswebframework.web.dao.oauth2.OAuth2ClientDao;
 import org.hswebframework.web.entity.authorization.*;
+import org.hswebframework.web.entity.authorization.bind.BindPermissionRoleEntity;
 import org.hswebframework.web.entity.authorization.bind.BindRoleUserEntity;
 import org.hswebframework.web.service.authorization.AuthorizationSettingService;
 import org.hswebframework.web.service.authorization.PermissionService;
@@ -103,7 +104,7 @@ public class OAuth2ServerApplication implements CommandLineRunner {
         updateAccessEntity.setAction(Permission.ACTION_UPDATE);
 
         DataAccessEntity denyFields = new DataAccessEntity();
-        denyFields.setType(DataAccessConfig.DefaultType.DENY_FIELDS);
+        denyFields.setType(DataAccessConfig.DefaultType.ALLOW_FIELDS);
         denyFields.setAction(Permission.ACTION_UPDATE);
         denyFields.setConfig(JSON.toJSONString(new SimpleFieldFilterDataAccessConfig("password")));
 
@@ -121,11 +122,18 @@ public class OAuth2ServerApplication implements CommandLineRunner {
         permission.setId("test");
         permission.setStatus((byte) 1);
         permission.setActions(ActionEntity.create(Permission.ACTION_QUERY, Permission.ACTION_UPDATE));
+        permission.setDataAccess(Arrays.asList(accessEntity, updateAccessEntity));
         permissionService.insert(permission);
 
-        RoleEntity roleEntity = entityFactory.newInstance(RoleEntity.class);
+        BindPermissionRoleEntity<PermissionRoleEntity> roleEntity = entityFactory.newInstance(BindPermissionRoleEntity.class);
+        SimplePermissionRoleEntity permissionRoleEntity = new SimplePermissionRoleEntity();
+        permissionRoleEntity.setRoleId("admin");
+        permissionRoleEntity.setPermissionId("test");
+        permissionRoleEntity.setActions(Arrays.asList(Permission.ACTION_QUERY, Permission.ACTION_UPDATE));
+        permissionRoleEntity.setDataAccesses(permission.getDataAccess());
         roleEntity.setId("admin");
         roleEntity.setName("test");
+        roleEntity.setPermissions(Arrays.asList(permissionRoleEntity));
         roleService.insert(roleEntity);
 
           /*            权限设置        */
