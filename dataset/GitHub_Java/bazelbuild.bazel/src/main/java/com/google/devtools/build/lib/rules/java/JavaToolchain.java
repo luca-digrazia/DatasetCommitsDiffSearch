@@ -13,7 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
-import com.google.common.collect.ImmutableListMultimap;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -31,6 +32,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.java.JavaToolchainData.SupportsWorkers;
 import com.google.devtools.build.lib.syntax.Type;
+
 import java.util.List;
 import java.util.Map;
 
@@ -57,7 +59,7 @@ public final class JavaToolchain implements RuleConfiguredTargetFactory {
     Artifact singleJar = getArtifact("singlejar", ruleContext);
     Artifact genClass = getArtifact("genclass", ruleContext);
     FilesToRunProvider ijar = ruleContext.getExecutablePrerequisite("ijar", Mode.HOST);
-    ImmutableListMultimap<String, String> compatibleJavacOptions =
+    ImmutableMap<String, ImmutableList<String>> compatibleJavacOptions =
         getCompatibleJavacOptions(ruleContext);
 
     final JavaToolchainData toolchainData =
@@ -73,8 +75,7 @@ public final class JavaToolchain implements RuleConfiguredTargetFactory {
             javacSupportsWorkers ? SupportsWorkers.YES : SupportsWorkers.NO);
     final JavaConfiguration configuration = ruleContext.getFragment(JavaConfiguration.class);
     JavaToolchainProvider provider =
-        JavaToolchainProvider.create(
-            ruleContext.getLabel(),
+        new JavaToolchainProvider(
             toolchainData,
             bootclasspath,
             extclasspath,
@@ -96,17 +97,18 @@ public final class JavaToolchain implements RuleConfiguredTargetFactory {
     return builder.build();
   }
 
-  private static ImmutableListMultimap<String, String> getCompatibleJavacOptions(
+  private ImmutableMap<String, ImmutableList<String>> getCompatibleJavacOptions(
       RuleContext ruleContext) {
-    ImmutableListMultimap.Builder<String, String> result = ImmutableListMultimap.builder();
+    ImmutableMap.Builder<String, ImmutableList<String>> result = ImmutableMap.builder();
     for (Map.Entry<String, List<String>> entry :
         ruleContext.attributes().get("compatible_javacopts", Type.STRING_LIST_DICT).entrySet()) {
-      result.putAll(entry.getKey(), JavaHelper.tokenizeJavaOptions(entry.getValue()));
+      result.put(
+          entry.getKey(), ImmutableList.copyOf(JavaHelper.tokenizeJavaOptions(entry.getValue())));
     }
     return result.build();
   }
 
-  private static Artifact getArtifact(String attributeName, RuleContext ruleContext) {
+  private Artifact getArtifact(String attributeName, RuleContext ruleContext) {
     TransitiveInfoCollection prerequisite = ruleContext.getPrerequisite(attributeName, Mode.HOST);
     if (prerequisite == null) {
       return null;
@@ -120,8 +122,7 @@ public final class JavaToolchain implements RuleConfiguredTargetFactory {
     return Iterables.getOnlyElement(artifacts);
   }
 
-  private static NestedSet<Artifact> getArtifactList(
-      String attributeName, RuleContext ruleContext) {
+  private NestedSet<Artifact> getArtifactList(String attributeName, RuleContext ruleContext) {
     TransitiveInfoCollection prerequisite = ruleContext.getPrerequisite(attributeName, Mode.HOST);
     if (prerequisite == null) {
       return null;
