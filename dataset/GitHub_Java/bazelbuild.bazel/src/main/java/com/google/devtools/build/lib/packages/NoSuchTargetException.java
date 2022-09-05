@@ -25,7 +25,9 @@ import javax.annotation.Nullable;
 public class NoSuchTargetException extends NoSuchThingException {
 
   @Nullable private final Label label;
-  private final boolean hasTarget;
+  // TODO(bazel-team): rename/refactor this class and NoSuchPackageException since it's confusing
+  // that they embed Target/Package instances.
+  @Nullable private final Target target;
 
   public NoSuchTargetException(String message) {
     this(null, message);
@@ -44,7 +46,7 @@ public class NoSuchTargetException extends NoSuchThingException {
       @Nullable NoSuchPackageException nspe) {
     super(message, nspe);
     this.label = label;
-    this.hasTarget = (target != null);
+    this.target = target;
   }
 
   @Nullable
@@ -53,9 +55,10 @@ public class NoSuchTargetException extends NoSuchThingException {
   }
 
   /**
-   * Return whether parsing completed enough to construct the target.
+   * Return the target (in error) if parsing completed enough to construct it. May return null.
    */
-  public boolean hasTarget() {
-    return hasTarget;
+  @Nullable
+  public Target getTarget() {
+    return target;
   }
 }

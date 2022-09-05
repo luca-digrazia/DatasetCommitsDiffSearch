@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -27,7 +26,6 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.OutputFile;
-import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Rule;
@@ -69,43 +67,21 @@ public class TransitiveTargetFunction implements SkyFunction {
         return null;
       }
       PackageValue packageValue = (PackageValue) env.getValueOrThrow(packageKey,
-          NoSuchPackageException.class);
+          NoSuchThingException.class);
       if (packageValue == null) {
         return null;
       }
 
       packageLoadedSuccessfully = true;
-      try {
-        target = packageValue.getPackage().getTarget(label.getName());
-      } catch (NoSuchTargetException unexpected) {
-        // Not expected since the TargetMarkerFunction would have failed earlier if the Target
-        // was not present.
-        throw new IllegalStateException(unexpected);
-      }
+      target = packageValue.getPackage().getTarget(label.getName());
     } catch (NoSuchTargetException e) {
-      if (!e.hasTarget()) {
+      target = e.getTarget();
+      if (target == null) {
         throw new TransitiveTargetFunctionException(e);
       }
 
-      // We know that a Target may be extracted, but we need to get it out of the Package
-      // (which is known to be in error).
-      Package pkg;
-      try {
-        PackageValue packageValue = (PackageValue) env.getValueOrThrow(packageKey,
-            NoSuchPackageException.class);
-        if (packageValue == null) {
-          return null;
-        }
-        throw new IllegalStateException("Expected bad package: " + label.getPackageIdentifier());
-      } catch (NoSuchPackageException nsp) {
-        pkg = Preconditions.checkNotNull(nsp.getPackage(), label.getPackageIdentifier());
-      }
-      try {
-        target = pkg.getTarget(label.getName());
-      } catch (NoSuchTargetException nste) {
-        throw new IllegalStateException("Expected target to exist", nste);
-      }
-
+      // So we now have a Target here, but the only way for that to happen is if the package loaded
+      // at least partially, but had an error.
       successfulTransitiveLoading = false;
       transitiveRootCauses.add(label);
       errorLoadingTarget = e;
