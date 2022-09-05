@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
@@ -334,9 +333,9 @@ public class CppHelper {
    * <p>Emits a warning on the rule if there are identical linkstamp artifacts with different
    * compilation contexts.
    */
-  public static Map<Artifact, NestedSet<Artifact>> resolveLinkstamps(
-      RuleErrorConsumer listener, CcLinkParams linkParams) {
-    Map<Artifact, NestedSet<Artifact>> result = new LinkedHashMap<>();
+  public static Map<Artifact, ImmutableList<Artifact>> resolveLinkstamps(RuleErrorConsumer listener,
+      CcLinkParams linkParams) {
+    Map<Artifact, ImmutableList<Artifact>> result = new LinkedHashMap<>();
     for (Linkstamp pair : linkParams.getLinkstamps()) {
       Artifact artifact = pair.getArtifact();
       if (result.containsKey(artifact)) {
@@ -425,8 +424,8 @@ public class CppHelper {
     Artifact mapFile = ruleContext.getPackageRelativeArtifact(
         ruleContext.getLabel().getName()
             + Iterables.getOnlyElement(CppFileTypes.CPP_MODULE_MAP.getExtensions()),
-        ruleContext.getConfiguration().getGenfilesDirectory());
-        CppModuleMap moduleMap = new CppModuleMap(mapFile, ruleContext.getLabel().toString());
+        ruleContext.getConfiguration().getGenfilesDirectory());    CppModuleMap moduleMap =
+        new CppModuleMap(mapFile, ruleContext.getLabel().toString());
     contextBuilder.setCppModuleMap(moduleMap);
     return moduleMap;
   }

@@ -13,11 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
+import static com.google.devtools.build.lib.rules.cpp.CcLibraryHelper.SourceCategory;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.FileProvider;
@@ -31,7 +33,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.rules.apple.Platform;
-import com.google.devtools.build.lib.rules.cpp.CcLibraryHelper.SourceCategory;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
@@ -71,7 +72,7 @@ public final class CcCommon {
     public void collectMetadataArtifacts(Iterable<Artifact> objectFiles,
         AnalysisEnvironment analysisEnvironment, NestedSetBuilder<Artifact> metadataFilesBuilder) {
       for (Artifact artifact : objectFiles) {
-        ActionAnalysisMetadata action = analysisEnvironment.getLocalGeneratingAction(artifact);
+        Action action = analysisEnvironment.getLocalGeneratingAction(artifact);
         if (action instanceof CppCompileAction) {
           addOutputs(metadataFilesBuilder, action, CppFileTypes.COVERAGE_NOTES);
         }
@@ -518,14 +519,12 @@ public final class CcCommon {
    * @param ruleSpecificRequestedFeatures features that will be requested, and thus be always
    * enabled if the toolchain supports them.
    * @param ruleSpecificUnsupportedFeatures features that are not supported in the current context.
-   * @param sourceCategory the source category for this build.
    * @return the feature configuration for the given {@code ruleContext}.
    */
   public static FeatureConfiguration configureFeatures(
       RuleContext ruleContext,
       Set<String> ruleSpecificRequestedFeatures,
       Set<String> ruleSpecificUnsupportedFeatures,
-      SourceCategory sourceCategory,
       CcToolchainProvider toolchain) {
     ImmutableSet.Builder<String> unsupportedFeaturesBuilder = ImmutableSet.builder();
     unsupportedFeaturesBuilder.addAll(ruleSpecificUnsupportedFeatures);
@@ -549,8 +548,6 @@ public final class CcCommon {
     }
     requestedFeatures.addAll(ruleSpecificRequestedFeatures);
 
-    requestedFeatures.addAll(sourceCategory.getActionConfigSet());
-
     FeatureConfiguration configuration =
         toolchain.getFeatures().getFeatureConfiguration(requestedFeatures.build());
     for (String feature : unsupportedFeatures) {
@@ -564,44 +561,27 @@ public final class CcCommon {
     }
     return configuration; 
   }
- 
+  
   /**
    * Creates a feature configuration for a given rule.
    *
    * @param ruleContext the context of the rule we want the feature configuration for.
    * @param toolchain the toolchain we want the feature configuration for.
-   * @param sourceCategory the category of sources to be used in this build.
    * @return the feature configuration for the given {@code ruleContext}.
    */
   public static FeatureConfiguration configureFeatures(
-      RuleContext ruleContext, CcToolchainProvider toolchain, SourceCategory sourceCategory) {
+      RuleContext ruleContext, CcToolchainProvider toolchain) {
     return configureFeatures(
-        ruleContext,
-        ImmutableSet.<String>of(),
-        ImmutableSet.<String>of(),
-        sourceCategory,
-        toolchain);
+        ruleContext, ImmutableSet.<String>of(), ImmutableSet.<String>of(), toolchain);
   }
 
   /**
    * Creates a feature configuration for a given rule.
    *
-   * @param ruleContext the context of the rule we want the feature configuraiton for.
-   * @param sourceCategory the category of sources to be used in this build.
-   * @return the feature configuration for the given {@code ruleContext}.
-   */
-  public static FeatureConfiguration configureFeatures(
-      RuleContext ruleContext, SourceCategory sourceCategory) {
-    return configureFeatures(ruleContext, CppHelper.getToolchain(ruleContext), sourceCategory);
-  }
-
-  /**
-   * Creates a feature configuration for a given rule.  Assumes strictly cc sources.
-   *
    * @param ruleContext the context of the rule we want the feature configuration for.
    * @return the feature configuration for the given {@code ruleContext}.
    */
   public static FeatureConfiguration configureFeatures(RuleContext ruleContext) {
-    return configureFeatures(ruleContext, SourceCategory.CC);
+    return configureFeatures(ruleContext, CppHelper.getToolchain(ruleContext));
   }
 }

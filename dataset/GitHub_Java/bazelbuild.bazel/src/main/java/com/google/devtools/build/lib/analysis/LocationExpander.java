@@ -27,8 +27,8 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.OutputFile;
-import com.google.devtools.build.lib.rules.AliasProvider;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -283,7 +283,7 @@ public class LocationExpander {
     if (ruleContext.getRule().isAttrDefined("srcs", BuildType.LABEL_LIST)) {
       for (TransitiveInfoCollection src : ruleContext
           .getPrerequisitesIf("srcs", Mode.TARGET, FileProvider.class)) {
-        Iterables.addAll(mapGet(locationMap, AliasProvider.getDependencyLabel(src)),
+        Iterables.addAll(mapGet(locationMap, src.getLabel()),
             src.getProvider(FileProvider.class).getFilesToBuild());
       }
     }
@@ -305,7 +305,7 @@ public class LocationExpander {
     }
 
     for (TransitiveInfoCollection dep : depsDataAndTools) {
-      Label label = AliasProvider.getDependencyLabel(dep);
+      Label label = dep.getLabel();
       FilesToRunProvider filesToRun = dep.getProvider(FilesToRunProvider.class);
       Artifact executableArtifact = filesToRun.getExecutable();
 
@@ -334,7 +334,7 @@ public class LocationExpander {
       PathFragment execPath =
           takeExecPath ? artifact.getExecPath() : artifact.getRootRelativePath();
       if (execPath != null) {  // omit middlemen etc
-        paths.add(execPath.getCallablePathString());
+        paths.add(execPath.getPathString());
       }
     }
     return paths;

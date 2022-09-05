@@ -488,7 +488,7 @@ public final class PyCommon {
     SpawnAction.Builder builder = new SpawnAction.Builder()
         .setResources(PY_COMPILE_RESOURCE_SET)
         .setExecutable(pythonBinary)
-        .setProgressMessage("Compiling Python " + source.prettyPrint())
+        .setProgressMessage("Compiling Python")
         .addInputArgument(
             ruleContext.getPrerequisiteArtifact(pythonPrecompileAttribute, Mode.HOST))
         .setMnemonic("PyCompile");
