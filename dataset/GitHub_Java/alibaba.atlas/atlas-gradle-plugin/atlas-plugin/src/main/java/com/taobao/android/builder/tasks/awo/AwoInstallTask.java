@@ -228,7 +228,7 @@ import java.io.IOException;
 import java.util.concurrent.Callable;
 
 /**
- * the patch Install the phone on your phone
+ * 把 patch 安装到手机上的任务
  */
 public class AwoInstallTask extends BaseTask {
 

@@ -233,7 +233,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /**
- * the patch Install the phone on your phone
+ * 把 patch 安装到手机上的任务
  */
 public class DexInstallTask extends BaseTask {
 
