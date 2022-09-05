@@ -2,16 +2,12 @@ package com.codahale.metrics;
 
 import org.junit.After;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.*;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.assertThat;
 
 public class InstrumentedScheduledExecutorServiceTest {
-    private static final Logger LOGGER = LoggerFactory.getLogger(InstrumentedScheduledExecutorServiceTest.class);
-
     private final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     private final MetricRegistry registry = new MetricRegistry();
     private final InstrumentedScheduledExecutorService instrumentedScheduledExecutor = new InstrumentedScheduledExecutorService(scheduledExecutor, registry, "xs");
@@ -260,7 +256,7 @@ public class InstrumentedScheduledExecutorServiceTest {
     public void tearDown() throws Exception {
         instrumentedScheduledExecutor.shutdown();
         if (!instrumentedScheduledExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
-            LOGGER.error("InstrumentedScheduledExecutorService did not terminate.");
+            System.err.println("InstrumentedScheduledExecutorService did not terminate.");
         }
     }
 
