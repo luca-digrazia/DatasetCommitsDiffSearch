@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
@@ -24,6 +23,7 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.util.Clock;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsClassProvider;
 
@@ -46,7 +46,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @ThreadSafe
 public final class BlazeExecutor implements Executor {
 
-  private final Path outputPath;
   private final boolean verboseFailures;
   private final boolean showSubcommands;
   private final Path execRoot;
@@ -74,7 +73,6 @@ public final class BlazeExecutor implements Executor {
    * request, and shutdown() when you're done with this executor.
    */
   public BlazeExecutor(Path execRoot,
-      Path outputPath,
       Reporter reporter,
       EventBus eventBus,
       Clock clock,
@@ -82,10 +80,9 @@ public final class BlazeExecutor implements Executor {
       boolean verboseFailures,
       boolean showSubcommands,
       List<ActionContext> contextImplementations,
-      Map<String, ActionContext> spawnContextMap,
+      Map<String, SpawnActionContext> spawnActionContextMap,
       Iterable<ActionContextProvider> contextProviders)
       throws ExecutorInitException {
-    this.outputPath = outputPath;
     this.verboseFailures = verboseFailures;
     this.showSubcommands = showSubcommands;
     this.execRoot = execRoot;
@@ -99,20 +96,16 @@ public final class BlazeExecutor implements Executor {
     // (so we respect insertion order but also instantiate them only once).
     LinkedHashSet<ActionContext> allContexts = new LinkedHashSet<>();
     allContexts.addAll(contextImplementations);
-
-    ImmutableMap.Builder<String, SpawnActionContext> spawnMapBuilder = ImmutableMap.builder();
-    for (Map.Entry<String, ActionContext> entry: spawnContextMap.entrySet()) {
-      spawnMapBuilder.put(entry.getKey(), (SpawnActionContext) entry.getValue());
-      allContexts.add(entry.getValue());
-    }
+    allContexts.addAll(spawnActionContextMap.values());
+    this.spawnActionContextMap = ImmutableMap.copyOf(spawnActionContextMap);
 
     for (ActionContext context : contextImplementations) {
       ExecutionStrategy annotation = context.getClass().getAnnotation(ExecutionStrategy.class);
       if (annotation != null) {
         contextMap.put(annotation.contextType(), context);
       }
+      contextMap.put(context.getClass(), context);
     }
-    this.spawnActionContextMap = spawnMapBuilder.build();
 
     for (ActionContextProvider factory : contextProviders) {
       factory.executorCreated(allContexts);
@@ -150,7 +143,7 @@ public final class BlazeExecutor implements Executor {
    */
   @Override
   public void reportSubcommand(String reason, String message) {
-    reporter.handle(new Event(EventKind.SUBCOMMAND, null, "# " + reason + "\n" + message));
+    reporter.handle(Event.of(EventKind.SUBCOMMAND, null, "# " + reason + "\n" + message));
   }
 
   /**
@@ -225,9 +218,5 @@ public final class BlazeExecutor implements Executor {
   @Override
   public OptionsClassProvider getOptions() {
     return options;
-  }
-
-  public Path getOutputPath() {
-    return outputPath;
   }
 }

@@ -17,14 +17,14 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
+import com.google.devtools.build.lib.actions.ActionContextProvider;
+import com.google.devtools.build.lib.actions.BlazeExecutor;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.exec.ActionContextProvider;
-import com.google.devtools.build.lib.exec.BlazeExecutor;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.FileWriteStrategy;
 import com.google.devtools.build.lib.exec.SymlinkTreeStrategy;
@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -45,8 +46,8 @@ public class TestExecutorBuilder {
   public static final List<Class<? extends OptionsBase>> DEFAULT_OPTIONS = ImmutableList.of(
       ExecutionOptions.class, CommonCommandOptions.class);
   private final BlazeDirectories directories;
+  private Reporter reporter = new Reporter();
   private EventBus bus = new EventBus();
-  private Reporter reporter = new Reporter(bus);
   private OptionsParser optionsParser = OptionsParser.newOptionsParser(DEFAULT_OPTIONS);
   private List<ActionContext> strategies = new ArrayList<>();
   private Map<String, SpawnActionContext> spawnStrategyMap =
@@ -95,14 +96,11 @@ public class TestExecutorBuilder {
   }
 
   public BlazeExecutor build() throws ExecutorInitException {
-    return new BlazeExecutor(
-        directories.getExecRoot(),
-        reporter,
-        bus,
-        BlazeClock.instance(),
-        optionsParser,
+    return new BlazeExecutor(directories.getExecRoot(), reporter, bus,
+        BlazeClock.instance(), optionsParser,
+        optionsParser.getOptions(ExecutionOptions.class).verboseFailures,
+        optionsParser.getOptions(ExecutionOptions.class).showSubcommands,
         strategies,
-        ImmutableMap.copyOf(spawnStrategyMap),
-        ImmutableList.<ActionContextProvider>of());
+        ImmutableMap.copyOf(spawnStrategyMap), ImmutableList.<ActionContextProvider>of());
   }
 }
