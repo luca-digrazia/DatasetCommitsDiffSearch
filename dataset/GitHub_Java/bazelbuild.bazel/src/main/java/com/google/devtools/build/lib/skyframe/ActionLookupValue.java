@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,11 +17,10 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
-import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -39,7 +38,7 @@ public class ActionLookupValue implements SkyValue {
   private static Map<Artifact, Action> filterSharedActionsAndThrowRuntimeIfConflict(
       Iterable<Action> actions) {
     try {
-      return Actions.filterSharedActionsAndThrowActionConflict(actions);
+      return ConfiguredTargetFunction.filterSharedActionsAndThrowIfConflict(actions);
     } catch (ActionConflictException e) {
       // Programming bug.
       throw new IllegalStateException(e);
@@ -106,7 +105,7 @@ public class ActionLookupValue implements SkyValue {
      * <p>Subclasses may override if the value key contents should not be the key itself.
      */
     SkyKey getSkyKey() {
-      return SkyKey.create(getType(), this);
+      return new SkyKey(getType(), this);
     }
   }
 }
