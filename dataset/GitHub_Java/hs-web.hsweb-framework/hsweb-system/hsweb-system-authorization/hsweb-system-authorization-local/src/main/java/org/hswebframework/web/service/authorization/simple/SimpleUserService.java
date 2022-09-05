@@ -16,7 +16,6 @@ import org.hswebframework.web.service.AbstractService;
 import org.hswebframework.web.service.DefaultDSLQueryService;
 import org.hswebframework.web.service.authorization.events.ClearUserAuthorizationCacheEvent;
 import org.hswebframework.web.service.authorization.events.UserModifiedEvent;
-import org.hswebframework.web.service.authorization.simple.terms.UserInRoleSqlTerm;
 import org.hswebframework.web.validate.ValidationException;
 import org.hswebframework.utils.ListUtils;
 import org.hswebframework.web.validator.group.CreateGroup;
@@ -75,10 +74,6 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     @Override
     public UserEntity createEntity() {
         return entityFactory.newInstance(BindRoleUserEntity.class);
-    }
-
-    protected IDGenerator<String> getIdGenerator() {
-        return IDGenerator.MD5;
     }
 
     @Override
@@ -140,7 +135,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         //密码强度验证
         tryValidateProperty(passwordStrengthValidator, UserEntity.password, userEntity.getPassword());
         userEntity.setCreateTime(System.currentTimeMillis());
-        userEntity.setId(getIdGenerator().generate());
+        userEntity.setId(IDGenerator.MD5.generate());
         userEntity.setSalt(IDGenerator.RANDOM.generate());
         userEntity.setStatus(DataStatus.STATUS_ENABLED);
         //验证其他属性
@@ -173,6 +168,9 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     @Override
     @Caching(evict = {
             @CacheEvict(value = CacheConstants.USER_CACHE_NAME, key = "#userId")
+//           , @CacheEvict(value = CacheConstants.USER_AUTH_CACHE_NAME, key = "#userId"),
+//            @CacheEvict(value = CacheConstants.USER_AUTH_CACHE_NAME, key = "'user-menu-list:'+#userId"),
+//            @CacheEvict(value = CacheConstants.USER_AUTH_CACHE_NAME, key = "'menu-tree:'+#userId")
     })
     public void update(String userId, UserEntity userEntity) {
         userEntity.setId(userId);
@@ -300,7 +298,6 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         if (CollectionUtils.isEmpty(roleIdList)) {
             return new java.util.ArrayList<>();
         }
-        // org.hswebframework.web.service.authorization.simple.terms.UserInRoleSqlTerm
         return createQuery()
                 .where("id", "user-in-role", roleIdList)
                 .listNoPaging();
