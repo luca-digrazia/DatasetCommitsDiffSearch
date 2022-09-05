@@ -24,6 +24,9 @@ import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.testutil.TestUtils;
+import com.google.devtools.build.lib.vfs.FileSystem;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.Options;
 
 import java.util.Map;
@@ -142,7 +145,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     }
 
     BuildConfigurationCollection master = createCollection(
-        "--multi_cpu=k8", "--multi_cpu=piii", "--ignore_java_cpu");
+        "--multi_cpu=k8", "--multi_cpu=piii", "--ignore_java_cpu", "--ignore_python_cpu");
     assertThat(master.getTargetConfigurations()).hasSize(2);
     // Note: the cpus are sorted alphabetically.
     assertEquals("k8", master.getTargetConfigurations().get(0).getCpu());
@@ -162,10 +165,10 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
       BuildConfigurationCollection master;
       if (order == 0) {
         master = createCollection(
-            "--multi_cpu=k8", "--multi_cpu=piii", "--ignore_java_cpu");
+            "--multi_cpu=k8", "--multi_cpu=piii", "--ignore_java_cpu", "--ignore_python_cpu");
       } else {
         master = createCollection(
-            "--multi_cpu=piii", "--multi_cpu=k8", "--ignore_java_cpu");
+            "--multi_cpu=piii", "--multi_cpu=k8", "--ignore_java_cpu", "--ignore_python_cpu");
       }
       assertThat(master.getTargetConfigurations()).hasSize(2);
       assertEquals("k8", master.getTargetConfigurations().get(0).getCpu());
@@ -210,6 +213,15 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
         }
         return new Fragment() {
 
+          @Override
+          public String getName() {
+            return creates.toString();
+          }
+
+          @Override
+          public String cacheKey() {
+            return creates.toString();
+          }
         };
       }
     };
@@ -272,5 +284,15 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
     // Legitimately null option:
     assertNull(create().getOptionValue("test_filter"));
+  }
+
+  public void testSerialization() throws Exception {
+    FileSystem oldFileSystem = Path.getFileSystemForSerialization();
+    try {
+      Path.setFileSystemForSerialization(scratch.getFileSystem());
+      TestUtils.serializeObject(createCollection());
+    } finally {
+      Path.setFileSystemForSerialization(oldFileSystem);
+    }
   }
 }
