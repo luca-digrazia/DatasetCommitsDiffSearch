@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -89,7 +90,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
   // True if this context is for a compilation that should use header modules from dependencies.
   private final boolean useHeaderModules;
 
-  // Derived from depsContexts.
+  // Derived from depsContexts; no need to consider it for equals/hashCode.
   private final ImmutableSet<Artifact> compilationPrerequisites;
 
   private CppCompilationContext(
@@ -309,6 +310,56 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
     return commandLineContext.defines;
   }
 
+  @Override
+  public boolean equals(Object obj) {
+    if (obj == this) {
+      return true;
+    }
+    if (!(obj instanceof CppCompilationContext)) {
+      return false;
+    }
+    CppCompilationContext other = (CppCompilationContext) obj;
+    return Objects.equals(headerModule, other.headerModule)
+        && Objects.equals(cppModuleMap, other.cppModuleMap)
+        && Objects.equals(picHeaderModule, other.picHeaderModule)
+        && commandLineContext.equals(other.commandLineContext)
+        && Objects.equals(declaredIncludeDirs, other.declaredIncludeDirs)
+        && Objects.equals(declaredIncludeWarnDirs, other.declaredIncludeWarnDirs)
+        && Objects.equals(declaredIncludeSrcs, other.declaredIncludeSrcs)
+        && Objects.equals(directModuleMaps, other.directModuleMaps)
+        && Objects.equals(headerModuleSrcs, other.headerModuleSrcs)
+        && Objects.equals(impliedHeaderModules, other.impliedHeaderModules)
+        && Objects.equals(picImpliedHeaderModules, other.picImpliedHeaderModules)
+        && Objects.equals(topLevelHeaderModules, other.topLevelHeaderModules)
+        && Objects.equals(picTopLevelHeaderModules, other.picTopLevelHeaderModules)
+        && Objects.equals(transitiveModuleMaps, other.transitiveModuleMaps)
+        && Objects.equals(compilationPrerequisites, other.compilationPrerequisites)
+        && (provideTransitiveModuleMaps == other.provideTransitiveModuleMaps)
+        && (useHeaderModules == other.useHeaderModules);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(
+        headerModule,
+        picHeaderModule,
+        commandLineContext,
+        declaredIncludeDirs,
+        declaredIncludeWarnDirs,
+        declaredIncludeSrcs,
+        directModuleMaps,
+        headerModuleSrcs,
+        impliedHeaderModules,
+        picImpliedHeaderModules,
+        transitiveModuleMaps,
+        topLevelHeaderModules,
+        picTopLevelHeaderModules,
+        compilationPrerequisites,
+        cppModuleMap,
+        provideTransitiveModuleMaps,
+        useHeaderModules);
+  }
+
   /**
    * Returns a context that is based on a given context but returns empty sets
    * for {@link #getDeclaredIncludeDirs()} and {@link #getDeclaredIncludeWarnDirs()}.
@@ -436,6 +487,26 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
       this.quoteIncludeDirs = quoteIncludeDirs;
       this.systemIncludeDirs = systemIncludeDirs;
       this.defines = defines;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (obj == this) {
+        return true;
+      }
+      if (!(obj instanceof CommandLineContext)) {
+        return false;
+      }
+      CommandLineContext other = (CommandLineContext) obj;
+      return Objects.equals(includeDirs, other.includeDirs)
+          && Objects.equals(quoteIncludeDirs, other.quoteIncludeDirs)
+          && Objects.equals(systemIncludeDirs, other.systemIncludeDirs)
+          && Objects.equals(defines, other.defines);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(includeDirs, quoteIncludeDirs, systemIncludeDirs, defines);
     }
   }
 
