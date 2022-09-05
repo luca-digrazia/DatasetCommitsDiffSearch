@@ -2,13 +2,13 @@ package org.hsweb.web.bean.po.user;
 
 import org.hibernate.validator.constraints.Email;
 import org.hibernate.validator.constraints.NotEmpty;
-import org.hsweb.commons.MapUtils;
-import org.hsweb.commons.StringUtils;
 import org.hsweb.web.bean.po.GenericPo;
-import org.hsweb.web.bean.po.module.Module;
 import org.hsweb.web.bean.po.role.Role;
+import org.hsweb.web.bean.po.module.Module;
 import org.hsweb.web.bean.po.role.RoleModule;
 import org.hsweb.web.bean.po.role.UserRole;
+import org.webbuilder.utils.common.MapUtils;
+import org.webbuilder.utils.common.StringUtils;
 
 import javax.validation.constraints.NotNull;
 import java.util.*;
@@ -111,12 +111,19 @@ public class User extends GenericPo<String> {
     public boolean hasAccessRole(String rId) {
         if (getUserRoles() != null)
             return getUserRoles().stream().anyMatch(userRole -> userRole.getRoleId().equals(rId));
+//            for (UserRole userRole : getUserRoles()) {
+//                if (rId.equals(userRole.getRoleId())) return true;
+//            }
         return false;
     }
 
     public boolean hasAccessModule(String mId) {
         if (roleInfo == null) initRoleInfo();
         return roleInfo.keySet().stream().anyMatch(mdl -> mdl.getId().equals(mId));
+//        for (Module module : roleInfo.keySet()) {
+//            if (module.getId().equals(mId)) return true;
+//        }
+//        return false;
     }
 
     /**
@@ -124,23 +131,22 @@ public class User extends GenericPo<String> {
      */
     public void initRoleInfo() {
         Map<Module, Set<String>> roleInfo_tmp = new LinkedHashMap<>();
-        if (getUserRoles() != null)
-            for (UserRole userRole : getUserRoles()) {
-                Role role = userRole.getRole();
-                if (role == null) continue;
-                //角色可访问的路径
-                List<RoleModule> roleModules = role.getModules();
-                for (RoleModule roleModule : roleModules) {
-                    Module module = roleModule.getModule();
-                    if (module == null || module.getStatus() != 1) continue;
-                    Set<String> actions = roleInfo_tmp.get(module);
-                    if (actions == null)
-                        roleInfo_tmp.put(module, new HashSet<>(roleModule.getActions()));
-                    else {
-                        actions.addAll(roleModule.getActions());
-                    }
+        for (UserRole userRole : getUserRoles()) {
+            Role role = userRole.getRole();
+            if (role == null) continue;
+            //角色可访问的路径
+            List<RoleModule> roleModules = role.getModules();
+            for (RoleModule roleModule : roleModules) {
+                Module module = roleModule.getModule();
+                if (module == null || module.getStatus() != 1) continue;
+                Set<String> actions = roleInfo_tmp.get(module);
+                if (actions == null)
+                    roleInfo_tmp.put(module, new HashSet<>(roleModule.getActions()));
+                else {
+                    actions.addAll(roleModule.getActions());
                 }
             }
+        }
         //排序
         roleInfo = MapUtils.sortMapByKey(roleInfo_tmp);
     }
@@ -285,6 +291,8 @@ public class User extends GenericPo<String> {
     }
 
     public List<UserRole> getUserRoles() {
+        if (userRoles == null)
+            userRoles = new ArrayList<>();
         return userRoles;
     }
 
