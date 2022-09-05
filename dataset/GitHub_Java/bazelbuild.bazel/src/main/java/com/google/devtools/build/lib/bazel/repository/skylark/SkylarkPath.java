@@ -33,14 +33,10 @@ import java.util.List;
 @SkylarkModule(name = "path", doc = "A structure representing a file to be used inside a repository"
 )
 final class SkylarkPath {
-  private final Path path;
+  final Path path;
 
-  SkylarkPath(Path path) {
+  public SkylarkPath(Path path) {
     this.path = path;
-  }
-
-  Path getPath() {
-    return path;
   }
 
   @Override
