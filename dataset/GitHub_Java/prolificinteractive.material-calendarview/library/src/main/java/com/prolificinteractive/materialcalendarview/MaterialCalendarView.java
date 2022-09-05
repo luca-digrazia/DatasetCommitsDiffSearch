@@ -15,6 +15,7 @@ import android.support.annotation.Nullable;
 import android.support.v4.view.ViewPager;
 import android.support.v7.widget.AppCompatTextView;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.util.SparseArray;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -40,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -295,7 +297,8 @@ public class MaterialCalendarView extends ViewGroup {
                             VERTICAL));
 
             if (firstDayOfWeek < 0) {
-                firstDayOfWeek = CalendarUtils.getInstance().getFirstDayOfWeek();
+                //Allowing use of Calendar.getInstance() here as a performance optimization
+                firstDayOfWeek = Calendar.getInstance().getFirstDayOfWeek();
             }
 
             showWeekDays = a.getBoolean(R.styleable.MaterialCalendarView_mcv_showWeekDays, true);
@@ -305,11 +308,6 @@ public class MaterialCalendarView extends ViewGroup {
                     .setCalendarDisplayMode(CalendarMode.values()[calendarModeIndex])
                     .setShowWeekDays(showWeekDays)
                     .commit();
-
-            setSelectionMode(a.getInteger(
-                R.styleable.MaterialCalendarView_mcv_selectionMode,
-                SELECTION_MODE_SINGLE
-            ));
 
             final int tileSize = a.getLayoutDimension(R.styleable.MaterialCalendarView_mcv_tileSize, INVALID_TILE_DIMENSION);
             if (tileSize > INVALID_TILE_DIMENSION) {
@@ -819,7 +817,7 @@ public class MaterialCalendarView extends ViewGroup {
     /**
      * @param date a Date to set as selected. Null to clear selection
      */
-    public void setSelectedDate(long date) {
+    public void setSelectedDate(@Nullable Date date) {
         setSelectedDate(CalendarDay.from(date));
     }
 
@@ -845,7 +843,7 @@ public class MaterialCalendarView extends ViewGroup {
      * @param date     a Date to change. Passing null does nothing
      * @param selected true if day should be selected, false to deselect
      */
-    public void setDateSelected(long date, boolean selected) {
+    public void setDateSelected(@Nullable Date date, boolean selected) {
         setDateSelected(CalendarDay.from(date), selected);
     }
 
@@ -870,7 +868,7 @@ public class MaterialCalendarView extends ViewGroup {
     /**
      * @param date a Date to focus the calendar on. Null will do nothing
      */
-    public void setCurrentDate(long date) {
+    public void setCurrentDate(@Nullable Date date) {
         setCurrentDate(CalendarDay.from(date));
     }
 
@@ -1118,7 +1116,6 @@ public class MaterialCalendarView extends ViewGroup {
         ss.dynamicHeightEnabled = mDynamicHeightEnabled;
         ss.currentMonth = currentMonth;
         ss.cacheCurrentPosition = state.cacheCurrentPosition;
-        ss.showWeekDays = showWeekDays;
         return ss;
     }
 
@@ -1905,7 +1902,7 @@ public class MaterialCalendarView extends ViewGroup {
 
     public class StateBuilder {
         private CalendarMode calendarMode = CalendarMode.MONTHS;
-        private int firstDayOfWeek = CalendarUtils.getInstance().getFirstDayOfWeek();
+        private int firstDayOfWeek = Calendar.getInstance().getFirstDayOfWeek();
         private boolean cacheCurrentPosition = false;
         private CalendarDay minDate = null;
         private CalendarDay maxDate = null;
@@ -1960,7 +1957,7 @@ public class MaterialCalendarView extends ViewGroup {
         /**
          * @param date set the minimum selectable date, null for no minimum
          */
-        public StateBuilder setMinimumDate(long date) {
+        public StateBuilder setMinimumDate(@Nullable Date date) {
             setMinimumDate(CalendarDay.from(date));
             return this;
         }
@@ -1984,7 +1981,7 @@ public class MaterialCalendarView extends ViewGroup {
         /**
          * @param date set the maximum selectable date, null for no maximum
          */
-        public StateBuilder setMaximumDate(long date) {
+        public StateBuilder setMaximumDate(@Nullable Date date) {
             setMaximumDate(CalendarDay.from(date));
             return this;
         }
