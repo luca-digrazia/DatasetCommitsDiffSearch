@@ -24,11 +24,13 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.syntax.Type;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
- * Tool for chasing redirects. This is intended to be used during configuration creation.
+ * Tool for chasing filegroup redirects. This is mainly intended to be used during
+ * BuildConfiguration creation.
  */
 public final class RedirectChaser {
 
@@ -59,7 +61,7 @@ public final class RedirectChaser {
 
   /**
    * Follows the 'srcs' attribute of the given label recursively. Keeps repeating as long as the
-   * labels are either <code>alias</code> or <code>bind</code> rules.
+   * labels are filegroups with a single srcs entry.
    *
    * @param env for loading the packages
    * @param label the label to start at
@@ -69,7 +71,7 @@ public final class RedirectChaser {
    */
   @Nullable
   public static Label followRedirects(ConfigurationEnvironment env, Label label, String name)
-      throws InvalidConfigurationException, InterruptedException {
+      throws InvalidConfigurationException {
     Label oldLabel = null;
     Set<Label> visitedLabels = new HashSet<>();
     visitedLabels.add(label);
@@ -79,7 +81,10 @@ public final class RedirectChaser {
         if (possibleRedirect == null) {
           return null;
         }
-        Label newLabel = getBindOrAliasRedirect(possibleRedirect);
+        Label newLabel = getFilegroupRedirect(possibleRedirect);
+        if (newLabel == null) {
+          newLabel = getBindOrAliasRedirect(possibleRedirect);
+        }
         if (newLabel == null) {
           return label;
         }
@@ -88,8 +93,8 @@ public final class RedirectChaser {
         oldLabel = label;
         label = newLabel;
         if (!visitedLabels.add(label)) {
-          throw new InvalidConfigurationException("The " + name + " points to a rule which "
-              + "recursively references itself. The label " + label + " is part of the loop");
+          throw new InvalidConfigurationException("The " + name + " points to a filegroup which "
+              + "recursively includes itself. The label " + label + " is part of the loop");
         }
       }
     } catch (NoSuchThingException e) {
@@ -98,6 +103,25 @@ public final class RedirectChaser {
           : "in target '" + oldLabel + "': ";
       throw new InvalidConfigurationException(prefix + e.getMessage(), e);
     }
+  }
+
+  private static Label getFilegroupRedirect(Target target) throws InvalidConfigurationException {
+    if (!(target instanceof Rule)) {
+      return null;
+    }
+
+    Rule rule = (Rule) target;
+    if (!rule.getRuleClass().equals("filegroup")) {
+      return null;
+    }
+
+    List<Label> labels =
+        new StaticValuedAttributeMapper(rule).getAndValidate("srcs", BuildType.LABEL_LIST);
+    if (labels.size() != 1) {
+      return null;
+    }
+
+    return labels.get(0);
   }
 
   private static Label getBindOrAliasRedirect(Target target)
