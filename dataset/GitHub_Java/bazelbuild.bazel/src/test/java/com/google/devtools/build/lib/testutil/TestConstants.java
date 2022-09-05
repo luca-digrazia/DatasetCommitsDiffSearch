@@ -15,9 +15,8 @@
 package com.google.devtools.build.lib.testutil;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.packages.PackageFactory.BuilderFactoryForTesting;
+import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
-import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 
 /**
  * Various constants required by the tests.
@@ -32,6 +31,7 @@ public class TestConstants {
    * A list of all embedded binaries that go into the regular Bazel binary.
    */
   public static final ImmutableList<String> EMBEDDED_TOOLS = ImmutableList.of(
+      "build_interface_so",
       "build-runfiles",
       "linux-sandbox",
       "process-wrapper",
@@ -64,13 +64,9 @@ public class TestConstants {
   public static final String TEST_RULE_MODULE =
         "com.google.devtools.build.lib.bazel.rules.BazelRulesModule";
   public static final String TEST_REAL_UNIX_FILE_SYSTEM =
-      "com.google.devtools.build.lib.unix.UnixFileSystem";
-
-  public static void processSkyframeExecutorForTesting(SkyframeExecutor skyframeExecutor) {}
+      "com.google.devtools.build.lib.vfs.UnixFileSystem";
 
   public static final ImmutableList<String> IGNORED_MESSAGE_PREFIXES = ImmutableList.<String>of();
-
-  public static final String WORKSPACE_CONTENT = "";
 
   public static final String GCC_INCLUDE_PATH = "external/bazel_tools/tools/cpp/gcc3";
 
@@ -88,6 +84,6 @@ public class TestConstants {
   public static final InvocationPolicy TEST_INVOCATION_POLICY =
       InvocationPolicy.getDefaultInstance();
 
-  public static final BuilderFactoryForTesting PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING =
-      PackageFactoryBuilderFactoryForBazelUnitTests.INSTANCE;
+  public static final PackageFactory.FactoryForTesting PACKAGE_FACTORY_FACTORY_FOR_TESTING =
+      PackageFactoryFactoryForBazelUnitTests.INSTANCE;
 }
