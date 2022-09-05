@@ -58,7 +58,6 @@ public class AndroidResourcesProcessorBuilder {
   private ResourceContainer primary;
   private ResourceDependencies dependencies;
   private Artifact proguardOut;
-  private Artifact mainDexProguardOut;
   private Artifact rTxtOut;
   private Artifact sourceJarOut;
   private boolean debug = false;
@@ -132,11 +131,6 @@ public class AndroidResourcesProcessorBuilder {
 
   public AndroidResourcesProcessorBuilder setProguardOut(Artifact proguardCfg) {
     this.proguardOut = proguardCfg;
-    return this;
-  }
-
-  public AndroidResourcesProcessorBuilder setMainDexProguardOut(Artifact mainDexProguardCfg) {
-    this.mainDexProguardOut = mainDexProguardCfg;
     return this;
   }
 
@@ -314,11 +308,6 @@ public class AndroidResourcesProcessorBuilder {
       outs.add(proguardOut);
     }
 
-    if (mainDexProguardOut != null) {
-      builder.addExecPath("--mainDexProguardOutput", mainDexProguardOut);
-      outs.add(mainDexProguardOut);
-    }
-
     if (manifestOut != null) {
       builder.addExecPath("--manifestOutput", manifestOut);
       outs.add(manifestOut);
@@ -389,9 +378,9 @@ public class AndroidResourcesProcessorBuilder {
         primary.getRenameManifestPackage(),
         primary.getConstantsInlined(),
         // If there is no apk to be generated, use the apk from the primary resources.
-        // All android_binary ResourceContainers have to have an apk, but if a new one is not
-        // requested to be built for this resource processing action (in case of just creating an
-        // R.txt or proguard merging), reuse the primary resource from the dependencies.
+        // All ResourceContainers have to have an apk, but if a new one is not requested to be built
+        // for this resource processing action (in case of just creating an R.txt or
+        // proguard merging), reuse the primary resource from the dependencies.
         apkOut != null ? apkOut : primary.getApk(),
         manifestOut != null ? manifestOut : primary.getManifest(),
         sourceJarOut,

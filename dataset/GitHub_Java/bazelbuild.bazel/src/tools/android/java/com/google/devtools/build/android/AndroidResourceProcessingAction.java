@@ -141,13 +141,6 @@ public class AndroidResourceProcessingAction {
         help = "Path for the proguard file.")
     public Path proguardOutput;
 
-    @Option(name = "mainDexProguardOutput",
-        defaultValue = "null",
-        converter = PathConverter.class,
-        category = "output",
-        help = "Path for the main dex proguard file.")
-    public Path mainDexProguardOutput;
-
     @Option(name = "manifestOutput",
         defaultValue = "null",
         converter = PathConverter.class,
@@ -174,7 +167,7 @@ public class AndroidResourceProcessingAction {
         defaultValue = "",
         converter = CommaSeparatedOptionListConverter.class,
         category = "config",
-        help = "A list of densities to filter the resource drawables by.")
+        help = "A list densities to filter the resource drawables by.")
     public List<String> densities;
 
     @Option(name = "packageForR",
@@ -287,13 +280,11 @@ public class AndroidResourceProcessingAction {
           options.packageForR,
           new FlagAaptOptions(aaptConfigOptions),
           aaptConfigOptions.resourceConfigs,
-          aaptConfigOptions.splits,
           processedManifestData,
           data,
           generatedSources,
           options.packagePath,
           options.proguardOutput,
-          options.mainDexProguardOutput,
           options.resourcesOutput != null
               ? processedManifestData.getResourceDir().resolve("values").resolve("public.xml")
               : null);
