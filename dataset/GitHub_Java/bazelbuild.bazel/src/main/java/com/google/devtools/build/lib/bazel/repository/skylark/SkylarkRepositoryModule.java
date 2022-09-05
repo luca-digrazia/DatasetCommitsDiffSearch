@@ -17,9 +17,7 @@ package com.google.devtools.build.lib.bazel.repository.skylark;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.syntax.SkylarkType.castMap;
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
 
-import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeValueSource;
@@ -109,9 +107,6 @@ public class SkylarkRepositoryModule {
           // We'll set the name later, pass the empty string for now.
           Builder builder = new Builder("", RuleClassType.WORKSPACE, true);
 
-          builder.addOrOverrideAttribute(attr("$local", BOOLEAN).defaultValue(local).build());
-          BaseRuleClasses.commonCoreAndSkylarkAttributes(builder);
-          builder.add(attr("expect_failure", STRING));
           if (attrs != Runtime.NONE) {
             for (Map.Entry<String, Descriptor> attr :
                 castMap(attrs, String.class, Descriptor.class, "attrs").entrySet()) {
@@ -122,6 +117,7 @@ public class SkylarkRepositoryModule {
               builder.addOrOverrideAttribute(attrBuilder.build(attrName));
             }
           }
+          builder.addOrOverrideAttribute(attr("$local", BOOLEAN).defaultValue(local).build());
           builder.setConfiguredTargetFunction(implementation);
           builder.setRuleDefinitionEnvironment(funcallEnv);
           builder.setWorkspaceOnly();

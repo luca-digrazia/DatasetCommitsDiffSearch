@@ -45,12 +45,6 @@ public @interface Param {
   Class<?> type() default Object.class;
 
   /**
-   * List of allowed types for the parameter if multiple types are allowed, and {@link #type()} is
-   * set to Object.class.
-   */
-  ParamType[] allowedTypes() default {};
-
-  /**
    * When {@link #type()} is a generic type (e.g.,
    * {@link com.google.devtools.build.lib.syntax.SkylarkList}), specify the type parameter (e.g.
    * {@link String}.class} along with {@link com.google.devtools.build.lib.syntax.SkylarkList} for
@@ -81,12 +75,12 @@ public @interface Param {
   boolean named() default false;
 
   /**
-   * If true, the parameter may be specified as a positional parameter. For example for an integer
+   * If true, the parameter may be specified as a positional parameter.  For example for an integer
    * positional parameter {@code foo} of a method {@code bar}, then the method call will look like
    * {@code foo(1)}. If {@link #named()} is {@code false}, then this will be the only way to call
    * {@code foo}.
    *
-   * <p>Positional arguments should come first.
+   * <p>Positional arguments should comes first.
    */
   boolean positional() default true;
 

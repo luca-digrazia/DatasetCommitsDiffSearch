@@ -91,7 +91,6 @@ import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.protobuf.TextFormat;
 
 import java.util.List;
 import java.util.Map;
@@ -716,27 +715,25 @@ public class SkylarkRuleClassFunctions {
   private static final BuiltinFunction toProto = new BuiltinFunction("to_proto") {
       public String invoke(SkylarkClassObject self, Location loc) throws EvalException {
         StringBuilder sb = new StringBuilder();
-        printProtoTextMessage(self, sb, 0, loc);
+        printTextMessage(self, sb, 0, loc);
         return sb.toString();
       }
 
-      private void printProtoTextMessage(ClassObject object, StringBuilder sb,
+      private void printTextMessage(ClassObject object, StringBuilder sb,
           int indent, Location loc) throws EvalException {
         for (String key : object.getKeys()) {
-          printProtoTextMessage(key, object.getValue(key), sb, indent, loc);
+          printTextMessage(key, object.getValue(key), sb, indent, loc);
         }
       }
 
-      private void printProtoTextMessage(String key, Object value, StringBuilder sb,
+      private void printSimpleTextMessage(String key, Object value, StringBuilder sb,
           int indent, Location loc, String container) throws EvalException {
         if (value instanceof ClassObject) {
           print(sb, key + " {", indent);
-          printProtoTextMessage((ClassObject) value, sb, indent + 1, loc);
+          printTextMessage((ClassObject) value, sb, indent + 1, loc);
           print(sb, "}", indent);
         } else if (value instanceof String) {
-          print(sb,
-              key + ": \"" + escapeDoubleQuotesAndBackslashesAndNewlines((String) value) + "\"",
-              indent);
+          print(sb, key + ": \"" + escapeString((String) value) + "\"", indent);
         } else if (value instanceof Integer) {
           print(sb, key + ": " + value, indent);
         } else if (value instanceof Boolean) {
@@ -750,16 +747,16 @@ public class SkylarkRuleClassFunctions {
         }
       }
 
-      private void printProtoTextMessage(String key, Object value, StringBuilder sb,
+      private void printTextMessage(String key, Object value, StringBuilder sb,
           int indent, Location loc) throws EvalException {
         if (value instanceof SkylarkList) {
           for (Object item : ((SkylarkList) value)) {
             // TODO(bazel-team): There should be some constraint on the fields of the structs
             // in the same list but we ignore that for now.
-            printProtoTextMessage(key, item, sb, indent, loc, "list element in struct field");
+            printSimpleTextMessage(key, item, sb, indent, loc, "list element in struct field");
           }
         } else {
-          printProtoTextMessage(key, value, sb, indent, loc, "struct field");
+          printSimpleTextMessage(key, value, sb, indent, loc, "struct field");
         }
       }
 
@@ -772,13 +769,10 @@ public class SkylarkRuleClassFunctions {
       }
     };
 
-  /**
-   * Escapes the given string for use in proto/JSON string.
-   *
-   * <p>This escapes double quotes, backslashes, and newlines.
-   */
-  private static String escapeDoubleQuotesAndBackslashesAndNewlines(String string) {
-    return TextFormat.escapeDoubleQuotesAndBackslashes(string).replace("\n", "\\n");
+  // Escapes the given string for use in Proto messages or JSON strings.
+  private static String escapeString(String string) {
+    // TODO(bazel-team): use guava's SourceCodeEscapers when it's released.
+    return string.replace("\"", "\\\"").replace("\n", "\\n");
   }
 
   @SkylarkSignature(name = "to_json",
@@ -852,8 +846,9 @@ public class SkylarkRuleClassFunctions {
     }
 
     private String jsonEscapeString(String string) {
-      return escapeDoubleQuotesAndBackslashesAndNewlines(string)
-          .replace("\r", "\\r").replace("\t", "\\t");
+      return escapeString(string.replace("\\", "\\\\")
+          .replace("\r", "\\r")
+          .replace("\t", "\\t"));
     }
   };
 

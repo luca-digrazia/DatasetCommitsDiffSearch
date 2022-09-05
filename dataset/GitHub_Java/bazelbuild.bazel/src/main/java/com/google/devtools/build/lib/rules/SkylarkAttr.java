@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.BuiltinFunction;
 import com.google.devtools.build.lib.syntax.Environment;
@@ -55,18 +54,16 @@ import javax.annotation.Nullable;
 /**
  * A helper class to provide Attr module in Skylark.
  *
- * <p>It exposes functions (e.g. 'attr.string', 'attr.label_list', etc.) to Skylark users. The
- * functions are executed through reflection. As everywhere in Skylark, arguments are type-checked
- * with the signature and cannot be null.
+ * <p>It exposes functions (e.g. 'attr.string', 'attr.label_list', etc.) to Skylark
+ * users. The functions are executed through reflection. As everywhere in Skylark,
+ * arguments are type-checked with the signature and cannot be null.
  */
 @SkylarkModule(
   name = "attr",
   namespace = true,
-  category = SkylarkModuleCategory.BUILTIN,
   doc =
       "Module for creating new attributes. "
-          + "They are only for use with <a href=\"globals.html#rule\">rule</a> or "
-          + "<a href=\"globals.html#aspect\">aspect</a>."
+          + "They are only for use with the <a href=\"globals.html#rule\">rule</a> function."
 )
 public final class SkylarkAttr {
 
@@ -88,7 +85,7 @@ public final class SkylarkAttr {
 
   private static final String CONFIGURATION_ARG = "cfg";
   private static final String CONFIGURATION_DOC =
-      "configuration of the attribute. It can be either \"data\" or \"host\".";
+      "configuration of the attribute. For example, use DATA_CFG or HOST_CFG.";
 
   private static final String DEFAULT_ARG = "default";
   private static final String DEFAULT_DOC = "the default value of the attribute.";
@@ -116,7 +113,6 @@ public final class SkylarkAttr {
           + "automatically converted to a list containing one list of providers.";
 
   private static final String SINGLE_FILE_ARG = "single_file";
-  private static final String ALLOW_SINGLE_FILE_ARG = "allow_single_file";
 
   private static final String VALUES_ARG = "values";
   private static final String VALUES_DOC =
@@ -125,27 +121,6 @@ public final class SkylarkAttr {
 
   private static boolean containsNonNoneKey(SkylarkDict<String, Object> arguments, String key) {
     return arguments.containsKey(key) && arguments.get(key) != Runtime.NONE;
-  }
-
-  private static void setAllowedFileTypes(
-      String attr, Object fileTypesObj, FuncallExpression ast, Attribute.Builder<?> builder)
-      throws EvalException {
-    if (fileTypesObj == Boolean.TRUE) {
-      builder.allowedFileTypes(FileTypeSet.ANY_FILE);
-    } else if (fileTypesObj == Boolean.FALSE) {
-      builder.allowedFileTypes(FileTypeSet.NO_FILE);
-    } else if (fileTypesObj instanceof SkylarkFileType) {
-      // TODO(laurentlb): deprecated, to be removed
-      builder.allowedFileTypes(((SkylarkFileType) fileTypesObj).getFileTypeSet());
-    } else if (fileTypesObj instanceof SkylarkList) {
-      List<String> arg =
-          SkylarkList.castSkylarkListOrNoneToList(
-              fileTypesObj, String.class, "allow_files argument");
-      builder.allowedFileTypes(FileType.of(arg));
-    } else {
-      throw new EvalException(
-          ast.getLocation(), attr + " should be a boolean or a string list");
-    }
   }
 
   private static Attribute.Builder<?> createAttribute(
@@ -184,30 +159,29 @@ public final class SkylarkAttr {
       builder.setPropertyFlag("EXECUTABLE");
     }
 
-    // TODO(laurentlb): Deprecated, remove in August 2016 (use allow_single_file).
     if (containsNonNoneKey(arguments, SINGLE_FILE_ARG)
         && (Boolean) arguments.get(SINGLE_FILE_ARG)) {
-      if (containsNonNoneKey(arguments, ALLOW_SINGLE_FILE_ARG)) {
-        throw new EvalException(
-            ast.getLocation(),
-            "Cannot specify both single_file (deprecated) and allow_single_file");
-      }
       builder.setPropertyFlag("SINGLE_ARTIFACT");
-    }
-
-    if (containsNonNoneKey(arguments, ALLOW_FILES_ARG)
-        && containsNonNoneKey(arguments, ALLOW_SINGLE_FILE_ARG)) {
-      throw new EvalException(
-          ast.getLocation(), "Cannot specify both allow_files and allow_single_file");
     }
 
     if (containsNonNoneKey(arguments, ALLOW_FILES_ARG)) {
       Object fileTypesObj = arguments.get(ALLOW_FILES_ARG);
-      setAllowedFileTypes(ALLOW_FILES_ARG, fileTypesObj, ast, builder);
-    } else if (containsNonNoneKey(arguments, ALLOW_SINGLE_FILE_ARG)) {
-      Object fileTypesObj = arguments.get(ALLOW_SINGLE_FILE_ARG);
-      setAllowedFileTypes(ALLOW_SINGLE_FILE_ARG, fileTypesObj, ast, builder);
-      builder.setPropertyFlag("SINGLE_ARTIFACT");
+      if (fileTypesObj == Boolean.TRUE) {
+        builder.allowedFileTypes(FileTypeSet.ANY_FILE);
+      } else if (fileTypesObj == Boolean.FALSE) {
+        builder.allowedFileTypes(FileTypeSet.NO_FILE);
+      } else if (fileTypesObj instanceof SkylarkFileType) {
+        // TODO(laurentlb): deprecated, to be removed
+        builder.allowedFileTypes(((SkylarkFileType) fileTypesObj).getFileTypeSet());
+      } else if (fileTypesObj instanceof SkylarkList) {
+        List<String> arg =
+            SkylarkList.castSkylarkListOrNoneToList(
+                fileTypesObj, String.class, "allow_files argument");
+        builder.allowedFileTypes(FileType.of(arg));
+      } else {
+        throw new EvalException(
+            ast.getLocation(), "allow_files should be a boolean or a string list");
+      }
     } else if (type.equals(BuildType.LABEL) || type.equals(BuildType.LABEL_LIST)) {
       builder.allowedFileTypes(FileTypeSet.NO_FILE);
     }
@@ -243,17 +217,7 @@ public final class SkylarkAttr {
     }
 
     if (containsNonNoneKey(arguments, CONFIGURATION_ARG)) {
-      Object trans = arguments.get(CONFIGURATION_ARG);
-      if (trans instanceof ConfigurationTransition) {
-        // TODO(laurentlb): Deprecated, to be removed in August 2016.
-        builder.cfg((ConfigurationTransition) trans);
-      } else if (trans.equals("data")) {
-        builder.cfg(ConfigurationTransition.DATA);
-      } else if (trans.equals("host")) {
-        builder.cfg(ConfigurationTransition.HOST);
-      } else {
-        throw new EvalException(ast.getLocation(), "cfg must be either 'data' or 'host'.");
-      }
+      builder.cfg((ConfigurationTransition) arguments.get(CONFIGURATION_ARG));
     }
     return builder;
   }
@@ -465,20 +429,10 @@ public final class SkylarkAttr {
       ),
       @Param(
         name = ALLOW_FILES_ARG,
-        defaultValue = "None",
+        defaultValue = "False",
         named = true,
         positional = false,
         doc = ALLOW_FILES_DOC
-      ),
-      @Param(
-        name = ALLOW_SINGLE_FILE_ARG,
-        defaultValue = "None",
-        named = true,
-        positional = false,
-        doc =
-            "This is similar to <code>allow_files</code>, with the restriction that the label must "
-                + "correspond to a single <a href=\"file.html\">File</a>. "
-                + "Access it through <code>ctx.file.&lt;attribute_name&gt;</code>."
       ),
       @Param(
         name = MANDATORY_ARG,
@@ -513,13 +467,12 @@ public final class SkylarkAttr {
         named = true,
         positional = false,
         doc =
-            "Deprecated: Use <code>allow_single_file</code> instead. "
-                + "If True, the label must correspond to a single <a href=\"file.html\">File</a>. "
+            "if True, the label must correspond to a single <a href=\"file.html\">File</a>. "
                 + "Access it through <code>ctx.file.&lt;attribute_name&gt;</code>."
       ),
       @Param(
         name = CONFIGURATION_ARG,
-        type = Object.class,
+        type = ConfigurationTransition.class,
         noneable = true,
         defaultValue = "None",
         named = true,
@@ -536,7 +489,6 @@ public final class SkylarkAttr {
             Object defaultO,
             Boolean executable,
             Object allowFiles,
-            Object allowSingleFile,
             Boolean mandatory,
             SkylarkList<?> providers,
             Object allowRules,
@@ -555,8 +507,6 @@ public final class SkylarkAttr {
                   executable,
                   ALLOW_FILES_ARG,
                   allowFiles,
-                  ALLOW_SINGLE_FILE_ARG,
-                  allowSingleFile,
                   MANDATORY_ARG,
                   mandatory,
                   PROVIDERS_ARG,
@@ -691,7 +641,7 @@ public final class SkylarkAttr {
       ),
       @Param(
         name = ALLOW_FILES_ARG, // bool or FileType filter
-        defaultValue = "None",
+        defaultValue = "False",
         named = true,
         positional = false,
         doc = ALLOW_FILES_DOC
@@ -739,7 +689,7 @@ public final class SkylarkAttr {
       ),
       @Param(
         name = CONFIGURATION_ARG,
-        type = Object.class,
+        type = ConfigurationTransition.class,
         noneable = true,
         defaultValue = "None",
         named = true,
@@ -1104,16 +1054,9 @@ public final class SkylarkAttr {
         }
       };
 
-  /** A descriptor of an attribute defined in Skylark. */
-  @SkylarkModule(
-    name = "attr_defintion",
-    category = SkylarkModuleCategory.NONE,
-    doc =
-        "Representation of a definition of an attribute; constructed by <code>attr.*</code>"
-            + " functions. They are only for use with <a href=\"globals.html#rule\">rule</a> or "
-            + "<a href=\"globals.html#aspect\">aspect</a>."
-
-  )
+  /**
+   * A descriptor of an attribute defined in Skylark.
+   */
   public static final class Descriptor {
     private final Attribute.Builder<?> attributeBuilder;
     private final ImmutableList<SkylarkAspect> aspects;

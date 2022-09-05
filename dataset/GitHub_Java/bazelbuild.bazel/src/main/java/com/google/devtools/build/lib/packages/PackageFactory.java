@@ -338,24 +338,23 @@ public final class PackageFactory {
   @VisibleForTesting
   public abstract static class FactoryForTesting {
     public final PackageFactory create(RuleClassProvider ruleClassProvider, FileSystem fs) {
-      return create(ruleClassProvider, null, ImmutableList.<EnvironmentExtension>of(), fs);
+      return create(ruleClassProvider, ImmutableList.<EnvironmentExtension>of(), fs);
     }
     
     public final PackageFactory create(
         RuleClassProvider ruleClassProvider,
         EnvironmentExtension environmentExtension,
         FileSystem fs) {
-      return create(ruleClassProvider, null, ImmutableList.of(environmentExtension), fs);
+      return create(ruleClassProvider, ImmutableList.of(environmentExtension), fs);
     }
   
     public final PackageFactory create(
         RuleClassProvider ruleClassProvider,
-        Map<String, String> platformSetRegexps,
         Iterable<EnvironmentExtension> environmentExtensions,
         FileSystem fs) {
       return create(
           ruleClassProvider,
-          platformSetRegexps,
+          null,
           AttributeContainer.ATTRIBUTE_CONTAINER_FACTORY,
           environmentExtensions,
           "test",
@@ -760,7 +759,21 @@ public final class PackageFactory {
    * TODO(bazel-team): Remove in favor of package.licenses.
    */
   @SkylarkSignature(name = "licenses", returnType = Runtime.NoneType.class,
-      doc = "Declare the license(s) for the code in the current package.",
+      doc = "Declare the license(s) for the code in the current package. Legal license types "
+          + "include:\n"
+          + "<dl>"
+          + "<dt><code>restricted</code></dt><dd>Requires mandatory source distribution.</dd>"
+          + "<dt><code>reciprocal</code></dt><dd>Allows usage of software freely in "
+          + "<b>unmodified</b> form. Any modifications must be made freely available.</dd>"
+          + "<dt><code>notice</code></dt><dd>Original or modified third-party software may be "
+          + "shipped without danger nor encumbering other sources. All of the licenses in this "
+          + "category do, however, have an \"original Copyright notice\" or "
+          + "\"advertising clause\", wherein any external distributions must include the notice "
+          + "or clause specified in the license.</dd>"
+          + "<dt><code>permissive</code></dt><dd>Code that is under a license but does not "
+          + "require a notice.</dd>"
+          + "<dt><code>unencumbered</code></dt><dd>Public domain, free for any use.</dd>"
+          + "</dl>",
       parameters = {
         @Param(name = "license_strings", type = SkylarkList.class, generic1 = String.class,
             doc = "A list of strings, the names of the licenses used.")},

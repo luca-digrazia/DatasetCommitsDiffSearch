@@ -17,12 +17,14 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.BuiltinFunction.ExtraArgKind;
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -166,7 +168,7 @@ public class SkylarkSignatureProcessor {
     return new Parameter.Optional<>(param.name(), officialType, defaultValue);
   }
 
-  static Object getDefaultValue(Param param, Iterator<Object> iterator) {
+  private static Object getDefaultValue(Param param, Iterator<Object> iterator) {
     if (iterator != null) {
       return iterator.next();
     } else if (param.defaultValue().isEmpty()) {
