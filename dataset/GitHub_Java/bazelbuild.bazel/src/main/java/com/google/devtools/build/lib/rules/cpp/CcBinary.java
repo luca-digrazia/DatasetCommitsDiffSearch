@@ -274,8 +274,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
 
     RuleConfiguredTargetBuilder ruleBuilder = new RuleConfiguredTargetBuilder(ruleContext);
     addTransitiveInfoProviders(
-        ruleContext, cppConfiguration, common, ruleBuilder, filesToBuild, ccCompilationOutputs,
-        cppCompilationContext, linkingOutputs, dwoArtifacts, transitiveLipoInfo);
+        ruleContext, common, ruleBuilder, filesToBuild, ccCompilationOutputs, cppCompilationContext,
+        linkingOutputs, dwoArtifacts, transitiveLipoInfo);
 
     Map<Artifact, IncludeScannable> scannableMap = new LinkedHashMap<>();
     if (cppConfiguration.isLipoContextCollector()) {
@@ -607,7 +607,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
 
   private static void addTransitiveInfoProviders(
       RuleContext ruleContext,
-      CppConfiguration cppConfiguration,
       CcCommon common,
       RuleConfiguredTargetBuilder builder,
       NestedSet<Artifact> filesToBuild,
@@ -632,10 +631,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             instrumentedObjectFiles))
         .add(CppDebugFileProvider.class, new CppDebugFileProvider(
             dwoArtifacts.getDwoArtifacts(), dwoArtifacts.getPicDwoArtifacts()))
-        .addOutputGroup(OutputGroupProvider.TEMP_FILES,
-            getTemps(cppConfiguration, ccCompilationOutputs))
+        .addOutputGroup(OutputGroupProvider.TEMP_FILES, common.getTemps(ccCompilationOutputs))
         .addOutputGroup(OutputGroupProvider.FILES_TO_COMPILE,
-            common.getFilesToCompile(ccCompilationOutputs))
+            NestedSetBuilder.wrap(Order.STABLE_ORDER,
+                common.getFilesToCompile(ccCompilationOutputs)))
         .addOutputGroup(OutputGroupProvider.COMPILATION_PREREQUISITES,
             CcCommon.collectCompilationPrerequisites(ruleContext, cppCompilationContext));
   }
@@ -668,13 +667,5 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       builder.addTransitive(dep.getTransitiveCcNativeLibraries());
     }
     return builder.build();
-  }
-
-
-  private static NestedSet<Artifact> getTemps(CppConfiguration cppConfiguration,
-      CcCompilationOutputs compilationOutputs) {
-    return cppConfiguration.isLipoContextCollector()
-        ? NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)
-        : compilationOutputs.getTemps();
   }
 }
