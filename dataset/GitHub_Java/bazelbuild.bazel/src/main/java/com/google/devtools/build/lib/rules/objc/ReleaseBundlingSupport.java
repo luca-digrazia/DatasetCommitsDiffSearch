@@ -438,7 +438,7 @@ public final class ReleaseBundlingSupport {
 
     String actionCommandLine =
         "set -e && "
-            + "t=$(mktemp -d \"${TMPDIR:-/tmp}/signing_intermediate.XXXXXX\") && "
+            + "t=$(mktemp -d -t signing_intermediate) && "
             + "trap \"rm -rf ${t}\" EXIT && "
             // Get an absolute path since we need to cd into the temp directory for zip.
             + "signed_ipa=${PWD}/"
@@ -761,7 +761,8 @@ public final class ReleaseBundlingSupport {
         new BundleMergeControlBytes(
             bundling,
             intermediateArtifacts.unprocessedIpa(),
-            ruleContext.getFragment(AppleConfiguration.class));
+            ruleContext.getFragment(AppleConfiguration.class),
+            bundleSupport.targetDeviceFamilies());
 
     ruleContext.registerAction(
         new BinaryFileWriteAction(

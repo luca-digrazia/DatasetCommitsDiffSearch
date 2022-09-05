@@ -61,7 +61,7 @@ public class IosApplicationRule implements RuleDefinition {
         Any extensions to include in the final application.
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("extensions", LABEL_LIST)
-            .allowedRuleClasses("ios_extension", "apple_watch1_extension")
+            .allowedRuleClasses("ios_extension")
             .allowedFileTypes()
             .direct_compile_time_input())
         .add(attr("$runner_script_template", LABEL).cfg(HOST)
