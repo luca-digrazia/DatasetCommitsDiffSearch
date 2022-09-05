@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import com.google.common.collect.HashBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -76,10 +75,6 @@ public class LocalDiffAwareness implements DiffAwareness {
         if (resolvedPathEntryFragment.startsWith(new PathFragment(prefix))) {
           return null;
         }
-      }
-      // Disable the file watcher on OSX due to https://bugs.openjdk.java.net/browse/JDK-7133447
-      if (OS.getCurrent() == OS.DARWIN) {
-        return null;
       }
 
       WatchService watchService;

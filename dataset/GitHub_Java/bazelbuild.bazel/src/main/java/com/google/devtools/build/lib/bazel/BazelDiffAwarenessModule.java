@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,7 @@
 package com.google.devtools.build.lib.bazel;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.runtime.BlazeModule;
-import com.google.devtools.build.lib.runtime.WorkspaceBuilder;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.LocalDiffAwareness;
 
@@ -25,9 +23,11 @@ import com.google.devtools.build.lib.skyframe.LocalDiffAwareness;
  */
 public class BazelDiffAwarenessModule extends BlazeModule {
   @Override
-  public void workspaceInit(BlazeDirectories directories, WorkspaceBuilder builder) {
-    if (builder.enableWatchFs()) {
-      builder.addDiffAwarenessFactory(new LocalDiffAwareness.Factory(ImmutableList.<String>of()));
+  public Iterable<DiffAwareness.Factory> getDiffAwarenessFactories(boolean watchFS) {
+    ImmutableList.Builder<DiffAwareness.Factory> builder = ImmutableList.builder();
+    if (watchFS) {
+      builder.add(new LocalDiffAwareness.Factory(ImmutableList.<String>of()));
     }
+    return builder.build();
   }
 }
