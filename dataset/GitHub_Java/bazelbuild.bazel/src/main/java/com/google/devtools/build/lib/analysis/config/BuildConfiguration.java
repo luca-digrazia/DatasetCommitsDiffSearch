@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis.config;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.Splitter;
 import com.google.common.base.Verify;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ClassToInstanceMap;
@@ -218,23 +217,6 @@ public final class BuildConfiguration {
     }
   }
 
-  /** A converter from comma-separated strings to Label lists. */
-  public static class LabelListConverter implements Converter<List<Label>> {
-    @Override
-    public List<Label> convert(String input) throws OptionsParsingException {
-      ImmutableList.Builder result = ImmutableList.builder();
-      for (String label : Splitter.on(",").omitEmptyStrings().split(input)) {
-        result.add(convertLabel(label));
-      }
-      return result.build();
-    }
-
-    @Override
-    public String getTypeDescription() {
-      return "a build target label";
-    }
-  }
-
   /**
    * A converter that returns null if the input string is empty, otherwise it converts
    * the input to a label.
@@ -400,8 +382,6 @@ public final class BuildConfiguration {
                 return "ppc";
               case ARM:
                 return "arm";
-              case S390X:
-                return "s390x";
               default:
                 return "unknown";
             }
@@ -768,14 +748,14 @@ public final class BuildConfiguration {
         defaultValue = "true",
         category = "strategy",
         help = "Build all the tools used during the build for a distinct configuration from "
-            + "that used for the target program. When this is disabled, the same configuration "
-            + "is used for host and target programs. This may cause undesirable rebuilds of tools "
+            + "that used for the target program.  By default, the same configuration is used "
+            + "for host and target programs, but this may cause undesirable rebuilds of tool "
             + "such as the protocol compiler (and then everything downstream) whenever a minor "
-            + "change is made to the target configuration, such as setting the linker options. "
-            + "When this enabled (the default), a distinct configuration will be used to build the "
-            + "tools, preventing undesired rebuilds. However, certain libraries will then "
+            + "change is made to the target configuration, such as setting the linker options.  "
+            + "When this flag is specified, a distinct configuration will be used to build the "
+            + "tools, preventing undesired rebuilds.  However, certain libraries will then "
             + "need to be compiled twice, once for each configuration, which may cause some "
-            + "builds to be slower. As a rule of thumb, this option is likely to benefit "
+            + "builds to be slower.  As a rule of thumb, this option is likely to benefit "
             + "users that make frequent changes in configuration (e.g. opt/dbg).  "
             + "Please read the user manual for the full explanation.")
     public boolean useDistinctHostConfiguration;
@@ -1762,13 +1742,7 @@ public final class BuildConfiguration {
     public Iterable<Dependency> getDependencies(
         Label label, ImmutableSet<AspectDescriptor> aspects) {
       return ImmutableList.of(
-          isNull()
-              // We can trivially set the final value for null-configured targets now. This saves
-              // us from having to recreate a new Dependency object for the final value later. Since
-              // there are lots of null-configured targets (e.g. all source files), this can add up
-              // over the course of a build.
-              ? Dependency.withNullConfiguration(label)
-              : Dependency.withTransitionAndAspects(label, currentTransition, aspects));
+          Dependency.withTransitionAndAspects(label, currentTransition, aspects));
     }
   }
 
