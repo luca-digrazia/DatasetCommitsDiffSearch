@@ -858,19 +858,6 @@ public class MethodLibraryTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testListIndexMethod() throws Exception {
-    new BothModesTest()
-        .testStatement("['a', 'b', 'c'].index('a')", 0)
-        .testStatement("['a', 'b', 'c'].index('b')", 1)
-        .testStatement("['a', 'b', 'c'].index('c')", 2)
-        .testStatement("[2, 4, 6].index(4)", 1)
-        .testStatement("[2, 4, 6].index(4)", 1)
-        .testStatement("[0, 1, [1]].index([1])", 2)
-        .testIfErrorContains("Item \"a\" not found in list", "[1, 2].index('a')")
-        .testIfErrorContains("Item 0 not found in list", "[].index(0)");
-  }
-
-  @Test
   public void testListIndex() throws Exception {
     new BothModesTest()
         .testStatement("['a', 'b', 'c', 'd'][0]", "a")
@@ -1106,38 +1093,29 @@ public class MethodLibraryTest extends EvaluationTestCase {
   @Test
   public void testLStrip() throws Exception {
     new BothModesTest()
-        .testStatement("'a b c'.lstrip('')", "a b c")
+        .testStatement("'abc'.lstrip('')", "abc")
         .testStatement("'abcba'.lstrip('ba')", "cba")
         .testStatement("'abc'.lstrip('xyz')", "abc")
-        .testStatement("'  a b c  '.lstrip()", "a b c  ")
-        // the "\\"s are because Java absorbs one level of "\"s
-        .testStatement("' \\t\\na b c '.lstrip()", "a b c ")
-        .testStatement("' a b c '.lstrip('')", " a b c ");
+        .testStatement("'  abc  '.lstrip()", "abc  ");
   }
 
   @Test
   public void testRStrip() throws Exception {
     new BothModesTest()
-        .testStatement("'a b c'.rstrip('')", "a b c")
+        .testStatement("'abc'.rstrip('')", "abc")
         .testStatement("'abcba'.rstrip('ba')", "abc")
         .testStatement("'abc'.rstrip('xyz')", "abc")
-        .testStatement("'  a b c  '.rstrip()", "  a b c")
-        // the "\\"s are because Java absorbs one level of "\"s
-        .testStatement("' a b c \\t \\n'.rstrip()", " a b c")
-        .testStatement("' a b c '.rstrip('')", " a b c ");
+        .testStatement("'  abc  '.rstrip()", "  abc");
   }
 
   @Test
   public void testStrip() throws Exception {
     new BothModesTest()
-        .testStatement("'a b c'.strip('')", "a b c")
+        .testStatement("'abc'.strip('')", "abc")
         .testStatement("'abcba'.strip('ba')", "c")
         .testStatement("'abc'.strip('xyz')", "abc")
-        .testStatement("'  a b c  '.strip()", "a b c")
-        .testStatement("' a b c\\t'.strip()", "a b c")
-        .testStatement("'a b c'.strip('.')", "a b c")
-        // the "\\"s are because Java absorbs one level of "\"s
-        .testStatement("' \\t\\n\\ra b c \\t\\n\\r'.strip()", "a b c")
-        .testStatement("' a b c '.strip('')", " a b c ");
+        .testStatement("'  abc  '.strip()", "abc")
+        .testStatement("' abc\t'.strip()", "abc")
+        .testStatement("'abc'.strip('.')", "abc");
   }
 }

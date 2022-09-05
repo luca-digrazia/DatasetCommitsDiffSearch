@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.events.Event;
@@ -26,7 +27,7 @@ import com.google.devtools.build.lib.syntax.Mutability.Freezable;
 import com.google.devtools.build.lib.syntax.Mutability.MutabilityException;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -293,9 +294,9 @@ public final class Environment implements Freezable {
   private final EventHandler eventHandler;
 
   /**
-   * For each imported extension, a global Skylark frame from which to load() individual bindings.
+   * For each imported extensions, a global Skylark frame from which to load() individual bindings.
    */
-  private final Map<String, Extension> importedExtensions;
+  private final Map<PathFragment, Extension> importedExtensions;
 
   /**
    * Is this Environment being executed in Skylark context?
@@ -385,6 +386,18 @@ public final class Environment implements Freezable {
     return lexicalFrame == null;
   }
 
+  /**
+   * Is the current code Skylark?
+   * @return true if Skylark was enabled when this code was read.
+   */
+  // TODO(bazel-team): Delete this function.
+  // This function is currently used in various functions that change their behavior with respect to
+  // lists depending on the Skylark-ness of the code; lists should be unified between the two modes.
+  @VisibleForTesting
+  public boolean isSkylark() {
+    return isSkylark;
+  }
+
   @Override
   public Mutability mutability() {
     // the mutability of the environment is that of its dynamic frame.
@@ -455,7 +468,7 @@ public final class Environment implements Freezable {
       Frame globalFrame,
       Frame dynamicFrame,
       EventHandler eventHandler,
-      Map<String, Extension> importedExtensions,
+      Map<PathFragment, Extension> importedExtensions,
       boolean isSkylark,
       @Nullable String fileContentHashCode,
       boolean isLoadingPhase) {
@@ -479,7 +492,7 @@ public final class Environment implements Freezable {
     private boolean isLoadingPhase = false;
     @Nullable private Frame parent;
     @Nullable private EventHandler eventHandler;
-    @Nullable private Map<String, Extension> importedExtensions;
+    @Nullable private Map<PathFragment, Extension> importedExtensions;
     @Nullable private String fileContentHashCode;
 
     Builder(Mutability mutability) {
@@ -515,9 +528,9 @@ public final class Environment implements Freezable {
     }
 
     /** Declares imported extensions for load() statements. */
-    public Builder setImportedExtensions (Map<String, Extension> importMap) {
+    public Builder setImportedExtensions (Map<PathFragment, Extension> importedExtensions) {
       Preconditions.checkState(this.importedExtensions == null);
-      this.importedExtensions = importMap;
+      this.importedExtensions = importedExtensions;
       return this;
     }
 
@@ -538,7 +551,7 @@ public final class Environment implements Freezable {
       if (importedExtensions == null) {
         importedExtensions = ImmutableMap.of();
       }
-      return new Environment(
+      Environment env = new Environment(
           globalFrame,
           dynamicFrame,
           eventHandler,
@@ -546,6 +559,7 @@ public final class Environment implements Freezable {
           isSkylark,
           fileContentHashCode,
           isLoadingPhase);
+      return env;
     }
   }
 
@@ -759,22 +773,22 @@ public final class Environment implements Freezable {
    * that was not properly loaded.
    */
   public static class LoadFailedException extends Exception {
-    LoadFailedException(String importString) {
+    LoadFailedException(PathFragment extension) {
       super(String.format("file '%s' was not correctly loaded. "
               + "Make sure the 'load' statement appears in the global scope in your file",
-              importString));
+              extension));
     }
   }
 
-  public void importSymbol(String importString, Identifier symbol, String nameInLoadedFile)
+  public void importSymbol(PathFragment extension, Identifier symbol, String nameInLoadedFile)
       throws NoSuchVariableException, LoadFailedException {
     Preconditions.checkState(isGlobal()); // loading is only allowed at global scope.
 
-    if (!importedExtensions.containsKey(importString)) {
-      throw new LoadFailedException(importString);
+    if (!importedExtensions.containsKey(extension)) {
+      throw new LoadFailedException(extension);
     }
 
-    Extension ext = importedExtensions.get(importString);
+    Extension ext = importedExtensions.get(extension);
 
     // TODO(bazel-team): Throw a LoadFailedException instead, with an appropriate message.
     // Throwing a NoSuchVariableException is backward compatible, but backward.
@@ -787,7 +801,7 @@ public final class Environment implements Freezable {
     try {
       update(symbol.getName(), value);
     } catch (EvalException e) {
-      throw new LoadFailedException(importString);
+      throw new LoadFailedException(extension);
     }
   }
 
@@ -799,9 +813,9 @@ public final class Environment implements Freezable {
     // Calculate a new hash from the hash of the loaded Extension-s.
     Fingerprint fingerprint = new Fingerprint();
     fingerprint.addString(Preconditions.checkNotNull(fileContentHashCode));
-    TreeSet<String> importStrings = new TreeSet<>(importedExtensions.keySet());
-    for (String importString : importStrings) {
-      fingerprint.addString(importedExtensions.get(importString).getTransitiveContentHashCode());
+    TreeSet<PathFragment> paths = new TreeSet<>(importedExtensions.keySet());
+    for (PathFragment path : paths) {
+      fingerprint.addString(importedExtensions.get(path).getTransitiveContentHashCode());
     }
     return fingerprint.hexDigestAndReset();
   }

@@ -60,7 +60,6 @@ import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.UnixGlob;
@@ -996,9 +995,11 @@ public final class PackageFactory {
       PackageIdentifier packageId,
       Path buildFile,
       Preprocessor.Result preprocessingResult,
+      Iterable<Event> preprocessingEvents,
       List<Statement> preludeStatements,
       Map<PathFragment, Extension> imports,
       ImmutableList<Label> skylarkFileDependencies,
+      CachingPackageLocator locator,
       RuleVisibility defaultVisibility,
       Globber globber) throws InterruptedException {
     StoredEventHandler localReporterForParsing = new StoredEventHandler();
@@ -1006,8 +1007,8 @@ public final class PackageFactory {
     // show up below.
     BuildFileAST buildFileAST = parseBuildFile(packageId, preprocessingResult.result,
         preludeStatements, localReporterForParsing);
-    AstAfterPreprocessing astAfterPreprocessing = new AstAfterPreprocessing(preprocessingResult,
-        buildFileAST, localReporterForParsing, /*globber=*/null);
+    AstAfterPreprocessing astAfterPreprocessing =
+        new AstAfterPreprocessing(preprocessingResult, buildFileAST, localReporterForParsing);
     return createPackageFromPreprocessingAst(
         externalPkg,
         packageId,
@@ -1097,15 +1098,15 @@ public final class PackageFactory {
       throw new BuildFileNotFoundException(
           packageId, "illegal package name: '" + packageId + "' (" + error + ")");
     }
-    byte[] buildFileBytes = maybeGetBuildFileBytes(buildFile, eventHandler);
-    if (buildFileBytes == null) {
+    ParserInputSource inputSource = maybeGetParserInputSource(buildFile, eventHandler);
+    if (inputSource == null) {
       throw new BuildFileContainsErrorsException(packageId, "IOException occured");
     }
 
     Globber globber = createLegacyGlobber(buildFile.getParentDirectory(), packageId, locator);
     Preprocessor.Result preprocessingResult;
     try {
-      preprocessingResult = preprocess(buildFile, packageId, buildFileBytes, globber);
+      preprocessingResult = preprocess(packageId, inputSource, globber);
     } catch (IOException e) {
       eventHandler.handle(
           Event.error(Location.fromFile(buildFile), "preprocessing failed: " + e.getMessage()));
@@ -1118,9 +1119,11 @@ public final class PackageFactory {
                 packageId,
                 buildFile,
                 preprocessingResult,
+                /*preprocessingEvents=*/preprocessingResult.events,
                 /*preludeStatements=*/ImmutableList.<Statement>of(),
                 /*imports=*/ImmutableMap.<PathFragment, Extension>of(),
                 /*skylarkFileDependencies=*/ImmutableList.<Label>of(),
+                locator,
                 /*defaultVisibility=*/ConstantRuleVisibility.PUBLIC,
                 globber)
             .build();
@@ -1132,10 +1135,11 @@ public final class PackageFactory {
   public Preprocessor.Result preprocess(
       PackageIdentifier packageId, Path buildFile, CachingPackageLocator locator)
       throws InterruptedException, IOException {
-    byte[] buildFileBytes = FileSystemUtils.readWithKnownFileSize(buildFile, buildFile.getFileSize());
+    ParserInputSource inputSource;
+    inputSource = ParserInputSource.create(buildFile);
     Globber globber = createLegacyGlobber(buildFile.getParentDirectory(), packageId, locator);
     try {
-      return preprocess(buildFile, packageId, buildFileBytes, globber);
+      return preprocess(packageId, inputSource, globber);
     } finally {
       globber.onCompletion();
     }
@@ -1146,16 +1150,15 @@ public final class PackageFactory {
    * {@link InterruptedException}.
    */
   public Preprocessor.Result preprocess(
-      Path buildFilePath, PackageIdentifier packageId, byte[] buildFileBytes,
-      Globber globber) throws InterruptedException, IOException {
+      PackageIdentifier packageId, ParserInputSource inputSource, Globber globber)
+      throws InterruptedException, IOException {
     Preprocessor preprocessor = preprocessorFactory.getPreprocessor();
     if (preprocessor == null) {
-      return Preprocessor.Result.noPreprocessing(buildFilePath.asFragment(), buildFileBytes);
+      return Preprocessor.Result.noPreprocessing(inputSource);
     }
     try {
       return preprocessor.preprocess(
-          buildFilePath,
-          buildFileBytes,
+          inputSource,
           packageId.toString(),
           globber,
           Environment.BUILD,
@@ -1173,9 +1176,9 @@ public final class PackageFactory {
   }
 
   @Nullable
-  private byte[] maybeGetBuildFileBytes(Path buildFile, EventHandler eventHandler) {
+  private ParserInputSource maybeGetParserInputSource(Path buildFile, EventHandler eventHandler) {
     try {
-      return FileSystemUtils.readWithKnownFileSize(buildFile, buildFile.getFileSize());
+      return ParserInputSource.create(buildFile);
     } catch (IOException e) {
       eventHandler.handle(Event.error(Location.fromFile(buildFile), e.getMessage()));
       return null;
@@ -1336,8 +1339,7 @@ public final class PackageFactory {
       PackageContext context = new PackageContext(pkgBuilder, globber, eventHandler);
       buildPkgEnv(pkgEnv, context, ruleFactory);
       pkgEnv.setupDynamic(PKG_CONTEXT, context);
-      pkgEnv.setupDynamic(Runtime.PKG_NAME, packageId.getPackageFragment().getPathString());
-      pkgEnv.setupDynamic(Runtime.REPOSITORY_NAME, packageId.getRepository().toString());
+      pkgEnv.setupDynamic(Runtime.PKG_NAME, packageId.toString());
 
       if (containsError) {
         pkgBuilder.setContainsErrors();
@@ -1457,23 +1459,5 @@ public final class PackageFactory {
 
   static {
     SkylarkSignatureProcessor.configureSkylarkFunctions(PackageFactory.class);
-  }
-
-  public static class EmptyEnvironmentExtension implements EnvironmentExtension {
-    @Override
-    public void update(Environment environment) {}
-
-    @Override
-    public void updateWorkspace(Environment environment) {}
-
-    @Override
-    public Iterable<PackageArgument<?>> getPackageArguments() {
-      return ImmutableList.of();
-    }
-
-    @Override
-    public ImmutableList<BaseFunction> nativeModuleFunctions() {
-      return ImmutableList.<BaseFunction>of();
-    }
   }
 }

@@ -196,10 +196,10 @@ public final class SkylarkRuleContext {
         continue;
       }
       String skyname = a.getPublicName();
+      Mode mode = getMode(a.getName());
       if (a.isExecutable()) {
         // In Skylark only label (not label list) type attributes can have the Executable flag.
-        FilesToRunProvider provider =
-            ruleContext.getExecutablePrerequisite(a.getName(), Mode.DONT_CHECK);
+        FilesToRunProvider provider = ruleContext.getExecutablePrerequisite(a.getName(), mode);
         if (provider != null && provider.getExecutable() != null) {
           Artifact executable = provider.getExecutable();
           executableBuilder.put(skyname, executable);
@@ -210,18 +210,17 @@ public final class SkylarkRuleContext {
       }
       if (a.isSingleArtifact()) {
         // In Skylark only label (not label list) type attributes can have the SingleArtifact flag.
-        Artifact artifact = ruleContext.getPrerequisiteArtifact(a.getName(), Mode.DONT_CHECK);
+        Artifact artifact = ruleContext.getPrerequisiteArtifact(a.getName(), mode);
         if (artifact != null) {
           fileBuilder.put(skyname, artifact);
         } else {
           fileBuilder.put(skyname, Runtime.NONE);
         }
       }
-      filesBuilder.put(
-          skyname, ruleContext.getPrerequisiteArtifacts(a.getName(), Mode.DONT_CHECK).list());
-      List<?> allPrereq = ruleContext.getPrerequisites(a.getName(), Mode.DONT_CHECK);
+      filesBuilder.put(skyname, ruleContext.getPrerequisiteArtifacts(a.getName(), mode).list());
+      List<?> allPrereq = ruleContext.getPrerequisites(a.getName(), mode);
       if (type == BuildType.LABEL) {
-        Object prereq = ruleContext.getPrerequisite(a.getName(), Mode.DONT_CHECK);
+        Object prereq = ruleContext.getPrerequisite(a.getName(), mode);
         if (prereq == null) {
           prereq = Runtime.NONE;
         }
@@ -268,6 +267,10 @@ public final class SkylarkRuleContext {
    */
   public RuleContext getRuleContext() {
     return ruleContext;
+  }
+
+  private Mode getMode(String attributeName) {
+    return ruleContext.getAttributeMode(attributeName);
   }
 
   @SkylarkCallable(name = "attr", structField = true,

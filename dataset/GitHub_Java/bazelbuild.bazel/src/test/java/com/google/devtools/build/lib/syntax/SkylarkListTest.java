@@ -16,8 +16,10 @@ package com.google.devtools.build.lib.syntax;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -49,8 +51,7 @@ public class SkylarkListTest extends EvaluationTestCase {
 
   @Test
   public void testListConcat() throws Exception {
-    assertThat(eval("[1, 2] + [3, 4]"))
-        .isEqualTo(SkylarkList.createImmutable(Tuple.of(1, 2, 3, 4)));
+    assertThat(eval("[1, 2] + [3, 4]")).isEqualTo(new MutableList(Tuple.of(1, 2, 3, 4)));
   }
 
   @Test

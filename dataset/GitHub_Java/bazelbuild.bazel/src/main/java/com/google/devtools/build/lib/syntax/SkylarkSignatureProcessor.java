@@ -13,10 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature.Param;
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.syntax.BuiltinFunction.ExtraArgKind;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.syntax.SkylarkSignature.Param;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -189,7 +188,6 @@ public class SkylarkSignatureProcessor {
             .setGlobals(Environment.CONSTANTS_ONLY)
             .setEventHandler(Environment.FAIL_FAST_HANDLER)
             .build()
-            .update("unbound", Runtime.UNBOUND)
             .eval(param.defaultValue());
       } catch (Exception e) {
         throw new RuntimeException(String.format(
