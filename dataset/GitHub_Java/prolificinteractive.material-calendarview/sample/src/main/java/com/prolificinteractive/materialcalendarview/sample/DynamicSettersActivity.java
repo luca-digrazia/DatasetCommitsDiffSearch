@@ -9,11 +9,9 @@ import android.support.annotation.NonNull;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.widget.DatePicker;
-import android.widget.LinearLayout;
 import android.widget.NumberPicker;
 
 import com.prolificinteractive.materialcalendarview.CalendarDay;
-import com.prolificinteractive.materialcalendarview.CalendarMode;
 import com.prolificinteractive.materialcalendarview.MaterialCalendarView;
 
 import java.util.Calendar;
@@ -30,8 +28,6 @@ public class DynamicSettersActivity extends AppCompatActivity {
     MaterialCalendarView widget;
 
     private int currentTileSize;
-    private int currentTileWidth;
-    private int currentTileHeight;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,8 +36,6 @@ public class DynamicSettersActivity extends AppCompatActivity {
         ButterKnife.bind(this);
 
         currentTileSize = MaterialCalendarView.DEFAULT_TILE_SIZE_DP;
-        currentTileWidth = MaterialCalendarView.DEFAULT_TILE_SIZE_DP;
-        currentTileHeight = MaterialCalendarView.DEFAULT_TILE_SIZE_DP;
     }
 
     @OnClick(R.id.button_other_dates)
@@ -123,9 +117,7 @@ public class DynamicSettersActivity extends AppCompatActivity {
         showDatePickerDialog(this, widget.getMinimumDate(), new DatePickerDialog.OnDateSetListener() {
             @Override
             public void onDateSet(DatePicker view, int year, int monthOfYear, int dayOfMonth) {
-                widget.state().edit()
-                        .setMinimumDate(CalendarDay.from(year, monthOfYear, dayOfMonth))
-                        .commit();
+                widget.setMinimumDate(CalendarDay.from(year, monthOfYear, dayOfMonth));
             }
         });
     }
@@ -135,9 +127,7 @@ public class DynamicSettersActivity extends AppCompatActivity {
         showDatePickerDialog(this, widget.getMaximumDate(), new DatePickerDialog.OnDateSetListener() {
             @Override
             public void onDateSet(DatePicker view, int year, int monthOfYear, int dayOfMonth) {
-                widget.state().edit()
-                        .setMaximumDate(CalendarDay.from(year, monthOfYear, dayOfMonth))
-                        .commit();
+                widget.setMaximumDate(CalendarDay.from(year, monthOfYear, dayOfMonth));
             }
         });
     }
@@ -189,37 +179,6 @@ public class DynamicSettersActivity extends AppCompatActivity {
                 .show();
     }
 
-    @OnClick(R.id.button_set_width_height)
-    void onTileWidthHeightClicked() {
-        final LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.HORIZONTAL);
-        final NumberPicker pickerWidth = new NumberPicker(this);
-        pickerWidth.setMinValue(24);
-        pickerWidth.setMaxValue(64);
-        pickerWidth.setWrapSelectorWheel(false);
-        pickerWidth.setValue(currentTileWidth);
-        final NumberPicker pickerHeight = new NumberPicker(this);
-        pickerHeight.setMinValue(24);
-        pickerHeight.setMaxValue(64);
-        pickerHeight.setWrapSelectorWheel(false);
-        pickerHeight.setValue(currentTileHeight);
-        layout.addView(pickerWidth);
-        layout.addView(pickerHeight);
-        new AlertDialog.Builder(this)
-                .setView(layout)
-                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(@NonNull DialogInterface dialog, int which) {
-                        currentTileWidth = pickerWidth.getValue();
-                        currentTileHeight = pickerHeight.getValue();
-                        widget.setTileSize(-1);
-                        widget.setTileWidthDp(currentTileWidth);
-                        widget.setTileHeightDp(currentTileHeight);
-                    }
-                })
-                .show();
-    }
-
     @OnClick(R.id.button_clear_selection)
     void onClearSelection() {
         widget.clearSelection();
@@ -257,26 +216,8 @@ public class DynamicSettersActivity extends AppCompatActivity {
     @OnClick(R.id.button_set_first_day)
     void onFirstDayOfWeekClicked() {
         int index = random.nextInt(DAYS_OF_WEEK.length);
-        widget.state().edit()
-                .setFirstDayOfWeek(DAYS_OF_WEEK[index])
-                .commit();
-
+        widget.setFirstDayOfWeek(DAYS_OF_WEEK[index]);
     }
-
-    @OnClick(R.id.button_weeks)
-    public void onSetWeekMode() {
-        widget.state().edit()
-                .setCalendarDisplayMode(CalendarMode.WEEKS)
-                .commit();
-    }
-
-    @OnClick(R.id.button_months)
-    public void onSetMonthMode() {
-        widget.state().edit()
-                .setCalendarDisplayMode(CalendarMode.MONTHS)
-                .commit();
-    }
-
 
     public static void showDatePickerDialog(Context context, CalendarDay day,
                                             DatePickerDialog.OnDateSetListener callback) {
