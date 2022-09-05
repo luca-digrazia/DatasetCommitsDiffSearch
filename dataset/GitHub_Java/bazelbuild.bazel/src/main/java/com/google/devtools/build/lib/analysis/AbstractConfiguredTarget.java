@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,15 +18,14 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.syntax.ClassObject;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import javax.annotation.Nullable;
 
 /**
  * An abstract implementation of ConfiguredTarget in which all properties are
@@ -83,7 +82,6 @@ public abstract class AbstractConfiguredTarget
     return "ConfiguredTarget(" + getTarget().getLabel() + ", " + getConfiguration() + ")";
   }
 
-  @Nullable
   @Override
   public <P extends TransitiveInfoProvider> P getProvider(Class<P> provider) {
     AnalysisUtils.checkProvider(provider);
@@ -100,7 +98,7 @@ public abstract class AbstractConfiguredTarget
       case LABEL_FIELD:
         return getLabel();
       case FILES_FIELD:
-        // A shortcut for files to build in Skylark. FileConfiguredTarget and RuleConfiguredTarget
+        // A shortcut for files to build in Skylark. FileConfiguredTarget and RunleConfiguredTarget
         // always has FileProvider and Error- and PackageGroupConfiguredTarget-s shouldn't be
         // accessible in Skylark.
         return SkylarkNestedSet.of(
@@ -113,7 +111,7 @@ public abstract class AbstractConfiguredTarget
         return get(name);
     }
   }
-
+  
   @Override
   public String errorMessage(String name) {
     return null;
