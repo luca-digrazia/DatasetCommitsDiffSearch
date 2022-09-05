@@ -18,14 +18,12 @@ import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTran
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.TRISTATE;
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fromFunctions;
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
 import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
@@ -45,6 +43,7 @@ import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
+
 import java.util.Set;
 
 /**
@@ -117,18 +116,17 @@ public class BazelJavaRuleClasses {
     }
   }
 
-  static final Set<String> ALLOWED_RULES_IN_DEPS =
-      ImmutableSet.of(
-          "cc_binary", // NB: linkshared=1
-          "cc_library",
-          "genrule",
-          "genproto", // TODO(bazel-team): we should filter using providers instead (skylark rule).
-          "java_import",
-          "java_library",
-          "java_proto_library",
-          "proto_library",
-          "sh_binary",
-          "sh_library");
+  static final Set<String> ALLOWED_RULES_IN_DEPS = ImmutableSet.of(
+      "cc_binary",  // NB: linkshared=1
+      "cc_library",
+      "genrule",
+      "genproto",  // TODO(bazel-team): we should filter using providers instead (skylark rule).
+      "java_import",
+      "java_library",
+      // There is no Java protoc for Bazel--yet. This is here for the benefit of J2 protos.
+      "proto_library",
+      "sh_binary",
+      "sh_library");
 
   /**
    * Common attributes for Java rules.
@@ -328,18 +326,18 @@ public class BazelJavaRuleClasses {
           this to 0 if the <code>launcher</code> or <code>main_class</code> attributes
           are set.
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-          .add(attr("create_executable", BOOLEAN).nonconfigurable("internal").value(true))
-          .add(
-              attr("$testsupport", LABEL)
-                  .value(
-                      new Attribute.ComputedDefault("use_testrunner") {
-                        @Override
-                        public Object getDefault(AttributeMap rule) {
-                          return rule.get("use_testrunner", Type.BOOLEAN)
-                              ? env.getToolsLabel(JUNIT_TESTRUNNER)
-                              : null;
-                        }
-                      }))
+          .add(attr("create_executable", BOOLEAN)
+              .nonconfigurable("internal")
+              .value(true))
+          .add(attr("$testsupport", LABEL).value(
+              new Attribute.ComputedDefault("use_testrunner") {
+                @Override
+                public Object getDefault(AttributeMap rule) {
+                  return rule.get("use_testrunner", Type.BOOLEAN)
+                    ? env.getToolsLabel(JUNIT_TESTRUNNER)
+                    : null;
+                }
+              }))
           /* <!-- #BLAZE_RULE($base_java_binary).ATTRIBUTE(deploy_manifest_lines) -->
           A list of lines to add to the <code>META-INF/manifest.mf</code> file generated for the
           <code>*_deploy.jar</code> target. The contents of this attribute are <em>not</em> subject
@@ -383,18 +381,10 @@ public class BazelJavaRuleClasses {
           specified by the launcher target. (This does not apply to the opt-out
           label.)</p>
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-          .add(
-              attr("launcher", LABEL)
-                  .allowedFileTypes(FileTypeSet.NO_FILE)
-                  .allowedRuleClasses("cc_binary"))
-          .add(attr(":java_launcher", LABEL).value(JavaSemantics.JAVA_LAUNCHER)) // blaze flag
-          .add(
-              attr("$no_launcher", NODEP_LABEL_LIST)
-                  .value(
-                      ImmutableList.of(
-                          // TODO(b/30038239): migrate to //tools/jdk:no_launcher and delete
-                          env.getToolsLabel("//third_party/java/jdk:jdk_launcher"),
-                          env.getToolsLabel("//tools/jdk:no_launcher"))))
+          .add(attr("launcher", LABEL)
+              .allowedFileTypes(FileTypeSet.NO_FILE)
+              .allowedRuleClasses("cc_binary"))
+          .add(attr(":java_launcher", LABEL).value(JavaSemantics.JAVA_LAUNCHER))  // blaze flag
           .build();
     }
     @Override
