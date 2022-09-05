@@ -7,7 +7,6 @@ import org.hswebframework.ezorm.rdb.mapping.ReactiveRepository;
 import org.hswebframework.ezorm.rdb.mapping.ReactiveUpdate;
 import org.hswebframework.ezorm.rdb.mapping.defaults.SaveResult;
 import org.hswebframework.web.api.crud.entity.PagerResult;
-import org.hswebframework.web.api.crud.entity.QueryParamEntity;
 import org.reactivestreams.Publisher;
 import org.springframework.transaction.ReactiveTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -89,13 +88,13 @@ public interface ReactiveCrudService<E, K> {
     }
 
     @Transactional(readOnly = true)
-    default Flux<E> query(Mono<? extends QueryParamEntity> queryParamMono) {
+    default Flux<E> query(Mono<? extends QueryParam> queryParamMono) {
         return queryParamMono
                 .flatMapMany(this::query);
     }
 
     @Transactional(readOnly = true)
-    default Flux<E> query(QueryParamEntity param) {
+    default Flux<E> query(QueryParam param) {
         return getRepository()
                 .createQuery()
                 .setParam(param)
@@ -103,50 +102,40 @@ public interface ReactiveCrudService<E, K> {
     }
 
     @Transactional(readOnly = true)
-    default Mono<PagerResult<E>> queryPager(QueryParamEntity queryParamMono) {
+    default Mono<PagerResult<E>> queryPager(QueryParam queryParamMono) {
         return queryPager(queryParamMono, Function.identity());
     }
 
     @Transactional(readOnly = true)
-    default <T> Mono<PagerResult<T>> queryPager(QueryParamEntity query, Function<E, T> mapper) {
-        if (query.getTotal() != null) {
-            return getRepository()
-                    .createQuery()
-                    .setParam(query.rePaging(query.getTotal()))
-                    .fetch()
-                    .map(mapper)
-                    .collectList()
-                    .map(list -> PagerResult.of(query.getTotal(), list, query));
-        }
+    default <T> Mono<PagerResult<T>> queryPager(QueryParam param, Function<E, T> mapper) {
         return getRepository()
                 .createQuery()
-                .setParam(query)
+                .setParam(param)
                 .count()
                 .flatMap(total -> {
                     if (total == 0) {
-                        return Mono.just(PagerResult.empty());
+                        return Mono.just(PagerResult.of(0, Collections.emptyList(), param));
                     }
-                    return query(query.clone().rePaging(total))
-                            .map(mapper)
+                    return query(Mono.just(param.rePaging(total))).map(mapper)
                             .collectList()
-                            .map(list -> PagerResult.of(total, list, query));
+                            .map(list -> PagerResult.of(total, list, param));
                 });
     }
 
     @Transactional(readOnly = true)
-    default <T> Mono<PagerResult<T>> queryPager(Mono<? extends QueryParamEntity> queryParamMono, Function<E, T> mapper) {
+    default <T> Mono<PagerResult<T>> queryPager(Mono<? extends QueryParam> queryParamMono, Function<E, T> mapper) {
         return queryParamMono
-                .cast(QueryParamEntity.class)
+                .cast(QueryParam.class)
                 .flatMap(param -> queryPager(param, mapper));
     }
 
     @Transactional(readOnly = true)
-    default Mono<PagerResult<E>> queryPager(Mono<? extends QueryParamEntity> queryParamMono) {
+    default Mono<PagerResult<E>> queryPager(Mono<? extends QueryParam> queryParamMono) {
         return queryPager(queryParamMono, Function.identity());
     }
 
     @Transactional(readOnly = true)
-    default Mono<Integer> count(QueryParamEntity queryParam) {
+    default Mono<Integer> count(QueryParam queryParam) {
         return getRepository()
                 .createQuery()
                 .setParam(queryParam)
@@ -154,7 +143,7 @@ public interface ReactiveCrudService<E, K> {
     }
 
     @Transactional(readOnly = true)
-    default Mono<Integer> count(Mono<? extends QueryParamEntity> queryParamMono) {
+    default Mono<Integer> count(Mono<? extends QueryParam> queryParamMono) {
         return queryParamMono.flatMap(this::count);
     }
 
