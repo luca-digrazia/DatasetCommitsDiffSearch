@@ -258,9 +258,11 @@ public final class CcLinkParams {
     /**
      * Adds a collection of linkstamps.
      */
-    public Builder addLinkstamps(NestedSet<Artifact> linkstamps, CppCompilationContext context) {
+    public Builder addLinkstamps(Iterable<Artifact> linkstamps, CppCompilationContext context) {
+      ImmutableList<Artifact> declaredIncludeSrcs =
+          ImmutableList.copyOf(context.getDeclaredIncludeSrcs());
       for (Artifact linkstamp : linkstamps) {
-        linkstampsBuilder.add(new Linkstamp(linkstamp, context.getDeclaredIncludeSrcs()));
+        linkstampsBuilder.add(new Linkstamp(linkstamp, declaredIncludeSrcs));
       }
       return this;
     }
@@ -323,9 +325,9 @@ public final class CcLinkParams {
    */
   public static final class Linkstamp {
     private final Artifact artifact;
-    private final NestedSet<Artifact> declaredIncludeSrcs;
+    private final ImmutableList<Artifact> declaredIncludeSrcs;
 
-    private Linkstamp(Artifact artifact, NestedSet<Artifact> declaredIncludeSrcs) {
+    private Linkstamp(Artifact artifact, ImmutableList<Artifact> declaredIncludeSrcs) {
       this.artifact = Preconditions.checkNotNull(artifact);
       this.declaredIncludeSrcs = Preconditions.checkNotNull(declaredIncludeSrcs);
     }
@@ -340,7 +342,7 @@ public final class CcLinkParams {
     /**
      * Returns the declared includes.
      */
-    public NestedSet<Artifact> getDeclaredIncludeSrcs() {
+    public ImmutableList<Artifact> getDeclaredIncludeSrcs() {
       return declaredIncludeSrcs;
     }
 
