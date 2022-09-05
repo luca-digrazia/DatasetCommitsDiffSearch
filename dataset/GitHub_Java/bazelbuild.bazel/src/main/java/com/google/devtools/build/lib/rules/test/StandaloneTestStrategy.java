@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.test;
 
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
@@ -32,6 +33,7 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import com.google.devtools.build.lib.view.test.TestStatus.TestCase;
 import com.google.devtools.build.lib.view.test.TestStatus.TestResultData;
@@ -39,6 +41,7 @@ import com.google.devtools.common.options.OptionsClassProvider;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -48,6 +51,7 @@ import java.util.Map;
 public class StandaloneTestStrategy extends TestStrategy {
   // TODO(bazel-team) - add tests for this strategy.
   // TODO(bazel-team) - add support for test timeouts.
+  // TODO(bazel-team) - add support for parsing XML output.
 
   private final Path workspace;
 
@@ -75,21 +79,11 @@ public class StandaloneTestStrategy extends TestStrategy {
         workspace, actionExecutionContext.getExecutor().getExecRoot(), executionOptions)
         .getChild(getTmpDirName(action.getExecutionSettings().getExecutable().getExecPath()));
     Path workingDirectory = runfilesDir.getRelative(action.getRunfilesPrefix());
-
-    TestRunnerAction.ResolvedPaths resolvedPaths =
-        action.resolve(actionExecutionContext.getExecutor().getExecRoot());
-    Map<String, String> env = getEnv(action, runfilesDir, testTmpDir, resolvedPaths);
-    Spawn spawn =
-        new BaseSpawn(
-            // Bazel lacks much of the tooling for coverage, so we don't attempt to pass a coverage
-            // script here.
-            getArgs(TEST_SETUP, "", action),
-            env,
-            action.getTestProperties().getExecutionInfo(),
-            action,
-            action
-                .getTestProperties()
-                .getLocalResourceUsage(executionOptions.usingLocalTestJobs()));
+    Map<String, String> env = getEnv(action, runfilesDir, testTmpDir);
+    Spawn spawn = new BaseSpawn(getArgs(action), env,
+        action.getTestProperties().getExecutionInfo(),
+        action,
+        action.getTestProperties().getLocalResourceUsage(executionOptions.usingLocalTestJobs()));
 
     Executor executor = actionExecutionContext.getExecutor();
 
@@ -131,24 +125,14 @@ public class StandaloneTestStrategy extends TestStrategy {
     }
   }
 
-  private Map<String, String> getEnv(
-      TestRunnerAction action,
-      Path runfilesDir,
-      Path tmpDir,
-      TestRunnerAction.ResolvedPaths resolvedPaths) {
+  private Map<String, String> getEnv(TestRunnerAction action, Path runfilesDir, Path tmpDir) {
     Map<String, String> vars = getDefaultTestEnvironment(action);
     BuildConfiguration config = action.getConfiguration();
 
     vars.putAll(config.getDefaultShellEnvironment());
     vars.putAll(action.getTestEnv());
-
-    /*
-     * TODO(bazel-team): the paths below are absolute,
-     * making test actions impossible to cache remotely.
-     */
     vars.put("TEST_SRCDIR", runfilesDir.getPathString());
     vars.put("TEST_TMPDIR", tmpDir.getPathString());
-    vars.put("XML_OUTPUT_FILE", resolvedPaths.getXmlOutputPath().getPathString());
 
     return vars;
   }
@@ -239,6 +223,19 @@ public class StandaloneTestStrategy extends TestStrategy {
     if (!executionOptions.testKeepGoing && data.getStatus() != BlazeTestStatus.PASSED) {
       throw new TestExecException("Test failed: aborting");
     }
+  }
+
+  private List<String> getArgs(TestRunnerAction action) {
+    List<String> args = Lists.newArrayList(TEST_SETUP);
+    TestTargetExecutionSettings execSettings = action.getExecutionSettings();
+    PathFragment prefix = new PathFragment(action.getRunfilesPrefix());
+    PathFragment executable = execSettings.getExecutable().getRootRelativePath();
+
+    // Execute the test using the alias in the runfiles tree.
+    args.add(prefix.getRelative(executable).getPathString());
+    args.addAll(execSettings.getArgs());
+
+    return args;
   }
 
   @Override
