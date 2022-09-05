@@ -85,7 +85,7 @@ public class ObjcProtoAspect extends NativeAspectClass implements ConfiguredAspe
 
     // Only add the provider if it has any values, otherwise skip it.
     if (!aspectObjcProtoProvider.isEmpty()) {
-      aspectBuilder.addProvider(aspectObjcProtoProvider.build());
+      aspectBuilder.addProvider(ObjcProtoProvider.class, aspectObjcProtoProvider.build());
     }
     return aspectBuilder.build();
   }

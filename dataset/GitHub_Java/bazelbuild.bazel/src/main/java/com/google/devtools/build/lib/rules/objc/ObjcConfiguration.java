@@ -71,7 +71,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   private final boolean debugWithGlibcxx;
   @Nullable private final Label extraEntitlements;
   private final boolean deviceDebugEntitlements;
-  private final boolean experimentalObjcLibrary;
 
   ObjcConfiguration(ObjcCommandLineOptions objcOptions, BuildConfiguration.Options options,
       @Nullable BlazeDirectories directories) {
@@ -96,7 +95,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.debugWithGlibcxx = objcOptions.debugWithGlibcxx;
     this.extraEntitlements = objcOptions.extraEntitlements;
     this.deviceDebugEntitlements = objcOptions.deviceDebugEntitlements;
-    this.experimentalObjcLibrary = objcOptions.experimentalObjcLibrary;
   }
 
   /**
@@ -249,9 +247,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
    * certificate was specified.
    */
   @Nullable
-  @SkylarkCallable(name = "signing_certificate_name", structField = true,
-      doc = "Returns the flag-supplied certificate name to be used in signing, or None if no such "
-      + "certificate was specified.")
   public String getSigningCertName() {
     return this.signingCertName;
   }
@@ -275,21 +270,10 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   /**
    * Returns whether device debug entitlements should be included when signing an application.
    *
-   * <p>Note that debug entitlements will be included only if the --device_debug_entitlements flag
-   * is set <b>and</b> the compilation mode is not {@code opt}.
+   * <p>Note that debug entitlements should not be included in compilation mode {@code opt}
+   * regardless of this setting.
    */
-  @SkylarkCallable(name = "uses_device_debug_entitlements", structField = true,
-      doc = "Returns whether device debug entitlements should be included when signing an "
-      + "application.")
   public boolean useDeviceDebugEntitlements() {
-    return deviceDebugEntitlements && compilationMode != CompilationMode.OPT;
-  }
-  
-  /**
-   * Returns true if all objc_library targets should be configured as if they were
-   * experimental_objc_library targets.
-   */
-  public boolean useExperimentalObjcLibrary() {
-    return experimentalObjcLibrary;
+    return deviceDebugEntitlements;
   }
 }

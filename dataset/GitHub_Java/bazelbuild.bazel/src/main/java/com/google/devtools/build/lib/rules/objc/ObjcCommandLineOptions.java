@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.apple.DottedVersionConverter;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.Option;
+
 import java.util.List;
 
 /**
@@ -199,13 +200,6 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   )
   public boolean deviceDebugEntitlements;
 
-  @Option(
-    name = "experimental_objc_library",
-    defaultValue = "false",
-    category = "undocumented"
-  )
-  public boolean experimentalObjcLibrary;
-  
   @VisibleForTesting static final String DEFAULT_MINIMUM_IOS = "7.0";
 
   @SuppressWarnings("unchecked")
@@ -214,7 +208,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
     return ImmutableList.<SplitTransition<BuildOptions>>builder().add(
             IosApplication.SPLIT_ARCH_TRANSITION, IosExtension.MINIMUM_OS_AND_SPLIT_ARCH_TRANSITION,
             AppleWatch1Extension.MINIMUM_OS_AND_SPLIT_ARCH_TRANSITION)
-        .addAll(MultiArchSplitTransitionProvider.getPotentialSplitTransitions())
+        .addAll(AppleBinary.SPLIT_TRANSITION_PROVIDER.getPotentialSplitTransitions())
         .build();
   }
 }
