@@ -4,7 +4,6 @@ import org.activiti.engine.history.HistoricProcessInstance;
 import org.activiti.engine.history.HistoricTaskInstance;
 import org.activiti.engine.impl.RepositoryServiceImpl;
 import org.activiti.engine.impl.TaskServiceImpl;
-import org.activiti.engine.impl.persistence.entity.IdentityLinkEntity;
 import org.activiti.engine.impl.persistence.entity.ProcessDefinitionEntity;
 import org.activiti.engine.impl.pvm.PvmActivity;
 import org.activiti.engine.impl.pvm.PvmTransition;
@@ -14,20 +13,15 @@ import org.activiti.engine.impl.pvm.process.TransitionImpl;
 import org.activiti.engine.runtime.Execution;
 import org.activiti.engine.runtime.ProcessInstance;
 import org.activiti.engine.task.Task;
-import org.hswebframework.utils.ClassUtils;
 import org.hswebframework.utils.StringUtils;
 import org.hswebframework.web.NotFoundException;
-import org.hswebframework.web.entity.organizational.PersonEntity;
 import org.hswebframework.web.entity.workflow.ActDefEntity;
-import org.hswebframework.web.organizational.authorization.Personnel;
 import org.hswebframework.web.organizational.authorization.relation.Relation;
-import org.hswebframework.web.service.organizational.PersonService;
 import org.hswebframework.web.service.organizational.RelationDefineService;
 import org.hswebframework.web.service.organizational.RelationInfoService;
 import org.hswebframework.web.service.workflow.ActDefService;
 import org.hswebframework.web.workflow.flowable.service.BpmActivityService;
 import org.hswebframework.web.workflow.flowable.service.BpmTaskService;
-import org.hswebframework.web.workflow.flowable.service.BpmUtilsService;
 import org.hswebframework.web.workflow.flowable.utils.FlowableAbstract;
 import org.hswebframework.web.workflow.flowable.utils.JumpTaskCmd;
 import org.slf4j.Logger;
@@ -38,8 +32,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.*;
-import java.util.stream.Collector;
-import java.util.stream.Collectors;
 
 import static org.hswebframework.web.commons.entity.param.QueryParamEntity.single;
 
@@ -58,7 +50,9 @@ public class BpmTaskServiceImp extends FlowableAbstract implements BpmTaskServic
     @Autowired
     ActDefService actDefService;
     @Autowired
-    BpmUtilsService bpmUtilsService;
+    RelationDefineService relationDefineService;
+    @Autowired
+    RelationInfoService relationInfoService;
 
     @Override
     public List<Task> selectNowTask(String procInstId) {
@@ -173,9 +167,9 @@ public class BpmTaskServiceImp extends FlowableAbstract implements BpmTaskServic
         if (execution.size() > 0) {
             List<Task> tasks = selectNowTask(task.getProcessInstanceId());
             // 自定义下一执行人
-            if (tasks.size() == 0 && !StringUtils.isNullOrEmpty(nextClaim)) claim(tasks.get(0).getId(), nextClaim);
+            if (tasks.size()==0 && !StringUtils.isNullOrEmpty(nextClaim)) claim(tasks.get(0).getId(), nextClaim);
             else {
-                for (Task t : tasks) {
+                for(Task t:tasks){
                     addCandidateUser(t.getId(), t.getTaskDefinitionKey(), userId);
                 }
             }
@@ -265,22 +259,20 @@ public class BpmTaskServiceImp extends FlowableAbstract implements BpmTaskServic
 
     @Override
     public void addCandidateUser(String taskId, String actId, String userId) {
-        if (!StringUtils.isNullOrEmpty(actId)) {
+        if(!StringUtils.isNullOrEmpty(actId)){
             // 获取节点配置信息
-            ActDefEntity actDefEntity = actDefService.selectSingle(single(ActDefEntity.actId, actId));
-            // 根据配置类型  获取人员信息 设置待办人
-            if (actDefEntity!=null) {
-                List<String> list = bpmUtilsService.selectUserIdsBy(userId,actDefEntity);
-                list.forEach(uId -> taskService.addCandidateUser(taskId,uId));
-            } else {
-                taskService.addCandidateUser(taskId,
-                        runtimeService.getIdentityLinksForProcessInstance(selectTaskByTaskId(taskId).getProcessInstanceId())
-                        .stream()
-                        .filter(linkEntity -> linkEntity.getType().equals("starter"))
-                        .findFirst().orElseThrow(()-> new NotFoundException("发起人获取失败")).getUserId()
-                );
+            ActDefEntity actDefEntity = actDefService.selectSingle(single(ActDefEntity.actId,actId));
+            // 获取矩阵信息
+//            RelationDefineEntity relationDefineEntity = relationDefineService.selectByPk(actDefEntity.getDefId());
+            // 获取人员信息
+            List<Relation> relations = relationInfoService
+                    .getRelations(actDefEntity.getType(),userId)
+                    .findPos(actDefEntity.getDefId());
+            // 设置待办人
+            for(Relation relation : relations){
+                taskService.addCandidateUser(taskId,relation.getTarget());
             }
-        } else {
+        }else {
             taskService.addCandidateUser(taskId, userId);
         }
     }
@@ -373,7 +365,7 @@ public class BpmTaskServiceImp extends FlowableAbstract implements BpmTaskServic
     }
 
     @Override
-    public Map<String, Object> getVariablesByProcInstId(String procInstId) {
+    public Map<String, Object> getVariables(String procInstId) {
         List<Execution> executions = runtimeService.createExecutionQuery().processInstanceId(procInstId).list();
         String executionId = "";
         for (Execution execution : executions) {
@@ -382,10 +374,5 @@ public class BpmTaskServiceImp extends FlowableAbstract implements BpmTaskServic
             }
         }
         return runtimeService.getVariables(executionId);
-    }
-
-    @Override
-    public Map<String, Object> getVariablesByTaskId(String taskId) {
-        return taskService.getVariables(taskId);
     }
 }
