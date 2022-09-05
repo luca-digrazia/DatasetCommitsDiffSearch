@@ -125,7 +125,7 @@ public class GangliaReporter extends ScheduledReporter {
          * Builds a {@link GangliaReporter} with the given properties, announcing metrics to the
          * given {@link GMetric} client.
          *
-         * @param gmetric the client to use for announcing metrics
+         * @param ganglia the client to use for announcing metrics
          * @return a {@link GangliaReporter}
          */
         public GangliaReporter build(GMetric gmetric) {
@@ -136,7 +136,7 @@ public class GangliaReporter extends ScheduledReporter {
          * Builds a {@link GangliaReporter} with the given properties, announcing metrics to the
          * given {@link GMetric} client.
          *
-         * @param gmetrics the clients to use for announcing metrics
+         * @param ganglia the clients to use for announcing metrics
          * @return a {@link GangliaReporter}
          */
         public GangliaReporter build(GMetric... gmetrics) {
@@ -284,7 +284,7 @@ public class GangliaReporter extends ScheduledReporter {
         final Object obj = gauge.getValue();
         try {
             for(GMetric gmetric: gmetrics) {
-                gmetric.announce(name(prefix, escapeSlashes(name)), String.valueOf(obj), detectType(obj), "",
+                gmetric.announce(name(prefix, name), String.valueOf(obj), detectType(obj), "",
                     GMetricSlope.BOTH, tMax, dMax, group);
             }
         } catch (GangliaException e) {
@@ -335,11 +335,6 @@ public class GangliaReporter extends ScheduledReporter {
     }
 
     private String prefix(String name, String n) {
-        return name(prefix, escapeSlashes(name), n);
-    }
-
-    // ganglia metric names can't contain slashes.
-    private String escapeSlashes(String name) {
-        return name.replace("\\", "_");
+        return name(prefix, name, n);
     }
 }
