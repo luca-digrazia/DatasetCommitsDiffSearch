@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,9 +48,7 @@ public final class FileWriteStrategy implements FileWriteActionContext {
   public void exec(Executor executor, AbstractFileWriteAction action, FileOutErr outErr,
       ActionExecutionContext actionExecutionContext) throws ExecException, InterruptedException {
     EventHandler reporter = executor == null ? null : executor.getEventHandler();
-    try (AutoProfiler p =
-            AutoProfiler.logged(
-                "running " + action.prettyPrint(), LOG, /*minTimeForLoggingInMilliseconds=*/ 100)) {
+    try (AutoProfiler p = AutoProfiler.logged("running " + action.prettyPrint(), LOG)) {
       try {
         Path outputPath = Iterables.getOnlyElement(action.getOutputs()).getPath();
         try (OutputStream out = new BufferedOutputStream(outputPath.getOutputStream())) {
