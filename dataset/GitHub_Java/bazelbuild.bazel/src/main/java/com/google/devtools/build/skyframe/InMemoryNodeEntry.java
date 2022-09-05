@@ -21,9 +21,11 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -126,7 +128,7 @@ public class InMemoryNodeEntry implements NodeEntry {
    * The transient state of this entry, after it has been created but before it is done. It allows
    * us to keep the current state of the entry across invalidation and successive evaluations.
    */
-  @VisibleForTesting @Nullable protected volatile BuildingState buildingState = new BuildingState();
+  @VisibleForTesting @Nullable protected BuildingState buildingState = new BuildingState();
 
   /**
    * Construct a InMemoryNodeEntry. Use ONLY in Skyframe evaluation and graph implementations.
@@ -140,7 +142,7 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   @Override
-  public boolean isDone() {
+  public synchronized boolean isDone() {
     return buildingState == null;
   }
 
@@ -161,13 +163,9 @@ public class InMemoryNodeEntry implements NodeEntry {
     if (isDone()) {
       return getErrorInfo() == null ? getValue() : null;
     } else if (isChanged() || isDirty()) {
-      SkyValue lastBuildValue = null;
-      try {
-        lastBuildValue = getDirtyBuildingState().getLastBuildValue();
-      } catch (InterruptedException e) {
-        throw new IllegalStateException("Interruption unexpected: " + this, e);
-      }
-      return (lastBuildValue == null) ? null : ValueWithMetadata.justValue(lastBuildValue);
+      return (getDirtyBuildingState().getLastBuildValue() == null)
+          ? null
+          : ValueWithMetadata.justValue(getDirtyBuildingState().getLastBuildValue());
     } else {
       // Value has not finished evaluating. It's probably about to be cleaned from the graph.
       return null;
@@ -232,8 +230,7 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   @Override
-  public synchronized Set<SkyKey> setValue(SkyValue value, Version version)
-      throws InterruptedException {
+  public synchronized Set<SkyKey> setValue(SkyValue value, Version version) {
     Preconditions.checkState(isReady(), "%s %s", this, value);
     // This check may need to be removed when we move to a non-linear versioning sequence.
     Preconditions.checkState(
@@ -373,7 +370,7 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   @Override
-  public synchronized Set<SkyKey> markClean() throws InterruptedException {
+  public synchronized Set<SkyKey> markClean() {
     this.value = getDirtyBuildingState().getLastBuildValue();
     Preconditions.checkState(isReady(), "Should be ready when clean: %s", this);
     Preconditions.checkState(
@@ -473,9 +470,9 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   @Override
-  public synchronized Set<SkyKey> addTemporaryDirectDeps(GroupedListHelper<SkyKey> helper) {
+  public synchronized void addTemporaryDirectDeps(GroupedListHelper<SkyKey> helper) {
     Preconditions.checkState(!isDone(), "add temp shouldn't be done: %s %s", helper, this);
-    return getTemporaryDirectDeps().append(helper);
+    getTemporaryDirectDeps().append(helper);
   }
 
   @Override
