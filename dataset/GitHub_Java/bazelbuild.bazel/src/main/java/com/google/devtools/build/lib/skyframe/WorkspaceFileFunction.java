@@ -54,10 +54,9 @@ public class WorkspaceFileFunction implements SkyFunction {
   public SkyValue compute(SkyKey skyKey, Environment env) throws WorkspaceFileFunctionException,
       InterruptedException {
 
-    WorkspaceFileKey key = (WorkspaceFileKey) skyKey.argument();
-    RootedPath workspaceRoot = key.getPath();
+    RootedPath workspaceRoot = ((WorkspaceFileKey) skyKey.argument()).getPath();
     WorkspaceASTValue workspaceASTValue =
-        (WorkspaceASTValue) env.getValue(WorkspaceASTValue.key(workspaceRoot));
+        (WorkspaceASTValue) env.getValue(new SkyKey(SkyFunctions.WORKSPACE_AST, workspaceRoot));
     if (workspaceASTValue == null) {
       return null;
     }
@@ -76,15 +75,14 @@ public class WorkspaceFileFunction implements SkyFunction {
               directories.getEmbeddedBinariesRoot(),
               directories.getWorkspace());
       try {
-        for (BuildFileAST ast : workspaceASTValue.getASTs()) {
-          PackageFunction.SkylarkImportResult importResult =
-              PackageFunction.fetchImportsFromBuildFile(
-                  repoWorkspace, Label.EXTERNAL_PACKAGE_IDENTIFIER, ast, env, null);
-          if (importResult != null) {
-            parser.execute(ast, importResult.importMap);
-          } else {
-            return null;
-          }
+        BuildFileAST ast = workspaceASTValue.getAST();
+        PackageFunction.SkylarkImportResult importResult =
+            PackageFunction.fetchImportsFromBuildFile(
+                repoWorkspace, Label.EXTERNAL_PACKAGE_IDENTIFIER, ast, env, null);
+        if (importResult != null) {
+          parser.execute(ast, importResult.importMap);
+        } else {
+          return null;
         }
       } catch (PackageFunctionException e) {
         throw new WorkspaceFileFunctionException(e, Transience.PERSISTENT);

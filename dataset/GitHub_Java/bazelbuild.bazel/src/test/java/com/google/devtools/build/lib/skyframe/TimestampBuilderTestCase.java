@@ -88,7 +88,7 @@ import javax.annotation.Nullable;
  */
 public abstract class TimestampBuilderTestCase extends FoundationTestCase {
 
-  private static final SkyKey OWNER_KEY = SkyKey.create(SkyFunctions.ACTION_LOOKUP, "OWNER");
+  private static final SkyKey OWNER_KEY = new SkyKey(SkyFunctions.ACTION_LOOKUP, "OWNER");
   protected static final ActionLookupValue.ActionLookupKey ALL_OWNER =
       new SingletonActionLookupKey();
   protected static final Predicate<Action> ALWAYS_EXECUTE_FILTER = Predicates.alwaysTrue();
@@ -138,7 +138,6 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
       @Nullable EvaluationProgressReceiver evaluationProgressReceiver) {
     AtomicReference<PathPackageLocator> pkgLocator =
         new AtomicReference<>(new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)));
-    AtomicReference<TimestampGranularityMonitor> tsgmRef = new AtomicReference<>(tsgm);
     ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(pkgLocator, false);
     differencer = new RecordingDifferencer();
 
@@ -154,14 +153,14 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     final InMemoryMemoizingEvaluator evaluator =
         new InMemoryMemoizingEvaluator(
             ImmutableMap.<SkyFunctionName, SkyFunction>builder()
-                .put(SkyFunctions.FILE_STATE, new FileStateFunction(tsgmRef, externalFilesHelper))
+                .put(SkyFunctions.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper))
                 .put(SkyFunctions.FILE, new FileFunction(pkgLocator))
                 .put(
                     SkyFunctions.ARTIFACT,
                     new ArtifactFunction(Predicates.<PathFragment>alwaysFalse()))
                 .put(
                     SkyFunctions.ACTION_EXECUTION,
-                    new ActionExecutionFunction(skyframeActionExecutor, tsgmRef))
+                    new ActionExecutionFunction(skyframeActionExecutor, tsgm))
                 .put(
                     SkyFunctions.PACKAGE,
                     new PackageFunction(null, null, null, null, null, null, null))
