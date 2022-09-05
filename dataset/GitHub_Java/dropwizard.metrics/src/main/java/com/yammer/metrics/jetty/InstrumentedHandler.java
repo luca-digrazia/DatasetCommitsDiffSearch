@@ -88,33 +88,24 @@ public class InstrumentedHandler extends HandlerWrapper {
 			throws IOException, ServletException {
 		activeDispatches.inc();
 
+		long startTime = 0L;
 		final AsyncContinuation continuation = request.getAsyncContinuation();
-
-		long start;
-		boolean isMilliseconds;
-
 		if (continuation.isInitial()) {
 			activeRequests.inc();
-			start = request.getTimeStamp();
-			isMilliseconds = true;
+			startTime = request.getTimeStamp();
 		} else {
+			startTime = System.currentTimeMillis();
 			activeSuspendedRequests.dec();
 			if (continuation.isResumed()) {
 				resumes.mark();
 			}
-			isMilliseconds = false;
-			start = System.nanoTime();
 		}
 
+		final long start = System.nanoTime();
 		try {
 			super.handle(target, request, httpRequest, httpResponse);
 		} finally {
-			if (isMilliseconds) {
-				dispatches.update(System.currentTimeMillis() - start, TimeUnit.MILLISECONDS);
-			} else {
-				dispatches.update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
-			}
-
+			dispatches.update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
 			activeDispatches.dec();
 			if (continuation.isSuspended()) {
 				if (continuation.isInitial()) {
