@@ -35,7 +35,7 @@ import com.google.common.eventbus.SubscriberExceptionContext;
 import com.google.common.eventbus.SubscriberExceptionHandler;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.Uninterruptibles;
-import com.google.devtools.build.lib.Constants;
+import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.actions.cache.CompactPersistentActionCache;
 import com.google.devtools.build.lib.actions.cache.NullActionCache;
@@ -43,6 +43,7 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.analysis.BuildView;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
+import com.google.devtools.build.lib.analysis.SkyframePackageRootResolver;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -172,6 +173,7 @@ public final class BlazeRuntime {
   private final Reporter reporter;
   private final LoadingPhaseRunner loadingPhaseRunner;
   private final PackageFactory packageFactory;
+  private final PackageRootResolver packageRootResolver;
   private final ConfigurationFactory configurationFactory;
   private final ConfiguredRuleClassProvider ruleClassProvider;
   private final BuildView view;
@@ -217,6 +219,7 @@ public final class BlazeRuntime {
     this.projectFileProvider = projectFileProvider;
 
     this.skyframeExecutor = skyframeExecutor;
+    this.packageRootResolver = new SkyframePackageRootResolver(skyframeExecutor);
     this.loadingPhaseRunner = new LoadingPhaseRunner(
         skyframeExecutor.getPackageManager(),
         pkgFactory.getRuleClassNames());
@@ -522,6 +525,10 @@ public final class BlazeRuntime {
    */
   public PackageManager getPackageManager() {
     return skyframeExecutor.getPackageManager();
+  }
+
+  public PackageRootResolver getPackageRootResolver() {
+    return packageRootResolver;
   }
 
   public WorkspaceStatusAction.Factory getworkspaceStatusActionFactory() {
@@ -875,7 +882,7 @@ public final class BlazeRuntime {
     if (!skyframeExecutor.hasIncrementalState()) {
       clearSkyframeRelevantCaches();
     }
-    skyframeExecutor.sync(reporter, packageCacheOptions, getOutputBase(), getWorkingDirectory(),
+    skyframeExecutor.sync(packageCacheOptions, getOutputBase(), getWorkingDirectory(),
         defaultsPackageContents, commandId);
   }
 
@@ -1408,20 +1415,7 @@ public final class BlazeRuntime {
     Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
       @Override
       public void uncaughtException(Thread thread, Throwable throwable) {
-        try {
-          BugReport.handleCrash(throwable, args);
-        } catch (Throwable t) {
-          System.err.println("An exception was caught in " + Constants.PRODUCT_NAME + "'s "
-              + "UncaughtExceptionHandler, a bug report may not have been filed.");
-
-          System.err.println("Original uncaught exception:");
-          throwable.printStackTrace(System.err);
-
-          System.err.println("Exception encountered during UncaughtExceptionHandler:");
-          t.printStackTrace(System.err);
-
-          Runtime.getRuntime().halt(BugReport.getExitCodeForThrowable(throwable));
-        }
+        BugReport.handleCrash(throwable, args);
       }
     });
   }

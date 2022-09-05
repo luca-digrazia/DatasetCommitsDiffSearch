@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Factory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.config.BinTools;
+import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.util.AbruptExitException;
@@ -39,6 +40,7 @@ public interface SkyframeExecutorFactory {
   /**
    * Creates an instance of SkyframeExecutor
    *
+   * @param reporter the reporter to be used by the executor
    * @param pkgFactory the package factory
    * @param tsgm timestamp granularity monitor
    * @param directories Blaze directories
@@ -55,6 +57,7 @@ public interface SkyframeExecutorFactory {
    * @throws AbruptExitException if the executor cannot be created
    */
   SkyframeExecutor create(
+      Reporter reporter,
       PackageFactory pkgFactory,
       TimestampGranularityMonitor tsgm,
       BlazeDirectories directories,

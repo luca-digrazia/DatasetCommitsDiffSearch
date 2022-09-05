@@ -167,7 +167,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected OptionsParser optionsParser;
   private PackageCacheOptions packageCacheOptions;
-  private PackageFactory pkgFactory;
 
   protected MockToolsConfig mockToolsConfig;
 
@@ -192,11 +191,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         new AnalysisTestUtil.DummyWorkspaceStatusActionFactory(directories);
     mutableActionGraph = new MapBasedActionGraph();
     ruleClassProvider = getRuleClassProvider();
-    pkgFactory = new PackageFactory(ruleClassProvider, getEnvironmentExtensions());
     skyframeExecutor =
         SequencedSkyframeExecutor.create(
             reporter,
-            pkgFactory,
+            new PackageFactory(ruleClassProvider, getEnvironmentExtensions()),
             new TimestampGranularityMonitor(BlazeClock.instance()),
             directories,
             binTools,
@@ -231,10 +229,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   /** Creates or retrieves the rule class provider used in this test. */
   protected ConfiguredRuleClassProvider getRuleClassProvider() {
     return TestRuleClassProvider.getRuleClassProvider();
-  }
-
-  protected PackageFactory getPackageFactory() {
-    return pkgFactory;
   }
 
   protected Iterable<EnvironmentExtension> getEnvironmentExtensions() {
@@ -749,7 +743,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
                                String... lines) throws Exception {
     eventCollector.clear();
     ConfiguredTarget target = scratchConfiguredTarget(packageName, ruleName,
-        lines);
+                                                     lines);
     assertFalse(
         "Rule '" + "//" + packageName + ":" + ruleName + "' did contain an error",
         view.hasErrors(target));
@@ -1411,7 +1405,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected String getErrorMsgWrongAttributeValue(String value, String... expected) {
     return String.format("has to be one of %s instead of '%s'",
-        StringUtil.joinEnglishList(ImmutableSet.copyOf(expected), "or", "'"), value);
+          StringUtil.joinEnglishList(ImmutableSet.copyOf(expected), "or", "'"), value);
   }
 
   protected String getErrorMsgMandatoryProviderMissing(String offendingRule, String providerName) {
@@ -1535,21 +1529,9 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected Artifact artifactByPath(Iterable<Artifact> artifacts, String... suffixes) {
     Artifact artifact = getFirstArtifactEndingWith(artifacts, suffixes[0]);
-    Action action = null;
-    for (int i = 1; i < suffixes.length; i++) {
-      if (artifact == null) {
-        if (action == null) {
-          throw new IllegalStateException("No suffix " + suffixes[0] + " among artifacts: "
-              + ActionsTestUtil.baseArtifactNames(artifacts));
-        } else {
-          throw new IllegalStateException("No suffix " + suffixes[i]
-              + " among inputs of action " + action.describe() + ": "
-              + ActionsTestUtil.baseArtifactNames(artifacts));
-        }
-      }
 
-      action = getGeneratingAction(artifact);
-      artifacts = action.getInputs();
+    for (int i = 1; i < suffixes.length; i++) {
+      artifacts = getGeneratingAction(artifact).getInputs();
       artifact = getFirstArtifactEndingWith(artifacts, suffixes[i]);
     }
 

@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView;
@@ -259,8 +258,8 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     skyframeExecutor.preparePackageLoading(pathPackageLocator,
         packageCacheOptions.defaultVisibility, true,
         7, ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID());
-    skyframeExecutor.invalidateFilesUnderPathForTesting(reporter,
-        ModifiedFileSet.EVERYTHING_MODIFIED, rootDirectory);
+    skyframeExecutor.invalidateFilesUnderPathForTesting(ModifiedFileSet.EVERYTHING_MODIFIED,
+        rootDirectory);
 
     LoadingResult loadingResult = loadingPhaseRunner
         .execute(reporter, eventBus, ImmutableList.copyOf(labels), loadingOptions,
@@ -270,7 +269,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     BuildRequestOptions requestOptions = optionsParser.getOptions(BuildRequestOptions.class);
     ImmutableSortedSet<String> multiCpu = ImmutableSortedSet.copyOf(requestOptions.multiCpus);
     masterConfig = skyframeExecutor.createConfigurations(
-        reporter, configurationFactory, buildOptions, directories, multiCpu, false);
+        configurationFactory, buildOptions, directories, multiCpu, false);
     analysisResult =
         buildView.update(
             loadingResult,
@@ -363,10 +362,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
   protected BuildView getView() {
     return buildView;
-  }
-
-  protected ActionGraph getActionGraph() {
-    return skyframeExecutor.getActionGraph();
   }
 
   protected AnalysisResult getAnalysisResult() {

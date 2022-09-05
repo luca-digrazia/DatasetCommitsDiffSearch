@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,8 +62,8 @@ import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.pkgcache.LoadedPackageProvider;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner.LoadingResult;
+import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.rules.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.rules.test.CoverageReportActionFactory.CoverageReportActionsWrapper;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
@@ -212,7 +212,7 @@ public class BuildView {
   private final SkyframeBuildView skyframeBuildView;
 
   // Same as skyframeExecutor.getPackageManager().
-  private final LoadedPackageProvider packageManager;
+  private final PackageManager packageManager;
 
   private final BinTools binTools;
 
@@ -261,7 +261,7 @@ public class BuildView {
       SkyframeExecutor skyframeExecutor,
       BinTools binTools, CoverageReportActionFactory coverageReportActionFactory) {
     this.directories = directories;
-    this.packageManager = skyframeExecutor.getLoadedPackageProvider();
+    this.packageManager = skyframeExecutor.getPackageManager();
     this.binTools = binTools;
     this.coverageReportActionFactory = coverageReportActionFactory;
     this.ruleClassProvider = ruleClassProvider;
@@ -642,13 +642,13 @@ public class BuildView {
     if (loadingEnabled) {
       setArtifactRoots(loadingResult.getPackageRoots(), configurations);
     }
-    prepareToBuild(configurations, new SkyframePackageRootResolver(skyframeExecutor, eventHandler));
+    prepareToBuild(configurations, new SkyframePackageRootResolver(skyframeExecutor));
     skyframeExecutor.injectWorkspaceStatusData();
     SkyframeAnalysisResult skyframeAnalysisResult;
     try {
       skyframeAnalysisResult =
           skyframeBuildView.configureTargets(
-              eventHandler, targetSpecs, aspectKeys, eventBus, viewOptions.keepGoing);
+              targetSpecs, aspectKeys, eventBus, viewOptions.keepGoing);
       setArtifactRoots(skyframeAnalysisResult.getPackageRoots(), configurations);
     } finally {
       skyframeBuildView.clearInvalidatedConfiguredTargets();
@@ -666,7 +666,6 @@ public class BuildView {
 
     AnalysisResult result =
         createResult(
-            eventHandler,
             loadingResult,
             topLevelOptions,
             viewOptions,
@@ -680,7 +679,6 @@ public class BuildView {
   }
 
   private AnalysisResult createResult(
-      EventHandler eventHandler,
       LoadingResult loadingResult,
       TopLevelArtifactContext topLevelOptions,
       BuildView.Options viewOptions,
@@ -703,8 +701,7 @@ public class BuildView {
     Set<ConfiguredTarget> exclusiveTests = new HashSet<>();
 
     // build-info and build-changelist.
-    Collection<Artifact> buildInfoArtifacts =
-        skyframeExecutor.getWorkspaceStatusArtifacts(eventHandler);
+    Collection<Artifact> buildInfoArtifacts = skyframeExecutor.getWorkspaceStatusArtifacts();
     Preconditions.checkState(buildInfoArtifacts.size() == 2, buildInfoArtifacts);
     artifactsToBuild.addAll(buildInfoArtifacts);
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -95,6 +95,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
         new AnalysisTestUtil.DummyWorkspaceStatusActionFactory(directories);
     skyframeExecutor =
         SequencedSkyframeExecutor.create(
+            reporter,
             pkgFactory,
             new TimestampGranularityMonitor(BlazeClock.instance()),
             directories,
@@ -153,8 +154,8 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
     configurationFactory.forbidSanityCheck();
     BuildOptions buildOptions = BuildOptions.of(buildOptionClasses, parser);
     BuildConfigurationCollection collection = skyframeExecutor.createConfigurations(
-        reporter, configurationFactory, buildOptions,
-        new BlazeDirectories(outputBase, outputBase, workspace), multiCpu, false);
+        configurationFactory, buildOptions, new BlazeDirectories(outputBase, outputBase, workspace),
+        multiCpu, false);
     return collection;
   }
 

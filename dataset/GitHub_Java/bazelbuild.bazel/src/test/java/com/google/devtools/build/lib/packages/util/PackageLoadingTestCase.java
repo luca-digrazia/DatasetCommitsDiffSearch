@@ -72,6 +72,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
     ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
     skyframeExecutor =
         SequencedSkyframeExecutor.create(
+            reporter,
             new PackageFactory(ruleClassProvider, getEnvironmentExtensions()),
             new TimestampGranularityMonitor(BlazeClock.instance()),
             new BlazeDirectories(outputBase, outputBase, rootDirectory),
@@ -236,8 +237,8 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
    * @throws InterruptedException
    */
   protected void invalidatePackages() throws InterruptedException {
-    skyframeExecutor.invalidateFilesUnderPathForTesting(
-        reporter, ModifiedFileSet.EVERYTHING_MODIFIED, rootDirectory);
+    skyframeExecutor.invalidateFilesUnderPathForTesting(ModifiedFileSet.EVERYTHING_MODIFIED,
+        rootDirectory);
   }
 
   protected String getErrorMsgNonEmptyList(String attrName, String ruleType, String ruleName) {
