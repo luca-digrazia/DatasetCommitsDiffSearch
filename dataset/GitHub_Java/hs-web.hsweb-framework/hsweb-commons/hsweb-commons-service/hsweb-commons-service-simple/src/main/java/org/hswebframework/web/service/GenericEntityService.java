@@ -22,13 +22,13 @@ import org.hswebframework.web.commons.entity.GenericEntity;
 import org.hswebframework.web.commons.entity.LogicalDeleteEntity;
 import org.hswebframework.web.commons.entity.RecordCreationEntity;
 import org.hswebframework.web.commons.entity.RecordModifierEntity;
-import org.hswebframework.web.commons.entity.events.EntityCreatedEvent;
-import org.hswebframework.web.commons.entity.events.EntityModifyEvent;
+import org.hswebframework.web.dao.CrudDao;
 import org.hswebframework.web.id.IDGenerator;
+import org.hswebframework.web.validator.DuplicateKeyException;
+import org.hswebframework.web.validator.LogicPrimaryKeyValidator;
 import org.hswebframework.web.validator.group.CreateGroup;
 import org.hswebframework.web.validator.group.UpdateGroup;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
@@ -61,13 +61,6 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
      */
     protected abstract IDGenerator<PK> getIDGenerator();
 
-    protected ApplicationEventPublisher eventPublisher;
-
-    @Autowired(required = false)
-    public void setEventPublisher(ApplicationEventPublisher eventPublisher) {
-        this.eventPublisher = eventPublisher;
-    }
-
     @PostConstruct
     public void init() {
         if (logicPrimaryKeyValidator instanceof DefaultLogicPrimaryKeyValidator) {
@@ -96,27 +89,13 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
         return old;
     }
 
-    protected boolean pushModifyEvent() {
-        return RecordModifierEntity.class.isAssignableFrom(entityType);
-    }
-
-    protected boolean pushCreatedEvent() {
-        return RecordCreationEntity.class.isAssignableFrom(entityType);
-    }
-
     @Override
     public int updateByPk(PK pk, E entity) {
         Assert.notNull(pk, "primary key can not be null");
         Assert.hasText(String.valueOf(pk), "primary key can not be null");
         Assert.notNull(entity, "entity can not be null");
         entity.setId(pk);
-
         tryValidate(entity, UpdateGroup.class);
-        //实现了 RecordModifierEntity接口的实体,将推送 EntityModifyEvent 事件.
-        if (eventPublisher != null && pushModifyEvent()) {
-            E old = selectByPk(pk);
-            eventPublisher.publishEvent(new GenericsPayloadApplicationEvent<>(this, new EntityModifyEvent<>(old, entity), entityType));
-        }
         return createUpdate(entity)
                 //如果是RecordCreationEntity则不修改creator_id和creator_time
                 .when(entity instanceof RecordCreationEntity,
@@ -173,10 +152,6 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
         }
         tryValidate(entity, CreateGroup.class);
         getDao().insert(entity);
-
-        if (eventPublisher != null && pushCreatedEvent()) {
-            eventPublisher.publishEvent(new GenericsPayloadApplicationEvent<>(this, new EntityCreatedEvent<>(entity), entityType));
-        }
         return entity.getId();
     }
 
