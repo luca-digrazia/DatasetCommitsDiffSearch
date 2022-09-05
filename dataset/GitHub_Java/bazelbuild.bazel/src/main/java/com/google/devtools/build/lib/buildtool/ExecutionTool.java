@@ -83,7 +83,6 @@ import com.google.devtools.build.lib.rules.fileset.FilesetActionContextImpl;
 import com.google.devtools.build.lib.rules.test.TestActionContext;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
-import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.Builder;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.syntax.Label;
@@ -392,20 +391,12 @@ public class ExecutionTool {
     Set<ConfiguredTarget> builtTargets = new HashSet<>();
     boolean interrupted = false;
     try {
-      Collection<AspectValue> aspects = analysisResult.getAspects();
-
-      Iterable<Artifact> allArtifactsForProviders =
-          Iterables.concat(
-              additionalArtifacts,
-              TopLevelArtifactHelper.getAllArtifactsToBuild(
-                      analysisResult.getTargetsToBuild(), analysisResult.getTopLevelContext())
-                  .getAllArtifacts(),
-              TopLevelArtifactHelper.getAllArtifactsToBuildFromAspects(
-                      aspects, analysisResult.getTopLevelContext())
-                  .getAllArtifacts(),
-              //TODO(dslomov): Artifacts to test from aspects?
-              TopLevelArtifactHelper.getAllArtifactsToTest(analysisResult.getTargetsToTest()));
-
+      Iterable<Artifact> allArtifactsForProviders = Iterables.concat(
+          additionalArtifacts,
+          TopLevelArtifactHelper.getAllArtifactsToBuild(
+              analysisResult.getTargetsToBuild(), analysisResult.getTopLevelContext())
+              .getAllArtifacts(),
+          TopLevelArtifactHelper.getAllArtifactsToTest(analysisResult.getTargetsToTest()));
       if (request.isRunningInEmacs()) {
         // The syntax of this message is tightly constrained by lisp/progmodes/compile.el in emacs
         request.getOutErr().printErrLn("blaze: Entering directory `" + getExecRoot() + "/'");
@@ -431,14 +422,11 @@ public class ExecutionTool {
 
       Profiler.instance().markPhase(ProfilePhase.EXECUTE);
 
-      builder.buildArtifacts(
-          additionalArtifacts,
+      builder.buildArtifacts(additionalArtifacts,
           analysisResult.getParallelTests(),
           analysisResult.getExclusiveTests(),
           analysisResult.getTargetsToBuild(),
-          analysisResult.getAspects(),
-          executor,
-          builtTargets,
+          executor, builtTargets,
           request.getBuildOptions().explanationPath != null,
           runtime.getLastExecutionTimeRange());
 
@@ -723,8 +711,8 @@ public class ExecutionTool {
         }
       }
       if (headerFlag) {
-        outErr.printErr("Here we are\n");
-        outErr.printErr("Target " + label + " up-to-date (nothing to build)\n");
+        outErr.printErr(
+            "Target " + label + " up-to-date (nothing to build)\n");
       }
     }
 
