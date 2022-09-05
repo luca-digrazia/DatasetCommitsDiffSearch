@@ -67,18 +67,18 @@ public class MethodLibrary {
   // Convert string index in the same way Python does.
   // If index is negative, starts from the end.
   // If index is outside bounds, it is restricted to the valid range.
-  private static int getClampedIndex(int index, int length) {
+  private static int getPythonStringIndex(int index, int stringLength) {
     if (index < 0) {
-      index += length;
+      index += stringLength;
     }
-    return Math.max(Math.min(index, length), 0);
+    return Math.max(Math.min(index, stringLength), 0);
   }
 
   // Emulate Python substring function
   // It converts out of range indices, and never fails
   private static String getPythonSubstring(String str, int start, int end) {
-    start = getClampedIndex(start, str.length());
-    end = getClampedIndex(end, str.length());
+    start = getPythonStringIndex(start, str.length());
+    end = getPythonStringIndex(end, str.length());
     if (start > end) {
       return "";
     } else {
@@ -225,7 +225,7 @@ public class MethodLibrary {
             end = Type.INTEGER.convert(args[3], "'rfind' argument");
           }
           int subpos = getPythonSubstring(thiz, start, end).lastIndexOf(sub);
-          start = getClampedIndex(start, thiz.length());
+          start = getPythonStringIndex(start, thiz.length());
           return subpos < 0 ? subpos : subpos + start;
         }
       };
@@ -256,7 +256,7 @@ public class MethodLibrary {
             end = Type.INTEGER.convert(args[3], "'find' argument");
           }
           int subpos = getPythonSubstring(thiz, start, end).indexOf(sub);
-          start = getClampedIndex(start, thiz.length());
+          start = getPythonStringIndex(start, thiz.length());
           return subpos < 0 ? subpos : subpos + start;
         }
       };
@@ -369,33 +369,17 @@ public class MethodLibrary {
         }
       };
 
-  // slice operator
-  @SkylarkBuiltin(name = "$slice", hidden = true,
-      doc = "x[<code>start</code>:<code>end</code>] returns a slice or a list slice.")
-  private static Function slice = new MixedModeFunction("$slice",
+  // substring operator
+  @SkylarkBuiltin(name = "$substring", hidden = true,
+      doc = "String[<code>start</code>:<code>end</code>] returns a substring.")
+  private static Function substring = new MixedModeFunction("$substring",
       ImmutableList.of("this", "start", "end"), 3, false) {
     @Override
-    public Object call(Object[] args, FuncallExpression ast, Environment env)
-        throws EvalException, ConversionException {
-      int left = Type.INTEGER.convert(args[1], "start operand");
-      int right = Type.INTEGER.convert(args[2], "end operand");
-
-      // Substring
-      if (args[0] instanceof String) {
-        String thiz = Type.STRING.convert(args[0], "substring operand");
-        return getPythonSubstring(thiz, left, right);
-      }
-
-      // List slice
-      List<Object> list = Type.OBJECT_LIST.convert(args[0], "list operand");
-      left = getClampedIndex(left, list.size());
-      right = getClampedIndex(right, list.size());
-
-      List<Object> result = Lists.newArrayList();
-      for (int i = left; i < right; i++) {
-        result.add(list.get(i));
-      }
-      return convert(result, env, ast.getLocation());
+    public Object call(Object[] args, FuncallExpression ast) throws ConversionException {
+      String thiz = Type.STRING.convert(args[0], "substring operand");
+      int left = Type.INTEGER.convert(args[1], "substring operand");
+      int right = Type.INTEGER.convert(args[2], "substring operand");
+      return getPythonSubstring(thiz, left, right);
     }
   };
 
@@ -516,7 +500,6 @@ public class MethodLibrary {
     }
   };
 
-  // TODO(bazel-team): Use the same type for both Skylark and BUILD files.
   @SuppressWarnings("unchecked")
   private static Iterable<Object> convert(Collection<?> list, Environment env, Location loc)
       throws EvalException {
@@ -954,13 +937,8 @@ public class MethodLibrary {
       .put(endswith, SkylarkType.BOOL)
       .put(startswith, SkylarkType.BOOL)
       .put(strip, SkylarkType.STRING)
-      .put(slice, SkylarkType.STRING)
+      .put(substring, SkylarkType.STRING)
       .put(count, SkylarkType.INT)
-      .build();
-
-  public static final Map<Function, SkylarkType> listPureFunctions = ImmutableMap
-      .<Function, SkylarkType>builder()
-      .put(slice, SkylarkType.LIST)
       .build();
 
   public static final List<Function> listFunctions = ImmutableList.of(append, extend);
@@ -1008,7 +986,6 @@ public class MethodLibrary {
     setupMethodEnvironment(env, Map.class, dictFunctions.keySet());
     env.registerFunction(String.class, index.getName(), index);
     setupMethodEnvironment(env, String.class, stringFunctions.keySet());
-    setupMethodEnvironment(env, List.class, listPureFunctions.keySet());
     if (env.isSkylarkEnabled()) {
       env.registerFunction(SkylarkList.class, index.getName(), index);
       setupMethodEnvironment(env, skylarkGlobalFunctions.keySet());
@@ -1056,9 +1033,5 @@ public class MethodLibrary {
     Map<String, SkylarkType> string = new HashMap<>();
     setupValidationEnvironment(stringFunctions, string);
     builtIn.put(SkylarkType.STRING, string);
-
-    Map<String, SkylarkType> list = new HashMap<>();
-    setupValidationEnvironment(listPureFunctions, string);
-    builtIn.put(SkylarkType.LIST, list);
   }
 }
