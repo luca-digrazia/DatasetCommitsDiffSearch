@@ -22,7 +22,7 @@ public class DistrictScopeDataAccessHandler extends AbstractScopeDataAccessHandl
 
     @Override
     protected String getSupportScope() {
-        return DISTRICT_SCOPE;
+        return AREA_SCOPE;
     }
 
     @Override
