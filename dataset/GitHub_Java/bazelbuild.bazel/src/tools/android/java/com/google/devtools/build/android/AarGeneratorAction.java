@@ -206,17 +206,17 @@ public class AarGeneratorAction {
       zipOut.write(Files.readAllBytes(classes));
       zipOut.closeEntry();
 
-      Files.walkFileTree(data.getResourceDir(),
-          new ZipDirectoryWriter(zipOut, data.getResourceDir(), "res"));
+      Files.walkFileTree(data.getResourceDirFile().toPath(),
+          new ZipDirectoryWriter(zipOut, data.getResourceDirFile().toPath(), "res"));
 
       ZipEntry r = new ZipEntry("R.txt");
       zipOut.putNextEntry(r);
       zipOut.write(Files.readAllBytes(rtxt));
       zipOut.closeEntry();
 
-      if (Files.exists(data.getAssetDir()) && data.getAssetDir().toFile().list().length > 0) {
-        Files.walkFileTree(data.getAssetDir(),
-            new ZipDirectoryWriter(zipOut, data.getAssetDir(), "assets"));
+      if (data.getAssetDirFile().exists() && data.getAssetDirFile().list().length > 0) {
+        Files.walkFileTree(data.getAssetDirFile().toPath(),
+            new ZipDirectoryWriter(zipOut, data.getAssetDirFile().toPath(), "assets"));
       }
     }
     aar.toFile().setLastModified(EPOCH);

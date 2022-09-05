@@ -26,13 +26,11 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.syntax.Type;
@@ -48,8 +46,7 @@ import javax.annotation.Nullable;
 public class XcodeConfig implements RuleConfiguredTargetFactory {
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException {
+  public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
     return new RuleConfiguredTargetBuilder(ruleContext)
         .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
         .build();
@@ -58,7 +55,7 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
   /**
    * Uses the {@link AppleCommandLineOptions#xcodeVersion} and
    * {@link AppleCommandLineOptions#xcodeVersionConfig} command line options to determine and
-   * return the effective xcode version and its properties.
+   * return the effective xcode version.
    *
    * @param env the current configuration environment
    * @param xcodeConfigLabel the label for the xcode_config target to parse
@@ -69,46 +66,40 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
    * @throws InvalidConfigurationException if the options given (or configuration targets) were
    *     malformed and thus the xcode version could not be determined
    */
-  public static XcodeVersionProperties resolveXcodeVersion(ConfigurationEnvironment env,
+  public static Optional<DottedVersion> resolveXcodeVersion(ConfigurationEnvironment env,
       Label xcodeConfigLabel, Optional<DottedVersion> xcodeVersionOverrideFlag,
       String errorDescription) throws InvalidConfigurationException {
     Rule xcodeConfigRule =
         getRuleForLabel(xcodeConfigLabel, "xcode_config", env, errorDescription);
 
-    XcodeVersionRuleData xcodeVersion =
+    DottedVersion dottedVersion =
         resolveExplicitlyDefinedVersion(env, xcodeConfigRule, xcodeVersionOverrideFlag);
-
-    if (xcodeVersion != null) {
-      return xcodeVersion.getXcodeVersionProperties();
-    } else if (xcodeVersionOverrideFlag.isPresent()) {
-      return new XcodeVersionProperties(xcodeVersionOverrideFlag.get());
+    
+    if (dottedVersion != null) {
+      return Optional.of(dottedVersion);
     } else {
-      return XcodeVersionProperties.unknownXcodeVersionProperties();
+      return xcodeVersionOverrideFlag;
     }
   }
 
   /**
-   * Returns the {@link XcodeVersionRuleData} associated with the {@code xcode_version} target
-   * explicitly defined in the {@code --xcode_version_config} build flag and selected by the
-   * {@code --xcode_version} flag. If {@code --xcode_version} is unspecified, then this
-   * will return the default rule data as specified in the {@code --xcode_version_config} target.
-   * Returns null if either the {@code --xcode_version} did not match any {@code xcode_version}
-   * target, or if {@code --xcode_version} is unspecified and {@code --xcode_version_config}
-   * specified no default target.
+   * Returns the xcode version number corresponding to the {@code --xcode_version} flag, if there
+   * is an available {@code xcode_version} target which recognizes the flag value as either
+   * an official version or an alias. Returns null if no such target is found.
    */
-  @Nullable private static XcodeVersionRuleData resolveExplicitlyDefinedVersion(
+  @Nullable private static DottedVersion resolveExplicitlyDefinedVersion(
       ConfigurationEnvironment env, Rule xcodeConfigTarget,
       Optional<DottedVersion> versionOverrideFlag) throws InvalidConfigurationException {
     if (versionOverrideFlag.isPresent()) {
       // The version override flag is not necessarily an actual version - it may be a version
       // alias.
-      XcodeVersionRuleData explicitVersion =
+      DottedVersion explicitVersion =
           aliasesToVersionMap(env, xcodeConfigTarget).get(versionOverrideFlag.get().toString());
       if (explicitVersion != null) {
         return explicitVersion;
       }
     } else { // No override specified. Use default.
-      XcodeVersionRuleData defaultVersion = getDefaultVersion(env, xcodeConfigTarget);
+      DottedVersion defaultVersion = getDefaultVersion(env, xcodeConfigTarget);
       
       if (defaultVersion != null) {
         return defaultVersion;
@@ -129,20 +120,20 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
    * Returns the default xcode version to use, if no {@code --xcode_version} command line flag
    * was specified.
    */
-  @Nullable private static XcodeVersionRuleData getDefaultVersion(ConfigurationEnvironment env,
+  @Nullable private static DottedVersion getDefaultVersion(ConfigurationEnvironment env,
       Rule xcodeConfigTarget) throws InvalidConfigurationException {
     Label defaultVersionLabel = NonconfigurableAttributeMapper.of(xcodeConfigTarget)
         .get(XcodeConfigRule.DEFAULT_ATTR_NAME, BuildType.LABEL);
     if (defaultVersionLabel != null) {
       Rule defaultVersionRule = getRuleForLabel(
           defaultVersionLabel, "xcode_version", env, "default xcode version");
-      return new XcodeVersionRuleData(defaultVersionLabel, defaultVersionRule);
+      return new XcodeVersionRuleData(defaultVersionLabel, defaultVersionRule).getVersion();
     } else {
       return null;
     }
   }
 
-  private static Map<String, XcodeVersionRuleData> aliasesToVersionMap(ConfigurationEnvironment env,
+  private static Map<String, DottedVersion> aliasesToVersionMap(ConfigurationEnvironment env,
       Rule xcodeConfigTarget) throws InvalidConfigurationException {
     List<Label> xcodeVersionLabels = NonconfigurableAttributeMapper.of(xcodeConfigTarget)
         .get(XcodeConfigRule.VERSIONS_ATTR_NAME, BuildType.LABEL_LIST);
@@ -154,19 +145,19 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
     }
     ImmutableList<XcodeVersionRuleData> xcodeVersionRules = xcodeVersionRuleListBuilder.build();
 
-    Map<String, XcodeVersionRuleData> aliasesToXcodeRules = Maps.newLinkedHashMap();
+    Map<String, DottedVersion> aliasesToVersionMap = Maps.newLinkedHashMap();
     for (XcodeVersionRuleData xcodeVersionRule : xcodeVersionRules) {
       for (String alias : xcodeVersionRule.getAliases()) {
-        if (aliasesToXcodeRules.put(alias, xcodeVersionRule) != null) {
+        if (aliasesToVersionMap.put(alias, xcodeVersionRule.getVersion()) != null) {
           configErrorDuplicateAlias(alias, xcodeVersionRules);
         }
       }
-      if (aliasesToXcodeRules.put(
-          xcodeVersionRule.getVersion().toString(), xcodeVersionRule) != null) {
+      if (aliasesToVersionMap.put(
+          xcodeVersionRule.getVersion().toString(), xcodeVersionRule.getVersion()) != null) {
         configErrorDuplicateAlias(xcodeVersionRule.getVersion().toString(), xcodeVersionRules);
       }
     }
-    return aliasesToXcodeRules;
+    return aliasesToVersionMap;
   }
   
   /**
@@ -215,7 +206,6 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
             description, label, type));
       }
     } catch (NoSuchPackageException | NoSuchTargetException exception) {
-      env.getEventHandler().handle(Event.error(exception.getMessage()));
       throw new InvalidConfigurationException(exception);
     }
   }

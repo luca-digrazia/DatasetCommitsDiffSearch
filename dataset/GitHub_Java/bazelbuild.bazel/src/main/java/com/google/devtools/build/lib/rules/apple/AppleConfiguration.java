@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.apple;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -25,12 +24,10 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactor
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions.AppleBitcodeMode;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.util.Preconditions;
 
+import java.util.List;
 import java.util.Map;
 
 import javax.annotation.Nullable;
@@ -38,8 +35,6 @@ import javax.annotation.Nullable;
 /**
  * A configuration containing flags required for Apple platforms and tools.
  */
-@SkylarkModule(name = "apple", doc = "A configuration fragment for Apple platforms")
-@Immutable
 public class AppleConfiguration extends BuildConfiguration.Fragment {
   public static final String XCODE_VERSION_ENV_NAME = "XCODE_VERSION_OVERRIDE";
   /**
@@ -56,12 +51,9 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
   private static final DottedVersion MINIMUM_BITCODE_XCODE_VERSION = DottedVersion.fromString("7");
 
   private final DottedVersion iosSdkVersion;
-  private final DottedVersion watchOsSdkVersion;
-  private final DottedVersion tvOsSdkVersion;
-  private final DottedVersion macOsXSdkVersion;
   private final String iosCpu;
   private final Optional<DottedVersion> xcodeVersion;
-  private final ImmutableList<String> iosMultiCpus;
+  private final List<String> iosMultiCpus;
   private final AppleBitcodeMode bitcodeMode;
   private final Label xcodeConfigLabel;
   @Nullable private final Label defaultProvisioningProfileLabel;
@@ -69,17 +61,9 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
   AppleConfiguration(AppleCommandLineOptions appleOptions,
       Optional<DottedVersion> xcodeVersionOverride) {
     this.iosSdkVersion = Preconditions.checkNotNull(appleOptions.iosSdkVersion, "iosSdkVersion");
-    this.watchOsSdkVersion =
-        Preconditions.checkNotNull(appleOptions.watchOsSdkVersion, "watchOsSdkVersion");
-    this.tvOsSdkVersion =
-        Preconditions.checkNotNull(appleOptions.tvOsSdkVersion, "tvOsSdkVersion");
-    this.macOsXSdkVersion =
-        Preconditions.checkNotNull(appleOptions.macOsXSdkVersion, "macOsXSdkVersion");
-
     this.xcodeVersion = Preconditions.checkNotNull(xcodeVersionOverride);
     this.iosCpu = Preconditions.checkNotNull(appleOptions.iosCpu, "iosCpu");
-    this.iosMultiCpus = ImmutableList.copyOf(
-        Preconditions.checkNotNull(appleOptions.iosMultiCpus, "iosMultiCpus"));
+    this.iosMultiCpus = Preconditions.checkNotNull(appleOptions.iosMultiCpus, "iosMultiCpus");
     this.bitcodeMode = appleOptions.appleBitcodeMode;
     this.xcodeConfigLabel =
         Preconditions.checkNotNull(appleOptions.xcodeVersionConfig, "xcodeConfigLabel");
@@ -88,34 +72,10 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
 
   /**
    * Returns the SDK version for ios SDKs (whether they be for simulator or device). This is
-   * directly derived from --ios_sdk_version.
-   *
-   * @deprecated - use {@link #getSdkVersionForPlatform()}
+   * directly derived from --ios_sdk_version. Format "x.y" (for example, "6.4").
    */
-  @Deprecated public DottedVersion getIosSdkVersion() {
-    return getSdkVersionForPlatform(Platform.IOS_DEVICE);
-  }
-
-  /**
-   * Returns the SDK version for a platform (whether they be for simulator or device). This is
-   * directly derived from command line args.
-   */
-  public DottedVersion getSdkVersionForPlatform(Platform platform) {
-    switch (platform) {
-      case IOS_DEVICE:
-      case IOS_SIMULATOR:
-        return iosSdkVersion;
-      case TVOS_DEVICE:
-      case TVOS_SIMULATOR:
-        return tvOsSdkVersion;
-      case WATCHOS_DEVICE:
-      case WATCHOS_SIMULATOR:
-        return watchOsSdkVersion;
-      case MACOS_X:
-        return macOsXSdkVersion;
-    }
-    throw new AssertionError();
-
+  public DottedVersion getIosSdkVersion() {
+    return iosSdkVersion;
   }
 
   /**
@@ -144,13 +104,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
    * apple host system. These environment variables are needed by the apple toolchain. Keys are
    * variable names and values are their corresponding values.
    */
-  @SkylarkCallable(
-      name = "apple_host_system_env",
-      doc =
-          "Returns a map of environment variables that should be propagated for actions that "
-          + "build on an apple host system. These environment variables are needed by the apple "
-          + "toolchain. Keys are variable names and values are their corresponding values."
-    )
   public Map<String, String> getAppleHostSystemEnv() {
     Optional<DottedVersion> xcodeVersion = getXcodeVersion();
     ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
@@ -171,8 +124,7 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
 
     // TODO(bazel-team): Handle non-ios platforms.
     if (platform == Platform.IOS_DEVICE || platform == Platform.IOS_SIMULATOR) {
-      String sdkVersion = getSdkVersionForPlatform(platform).toString();
-      builder.put(AppleConfiguration.APPLE_SDK_VERSION_ENV_NAME, sdkVersion)
+      builder.put(AppleConfiguration.APPLE_SDK_VERSION_ENV_NAME, getIosSdkVersion().toString())
           .put(AppleConfiguration.APPLE_SDK_PLATFORM_ENV_NAME, platform.getNameInPlist());
     }
     return builder.build();
@@ -223,7 +175,7 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
    * List of all CPUs that this invocation is being built for. Different from {@link #getIosCpu()}
    * which is the specific CPU <b>this target</b> is being built for.
    */
-  public ImmutableList<String> getIosMultiCpus() {
+  public List<String> getIosMultiCpus() {
     return iosMultiCpus;
   }
 

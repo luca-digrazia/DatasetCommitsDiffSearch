@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
-import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
@@ -128,7 +127,7 @@ public class AppleToolchain {
           relativePath = DEVELOPER_FRAMEWORK_PATH;
         }
         break;
-      case MACOS_X:
+      case MACOSX:
         relativePath = DEVELOPER_FRAMEWORK_PATH;
         break;
       default:
@@ -171,16 +170,6 @@ public class AppleToolchain {
    * Base rule definition to be ancestor for rules which may require an xcode toolchain.
    */
   public static class RequiresXcodeConfigRule implements RuleDefinition {
-    public static final LateBoundLabel<BuildConfiguration> XCODE_CONFIG_LABEL =
-        new LateBoundLabel<BuildConfiguration>(
-            AppleCommandLineOptions.DEFAULT_XCODE_VERSION_CONFIG_LABEL, AppleConfiguration.class) {
-          @Override
-          public Label getDefault(Rule rule, AttributeMap attributes,
-              BuildConfiguration configuration) {
-            return configuration.getFragment(AppleConfiguration.class).getXcodeConfigLabel();
-          }
-        };
-
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
@@ -189,7 +178,14 @@ public class AppleToolchain {
               .checkConstraints()
               .direct_compile_time_input()
               .cfg(HOST)
-              .value(XCODE_CONFIG_LABEL))
+              .value(new LateBoundLabel<BuildConfiguration>(
+                  AppleCommandLineOptions.DEFAULT_XCODE_VERSION_CONFIG_LABEL,
+                  AppleConfiguration.class) {
+                @Override
+                public Label getDefault(Rule rule, BuildConfiguration configuration) {
+                  return configuration.getFragment(AppleConfiguration.class).getXcodeConfigLabel();
+                }
+              }))
           .build();
     }
     @Override
