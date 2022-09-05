@@ -28,9 +28,9 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 
 /**
- * An aspect that transpiles .proto dependencies using the J2ObjC proto plugin
- * and //tools/objc:standalone_protoc. N.B.: This tool has not yet been released into
- * open-source.
+ * An aspect that transpiles .proto dependencies using the J2ObjC proto plugin,
+ * //tools/objc:compile_protos and //tools/objc:proto_support. N.B.: These two tools
+ * have not yet been released into open-source.
  */
 public class BazelJ2ObjcProtoAspect extends AbstractJ2ObjcProtoAspect {
   public static final String NAME = "BazelJ2ObjcProtoAspect";
@@ -69,8 +69,7 @@ public class BazelJ2ObjcProtoAspect extends AbstractJ2ObjcProtoAspect {
       Iterable<Artifact> headerMappingFiles,
       Iterable<Artifact> classMappingFiles,
       J2ObjcSource j2ObjcSource) {
-    String genDir = ruleContext.getConfiguration().getGenfilesDirectory(
-        ruleContext.getRule().getRepository()).getExecPathString();
+    String genDir = ruleContext.getConfiguration().getGenfilesDirectory().getExecPathString();
     Artifact compiler = ruleContext.getPrerequisiteArtifact("$protoc", Mode.HOST);
     Artifact j2objcPlugin = ruleContext.getPrerequisiteArtifact("$j2objc_plugin", Mode.HOST);
 
@@ -96,5 +95,10 @@ public class BazelJ2ObjcProtoAspect extends AbstractJ2ObjcProtoAspect {
             .addOutputs(headerMappingFiles)
             .addOutputs(classMappingFiles)
             .build(ruleContext));
+  }
+
+  @Override
+  protected boolean checkShouldCreateSources(RuleContext ruleContext) {
+    return true;
   }
 }
