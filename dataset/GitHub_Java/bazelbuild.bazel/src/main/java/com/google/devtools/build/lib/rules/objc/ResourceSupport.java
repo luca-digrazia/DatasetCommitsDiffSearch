@@ -45,6 +45,7 @@ final class ResourceSupport {
    */
   ResourceSupport addXcodeSettings(XcodeProvider.Builder xcodeProviderBuilder) {
     xcodeProviderBuilder.addInputsToXcodegen(Xcdatamodel.inputsToXcodegen(attributes.datamodels()));
+    xcodeProviderBuilder.addDatamodelDirs(Xcdatamodels.datamodelDirs(attributes.datamodels()));
     return this;
   }
 
