@@ -104,7 +104,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         javaCommon,
         androidCommon,
         javaSemantics,
-        androidSemantics);
+        androidSemantics,
+        ImmutableList.<String>of("deps"));
     if (builder == null) {
       return null;
     }
@@ -118,7 +119,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       JavaCommon javaCommon,
       AndroidCommon androidCommon,
       JavaSemantics javaSemantics,
-      AndroidSemantics androidSemantics) throws InterruptedException {
+      AndroidSemantics androidSemantics,
+      List<String> depsAttributes) throws InterruptedException {
 
     if (getMultidexMode(ruleContext) != MultidexMode.LEGACY
         && ruleContext.attributes().isAttributeValueExplicitlySpecified(
@@ -144,13 +146,17 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         MultimapBuilder.treeKeys().arrayListValues().build();
     AndroidConfiguration config = ruleContext.getFragment(AndroidConfiguration.class);
     if (config.isFatApk()) {
-      for (Map.Entry<String, ? extends List<? extends TransitiveInfoCollection>> entry :
-          ruleContext.getSplitPrerequisites("deps").entrySet()) {
-        depsByArchitecture.putAll(entry.getKey(), entry.getValue());
+      for (String depsAttribute : depsAttributes) {
+        for (Map.Entry<String, ? extends List<? extends TransitiveInfoCollection>> entry :
+            ruleContext.getSplitPrerequisites(depsAttribute).entrySet()) {
+          depsByArchitecture.putAll(entry.getKey(), entry.getValue());
+        }
       }
     } else {
-      depsByArchitecture.putAll(
-          config.getCpu(), ruleContext.getPrerequisites("deps", Mode.TARGET));
+      for (String depsAttribute : depsAttributes) {
+        depsByArchitecture.putAll(
+            config.getCpu(), ruleContext.getPrerequisites(depsAttribute, Mode.TARGET));
+      }
     }
     Map<String, BuildConfiguration> configurationMap = new LinkedHashMap<>();
     Map<String, CcToolchainProvider> toolchainMap = new LinkedHashMap<>();

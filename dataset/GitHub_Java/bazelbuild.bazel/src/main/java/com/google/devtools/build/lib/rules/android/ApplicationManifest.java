@@ -163,7 +163,7 @@ public final class ApplicationManifest {
 
   public ApplicationManifest mergeWith(RuleContext ruleContext,
       ResourceDependencies resourceDeps) {
-    Iterable<Artifact> mergeeManifests = getMergeeManifests(resourceDeps.getResources());
+    Iterable<Artifact> mergeeManifests = getMergeeManifests(resourceDeps.getResources()); 
     if (!Iterables.isEmpty(mergeeManifests)) {
       Iterable<Artifact> exportedManifests = mergeeManifests;
       Artifact outputManifest = ruleContext.getUniqueDirectoryArtifact(
@@ -188,7 +188,7 @@ public final class ApplicationManifest {
     return builder.build();
   }
 
-  /** Packages up the manifest with assets from the rule and dependent resources.
+  /** Packages up the manifest with assets from the rule and dependent resources. 
    * @throws InterruptedException */
   public ResourceApk packWithAssets(
       Artifact resourceApk,
@@ -208,45 +208,39 @@ public final class ApplicationManifest {
 
     return createApk(resourceApk,
         ruleContext,
-        false, /* isLibrary */
         resourceDeps,
         rTxt,
-        null, /* symbolsTxt */
-        ImmutableList.<String>of(), /* configurationFilters */
+        null, /* configurationFilters */
         ImmutableList.<String>of(), /* uncompressedExtensions */
-        true, /* crunchPng */
         ImmutableList.<String>of(), /* densities */
-        null, /* String applicationId */
+        ImmutableList.<String>of(), /* String applicationId */
         null, /* String versionCode */
         null, /* String versionName */
+        null, /* Artifact symbolsTxt */
         incremental,
         data,
         proguardCfg,
-        null, /* Artifact manifestOut */
-        null /* Artifact mergedResources */);
+        null);
   }
 
-  /** Packages up the manifest with resource and assets from the rule and dependent resources.
+  /** Packages up the manifest with resource and assets from the rule and dependent resources. 
    * @param manifestOut TODO(corysmith):
    * @throws InterruptedException */
   public ResourceApk packWithDataAndResources(
       Artifact resourceApk,
       RuleContext ruleContext,
-      boolean isLibrary,
       ResourceDependencies resourceDeps,
       Artifact rTxt,
       Artifact symbolsTxt,
       List<String> configurationFilters,
       List<String> uncompressedExtensions,
-      boolean crunchPng,
       List<String> densities,
       String applicationId,
       String versionCode,
       String versionName,
       boolean incremental,
       Artifact proguardCfg,
-      Artifact manifestOut,
-      Artifact mergedResources) throws InterruptedException {
+      Artifact manifestOut) throws InterruptedException {
     LocalResourceContainer data = new LocalResourceContainer.Builder(ruleContext)
         .withAssets(
             AndroidCommon.getAssetDir(ruleContext),
@@ -265,13 +259,11 @@ public final class ApplicationManifest {
     }
     return createApk(resourceApk,
         ruleContext,
-        isLibrary,
         resourceDeps,
         rTxt,
         symbolsTxt,
         configurationFilters,
         uncompressedExtensions,
-        crunchPng,
         densities,
         applicationId,
         versionCode,
@@ -279,19 +271,16 @@ public final class ApplicationManifest {
         incremental,
         data,
         proguardCfg,
-        manifestOut,
-        mergedResources);
+        manifestOut);
   }
 
   private ResourceApk createApk(Artifact resourceApk,
       RuleContext ruleContext,
-      boolean isLibrary,
       ResourceDependencies resourceDeps,
       Artifact rTxt,
       Artifact symbolsTxt,
       List<String> configurationFilters,
       List<String> uncompressedExtensions,
-      boolean crunchPng,
       List<String> densities,
       String applicationId,
       String versionCode,
@@ -299,8 +288,7 @@ public final class ApplicationManifest {
       boolean incremental,
       LocalResourceContainer data,
       Artifact proguardCfg,
-      Artifact manifestOut,
-      Artifact mergedResources) throws InterruptedException {
+      Artifact manifestOut) throws InterruptedException {
     ResourceContainer resourceContainer = checkForInlinedResources(
         new AndroidResourceContainerBuilder()
             .withData(data)
@@ -319,15 +307,12 @@ public final class ApplicationManifest {
 
     AndroidResourcesProcessorBuilder builder =
         new AndroidResourcesProcessorBuilder(ruleContext)
-            .setLibrary(isLibrary)
             .setApkOut(resourceContainer.getApk())
             .setConfigurationFilters(configurationFilters)
             .setUncompressedExtensions(uncompressedExtensions)
-            .setCrunchPng(crunchPng)
             .setJavaPackage(resourceContainer.getJavaPackage())
             .setDebug(ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT)
             .setManifestOut(manifestOut)
-            .setMergedResourcesOut(mergedResources)
             .withPrimary(resourceContainer)
             .withDependencies(resourceDeps)
             .setDensities(densities)
@@ -388,7 +373,7 @@ public final class ApplicationManifest {
 
   /**
    * Packages up the manifest with resources, and generates the R.java.
-   * @throws InterruptedException
+   * @throws InterruptedException 
    *
    * @deprecated in favor of {@link ApplicationManifest#packWithDataAndResources}.
    */

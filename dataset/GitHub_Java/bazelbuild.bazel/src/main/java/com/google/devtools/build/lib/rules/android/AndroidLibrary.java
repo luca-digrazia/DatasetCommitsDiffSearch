@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaNeverlinkInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
+import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
@@ -181,6 +182,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     return builder
       .add(AndroidNativeLibraryProvider.class,
           new AndroidNativeLibraryProvider(transitiveNativeLibraries))
+      .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, new JavaSkylarkApiProvider())
       .add(JavaNeverlinkInfoProvider.class,
           new JavaNeverlinkInfoProvider(androidCommon.isNeverLink()))
       .add(JavaSourceInfoProvider.class,
@@ -188,7 +190,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       .add(JavaSourceJarsProvider.class, androidCommon.getJavaSourceJarsProvider())
       .add(AndroidCcLinkParamsProvider.class,
           new AndroidCcLinkParamsProvider(androidCommon.getCcLinkParamsStore()))
-      .add(JavaPluginInfoProvider.class, JavaCommon.getTransitivePlugins(ruleContext))
+      .add(JavaPluginInfoProvider.class, javaCommon.getTransitivePlugins())
       .add(ProguardSpecProvider.class, new ProguardSpecProvider(transitiveProguardConfigs))
       .addOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL, transitiveProguardConfigs)
       .add(AndroidLibraryAarProvider.class, new AndroidLibraryAarProvider(
