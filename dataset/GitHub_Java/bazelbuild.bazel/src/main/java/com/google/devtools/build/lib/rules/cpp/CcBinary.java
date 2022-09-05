@@ -46,6 +46,7 @@ import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.rules.test.ExecutionInfoProvider;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -65,6 +66,11 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   protected CcBinary(CppSemantics semantics) {
     this.semantics = semantics;
   }
+
+  // TODO(bazel-team): should this use Link.SHARED_LIBRARY_FILETYPES?
+  private static final FileTypeSet SHARED_LIBRARY_FILETYPES = FileTypeSet.of(
+      CppFileTypes.SHARED_LIBRARY,
+      CppFileTypes.VERSIONED_SHARED_LIBRARY);
 
   /**
    * The maximum number of inputs for any single .dwp generating action. For cases where
@@ -164,11 +170,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     List<String> linkopts = common.getLinkopts();
     LinkStaticness linkStaticness = getLinkStaticness(ruleContext, linkopts, cppConfiguration);
 
-    semantics.validateAttributes(ruleContext);
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
-
     CcLibraryHelper helper =
         new CcLibraryHelper(ruleContext, semantics, featureConfiguration)
             .fromCommon(common)
@@ -209,6 +210,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             linkStaticness,
             linkopts);
     linkActionBuilder.setUseTestOnlyFlags(isTest);
+    linkActionBuilder.addNonCodeInputs(ccCompilationOutputs.getHeaderTokenFiles());
 
     CcToolchainProvider ccToolchain = CppHelper.getToolchain(ruleContext);
     if (linkStaticness == LinkStaticness.DYNAMIC) {
@@ -654,13 +656,12 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     InstrumentedFilesProvider instrumentedFilesProvider = common.getInstrumentedFilesProvider(
         instrumentedObjectFiles, !TargetUtils.isTestRule(ruleContext.getRule()) && !fake);
 
-    NestedSet<Artifact> headerTokens =
-        CcLibraryHelper.collectHeaderTokens(ruleContext, ccCompilationOutputs);
     NestedSet<Artifact> filesToCompile =
         ccCompilationOutputs.getFilesToCompile(
             cppConfiguration.isLipoContextCollector(),
             cppConfiguration.processHeadersInDependencies(),
             CppHelper.usePic(ruleContext, false));
+    NestedSet<Artifact> artifactsToForce = collectHiddenTopLevelArtifacts(ruleContext);
     builder
         .setFilesToBuild(filesToBuild)
         .add(CppCompilationContext.class, cppCompilationContext)
@@ -683,15 +684,23 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         .addOutputGroup(
             OutputGroupProvider.TEMP_FILES, getTemps(cppConfiguration, ccCompilationOutputs))
         .addOutputGroup(OutputGroupProvider.FILES_TO_COMPILE, filesToCompile)
-        // For CcBinary targets, we only want to ensure that we process headers in dependencies and
-        // thus only add header tokens to HIDDEN_TOP_LEVEL. If we add all HIDDEN_TOP_LEVEL artifacts
-        // from dependent CcLibrary targets, we'd be building .pic.o files in nopic builds.
-        .addOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL, headerTokens)
+        .addOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL, artifactsToForce)
         .addOutputGroup(
             OutputGroupProvider.COMPILATION_PREREQUISITES,
             CcCommon.collectCompilationPrerequisites(ruleContext, cppCompilationContext));
 
     CppHelper.maybeAddStaticLinkMarkerProvider(builder, ruleContext);
+  }
+
+  private static NestedSet<Artifact> collectHiddenTopLevelArtifacts(RuleContext ruleContext) {
+    // Ensure that we build all the dependencies, otherwise users may get confused.
+    NestedSetBuilder<Artifact> artifactsToForceBuilder = NestedSetBuilder.stableOrder();
+    for (OutputGroupProvider dep :
+        ruleContext.getPrerequisites("deps", Mode.TARGET, OutputGroupProvider.class)) {
+      artifactsToForceBuilder.addTransitive(
+          dep.getOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL));
+    }
+    return artifactsToForceBuilder.build();
   }
 
   private static NestedSet<Artifact> collectExecutionDynamicLibraryArtifacts(
@@ -723,6 +732,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     }
     return builder.build();
   }
+
 
   private static NestedSet<Artifact> getTemps(CppConfiguration cppConfiguration,
       CcCompilationOutputs compilationOutputs) {
