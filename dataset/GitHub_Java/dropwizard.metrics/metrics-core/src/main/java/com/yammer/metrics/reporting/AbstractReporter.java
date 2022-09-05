@@ -18,7 +18,7 @@ public abstract class AbstractReporter implements Runnable {
     public abstract void run();
     
     /**
-     * Starts reporter output.
+     * Starts sending output to ganglia server.
      *
      * @param period the period between successive displays
      * @param unit   the time unit of {@code period}
