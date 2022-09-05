@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.EnvironmentBackedRecursivePackageProvider.MissingDepException;
 import com.google.devtools.build.lib.util.BatchCallback;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -56,7 +55,7 @@ public class TargetPatternFunction implements SkyFunction {
           new RecursivePackageProviderBackedTargetPatternResolver(provider, env.getListener(),
               patternKey.getPolicy());
       TargetPattern parsedPattern = patternKey.getParsedPattern();
-      ImmutableSet<PathFragment> excludedSubdirectories = patternKey.getExcludedSubdirectories();
+      ImmutableSet<String> excludedSubdirectories = patternKey.getExcludedSubdirectories();
       final Set<Target> results = CompactHashSet.create();
       BatchCallback<Target, RuntimeException> callback =
           new BatchCallback<Target, RuntimeException>() {
