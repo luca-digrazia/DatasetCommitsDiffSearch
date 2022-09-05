@@ -17,6 +17,7 @@ public class Target {
     private boolean boy2;
     private String boy3;
 
+
     private int age;
 
     private int age2;
@@ -32,8 +33,6 @@ public class Target {
     private NestObject nestObject;
 
     private NestObject nestObject2;
-
-    private List<Map<String,Object>> nestObjects;
 
     private Map<String, Object> nestObject3;
 
