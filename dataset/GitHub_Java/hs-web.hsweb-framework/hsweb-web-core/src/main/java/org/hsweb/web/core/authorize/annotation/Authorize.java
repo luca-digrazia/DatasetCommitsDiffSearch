@@ -52,7 +52,6 @@ public @interface Authorize {
      *
      * @return
      */
-    @Deprecated
     boolean api() default false;
 
     /**
