@@ -154,14 +154,6 @@ public final class BuildConfiguration {
     }
 
     /**
-     * Returns the roots used for the "all labels in the configuration must be reachable from the
-     * labels provided on the command line" sanity check.
-     */
-    public Iterable<Label> getSanityCheckRoots() {
-      return ImmutableList.of();
-    }
-
-    /**
      * Returns a multimap of all labels that should be implicitly loaded from labels that were
      * specified as options, keyed by the name to be displayed to the user if something goes wrong.
      * The returned set only contains labels that were derived from command-line options; the
@@ -1308,7 +1300,15 @@ public final class BuildConfiguration {
       fragment.addGlobalMakeVariables(globalMakeEnvBuilder);
     }
 
+    // Lots of packages in third_party assume that BINMODE expands to either "-dbg", or "-opt". So
+    // for backwards compatibility we preserve that invariant, setting BINMODE to "-dbg" rather than
+    // "-fastbuild" if the compilation mode is "fastbuild".
+    // We put the real compilation mode in a new variable COMPILATION_MODE.
     globalMakeEnvBuilder.put("COMPILATION_MODE", options.compilationMode.toString());
+    globalMakeEnvBuilder.put("BINMODE", "-"
+        + ((options.compilationMode == CompilationMode.FASTBUILD)
+        ? "dbg"
+        : options.compilationMode.toString()));
     /*
      * Attention! Document these in the build-encyclopedia
      */
