@@ -11,23 +11,14 @@ import java.util.Set;
 public class DeadlockHealthCheck extends HealthCheck {
     private final VirtualMachineMetrics vm;
 
-    /**
-     * Creates a new {@link DeadlockHealthCheck} with the given {@link VirtualMachineMetrics}
-     * instance.
-     *
-     * @param vm    a {@link VirtualMachineMetrics} instance
-     */
     public DeadlockHealthCheck(VirtualMachineMetrics vm) {
         super("deadlocks");
         this.vm = vm;
     }
 
-    /**
-     * Creates a new {@link DeadlockHealthCheck}.
-     */
     @SuppressWarnings("UnusedDeclaration")
     public DeadlockHealthCheck() {
-        this(VirtualMachineMetrics.getInstance());
+        this(VirtualMachineMetrics.INSTANCE);
     }
 
     @Override
