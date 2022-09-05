@@ -14,14 +14,11 @@
 
 package com.google.testing.junit.runner.junit4;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
 import javax.annotation.Nullable;
 
 /**
@@ -86,7 +83,7 @@ class JUnit4Options {
   private final String testExcludeFilter;
   private final String[] unparsedArgs;
 
-  @VisibleForTesting
+  // VisibleForTesting
   JUnit4Options(@Nullable String testIncludeFilter, @Nullable String testExcludeFilter,
                 String[] unparsedArgs) {
     this.testIncludeFilter = testIncludeFilter;

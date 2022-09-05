@@ -14,18 +14,16 @@
 
 package com.google.testing.junit.runner.junit4;
 
-import com.google.common.base.Preconditions;
 import com.google.testing.junit.junit4.runner.MemoizingRequest;
 import com.google.testing.junit.junit4.runner.RunNotifierWrapper;
 
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import org.junit.runner.Description;
 import org.junit.runner.Request;
 import org.junit.runner.Runner;
 import org.junit.runner.notification.RunNotifier;
 import org.junit.runner.notification.StoppedByUserException;
-
-import javax.inject.Inject;
-import javax.inject.Singleton;
 
 /**
  * Creates requests that can be cancelled.
@@ -45,7 +43,9 @@ class CancellableRequestFactory {
    * @param delegate request to wrap
    */
   public Request createRequest(Request delegate) {
-    Preconditions.checkState(!requestCreated, "a request was already created");
+    if (requestCreated) {
+      throw new IllegalStateException("a request was already created");
+    }
     return new MemoizingRequest(delegate) {
       @Override
       protected Runner createRunner(Request delegate) {

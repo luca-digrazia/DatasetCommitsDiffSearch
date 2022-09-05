@@ -14,18 +14,16 @@
 
 package com.google.testing.junit.runner.junit4;
 
-import com.google.testing.junit.junit4.runner.RegExTestCaseFilter;
 import com.google.testing.junit.junit4.runner.SuiteTrimmingFilter;
 import com.google.testing.junit.runner.internal.Stdout;
-import com.google.testing.junit.runner.internal.junit4.CancellableRequestFactory;
 import com.google.testing.junit.runner.model.TestSuiteModel;
 import com.google.testing.junit.runner.util.GoogleTestSecurityManager;
+import com.google.testing.junit.runner.util.Supplier;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Set;
-import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import org.junit.internal.runners.ErrorReportingRunner;
