@@ -79,7 +79,6 @@ public class CppCompileActionBuilder {
   private Class<? extends CppCompileActionContext> actionContext;
   private CppConfiguration cppConfiguration;
   private ImmutableMap<Artifact, IncludeScannable> lipoScannableMap;
-  // New fields need to be added to the copy constructor.
 
   /**
    * Creates a builder from a rule. This also uses the configuration and
@@ -160,8 +159,6 @@ public class CppCompileActionBuilder {
     this.actionClassId = other.actionClassId;
     this.actionContext = other.actionContext;
     this.cppConfiguration = other.cppConfiguration;
-    this.fdoBuildStamp = other.fdoBuildStamp;
-    this.usePic = other.usePic;
     this.lipoScannableMap = other.lipoScannableMap;
   }
 
