@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Objects;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -39,20 +40,13 @@ public abstract class PackageLookupValue implements SkyValue {
    * The file (BUILD, WORKSPACE, etc.) that defines this package, referred to as the "build file".
    */
   public enum BuildFileName {
-
     WORKSPACE("WORKSPACE") {
       @Override
       public PathFragment getBuildFileFragment(PackageIdentifier packageIdentifier) {
-        return PathFragment.create(BuildFileName.WORKSPACE.getFilename());
+        return new PathFragment(BuildFileName.WORKSPACE.getFilename());
       }
     },
     BUILD("BUILD") {
-      @Override
-      public PathFragment getBuildFileFragment(PackageIdentifier packageIdentifier) {
-        return packageIdentifier.getPackageFragment().getChild(getFilename());
-      }
-    },
-    BUILD_DOT_BAZEL("BUILD.bazel") {
       @Override
       public PathFragment getBuildFileFragment(PackageIdentifier packageIdentifier) {
         return packageIdentifier.getPackageFragment().getChild(getFilename());

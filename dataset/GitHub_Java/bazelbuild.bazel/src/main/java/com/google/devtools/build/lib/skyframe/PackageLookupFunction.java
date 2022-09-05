@@ -39,27 +39,15 @@ import javax.annotation.Nullable;
  * SkyFunction for {@link PackageLookupValue}s.
  */
 public class PackageLookupFunction implements SkyFunction {
-  /** Lists possible ways to handle a package label which crosses into a new repository. */
-  public enum CrossRepositoryLabelViolationStrategy {
-    /** Ignore the violation. */
-    IGNORE,
-    /** Generate an error. */
-    ERROR;
-  }
 
   private final AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages;
-  private final CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy;
 
-  public PackageLookupFunction(
-      AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages,
-      CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy) {
+  public PackageLookupFunction(AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages) {
     this.deletedPackages = deletedPackages;
-    this.crossRepositoryLabelViolationStrategy = crossRepositoryLabelViolationStrategy;
   }
 
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env)
-      throws PackageLookupFunctionException, InterruptedException {
+  public SkyValue compute(SkyKey skyKey, Environment env) throws PackageLookupFunctionException {
     PathPackageLocator pkgLocator = PrecomputedValue.PATH_PACKAGE_LOCATOR.get(env);
     PackageIdentifier packageKey = (PackageIdentifier) skyKey.argument();
     if (PackageFunction.isDefaultsPackage(packageKey)) {
@@ -106,9 +94,9 @@ public class PackageLookupFunction implements SkyFunction {
   }
 
   @Nullable
-  private static FileValue getFileValue(
+  private FileValue getFileValue(
       RootedPath fileRootedPath, Environment env, PackageIdentifier packageIdentifier)
-      throws PackageLookupFunctionException, InterruptedException {
+      throws PackageLookupFunctionException {
     String basename = fileRootedPath.asPath().getBaseName();
     SkyKey fileSkyKey = FileValue.key(fileRootedPath);
     FileValue fileValue = null;
@@ -139,7 +127,7 @@ public class PackageLookupFunction implements SkyFunction {
       ImmutableList<Path> packagePathEntries,
       PackageIdentifier packageIdentifier,
       BuildFileName buildFileName)
-      throws PackageLookupFunctionException, InterruptedException {
+      throws PackageLookupFunctionException {
     // TODO(bazel-team): The following is O(n^2) on the number of elements on the package path due
     // to having restart the SkyFunction after every new dependency. However, if we try to batch
     // the missing value keys, more dependencies than necessary will be declared. This wart can be
@@ -148,11 +136,6 @@ public class PackageLookupFunction implements SkyFunction {
       PathFragment buildFileFragment = buildFileName.getBuildFileFragment(packageIdentifier);
       RootedPath buildFileRootedPath = RootedPath.toRootedPath(packagePathEntry,
           buildFileFragment);
-
-      if (crossRepositoryLabelViolationStrategy != CrossRepositoryLabelViolationStrategy.IGNORE) {
-        // TODO(jcater): Check for cross repository package label violations.
-      }
-
       FileValue fileValue = getFileValue(buildFileRootedPath, env, packageIdentifier);
       if (fileValue == null) {
         return null;
@@ -166,7 +149,7 @@ public class PackageLookupFunction implements SkyFunction {
 
   private PackageLookupValue computeWorkspacePackageLookupValue(
       Environment env, ImmutableList<Path> packagePathEntries)
-      throws PackageLookupFunctionException, InterruptedException {
+      throws PackageLookupFunctionException {
     PackageLookupValue result =
         getPackageLookupValue(
             env, packagePathEntries, Label.EXTERNAL_PACKAGE_IDENTIFIER, BuildFileName.WORKSPACE);
@@ -199,11 +182,11 @@ public class PackageLookupFunction implements SkyFunction {
    * Gets a PackageLookupValue from a different Bazel repository.
    *
    * <p>To do this, it looks up the "external" package and finds a path mapping for the repository
-   * name.
+   * name.</p>
    */
-  private static PackageLookupValue computeExternalPackageLookupValue(
+  private PackageLookupValue computeExternalPackageLookupValue(
       SkyKey skyKey, Environment env, PackageIdentifier packageIdentifier)
-      throws PackageLookupFunctionException, InterruptedException {
+      throws PackageLookupFunctionException {
     PackageIdentifier id = (PackageIdentifier) skyKey.argument();
     SkyKey repositoryKey = RepositoryValue.key(id.getRepository());
     RepositoryValue repositoryValue;

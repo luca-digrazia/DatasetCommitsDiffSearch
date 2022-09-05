@@ -132,22 +132,21 @@ public abstract class RepositoryFunction {
    *
    * <p>The {@code env} argument can be used to fetch Skyframe dependencies the repository
    * implementation needs on the following conditions:
-   *
    * <ul>
-   * <li>When a Skyframe value is missing, fetching must be restarted, thus, in order to avoid doing
-   *     duplicate work, it's better to first request the Skyframe dependencies you need and only
-   *     then start doing anything costly.
-   * <li>The output directory must be populated from within this method (and not from within another
-   *     SkyFunction). This is because if it was populated in another SkyFunction, the repository
-   *     function would be restarted <b>after</b> that SkyFunction has been run, and it would wipe
-   *     the output directory clean.
+   *   <li>When a Skyframe value is missing, fetching must be restarted, thus, in order to avoid
+   *     doing duplicate work, it's better to first request the Skyframe dependencies you need and
+   *     only then start doing anything costly.
+   *   <li>The output directory must be populated from within this method (and not from within
+   *     another SkyFunction). This is because if it was populated in another SkyFunction, the
+   *     repository function would be restarted <b>after</b> that SkyFunction has been run, and
+   *     it would wipe the output directory clean.
    * </ul>
    */
   @ThreadSafe
   @Nullable
   public abstract SkyValue fetch(
       Rule rule, Path outputDirectory, BlazeDirectories directories, Environment env)
-      throws SkyFunctionException, InterruptedException;
+          throws SkyFunctionException, InterruptedException;
 
   /**
    * Whether fetching is done using local operations only.
@@ -165,7 +164,7 @@ public abstract class RepositoryFunction {
    * to keep it working somehow)
    */
   protected byte[] getRuleSpecificMarkerData(Rule rule, Environment env)
-      throws RepositoryFunctionException, InterruptedException {
+      throws RepositoryFunctionException {
     return new byte[] {};
   }
 
@@ -266,7 +265,7 @@ public abstract class RepositoryFunction {
    */
   @Nullable
   public static Rule getRule(String repository, Environment env)
-      throws RepositoryFunctionException, InterruptedException {
+      throws RepositoryFunctionException {
 
     SkyKey packageLookupKey = PackageLookupValue.key(Label.EXTERNAL_PACKAGE_IDENTIFIER);
     PackageLookupValue packageLookupValue = (PackageLookupValue) env.getValue(packageLookupKey);
@@ -299,8 +298,9 @@ public abstract class RepositoryFunction {
   }
 
   @Nullable
-  public static Rule getRule(String ruleName, @Nullable String ruleClassName, Environment env)
-      throws RepositoryFunctionException, InterruptedException {
+  public static Rule getRule(
+      String ruleName, @Nullable String ruleClassName, Environment env)
+          throws RepositoryFunctionException {
     try {
       return getRule(RepositoryName.create("@" + ruleName), ruleClassName, env);
     } catch (LabelSyntaxException e) {
@@ -310,15 +310,15 @@ public abstract class RepositoryFunction {
   }
 
   /**
-   * Uses a remote repository name to fetch the corresponding Rule describing how to get it. This
-   * should be called from {@link SkyFunction#compute} functions, which should return null if this
-   * returns null. If {@code ruleClassName} is set, the rule found must have a matching rule class
-   * name.
+   * Uses a remote repository name to fetch the corresponding Rule describing how to get it.
+   * This should be called from {@link SkyFunction#compute} functions, which should return null if
+   * this returns null. If {@code ruleClassName} is set, the rule found must have a matching rule
+   * class name.
    */
   @Nullable
   public static Rule getRule(
       RepositoryName repositoryName, @Nullable String ruleClassName, Environment env)
-      throws RepositoryFunctionException, InterruptedException {
+          throws RepositoryFunctionException {
     Rule rule = getRule(repositoryName.strippedName(), env);
     Preconditions.checkState(
         rule == null || ruleClassName == null || rule.getRuleClass().equals(ruleClassName),
@@ -327,12 +327,12 @@ public abstract class RepositoryFunction {
   }
 
   /**
-   * Adds the repository's directory to the graph and, if it's a symlink, resolves it to an actual
-   * directory.
+   * Adds the repository's directory to the graph and, if it's a symlink, resolves it to an
+   * actual directory.
    */
   @Nullable
-  protected static FileValue getRepositoryDirectory(Path repositoryDirectory, Environment env)
-      throws RepositoryFunctionException, InterruptedException {
+  public static FileValue getRepositoryDirectory(Path repositoryDirectory, Environment env)
+      throws RepositoryFunctionException {
     SkyKey outputDirectoryKey = FileValue.key(RootedPath.toRootedPath(
         repositoryDirectory, PathFragment.EMPTY_FRAGMENT));
     FileValue value;
@@ -347,24 +347,28 @@ public abstract class RepositoryFunction {
     return value;
   }
 
-  protected static Path getExternalRepositoryDirectory(BlazeDirectories directories) {
-    return directories.getOutputBase().getRelative(Label.EXTERNAL_PACKAGE_NAME);
+  public static Path getExternalRepositoryDirectory(BlazeDirectories directories) {
+    return directories
+        .getOutputBase()
+        .getRelative(Label.EXTERNAL_PATH_PREFIX);
   }
 
   /**
-   * For files that are under $OUTPUT_BASE/external, add a dependency on the corresponding rule so
-   * that if the WORKSPACE file changes, the File/DirectoryStateValue will be re-evaluated.
+   * For files that are under $OUTPUT_BASE/external, add a dependency on the corresponding rule
+   * so that if the WORKSPACE file changes, the File/DirectoryStateValue will be re-evaluated.
    *
-   * <p>Note that: - We don't add a dependency on the parent directory at the package root boundary,
-   * so the only transitive dependencies from files inside the package roots to external files are
-   * through symlinks. So the upwards transitive closure of external files is small. - The only way
-   * other than external repositories for external source files to get into the skyframe graph in
-   * the first place is through symlinks outside the package roots, which we neither want to
-   * encourage nor optimize for since it is not common. So the set of external files is small.
+   * Note that:
+   * - We don't add a dependency on the parent directory at the package root boundary, so
+   * the only transitive dependencies from files inside the package roots to external files
+   * are through symlinks. So the upwards transitive closure of external files is small.
+   * - The only way other than external repositories for external source files to get into the
+   * skyframe graph in the first place is through symlinks outside the package roots, which we
+   * neither want to encourage nor optimize for since it is not common. So the set of external
+   * files is small.
    */
   public static void addExternalFilesDependencies(
       RootedPath rootedPath, BlazeDirectories directories, Environment env)
-      throws IOException, InterruptedException {
+      throws IOException {
     Path externalRepoDir = getExternalRepositoryDirectory(directories);
     PathFragment repositoryPath = rootedPath.asPath().relativeTo(externalRepoDir);
     if (repositoryPath.segmentCount() == 0) {

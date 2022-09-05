@@ -71,16 +71,10 @@ public class PackageFunctionTest extends BuildViewTestCase {
   private CustomInMemoryFs fs = new CustomInMemoryFs(new ManualClock());
 
   private void preparePackageLoading(Path... roots) {
-    getSkyframeExecutor()
-        .preparePackageLoading(
-            new PathPackageLocator(outputBase, ImmutableList.copyOf(roots)),
-            ConstantRuleVisibility.PUBLIC,
-            true,
-            7,
-            "",
-            UUID.randomUUID(),
-            ImmutableMap.<String, String>of(),
-            new TimestampGranularityMonitor(BlazeClock.instance()));
+    getSkyframeExecutor().preparePackageLoading(
+        new PathPackageLocator(outputBase, ImmutableList.copyOf(roots)),
+        ConstantRuleVisibility.PUBLIC, true,
+        7, "", UUID.randomUUID(), new TimestampGranularityMonitor(BlazeClock.instance()));
   }
 
   @Override
@@ -427,30 +421,6 @@ public class PackageFunctionTest extends BuildViewTestCase {
             reporter,
             ModifiedFileSet.builder().modify(new PathFragment("foo/BUILD")).build(),
             rootDirectory);
-    value = validPackage(skyKey);
-    assertThat(
-            (Iterable<Label>)
-                value
-                    .getPackage()
-                    .getTarget("foo")
-                    .getAssociatedRule()
-                    .getAttributeContainer()
-                    .getAttr("srcs"))
-        .containsExactly(
-            Label.parseAbsoluteUnchecked("//foo:a.config"),
-            Label.parseAbsoluteUnchecked("//foo:b.txt"))
-        .inOrder();
-    getSkyframeExecutor().resetEvaluator();
-    getSkyframeExecutor()
-        .preparePackageLoading(
-            new PathPackageLocator(outputBase, ImmutableList.<Path>of(rootDirectory)),
-            ConstantRuleVisibility.PUBLIC,
-            true,
-            7,
-            "",
-            UUID.randomUUID(),
-            ImmutableMap.<String, String>of(),
-            tsgm);
     value = validPackage(skyKey);
     assertThat(
             (Iterable<Label>)
