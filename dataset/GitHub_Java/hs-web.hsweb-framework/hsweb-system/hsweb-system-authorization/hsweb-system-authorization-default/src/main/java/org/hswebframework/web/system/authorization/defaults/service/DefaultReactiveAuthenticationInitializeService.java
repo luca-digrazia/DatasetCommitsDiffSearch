@@ -121,7 +121,6 @@ public class DefaultReactiveAuthenticationInitializeService
                 SimplePermission permission = new SimplePermission();
                 permission.setId(permissionEntity.getId());
                 permission.setName(permissionEntity.getName());
-                permission.setOptions(permissionEntity.getProperties());
                 Set<DataAccessConfig> configs = new HashSet<>();
 
                 for (AuthorizationSettingEntity permissionSetting : permissionSettings) {
