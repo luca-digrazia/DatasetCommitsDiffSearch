@@ -25,8 +25,6 @@ import org.hswebframework.web.authorization.oauth2.client.simple.session.Authori
 import org.hswebframework.web.authorization.oauth2.client.simple.session.CachedOAuth2Session;
 import org.hswebframework.web.authorization.oauth2.client.simple.session.DefaultOAuth2Session;
 import org.hswebframework.web.authorization.oauth2.client.simple.session.PasswordSession;
-import org.hswebframework.web.oauth2.core.GrantType;
-import org.hswebframework.web.oauth2.core.OAuth2Constants;
 
 import java.util.List;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -89,7 +87,6 @@ public class SimpleOAuth2SessionBuilder implements OAuth2SessionBuilder {
                 } else {
                     token.setGrantType(grantType);
                     token.setCreateTime(System.currentTimeMillis());
-                    token.setUpdateTime(System.currentTimeMillis());
                     token.setServerId(serverConfig.getId());
                     oAuth2UserTokenRepository.insert(token);
                 }
@@ -112,7 +109,7 @@ public class SimpleOAuth2SessionBuilder implements OAuth2SessionBuilder {
     }
 
 
-   private Supplier<AccessTokenInfo> tokenGetter = () -> {
+    Supplier<AccessTokenInfo> tokenGetter = () -> {
         readWriteLock.readLock().lock();
         try {
             return getClientCredentialsToken();
@@ -126,10 +123,8 @@ public class SimpleOAuth2SessionBuilder implements OAuth2SessionBuilder {
         DefaultOAuth2Session session;
 
         AccessTokenInfo info = tokenGetter.get();
-
         if (null != info) {
             session = new CachedOAuth2Session(info);
-
         } else {
             readWriteLock.writeLock().lock();
             try {
@@ -172,10 +167,11 @@ public class SimpleOAuth2SessionBuilder implements OAuth2SessionBuilder {
     @Override
     public OAuth2Session byAccessToken(String accessToken) {
         Supplier<AccessTokenInfo> supplier = () -> oAuth2UserTokenRepository.findByAccessToken(accessToken);
-        AccessTokenInfo tokenInfo = supplier.get();
-        if (tokenInfo == null) {
+        AccessTokenInfo tokenEntity = supplier.get();
+        if (tokenEntity == null) {
             throw new NotFoundException("access_token not found");
         }
+        AccessTokenInfo tokenInfo = new AccessTokenInfo();
         CachedOAuth2Session session = new CachedOAuth2Session(tokenInfo);
         session.setServerConfig(serverConfig);
         session.setRequestBuilderFactory(requestBuilderFactory);

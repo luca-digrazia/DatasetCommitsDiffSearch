@@ -87,9 +87,6 @@ public class SimpleOAuth2UserTokenService extends GenericEntityService<OAuth2Use
             info.setCreateTime(entity.getCreateTime());
             info.setUpdateTime(entity.getUpdateTime());
             info.setRefreshToken(entity.getRefreshToken());
-            info.setServerId(entity.getServerId());
-            info.setGrantType(entity.getGrantType());
-            info.setScope(entity.getScope());
             return info;
         };
     }
@@ -100,20 +97,17 @@ public class SimpleOAuth2UserTokenService extends GenericEntityService<OAuth2Use
             OAuth2UserTokenEntity entity = entityFactory.newInstance(OAuth2UserTokenEntity.class, info);
             entity.setExpiresIn(info.getExpiresIn());
             entity.setAccessToken(info.getAccessToken());
-            entity.setCreateTime(info.getCreateTime());
-            entity.setUpdateTime(info.getUpdateTime());
             entity.setRefreshToken(info.getRefreshToken());
-            entity.setServerId(info.getServerId());
-            entity.setGrantType(info.getGrantType());
-            entity.setScope(info.getScope());
             return entity;
         };
     }
 
     @Override
     @Caching(
-            put = @CachePut(cacheNames = "oauth2-user-token", key = "'a-t:'+#tokenInfo.accessToken"),
-            evict = @CacheEvict(cacheNames = "oauth2-user-token-list", key = "'s-g-t:'+#result.serverId+':'+#result.grantType")
+            put = {
+                    @CachePut(cacheNames = "oauth2-user-token", key = "'a-t:'+#tokenInfo.accessToken"),
+            },
+            evict = @CacheEvict(cacheNames = "oauth2-user-token-list", allEntries = true)
     )
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public AccessTokenInfo update(String id, AccessTokenInfo tokenInfo) {
@@ -125,8 +119,10 @@ public class SimpleOAuth2UserTokenService extends GenericEntityService<OAuth2Use
 
     @Override
     @Caching(
-            put = @CachePut(cacheNames = "oauth2-user-token", key = "'a-t:'+#tokenInfo.accessToken"),
-            evict = @CacheEvict(cacheNames = "oauth2-user-token-list", key = "'s-g-t:'+#result.serverId+':'+#result.grantType")
+            put = {
+                    @CachePut(cacheNames = "oauth2-user-token", key = "'a-t:'+#tokenInfo.accessToken"),
+            },
+            evict = @CacheEvict(cacheNames = "oauth2-user-token-list", allEntries = true)
     )
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public AccessTokenInfo insert(AccessTokenInfo tokenInfo) {
@@ -134,8 +130,8 @@ public class SimpleOAuth2UserTokenService extends GenericEntityService<OAuth2Use
             tokenInfo.setId(getIDGenerator().generate());
         }
         OAuth2UserTokenEntity entity = entityTokenInfoMapping().apply(tokenInfo);
-        entity.setCreateTime(tokenInfo.getCreateTime());
-        entity.setUpdateTime(tokenInfo.getUpdateTime());
+
+        entity.setUpdateTime(System.currentTimeMillis());
 
         insert(entity);
         return tokenInfo;
