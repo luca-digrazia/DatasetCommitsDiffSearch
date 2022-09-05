@@ -67,7 +67,7 @@ public class VirtualMachineMetrics {
      *
      * @return total Heap and non-heap memory currently committed to the JVM in bytes.
      */
-    public double totalCommitted() {
+    public double totalCommited() {
         return getMemoryMXBean().getHeapMemoryUsage().getCommitted() +
                 getMemoryMXBean().getNonHeapMemoryUsage().getCommitted();
     }
@@ -103,7 +103,7 @@ public class VirtualMachineMetrics {
      *
      * @return Heap memory currently committed to the JVM in bytes.
      */
-    public double heapCommitted() {
+    public double heapCommited() {
         return getMemoryMXBean().getHeapMemoryUsage().getCommitted() +
                 getMemoryMXBean().getNonHeapMemoryUsage().getCommitted();
     }
