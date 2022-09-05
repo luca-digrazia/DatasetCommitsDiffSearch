@@ -74,7 +74,7 @@ public final class DotExpression extends Expression {
       throw new EvalException(
           loc,
           Printer.format(
-              "object of type '%s' has no field %r", EvalUtils.getDataTypeName(objValue), name));
+              "Object of type '%s' has no field %r", EvalUtils.getDataTypeName(objValue), name));
     }
     return result;
   }

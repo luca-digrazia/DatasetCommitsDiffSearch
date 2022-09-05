@@ -46,7 +46,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -755,7 +754,7 @@ public final class FuncallExpression extends Expression {
     posargs.add(objValue);
     // We copy this into an ImmutableMap in the end, but we can't use an ImmutableMap.Builder, or
     // we'd still have to have a HashMap on the side for the sake of properly handling duplicates.
-    Map<String, Object> kwargs = new LinkedHashMap<>();
+    Map<String, Object> kwargs = new HashMap<>();
     evalArguments(posargs, kwargs, env);
     return invokeObjectMethod(
         func.getName(), posargs.build(), ImmutableMap.<String, Object>copyOf(kwargs), this, env);
