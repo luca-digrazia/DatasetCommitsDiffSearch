@@ -930,12 +930,8 @@ public class OptionsParserTest {
 
   public static List<String> canonicalize(Class<? extends OptionsBase> optionsClass, String... args)
       throws OptionsParsingException {
-
-    OptionsParser parser = OptionsParser.newOptionsParser(
-        ImmutableList.<Class<? extends OptionsBase>>of(optionsClass));
-    parser.setAllowResidue(false);
-    parser.parse(Arrays.asList(args));
-    return parser.canonicalize();
+    return OptionsParser.canonicalize(ImmutableList.<Class<? extends OptionsBase>>of(optionsClass),
+        Arrays.asList(args));
   }
 
   @Test
