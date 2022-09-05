@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.server;
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.net.InetAddresses;
 import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.LockingMode;
 import com.google.devtools.build.lib.runtime.CommandExecutor;
 import com.google.devtools.build.lib.server.CommandProtos.CancelRequest;
@@ -35,13 +34,12 @@ import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.protobuf.ByteString;
-import io.grpc.Server;
-import io.grpc.netty.NettyServerBuilder;
-import io.grpc.stub.StreamObserver;
+
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.BindException;
+import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
+import java.nio.channels.ServerSocketChannel;
 import java.nio.charset.Charset;
 import java.security.SecureRandom;
 import java.util.Collections;
@@ -50,7 +48,12 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+
 import javax.annotation.concurrent.GuardedBy;
+
+import io.grpc.Server;
+import io.grpc.netty.NettyServerBuilder;
+import io.grpc.stub.StreamObserver;
 
 /**
  * gRPC server class.
@@ -58,7 +61,7 @@ import javax.annotation.concurrent.GuardedBy;
  * <p>Only this class should depend on gRPC so that we only need to exclude this during
  * bootstrapping.
  */
-public class GrpcServerImpl extends RPCServer {
+public class GrpcServerImpl extends RPCServer implements CommandServerGrpc.CommandServer {
   // UTF-8 won't do because we want to be able to pass arbitrary binary strings.
   // Not that the internals of Bazel handle that correctly, but why not make at least this little
   // part correct?
@@ -157,7 +160,7 @@ public class GrpcServerImpl extends RPCServer {
   private final int maxIdleSeconds;
 
   private Server server;
-  private final int port;
+  private int port;  // mutable so that we can overwrite it if port 0 is passed in
   boolean serving;
 
   public GrpcServerImpl(CommandExecutor commandExecutor, Clock clock, int port,
@@ -268,36 +271,25 @@ public class GrpcServerImpl extends RPCServer {
   @Override
   public void serve() throws IOException {
     Preconditions.checkState(!serving);
+    server = NettyServerBuilder.forAddress(new InetSocketAddress("localhost", port))
+        .addService(CommandServerGrpc.bindService(this))
+        .build();
 
-    // For reasons only Apple knows, you cannot bind to IPv4-localhost when you run in a sandbox
-    // that only allows loopback traffic, but binding to IPv6-localhost works fine. This would
-    // however break on systems that don't support IPv6. So what we'll do is to try to bind to IPv6
-    // and if that fails, try again with IPv4.
-    InetSocketAddress address = new InetSocketAddress("[::1]", port);
-    try {
-      server = NettyServerBuilder.forAddress(address).addService(commandServer).build().start();
-    } catch (BindException e) {
-      address = new InetSocketAddress("127.0.0.1", port);
-      server = NettyServerBuilder.forAddress(address).addService(commandServer).build().start();
-    }
-
+    server.start();
     if (maxIdleSeconds > 0) {
-      Thread timeoutThread =
-          new Thread(
-              new Runnable() {
-                @Override
-                public void run() {
-                  timeoutThread();
-                }
-              });
+      Thread timeoutThread = new Thread(new Runnable() {
+        @Override
+        public void run() {
+          timeoutThread();
+        }
+      });
 
       timeoutThread.setDaemon(true);
       timeoutThread.start();
     }
     serving = true;
 
-    writeServerFile(
-        PORT_FILE, InetAddresses.toUriString(address.getAddress()) + ":" + server.getPort());
+    writeServerFile(PORT_FILE, getAddressString());
     writeServerFile(REQUEST_COOKIE_FILE, requestCookie);
     writeServerFile(RESPONSE_COOKIE_FILE, responseCookie);
 
@@ -315,115 +307,145 @@ public class GrpcServerImpl extends RPCServer {
     deleteAtExit(file, false);
   }
 
+  /**
+   * Gets the server port the kernel bound our server to if port 0 was passed in.
+   *
+   * <p>The implementation is awful, but gRPC doesn't provide an official way to do this:
+   * https://github.com/grpc/grpc-java/issues/72
+   */
+  private String getAddressString() {
+    try {
+      ServerSocketChannel channel =
+          (ServerSocketChannel) getField(server, "transportServer", "channel", "ch");
+      InetSocketAddress address = (InetSocketAddress) channel.getLocalAddress();
+      String host = address.getAddress().getHostAddress();
+      if (host.contains(":")) {
+        host = "[" + host + "]";
+      }
+      return host + ":" + address.getPort();
+    } catch (IllegalAccessException | NullPointerException | IOException e) {
+      throw new IllegalStateException("Cannot read server socket address from gRPC");
+    }
+  }
 
-  private final CommandServerGrpc.CommandServerImplBase commandServer =
-      new CommandServerGrpc.CommandServerImplBase() {
-        @Override
-        public void run(RunRequest request, StreamObserver<RunResponse> observer) {
-          if (!request.getCookie().equals(requestCookie)
-              || request.getClientDescription().isEmpty()) {
-            observer.onNext(
-                RunResponse.newBuilder()
-                    .setExitCode(ExitCode.LOCAL_ENVIRONMENTAL_ERROR.getNumericExitCode())
-                    .build());
-            observer.onCompleted();
-            return;
-          }
+  private static Object getField(Object instance, String... fieldNames)
+    throws IllegalAccessException, NullPointerException {
+    for (String fieldName : fieldNames) {
+      Field field = null;
+      for (Class<?> clazz = instance.getClass(); clazz != null; clazz = clazz.getSuperclass()) {
+        try {
+          field = clazz.getDeclaredField(fieldName);
+          break;
+        } catch (NoSuchFieldException e) {
+          // Try again with the superclass
+        }
+      }
+      field.setAccessible(true);
+      instance = field.get(instance);
+    }
 
-          ImmutableList.Builder<String> args = ImmutableList.builder();
-          for (ByteString requestArg : request.getArgList()) {
-            args.add(requestArg.toString(CHARSET));
-          }
+    return instance;
+  }
 
-          String commandId;
-          int exitCode;
-          try (RunningCommand command = new RunningCommand()) {
-            commandId = command.id;
-            OutErr rpcOutErr =
-                OutErr.create(
-                    new RpcOutputStream(observer, command.id, StreamType.STDOUT),
-                    new RpcOutputStream(observer, command.id, StreamType.STDERR));
+  @Override
+  public void run(
+      RunRequest request, StreamObserver<RunResponse> observer) {
+    if (!request.getCookie().equals(requestCookie)
+        || request.getClientDescription().isEmpty()) {
+      observer.onNext(RunResponse.newBuilder()
+          .setExitCode(ExitCode.LOCAL_ENVIRONMENTAL_ERROR.getNumericExitCode())
+          .build());
+      observer.onCompleted();
+      return;
+    }
 
-            exitCode =
-                commandExecutor.exec(
-                    args.build(),
-                    rpcOutErr,
-                    request.getBlockForLock() ? LockingMode.WAIT : LockingMode.ERROR_OUT,
-                    request.getClientDescription(),
-                    clock.currentTimeMillis());
-          } catch (InterruptedException e) {
-            exitCode = ExitCode.INTERRUPTED.getNumericExitCode();
-            commandId = ""; // The default value, the client will ignore it
-          }
+    ImmutableList.Builder<String> args = ImmutableList.builder();
+    for (ByteString requestArg : request.getArgList()) {
+      args.add(requestArg.toString(CHARSET));
+    }
 
-          // There is a chance that a cancel request comes in after commandExecutor#exec() has
-          // finished and no one calls Thread.interrupted() to receive the interrupt. So we just
-          // reset the interruption state here to make these cancel requests not have any effect
-          // outside of command execution (after the try block above, the cancel request won't find
-          // the thread to interrupt)
-          Thread.interrupted();
+    String commandId;
+    int exitCode;
+    try (RunningCommand command = new RunningCommand()) {
+      commandId = command.id;
+      OutErr rpcOutErr = OutErr.create(
+          new RpcOutputStream(observer, command.id, StreamType.STDOUT),
+          new RpcOutputStream(observer, command.id, StreamType.STDERR));
 
-          RunResponse response =
-              RunResponse.newBuilder()
-                  .setCookie(responseCookie)
-                  .setCommandId(commandId)
-                  .setFinished(true)
-                  .setExitCode(exitCode)
-                  .build();
+      exitCode = commandExecutor.exec(
+          args.build(), rpcOutErr,
+          request.getBlockForLock() ? LockingMode.WAIT : LockingMode.ERROR_OUT,
+          request.getClientDescription(), clock.currentTimeMillis());
+    } catch (InterruptedException e) {
+      exitCode = ExitCode.INTERRUPTED.getNumericExitCode();
+      commandId = "";  // The default value, the client will ignore it
+    }
 
-          observer.onNext(response);
-          observer.onCompleted();
+    // There is a chance that a cancel request comes in after commandExecutor#exec() has finished
+    // and no one calls Thread.interrupted() to receive the interrupt. So we just reset the
+    // interruption state here to make these cancel requests not have any effect outside of command
+    // execution (after the try block above, the cancel request won't find the thread to interrupt)
+    Thread.interrupted();
 
-          switch (commandExecutor.shutdown()) {
-            case NONE:
-              break;
+    RunResponse response = RunResponse.newBuilder()
+        .setCookie(responseCookie)
+        .setCommandId(commandId)
+        .setFinished(true)
+        .setExitCode(exitCode)
+        .build();
 
-            case CLEAN:
-              server.shutdownNow();
-              break;
+    observer.onNext(response);
+    observer.onCompleted();
 
-            case EXPUNGE:
-              disableShutdownHooks();
-              server.shutdownNow();
-              break;
-          }
+    switch (commandExecutor.shutdown()) {
+      case NONE:
+        break;
+
+      case CLEAN:
+        server.shutdownNow();
+        break;
+
+      case EXPUNGE:
+        disableShutdownHooks();
+        server.shutdownNow();
+        break;
+    }
+  }
+
+  @Override
+  public void ping(PingRequest pingRequest, StreamObserver<PingResponse> streamObserver) {
+    Preconditions.checkState(serving);
+
+    try (RunningCommand command = new RunningCommand()) {
+      PingResponse.Builder response = PingResponse.newBuilder();
+      if (pingRequest.getCookie().equals(requestCookie)) {
+        response.setCookie(responseCookie);
+      }
+
+      streamObserver.onNext(response.build());
+      streamObserver.onCompleted();
+    }
+  }
+
+  @Override
+  public void cancel(CancelRequest request, StreamObserver<CancelResponse> streamObserver) {
+    if (!request.getCookie().equals(requestCookie)) {
+      streamObserver.onCompleted();
+      return;
+    }
+
+    try (RunningCommand cancelCommand = new RunningCommand()) {
+      synchronized (runningCommands) {
+        RunningCommand pendingCommand = runningCommands.get(request.getCommandId());
+        if (pendingCommand != null) {
+          pendingCommand.thread.interrupt();
         }
 
-        @Override
-        public void ping(PingRequest pingRequest, StreamObserver<PingResponse> streamObserver) {
-          Preconditions.checkState(serving);
+        startSlowInterruptWatcher(ImmutableSet.of(request.getCommandId()));
+      }
 
-          try (RunningCommand command = new RunningCommand()) {
-            PingResponse.Builder response = PingResponse.newBuilder();
-            if (pingRequest.getCookie().equals(requestCookie)) {
-              response.setCookie(responseCookie);
-            }
-
-            streamObserver.onNext(response.build());
-            streamObserver.onCompleted();
-          }
-        }
-
-        @Override
-        public void cancel(CancelRequest request, StreamObserver<CancelResponse> streamObserver) {
-          if (!request.getCookie().equals(requestCookie)) {
-            streamObserver.onCompleted();
-            return;
-          }
-
-          try (RunningCommand cancelCommand = new RunningCommand()) {
-            synchronized (runningCommands) {
-              RunningCommand pendingCommand = runningCommands.get(request.getCommandId());
-              if (pendingCommand != null) {
-                pendingCommand.thread.interrupt();
-              }
-
-              startSlowInterruptWatcher(ImmutableSet.of(request.getCommandId()));
-            }
-
-            streamObserver.onNext(CancelResponse.newBuilder().setCookie(responseCookie).build());
-            streamObserver.onCompleted();
-          }
-        }
-      };
+      streamObserver.onNext(CancelResponse.newBuilder().setCookie(responseCookie).build());
+      streamObserver.onCompleted();
+    }
+  }
 }
