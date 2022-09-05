@@ -26,7 +26,6 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
@@ -128,7 +127,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -190,7 +188,8 @@ public final class BlazeRuntime {
   // We pass this through here to make it available to the MasterLogWriter.
   private final OptionsProvider startupOptionsProvider;
 
-  private final Map<String, BlazeCommand> commandMap = new LinkedHashMap<>();
+  private String outputFileSystem;
+  private Map<String, BlazeCommand> commandMap;
 
   private final SubscriberExceptionHandler eventBusExceptionHandler;
 
@@ -208,8 +207,7 @@ public final class BlazeRuntime {
       OptionsProvider startupOptionsProvider, Iterable<BlazeModule> blazeModules,
       TimestampGranularityMonitor timestampGranularityMonitor,
       SubscriberExceptionHandler eventBusExceptionHandler,
-      BinTools binTools, ProjectFile.Provider projectFileProvider,
-      Iterable<BlazeCommand> commands) {
+      BinTools binTools, ProjectFile.Provider projectFileProvider) {
     this.workspaceStatusActionFactory = workspaceStatusActionFactory;
     this.directories = directories;
     this.workingDirectory = directories.getWorkspace();
@@ -234,7 +232,6 @@ public final class BlazeRuntime {
     this.startupOptionsProvider = startupOptionsProvider;
 
     this.eventBusExceptionHandler = eventBusExceptionHandler;
-    overrideCommands(commands);
 
     if (inWorkspace()) {
       writeOutputBaseReadmeFile();
@@ -258,31 +255,6 @@ public final class BlazeRuntime {
   }
 
   /**
-   * Adds the given command under the given name to the map of commands.
-   *
-   * @throws AssertionError if the name is already used by another command.
-   */
-  private void addCommand(BlazeCommand command) {
-    String name = command.getClass().getAnnotation(Command.class).name();
-    if (commandMap.containsKey(name)) {
-      throw new IllegalStateException("Command name or alias " + name + " is already used.");
-    }
-    commandMap.put(name, command);
-  }
-
-  final void overrideCommands(Iterable<BlazeCommand> commands) {
-    commandMap.clear();
-    for (BlazeCommand command : commands) {
-      addCommand(command);
-    }
-    for (BlazeModule module : blazeModules) {
-      for (BlazeCommand command : module.getCommands()) {
-        addCommand(command);
-      }
-    }
-  }
-
-  /**
    * Figures out what file system we are writing output to. Here we use
    * outputBase instead of outputPath because we need a file system to create the latter.
    */
@@ -293,6 +265,10 @@ public final class BlazeRuntime {
     try (AutoProfiler p = profiled("Finding output file system", ProfilerTask.INFO)) {
       return FileSystemUtils.getFileSystem(getOutputBase());
     }
+  }
+
+  public String getOutputFileSystem() {
+    return outputFileSystem;
   }
 
   public CommandEnvironment initCommand() {
@@ -687,7 +663,7 @@ public final class BlazeRuntime {
         ? null
         : outputService.getBatchStatter());
 
-    env.setOutputFileSystem(determineOutputFileSystem());
+    outputFileSystem = determineOutputFileSystem();
 
     // Ensure that the working directory will be under the workspace directory.
     Path workspace = getWorkspace();
@@ -865,6 +841,10 @@ public final class BlazeRuntime {
     } catch (IOException e) {
       return String.format("unknown file size (%s)", type);
     }
+  }
+
+  void setCommandMap(Map<String, BlazeCommand> commandMap) {
+    this.commandMap = ImmutableMap.copyOf(commandMap);
   }
 
   public Map<String, BlazeCommand> getCommandMap() {
@@ -1137,7 +1117,8 @@ public final class BlazeRuntime {
       return e.getExitCode().getNumericExitCode();
     }
 
-    BlazeCommandDispatcher dispatcher = new BlazeCommandDispatcher(runtime);
+    BlazeCommandDispatcher dispatcher =
+        new BlazeCommandDispatcher(runtime, getBuiltinCommandList());
 
     try {
       LOG.info(getRequestLogString(commandLineOptions.getOtherArgs()));
@@ -1185,7 +1166,8 @@ public final class BlazeRuntime {
     BlazeServerStartupOptions startupOptions = options.getOptions(BlazeServerStartupOptions.class);
 
     final BlazeRuntime runtime = newRuntime(modules, options);
-    final BlazeCommandDispatcher dispatcher = new BlazeCommandDispatcher(runtime);
+    final BlazeCommandDispatcher dispatcher =
+        new BlazeCommandDispatcher(runtime, getBuiltinCommandList());
 
     final ServerCommand blazeCommand;
 
@@ -1362,7 +1344,6 @@ public final class BlazeRuntime {
     for (BlazeModule blazeModule : blazeModules) {
       runtimeBuilder.addBlazeModule(blazeModule);
     }
-    runtimeBuilder.addCommands(getBuiltinCommandList());
 
     BlazeRuntime runtime = runtimeBuilder.build();
     AutoProfiler.setClock(runtime.getClock());
@@ -1459,12 +1440,11 @@ public final class BlazeRuntime {
     private ConfigurationFactory configurationFactory;
     private Clock clock;
     private OptionsProvider startupOptionsProvider;
-    private final List<BlazeModule> blazeModules = new ArrayList<>();
+    private final List<BlazeModule> blazeModules = Lists.newArrayList();
     private SubscriberExceptionHandler eventBusExceptionHandler =
         new RemoteExceptionHandler();
     private BinTools binTools;
     private UUID instanceId;
-    private final List<BlazeCommand> commands = new ArrayList<>();
 
     public BlazeRuntime build() throws AbruptExitException {
       Preconditions.checkNotNull(directories);
@@ -1627,7 +1607,7 @@ public final class BlazeRuntime {
       return new BlazeRuntime(directories, reporter, workspaceStatusActionFactory, skyframeExecutor,
           pkgFactory, ruleClassProvider, configurationFactory,
           clock, startupOptionsProvider, ImmutableList.copyOf(blazeModules),
-          timestampMonitor, eventBusExceptionHandler, binTools, projectFileProvider, commands);
+          timestampMonitor, eventBusExceptionHandler, binTools, projectFileProvider);
     }
 
     public Builder setBinTools(BinTools binTools) {
@@ -1684,16 +1664,6 @@ public final class BlazeRuntime {
     public Builder setEventBusExceptionHandler(
         SubscriberExceptionHandler eventBusExceptionHandler) {
       this.eventBusExceptionHandler = eventBusExceptionHandler;
-      return this;
-    }
-
-    public Builder addCommands(BlazeCommand... commands) {
-      this.commands.addAll(Arrays.asList(commands));
-      return this;
-    }
-
-    public Builder addCommands(Iterable<BlazeCommand> commands) {
-      Iterables.addAll(this.commands, commands);
       return this;
     }
   }

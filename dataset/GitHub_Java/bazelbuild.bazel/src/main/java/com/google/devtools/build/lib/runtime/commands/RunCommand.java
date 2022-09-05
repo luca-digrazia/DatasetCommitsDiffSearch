@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
@@ -46,7 +47,6 @@ import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.shell.AbnormalTerminationException;
 import com.google.devtools.build.lib.shell.BadExitStatusException;
 import com.google.devtools.build.lib.shell.CommandException;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.CommandBuilder;
 import com.google.devtools.build.lib.util.CommandDescriptionForm;
 import com.google.devtools.build.lib.util.CommandFailureUtils;
@@ -215,7 +215,7 @@ public class RunCommand implements BlazeCommand  {
     }
     Path workingDir;
     try {
-      workingDir = ensureRunfilesBuilt(env, targetToRun);
+      workingDir = ensureRunfilesBuilt(runtime, targetToRun);
     } catch (CommandException e) {
       env.getReporter().handle(Event.error("Error creating runfiles: " + e.getMessage()));
       return ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
@@ -343,17 +343,17 @@ public class RunCommand implements BlazeCommand  {
    * @return the path of the runfiles directory.
    * @throws CommandException
    */
-  private Path ensureRunfilesBuilt(CommandEnvironment env, ConfiguredTarget target)
+  private Path ensureRunfilesBuilt(BlazeRuntime runtime, ConfiguredTarget target)
       throws CommandException {
     FilesToRunProvider provider = target.getProvider(FilesToRunProvider.class);
     RunfilesSupport runfilesSupport = provider == null ? null : provider.getRunfilesSupport();
     if (runfilesSupport == null) {
-      return env.getWorkingDirectory();
+      return runtime.getWorkingDirectory();
     }
 
     Artifact manifest = runfilesSupport.getRunfilesManifest();
     PathFragment runfilesDir = runfilesSupport.getRunfilesDirectoryExecPath();
-    Path workingDir = env.getRuntime().getExecRoot()
+    Path workingDir = runtime.getExecRoot()
         .getRelative(runfilesDir)
         .getRelative(runfilesSupport.getRunfiles().getSuffix());
 
@@ -369,8 +369,8 @@ public class RunCommand implements BlazeCommand  {
         manifest.getExecPath(),
         runfilesDir,
         false);
-    helper.createSymlinksUsingCommand(env.getRuntime().getExecRoot(), target.getConfiguration(),
-        env.getRuntime().getBinTools());
+    helper.createSymlinksUsingCommand(runtime.getExecRoot(), target.getConfiguration(),
+        runtime.getBinTools());
     return workingDir;
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -93,8 +93,7 @@ public final class FetchCommand implements BlazeCommand {
     JavaOptions javaOptions = options.getOptions(JavaOptions.class);
     ImmutableList.Builder<String> labelsToLoad = new ImmutableList.Builder<String>()
         .addAll(options.getResidue());
-    if (String.valueOf(javaOptions.javaLangtoolsJar).equals(
-        Constants.TOOLS_REPOSITORY + JavaOptions.DEFAULT_LANGTOOLS)) {
+    if (String.valueOf(javaOptions.javaLangtoolsJar).equals(JavaOptions.DEFAULT_LANGTOOLS)) {
       labelsToLoad.add(javaOptions.javaBase);
     } else {
       // TODO(kchodroow): Remove this when OS X isn't as hacky about finding the JVM. Our test

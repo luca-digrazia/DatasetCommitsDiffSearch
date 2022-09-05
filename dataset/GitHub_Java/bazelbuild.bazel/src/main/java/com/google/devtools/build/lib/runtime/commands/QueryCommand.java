@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -179,7 +179,7 @@ public final class QueryCommand implements BlazeCommand {
         env.getPackageManager().newTransitiveLoader(),
         env.getSkyframeExecutor(),
         env.getPackageManager(),
-        env.getTargetPatternEvaluator(),
+        env.getPackageManager().getTargetPatternEvaluator(),
         keepGoing, orderedResults, universeScope, loadingPhaseThreads, env.getReporter(),
         settings,
         functions.build(),
