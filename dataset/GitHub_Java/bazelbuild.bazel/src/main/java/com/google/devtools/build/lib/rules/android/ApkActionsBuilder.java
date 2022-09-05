@@ -257,7 +257,6 @@ public class ApkActionsBuilder {
         .setExecutionInfo(executionInfo)
         .addArgument("--exclude_build_data")
         .addArgument("--compression")
-        .addArgument("--normalize")
         .addArgument("--output")
         .addOutputArgument(compressedApk);
     setSingleJarAsExecutable(ruleContext, compressedApkActionBuilder);
@@ -308,7 +307,6 @@ public class ApkActionsBuilder {
         .setExecutionInfo(executionInfo)
         .addArgument("--exclude_build_data")
         .addArgument("--dont_change_compression")
-        .addArgument("--normalize")
         .addArgument("--sources")
         .addInputArgument(compressedApk)
         .addArgument("--output")
