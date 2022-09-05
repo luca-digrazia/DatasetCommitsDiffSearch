@@ -11,15 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
+import com.google.devtools.build.lib.actions.ActionContextConsumer;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.exec.ActionContextConsumer;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.OS;
 
@@ -27,35 +26,25 @@ import com.google.devtools.build.lib.util.OS;
  * {@link ActionContextConsumer} that requests the action contexts necessary for sandboxed
  * execution.
  */
-final class SandboxActionContextConsumer implements ActionContextConsumer {
+public class SandboxActionContextConsumer implements ActionContextConsumer {
 
   private final ImmutableMultimap<Class<? extends ActionContext>, String> contexts;
-  private final ImmutableMap<String, String> spawnContexts;
 
   public SandboxActionContextConsumer(CommandEnvironment env) {
     ImmutableMultimap.Builder<Class<? extends ActionContext>, String> contexts =
         ImmutableMultimap.builder();
-    ImmutableMap.Builder<String, String> spawnContexts = ImmutableMap.builder();
 
     if ((OS.getCurrent() == OS.LINUX && LinuxSandboxedStrategy.isSupported(env))
-        || (OS.getCurrent() == OS.DARWIN && DarwinSandboxRunner.isSupported())
-        || (OS.isPosixCompatible() && ProcessWrapperSandboxedStrategy.isSupported(env))) {
-      // This makes the "sandboxed" strategy available via --spawn_strategy=sandboxed,
-      // but it is not necessarily the default.
+        || (OS.getCurrent() == OS.DARWIN && DarwinSandboxRunner.isSupported())) {
       contexts.put(SpawnActionContext.class, "sandboxed");
-
-      // This makes the "sandboxed" strategy the default Spawn strategy, unless it is
-      // overridden by a later BlazeModule.
-      spawnContexts.put("", "sandboxed");
     }
 
     this.contexts = contexts.build();
-    this.spawnContexts = spawnContexts.build();
   }
 
   @Override
   public ImmutableMap<String, String> getSpawnActionContexts() {
-    return spawnContexts;
+    return ImmutableMap.of();
   }
 
   @Override
