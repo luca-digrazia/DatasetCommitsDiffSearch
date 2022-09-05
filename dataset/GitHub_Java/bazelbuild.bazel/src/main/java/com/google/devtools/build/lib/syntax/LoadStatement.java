@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,15 +14,9 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.syntax.compiler.DebugInfo;
-import com.google.devtools.build.lib.syntax.compiler.LoopLabels;
-import com.google.devtools.build.lib.syntax.compiler.VariableScope;
 import com.google.devtools.build.lib.vfs.PathFragment;
-
-import net.bytebuddy.implementation.bytecode.ByteCodeAppender;
 
 import java.util.Map;
 
@@ -118,19 +112,11 @@ public final class LoadStatement extends Statement {
     } else if (pathString.getValue().startsWith("//")) {
       error =
           "First argument of load() is a path, not a label. "
-          + "It should start with a single slash if it is an absolute path";
+          + "It should start with a single slash if it is an absolute path.";
     }
 
     if (error != null) {
       throw new EvalException(getLocation(), error);
     }
-  }
-
-  @Override
-  ByteCodeAppender compile(
-      VariableScope scope, Optional<LoopLabels> loopLabels, DebugInfo debugInfo) {
-    throw new UnsupportedOperationException(
-        "load statements should never appear in method bodies and"
-            + " should never be compiled in general");
   }
 }

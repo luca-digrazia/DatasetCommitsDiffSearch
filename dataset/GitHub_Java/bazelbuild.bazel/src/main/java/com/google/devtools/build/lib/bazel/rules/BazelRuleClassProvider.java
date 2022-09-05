@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryRule;
+import com.google.devtools.build.lib.bazel.rules.android.AndroidRepositoryRules;
+import com.google.devtools.build.lib.bazel.rules.android.AndroidRepositoryRules.AndroidHttpToolsRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidBinaryRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidLibraryRule;
@@ -62,10 +64,13 @@ import com.google.devtools.build.lib.bazel.rules.workspace.GitRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.HttpArchiveRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.HttpFileRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.HttpJarRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.LocalRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenJarRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenServerRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewGitRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.NewLocalRepositoryRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.WorkspaceBaseRule;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.ideinfo.AndroidStudioInfoAspect;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -90,7 +95,6 @@ import com.google.devtools.build.lib.rules.java.JavaImportBaseRule;
 import com.google.devtools.build.lib.rules.java.JavaOptions;
 import com.google.devtools.build.lib.rules.java.JavaToolchainRule;
 import com.google.devtools.build.lib.rules.java.JvmConfigurationLoader;
-import com.google.devtools.build.lib.rules.java.ProguardLibraryRule;
 import com.google.devtools.build.lib.rules.objc.ExperimentalIosTestRule;
 import com.google.devtools.build.lib.rules.objc.IosApplicationRule;
 import com.google.devtools.build.lib.rules.objc.IosDeviceRule;
@@ -115,10 +119,7 @@ import com.google.devtools.build.lib.rules.objc.ObjcXcodeprojRule;
 import com.google.devtools.build.lib.rules.proto.BazelProtoLibraryRule;
 import com.google.devtools.build.lib.rules.python.PythonConfigurationLoader;
 import com.google.devtools.build.lib.rules.python.PythonOptions;
-import com.google.devtools.build.lib.rules.repository.BindRule;
-import com.google.devtools.build.lib.rules.repository.LocalRepositoryRule;
-import com.google.devtools.build.lib.rules.repository.NewLocalRepositoryRule;
-import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
+import com.google.devtools.build.lib.rules.workspace.BindRule;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -278,8 +279,6 @@ public class BazelRuleClassProvider {
 
     try {
       builder.addWorkspaceFile(
-          ResourceFileLoader.loadResource(BazelRuleClassProvider.class, "tools.WORKSPACE"));
-      builder.addWorkspaceFile(
           ResourceFileLoader.loadResource(BazelJavaRuleClasses.class, "jdk.WORKSPACE"));
       builder.addWorkspaceFile(
           ResourceFileLoader.loadResource(BazelAndroidSemantics.class, "android.WORKSPACE"));
@@ -292,7 +291,6 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new BazelJavaRuleClasses.BaseJavaBinaryRule());
     builder.addRuleDefinition(new BazelJavaRuleClasses.IjarBaseRule());
     builder.addRuleDefinition(new BazelJavaRuleClasses.JavaBaseRule());
-    builder.addRuleDefinition(new ProguardLibraryRule());
     builder.addRuleDefinition(new JavaImportBaseRule());
     builder.addRuleDefinition(new BazelJavaRuleClasses.JavaRule());
     builder.addRuleDefinition(new BazelJavaBinaryRule());
@@ -363,6 +361,8 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new NewLocalRepositoryRule());
     builder.addRuleDefinition(new AndroidSdkRepositoryRule());
     builder.addRuleDefinition(new AndroidNdkRepositoryRule());
+    builder.addRuleDefinition(new AndroidRepositoryRules.AndroidLocalRepositoryRule());
+    builder.addRuleDefinition(new AndroidHttpToolsRepositoryRule());
 
     builder.addAspectFactory(AndroidStudioInfoAspect.NAME, AndroidStudioInfoAspect.class);
 

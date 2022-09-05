@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,12 +71,6 @@ public class SkylarkImportLookupValue implements SkyValue {
     return key(pkgIdentifier.getRepository(), pkgIdentifier.getPackageFragment());
   }
 
-  /**
-   * Returns a SkyKey to get a SkylarkImportLookupValue. Note that SkylarkImportLookupValue
-   * computations may be inlined to avoid having them in the graph. Callers should confirm whether
-   * inlining is desired and either do the computation directly themselves (if inlined) or request
-   * this key's value from the environment (if not).
-   */
   static SkyKey key(RepositoryName repo, PathFragment fromFile, PathFragment fileToImport)
       throws ASTLookupInputException {
     PathFragment computedPath;
@@ -96,6 +90,6 @@ public class SkylarkImportLookupValue implements SkyValue {
     checkInputArgument(fileToImport);
     return new SkyKey(
         SkyFunctions.SKYLARK_IMPORTS_LOOKUP,
-        PackageIdentifier.create(repo, fileToImport));
+        new PackageIdentifier(repo, fileToImport));
   }
 }

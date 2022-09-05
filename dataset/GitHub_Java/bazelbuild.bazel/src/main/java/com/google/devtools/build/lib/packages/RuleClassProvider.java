@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,7 @@
 
 package com.google.devtools.build.lib.packages;
 
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.NativeAspectClass.NativeAspectFactory;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.Mutability;
@@ -32,9 +30,9 @@ import javax.annotation.Nullable;
 public interface RuleClassProvider {
 
   /**
-   * Label referencing the prelude file.
+   * Workspace relative path to the prelude file.
    */
-  Label getPreludeLabel();
+  PathFragment getPreludePath();
 
   /**
    * The default runfiles prefix (may be overwritten by the WORKSPACE file).
@@ -45,6 +43,11 @@ public interface RuleClassProvider {
    * Returns a map from rule names to rule class objects.
    */
   Map<String, RuleClass> getRuleClassMap();
+
+  /**
+   * Returns a map from aspect names to aspect factory objects.
+   */
+  Map<String, Class<? extends AspectFactory<?, ?, ?>>> getAspectFactoryMap();
 
   /**
    * Returns a new Skylark Environment instance for rule creation.
@@ -60,11 +63,6 @@ public interface RuleClassProvider {
       EventHandler eventHandler,
       @Nullable String astFileContentHashCode,
       @Nullable Map<PathFragment, Extension> importMap);
-
-  /**
-   * Returns a map from aspect names to aspect factory objects.
-   */
-  Map<String, Class<? extends NativeAspectFactory>> getAspectFactoryMap();
 
   /**
    * Returns the default content of the WORKSPACE file.
