@@ -82,7 +82,7 @@ public class TurbineOptionsParser {
           builder.setTempDir(readOne(argumentDeque));
           break;
         case "--processors":
-          builder.addProcessors(readList(argumentDeque));
+          builder.setProcessors(readList(argumentDeque));
           break;
         case "--processorpath":
           builder.addProcessorPathEntries(splitClasspath(readOne(argumentDeque)));
