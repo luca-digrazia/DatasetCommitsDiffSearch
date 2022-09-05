@@ -1,8 +1,10 @@
 package org.hsweb.web.service.system;
 
-import org.hsweb.web.bean.common.database.TableField;
+import org.hsweb.ezorm.meta.TableMetaData;
 
+import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 数据库管理服务,用于获取数据库中的表结构等操作
@@ -12,24 +14,16 @@ public interface DataBaseManagerService {
 
     /**
      * 获取当前数据源中所有的表名
+     * 能自动获取数据库类型，并列出对于的表名
+     * 当前版本支持数据库:h2,mysql，oracle
      *
      * @return 表名集合
      */
-    List<String> getTableNameList();
+    List<TableMetaData> getTableList() throws SQLException;
 
-    /**
-     * 获取数据库表的字段信息
-     *
-     * @param tableName 数据库表名
-     * @return 字段集合
-     */
-    List<TableField> getFieldList(String tableName);
+    List<Map<String,Object>> execSql(List<String> sqlList) throws SQLException;
 
-    /**
-     * 执行sql语句，多条sql语句使用[;\n]分割
-     *
-     * @param sql     sql语句
-     * @param process 执行过程回调，每执行一个sql都应该调用对应的回调方法
-     */
-    void executeSQL(String sql, SqlExecuteProcess process) throws Exception;
+    String createAlterSql(TableMetaData newTable)throws Exception;
+
+    String createCreateSql(TableMetaData newTable)throws Exception;
 }
