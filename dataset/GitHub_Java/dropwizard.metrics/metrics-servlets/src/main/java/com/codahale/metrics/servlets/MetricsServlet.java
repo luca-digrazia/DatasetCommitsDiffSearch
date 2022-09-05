@@ -114,10 +114,10 @@ public class MetricsServlet extends HttpServlet {
     private static final long serialVersionUID = 1049773947734939602L;
     private static final String CONTENT_TYPE = "application/json";
 
-    protected String allowedOrigin;
-    protected String jsonpParamName;
-    protected transient MetricRegistry registry;
-    protected transient ObjectMapper mapper;
+    private String allowedOrigin;
+    private String jsonpParamName;
+    private transient MetricRegistry registry;
+    private transient ObjectMapper mapper;
 
     public MetricsServlet() {
     }
@@ -139,27 +139,23 @@ public class MetricsServlet extends HttpServlet {
                 throw new ServletException("Couldn't find a MetricRegistry instance.");
             }
         }
-        this.allowedOrigin = context.getInitParameter(ALLOWED_ORIGIN);
-        this.jsonpParamName = context.getInitParameter(CALLBACK_PARAM);
 
-        setupMetricsModule(context);
-    }
-
-    protected void setupMetricsModule(ServletContext context) {
         final TimeUnit rateUnit = parseTimeUnit(context.getInitParameter(RATE_UNIT),
-                TimeUnit.SECONDS);
+                                                TimeUnit.SECONDS);
         final TimeUnit durationUnit = parseTimeUnit(context.getInitParameter(DURATION_UNIT),
-                TimeUnit.SECONDS);
+                                                    TimeUnit.SECONDS);
         final boolean showSamples = Boolean.parseBoolean(context.getInitParameter(SHOW_SAMPLES));
         MetricFilter filter = (MetricFilter) context.getAttribute(METRIC_FILTER);
         if (filter == null) {
-            filter = MetricFilter.ALL;
+          filter = MetricFilter.ALL;
         }
-
         this.mapper = new ObjectMapper().registerModule(new MetricsModule(rateUnit,
-                durationUnit,
-                showSamples,
-                filter));
+                                                                          durationUnit,
+                                                                          showSamples,
+                                                                          filter));
+
+        this.allowedOrigin = context.getInitParameter(ALLOWED_ORIGIN);
+        this.jsonpParamName = context.getInitParameter(CALLBACK_PARAM);
     }
 
     @Override
@@ -181,7 +177,7 @@ public class MetricsServlet extends HttpServlet {
         }
     }
 
-    protected ObjectWriter getWriter(HttpServletRequest request) {
+    private ObjectWriter getWriter(HttpServletRequest request) {
         final boolean prettyPrint = Boolean.parseBoolean(request.getParameter("pretty"));
         if (prettyPrint) {
             return mapper.writerWithDefaultPrettyPrinter();
@@ -189,7 +185,7 @@ public class MetricsServlet extends HttpServlet {
         return mapper.writer();
     }
 
-    protected TimeUnit parseTimeUnit(String value, TimeUnit defaultValue) {
+    private TimeUnit parseTimeUnit(String value, TimeUnit defaultValue) {
         try {
             return TimeUnit.valueOf(String.valueOf(value).toUpperCase(Locale.US));
         } catch (IllegalArgumentException e) {
