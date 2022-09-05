@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.bazel.rules.workspace;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.STRING;
 
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -38,7 +38,7 @@ public class HttpArchiveRule implements RuleDefinition {
          ${SYNOPSIS}
 
          <p>Archives of type .zip, .jar, .war, .tar.gz or .tgz are supported. There is no support
-         for authentication. Redirections are followed.</p>
+         for authentication or redirection.</p>
          <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("url", STRING).mandatory())
         /* <!-- #BLAZE_RULE(http_archive).ATTRIBUTE(sha256) -->
