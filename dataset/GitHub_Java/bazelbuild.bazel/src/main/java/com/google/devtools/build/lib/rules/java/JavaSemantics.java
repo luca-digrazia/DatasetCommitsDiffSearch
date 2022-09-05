@@ -200,7 +200,7 @@ public interface JavaSemantics {
   String IJAR_LABEL = "//tools/defaults:ijar";
 
   /**
-   * Verifies if the rule contains any errors.
+   * Verifies if the rule contains and errors.
    *
    * <p>Errors should be signaled through {@link RuleContext}.
    */
