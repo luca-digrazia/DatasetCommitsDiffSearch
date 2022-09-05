@@ -9,7 +9,7 @@ import org.hsweb.web.service.module.ModuleService;
 import org.hsweb.web.core.utils.WebUtil;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.hsweb.commons.StringUtils;
+import org.webbuilder.utils.common.StringUtils;
 
 import javax.annotation.Resource;
 import java.util.LinkedList;
@@ -30,17 +30,15 @@ public class UserModuleController {
     @RequestMapping
     public ResponseMessage userModule() throws Exception {
         String[] includes = {
-                "name", "id", "parentId", "icon", "uri", "optional"
+                "name", "u_id", "p_id", "icon", "uri", "m_option"
         };
         User user = WebUtil.getLoginUser();
         List<Module> modules;
         if (user == null) {
-            QueryParam queryParam = new QueryParam();
-            queryParam.includes(includes).orderBy("sortIndex");
-            modules = moduleService.select(queryParam);
+            modules = moduleService.select(new QueryParam().includes(includes).orderBy("sort_index"));
             modules = modules.stream()
                     .filter(module -> {
-                        Object obj = module.getOptionalMap().get("M");
+                        Object obj = module.getM_optionMap().get("M");
                         if (obj instanceof Map)
                             return StringUtils.isTrue(((Map) obj).get("checked"));
                         return false;
@@ -48,14 +46,13 @@ public class UserModuleController {
                     .collect(Collectors.toCollection(() -> new LinkedList<>()));
         } else {
             modules = user.getModules().stream()
-                    .filter(module -> user.hasAccessModuleAction(module.getId(), "M"))
-                    .sorted()
+                    .filter(module -> user.hasAccessModuleAction(module.getU_id(), "M"))
                     .collect(Collectors.toCollection(() -> new LinkedList<>()));
         }
 
         return ResponseMessage.ok(modules)
                 .include(Module.class, includes)
-                .exclude(Module.class, "optional")
+                .exclude(Module.class, "m_option")
                 .onlyData();
     }
 }
