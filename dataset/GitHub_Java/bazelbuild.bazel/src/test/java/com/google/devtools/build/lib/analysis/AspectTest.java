@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.analysis.BaseRuleClasses.ACTION_LISTENER;
 import static com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode.TARGET;
@@ -423,11 +424,10 @@ public class AspectTest extends AnalysisTestCase {
     update();
 
     ConfiguredTarget a = getConfiguredTarget("//a:a");
-    NestedSet<Artifact> extraActionArtifacts =
-        a.getProvider(ExtraActionArtifactsProvider.class).getTransitiveExtraActionArtifacts();
-    for (Artifact artifact : extraActionArtifacts) {
-      assertThat(artifact.getOwnerLabel()).isEqualTo(Label.create("@//a", "b"));
-    }
+    NestedSet<ExtraActionArtifactsProvider.ExtraArtifactSet> extraActionArtifacts =
+        a.getProvider(ExtraActionArtifactsProvider.class)
+            .getTransitiveExtraActionArtifacts();
+    assertThat(getOnlyElement(extraActionArtifacts).getLabel()).isEqualTo(Label.create("@//a", "b"));
   }
 
   @Test

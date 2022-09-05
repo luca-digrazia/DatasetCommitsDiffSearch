@@ -1055,7 +1055,6 @@ public class BuildView {
             env,
             (Rule) target.getTarget(),
             null,
-            null,
             targetConfig,
             configurations.getHostConfiguration(),
             ruleClassProvider.getPrerequisiteValidator(),
