@@ -124,7 +124,7 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
   }
 
   public PathFragment getPathUnderExecRoot() {
-    return repository.getPathUnderExecRoot().getRelative(pkgName);
+    return getSourceRoot();
   }
 
   /**

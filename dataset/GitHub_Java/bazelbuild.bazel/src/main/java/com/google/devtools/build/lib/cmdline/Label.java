@@ -421,16 +421,15 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkPrin
    * All other labels have identical shorthand and canonical forms.
    */
   public String toShorthandString() {
-    if (!getPackageFragment().getBaseName().equals(name)) {
-      return toString();
-    }
     String repository;
     if (packageIdentifier.getRepository().isMain()) {
       repository = "";
     } else {
       repository = packageIdentifier.getRepository().getName();
     }
-    return repository + "//" + getPackageFragment();
+    return repository + (getPackageFragment().getBaseName().equals(name)
+        ? "//" + getPackageFragment()
+        : toString());
   }
 
   /**

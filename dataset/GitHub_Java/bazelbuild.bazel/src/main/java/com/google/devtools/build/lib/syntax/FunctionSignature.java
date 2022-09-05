@@ -223,39 +223,31 @@ public abstract class FunctionSignature implements Serializable {
     /** The underlying signature with parameter shape and names */
     public abstract FunctionSignature getSignature();
 
-    /**
-     * The default values (if any) as an unmodifiable List of one per optional parameter. May
-     * contain nulls.
+    /** The default values (if any) as a List of one per optional parameter.
+     * We might have preferred ImmutableList, but we care about
+     * supporting null's for some BuiltinFunction's, and we don't spit on speed.
      */
     @Nullable public abstract List<V> getDefaultValues();
 
-    /**
-     * The parameter types (if specified) as an unmodifiable List of one per parameter, including *
-     * and **. May contain nulls.
+    /** The parameter types (if specified) as a List of one per parameter, including * and **.
+     * We might have preferred ImmutableList, but we care about supporting null's
+     * so we can take shortcut for untyped values.
      */
     @Nullable public abstract List<T> getTypes();
 
 
-    /** Create a signature with (default and type) values. */
+    /**
+     * Create a signature with (default and type) values.
+     * If you supply mutable List's, we trust that you won't modify them afterwards.
+     */
     public static <V, T> WithValues<V, T> create(FunctionSignature signature,
         @Nullable List<V> defaultValues, @Nullable List<T> types) {
       Shape shape = signature.getShape();
-      List<V> convertedDefaultValues = null;
-      if (defaultValues != null) {
-        Preconditions.checkArgument(defaultValues.size() == shape.getOptionals());
-        List<V> copiedDefaultValues = new ArrayList<>();
-        copiedDefaultValues.addAll(defaultValues);
-        convertedDefaultValues = Collections.unmodifiableList(copiedDefaultValues);
-      }
-      List<T> convertedTypes = null;
-      if (types != null) {
-        Preconditions.checkArgument(types.size() == shape.getArguments());
-        List<T> copiedTypes = new ArrayList<>();
-        copiedTypes.addAll(types);
-        convertedTypes = Collections.unmodifiableList(copiedTypes);
-      }
-      return new AutoValue_FunctionSignature_WithValues<>(
-          signature, convertedDefaultValues, convertedTypes);
+      Preconditions.checkArgument(defaultValues == null
+          || defaultValues.size() == shape.getOptionals());
+      Preconditions.checkArgument(types == null
+          || types.size() == shape.getArguments());
+      return new AutoValue_FunctionSignature_WithValues<>(signature, defaultValues, types);
     }
 
     public static <V, T> WithValues<V, T> create(FunctionSignature signature,
