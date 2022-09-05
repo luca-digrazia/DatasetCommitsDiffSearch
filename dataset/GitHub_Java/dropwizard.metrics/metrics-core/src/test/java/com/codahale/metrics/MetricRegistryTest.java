@@ -317,19 +317,7 @@ public class MetricRegistryTest {
     }
 
     @Test
-    public void elidesNullValuesFromNamesWhenOnlyOneNullPassedIn() throws Exception {
-        assertThat(name("one", null))
-                .isEqualTo("one");
-    }
-
-    @Test
-    public void elidesNullValuesFromNamesWhenManyNullsPassedIn() throws Exception {
-        assertThat(name("one", null, null))
-                .isEqualTo("one");
-    }
-
-    @Test
-    public void elidesNullValuesFromNamesWhenNullAndNotNullPassedIn() throws Exception {
+    public void elidesNullValuesFromNames() throws Exception {
         assertThat(name("one", null, "three"))
                 .isEqualTo("one.three");
     }
