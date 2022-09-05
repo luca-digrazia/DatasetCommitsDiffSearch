@@ -969,9 +969,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   EvaluationResult<TargetPatternValue> targetPatterns(Iterable<SkyKey> patternSkyKeys,
-      int numThreads, boolean keepGoing, EventHandler eventHandler) throws InterruptedException {
+      boolean keepGoing, EventHandler eventHandler) throws InterruptedException {
     checkActive();
-    return buildDriver.evaluate(patternSkyKeys, keepGoing, numThreads,
+    return buildDriver.evaluate(patternSkyKeys, keepGoing, DEFAULT_THREAD_COUNT,
         eventHandler);
   }
 
@@ -1193,8 +1193,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     Iterable<SkyKey> patternSkyKeys = TargetPatternValue.keys(patterns, policy, offset);
     ResolvedTargets<Target> result;
     try {
-      result = patternEvaluator.parseTargetPatternKeys(patternSkyKeys, /*numThreads=*/numThreads,
-        /*keepGoing=*/true, eventHandler);
+      result = patternEvaluator.parseTargetPatternKeys(patternSkyKeys, /*keepGoing=*/true,
+          eventHandler);
     } catch (TargetParsingException e) {
       // Can't happen, since we ran with keepGoing.
       throw new IllegalStateException(e);
