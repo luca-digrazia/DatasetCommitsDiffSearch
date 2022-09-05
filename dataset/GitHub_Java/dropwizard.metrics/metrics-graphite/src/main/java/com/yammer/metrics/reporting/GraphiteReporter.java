@@ -118,7 +118,7 @@ public class GraphiteReporter implements Runnable {
      * @throws IOException if there is an error connecting to the Graphite server
      */
     public GraphiteReporter(MetricsRegistry metricsRegistry, String host, int port, String prefix) throws IOException {
-        this.tickThread = metricsRegistry.threadPools().newScheduledThreadPool(1, "graphite-reporter");
+        this.tickThread = Utils.newScheduledThreadPool(1, "graphite-reporter" + System.identityHashCode(this));
         this.metricsRegistry = metricsRegistry;
         this.host = host;
         this.port = port;

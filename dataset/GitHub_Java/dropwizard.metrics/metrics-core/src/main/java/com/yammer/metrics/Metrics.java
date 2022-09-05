@@ -265,7 +265,8 @@ public class Metrics {
      */
     @Deprecated
     public static void enableConsoleReporting(long period, TimeUnit unit) {
-        ConsoleReporter.enable(DEFAULT_REGISTRY, period, unit);
+        final ConsoleReporter reporter = new ConsoleReporter(System.out);
+        reporter.start(period, unit);
     }
 
     /**
