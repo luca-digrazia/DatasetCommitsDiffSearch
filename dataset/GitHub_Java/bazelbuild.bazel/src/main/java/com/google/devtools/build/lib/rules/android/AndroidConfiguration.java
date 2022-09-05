@@ -215,6 +215,16 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.jackSanityChecks = options.jackSanityChecks;
   }
 
+  @Override
+  public String getName() {
+    return "Android";
+  }
+
+  @Override
+  public String cacheKey() {
+    return cpu + "-" + strictDeps.toString().toLowerCase();
+  }
+
   public String getCpu() {
     return cpu;
   }

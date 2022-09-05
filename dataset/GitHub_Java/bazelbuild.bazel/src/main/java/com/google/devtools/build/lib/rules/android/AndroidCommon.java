@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDe
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.MultidexMode;
@@ -96,9 +95,8 @@ public class AndroidCommon {
   private JavaCompilationArgs javaCompilationArgs = JavaCompilationArgs.EMPTY_ARGS;
   private JavaCompilationArgs recursiveJavaCompilationArgs = JavaCompilationArgs.EMPTY_ARGS;
   private JackCompilationHelper jackCompilationHelper;
-  private Artifact classJar;
   private Artifact srcJar;
-  private Artifact genJar;
+  private Artifact classJar;
   private Artifact gensrcJar;
 
   private Collection<Artifact> idls;
@@ -245,12 +243,8 @@ public class AndroidCommon {
       Artifact outputDepsProto =
           javacHelper.createOutputDepsProtoArtifact(binaryResourcesJar, javaArtifactsBuilder);
 
-      javacHelper.createCompileActionWithInstrumentation(
-          binaryResourcesJar,
-          null /* manifestProtoOutput */,
-          null /* gensrcJar */,
-          outputDepsProto,
-          javaArtifactsBuilder);
+      javacHelper.createCompileActionWithInstrumentation(binaryResourcesJar, null /* gensrcJar */,
+          outputDepsProto, javaArtifactsBuilder);
   }
 
   private void createJarJarActions(
@@ -314,8 +308,7 @@ public class AndroidCommon {
   public JavaTargetAttributes init(
       JavaSemantics javaSemantics, AndroidSemantics androidSemantics,
       ResourceApk resourceApk, AndroidIdlProvider transitiveIdlImportData,
-      boolean addCoverageSupport, boolean collectJavaCompilationArgs,
-      SafeImplicitOutputsFunction genClassJarImplicitOutput) {
+      boolean addCoverageSupport, boolean collectJavaCompilationArgs) {
     ImmutableList<Artifact> extraSources =
         resourceApk.isLegacy() || resourceApk.getResourceJavaSrcJar() == null
             ? ImmutableList.<Artifact>of()
@@ -344,8 +337,7 @@ public class AndroidCommon {
     }
 
     initJava(
-        helper, artifactsBuilder, collectJavaCompilationArgs, resourceApk.getResourceJavaSrcJar(),
-        genClassJarImplicitOutput);
+        helper, artifactsBuilder, collectJavaCompilationArgs, resourceApk.getResourceJavaSrcJar());
     return helper.getAttributes();
   }
 
@@ -428,8 +420,7 @@ public class AndroidCommon {
       JavaCompilationHelper helper,
       JavaCompilationArtifacts.Builder javaArtifactsBuilder,
       boolean collectJavaCompilationArgs,
-      @Nullable Artifact additionalSourceJar,
-      SafeImplicitOutputsFunction genClassJarImplicitOutput) {
+      @Nullable Artifact additionalSourceJar) {
     NestedSetBuilder<Artifact> filesBuilder = NestedSetBuilder.<Artifact>stableOrder();
     if (additionalSourceJar != null) {
       filesBuilder.add(additionalSourceJar);
@@ -462,14 +453,9 @@ public class AndroidCommon {
 
     filesBuilder.add(classJar);
 
-    // The gensrc jar is created only if the target uses annotation processing. Otherwise,
+    // The gensrcJar is only created if the target uses annotation processing.  Otherwise,
     // it is null, and the source jar action will not depend on the compile action.
     gensrcJar = helper.createGensrcJar(classJar);
-    Artifact manifestProtoOutput = helper.createManifestProtoOutput(classJar);
-
-    // AndroidBinary will pass its -gen.jar output, and AndroidLibrary will pass its own. 
-    genJar = ruleContext.getImplicitOutputArtifact(genClassJarImplicitOutput);
-    helper.createGenJarAction(classJar, manifestProtoOutput, genJar);
 
     srcJar = ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_SOURCE_JAR);
     helper.createSourceJarAction(srcJar, gensrcJar);
@@ -479,8 +465,8 @@ public class AndroidCommon {
     if (outputDepsProto != null) {
       compileTimeDependenciesBuilder.add(outputDepsProto);
     }
-    helper.createCompileActionWithInstrumentation(classJar, manifestProtoOutput, gensrcJar,
-        outputDepsProto, javaArtifactsBuilder);
+    helper.createCompileActionWithInstrumentation(classJar, gensrcJar, outputDepsProto,
+        javaArtifactsBuilder);
 
     compileTimeDependencyArtifacts = compileTimeDependenciesBuilder.build();
     filesToBuild = filesBuilder.build();
@@ -546,8 +532,7 @@ public class AndroidCommon {
                 : jackCompilationHelper.compileAsLibrary())
         .addOutputGroup(
             OutputGroupProvider.HIDDEN_TOP_LEVEL, collectHiddenTopLevelArtifacts(ruleContext))
-        .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars)
-        .addOutputGroup(JavaSemantics.GENERATED_JARS_OUTPUT_GROUP, genJar);
+        .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars);
   }
 
   public static PathFragment getAssetDir(RuleContext ruleContext) {
@@ -756,10 +741,6 @@ public class AndroidCommon {
 
   public ImmutableList<String> getJavacOpts() {
     return javaCommon.getJavacOpts();
-  }
-
-  public Artifact getGenJar() {
-    return genJar;
   }
 
   @Nullable public Artifact getGensrcJar() {

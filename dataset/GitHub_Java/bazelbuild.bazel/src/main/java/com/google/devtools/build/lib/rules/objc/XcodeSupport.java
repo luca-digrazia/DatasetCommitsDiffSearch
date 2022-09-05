@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.BinaryFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition.ConfigurationDistinguisher;
@@ -76,16 +75,8 @@ public final class XcodeSupport {
    * @return this xcode support
    */
   XcodeSupport addDummySource(XcodeProvider.Builder xcodeProviderBuilder) {
-    IntermediateArtifacts intermediateArtifacts =
-        ObjcRuleClasses.intermediateArtifacts(ruleContext);
-
-    ruleContext.registerAction(new SymlinkAction(
-        ruleContext.getActionOwner(),
-        ruleContext.getPrerequisiteArtifact("$dummy_source", Mode.TARGET),
-        intermediateArtifacts.dummySource(),
-        "Symlinking dummy artifact"));
-
-    xcodeProviderBuilder.addAdditionalSources(intermediateArtifacts.dummySource());
+    xcodeProviderBuilder.addAdditionalSources(
+        ruleContext.getPrerequisiteArtifact("$dummy_source", Mode.TARGET));
     return this;
   }
 
@@ -216,7 +207,6 @@ public final class XcodeSupport {
         .addInputArgument(controlFile)
         .addOutput(ruleContext.getImplicitOutputArtifact(XcodeSupport.PBXPROJ))
         .addTransitiveInputs(project.getInputsToXcodegen())
-        .addTransitiveInputs(project.getAdditionalSources())
         .build(ruleContext));
   }
 

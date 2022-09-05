@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -29,7 +30,6 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction.Builder;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
 import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceType;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
@@ -45,7 +45,7 @@ public final class AndroidAaptActionHelper {
   private final RuleContext ruleContext;
   private final Artifact manifest;
   private final Collection<Artifact> inputs = new LinkedHashSet<>();
-  private final Iterable<ResourceContainer> resourceContainers;
+  private final List<ResourceContainer> resourceContainers;
 
   /**
    * Constructs an instance of AndroidAaptActionHelper.
@@ -57,7 +57,7 @@ public final class AndroidAaptActionHelper {
    * @param resourceContainers The transitive closure of the ResourceContainers.
    */
   public AndroidAaptActionHelper(RuleContext ruleContext, Artifact manifest,
-      Iterable<ResourceContainer> resourceContainers) {
+      List<ResourceContainer> resourceContainers) {
     this.ruleContext = ruleContext;
     this.manifest = manifest;
     this.resourceContainers = resourceContainers;
@@ -277,7 +277,7 @@ public final class AndroidAaptActionHelper {
             ruleContext.getExecutablePrerequisite("$android_aapt_apk_generator", Mode.HOST))
         .setCommandLine(CommandLine.of(aaptCommand, false))
         .useParameterFile(ParameterFileType.UNQUOTED)
-        .setProgressMessage("Generating Proguard configuration for resources")
+        .setProgressMessage("Generating Proguard Configuration")
         .setMnemonic("AndroidAapt")
         .build(ruleContext));
   }

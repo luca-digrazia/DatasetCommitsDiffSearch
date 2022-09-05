@@ -29,7 +29,6 @@ public final class AndroidSdkProvider implements TransitiveInfoProvider {
   private final Artifact frameworkAidl;
   private final Artifact androidJar;
   private final Artifact shrinkedAndroidJar;
-  private final Artifact androidJack;
   private final Artifact annotationsJar;
   private final Artifact mainDexClasses;
   private final FilesToRunProvider adb;
@@ -40,32 +39,17 @@ public final class AndroidSdkProvider implements TransitiveInfoProvider {
   private final FilesToRunProvider apkBuilder;
   private final FilesToRunProvider proguard;
   private final FilesToRunProvider zipalign;
-  private final FilesToRunProvider jack;
-  private final FilesToRunProvider jill;
-  private final FilesToRunProvider resourceExtractor;
 
   public AndroidSdkProvider(
-      Artifact frameworkAidl,
-      Artifact androidJar,
-      Artifact shrinkedAndroidJar,
-      Artifact androidJack,
-      Artifact annotationsJar,
-      Artifact mainDexClasses,
-      FilesToRunProvider adb,
-      FilesToRunProvider dx,
+      Artifact frameworkAidl, Artifact androidJar, Artifact shrinkedAndroidJar,
+      Artifact annotationsJar, Artifact mainDexClasses,
+      FilesToRunProvider adb, FilesToRunProvider dx,
       FilesToRunProvider mainDexListCreator,
-      FilesToRunProvider aidl,
-      FilesToRunProvider aapt,
-      FilesToRunProvider apkBuilder,
-      FilesToRunProvider proguard,
-      FilesToRunProvider zipalign,
-      FilesToRunProvider jack,
-      FilesToRunProvider jill,
-      FilesToRunProvider resourceExtractor) {
+      FilesToRunProvider aidl, FilesToRunProvider aapt, FilesToRunProvider apkBuilder,
+      FilesToRunProvider proguard, FilesToRunProvider zipalign) {
     this.frameworkAidl = frameworkAidl;
     this.androidJar = androidJar;
     this.shrinkedAndroidJar = shrinkedAndroidJar;
-    this.androidJack = androidJack;
     this.annotationsJar = annotationsJar;
     this.mainDexClasses = mainDexClasses;
     this.adb = adb;
@@ -76,9 +60,6 @@ public final class AndroidSdkProvider implements TransitiveInfoProvider {
     this.apkBuilder = apkBuilder;
     this.proguard = proguard;
     this.zipalign = zipalign;
-    this.jack = jack;
-    this.jill = jill;
-    this.resourceExtractor = resourceExtractor;
   }
 
   /**
@@ -119,10 +100,6 @@ public final class AndroidSdkProvider implements TransitiveInfoProvider {
     return shrinkedAndroidJar;
   }
 
-  public Artifact getAndroidJack() {
-    return androidJack;
-  }
-
   public Artifact getAnnotationsJar() {
     return annotationsJar;
   }
@@ -161,17 +138,5 @@ public final class AndroidSdkProvider implements TransitiveInfoProvider {
 
   public FilesToRunProvider getZipalign() {
     return zipalign;
-  }
-
-  public FilesToRunProvider getJack() {
-    return jack;
-  }
-
-  public FilesToRunProvider getJill() {
-    return jill;
-  }
-
-  public FilesToRunProvider getResourceExtractor() {
-    return resourceExtractor;
   }
 }
