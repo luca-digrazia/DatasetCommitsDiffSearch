@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.rules.java;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.devtools.build.lib.collect.nestedset.Order.NAIVE_LINK_ORDER;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -26,6 +27,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction.Builder;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -111,7 +113,9 @@ public abstract class ProguardHelper {
     Artifact singleJar =
         ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_MERGED_JAR);
     return createProguardAction(ruleContext, proguard, singleJar, proguardSpecs, (Artifact) null,
-        bootclasspath, deployJar, /* mappingRequested */ false, /* optimizationPases */ null);
+        NestedSetBuilder.<Artifact>emptySet(NAIVE_LINK_ORDER), deployJar,
+        /* mappingRequested */ false,
+        /* optimizationPases */ null);
   }
 
   private ImmutableList<Artifact> collectProguardSpecs(
@@ -196,20 +200,24 @@ public abstract class ProguardHelper {
   }
 
   /**
-   * Creates a proguard spec that tells proguard to keep the binary's entry point, ie., the
-   * {@code main()} method to be invoked.
+   * Creates a proguard spec that tells proguard to use the JDK's rt.jar as a library jar, similar
+   * to how android_binary would give Android SDK's android.jar to Proguard as library jar, and
+   * to keep the binary's entry point, ie., the main() method to be invoked.
    */
   protected static Artifact generateSpecForJavaBinary(
-      RuleContext ruleContext, String mainClassName) {
+      RuleContext ruleContext, ImmutableList<Artifact> bootclasspath, String mainClassName) {
     Artifact result = ProguardHelper.getProguardConfigArtifact(ruleContext, "jvm");
     ruleContext.registerAction(
         new FileWriteAction(
             ruleContext.getActionOwner(),
             result,
             String.format(
-                "-keep class %s {%n"
+                "-libraryjars %s%n"
+                    + "-keep class %s {%n"
                     + "  public static void main(java.lang.String[]);%n"
                     + "}",
+                Artifact.joinExecPaths(
+                    ruleContext.getConfiguration().getHostPathSeparator(), bootclasspath),
                 mainClassName),
             /*executable*/ false));
     return result;
@@ -238,7 +246,7 @@ public abstract class ProguardHelper {
       Artifact programJar,
       ImmutableList<Artifact> proguardSpecs,
       @Nullable Artifact proguardMapping,
-      Iterable<Artifact> libraryJars,
+      NestedSet<Artifact> libraryJars,
       Artifact proguardOutputJar,
       boolean mappingRequested,
       @Nullable Integer optimizationPasses) throws InterruptedException {
@@ -348,7 +356,7 @@ public abstract class ProguardHelper {
       Artifact programJar,
       ImmutableList<Artifact> proguardSpecs,
       @Nullable Artifact proguardMapping,
-      Iterable<Artifact> libraryJars,
+      NestedSet<Artifact> libraryJars,
       Artifact proguardOutputJar,
       @Nullable Artifact proguardOutputMap) {
     Builder builder = new SpawnAction.Builder()
