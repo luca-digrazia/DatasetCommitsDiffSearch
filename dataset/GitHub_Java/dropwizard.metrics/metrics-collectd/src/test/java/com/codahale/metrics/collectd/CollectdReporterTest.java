@@ -1,6 +1,7 @@
 package com.codahale.metrics.collectd;
 
 import com.codahale.metrics.Counter;
+import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricAttribute;
@@ -12,10 +13,8 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
@@ -71,7 +70,7 @@ public class CollectdReporterTest {
 
     private <T extends Number> void reportsGauges(T value) throws Exception {
         reporter.report(
-                map("gauge", () -> value),
+                map("gauge", (Gauge) () -> value),
                 map(),
                 map(),
                 map(),
@@ -83,7 +82,7 @@ public class CollectdReporterTest {
     @Test
     public void reportsBooleanGauges() throws Exception {
         reporter.report(
-                map("gauge", () -> true),
+                map("gauge", (Gauge) () -> true),
                 map(),
                 map(),
                 map(),
@@ -92,7 +91,7 @@ public class CollectdReporterTest {
         assertThat(nextValues(receiver)).containsExactly(1d);
 
         reporter.report(
-                map("gauge", () -> false),
+                map("gauge", (Gauge) () -> false),
                 map(),
                 map(),
                 map(),
@@ -104,7 +103,7 @@ public class CollectdReporterTest {
     @Test
     public void doesNotReportStringGauges() throws Exception {
         reporter.report(
-                map("unsupported", () -> "value"),
+                map("unsupported", (Gauge) () -> "value"),
                 map(),
                 map(),
                 map(),
@@ -267,34 +266,18 @@ public class CollectdReporterTest {
         assertThat(values.getPlugin()).isEqualTo("dash_illegal.slash_illegal");
     }
 
-    @Test
-    public void sanitizesMetricNameWithCustomMaxLength() throws Exception {
-        CollectdReporter customReporter = CollectdReporter.forRegistry(registry)
-                .withHostName("eddie")
-                .withMaxLength(20)
-                .build(new Sender("localhost", 25826));
-
-        Counter counter = registry.counter("dash-illegal.slash/illegal");
-        counter.inc();
-
-        customReporter.report();
-
-        ValueList values = receiver.next();
-        assertThat(values.getPlugin()).isEqualTo("dash_illegal.slash_i");
-    }
-
     private <T> SortedMap<String, T> map() {
-        return Collections.emptySortedMap();
+        return new TreeMap<>();
     }
 
     private <T> SortedMap<String, T> map(String name, T metric) {
-        final Map<String, T> map = Collections.singletonMap(name, metric);
-        return new TreeMap<>(map);
+        final SortedMap<String, T> map = map();
+        map.put(name, metric);
+        return map;
     }
 
     private List<Number> nextValues(Receiver receiver) throws Exception {
-        final ValueList valueList = receiver.next();
-        return valueList == null ? Collections.emptyList() : valueList.getValues();
+        return receiver.next().getValues();
     }
 }
 
