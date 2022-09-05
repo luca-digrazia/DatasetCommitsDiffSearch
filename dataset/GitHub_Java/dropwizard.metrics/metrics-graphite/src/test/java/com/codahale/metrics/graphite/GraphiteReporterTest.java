@@ -1,16 +1,11 @@
 package com.codahale.metrics.graphite;
 
 import com.codahale.metrics.*;
-import com.codahale.metrics.Timer;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.InOrder;
 
 import java.net.UnknownHostException;
-import java.util.Locale;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
@@ -28,7 +23,6 @@ public class GraphiteReporterTest {
                                                               .convertRatesTo(TimeUnit.SECONDS)
                                                               .convertDurationsTo(TimeUnit.MILLISECONDS)
                                                               .filter(MetricFilter.ALL)
-                                                              .disabledMetricAttributes(Collections.<MetricAttribute>emptySet())
                                                               .build(graphite);
 
     @Before
@@ -149,31 +143,6 @@ public class GraphiteReporterTest {
         final InOrder inOrder = inOrder(graphite);
         inOrder.verify(graphite).connect();
         inOrder.verify(graphite).send("prefix.gauge", "1.10", timestamp);
-        inOrder.verify(graphite).flush();
-        inOrder.verify(graphite).close();
-
-        verifyNoMoreInteractions(graphite);
-    }
-
-    @Test
-    public void reportsDoubleGaugeValuesWithCustomFormat() throws Exception {
-        final GraphiteReporter graphiteReporter = new GraphiteReporter(registry, graphite, clock, "prefix",
-                TimeUnit.SECONDS, TimeUnit.MICROSECONDS, MetricFilter.ALL, null, false,
-                Collections.<MetricAttribute>emptySet()){
-            @Override
-            protected String format(double v) {
-                return String.format(Locale.US, "%4.4f", v);
-            }
-        };
-        graphiteReporter.report(map("gauge", gauge(1.13574)),
-                this.<Counter>map(),
-                this.<Histogram>map(),
-                this.<Meter>map(),
-                this.<Timer>map());
-
-        final InOrder inOrder = inOrder(graphite);
-        inOrder.verify(graphite).connect();
-        inOrder.verify(graphite).send("prefix.gauge", "1.1357", timestamp);
         inOrder.verify(graphite).flush();
         inOrder.verify(graphite).close();
 
@@ -323,8 +292,6 @@ public class GraphiteReporterTest {
         inOrder.verify(graphite).close();
 
         verifyNoMoreInteractions(graphite);
-
-        reporter.close();
     }
 
     @Test
@@ -352,42 +319,6 @@ public class GraphiteReporterTest {
 
         verifyNoMoreInteractions(graphite);
     }
-
-    @Test
-    public void disabledMetricsAttribute() throws Exception {
-        final Meter meter = mock(Meter.class);
-        when(meter.getCount()).thenReturn(1L);
-        when(meter.getOneMinuteRate()).thenReturn(2.0);
-        when(meter.getFiveMinuteRate()).thenReturn(3.0);
-        when(meter.getFifteenMinuteRate()).thenReturn(4.0);
-        when(meter.getMeanRate()).thenReturn(5.0);
-
-        Set<MetricAttribute> disabledMetricAttributes = EnumSet.of(MetricAttribute.M15_RATE, MetricAttribute.M5_RATE);
-        GraphiteReporter reporterWithdisabledMetricAttributes = GraphiteReporter.forRegistry(registry)
-                .withClock(clock)
-                .prefixedWith("prefix")
-                .convertRatesTo(TimeUnit.SECONDS)
-                .convertDurationsTo(TimeUnit.MILLISECONDS)
-                .filter(MetricFilter.ALL)
-                .disabledMetricAttributes(disabledMetricAttributes)
-                .build(graphite);
-        reporterWithdisabledMetricAttributes.report(this.<Gauge>map(),
-                this.<Counter>map(),
-                this.<Histogram>map(),
-                this.<Meter>map("meter", meter),
-                this.<Timer>map());
-
-        final InOrder inOrder = inOrder(graphite);
-        inOrder.verify(graphite).connect();
-        inOrder.verify(graphite).send("prefix.meter.count", "1", timestamp);
-        inOrder.verify(graphite).send("prefix.meter.m1_rate", "2.00", timestamp);
-        inOrder.verify(graphite).send("prefix.meter.mean_rate", "5.00", timestamp);
-        inOrder.verify(graphite).flush();
-        inOrder.verify(graphite).close();
-
-        verifyNoMoreInteractions(graphite);
-    }
-
 
     private <T> SortedMap<String, T> map() {
         return new TreeMap<String, T>();

@@ -10,14 +10,15 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.charset.Charset;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
+import java.util.regex.Pattern;
 
 /**
  * A client to a Carbon server via TCP.
  */
 public class Graphite implements GraphiteSender {
+    private static final Pattern WHITESPACE = Pattern.compile("[\\s]+");
     // this may be optimistic about Carbon/Graphite
+    private static final Charset UTF_8 = Charset.forName("UTF-8");
 
     private final String hostname;
     private final int port;
@@ -116,12 +117,7 @@ public class Graphite implements GraphiteSender {
             address = new InetSocketAddress(hostname, port);
         }
         if (address.getAddress() == null) {
-            // retry lookup, just in case the DNS changed
-            address = new InetSocketAddress(address.getHostName(),address.getPort());
-
-            if (address.getAddress() == null) {
-                throw new UnknownHostException(address.getHostName());
-            }
+            throw new UnknownHostException(address.getHostName());
         }
 
         this.socket = socketFactory.createSocket(address.getAddress(), address.getPort());
@@ -185,6 +181,6 @@ public class Graphite implements GraphiteSender {
     }
 
     protected String sanitize(String s) {
-        return GraphiteSanitize.sanitize(s);
+        return WHITESPACE.matcher(s).replaceAll("-");
     }
 }
