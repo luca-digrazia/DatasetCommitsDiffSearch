@@ -4,7 +4,13 @@ import java.util.Set;
 
 import org.elasticsearch.common.collect.Sets;
 import org.elasticsearch.common.xcontent.ToXContent;
-import org.elasticsearch.index.query.*;
+import org.elasticsearch.index.query.FilterBuilder;
+import org.elasticsearch.index.query.FilterBuilders;
+import org.elasticsearch.index.query.MatchQueryBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.index.query.QueryStringQueryBuilder;
+import org.elasticsearch.index.query.WildcardQueryBuilder;
 import org.nlpcn.es4sql.domain.Condition;
 import org.nlpcn.es4sql.domain.Condition.OPEAR;
 import org.nlpcn.es4sql.domain.Paramer;
@@ -117,6 +123,7 @@ public abstract class Maker {
 		case IS:
 		case N:
 		case EQ:
+
 			if (value instanceof SQLIdentifierExpr) {
 				x = FilterBuilders.missingFilter(name);
 				if (isQuery) {
@@ -124,11 +131,10 @@ public abstract class Maker {
 				}
 				break;
 			} else {
-				// TODO, maybe use term filter when not analayzed field avalaible to make exact matching?
-				// using matchPhrase to achieve equallity.
-				// matchPhrase still have some disatvantegs, f.e search for 'word' will match 'some word'
-				MatchQueryBuilder matchPhraseQuery = QueryBuilders.matchPhraseQuery(name, value);
-				x = isQuery? matchPhraseQuery : FilterBuilders.queryFilter(matchPhraseQuery);
+				if (isQuery)
+					x = QueryBuilders.termQuery(name, value);
+				else
+					x = FilterBuilders.termFilter(name, value);
 				break;
 			}
 		case LIKE:
@@ -164,27 +170,10 @@ public abstract class Maker {
 			break;
 		case NIN:
 		case IN:
-			Object[] values = (Object[]) value;
-			MatchQueryBuilder[] matchQueries = new MatchQueryBuilder[values.length];
-			for(int i = 0; i < values.length; i++) {
-				matchQueries[i] = QueryBuilders.matchPhraseQuery(name, values[i]);
-			}
-
-			if(isQuery) {
-				BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
-				for(MatchQueryBuilder matchQuery : matchQueries) {
-					boolQuery.should(matchQuery);
-				}
-				x = boolQuery;
-			}
-			else {
-				OrFilterBuilder orFilter = FilterBuilders.orFilter();
-				for(MatchQueryBuilder matchQuery : matchQueries) {
-					orFilter.add(FilterBuilders.queryFilter(matchQuery));
-				}
-				x = orFilter;
-			}
-			break;
+			if (isQuery)
+				x = QueryBuilders.inQuery(name, (Object[]) value);
+			else
+				x = FilterBuilders.inFilter(name, (Object[]) value);
 		case BETWEEN:
 		case NBETWEEN:
 			if (isQuery)
