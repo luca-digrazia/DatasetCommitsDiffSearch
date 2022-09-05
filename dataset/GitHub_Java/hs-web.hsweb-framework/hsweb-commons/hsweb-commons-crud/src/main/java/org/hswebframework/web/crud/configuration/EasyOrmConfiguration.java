@@ -18,7 +18,6 @@ import org.hswebframework.web.api.crud.entity.EntityFactory;
 import org.hswebframework.web.crud.annotation.EnableEasyormRepository;
 import org.hswebframework.web.crud.entity.factory.MapperEntityFactory;
 import org.hswebframework.web.crud.events.CompositeEventListener;
-import org.hswebframework.web.crud.events.EntityEventListener;
 import org.hswebframework.web.crud.events.ValidateEventListener;
 import org.hswebframework.web.crud.generator.CurrentTimeGenerator;
 import org.hswebframework.web.crud.generator.DefaultIdGenerator;
@@ -44,9 +43,6 @@ public class EasyOrmConfiguration {
     @Autowired
     private EasyormProperties properties;
 
-    static {
-
-    }
     @Bean
     @ConditionalOnMissingBean
     public EntityFactory entityFactory() {
@@ -66,7 +62,7 @@ public class EasyOrmConfiguration {
             @Override
             public EntityColumnMapping getMapping(Class entity) {
 
-                return resolver.resolve(entityFactory.getInstanceType(entity, true))
+                return resolver.resolve(entityFactory.getInstanceType(entity))
                         .getFeature(MappingFeatureType.columnPropertyMapping.createFeatureId(entity))
                         .map(EntityColumnMapping.class::cast)
                         .orElse(null);
@@ -122,22 +118,17 @@ public class EasyOrmConfiguration {
         return new BeanPostProcessor() {
             @Override
             public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
-
-                if (bean instanceof EventListener) {
-                    eventListener.addListener(((EventListener) bean));
-                } else if (bean instanceof Feature) {
+                if (bean instanceof Feature) {
                     metadata.addFeature(((Feature) bean));
                 }
-
+                if (bean instanceof EventListener) {
+                    eventListener.addListener(((EventListener) bean));
+                }
                 return bean;
             }
         };
     }
 
-    @Bean
-    public EntityEventListener entityEventListener(){
-        return new EntityEventListener();
-    }
 
     @Bean
     public ValidateEventListener validateEventListener() {
