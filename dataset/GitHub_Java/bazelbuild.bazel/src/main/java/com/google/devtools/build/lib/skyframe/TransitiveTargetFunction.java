@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy;
-import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
@@ -231,8 +230,7 @@ public class TransitiveTargetFunction
         return ImmutableList.of();
       }
       Target dependedTarget = pkgValue.getPackage().getTarget(toLabel.getName());
-      return AspectDefinition.visitAspectsIfRequired(fromRule, attr, dependedTarget,
-          DependencyFilter.ALL_DEPS).values();
+      return AspectDefinition.visitAspectsIfRequired(fromRule, attr, dependedTarget).values();
     } catch (NoSuchThingException e) {
       // Do nothing. This error was handled when we computed the corresponding
       // TransitiveTargetValue.
