@@ -104,8 +104,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
         "filegroup(name='extdir', srcs=glob(['jdk/jre/lib/ext/*']))",
         // "dummy" is needed so that RedirectChaser stops here
         "filegroup(name='java', srcs = ['jdk/jre/bin/java', 'dummy'])",
-        "filegroup(name='JacocoCoverage', srcs = [])",
-        "filegroup(name='jacoco-blaze-agent', srcs = [])",
         "exports_files(['JavaBuilder_deploy.jar','SingleJar_deploy.jar','TestRunner_deploy.jar',",
         "               'JavaBuilderCanary_deploy.jar', 'ijar', 'GenClass_deploy.jar',",
         "               'turbine_deploy.jar'])");
@@ -134,8 +132,8 @@ public final class BazelAnalysisMock extends AnalysisMock {
         "            jars = [ 'jarjar.jar' ])");
 
     config.create("/bazel_tools_workspace/tools/test/BUILD",
-        "filegroup(name = 'runtime', srcs = ['test-setup.sh'],)",
-        "filegroup(name='coverage_support', srcs=['collect_coverage.sh',':LcovMerger_deploy.jar'])",
+        "filegroup(name = 'runtime')",
+        "filegroup(name = 'coverage_support')",
         "filegroup(name = 'coverage_report_generator', srcs = ['coverage_report_generator.sh'])");
 
     config.create(
