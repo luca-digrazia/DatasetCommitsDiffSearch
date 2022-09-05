@@ -8,7 +8,6 @@ import java.util.concurrent.atomic.AtomicLong;
  * exponentially-weighted moving average throughputs.
  *
  * @see <a href="http://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average">EMA</a>
- * @see EWMA
  */
 public class Meter implements Metered {
     private static final long TICK_INTERVAL = TimeUnit.SECONDS.toNanos(5);
@@ -96,8 +95,8 @@ public class Meter implements Metered {
         if (getCount() == 0) {
             return 0.0;
         } else {
-            final double elapsed = (clock.getTick() - startTime);
-            return getCount() / elapsed * TimeUnit.SECONDS.toNanos(1);
+            final long elapsed = (clock.getTick() - startTime);
+            return convertNsRate(getCount() / (double) elapsed);
         }
     }
 
@@ -105,5 +104,9 @@ public class Meter implements Metered {
     public double getOneMinuteRate() {
         tickIfNecessary();
         return m1Rate.getRate(TimeUnit.SECONDS);
+    }
+
+    private double convertNsRate(double ratePerNs) {
+        return ratePerNs * (double) TimeUnit.SECONDS.toNanos(1);
     }
 }

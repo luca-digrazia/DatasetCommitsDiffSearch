@@ -9,35 +9,24 @@ import java.util.concurrent.TimeUnit;
  */
 public class Timer implements Metered, Sampling, Summarizable {
     private final Meter meter;
-    private final Histogram histogram;
+    private final Histogram histogram = new Histogram(SampleType.BIASED);
     private final Clock clock;
 
     /**
      * Creates a new {@link Timer}.
      */
     public Timer() {
-        this(new ExponentiallyDecayingSample());
+        this(Clock.defaultClock());
     }
 
     /**
-     * Creates a new {@link Timer} that uses the given {@link Sample}.
+     * Creates a new {@link Timer}.
      *
-     * @param sample the {@link Sample} implementation the timer should use
+     * @param clock        the clock used to calculate duration
      */
-    public Timer(Sample sample) {
-        this(sample, Clock.defaultClock());
-    }
-
-    /**
-     * Creates a new {@link Timer} that uses the given {@link Sample} and {@link Clock}.
-     *
-     * @param sample the {@link Sample} implementation the timer should use
-     * @param clock  the {@link Clock} implementation the timer should use
-     */
-    public Timer(Sample sample, Clock clock) {
+    public Timer(Clock clock) {
         this.meter = new Meter(clock);
         this.clock = clock;
-        this.histogram = new Histogram(sample);
     }
 
     /**
