@@ -1,25 +1,18 @@
 package com.codahale.metrics.servlets;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.json.MetricsModule;
+
+import javax.servlet.*;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
-
-import javax.servlet.ServletConfig;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletContextEvent;
-import javax.servlet.ServletContextListener;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
-import com.codahale.metrics.MetricFilter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.json.MetricsModule;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.databind.util.JSONPObject;
 
 /**
  * A servlet which returns the metrics in a given registry as an {@code application/json} response.
@@ -62,22 +55,6 @@ public class MetricsServlet extends HttpServlet {
             return null;
         }
 
-        /**
-         * Returns the name of the parameter used to specify the jsonp callback, if any.
-         */
-        protected String getJsonpCallbackParameter() {
-            return null;
-        }
-
-        /**
-         * Returns the {@link MetricFilter} that shall be used to filter metrics, or {@link MetricFilter#ALL} if
-         * the default should be used.
-         */
-        protected MetricFilter getMetricFilter() {
-            // use the default
-            return MetricFilter.ALL;
-        }
-
         @Override
         public void contextInitialized(ServletContextEvent event) {
             final ServletContext context = event.getServletContext();
@@ -85,8 +62,6 @@ public class MetricsServlet extends HttpServlet {
             context.setAttribute(RATE_UNIT, getRateUnit());
             context.setAttribute(DURATION_UNIT, getDurationUnit());
             context.setAttribute(ALLOWED_ORIGIN, getAllowedOrigin());
-            context.setAttribute(METRIC_FILTER, getMetricFilter());
-            context.setAttribute(CALLBACK_PARAM, getJsonpCallbackParameter());
         }
 
         @Override
@@ -100,15 +75,11 @@ public class MetricsServlet extends HttpServlet {
     public static final String SHOW_SAMPLES = MetricsServlet.class.getCanonicalName() + ".showSamples";
     public static final String METRICS_REGISTRY = MetricsServlet.class.getCanonicalName() + ".registry";
     public static final String ALLOWED_ORIGIN = MetricsServlet.class.getCanonicalName() + ".allowedOrigin";
-    public static final String METRIC_FILTER = MetricsServlet.class.getCanonicalName() + ".metricFilter";
-	public static final String CALLBACK_PARAM = MetricsServlet.class
-			.getCanonicalName() + ".jsonpCallback";
 
     private static final long serialVersionUID = 1049773947734939602L;
     private static final String CONTENT_TYPE = "application/json";
 
     private String allowedOrigin;
-	private String jsonpParamName;
     private transient MetricRegistry registry;
     private transient ObjectMapper mapper;
 
@@ -138,17 +109,11 @@ public class MetricsServlet extends HttpServlet {
         final TimeUnit durationUnit = parseTimeUnit(context.getInitParameter(DURATION_UNIT),
                                                     TimeUnit.SECONDS);
         final boolean showSamples = Boolean.parseBoolean(context.getInitParameter(SHOW_SAMPLES));
-        MetricFilter filter = (MetricFilter) context.getAttribute(METRIC_FILTER);
-        if (filter == null) {
-          filter = MetricFilter.ALL;
-        }
         this.mapper = new ObjectMapper().registerModule(new MetricsModule(rateUnit,
                                                                           durationUnit,
-                                                                          showSamples,
-                                                                          filter));
+                                                                          showSamples));
 
         this.allowedOrigin = config.getInitParameter(ALLOWED_ORIGIN);
-		this.jsonpParamName = config.getInitParameter(CALLBACK_PARAM);
     }
 
     @Override
@@ -160,18 +125,14 @@ public class MetricsServlet extends HttpServlet {
         }
         resp.setHeader("Cache-Control", "must-revalidate,no-cache,no-store");
         resp.setStatus(HttpServletResponse.SC_OK);
-        
+
         final OutputStream output = resp.getOutputStream();
         try {
-        	if(jsonpParamName != null && req.getParameter(jsonpParamName) != null){
-                getWriter(req).writeValue(output, new JSONPObject(req.getParameter(jsonpParamName),registry));
-            }else{
-            	getWriter(req).writeValue(output, registry);
-            }
+            getWriter(req).writeValue(output, registry);
         } finally {
             output.close();
         }
-   }
+    }
 
     private ObjectWriter getWriter(HttpServletRequest request) {
         final boolean prettyPrint = Boolean.parseBoolean(request.getParameter("pretty"));
