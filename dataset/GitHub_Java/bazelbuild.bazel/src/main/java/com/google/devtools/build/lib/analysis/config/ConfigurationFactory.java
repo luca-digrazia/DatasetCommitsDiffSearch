@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.analysis.config;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
@@ -46,6 +47,7 @@ import javax.annotation.Nullable;
 public final class ConfigurationFactory {
   private final List<ConfigurationFragmentFactory> configurationFragmentFactories;
   private final ConfigurationCollectionFactory configurationCollectionFactory;
+  private boolean performSanityCheck = true;
 
   public ConfigurationFactory(
       ConfigurationCollectionFactory configurationCollectionFactory,
@@ -61,8 +63,12 @@ public final class ConfigurationFactory {
     this.configurationFragmentFactories = ImmutableList.copyOf(fragmentFactories);
   }
 
-  /**
-   * Creates a set of build configurations with top-level configuration having the given options.
+  @VisibleForTesting
+  public void setSanityCheck(boolean performSanityCheck) {
+    this.performSanityCheck = performSanityCheck;
+  }
+
+  /** Creates a set of build configurations with top-level configuration having the given options.
    *
    * <p>The rest of the configurations are created based on the set of transitions available.
    */
@@ -73,7 +79,7 @@ public final class ConfigurationFactory {
       EventHandler errorEventListener)
           throws InvalidConfigurationException {
     return configurationCollectionFactory.createConfigurations(this, cache,
-        loadedPackageProvider, buildOptions, errorEventListener);
+        loadedPackageProvider, buildOptions, errorEventListener, performSanityCheck);
   }
 
   /**
