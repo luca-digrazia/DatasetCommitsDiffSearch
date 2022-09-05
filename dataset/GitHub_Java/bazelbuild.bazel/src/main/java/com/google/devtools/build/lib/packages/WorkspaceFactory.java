@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.Environment.Frame;
-import com.google.devtools.build.lib.syntax.Environment.Phase;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
@@ -74,7 +73,7 @@ public class WorkspaceFactory {
           PackageFactory.PKG_CONTEXT);
 
   private final LegacyBuilder builder;
-
+  
   private final Path installDir;
   private final Path workspaceDir;
   private final Mutability mutability;
@@ -191,7 +190,7 @@ public class WorkspaceFactory {
       importMap = parentImportMap;
     }
     environmentBuilder.setImportedExtensions(importMap);
-    Environment workspaceEnv = environmentBuilder.setPhase(Phase.WORKSPACE).build();
+    Environment workspaceEnv = environmentBuilder.setLoadingPhase().build();
     addWorkspaceFunctions(workspaceEnv, localReporter);
     for (Map.Entry<String, Object> binding : parentVariableBindings.entrySet()) {
       try {

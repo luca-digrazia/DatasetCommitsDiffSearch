@@ -77,7 +77,9 @@ public class SkylarkRepositoryIntegrationTest extends BuildViewTestCase {
         BlazeDirectories directories) {
       // Add both the local repository and the skylark repository functions
       RepositoryFunction localRepositoryFunction = new LocalRepositoryFunction();
+      localRepositoryFunction.setDirectories(directories);
       SkylarkRepositoryFunction skylarkRepositoryFunction = new SkylarkRepositoryFunction();
+      skylarkRepositoryFunction.setDirectories(directories);
       ImmutableMap<String, RepositoryFunction> repositoryHandlers =
           ImmutableMap.of(LocalRepositoryRule.NAME, localRepositoryFunction);
 
