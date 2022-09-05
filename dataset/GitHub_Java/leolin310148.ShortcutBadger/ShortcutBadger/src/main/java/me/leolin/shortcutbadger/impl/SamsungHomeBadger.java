@@ -1,53 +1,41 @@
 package me.leolin.shortcutbadger.impl;
 
-import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Build;
+import me.leolin.shortcutbadger.ShortcutBadgeException;
+import me.leolin.shortcutbadger.ShortcutBadger;
+import me.leolin.shortcutbadger.util.CloseHelper;
 
 import java.util.Arrays;
 import java.util.List;
 
-import me.leolin.shortcutbadger.Badger;
-import me.leolin.shortcutbadger.ShortcutBadgeException;
-import me.leolin.shortcutbadger.util.CloseHelper;
-
 /**
  * @author Leo Lin
  */
-public class SamsungHomeBadger implements Badger {
+public class SamsungHomeBadger extends ShortcutBadger {
     private static final String CONTENT_URI = "content://com.sec.badge/apps?notify=true";
-    private static final String[] CONTENT_PROJECTION = new String[]{"_id", "class"};
+    private static final String[] CONTENT_PROJECTION = new String[]{"_id","class"};
 
-    private DefaultBadger defaultBadger;
-
-    public SamsungHomeBadger() {
-        if (Build.VERSION.SDK_INT >= 21) {
-            defaultBadger = new DefaultBadger();
-        }
+    public SamsungHomeBadger(Context context) {
+        super(context);
     }
 
     @Override
-    public void executeBadge(Context context, ComponentName componentName, int badgeCount) throws ShortcutBadgeException {
-        if (defaultBadger != null) {
-            defaultBadger.executeBadge(context, componentName, badgeCount);
-            return;
-        }
-
+    protected void executeBadge(int badgeCount) throws ShortcutBadgeException {
         Uri mUri = Uri.parse(CONTENT_URI);
-        ContentResolver contentResolver = context.getContentResolver();
+        ContentResolver contentResolver = mContext.getContentResolver();
         Cursor cursor = null;
         try {
-            cursor = contentResolver.query(mUri, CONTENT_PROJECTION, "package=?", new String[]{componentName.getPackageName()}, null);
+            cursor = contentResolver.query(mUri, CONTENT_PROJECTION, "package=?", new String[]{getContextPackageName()}, null);
             if (cursor != null) {
-                String entryActivityName = componentName.getClassName();
+                String entryActivityName = getEntryActivityName();
                 boolean entryActivityExist = false;
                 while (cursor.moveToNext()) {
                     int id = cursor.getInt(0);
-                    ContentValues contentValues = getContentValues(componentName, badgeCount, false);
+                    ContentValues contentValues = getContentValues(badgeCount, false);
                     contentResolver.update(mUri, contentValues, "_id=?", new String[]{String.valueOf(id)});
                     if (entryActivityName.equals(cursor.getString(cursor.getColumnIndex("class")))) {
                         entryActivityExist = true;
@@ -55,7 +43,7 @@ public class SamsungHomeBadger implements Badger {
                 }
 
                 if (!entryActivityExist) {
-                    ContentValues contentValues = getContentValues(componentName, badgeCount, true);
+                    ContentValues contentValues = getContentValues(badgeCount, true);
                     contentResolver.insert(mUri, contentValues);
                 }
             }
@@ -64,11 +52,11 @@ public class SamsungHomeBadger implements Badger {
         }
     }
 
-    private ContentValues getContentValues(ComponentName componentName, int badgeCount, boolean isInsert) {
+    private ContentValues getContentValues(int badgeCount, boolean isInsert) {
         ContentValues contentValues = new ContentValues();
         if (isInsert) {
-            contentValues.put("package", componentName.getPackageName());
-            contentValues.put("class", componentName.getClassName());
+            contentValues.put("package", getContextPackageName());
+            contentValues.put("class", getEntryActivityName());
         }
 
         contentValues.put("badgecount", badgeCount);
