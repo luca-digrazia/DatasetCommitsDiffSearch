@@ -16,7 +16,6 @@ package com.google.devtools.build.java.turbine.javac;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.buildjar.javac.plugins.dependency.StrictJavaDepsPlugin;
-import com.google.devtools.build.java.turbine.javac.JavacTurbineCompileRequest.Prune;
 import com.google.devtools.build.java.turbine.javac.JavacTurbineCompileResult.Status;
 import com.google.devtools.build.java.turbine.javac.ZipOutputFileManager.OutputFileObject;
 
@@ -51,7 +50,7 @@ public class JavacTurbineCompiler {
 
     try (PrintWriter pw = new PrintWriter(sw)) {
       ZipOutputFileManager.preRegister(context, files);
-      setupContext(context, request.strictJavaDepsPlugin(), request.prune());
+      setupContext(context, request.strictJavaDepsPlugin());
       CacheFSInfo.preRegister(context);
 
       context.put(Log.outKey, pw);
@@ -89,13 +88,12 @@ public class JavacTurbineCompiler {
         t.printStackTrace(pw);
         status = Status.ERROR;
       }
-      comp.close();
     }
 
     return new JavacTurbineCompileResult(ImmutableMap.copyOf(files), status, sw, context);
   }
 
-  static void setupContext(Context context, @Nullable StrictJavaDepsPlugin sjd, Prune prune) {
-    JavacTurbineJavaCompiler.preRegister(context, sjd, prune);
+  static void setupContext(Context context, @Nullable StrictJavaDepsPlugin sjd) {
+    JavacTurbineJavaCompiler.preRegister(context, sjd);
   }
 }

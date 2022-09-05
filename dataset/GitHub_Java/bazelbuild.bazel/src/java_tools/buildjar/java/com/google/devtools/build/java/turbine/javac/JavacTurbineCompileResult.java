@@ -15,36 +15,33 @@
 package com.google.devtools.build.java.turbine.javac;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.java.turbine.javac.ZipOutputFileManager.OutputFileObject;
+
 import com.sun.tools.javac.util.Context;
-import javax.tools.Diagnostic;
-import javax.tools.JavaFileObject;
+
+import java.io.StringWriter;
 
 /** The output from a {@link JavacTurbineCompiler} compilation. */
 class JavacTurbineCompileResult {
-
 
   enum Status {
     OK, ERROR
   }
 
-  private final ImmutableMap<String, byte[]> files;
+  private final ImmutableMap<String, OutputFileObject> files;
   private final Status status;
-  private final String output;
-  private final ImmutableList<Diagnostic<? extends JavaFileObject>> diagnostics;
+  private final StringWriter sb;
   private final Context context;
 
   JavacTurbineCompileResult(
-      ImmutableMap<String, byte[]> files,
+      ImmutableMap<String, OutputFileObject> files,
       Status status,
-      String output,
-      ImmutableList<Diagnostic<? extends JavaFileObject>> diagnostics,
+      StringWriter sb,
       Context context) {
     this.files = files;
     this.status = status;
-    this.output = output;
-    this.diagnostics = diagnostics;
+    this.sb = sb;
     this.context = context;
   }
 
@@ -55,16 +52,11 @@ class JavacTurbineCompileResult {
 
   /** The stderr from the compilation. */
   String output() {
-    return output;
+    return sb.toString();
   }
 
-  /** The diagnostics from the compilation. */
-  ImmutableList<Diagnostic<? extends JavaFileObject>> diagnostics() {
-    return diagnostics;
-  }
-
-  /** The files produced by the compilation. */
-  ImmutableMap<String, byte[]> files() {
+  /** The files produced by the compilation's {@link ZipOutputFileManager}. */
+  ImmutableMap<String, OutputFileObject> files() {
     return files;
   }
 
