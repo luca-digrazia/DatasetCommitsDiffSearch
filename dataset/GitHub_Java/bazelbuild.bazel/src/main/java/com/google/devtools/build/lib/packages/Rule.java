@@ -70,6 +70,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
   private final RuleClass ruleClass;
 
   private final AttributeContainer attributes;
+  private final RawAttributeMapper attributeMap;
 
   private RuleVisibility visibility;
 
@@ -88,6 +89,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
     this.ruleClass = Preconditions.checkNotNull(ruleClass);
     this.location = Preconditions.checkNotNull(location);
     this.attributes = attributeContainer;
+    this.attributeMap = new RawAttributeMapper(pkg, ruleClass, label, attributes);
     this.containsErrors = false;
   }
 
@@ -192,7 +194,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
    */
   public boolean hasConfigurableAttributes() {
     for (Attribute attribute : getAttributes()) {
-      if (AbstractAttributeMapper.isConfigurable(this, attribute.getName(), attribute.getType())) {
+      if (attributeMap.isConfigurable(attribute.getName(), attribute.getType())) {
         return true;
       }
     }
@@ -203,10 +205,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
    * Returns true if the given attribute is configurable.
    */
   public boolean isConfigurableAttribute(String attributeName) {
-    Attribute attribute = ruleClass.getAttributeByNameMaybe(attributeName);
-    return attribute != null
-        ? AbstractAttributeMapper.isConfigurable(this, attributeName, attribute.getType())
-        : false;
+    return attributeMap.isConfigurable(attributeName, attributeMap.getAttributeType(attributeName));
   }
 
   /**
@@ -217,7 +216,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
    */
   @Deprecated
   public Attribute getAttributeDefinition(String attrName) {
-    return ruleClass.getAttributeByNameMaybe(attrName);
+    return attributeMap.getAttributeDefinition(attrName);
   }
 
   /**
@@ -308,7 +307,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
    * with the given name.
    */
   public boolean isAttributeValueExplicitlySpecified(String attrName) {
-    return attributes.isAttributeValueExplicitlySpecified(attrName);
+    return attributeMap.isAttributeValueExplicitlySpecified(attrName);
   }
 
   /**
@@ -470,7 +469,6 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
   private void populateImplicitOutputFiles(EventHandler eventHandler, Package.Builder pkgBuilder)
       throws InterruptedException {
     try {
-      RawAttributeMapper attributeMap = RawAttributeMapper.of(this);
       for (String out : ruleClass.getImplicitOutputsFunction().getImplicitOutputs(attributeMap)) {
         try {
           addOutputFile(pkgBuilder.createLabel(out), eventHandler);

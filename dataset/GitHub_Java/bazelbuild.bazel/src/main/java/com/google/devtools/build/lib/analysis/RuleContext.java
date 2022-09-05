@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.Optional;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableBiMap;
@@ -682,8 +681,8 @@ public final class RuleContext extends TargetContext
       // deeply nested and we can't easily inject the behavior we want. However, we should fix all
       // such call sites.
       checkAttribute(attributeName, Mode.SPLIT);
-      Map<Optional<String>, ? extends List<? extends TransitiveInfoCollection>> map =
-          getSplitPrerequisites(attributeName);
+      Map<String, ? extends List<? extends TransitiveInfoCollection>> map =
+          getSplitPrerequisites(attributeName, /*requireSplit=*/false);
       return map.isEmpty()
           ? ImmutableList.<TransitiveInfoCollection>of()
           : map.entrySet().iterator().next().getValue();
@@ -694,21 +693,35 @@ public final class RuleContext extends TargetContext
   }
 
   /**
-   * Returns the a prerequisites keyed by the CPU of their configurations.
-   * If the split transition is not active (e.g. split() returned an empty
-   * list), the key is an empty Optional.
+   * Returns the a prerequisites keyed by the CPU of their configurations; this method throws an
+   * exception if the split transition is not active.
    */
-  public Map<Optional<String>, ? extends List<? extends TransitiveInfoCollection>>
+  public Map<String, ? extends List<? extends TransitiveInfoCollection>>
       getSplitPrerequisites(String attributeName) {
+    return getSplitPrerequisites(attributeName, /*requireSplit*/true);
+  }
+
+  private Map<String, ? extends List<? extends TransitiveInfoCollection>>
+      getSplitPrerequisites(String attributeName, boolean requireSplit) {
     checkAttribute(attributeName, Mode.SPLIT);
 
     Attribute attributeDefinition = getAttribute(attributeName);
     SplitTransition<?> transition = attributeDefinition.getSplitTransition(rule);
     List<BuildConfiguration> configurations =
-        getConfiguration().getTransitions().getSplitConfigurationsNoSelf(transition);
-    if (configurations.isEmpty()) {
-      // The split transition is not active. Defer the decision on which CPU to use.
-      return ImmutableMap.of(Optional.<String>absent(), targetMap.get(attributeName));
+        getConfiguration().getTransitions().getSplitConfigurations(transition);
+    if (configurations.size() == 1) {
+      // There are two cases here:
+      // 1. Splitting is enabled, but only one target cpu.
+      // 2. Splitting is disabled, and no --cpu value was provided on the command line.
+      // In the first case, the cpu value is non-null, but in the second case it is null. We only
+      // allow that to proceed if the caller specified that he is going to ignore the cpu value
+      // anyway.
+      String cpu = configurations.get(0).getCpu();
+      if (cpu == null) {
+        Preconditions.checkState(!requireSplit);
+        cpu = "DO_NOT_USE";
+      }
+      return ImmutableMap.of(cpu, targetMap.get(attributeName));
     }
 
     Set<String> cpus = new HashSet<>();
@@ -720,15 +733,15 @@ public final class RuleContext extends TargetContext
     }
 
     // Use an ImmutableListMultimap.Builder here to preserve ordering.
-    ImmutableListMultimap.Builder<Optional<String>, TransitiveInfoCollection> result =
+    ImmutableListMultimap.Builder<String, TransitiveInfoCollection> result =
         ImmutableListMultimap.builder();
     for (TransitiveInfoCollection t : targetMap.get(attributeName)) {
       if (t.getConfiguration() != null) {
-        result.put(Optional.of(t.getConfiguration().getCpu()), t);
+        result.put(t.getConfiguration().getCpu(), t);
       } else {
         // Source files don't have a configuration, so we add them to all architecture entries.
         for (String cpu : cpus) {
-          result.put(Optional.of(cpu), t);
+          result.put(cpu, t);
         }
       }
     }

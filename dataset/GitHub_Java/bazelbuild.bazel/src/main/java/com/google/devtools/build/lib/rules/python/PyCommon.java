@@ -515,7 +515,9 @@ public final class PyCommon {
     TransitiveInfoCollection pythonTarget =
         ruleContext.getPrerequisite(hostPython2RuntimeAttribute, Mode.HOST);
     if (pythonTarget != null) {
-      builder.addTransitiveInputs(pythonTarget.getProvider(FileProvider.class).getFilesToBuild());
+      builder.addInputs(pythonTarget
+          .getProvider(FileProvider.class)
+          .getFilesToBuild());
     }
 
     builder.addInputArgument(source);
