@@ -13,13 +13,7 @@ import com.codahale.metrics.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.management.InstanceAlreadyExistsException;
-import javax.management.InstanceNotFoundException;
-import javax.management.JMException;
-import javax.management.MBeanRegistrationException;
-import javax.management.MBeanServer;
-import javax.management.ObjectInstance;
-import javax.management.ObjectName;
+import javax.management.*;
 import java.io.Closeable;
 import java.lang.management.ManagementFactory;
 import java.util.Collections;
@@ -70,7 +64,7 @@ public class JmxReporter implements Reporter, Closeable {
         /**
          * Register MBeans with the given {@link MBeanServer}.
          *
-         * @param mBeanServer an {@link MBeanServer}
+         * @param mBeanServer     an {@link MBeanServer}
          * @return {@code this}
          */
         public Builder registerWith(MBeanServer mBeanServer) {
@@ -90,13 +84,13 @@ public class JmxReporter implements Reporter, Closeable {
         }
 
         public Builder createsObjectNamesWith(ObjectNameFactory onFactory) {
-            if (onFactory == null) {
-                throw new IllegalArgumentException("null objectNameFactory");
-            }
-            this.objectNameFactory = onFactory;
-            return this;
+        	if(onFactory == null) {
+        		throw new IllegalArgumentException("null objectNameFactory");
+        	}
+        	this.objectNameFactory = onFactory;
+        	return this;
         }
-
+        
         /**
          * Convert durations to the given time unit.
          *
@@ -154,8 +148,8 @@ public class JmxReporter implements Reporter, Closeable {
          */
         public JmxReporter build() {
             final MetricTimeUnits timeUnits = new MetricTimeUnits(rateUnit, durationUnit, specificRateUnits, specificDurationUnits);
-            if (mBeanServer == null) {
-                mBeanServer = ManagementFactory.getPlatformMBeanServer();
+            if (mBeanServer==null) {
+            	mBeanServer = ManagementFactory.getPlatformMBeanServer();
             }
             return new JmxReporter(mBeanServer, domain, registry, filter, timeUnits, objectNameFactory);
         }
@@ -184,7 +178,6 @@ public class JmxReporter implements Reporter, Closeable {
     @SuppressWarnings("UnusedDeclaration")
     public interface JmxGaugeMBean extends MetricMBean {
         Object getValue();
-        Number getNumber();
     }
 
     private static class JmxGauge extends AbstractBean implements JmxGaugeMBean {
@@ -198,12 +191,6 @@ public class JmxReporter implements Reporter, Closeable {
         @Override
         public Object getValue() {
             return metric.getValue();
-        }
-
-        @Override
-        public Number getNumber() {
-            Object value = metric.getValue();
-            return value instanceof Number ? (Number) value : 0;
         }
     }
 
@@ -539,7 +526,7 @@ public class JmxReporter implements Reporter, Closeable {
             }
         }
 
-        @Override
+            @Override
         public void onGaugeAdded(String name, Gauge<?> gauge) {
             try {
                 if (filter.matches(name, gauge)) {
@@ -719,7 +706,7 @@ public class JmxReporter implements Reporter, Closeable {
                         String domain,
                         MetricRegistry registry,
                         MetricFilter filter,
-                        MetricTimeUnits timeUnits,
+                        MetricTimeUnits timeUnits, 
                         ObjectNameFactory objectNameFactory) {
         this.registry = registry;
         this.listener = new JmxListener(mBeanServer, domain, filter, timeUnits, objectNameFactory);
