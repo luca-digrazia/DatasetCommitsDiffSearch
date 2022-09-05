@@ -30,6 +30,10 @@ public class SystemMonitorProcessor extends AbstractCmdProcessor {
         sigar = new Sigar();
     }
 
+    public void setWebSocketMessageManager(WebSocketMessageManager webSocketMessageManager) {
+        this.webSocketMessageManager = webSocketMessageManager;
+    }
+
     @Override
     public String getName() {
         return "system-monitor";
