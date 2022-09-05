@@ -3,6 +3,7 @@ package org.hsweb.web.bean.common;
 import java.io.Serializable;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Created by 浩 on 2016-01-16 0016.
@@ -93,6 +94,11 @@ public class QueryParam extends SqlParam<QueryParam> implements Serializable {
     public void setPageSize(int pageSize) {
         this.pageSize = pageSize;
     }
+
+    static String reg = "(?:')|(?:--)|(/\\*(?:.|[\\n\\r])*?\\*/)|"
+            + "(\\b(select|update|and|or|delete|insert|trancate|char|into|substr|ascii|declare|exec|count|master|into|drop|execute)\\b)";
+
+    static Pattern sqlPattern = Pattern.compile(reg, Pattern.CASE_INSENSITIVE);
 
     public Set<String> getSortField() {
         return sortField;
