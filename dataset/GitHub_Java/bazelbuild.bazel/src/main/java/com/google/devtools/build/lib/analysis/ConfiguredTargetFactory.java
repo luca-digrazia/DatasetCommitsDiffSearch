@@ -55,7 +55,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nullable;
@@ -291,11 +290,10 @@ public final class ConfiguredTargetFactory {
       RuleConfiguredTarget associatedTarget,
       ConfiguredAspectFactory aspectFactory,
       AspectParameters aspectParameters,
-      Map<String, Attribute> aspectAttributes,
       ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
       Set<ConfigMatchingProvider> configConditions,
       BuildConfiguration hostConfiguration)
-          throws InterruptedException {
+      throws InterruptedException {
     RuleContext.Builder builder = new RuleContext.Builder(env,
         associatedTarget.getTarget(),
         associatedTarget.getConfiguration(),
@@ -305,7 +303,6 @@ public final class ConfiguredTargetFactory {
         .setVisibility(convertVisibility(
             prerequisiteMap, env.getEventHandler(), associatedTarget.getTarget(), null))
         .setPrerequisites(prerequisiteMap)
-        .setAspectAttributes(aspectAttributes)
         .setConfigConditions(configConditions)
         .build();
     if (ruleContext.hasErrors()) {

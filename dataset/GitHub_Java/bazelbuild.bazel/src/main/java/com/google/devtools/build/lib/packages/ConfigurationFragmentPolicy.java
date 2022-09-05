@@ -13,18 +13,15 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.syntax.FragmentClassNameResolver;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -65,65 +62,29 @@ public final class ConfigurationFragmentPolicy {
    * Builder to construct a new ConfigurationFragmentPolicy.
    */
   public static final class Builder {
-    private final Multimap<ConfigurationTransition, Class<?>> requiredConfigurationFragments
-        = ArrayListMultimap.create();
-    private final Map<ConfigurationTransition, ImmutableSet<String>>
-        requiredConfigurationFragmentNames = new LinkedHashMap<>();
+    private Set<Class<?>> requiredConfigurationFragments = new LinkedHashSet<>();
+    private Map<ConfigurationTransition, ImmutableSet<String>> requiredConfigurationFragmentNames =
+        new LinkedHashMap<>();
     private MissingFragmentPolicy missingFragmentPolicy = MissingFragmentPolicy.FAIL_ANALYSIS;
     private FragmentClassNameResolver fragmentNameResolver;
 
     /**
      * Declares that the implementation of the associated rule class requires the given
-     * fragments to be present in this rule's host and target configurations.
-     *
-     * <p>The value is inherited by subclasses.
+     * configuration fragments to be present in the configuration. The value is inherited by
+     * subclasses.
      */
     public Builder requiresConfigurationFragments(Collection<Class<?>> configurationFragments) {
-      requiredConfigurationFragments.putAll(ConfigurationTransition.HOST, configurationFragments);
-      requiredConfigurationFragments.putAll(ConfigurationTransition.NONE, configurationFragments);
+      requiredConfigurationFragments.addAll(configurationFragments);
       return this;
     }
 
     /**
      * Declares that the implementation of the associated rule class requires the given
-     * fragments to be present in this rule's host and target configurations.
-     *
-     * <p>The value is inherited by subclasses.
+     * configuration fragments to be present in the configuration. The value is inherited by
+     * subclasses.
      */
     public Builder requiresConfigurationFragments(Class<?>... configurationFragments) {
-      Collection<Class<?>> asList = new ArrayList();
-      Collections.addAll(asList, configurationFragments);
-      return requiresConfigurationFragments(asList);
-    }
-
-    /**
-     * Declares that the implementation of the associated rule class requires the given
-     * fragments to be present in the specified configuration. Valid transition values are
-     * HOST for the host configuration and NONE for the target configuration.
-     *
-     * <p>The value is inherited by subclasses.
-     */
-    public Builder requiresConfigurationFragments(ConfigurationTransition transition,
-        Class<?>... configurationFragments) {
-      for (Class<?> fragment : configurationFragments) {
-        requiredConfigurationFragments.put(transition, fragment);
-      }
-      return this;
-    }
-
-    /**
-     * Declares the configuration fragments that are required by this rule for the specified
-     * configuration. Valid transition values are HOST for the host configuration and NONE for
-     * the target configuration.
-     *
-     * <p>In contrast to {@link #requiresConfigurationFragments(Class...)}, this method takes the
-     * names of fragments instead of their classes.
-     */
-    public Builder requiresConfigurationFragments(
-        FragmentClassNameResolver fragmentNameResolver,
-        Map<ConfigurationTransition, ImmutableSet<String>> configurationFragmentNames) {
-      requiredConfigurationFragmentNames.putAll(configurationFragmentNames);
-      this.fragmentNameResolver = fragmentNameResolver;
+      Collections.addAll(requiredConfigurationFragments, configurationFragments);
       return this;
     }
 
@@ -136,9 +97,24 @@ public final class ConfigurationFragmentPolicy {
       return this;
     }
 
+    /**
+     * Declares the configuration fragments that are required by this rule.
+     *
+     * <p>In contrast to {@link #requiresConfigurationFragments(Class...)}, this method a) takes the
+     * names of fragments instead of their classes and b) distinguishes whether the fragments can be
+     * accessed in host (HOST) or target (NONE) configuration.
+     */
+    public Builder requiresConfigurationFragments(
+        FragmentClassNameResolver fragmentNameResolver,
+        Map<ConfigurationTransition, ImmutableSet<String>> configurationFragmentNames) {
+      requiredConfigurationFragmentNames.putAll(configurationFragmentNames);
+      this.fragmentNameResolver = fragmentNameResolver;
+      return this;
+    }
+
     public ConfigurationFragmentPolicy build() {
       return new ConfigurationFragmentPolicy(
-          ImmutableMultimap.copyOf(requiredConfigurationFragments),
+          ImmutableSet.copyOf(requiredConfigurationFragments),
           ImmutableMap.copyOf(requiredConfigurationFragmentNames),
           fragmentNameResolver,
           missingFragmentPolicy);
@@ -146,10 +122,10 @@ public final class ConfigurationFragmentPolicy {
   }
 
   /**
-   * A dictionary that maps configurations (NONE for target configuration, HOST for host
-   * configuration) to required configuration fragments.
+   * The set of required configuration fragments; this should list all fragments that can be
+   * accessed by the rule implementation.
    */
-  private final ImmutableMultimap<ConfigurationTransition, Class<?>> requiredConfigurationFragments;
+  private final ImmutableSet<Class<?>> requiredConfigurationFragments;
 
   /**
    * A dictionary that maps configurations (NONE for target configuration, HOST for host
@@ -170,7 +146,7 @@ public final class ConfigurationFragmentPolicy {
   private final MissingFragmentPolicy missingFragmentPolicy;
 
   private ConfigurationFragmentPolicy(
-      ImmutableMultimap<ConfigurationTransition, Class<?>> requiredConfigurationFragments,
+      ImmutableSet<Class<?>> requiredConfigurationFragments,
       ImmutableMap<ConfigurationTransition, ImmutableSet<String>>
           requiredConfigurationFragmentNames,
       FragmentClassNameResolver fragmentNameResolver,
@@ -183,10 +159,10 @@ public final class ConfigurationFragmentPolicy {
 
   /**
    * The set of required configuration fragments; this contains all fragments that can be
-   * accessed by the rule implementation under any configuration.
+   * accessed by the rule implementation.
    */
   public Set<Class<?>> getRequiredConfigurationFragments() {
-    return ImmutableSet.copyOf(requiredConfigurationFragments.values());
+    return requiredConfigurationFragments;
   }
 
   /**
@@ -195,7 +171,7 @@ public final class ConfigurationFragmentPolicy {
    */
   public boolean isLegalConfigurationFragment(
       Class<?> configurationFragment, ConfigurationTransition config) {
-    return getRequiredConfigurationFragments().contains(configurationFragment)
+    return requiredConfigurationFragments.contains(configurationFragment)
         || hasLegalFragmentName(configurationFragment, config);
   }
 
