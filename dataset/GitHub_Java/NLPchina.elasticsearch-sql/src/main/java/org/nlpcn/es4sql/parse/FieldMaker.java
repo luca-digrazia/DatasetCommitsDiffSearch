@@ -34,20 +34,21 @@ public class FieldMaker {
 			
             String methodName = mExpr.getMethodName();
             
-            if(methodName.equalsIgnoreCase("nested") ||methodName.equalsIgnoreCase("reverse_nested")  ){
+            if(methodName.toLowerCase().equals("nested") ||methodName.toLowerCase().equals("reverse_nested")  ){
                 NestedType nestedType = new NestedType();
                 if(nestedType.tryFillFromExpr(mExpr)){
                     return handleIdentifier(nestedType, alias, tableAlias);
                 }
-            }else if(methodName.equalsIgnoreCase("children")){
+            }
+            if(methodName.toLowerCase().equals("children")){
                 ChildrenType childrenType = new ChildrenType();
                 if(childrenType.tryFillFromExpr(mExpr)){
                     return handleIdentifier(childrenType, alias, tableAlias);
                 }
-            }else  if (methodName.equalsIgnoreCase("filter")){
+            }
+            else  if (methodName.toLowerCase().equals("filter")){
                 return makeFilterMethodField(mExpr,alias);
             }
-            
             return makeMethodField(methodName, mExpr.getParameters(), null, alias);
 		} else if (expr instanceof SQLAggregateExpr) {
 			SQLAggregateExpr sExpr = (SQLAggregateExpr) expr;

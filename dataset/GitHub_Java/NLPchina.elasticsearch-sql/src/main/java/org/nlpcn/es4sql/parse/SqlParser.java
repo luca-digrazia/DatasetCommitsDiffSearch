@@ -40,7 +40,7 @@ public class SqlParser {
     private Select parseSelect(MySqlSelectQueryBlock query) throws SqlParseException {
         Select select = new Select();
 
-        findSelect(query, select,query.getFrom().getAlias());
+        findSelect(query, select,null);
 
         select.getFrom().addAll(findFrom(query.getFrom()));
 
@@ -412,7 +412,6 @@ public class SqlParser {
 
 	private void findGroupBy(MySqlSelectQueryBlock query, Select select) throws SqlParseException {
 		SQLSelectGroupByClause groupBy = query.getGroupBy();
-        SQLTableSource sqlTableSource = query.getFrom();
 		if (groupBy == null) {
 			return;
 		}
@@ -428,32 +427,31 @@ public class SqlParser {
 
             if ((sqlExpr instanceof SQLParensIdentifierExpr || !(sqlExpr instanceof SQLIdentifierExpr|| sqlExpr instanceof SQLMethodInvokeExpr)) && !standardGroupBys.isEmpty()) {
                 // flush the standard group bys
-                select.addGroupBy(convertExprsToFields(standardGroupBys,sqlTableSource));
+                select.addGroupBy(convertExprsToFields(standardGroupBys));
                 standardGroupBys = new ArrayList<>();
             }
 
 			if (sqlExpr instanceof SQLParensIdentifierExpr) {
                 // single item with parens (should get its own aggregation)
-                select.addGroupBy(FieldMaker.makeField(sqlExpr, null,sqlTableSource.getAlias()));
+                select.addGroupBy(FieldMaker.makeField(sqlExpr, null,null));
             } else if (sqlExpr instanceof SQLListExpr) {
 				// multiple items in their own list
 				SQLListExpr listExpr = (SQLListExpr) sqlExpr;
-				select.addGroupBy(convertExprsToFields(listExpr.getItems(),sqlTableSource));
+				select.addGroupBy(convertExprsToFields(listExpr.getItems()));
 			} else {
 				// everything else gets added to the running list of standard group bys
 				standardGroupBys.add(sqlExpr);
 			}
 		}
 		if (!standardGroupBys.isEmpty()) {
-			select.addGroupBy(convertExprsToFields(standardGroupBys,sqlTableSource));
+			select.addGroupBy(convertExprsToFields(standardGroupBys));
 		}
 	}
 
-	private List<Field> convertExprsToFields(List<? extends SQLExpr> exprs,SQLTableSource sqlTableSource) throws SqlParseException {
+	private List<Field> convertExprsToFields(List<? extends SQLExpr> exprs) throws SqlParseException {
 		List<Field> fields = new ArrayList<>(exprs.size());
 		for (SQLExpr expr : exprs) {
-            //here we suppose groupby field will not have alias,so set null in second parameter
-			fields.add(FieldMaker.makeField(expr, null,sqlTableSource.getAlias()));
+			fields.add(FieldMaker.makeField(expr, null,null));
 		}
 		return fields;
 	}
