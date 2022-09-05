@@ -33,7 +33,8 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
 
     public FastJsonHttpMessageConverter() {
         super(new MediaType("application", "json", UTF8),
-                new MediaType("application", "*+json", UTF8));
+                new MediaType("application", "*+json", UTF8),
+                MediaType.APPLICATION_JSON);
     }
 
     @Override
@@ -126,5 +127,4 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
             }
         return filters.toArray(new PropertyPreFilter[filters.size()]);
     }
-
 }
