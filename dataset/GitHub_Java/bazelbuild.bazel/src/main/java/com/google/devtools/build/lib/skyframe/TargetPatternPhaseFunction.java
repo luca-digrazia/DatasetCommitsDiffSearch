@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.pkgcache.CompileOneDependencyTransformer;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
-import com.google.devtools.build.lib.pkgcache.ParsingFailedEvent;
 import com.google.devtools.build.lib.pkgcache.TargetProvider;
 import com.google.devtools.build.lib.pkgcache.TestFilter;
 import com.google.devtools.build.lib.skyframe.EnvironmentBackedRecursivePackageProvider.MissingDepException;
@@ -188,23 +187,14 @@ final class TargetPatternPhaseFunction implements SkyFunction {
    */
   private static ResolvedTargets<Target> getTargetsToBuild(
       Environment env, TargetPatternList options) throws InterruptedException {
-    List<TargetPatternKey> patternSkyKeys = new ArrayList<>();
+    List<SkyKey> patternSkyKeys = new ArrayList<>();
     for (TargetPatternSkyKeyOrException keyOrException :
-        TargetPatternValue.keys(
-            options.getTargetPatterns(),
-            options.getBuildManualTests()
-                ? FilteringPolicies.NO_FILTER
-                : FilteringPolicies.FILTER_MANUAL,
+        TargetPatternValue.keys(options.getTargetPatterns(), FilteringPolicies.FILTER_MANUAL,
             options.getOffset())) {
       try {
         patternSkyKeys.add(keyOrException.getSkyKey());
       } catch (TargetParsingException e) {
-        // We generally skip patterns that don't parse. We report a parsing failed exception to the
-        // event bus here, but not in determineTests below, which goes through the same list. Note
-        // that the TargetPatternFunction otherwise reports these events (but only if the target
-        // pattern could be parsed successfully).
-        env.getListener().post(
-            new ParsingFailedEvent(keyOrException.getOriginalPattern(),  e.getMessage()));
+        // Skip.
       }
     }
     Map<SkyKey, ValueOrException<TargetParsingException>> resolvedPatterns =
@@ -214,11 +204,13 @@ final class TargetPatternPhaseFunction implements SkyFunction {
     }
 
     ResolvedTargets.Builder<Target> builder = ResolvedTargets.builder();
-    for (TargetPatternKey pattern : patternSkyKeys) {
+    for (SkyKey key : patternSkyKeys) {
+      TargetPatternKey pattern = (TargetPatternKey) key.argument();
       TargetPatternValue value;
       try {
-        value = (TargetPatternValue) resolvedPatterns.get(pattern).get();
+        value = (TargetPatternValue) resolvedPatterns.get(key).get();
       } catch (TargetParsingException e) {
+        // TODO(ulfjack): Report to EventBus.
         String rawPattern = pattern.getPattern();
         String errorMessage = e.getMessage();
         env.getListener().handle(Event.error("Skipping '" + rawPattern + "': " + errorMessage));
@@ -263,7 +255,7 @@ final class TargetPatternPhaseFunction implements SkyFunction {
   private static ResolvedTargets<Target> determineTests(
       Environment env, List<String> targetPatterns, String offset, TestFilter testFilter)
       throws InterruptedException {
-    List<TargetPatternKey> patternSkyKeys = new ArrayList<>();
+    List<SkyKey> patternSkyKeys = new ArrayList<>();
     for (TargetPatternSkyKeyOrException keyOrException :
         TargetPatternValue.keys(targetPatterns, FilteringPolicies.FILTER_TESTS, offset)) {
       try {
@@ -279,7 +271,7 @@ final class TargetPatternPhaseFunction implements SkyFunction {
     }
 
     List<SkyKey> expandedSuiteKeys = new ArrayList<>();
-    for (TargetPatternKey key : patternSkyKeys) {
+    for (SkyKey key : patternSkyKeys) {
       TargetPatternValue value;
       try {
         value = (TargetPatternValue) resolvedPatterns.get(key).get();
@@ -295,10 +287,11 @@ final class TargetPatternPhaseFunction implements SkyFunction {
     }
 
     ResolvedTargets.Builder<Target> testTargetsBuilder = ResolvedTargets.builder();
-    for (TargetPatternKey pattern : patternSkyKeys) {
+    for (SkyKey key : patternSkyKeys) {
+      TargetPatternKey pattern = (TargetPatternKey) key.argument();
       TargetPatternValue value;
       try {
-        value = (TargetPatternValue) resolvedPatterns.get(pattern).get();
+        value = (TargetPatternValue) resolvedPatterns.get(key).get();
       } catch (TargetParsingException e) {
         // This was already reported in getTargetsToBuild (maybe merge the two code paths?).
         continue;

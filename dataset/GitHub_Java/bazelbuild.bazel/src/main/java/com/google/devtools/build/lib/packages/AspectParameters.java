@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.packages;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
 
+import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
@@ -37,8 +38,7 @@ public final class AspectParameters {
    * A builder for @{link {@link AspectParameters} class.
    */
   public static class Builder {
-    private final ImmutableMultimap.Builder<String, String> attributes =
-        ImmutableMultimap.builder();
+    private final Multimap<String, String> attributes = ArrayListMultimap.create();
 
     /**
      * Adds a new pair of attribute-value.
@@ -52,7 +52,7 @@ public final class AspectParameters {
      * Creates a new instance of {@link AspectParameters} class.
      */
     public AspectParameters build() {
-      return new AspectParameters(attributes.build());
+      return new AspectParameters(attributes);
     }
   }
 

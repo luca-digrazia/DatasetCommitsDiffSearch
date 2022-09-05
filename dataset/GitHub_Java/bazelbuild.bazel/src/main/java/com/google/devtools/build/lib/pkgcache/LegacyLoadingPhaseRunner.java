@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.pkgcache;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -100,6 +101,7 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
       List<String> targetPatterns,
       PathFragment relativeWorkingDirectory,
       LoadingOptions options,
+      ListMultimap<String, Label> labelsToLoadUnconditionally,
       boolean keepGoing,
       boolean determineTests,
       @Nullable LoadingCallback callback)

@@ -14,14 +14,11 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
+import com.google.devtools.build.lib.packages.AspectParameters;
+import com.google.devtools.build.lib.util.Preconditions;
 import javax.annotation.Nullable;
 
 /**
@@ -36,37 +33,26 @@ import javax.annotation.Nullable;
 public abstract class ActionOwner {
   /** An action owner for special cases. Usage is strongly discouraged. */
   public static final ActionOwner SYSTEM_ACTION_OWNER =
-      ActionOwner.create(
-          null,
-          ImmutableList.<AspectDescriptor>of(),
-          null,
-          "system",
-          "empty target kind",
-          "system",
-          null,
-          null,
-          null);
+      ActionOwner.create(null, null, null, null, "system", "empty target kind", "system", null);
 
   public static ActionOwner create(
       @Nullable Label label,
-      ImmutableList<AspectDescriptor> aspectDescriptors,
+      @Nullable String aspectName,
+      @Nullable AspectParameters aspectParameters,
       @Nullable Location location,
       @Nullable String mnemonic,
       @Nullable String targetKind,
       String configurationChecksum,
-      @Nullable BuildEvent configuration,
-      @Nullable String additionalProgressInfo,
-      @Nullable PlatformInfo executionPlatform) {
+      @Nullable String additionalProgressInfo) {
     return new AutoValue_ActionOwner(
         location,
         label,
-        aspectDescriptors,
+        aspectName,
+        aspectParameters,
         mnemonic,
         Preconditions.checkNotNull(configurationChecksum),
-        configuration,
         targetKind,
-        additionalProgressInfo,
-        executionPlatform);
+        additionalProgressInfo);
   }
 
   /** Returns the location of this ActionOwner, if any; null otherwise. */
@@ -77,7 +63,11 @@ public abstract class ActionOwner {
   @Nullable
   public abstract Label getLabel();
 
-  public abstract ImmutableList<AspectDescriptor> getAspectDescriptors();
+  @Nullable
+  public abstract String getAspectName();
+
+  @Nullable
+  public abstract AspectParameters getAspectParameters();
 
   /** Returns the configuration's mnemonic. */
   @Nullable
@@ -91,13 +81,6 @@ public abstract class ActionOwner {
    */
   public abstract String getConfigurationChecksum();
 
-  /**
-   * Return the configuration of the action owner, if any, as it should be reported in the build
-   * event protocol.
-   */
-  @Nullable
-  public abstract BuildEvent getConfiguration();
-
   /** Returns the target kind (rule class name) for this ActionOwner, if any; null otherwise. */
   @Nullable
   public abstract String getTargetKind();
@@ -108,13 +91,6 @@ public abstract class ActionOwner {
    */
   @Nullable
   abstract String getAdditionalProgressInfo();
-
-  /**
-   * Returns the {@link PlatformInfo} platform this action should be executed on. If the execution
-   * platform is {@code null}, then the host platform is assumed.
-   */
-  @Nullable
-  abstract PlatformInfo getExecutionPlatform();
 
   ActionOwner() {}
 }

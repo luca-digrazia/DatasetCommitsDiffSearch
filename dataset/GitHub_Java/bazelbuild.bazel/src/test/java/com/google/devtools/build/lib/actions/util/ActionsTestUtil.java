@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
@@ -46,10 +45,7 @@ import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate.OutputPathMapper;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ResourceUsage;
@@ -152,12 +148,8 @@ public final class ActionsTestUtil {
       EvaluationResult<SkyValue> evaluationResult;
       Map<SkyKey, ValueOrUntypedException> result = new HashMap<>();
       try {
-        evaluationResult =
-            driver.evaluate(
-                depKeys, /*keepGoing=*/
-                false,
-                ResourceUsage.getAvailableProcessors(),
-                new Reporter(new EventBus(), eventHandler));
+        evaluationResult = driver.evaluate(depKeys, /*keepGoing=*/false,
+            ResourceUsage.getAvailableProcessors(), eventHandler);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         for (SkyKey key : depKeys) {
@@ -182,7 +174,7 @@ public final class ActionsTestUtil {
     }
 
     @Override
-    public ExtendedEventHandler getListener() {
+    public EventHandler getListener() {
       return null;
     }
 
@@ -199,7 +191,8 @@ public final class ActionsTestUtil {
   public static final ActionOwner NULL_ACTION_OWNER =
       ActionOwner.create(
           NULL_LABEL,
-          ImmutableList.<AspectDescriptor>of(),
+          null,
+          null,
           null,
           "dummy-configuration-mnemonic",
           null,
