@@ -202,20 +202,15 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
     if (ruleKind == Kind.JAVA_LIBRARY
         || ruleKind == Kind.JAVA_IMPORT
         || ruleKind == Kind.JAVA_TEST
-        || ruleKind == Kind.JAVA_BINARY
-        || ruleKind == Kind.ANDROID_LIBRARY
-        || ruleKind == Kind.ANDROID_BINARY
-        || ruleKind == Kind.ANDROID_TEST
-        || ruleKind == Kind.ANDROID_ROBOELECTRIC_TEST) {
+        || ruleKind == Kind.JAVA_BINARY) {
       outputBuilder.setJavaRuleIdeInfo(makeJavaRuleIdeInfo(base));
-    }
-    if (ruleKind == Kind.ANDROID_LIBRARY
+    } else if (ruleKind == Kind.ANDROID_LIBRARY
         || ruleKind == Kind.ANDROID_BINARY
         || ruleKind == Kind.ANDROID_TEST) {
+      outputBuilder.setJavaRuleIdeInfo(makeJavaRuleIdeInfo(base));
       outputBuilder.setAndroidRuleIdeInfo(
           makeAndroidRuleIdeInfo(ruleContext, base, providerBuilder));
-    }
-    if (ruleKind == Kind.ANDROID_SDK) {
+    } else if (ruleKind == Kind.ANDROID_SDK) {
       outputBuilder.setAndroidSdkRuleInfo(
           makeAndroidSdkRuleInfo(ruleContext, base.getProvider(AndroidSdkProvider.class)));
     }
@@ -457,8 +452,6 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
         return Kind.ANDROID_BINARY;
       case "android_test":
         return Kind.ANDROID_TEST;
-      case "android_robolectric_test":
-        return Kind.ANDROID_ROBOELECTRIC_TEST;
       default:
         {
           if (base.getProvider(AndroidSdkProvider.class) != null) {

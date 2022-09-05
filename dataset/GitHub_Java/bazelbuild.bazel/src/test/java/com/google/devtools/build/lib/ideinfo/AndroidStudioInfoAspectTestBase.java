@@ -19,22 +19,17 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.Aspect;
 import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
-import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.actions.BinaryFileWriteAction;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.ArtifactLocation;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.LibraryArtifact;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.RuleIdeInfo;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 
 import javax.annotation.Nullable;
@@ -44,7 +39,7 @@ import javax.annotation.Nullable;
  */
 abstract class AndroidStudioInfoAspectTestBase extends BuildViewTestCase {
 
-  protected static final Function<ArtifactLocation, String> ARTIFACT_TO_RELATIVE_PATH =
+  public static final Function<ArtifactLocation, String> ARTIFACT_TO_RELATIVE_PATH =
       new Function<ArtifactLocation, String>() {
         @Nullable
         @Override
@@ -52,7 +47,7 @@ abstract class AndroidStudioInfoAspectTestBase extends BuildViewTestCase {
           return artifactLocation.getRelativePath();
         }
       };
-  protected static final Function<LibraryArtifact, String> LIBRARY_ARTIFACT_TO_STRING =
+  public static final Function<LibraryArtifact, String> LIBRARY_ARTIFACT_TO_STRING =
       new Function<LibraryArtifact, String>() {
         @Override
         public String apply(LibraryArtifact libraryArtifact) {
@@ -77,10 +72,7 @@ abstract class AndroidStudioInfoAspectTestBase extends BuildViewTestCase {
         }
       };
 
-  private AnalysisResult analysisResult;
-  private Aspect aspect;
-
-  protected static String jarString(String base, String jar, String iJar, String sourceJar) {
+  static String jarString(String base, String jar, String iJar, String sourceJar) {
     StringBuilder sb = new StringBuilder();
     if (jar != null) {
       sb.append("<jar:" + base + "/" + jar + ">");
@@ -101,13 +93,12 @@ abstract class AndroidStudioInfoAspectTestBase extends BuildViewTestCase {
   protected RuleIdeInfo getRuleInfoAndVerifyLabel(
       String target, Map<String, RuleIdeInfo> ruleIdeInfos) {
     RuleIdeInfo ruleIdeInfo = ruleIdeInfos.get(target);
-    assertThat(ruleIdeInfo).named(target).isNotNull();
     assertThat(ruleIdeInfo.getLabel()).isEqualTo(target);
     return ruleIdeInfo;
   }
 
-  protected void buildTarget(String target) throws Exception {
-    this.analysisResult =
+  protected Map<String, RuleIdeInfo> buildRuleIdeInfo(String target) throws Exception {
+    AnalysisResult analysisResult =
         update(
             ImmutableList.of(target),
             ImmutableList.of(AndroidStudioInfoAspect.NAME),
@@ -118,42 +109,17 @@ abstract class AndroidStudioInfoAspectTestBase extends BuildViewTestCase {
     Collection<AspectValue> aspects = analysisResult.getAspects();
     assertThat(aspects.size()).isEqualTo(1);
     AspectValue value = aspects.iterator().next();
-    this.aspect = value.getAspect();
-    assertThat(aspect.getName()).isEqualTo(AndroidStudioInfoAspect.NAME);
-  }
-
-  protected Map<String, RuleIdeInfo> buildRuleIdeInfo(String target) throws Exception {
-    buildTarget(target);
+    assertThat(value.getAspect().getName()).isEqualTo(AndroidStudioInfoAspect.NAME);
     AndroidStudioInfoFilesProvider provider =
-        aspect.getProvider(AndroidStudioInfoFilesProvider.class);
-    Iterable<Artifact> artifacts = provider.getIdeInfoFiles();
+        value.getAspect().getProvider(AndroidStudioInfoFilesProvider.class);
+    Iterable<Artifact> artifacts = provider.getIdeBuildFiles();
     ImmutableMap.Builder<String, RuleIdeInfo> builder = ImmutableMap.builder();
     for (Artifact artifact : artifacts) {
       BinaryFileWriteAction generatingAction =
-          (BinaryFileWriteAction)  getGeneratingAction(artifact);
+          (BinaryFileWriteAction) getGeneratingAction(artifact);
       RuleIdeInfo ruleIdeInfo = RuleIdeInfo.parseFrom(generatingAction.getSource().openStream());
       builder.put(ruleIdeInfo.getLabel(), ruleIdeInfo);
     }
     return builder.build();
-  }
-
-  protected List<String> getOutputGroupResult(String outputGroup) {
-    OutputGroupProvider outputGroupProvider = this.aspect.getProvider(OutputGroupProvider.class);
-    assert outputGroupProvider != null;
-    NestedSet<Artifact> artifacts = outputGroupProvider.getOutputGroup(outputGroup);
-
-    for (Artifact artifact : artifacts) {
-      assertThat(getGeneratingAction(artifact)).isNotNull();
-    }
-
-    List<String> artifactRelativePaths = Lists.newArrayList();
-    for (Artifact artifact : artifacts) {
-      artifactRelativePaths.add(artifact.getRootRelativePathString());
-    }
-    return artifactRelativePaths;
-  }
-
-  protected List<String> getIdeResolveFiles() {
-    return getOutputGroupResult(AndroidStudioInfoAspect.IDE_RESOLVE);
   }
 }
