@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Action;
@@ -58,8 +57,6 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.cmdline.ResolvedTargets;
-import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -73,11 +70,9 @@ import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
@@ -106,8 +101,6 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import com.google.devtools.build.skyframe.WalkableGraph;
-import com.google.devtools.build.skyframe.WalkableGraph.WalkableGraphFactory;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -135,7 +128,7 @@ import javax.annotation.Nullable;
  * some additional artifacts (workspace status and build info artifacts) into SkyFunctions
  * for use during the build.
  */
-public abstract class SkyframeExecutor implements WalkableGraphFactory {
+public abstract class SkyframeExecutor {
   private final EvaluatorSupplier evaluatorSupplier;
   protected MemoizingEvaluator memoizingEvaluator;
   private final MemoizingEvaluator.EmittedEventState emittedEventState =
@@ -215,8 +208,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   private boolean needToInjectEmbeddedArtifacts = true;
   private boolean needToInjectPrecomputedValuesForAnalysis = true;
   protected int modifiedFiles;
-  protected int outputDirtyFiles;
-  protected int modifiedFilesDuringPreviousBuild;
   private final Predicate<PathFragment> allowedMissingInputs;
 
   private final ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions;
@@ -1172,43 +1163,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   /**
-   * For internal use in queries: performs two graph updates to make sure the transitive closure of
-   * the specified target {@code patterns} is present in the graph, and returns a traversable view
-   * of the graph.
-   *
-   * <p>The graph updates here are unconditionally done in keep-going mode, so that the query is
-   * guaranteed a complete graph to work on.
-   */
-  @Override
-  public WalkableGraph prepareAndGet(Collection<String> patterns, int numThreads,
-      EventHandler eventHandler) throws InterruptedException {
-    SkyframeTargetPatternEvaluator patternEvaluator =
-        (SkyframeTargetPatternEvaluator) packageManager.getTargetPatternEvaluator();
-    String offset = patternEvaluator.getOffset();
-    FilteringPolicy policy = TargetPatternEvaluator.DEFAULT_FILTERING_POLICY;
-    Iterable<SkyKey> patternSkyKeys = TargetPatternValue.keys(patterns, policy, offset);
-    ResolvedTargets<Target> result;
-    try {
-      result = patternEvaluator.parseTargetPatternKeys(patternSkyKeys, /*keepGoing=*/true,
-          eventHandler);
-    } catch (TargetParsingException e) {
-      // Can't happen, since we ran with keepGoing.
-      throw new IllegalStateException(e);
-    }
-    List<SkyKey> targetKeys = new ArrayList<>();
-    for (Target target : result.getTargets()) {
-      targetKeys.add(TransitiveTargetValue.key(target.getLabel()));
-    }
-    // We request all the keys here, even the ones that were already evaluated, because we want a
-    // single graph that contains all these keys, and if the evaluator keys graphs based on
-    // top-level keys, we must request the union of all our desired keys in a single evaluate call.
-    Iterable<SkyKey> allKeys = ImmutableList.copyOf(Iterables.concat(patternSkyKeys, targetKeys));
-    return Preconditions.checkNotNull(
-        buildDriver.evaluate(allKeys, true, numThreads, eventHandler).getWalkableGraph(),
-        patterns);
-  }
-
-  /**
    * Returns the generating {@link Action} of the given {@link Artifact}.
    *
    * <p>For use for legacy support from {@code BuildView} only.
@@ -1419,19 +1373,15 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.binTools = binTools;
   }
 
-  public void prepareExecution(boolean checkOutputFiles,
-      Range<Long> lastExecutionTimeRange) throws AbruptExitException,
+  public void prepareExecution(boolean checkOutputFiles) throws AbruptExitException,
       InterruptedException {
     maybeInjectEmbeddedArtifacts();
 
     if (checkOutputFiles) {
       // Detect external modifications in the output tree.
-      FilesystemValueChecker fsnc = new FilesystemValueChecker(memoizingEvaluator, tsgm,
-          lastExecutionTimeRange);
+      FilesystemValueChecker fsnc = new FilesystemValueChecker(memoizingEvaluator, tsgm);
       invalidateDirtyActions(fsnc.getDirtyActionValues(batchStatter));
       modifiedFiles += fsnc.getNumberOfModifiedOutputFiles();
-      outputDirtyFiles += fsnc.getNumberOfModifiedOutputFiles();
-      modifiedFilesDuringPreviousBuild += fsnc.getNumberOfModifiedOutputFilesDuringPreviousBuild();
     }
     informAboutNumberOfModifiedFiles();
   }
@@ -1526,11 +1476,4 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     }
   }
 
-  public int getOutputDirtyFiles() {
-    return outputDirtyFiles;
-  }
-
-  public int getModifiedFilesDuringPreviousBuild() {
-    return modifiedFilesDuringPreviousBuild;
-  }
 }

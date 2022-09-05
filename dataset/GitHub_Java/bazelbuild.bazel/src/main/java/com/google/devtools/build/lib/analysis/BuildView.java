@@ -307,7 +307,7 @@ public class BuildView {
    * Sets the configurations. Not thread-safe. DO NOT CALL except from tests!
    */
   @VisibleForTesting
-  public void setConfigurationsForTesting(BuildConfigurationCollection configurations) {
+  void setConfigurationsForTesting(BuildConfigurationCollection configurations) {
     this.configurations = configurations;
   }
 
@@ -789,9 +789,7 @@ public class BuildView {
   private static void scheduleTestsIfRequested(Collection<ConfiguredTarget> targetsToTest,
       Collection<ConfiguredTarget> targetsToTestExclusive, TopLevelArtifactContext topLevelOptions,
       Collection<ConfiguredTarget> allTestTargets) {
-    Set<String> outputGroups = topLevelOptions.outputGroups();
-    if (!outputGroups.contains(TopLevelArtifactProvider.FILES_TO_COMPILE)
-        && !outputGroups.contains(TopLevelArtifactProvider.COMPILATION_PREREQUISITES)
+    if (!topLevelOptions.compileOnly() && !topLevelOptions.compilationPrerequisitesOnly()
         && allTestTargets != null) {
       scheduleTests(targetsToTest, targetsToTestExclusive, allTestTargets,
           topLevelOptions.runTestsExclusively());
@@ -921,7 +919,7 @@ public class BuildView {
    * </em>
    */
   @VisibleForTesting // for BuildViewTestCase
-  public void setArtifactRoots(ImmutableMap<PackageIdentifier, Path> packageRoots) {
+  void setArtifactRoots(ImmutableMap<PackageIdentifier, Path> packageRoots) {
     Map<Path, Root> rootMap = new HashMap<>();
     Map<PackageIdentifier, Root> realPackageRoots = new HashMap<>();
     for (Map.Entry<PackageIdentifier, Path> entry : packageRoots.entrySet()) {
@@ -979,29 +977,14 @@ public class BuildView {
             new ConfiguredTargetKey(target.getLabel(), config),
             /*isSystemEnv=*/false, config.extendedSanityChecks(), eventHandler,
             /*skyframeEnv=*/null, config.isActionsEnabled(), binTools);
-    return new RuleContext.Builder(analysisEnvironment,
+    RuleContext ruleContext = new RuleContext.Builder(analysisEnvironment,
         (Rule) target.getTarget(), config, ruleClassProvider.getPrerequisiteValidator())
             .setVisibility(NestedSetBuilder.<PackageSpecification>create(
                 Order.STABLE_ORDER, PackageSpecification.EVERYTHING))
             .setPrerequisites(getPrerequisiteMapForTesting(target))
             .setConfigConditions(ImmutableSet.<ConfigMatchingProvider>of())
             .build();
-  }
-
-  /**
-   * Creates and returns a rule context that is equivalent to the one that was used to create the
-   * given configured target.
-   */
-  @VisibleForTesting
-  public RuleContext getRuleContextForTesting(ConfiguredTarget target, AnalysisEnvironment env) {
-    return new RuleContext.Builder(
-        env, (Rule) target.getTarget(), target.getConfiguration(),
-        ruleClassProvider.getPrerequisiteValidator())
-            .setVisibility(NestedSetBuilder.<PackageSpecification>create(
-                Order.STABLE_ORDER, PackageSpecification.EVERYTHING))
-            .setPrerequisites(getPrerequisiteMapForTesting(target))
-            .setConfigConditions(ImmutableSet.<ConfigMatchingProvider>of())
-            .build();
+    return ruleContext;
   }
 
   /**

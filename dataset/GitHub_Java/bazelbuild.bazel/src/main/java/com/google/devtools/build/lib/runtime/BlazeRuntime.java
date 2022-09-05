@@ -31,6 +31,7 @@ import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.SubscriberExceptionContext;
 import com.google.common.eventbus.SubscriberExceptionHandler;
 import com.google.common.util.concurrent.Uninterruptibles;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.actions.cache.CompactPersistentActionCache;
@@ -140,7 +141,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -180,6 +180,9 @@ public final class BlazeRuntime {
   private final BlazeDirectories directories;
   private Path workingDirectory;
   private long commandStartTime;
+
+  // Application-specified constants
+  private final PathFragment runfilesPrefix;
 
   private final SkyframeExecutor skyframeExecutor;
 
@@ -244,7 +247,7 @@ public final class BlazeRuntime {
       WorkspaceStatusAction.Factory workspaceStatusActionFactory,
       final SkyframeExecutor skyframeExecutor,
       PackageFactory pkgFactory, ConfiguredRuleClassProvider ruleClassProvider,
-      ConfigurationFactory configurationFactory, Clock clock,
+      ConfigurationFactory configurationFactory, PathFragment runfilesPrefix, Clock clock,
       OptionsProvider startupOptionsProvider, Iterable<BlazeModule> blazeModules,
       Map<String, String> clientEnv,
       TimestampGranularityMonitor timestampGranularityMonitor,
@@ -254,6 +257,7 @@ public final class BlazeRuntime {
     this.directories = directories;
     this.workingDirectory = directories.getWorkspace();
     this.reporter = reporter;
+    this.runfilesPrefix = runfilesPrefix;
     this.packageFactory = pkgFactory;
     this.binTools = binTools;
     this.projectFileProvider = projectFileProvider;
@@ -338,7 +342,7 @@ public final class BlazeRuntime {
   /**
    * Conditionally enable profiling.
    */
-  private final boolean initProfiler(CommonCommandOptions options,
+  private final boolean initProfiler(CommonCommandOptions options, 
       UUID buildID, long execStartTimeNanos) {
     OutputStream out = null;
     boolean recordFullProfilerData = false;
@@ -432,6 +436,13 @@ public final class BlazeRuntime {
       return "";
     }
     return workspace.getBaseName();
+  }
+
+  /**
+   * Returns any prefix to be inserted between relative source paths and the runfiles directory.
+   */
+  public PathFragment getRunfilesPrefix() {
+    return runfilesPrefix;
   }
 
   /**
@@ -828,14 +839,6 @@ public final class BlazeRuntime {
       MemoryProfiler.instance().stop();
     } catch (IOException e) {
       getReporter().handle(Event.error("Error while writing profile file: " + e.getMessage()));
-    }
-
-    // If this is not a crash we flush the log after the command finishes.
-    if (exitCode < 30) {
-      LOG.info("Forcing flush of the logs");
-      for (Handler handler : Logger.getLogger("").getHandlers()) {
-        handler.flush();
-      }
     }
   }
 
@@ -1486,6 +1489,7 @@ public final class BlazeRuntime {
                 ? new BlazeRuntime.BugReportingExceptionHandler()
                 : new BlazeRuntime.RemoteExceptionHandler());
 
+    runtimeBuilder.setRunfilesPrefix(new PathFragment(Constants.RUNFILES_PREFIX));
     for (BlazeModule blazeModule : blazeModules) {
       runtimeBuilder.addBlazeModule(blazeModule);
     }
@@ -1572,6 +1576,7 @@ public final class BlazeRuntime {
    */
   public static class Builder {
 
+    private PathFragment runfilesPrefix = PathFragment.EMPTY_FRAGMENT;
     private BlazeDirectories directories;
     private Reporter reporter;
     private ConfigurationFactory configurationFactory;
@@ -1728,9 +1733,15 @@ public final class BlazeRuntime {
 
       return new BlazeRuntime(directories, reporter, workspaceStatusActionFactory, skyframeExecutor,
           pkgFactory, ruleClassProvider, configurationFactory,
+          runfilesPrefix == null ? PathFragment.EMPTY_FRAGMENT : runfilesPrefix,
           clock, startupOptionsProvider, ImmutableList.copyOf(blazeModules),
           clientEnv, timestampMonitor,
           eventBusExceptionHandler, binTools, projectFileProvider);
+    }
+
+    public Builder setRunfilesPrefix(PathFragment prefix) {
+      this.runfilesPrefix = prefix;
+      return this;
     }
 
     public Builder setBinTools(BinTools binTools) {
