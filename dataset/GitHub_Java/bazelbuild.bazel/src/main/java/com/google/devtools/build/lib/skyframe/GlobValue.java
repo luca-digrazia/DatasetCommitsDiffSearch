@@ -47,8 +47,7 @@ public final class GlobValue implements SkyValue {
   }
 
   /**
-   * Returns glob matches. The matches will be in a deterministic but unspecified order. If a
-   * particular order is required, the returned iterable should be sorted.
+   * Returns glob matches.
    */
   public NestedSet<PathFragment> getMatches() {
     return matches;
@@ -103,8 +102,7 @@ public final class GlobValue implements SkyValue {
   @ThreadSafe
   static SkyKey internalKey(PackageIdentifier packageId, Path packageRoot, PathFragment subdir,
       String pattern, boolean excludeDirs) {
-    return SkyKey.create(
-        SkyFunctions.GLOB,
+    return new SkyKey(SkyFunctions.GLOB,
         new GlobDescriptor(packageId, packageRoot, subdir, pattern, excludeDirs));
   }
 

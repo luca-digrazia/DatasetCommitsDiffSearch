@@ -146,9 +146,6 @@ public final class GlobFunction implements SkyFunction {
                 "readdir and stat disagree about whether " + symlinkRootedPath.asPath()
                     + " is a symlink."), Transience.TRANSIENT);
           }
-          if (!symlinkFileValue.exists()) {
-            continue;
-          }
           isDirectory = symlinkFileValue.isDirectory();
         }
 
