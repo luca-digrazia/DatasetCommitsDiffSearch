@@ -1174,8 +1174,7 @@ class Parser {
     int start = token.left;
     if (token.kind == TokenKind.RETURN) {
       return parseReturnStatement();
-    } else if ((parsingMode == SKYLARK)
-        && (token.kind == TokenKind.BREAK || token.kind == TokenKind.CONTINUE)) {
+    } else if (token.kind == TokenKind.BREAK || token.kind == TokenKind.CONTINUE)   {
       return parseFlowStatement(token.kind);
     }
     Expression expression = parseExpression();

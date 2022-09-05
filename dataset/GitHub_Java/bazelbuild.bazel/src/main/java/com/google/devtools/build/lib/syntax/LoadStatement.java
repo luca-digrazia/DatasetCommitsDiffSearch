@@ -90,7 +90,7 @@ public final class LoadStatement extends Statement {
    *
    * @throws EvalException if the path is empty or starts with two forward slashes
    */
-  public void validateLoadPath() throws EvalException {
+  private void validateLoadPath() throws EvalException {
     String error = null;
 
     if (pathString.isEmpty()) {
