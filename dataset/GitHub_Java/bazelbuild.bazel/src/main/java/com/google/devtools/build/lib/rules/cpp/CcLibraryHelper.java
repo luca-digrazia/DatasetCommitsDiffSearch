@@ -972,8 +972,6 @@ public final class CcLibraryHelper {
       if (model.getGeneratesNoPicHeaderModule()) {
         contextBuilder.setHeaderModule(model.getHeaderModule(cppModuleMap.getArtifact()));
       }
-      contextBuilder.setUseHeaderModules(
-          featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES));
       if (featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES)
           && featureConfiguration.isEnabled(CppRuleClasses.TRANSITIVE_MODULE_MAPS)) {
         contextBuilder.setProvideTransitiveModuleMaps(true);
@@ -1039,8 +1037,7 @@ public final class CcLibraryHelper {
 
   private Runfiles collectCppRunfiles(
       CcLinkingOutputs ccLinkingOutputs, boolean linkingStatically) {
-    Runfiles.Builder builder = new Runfiles.Builder(
-        ruleContext.getWorkspaceName(), ruleContext.getConfiguration().legacyExternalRunfiles());
+    Runfiles.Builder builder = new Runfiles.Builder(ruleContext.getWorkspaceName());
     builder.addTargets(implementationDeps, RunfilesProvider.DEFAULT_RUNFILES);
     builder.addTargets(implementationDeps, CppRunfilesProvider.runfilesFunction(linkingStatically));
     // Add the shared libraries to the runfiles.
