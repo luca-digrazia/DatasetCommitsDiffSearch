@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.EvalException.EvalExceptionWithJavaCause;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -102,7 +101,6 @@ public abstract class SkylarkFunction extends AbstractFunction {
     try {
       ImmutableMap.Builder<String, Object> arguments = new ImmutableMap.Builder<>();
       if (objectType != null && !FuncallExpression.isNamespace(objectType)) {
-        args = new ArrayList<Object>(args); // args immutable, get a mutable copy.
         arguments.put("self", args.remove(0));
       }
 
@@ -186,7 +184,7 @@ public abstract class SkylarkFunction extends AbstractFunction {
       throw new EvalException(loc, String.format("expected %s for '%s' but got %s instead\n"
           + "%s.%s: %s",
           EvalUtils.getDataTypeNameFromClass(expectedType), paramName,
-          EvalUtils.getDataTypeName(realValue), functionName, paramName, paramDoc));
+          EvalUtils.getDatatypeName(realValue), functionName, paramName, paramDoc));
     }
     if (expectedType.equals(SkylarkList.class)) {
       checkGeneric(functionName, paramName, expectedType, expectedGenericType,
@@ -209,7 +207,7 @@ public abstract class SkylarkFunction extends AbstractFunction {
           "expected %s of %ss for '%s' but got %s of %ss instead\n%s.%s: %s",
         mainType, EvalUtils.getDataTypeNameFromClass(expectedGenericType),
         paramName,
-        EvalUtils.getDataTypeName(realValue), EvalUtils.getDataTypeNameFromClass(realGenericType),
+        EvalUtils.getDatatypeName(realValue), EvalUtils.getDataTypeNameFromClass(realGenericType),
         functionName, paramName, paramDoc));
     }
   }
@@ -282,7 +280,7 @@ public abstract class SkylarkFunction extends AbstractFunction {
               throw new IllegalArgumentException(String.format(
                   "expected %s type for '%s' but got %s instead",
                   EvalUtils.getDataTypeNameFromClass(type), what,
-                  EvalUtils.getDataTypeName(input)));
+                  EvalUtils.getDatatypeName(input)));
             }
           }
     });
@@ -305,7 +303,7 @@ public abstract class SkylarkFunction extends AbstractFunction {
     if (!(obj instanceof Map<?, ?>)) {
       throw new IllegalArgumentException(String.format(
           "expected a dictionary for %s but got %s instead",
-          what, EvalUtils.getDataTypeName(obj)));
+          what, EvalUtils.getDatatypeName(obj)));
     }
     return Iterables.transform(((Map<?, ?>) obj).entrySet(),
         new com.google.common.base.Function<Map.Entry<?, ?>, Map.Entry<KEY_TYPE, VALUE_TYPE>>() {
@@ -322,8 +320,8 @@ public abstract class SkylarkFunction extends AbstractFunction {
             throw new IllegalArgumentException(String.format(
                 "expected <%s, %s> type for '%s' but got <%s, %s> instead",
                 keyType.getSimpleName(), valueType.getSimpleName(), what,
-                EvalUtils.getDataTypeName(input.getKey()),
-                EvalUtils.getDataTypeName(input.getValue())));
+                EvalUtils.getDatatypeName(input.getKey()),
+                EvalUtils.getDatatypeName(input.getValue())));
           }
         });
   }
@@ -336,7 +334,7 @@ public abstract class SkylarkFunction extends AbstractFunction {
       return type.cast(elem);
     } catch (ClassCastException e) {
       throw new EvalException(loc, String.format("expected %s for '%s' but got %s instead",
-          type.getSimpleName(), what, EvalUtils.getDataTypeName(elem)));
+          type.getSimpleName(), what, EvalUtils.getDatatypeName(elem)));
     }
   }
 }

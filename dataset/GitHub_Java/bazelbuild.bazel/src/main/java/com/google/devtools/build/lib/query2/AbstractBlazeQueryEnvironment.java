@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
-import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
@@ -35,7 +34,6 @@ import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.BinaryPredicate;
-import com.google.devtools.build.skyframe.WalkableGraph.WalkableGraphFactory;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -44,14 +42,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import javax.annotation.Nullable;
-
 /**
  * {@link QueryEnvironment} that can evaluate queries to produce a result, and implements as much
  * of QueryEnvironment as possible while remaining mostly agnostic as to the objects being stored.
  */
 public abstract class AbstractBlazeQueryEnvironment<T> implements QueryEnvironment<T> {
   protected final ErrorSensingEventHandler eventHandler;
+  private final TargetPatternEvaluator targetPatternEvaluator;
   private final Map<String, Set<T>> letBindings = new HashMap<>();
   protected final Map<String, ResolvedTargets<Target>> resolvedTargetPatterns = new HashMap<>();
   protected final boolean keepGoing;
@@ -63,13 +60,15 @@ public abstract class AbstractBlazeQueryEnvironment<T> implements QueryEnvironme
   private final Set<Setting> settings;
   private final List<QueryFunction> extraFunctions;
 
-  protected AbstractBlazeQueryEnvironment(boolean keepGoing,
+  protected AbstractBlazeQueryEnvironment(TargetPatternEvaluator targetPatternEvaluator,
+      boolean keepGoing,
       boolean strictScope,
       Predicate<Label> labelFilter,
       EventHandler eventHandler,
       Set<Setting> settings,
       Iterable<QueryFunction> extraFunctions) {
     this.eventHandler = new ErrorSensingEventHandler(eventHandler);
+    this.targetPatternEvaluator = targetPatternEvaluator;
     this.keepGoing = keepGoing;
     this.strictScope = strictScope;
     this.dependencyFilter = constructDependencyFilter(settings);
@@ -91,35 +90,23 @@ public abstract class AbstractBlazeQueryEnvironment<T> implements QueryEnvironme
   }
 
   public static AbstractBlazeQueryEnvironment<Target> newQueryEnvironment(
-      TransitivePackageLoader transitivePackageLoader, WalkableGraphFactory graphFactory,
-      PackageProvider packageProvider,
+      TransitivePackageLoader transitivePackageLoader, PackageProvider packageProvider,
       TargetPatternEvaluator targetPatternEvaluator, boolean keepGoing, boolean orderedResults,
-      List<String> universeScope, int loadingPhaseThreads,
-      EventHandler eventHandler, Set<Setting> settings, Iterable<QueryFunction> functions,
-      @Nullable PathPackageLocator packagePath) {
-    return newQueryEnvironment(transitivePackageLoader, graphFactory, packageProvider,
+      int loadingPhaseThreads,
+      EventHandler eventHandler, Set<Setting> settings, Iterable<QueryFunction> functions) {
+    return newQueryEnvironment(transitivePackageLoader, packageProvider,
         targetPatternEvaluator, keepGoing, /*strictScope=*/true, orderedResults,
-        universeScope, loadingPhaseThreads, Rule.ALL_LABELS, eventHandler, settings, functions,
-        packagePath);
+        loadingPhaseThreads, Rule.ALL_LABELS, eventHandler, settings, functions);
   }
 
   public static AbstractBlazeQueryEnvironment<Target> newQueryEnvironment(
-      TransitivePackageLoader transitivePackageLoader, WalkableGraphFactory graphFactory,
-      PackageProvider packageProvider,
+      TransitivePackageLoader transitivePackageLoader, PackageProvider packageProvider,
       TargetPatternEvaluator targetPatternEvaluator, boolean keepGoing, boolean strictScope,
-      boolean orderedResults, List<String> universeScope, int loadingPhaseThreads,
-      Predicate<Label> labelFilter,
-      EventHandler eventHandler, Set<Setting> settings, Iterable<QueryFunction> functions,
-      @Nullable PathPackageLocator packagePath) {
-    Preconditions.checkNotNull(universeScope);
-    return orderedResults || universeScope.isEmpty() || packagePath == null
-        ? new BlazeQueryEnvironment(transitivePackageLoader, packageProvider,
+      boolean orderedResults, int loadingPhaseThreads, Predicate<Label> labelFilter,
+      EventHandler eventHandler, Set<Setting> settings, Iterable<QueryFunction> functions) {
+    return new BlazeQueryEnvironment(transitivePackageLoader, packageProvider,
         targetPatternEvaluator, keepGoing, strictScope, loadingPhaseThreads,
-        labelFilter, eventHandler, settings, functions)
-        : new SkyQueryEnvironment(
-            keepGoing, strictScope, loadingPhaseThreads, labelFilter, eventHandler, settings,
-            functions, targetPatternEvaluator.getOffset(), graphFactory, universeScope,
-            packagePath);
+        labelFilter, eventHandler, settings, functions);
   }
 
   /**
@@ -132,6 +119,9 @@ public abstract class AbstractBlazeQueryEnvironment<T> implements QueryEnvironme
    *   effect
    */
   public QueryEvalResult<T> evaluateQuery(QueryExpression expr) throws QueryException {
+    // Some errors are reported as QueryExceptions and others as ERROR events
+    // (if --keep_going).
+    eventHandler.resetErrors();
     resolvedTargetPatterns.clear();
 
     // In the --nokeep_going case, errors are reported in the order in which the patterns are
@@ -220,8 +210,18 @@ public abstract class AbstractBlazeQueryEnvironment<T> implements QueryEnvironme
     return getTargetsMatchingPattern(caller, pattern);
   }
 
-  protected abstract Map<String, ResolvedTargets<Target>> preloadOrThrow(
-      Collection<String> patterns) throws QueryException, TargetParsingException;
+  private Map<String, ResolvedTargets<Target>> preloadOrThrow(Collection<String> patterns)
+      throws TargetParsingException {
+    try {
+      // Note that this may throw a RuntimeException if deps are missing in Skyframe and this is
+      // being called from within a SkyFunction.
+      return targetPatternEvaluator.preloadTargetPatterns(
+          eventHandler, patterns, keepGoing);
+    } catch (InterruptedException e) {
+      // TODO(bazel-team): Propagate the InterruptedException from here [skyframe-loading].
+      throw new TargetParsingException("interrupted");
+    }
+  }
 
   @Override
   public boolean isSettingEnabled(Setting setting) {
@@ -235,4 +235,5 @@ public abstract class AbstractBlazeQueryEnvironment<T> implements QueryEnvironme
     builder.addAll(extraFunctions);
     return builder.build();
   }
+
 }
