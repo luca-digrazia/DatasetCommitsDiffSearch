@@ -16,7 +16,9 @@ import javax.management.*;
 public class JmxReporter implements Runnable {
 	private static final ScheduledExecutorService TICK_THREAD =
 			Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("metrics-jmx-reporter"));
+	private final Map<MetricName, Metric> metrics;
 	private final Map<MetricName, MetricMBean> beans;
+	private ScheduledFuture<?> future;
 	private final MBeanServer server;
 
 	public static interface MetricMBean {
@@ -102,12 +104,12 @@ public class JmxReporter implements Runnable {
 
 		@Override
 		public String getEventType() {
-			return metric.eventType();
+			return metric.getEventType();
 		}
 
 		@Override
 		public TimeUnit getUnit() {
-			return metric.scaleUnit();
+			return metric.getScaleUnit();
 		}
 
 		@Override
@@ -296,7 +298,7 @@ public class JmxReporter implements Runnable {
 
 		@Override
 		public TimeUnit getRateUnit() {
-			return metric.rateUnit();
+			return metric.getRateUnit();
 		}
 
 		@Override
@@ -321,7 +323,7 @@ public class JmxReporter implements Runnable {
 
 		@Override
 		public TimeUnit getLatencyUnit() {
-			return metric.durationUnit();
+			return metric.getDurationUnit();
 		}
 
 		@Override
@@ -375,13 +377,14 @@ public class JmxReporter implements Runnable {
 		}
 	}
 
-	/*package*/ JmxReporter() {
-		this.beans = new HashMap<MetricName, MetricMBean>(Metrics.allMetrics().size());
+	public JmxReporter(Map<MetricName, Metric> metrics) {
+		this.metrics = metrics;
+		this.beans = new HashMap<MetricName, MetricMBean>(metrics.size());
 		this.server = ManagementFactory.getPlatformMBeanServer();
 	}
 
 	public void start() {
-		TICK_THREAD.scheduleAtFixedRate(this, 0, 1, TimeUnit.MINUTES);
+		this.future = TICK_THREAD.scheduleAtFixedRate(this, 0, 1, TimeUnit.MINUTES);
 		// then schedule the tick thread every 100ms for the next second so
 		// as to pick up the initialization of most metrics (in the first 1s of
 		// the application lifecycle) w/o incurring a high penalty later on
@@ -390,13 +393,26 @@ public class JmxReporter implements Runnable {
 		}
 	}
 
+	public void stop() {
+		if (future != null) {
+			future.cancel(true);
+			future = null;
+			for (MetricMBean bean : beans.values()) {
+				try {
+					server.unregisterMBean(bean.objectName());
+				} catch (Exception ignored) {
+				}
+			}
+		}
+	}
+
 	@Override
 	public void run() {
-		final Set<MetricName> newMetrics = new HashSet<MetricName>(Metrics.allMetrics().keySet());
+		final Set<MetricName> newMetrics = new HashSet<MetricName>(metrics.keySet());
 		newMetrics.removeAll(beans.keySet());
 
 		for (MetricName name : newMetrics) {
-			final Metric metric = Metrics.allMetrics().get(name);
+			final Metric metric = metrics.get(name);
 			if (metric != null) {
 				try {
 					final ObjectName objectName = new ObjectName(
