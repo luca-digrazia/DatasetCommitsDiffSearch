@@ -29,68 +29,57 @@ import org.apache.shiro.cache.Cache;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
 import org.apache.shiro.subject.Subject;
-import org.hswebframework.web.authorization.Authentication;
-import org.hswebframework.web.authorization.AuthenticationManager;
+import org.hswebframework.web.authorization.Authorization;
 import org.hswebframework.web.authorization.Role;
-import org.hswebframework.web.authorization.listener.AuthorizationListener;
-import org.hswebframework.web.authorization.listener.event.AuthorizationSuccessEvent;
+import org.hswebframework.web.authorization.listener.UserAuthorizationListener;
 
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
  * @author zhouhao
  */
-public class ListenerAuthorizingRealm extends AuthorizingRealm
-        implements AuthorizationListener<AuthorizationSuccessEvent> {
-    private AuthenticationManager authenticationManager;
+public class ListenerAuthorizingRealm extends AuthorizingRealm implements UserAuthorizationListener {
 
-
-    public ListenerAuthorizingRealm(AuthenticationManager authenticationManager) {
-        Objects.requireNonNull(authenticationManager);
-        this.authenticationManager=authenticationManager;
-        setAuthenticationTokenClass(SimpleAuthenticationToken.class);
+    public ListenerAuthorizingRealm() {
+        setAuthenticationTokenClass(CustomAuthenticationToken.class);
     }
-
 
     @Override
     protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
-        String loginUserId = (String) super.getAvailablePrincipal(principals);
-        return createAuthorizationInfo(authenticationManager.getByUserId(loginUserId));
+        String loginName = (String) super.getAvailablePrincipal(principals);
+        return this.<String, AuthorizationInfo>getCache(loginName)
+                .get(AuthorizationInfo.class.getName());
     }
 
     @Override
     protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) throws AuthenticationException {
-        if (token instanceof SimpleAuthenticationToken) {
-            return createAuthenticationInfo(((SimpleAuthenticationToken) token).getAuthentication());
+        if (token instanceof CustomAuthenticationToken) {
+            return this.<String, AuthenticationInfo>getCache((String) token.getPrincipal())
+                    .get(AuthenticationInfo.class.getName());
         }
         throw new AuthenticationException(new UnsupportedOperationException("{token_un_supported}"));
     }
 
-    private AuthenticationInfo createAuthenticationInfo(Authentication authentication) {
+    private AuthenticationInfo createAuthenticationInfo(Authorization authorization) {
         return new SimpleAuthenticationInfo(
-                authentication.getUser().getId(),
-                authentication.getUser().getUsername(),
-                ListenerAuthorizingRealm.class.getName());
+                authorization.getUser().getUsername(),
+                authorization.getUser().getId(),
+                authorization.getUser().getName());
     }
 
-    public void loginOut(Authentication authentication) {
+    @Override
+    public void onLoginOut(Authorization authorization) {
+        if (null != authorization)
+            getCache(authorization.getUser().getUsername()).clear();
         SecurityUtils.getSubject().logout();
     }
 
-    protected <K, V> Cache<K, V> getCache(String name) {
-        return getCacheManager().getCache(getCacheName(name));
-    }
-
-    protected String getCacheName(String name) {
-        return "shiro.auth.info.".concat(name);
-    }
-
-    protected AuthorizationInfo createAuthorizationInfo(Authentication authentication) {
+    @Override
+    public void onAuthorizeSuccess(boolean isRemembered, Authorization authorization) {
         SimpleAuthorizationInfo authorizationInfo = new SimpleAuthorizationInfo();
-        authorizationInfo.addRoles(authentication.getRoles().stream().map(Role::getId).collect(Collectors.toList()));
+        authorizationInfo.addRoles(authorization.getRoles().stream().map(Role::getId).collect(Collectors.toList()));
         authorizationInfo.addObjectPermissions(
-                authentication.getPermissions()
+                authorization.getPermissions()
                         .stream()
                         .map(permission -> {
                             StringBuilder builder = new StringBuilder(permission.getId());
@@ -100,18 +89,22 @@ public class ListenerAuthorizingRealm extends AuthorizingRealm
                             return new WildcardPermission(builder.toString());
                         }).collect(Collectors.toList()));
 
-        return authorizationInfo;
-    }
+        getCache(authorization.getUser().getUsername())
+                .put(AuthorizationInfo.class.getName(), authorizationInfo);
 
-    @Override
-    public void on(AuthorizationSuccessEvent event) {
-        Authentication authentication = event.getAuthentication();
-        boolean remember = Boolean.valueOf((String) event.getParameter("remember").orElse("false"));
-
-//        authentication.setAttribute(AuthorizationInfo.class.getName(), authorizationInfo);
-//        authentication.setAttribute(AuthenticationInfo.class.getName(), createAuthenticationInfo(authentication));
+        getCache(authorization.getUser().getUsername())
+                .put(AuthenticationInfo.class.getName(), createAuthenticationInfo(authorization));
 
         Subject subject = SecurityUtils.getSubject();
-        subject.login(new SimpleAuthenticationToken(authentication, remember));
+        subject.login(new CustomAuthenticationToken(authorization, isRemembered));
+        subject.getSession().setAttribute(Authorization.class.getName(), authorization);
+    }
+
+    protected <K, V> Cache<K, V> getCache(String name) {
+        return getCacheManager().getCache(getCacheName(name));
+    }
+
+    protected String getCacheName(String name) {
+        return "shiro.auth.info.".concat(name);
     }
 }
