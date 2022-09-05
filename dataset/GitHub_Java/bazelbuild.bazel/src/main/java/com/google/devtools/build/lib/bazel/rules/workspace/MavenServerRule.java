@@ -19,6 +19,7 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
 import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetFactory;
@@ -32,7 +33,7 @@ public class MavenServerRule implements RuleDefinition {
   public static final String NAME = "maven_server";
 
   @Override
-  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
+  public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
     return builder
         /* <!-- #BLAZE_RULE(maven_server).ATTRIBUTE(url) -->
         A URL for accessing the server.
@@ -66,7 +67,7 @@ public class MavenServerRule implements RuleDefinition {
 <p>How to access a Maven repository.</p>
 
 <p>This is a combination of a &lt;repository&gt; definition from a pom.xml file and a
-&lt;server&gt; definition from a settings.xml file.</p>
+&lt;server&lt; definition from a settings.xml file.</p>
 
 <h4>Using <code>maven_server</code></h4>
 
