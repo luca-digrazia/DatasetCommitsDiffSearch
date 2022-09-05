@@ -53,8 +53,7 @@ public class ScheduledReporterTest {
 
     @Test
     public void pollsPeriodically() throws Exception {
-        Thread.sleep(500);
-        verify(reporter, times(2)).report(
+        verify(reporter, timeout(500).times(2)).report(
                 map("gauge", gauge),
                 map("counter", counter),
                 map("histogram", histogram),
