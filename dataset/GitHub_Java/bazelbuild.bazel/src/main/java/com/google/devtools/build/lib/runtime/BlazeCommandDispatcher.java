@@ -209,10 +209,16 @@ public class BlazeCommandDispatcher {
    */
   int exec(List<String> args, OutErr outErr, long firstContactTime)
       throws ShutdownBlazeServerException {
-    // Record the start time for the profiler. Do not put anything before this!
+    // Record the start time for the profiler and the timestamp granularity monitor. Do not put
+    // anything before this!
     long execStartTimeNanos = runtime.getClock().nanoTime();
 
-    // The initCommand call also records the start time for the timestamp granularity monitor.
+    // Record the command's starting time again, for use by
+    // TimestampGranularityMonitor.waitForTimestampGranularity().
+    // This should be done as close as possible to the start of
+    // the command's execution - that's why we do this separately,
+    // rather than in runtime.beforeCommand().
+    runtime.getTimestampGranularityMonitor().setCommandStartTime();
     CommandEnvironment env = runtime.initCommand();
     // Record the command's starting time for use by the commands themselves.
     env.recordCommandStartTime(firstContactTime);
@@ -282,9 +288,6 @@ public class BlazeCommandDispatcher {
       parseArgsAndConfigs(optionsParser, commandAnnotation, args, rcfileNotes, outErr);
 
       InvocationPolicyEnforcer optionsPolicyEnforcer =
-          new InvocationPolicyEnforcer(runtime.getInvocationPolicy());
-      optionsPolicyEnforcer.enforce(optionsParser, commandName);
-      optionsPolicyEnforcer =
           InvocationPolicyEnforcer.create(getRuntime().getStartupOptionsProvider());
       optionsPolicyEnforcer.enforce(optionsParser, commandName);
     } catch (OptionsParsingException e) {
@@ -394,7 +397,7 @@ public class BlazeCommandDispatcher {
         reporter.removeHandler(ansiAllowingHandler);
         releaseHandler(ansiAllowingHandler);
       }
-      env.getTimestampGranularityMonitor().waitForTimestampGranularity(outErr);
+      runtime.getTimestampGranularityMonitor().waitForTimestampGranularity(outErr);
     }
   }
 
@@ -471,10 +474,9 @@ public class BlazeCommandDispatcher {
       throws OptionsParsingException {
     if (!rcfileOptions.isEmpty()) {
       String inherited = commandToParse.equals(originalCommand) ? "" : "Inherited ";
-      String source = rcfile.equals("client") ? "Options provided by the client"
-          : "Reading options for '" + originalCommand + "' from " + rcfile;
-      rcfileNotes.add(source + ":\n"
-          + "  " + inherited + "'" + commandToParse + "' options: "
+      rcfileNotes.add("Reading options for '" + originalCommand +
+          "' from " + rcfile + ":\n" +
+          "  " + inherited + "'" + commandToParse + "' options: "
         + Joiner.on(' ').join(rcfileOptions));
       optionsParser.parse(OptionPriority.RC_FILE, rcfile, rcfileOptions);
     }
@@ -484,7 +486,7 @@ public class BlazeCommandDispatcher {
     List<String> result = new ArrayList<>();
     getCommandNamesToParseHelper(commandAnnotation, result);
     result.add("common");
-    result = Lists.reverse(result);
+    // TODO(bazel-team): This statement is a NO-OP: Lists.reverse(result);
     return result;
   }
 
