@@ -315,6 +315,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(name = "experimental_desugar_for_android",
         defaultValue = "false",
         category = "undocumented",
+        implicitRequirements = "--noexperimental_android_use_jack_for_dexing",
         help = "Whether to desugar Java 8 bytecode before dexing.")
     public boolean desugarJava8;
 
@@ -374,14 +375,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         category = "hidden",
         help = "dx flags supported in incremental dexing.")
     public List<String> dexoptsSupportedInIncrementalDexing;
-
-    @Option(
-      name = "experimental_android_rewrite_dexes_with_rex",
-      defaultValue = "false",
-      category = "undocumented",
-      help = "use rex tool to rewrite dex files"
-    )
-    public boolean useRexToCompressDexFiles;
 
     @Option(name = "experimental_allow_android_library_deps_without_srcs",
         defaultValue = "true",
@@ -505,7 +498,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final ImmutableList<String> dexoptsSupportedInIncrementalDexing;
   private final ImmutableList<String> targetDexoptsThatPreventIncrementalDexing;
   private final boolean desugarJava8;
-  private final boolean useRexToCompressDexFiles;
   private final boolean allowAndroidLibraryDepsWithoutSrcs;
   private final boolean useAndroidResourceShrinking;
   private final boolean useRClassGenerator;
@@ -538,7 +530,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.manifestMerger = options.manifestMerger;
     this.apkSigningMethod = options.apkSigningMethod;
     this.useSingleJarApkBuilder = options.useSingleJarApkBuilder;
-    this.useRexToCompressDexFiles = options.useRexToCompressDexFiles;
   }
 
   public String getCpu() {
@@ -593,10 +584,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public boolean desugarJava8() {
     return desugarJava8;
-  }
-
-  public boolean useRexToCompressDexFiles() {
-    return useRexToCompressDexFiles;
   }
 
   public boolean allowSrcsLessAndroidLibraryDeps() {

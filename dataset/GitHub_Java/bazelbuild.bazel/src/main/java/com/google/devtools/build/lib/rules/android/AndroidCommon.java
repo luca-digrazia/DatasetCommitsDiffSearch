@@ -125,7 +125,7 @@ public class AndroidCommon {
   private JavaCompilationArgs javaCompilationArgs = JavaCompilationArgs.EMPTY_ARGS;
   private JavaCompilationArgs recursiveJavaCompilationArgs = JavaCompilationArgs.EMPTY_ARGS;
   private JackCompilationHelper jackCompilationHelper;
-  private NestedSet<Artifact> jarsProducedForRuntime;
+  private ImmutableList<Artifact> jarsProducedForRuntime;
   private Artifact classJar;
   private Artifact iJar;
   private Artifact srcJar;
@@ -375,17 +375,6 @@ public class AndroidCommon {
     throw new IllegalArgumentException(String.format("%s was not found in %s", needle, haystack));
   }
 
-  public static NestedSetBuilder<Artifact> collectTransitiveNativeLibsZips(
-      RuleContext ruleContext) {
-    NestedSetBuilder<Artifact> transitiveAarNativeLibs = NestedSetBuilder.naiveLinkOrder();
-    Iterable<NativeLibsZipsProvider> providers = getTransitivePrerequisites(
-        ruleContext, Mode.TARGET, NativeLibsZipsProvider.class);
-    for (NativeLibsZipsProvider nativeLibsZipsProvider : providers) {
-      transitiveAarNativeLibs.addTransitive(nativeLibsZipsProvider.getAarNativeLibs());
-    }
-    return transitiveAarNativeLibs;
-  }
-
   Artifact compileDexWithJack(
       MultidexMode mode, Optional<Artifact> mainDexList, Collection<Artifact> proguardSpecs) {
     return jackCompilationHelper.compileAsDex(mode, mainDexList, proguardSpecs);
@@ -398,7 +387,7 @@ public class AndroidCommon {
       JavaCompilationArtifacts.Builder artifactsBuilder,
       JavaTargetAttributes.Builder attributes,
       NestedSetBuilder<Artifact> filesBuilder,
-      NestedSetBuilder<Artifact> jarsProducedForRuntime,
+      ImmutableList.Builder<Artifact> jarsProducedForRuntime,
       boolean useRClassGenerator) throws InterruptedException {
     compileResourceJar(javaSemantics, resourceApk, resourcesJar, useRClassGenerator);
     // Add the compiled resource jar to the classpath of the main compilation.
@@ -462,7 +451,7 @@ public class AndroidCommon {
 
   private void createJarJarActions(
       JavaTargetAttributes.Builder attributes,
-      NestedSetBuilder<Artifact> jarsProducedForRuntime,
+      ImmutableList.Builder<Artifact> jarsProducedForRuntime,
       Iterable<ResourceContainer> resourceContainers,
       String originalPackage,
       Artifact binaryResourcesJar) {
@@ -550,7 +539,7 @@ public class AndroidCommon {
             .setBootClassPath(bootclasspath);
 
     JavaCompilationArtifacts.Builder artifactsBuilder = new JavaCompilationArtifacts.Builder();
-    NestedSetBuilder<Artifact> jarsProducedForRuntime = NestedSetBuilder.<Artifact>stableOrder();
+    ImmutableList.Builder<Artifact> jarsProducedForRuntime = ImmutableList.builder();
     NestedSetBuilder<Artifact> filesBuilder = NestedSetBuilder.<Artifact>stableOrder();
 
     Artifact resourcesJar = resourceApk.getResourceJavaSrcJar();
@@ -905,7 +894,7 @@ public class AndroidCommon {
    * {@link #getRuntimeJars()} returns the complete runtime classpath needed by this rule, including
    * dependencies.
    */
-  public NestedSet<Artifact> getJarsProducedForRuntime() {
+  public ImmutableList<Artifact> getJarsProducedForRuntime() {
     return jarsProducedForRuntime;
   }
 
