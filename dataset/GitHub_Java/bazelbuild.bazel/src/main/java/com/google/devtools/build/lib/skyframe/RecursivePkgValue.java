@@ -70,18 +70,23 @@ class RecursivePkgValue implements SkyValue {
    * set of subdirectories beneath {@code rootedPath} to skip.
    *
    * <p>Throws {@link IllegalArgumentException} if {@code excludedPaths} contains any paths that
-   * are equal to {@code rootedPath} or that are not beneath {@code rootedPath}.
+   * are not beneath {@code rootedPath}.
    */
   @ThreadSafe
   public static final class RecursivePkgKey implements Serializable {
     private final RootedPath rootedPath;
     private final ImmutableSet<PathFragment> excludedPaths;
 
-    public RecursivePkgKey(RootedPath rootedPath, ImmutableSet<PathFragment> excludedPaths) {
-      PathFragment.checkAllPathsAreUnder(excludedPaths,
-          rootedPath.getRelativePath());
+    private RecursivePkgKey(RootedPath rootedPath, ImmutableSet<PathFragment> excludedPaths) {
       this.rootedPath = Preconditions.checkNotNull(rootedPath);
       this.excludedPaths = Preconditions.checkNotNull(excludedPaths);
+
+      PathFragment rootedPathFragment = rootedPath.getRelativePath();
+      for (PathFragment excludedPath : excludedPaths) {
+        Preconditions.checkArgument(!excludedPath.equals(rootedPathFragment)
+            && excludedPath.startsWith(rootedPathFragment), "%s is not beneath %s", excludedPath,
+            rootedPathFragment);
+      }
     }
 
     public RootedPath getRootedPath() {
@@ -90,11 +95,6 @@ class RecursivePkgValue implements SkyValue {
 
     public ImmutableSet<PathFragment> getExcludedPaths() {
       return excludedPaths;
-    }
-
-    @Override
-    public String toString() {
-      return "rootedPath=" + rootedPath + ", excludedPaths=<omitted>)";
     }
 
     @Override
