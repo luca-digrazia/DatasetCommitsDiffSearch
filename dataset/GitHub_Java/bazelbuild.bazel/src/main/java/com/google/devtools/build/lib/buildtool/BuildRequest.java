@@ -502,7 +502,10 @@ public class BuildRequest implements OptionsClassProvider {
   }
 
   private ImmutableSortedSet<String> determineOutputGroups() {
-    Set<String> current = new HashSet<>(OutputGroupProvider.DEFAULT_GROUPS);
+    Set<String> current = new HashSet<>();
+    current.add(OutputGroupProvider.TEMP_FILES);
+    current.add(OutputGroupProvider.HIDDEN_TOP_LEVEL);
+    current.add(OutputGroupProvider.DEFAULT);
 
     for (String outputGroup : getBuildOptions().outputGroups) {
       if (outputGroup.startsWith("-")) {
