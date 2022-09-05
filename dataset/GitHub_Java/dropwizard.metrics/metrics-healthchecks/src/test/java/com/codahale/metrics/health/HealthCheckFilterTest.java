@@ -8,7 +8,7 @@ import org.junit.Test;
 public class HealthCheckFilterTest {
 
     @Test
-    public void theAllFilterMatchesAllHealthChecks() {
+    public void theAllFilterMatchesAllHealthChecks() throws Exception {
         assertThat(HealthCheckFilter.ALL.matches("", mock(HealthCheck.class))).isTrue();
     }
 }
