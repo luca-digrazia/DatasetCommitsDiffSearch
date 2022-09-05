@@ -1,5 +1,6 @@
 package com.codahale.metrics;
 
+import java.io.Closeable;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
@@ -13,7 +14,7 @@ public class Timer implements Metered, Sampling {
      *
      * @see Timer#time()
      */
-    public static class Context implements AutoCloseable {
+    public static class Context implements Closeable {
         private final Timer timer;
         private final Clock clock;
         private final long startTime;

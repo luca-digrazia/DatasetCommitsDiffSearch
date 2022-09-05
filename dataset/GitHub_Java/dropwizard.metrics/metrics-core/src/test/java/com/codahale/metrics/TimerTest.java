@@ -117,21 +117,4 @@ public class TimerTest {
 
         verifyZeroInteractions(reservoir);
     }
-
-    @Test
-    public void tryWithResourcesWork() {
-        assertThat(timer.getCount()).isZero();
-
-        int dummy = 0;
-        try (Timer.Context context = timer.time()) {
-            assertThat(context).isNotNull();
-            dummy += 1;
-        }
-        assertThat(dummy).isEqualTo(1);
-        assertThat(timer.getCount())
-                .isEqualTo(1);
-
-        verify(reservoir).update(50000000);
-    }
-
 }
