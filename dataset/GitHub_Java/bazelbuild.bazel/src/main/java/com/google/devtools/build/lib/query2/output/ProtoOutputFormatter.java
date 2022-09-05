@@ -22,7 +22,6 @@ import static com.google.devtools.build.lib.query2.proto.proto2api.Build.Target.
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.EnvironmentGroup;
@@ -39,6 +38,7 @@ import com.google.devtools.build.lib.query2.output.OutputFormatter.UnorderedForm
 import com.google.devtools.build.lib.query2.output.QueryOptions.OrderOutput;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build;
 import com.google.devtools.build.lib.syntax.Environment;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.BinaryPredicate;
 
 import java.io.IOException;
@@ -61,11 +61,10 @@ public class ProtoOutputFormatter extends OutputFormatter implements UnorderedFo
    */
   public static final String RULE_IMPLEMENTATION_HASH_ATTR_NAME = "$rule_implementation_hash";
 
-  private transient BinaryPredicate<Rule, Attribute> dependencyFilter;
-  protected transient AspectResolver aspectResolver;
-
+  private BinaryPredicate<Rule, Attribute> dependencyFilter;
   private boolean relativeLocations = false;
   protected boolean includeDefaultValues = true;
+  protected AspectResolver aspectResolver;
 
   protected void setDependencyFilter(QueryOptions options) {
     this.dependencyFilter = OutputFormatter.getDependencyFilter(options);
@@ -150,7 +149,7 @@ public class ProtoOutputFormatter extends OutputFormatter implements UnorderedFo
             Build.Attribute.newBuilder()
                 .setName(RULE_IMPLEMENTATION_HASH_ATTR_NAME)
                 .setType(ProtoUtils.getDiscriminatorFromType(
-                    com.google.devtools.build.lib.syntax.Type.STRING))
+                    com.google.devtools.build.lib.packages.Type.STRING))
                 .setStringValue(env.getTransitiveContentHashCode()));
       }
 
