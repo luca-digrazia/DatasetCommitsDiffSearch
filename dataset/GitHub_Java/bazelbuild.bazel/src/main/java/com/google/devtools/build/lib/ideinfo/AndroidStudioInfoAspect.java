@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.CRuleIdeInfo;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.CToolchainIdeInfo;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.JavaRuleIdeInfo;
-import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.JavaToolchainIdeInfo;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.LibraryArtifact;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.RuleIdeInfo;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.RuleIdeInfo.Kind;
@@ -75,7 +74,6 @@ import com.google.devtools.build.lib.rules.java.JavaGenJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
-import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.protobuf.MessageLite;
@@ -136,8 +134,6 @@ public class AndroidStudioInfoAspect extends NativeAspectClass implements Config
     builder.add(new PrerequisiteAttr("exports", BuildType.LABEL_LIST));
     // From android_test
     builder.add(new PrerequisiteAttr("binary_under_test", BuildType.LABEL));
-    // from java_* rules
-    builder.add(new PrerequisiteAttr(":java_toolchain", BuildType.LABEL));
     // from cc_* rules
     builder.add(new PrerequisiteAttr(":cc_toolchain", BuildType.LABEL));
 
@@ -339,9 +335,8 @@ public class AndroidStudioInfoAspect extends NativeAspectClass implements Config
       if (packageManifest != null) {
         providerBuilder.ideInfoFilesBuilder().add(packageManifest);
         ruleContext.registerAction(
-            makePackageManifestAction(ruleContext,
-                packageManifest,
-                getJavaSourceForPackageManifest(ruleContext)));
+            makePackageManifestAction(ruleContext, packageManifest, getJavaSources(ruleContext))
+        );
       }
 
       JavaRuleIdeInfo javaRuleIdeInfo = makeJavaRuleIdeInfo(
@@ -389,14 +384,6 @@ public class AndroidStudioInfoAspect extends NativeAspectClass implements Config
       outputBuilder.setTestInfo(builder);
     }
 
-    // Java toolchain rule
-    JavaToolchainProvider javaToolchainProvider = base.getProvider(JavaToolchainProvider.class);
-    if (javaToolchainProvider != null) {
-      outputBuilder.setJavaToolchainIdeInfo(JavaToolchainIdeInfo.newBuilder()
-          .setSourceVersion(javaToolchainProvider.getSourceVersion())
-          .setTargetVersion(javaToolchainProvider.getTargetVersion()));
-    }
-
     androidStudioInfoSemantics.augmentRuleInfo(
         outputBuilder, base, ruleContext, ideResolveArtifacts);
 
@@ -432,7 +419,7 @@ public class AndroidStudioInfoAspect extends NativeAspectClass implements Config
 
   @Nullable private static Artifact createPackageManifest(ConfiguredTarget base,
       RuleContext ruleContext) {
-    Collection<Artifact> sourceFiles = getJavaSourceForPackageManifest(ruleContext);
+    Collection<Artifact> sourceFiles = getJavaSources(ruleContext);
     if (sourceFiles.isEmpty()) {
       return null;
     }
@@ -468,11 +455,11 @@ public class AndroidStudioInfoAspect extends NativeAspectClass implements Config
       new Function<Artifact, String>() {
         @Override
         public String apply(Artifact artifact) {
-          Root root = artifact.getRoot();
+          ArtifactLocation location = makeArtifactLocation(artifact);
           return Joiner.on(",").join(
-              root.getExecPath().toString(),
-              artifact.getRootRelativePath().toString(),
-              root.getPath().toString() // Remove me once we remove ArtifactLocation root
+              location.getRootExecutionPathFragment(),
+              location.getRelativePath(),
+              location.getRootPath()
           );
         }
       };
@@ -531,15 +518,6 @@ public class AndroidStudioInfoAspect extends NativeAspectClass implements Config
 
     if (dependenciesResult.resources != null) {
       builder.setLegacyResources(dependenciesResult.resources.toString());
-    }
-
-    OutputJar resourceJar = androidIdeInfoProvider.getResourceJar();
-    if (resourceJar != null) {
-      LibraryArtifact resourceLibraryArtifact = makeLibraryArtifact(ideResolveArtifacts,
-          resourceJar.getClassJar(), resourceJar.getIJar(), resourceJar.getSrcJar());
-      if (resourceLibraryArtifact != null) {
-        builder.setResourceJar(resourceLibraryArtifact);
-      }
     }
 
     return builder.build();
@@ -645,8 +623,6 @@ public class AndroidStudioInfoAspect extends NativeAspectClass implements Config
     for (Artifact sourceFile : sourceFiles) {
       builder.addSource(makeArtifactLocation(sourceFile));
     }
-
-    ideResolveArtifacts.addTransitive(cppCompilationContext.getDeclaredIncludeSrcs());
 
     builder.addAllRuleInclude(getIncludes(ruleContext));
     builder.addAllRuleDefine(getDefines(ruleContext));
@@ -770,7 +746,7 @@ public class AndroidStudioInfoAspect extends NativeAspectClass implements Config
     }
   }
 
-  private static Collection<Artifact> getJavaSourceForPackageManifest(RuleContext ruleContext) {
+  private static Collection<Artifact> getJavaSources(RuleContext ruleContext) {
     Collection<Artifact> srcs = getSources(ruleContext);
     List<Artifact> javaSrcs = Lists.newArrayList();
     for (Artifact src : srcs) {
@@ -815,7 +791,7 @@ public class AndroidStudioInfoAspect extends NativeAspectClass implements Config
   private static PathFragment getOutputFilePath(ConfiguredTarget base, RuleContext ruleContext,
       String suffix) {
     PathFragment packagePathFragment =
-        ruleContext.getLabel().getPackageIdentifier().getSourceRoot();
+        ruleContext.getLabel().getPackageIdentifier().getPathFragment();
     String name = base.getLabel().getName();
     return new PathFragment(packagePathFragment, new PathFragment(name + suffix));
   }
