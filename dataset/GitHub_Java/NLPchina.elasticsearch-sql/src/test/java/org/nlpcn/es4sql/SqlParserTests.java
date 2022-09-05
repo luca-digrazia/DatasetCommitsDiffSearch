@@ -11,7 +11,6 @@ import org.nlpcn.es4sql.domain.*;
 import org.nlpcn.es4sql.exception.SqlParseException;
 import org.nlpcn.es4sql.parse.ElasticSqlExprParser;
 import org.nlpcn.es4sql.parse.SqlParser;
-import org.nlpcn.es4sql.query.ESHashJoinQueryAction;
 
 import java.util.List;
 
@@ -25,7 +24,6 @@ public class SqlParserTests {
     public static void init(){
         parser = new SqlParser();
     }
-
 
 
     @Test
