@@ -1,9 +1,9 @@
 package com.yammer.metrics.reporting;
 
-import com.yammer.metrics.core.HealthCheckRegistry;
+import com.yammer.metrics.HealthCheckRegistry;
 import com.yammer.metrics.HealthChecks;
 import com.yammer.metrics.Metrics;
-import com.yammer.metrics.core.MetricsRegistry;
+import com.yammer.metrics.MetricsRegistry;
 import com.yammer.metrics.core.*;
 import com.yammer.metrics.core.HealthCheck.Result;
 import com.yammer.metrics.util.Utils;
@@ -49,10 +49,10 @@ public class MetricsServlet extends HttpServlet {
                                            "  </ul>\n" +
                                            "</body>\n" +
                                            "</html>";
-    public static final String HEALTHCHECK_URI = "/healthcheck";
-    public static final String METRICS_URI = "/metrics";
-    public static final String PING_URI = "/ping";
-    public static final String THREADS_URI = "/threads";
+    private static final String HEALTHCHECK_URI = "/healthcheck";
+    private static final String METRICS_URI = "/metrics";
+    private static final String PING_URI = "/ping";
+    private static final String THREADS_URI = "/threads";
     private MetricsRegistry metricsRegistry;
     private HealthCheckRegistry healthCheckRegistry;
     private JsonFactory factory;
@@ -68,7 +68,7 @@ public class MetricsServlet extends HttpServlet {
     }
 
     public MetricsServlet(JsonFactory factory) {
-        this(factory, HEALTHCHECK_URI, METRICS_URI, PING_URI, THREADS_URI);
+        this(factory, HEALTHCHECK_URI, METRICS_URI, PING_URI, THREADS_URI, true);
     }
 
     public MetricsServlet(JsonFactory factory, boolean showJvmMetrics) {
@@ -76,24 +76,10 @@ public class MetricsServlet extends HttpServlet {
     }
 
     public MetricsServlet(String healthcheckUri, String metricsUri, String pingUri, String threadsUri) {
-        this(new JsonFactory(new ObjectMapper()), healthcheckUri, metricsUri, pingUri, threadsUri);
-    }
-
-    public MetricsServlet(JsonFactory factory, String healthcheckUri, String metricsUri, String pingUri, String threadsUri) {
-        this(factory, healthcheckUri, metricsUri, pingUri, threadsUri, true);
+        this(new JsonFactory(new ObjectMapper()), healthcheckUri, metricsUri, pingUri, threadsUri, true);
     }
 
     public MetricsServlet(JsonFactory factory, String healthcheckUri, String metricsUri, String pingUri, String threadsUri, boolean showJvmMetrics) {
-        this(Metrics.defaultRegistry(), HealthChecks.defaultRegistry(), factory, healthcheckUri, metricsUri, pingUri, threadsUri, showJvmMetrics);
-    }
-
-    public MetricsServlet(MetricsRegistry metricsRegistry, HealthCheckRegistry healthCheckRegistry, String healthcheckUri, String metricsUri, String pingUri, String threadsUri, boolean showJvmMetrics) {
-        this(metricsRegistry, healthCheckRegistry, new JsonFactory(new ObjectMapper()), healthcheckUri, metricsUri, pingUri, threadsUri, showJvmMetrics);
-    }
-
-    public MetricsServlet(MetricsRegistry metricsRegistry, HealthCheckRegistry healthCheckRegistry, JsonFactory factory, String healthcheckUri, String metricsUri, String pingUri, String threadsUri, boolean showJvmMetrics) {
-        this.metricsRegistry = metricsRegistry;
-        this.healthCheckRegistry = healthCheckRegistry;
         this.factory = factory;
         this.healthcheckUri = healthcheckUri;
         this.metricsUri = metricsUri;
@@ -109,8 +95,8 @@ public class MetricsServlet extends HttpServlet {
         ServletContext context = config.getServletContext();
 
         this.contextPath = context.getContextPath();
-        this.metricsRegistry = putAttrIfAbsent(context, ATTR_NAME_METRICS_REGISTRY, this.metricsRegistry);
-        this.healthCheckRegistry = putAttrIfAbsent(context, ATTR_NAME_HEALTHCHECK_REGISTRY, this.healthCheckRegistry);
+        this.metricsRegistry = putAttrIfAbsent(context, ATTR_NAME_METRICS_REGISTRY, Metrics.defaultRegistry());
+        this.healthCheckRegistry = putAttrIfAbsent(context, ATTR_NAME_HEALTHCHECK_REGISTRY, HealthChecks.defaultRegistry());
         this.metricsUri = getParam(config.getInitParameter("metrics-uri"), this.metricsUri);
         this.pingUri = getParam(config.getInitParameter("ping-uri"), this.pingUri);
         this.threadsUri = getParam(config.getInitParameter("threads-uri"), this.threadsUri);
@@ -192,11 +178,7 @@ public class MetricsServlet extends HttpServlet {
             for (Entry<String, Result> entry : results.entrySet()) {
                 final Result result = entry.getValue();
                 if (result.isHealthy()) {
-                    if (result.getMessage() != null) {
-                        writer.format("* %s: OK: %s\n", entry.getKey(), result.getMessage());
-                    } else {
-                        writer.format("* %s: OK\n", entry.getKey());
-                    }
+                    writer.format("* %s: OK\n", entry.getKey());
                 } else {
                     if (result.getMessage() != null) {
                         writer.format("! %s: ERROR\n!  %s\n", entry.getKey(), result.getMessage());
