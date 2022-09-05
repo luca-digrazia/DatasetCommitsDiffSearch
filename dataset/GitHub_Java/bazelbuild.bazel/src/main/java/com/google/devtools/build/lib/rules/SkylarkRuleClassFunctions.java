@@ -356,45 +356,20 @@ public class SkylarkRuleClassFunctions {
         type = SkylarkList.class,
         generic1 = String.class,
         defaultValue = "[]"
-      ),
-      @Param(
-        name = "extra_deps",
-        type = SkylarkList.class,
-        generic1 = String.class,
-        defaultValue = "[]"
       )
     },
-    useEnvironment = true,
-    useAst = true
+    useEnvironment = true
   )
   private static final BuiltinFunction aspect =
       new BuiltinFunction("aspect") {
         public SkylarkAspect invoke(
-            BaseFunction implementation,
-            SkylarkList attributeAspects,
-            SkylarkList extraDeps,
-            FuncallExpression ast,
-            Environment funcallEnv) throws EvalException {
-          ImmutableList.Builder<String> attributeListBuilder = ImmutableList.builder();
+            BaseFunction implementation, SkylarkList attributeAspects, Environment funcallEnv)
+            throws ConversionException {
+          ImmutableList.Builder<String> builder = ImmutableList.<String>builder();
           for (Object attributeAspect : attributeAspects) {
-            attributeListBuilder.add(STRING.convert(attributeAspect, "attr_aspects"));
+            builder.add(STRING.convert(attributeAspect, ""));
           }
-          ImmutableList.Builder<Label> extraDepsBuilder = ImmutableList.builder();
-          for (Object extraDep : extraDeps) {
-            String extraDepsString = STRING.convert(extraDep, "extra_deps");
-            Label label;
-            try {
-              label = Label.parseAbsolute(extraDepsString);
-            } catch (LabelSyntaxException e) {
-              throw new EvalException(ast.getLocation(), e.getMessage());
-            }
-            extraDepsBuilder.add(label);
-          }
-
-          return new SkylarkAspect(implementation,
-              attributeListBuilder.build(),
-              extraDepsBuilder.build(),
-              funcallEnv);
+          return new SkylarkAspect(implementation, builder.build(), funcallEnv);
         }
       };
 
@@ -458,7 +433,6 @@ public class SkylarkRuleClassFunctions {
           }
           attributeBuilder.aspect(new SkylarkAspectClass(skylarkAspect));
         }
-
         addAttribute(definitionLocation, builder,
             descriptor.getAttributeBuilder().build(attribute.getFirst()));
       }
@@ -635,17 +609,15 @@ public class SkylarkRuleClassFunctions {
   public static class SkylarkAspect implements SkylarkValue {
     private final BaseFunction implementation;
     private final ImmutableList<String> attributeAspects;
-    private final ImmutableList<Label> extraDeps;
     private final Environment funcallEnv;
     private Exported exported;
 
     public SkylarkAspect(
         BaseFunction implementation,
         ImmutableList<String> attributeAspects,
-        ImmutableList<Label> extraDeps, Environment funcallEnv) {
+        Environment funcallEnv) {
       this.implementation = implementation;
       this.attributeAspects = attributeAspects;
-      this.extraDeps = extraDeps;
       this.funcallEnv = funcallEnv;
     }
 
@@ -659,10 +631,6 @@ public class SkylarkRuleClassFunctions {
 
     public Environment getFuncallEnv() {
       return funcallEnv;
-    }
-
-    public ImmutableList<Label> getExtraDeps() {
-      return extraDeps;
     }
 
     @Override
@@ -730,7 +698,6 @@ public class SkylarkRuleClassFunctions {
       for (String attributeAspect : skylarkAspect.getAttributeAspects()) {
         builder.attributeAspect(attributeAspect, this);
       }
-      builder.add(attr("$extra_deps", LABEL_LIST).value(skylarkAspect.getExtraDeps()));
       this.aspectDefinition = builder.build();
 
       this.extensionLabel = skylarkAspect.getExtensionLabel();
