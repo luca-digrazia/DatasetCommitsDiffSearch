@@ -260,11 +260,7 @@ public class KernalVersionManager {
 
     @Override
     public String toString(){
-        return String.format("%s@%s--%s--dexPatchBundles:%s",
-            LAST_VERSIONNAME,CURRENT_VERSIONAME,
-            LAST_UPDATE_BUNDLES,
-            TextUtils.isEmpty(DEXPATCH_BUNDLES)?"":DEXPATCH_BUNDLES
-        );
+        return String.format("%s@%s--%s",LAST_VERSIONNAME,CURRENT_VERSIONAME,LAST_UPDATE_BUNDLES);
     }
 
     public void reset(){
