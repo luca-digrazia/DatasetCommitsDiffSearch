@@ -1,4 +1,4 @@
-// Copyright 2009 The Bazel Authors. All Rights Reserved.
+// Copyright 2009-2015 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,9 +35,9 @@ import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 
 /**
  * Builder for the test instance of the {@link BlazeExecutor} class.
@@ -50,8 +50,7 @@ public class TestExecutorBuilder {
   private EventBus bus = new EventBus();
   private OptionsParser optionsParser = OptionsParser.newOptionsParser(DEFAULT_OPTIONS);
   private List<ActionContext> strategies = new ArrayList<>();
-  private Map<String, SpawnActionContext> spawnStrategyMap =
-      new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+  private Map<String, SpawnActionContext> spawnStrategyMap = new HashMap<>();
 
   public TestExecutorBuilder(BlazeDirectories directories, BinTools binTools) {
     this.directories = directories;
@@ -96,7 +95,7 @@ public class TestExecutorBuilder {
   }
 
   public BlazeExecutor build() throws ExecutorInitException {
-    return new BlazeExecutor(directories.getExecRoot(), reporter, bus,
+    return new BlazeExecutor(directories.getExecRoot(), directories.getOutputPath(), reporter, bus,
         BlazeClock.instance(), optionsParser,
         optionsParser.getOptions(ExecutionOptions.class).verboseFailures,
         optionsParser.getOptions(ExecutionOptions.class).showSubcommands,

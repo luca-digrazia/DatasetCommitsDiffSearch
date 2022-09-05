@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.ImmutableList;
@@ -97,7 +96,7 @@ public class GlobListTest {
     GlobList<String> glob = GlobList.captureResults(include, exclude, matches);
     assertEquals(matches, glob);
     ImmutableList<GlobCriteria> criteria = glob.getCriteria();
-    assertThat(criteria).hasSize(1);
+    assertEquals(1, criteria.size());
     assertEquals(include, criteria.get(0).getIncludePatterns());
     assertEquals(exclude, criteria.get(0).getExcludePatterns());
   }

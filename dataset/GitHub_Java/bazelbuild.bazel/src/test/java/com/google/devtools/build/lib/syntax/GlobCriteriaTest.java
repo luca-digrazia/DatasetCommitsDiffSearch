@@ -13,12 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
 
@@ -37,72 +37,72 @@ public class GlobCriteriaTest {
   public void testParse_EmptyList() throws Exception {
     GlobCriteria gc = GlobCriteria.parse("[]");
     assertFalse(gc.isGlob());
-    assertThat(gc.getIncludePatterns()).isEmpty();
-    assertThat(gc.getExcludePatterns()).isEmpty();
+    assertTrue(gc.getIncludePatterns().isEmpty());
+    assertTrue(gc.getExcludePatterns().isEmpty());
   }
 
   @Test
   public void testParse_SingleList() throws Exception {
     GlobCriteria gc = GlobCriteria.parse("['abc']");
     assertFalse(gc.isGlob());
-    assertThat(gc.getIncludePatterns()).containsExactly("abc");
-    assertThat(gc.getExcludePatterns()).isEmpty();
+    assertEquals(ImmutableList.of("abc"), gc.getIncludePatterns());
+    assertTrue(gc.getExcludePatterns().isEmpty());
   }
 
   @Test
   public void testParse_MultipleList() throws Exception {
     GlobCriteria gc = GlobCriteria.parse("['abc', 'def', 'ghi']");
     assertFalse(gc.isGlob());
-    assertThat(gc.getIncludePatterns()).containsExactly("abc", "def", "ghi").inOrder();
-    assertThat(gc.getExcludePatterns()).isEmpty();
+    assertEquals(ImmutableList.of("abc", "def", "ghi"), gc.getIncludePatterns());
+    assertTrue(gc.getExcludePatterns().isEmpty());
   }
 
   @Test
   public void testParse_EmptyGlob() throws Exception {
     GlobCriteria gc = GlobCriteria.parse("glob([])");
     assertTrue(gc.isGlob());
-    assertThat(gc.getIncludePatterns()).isEmpty();
-    assertThat(gc.getExcludePatterns()).isEmpty();
+    assertTrue(gc.getIncludePatterns().isEmpty());
+    assertTrue(gc.getExcludePatterns().isEmpty());
   }
 
   @Test
   public void testParse_SingleGlob() throws Exception {
     GlobCriteria gc = GlobCriteria.parse("glob(['abc'])");
     assertTrue(gc.isGlob());
-    assertThat(gc.getIncludePatterns()).containsExactly("abc");
-    assertThat(gc.getExcludePatterns()).isEmpty();
+    assertEquals(ImmutableList.of("abc"), gc.getIncludePatterns());
+    assertTrue(gc.getExcludePatterns().isEmpty());
   }
 
   @Test
   public void testParse_MultipleGlob() throws Exception {
     GlobCriteria gc = GlobCriteria.parse("glob(['abc', 'def', 'ghi'])");
     assertTrue(gc.isGlob());
-    assertThat(gc.getIncludePatterns()).containsExactly("abc", "def", "ghi").inOrder();
-    assertThat(gc.getExcludePatterns()).isEmpty();
+    assertEquals(ImmutableList.of("abc", "def", "ghi"), gc.getIncludePatterns());
+    assertTrue(gc.getExcludePatterns().isEmpty());
   }
 
   @Test
   public void testParse_EmptyGlobWithExclude() throws Exception {
     GlobCriteria gc = GlobCriteria.parse("glob([], exclude=['xyz'])");
     assertTrue(gc.isGlob());
-    assertThat(gc.getIncludePatterns()).isEmpty();
-    assertThat(gc.getExcludePatterns()).containsExactly("xyz");
+    assertTrue(gc.getIncludePatterns().isEmpty());
+    assertEquals(ImmutableList.of("xyz"), gc.getExcludePatterns());
   }
 
   @Test
   public void testParse_SingleGlobWithExclude() throws Exception {
     GlobCriteria gc = GlobCriteria.parse("glob(['abc'], exclude=['xyz'])");
     assertTrue(gc.isGlob());
-    assertThat(gc.getIncludePatterns()).containsExactly("abc");
-    assertThat(gc.getExcludePatterns()).containsExactly("xyz");
+    assertEquals(ImmutableList.of("abc"), gc.getIncludePatterns());
+    assertEquals(ImmutableList.of("xyz"), gc.getExcludePatterns());
   }
 
   @Test
   public void testParse_MultipleGlobWithExclude() throws Exception {
     GlobCriteria gc = GlobCriteria.parse("glob(['abc', 'def', 'ghi'], exclude=['xyz'])");
     assertTrue(gc.isGlob());
-    assertThat(gc.getIncludePatterns()).containsExactly("abc", "def", "ghi").inOrder();
-    assertThat(gc.getExcludePatterns()).containsExactly("xyz");
+    assertEquals(ImmutableList.of("abc", "def", "ghi"), gc.getIncludePatterns());
+    assertEquals(ImmutableList.of("xyz"), gc.getExcludePatterns());
   }
 
   @Test
@@ -110,24 +110,24 @@ public class GlobCriteriaTest {
     GlobCriteria gc = GlobCriteria.parse(
         "glob(['abc', 'def', 'ghi'], exclude=['rst', 'uvw', 'xyz'])");
     assertTrue(gc.isGlob());
-    assertThat(gc.getIncludePatterns()).containsExactly("abc", "def", "ghi").inOrder();
-    assertThat(gc.getExcludePatterns()).containsExactly("rst", "uvw", "xyz").inOrder();
+    assertEquals(ImmutableList.of("abc", "def", "ghi"), gc.getIncludePatterns());
+    assertEquals(ImmutableList.of("rst", "uvw", "xyz"), gc.getExcludePatterns());
   }
 
   @Test
   public void testParse_GlobWithSlashesAndWildcards() throws Exception {
     GlobCriteria gc = GlobCriteria.parse("glob(['java/src/net/jsunit/*.java'])");
     assertTrue(gc.isGlob());
-    assertThat(gc.getIncludePatterns()).containsExactly("java/src/net/jsunit/*.java");
-    assertThat(gc.getExcludePatterns()).isEmpty();
+    assertEquals(ImmutableList.of("java/src/net/jsunit/*.java"), gc.getIncludePatterns());
+    assertTrue(gc.getExcludePatterns().isEmpty());
   }
 
   @Test
   public void testParse_ExcludeWithInvalidLabel() throws Exception {
     GlobCriteria gc = GlobCriteria.parse("glob(['abc', 'def', 'ghi'], exclude=['xyz~'])");
     assertTrue(gc.isGlob());
-    assertThat(gc.getIncludePatterns()).containsExactly("abc", "def", "ghi").inOrder();
-    assertThat(gc.getExcludePatterns()).containsExactly("xyz~");
+    assertEquals(ImmutableList.of("abc", "def", "ghi"), gc.getIncludePatterns());
+    assertEquals(ImmutableList.of("xyz~"), gc.getExcludePatterns());
   }
 
   @Test

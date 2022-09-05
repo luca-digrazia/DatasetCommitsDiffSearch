@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -66,7 +65,7 @@ public class MixedModeFunctionTest extends AbstractEvaluationTestCase {
         eval(callExpression, env);
         fail();
       } catch (EvalException e) {
-        assertThat(e).hasMessage(expectedOutput);
+        assertEquals(expectedOutput, e.getMessage());
       }
     }
   }
