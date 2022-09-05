@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019 http://www.hswebframework.org
+ *  Copyright 2016 http://www.hswebframework.org
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
  */
 package org.hswebframework.web.service.authorization.simple;
 
-import lombok.Getter;
-import lombok.Setter;
 import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.AuthenticationInitializeService;
 import org.hswebframework.web.authorization.Permission;
@@ -26,7 +24,6 @@ import org.hswebframework.web.authorization.simple.SimpleAuthentication;
 import org.hswebframework.web.authorization.simple.SimplePermission;
 import org.hswebframework.web.authorization.simple.SimpleRole;
 import org.hswebframework.web.authorization.simple.SimpleUser;
-import org.hswebframework.web.commons.entity.DataStatus;
 import org.hswebframework.web.commons.entity.TreeSupportEntity;
 import org.hswebframework.web.dao.authorization.AuthorizationSettingDao;
 import org.hswebframework.web.dao.authorization.AuthorizationSettingDetailDao;
@@ -361,26 +358,6 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
         return initPermission(detailList);
     }
 
-    @Getter
-    @Setter
-    static class ParentPermissionDetail extends ParentPermission {
-        private String sourcePermission;
-
-        public static Stream<ParentPermissionDetail> of(PermissionEntity entity) {
-            return entity.getParents()
-                    .stream()
-                    .filter(Objects::nonNull)
-                    .map(parent -> {
-                        ParentPermissionDetail permissionDetail = new ParentPermissionDetail();
-                        permissionDetail.setActions(parent.getActions());
-                        permissionDetail.setSourcePermission(entity.getId());
-                        permissionDetail.setPreActions(parent.getPreActions());
-                        permissionDetail.setPermission(parent.getPermission());
-                        return permissionDetail;
-                    });
-        }
-    }
-
     private List<Permission> initPermission(List<AuthorizationSettingDetailEntity> detailList) {
         //权限id集合
         List<String> permissionIds = detailList.stream()
@@ -429,14 +406,15 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
                 .collect(Collectors.groupingBy(AuthorizationSettingDetailEntity::getPermissionId));
 
         List<Permission> permissions = new ArrayList<>();
+        //获取关联的权限信息
+        Map<String, List<ParentPermission>> parentsPermissions = permissionEntityCache.values().stream()
+                .map(PermissionEntity::getParents)
+                .filter(Objects::nonNull)
+                .flatMap(Collection::stream)
+                .collect(Collectors.groupingBy(ParentPermission::getPermission));
 
         settings.forEach((permissionId, details) -> {
-            PermissionEntity entity = permissionEntityCache.get(permissionId);
-            if (entity == null || !DataStatus.STATUS_ENABLED.equals(entity.getStatus())) {
-                return;
-            }
             SimplePermission permission = new SimplePermission();
-            permission.setName(entity.getName());
             permission.setId(permissionId);
             Set<String> actions = new HashSet<>();
             Set<DataAccessConfig> dataAccessConfigs = new HashSet<>();
@@ -449,68 +427,36 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
                     dataAccessConfigs.clear();
                 }
                 // actions
-                if (isNotEmpty(detail.getActions())) {
+                if (null != detail.getActions()) {
                     actions.addAll(detail.getActions());
                 }
                 // 数据权限控制配置
-                if (isNotEmpty(detail.getDataAccesses())) {
+                if (null != detail.getDataAccesses()) {
                     dataAccessConfigs.addAll(detail.getDataAccesses()
                             .stream()
                             .map(dataAccessFactory::create)
                             .collect(Collectors.toSet()));
                 }
             }
-
+            //是否有其他权限关联了此权限
+            List<ParentPermission> parents = parentsPermissions.get(permissionId);
+            if (parents != null) {
+                actions.addAll(parents.stream()
+                        .map(ParentPermission::getActions)
+                        .filter(Objects::nonNull)
+                        .flatMap(Collection::stream)
+                        .collect(Collectors.toSet()));
+                parentsPermissions.remove(permissionId);
+            }
             permission.setActions(actions);
             permission.setDataAccesses(dataAccessConfigs);
             permissions.add(permission);
         });
 
-        /*=============================进行关联权限处理============================================*/
-        Map<String, Permission> permissionCache = permissions.stream()
-                .collect(Collectors.toMap(Permission::getId, Function.identity()));
-
-        //获取关联的权限信息
-        Map<String, List<ParentPermissionDetail>> parentsPermissions = permissionEntityCache
-                .values()
-                .stream()
-                .flatMap(ParentPermissionDetail::of)
-                .collect(Collectors.groupingBy(ParentPermission::getPermission));
-
-        for (Permission permission : permissions) {
-            //有其他权限关联了此权限
-            List<ParentPermissionDetail> parents = parentsPermissions.get(permission.getId());
-            if (parents != null) {
-                //添加action
-                permission.getActions()
-                        .addAll(parents.stream()
-                                .filter(parent -> {
-                                    if (CollectionUtils.isEmpty(parent.getActions())) {
-                                        return false;
-                                    }
-                                    if (CollectionUtils.isEmpty(parent.getPreActions())) {
-                                        return true;
-                                    }
-                                    //判断是否满足关联权限的条件
-                                    Permission source = permissionCache.get(parent.getSourcePermission());
-                                    return source != null && parent.getPreActions().containsAll(source.getActions());
-                                })
-                                .map(ParentPermission::getActions)
-                                .flatMap(Collection::stream)
-                                .collect(Collectors.toSet()));
-                //删除被合并的权限配置
-                parentsPermissions.remove(permission.getId());
-            }
-        }
-        //没有赋予被关联的权限时,直接关联权限
+        //关联权限
         parentsPermissions.forEach((per, all) -> {
-            PermissionEntity entity = permissionEntityCache.get(permissionId);
-            if (entity == null || !DataStatus.STATUS_ENABLED.equals(entity.getStatus())) {
-                return;
-            }
             SimplePermission permission = new SimplePermission();
             permission.setId(per);
-            permission.setName(entity.getName());
             permission.setActions(all.stream()
                     .map(ParentPermission::getActions)
                     .filter(Objects::nonNull)
@@ -518,9 +464,6 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
                     .collect(Collectors.toSet()));
             permissions.add(permission);
         });
-        parentsPermissions.clear();
-        permissionCache.clear();
-
         return permissions;
     }
 
