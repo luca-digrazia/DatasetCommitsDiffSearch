@@ -14,8 +14,13 @@
 package com.google.devtools.build.lib.analysis.select;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AbstractAttributeMapper;
@@ -27,14 +32,17 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.syntax.Type;
-import java.util.List;
-import java.util.stream.Collectors;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Unit tests for {@link AbstractAttributeMapper}. */
+import java.util.List;
+
+/**
+ * Unit tests for {@link AbstractAttributeMapper}.
+ */
 @RunWith(JUnit4.class)
 public class AbstractAttributeMapperTest extends BuildViewTestCase {
 
@@ -60,8 +68,8 @@ public class AbstractAttributeMapperTest extends BuildViewTestCase {
 
   @Test
   public void testRuleProperties() throws Exception {
-    assertThat(mapper.getName()).isEqualTo(rule.getName());
-    assertThat(mapper.getLabel()).isEqualTo(rule.getLabel());
+    assertEquals(rule.getName(), mapper.getName());
+    assertEquals(rule.getLabel(), mapper.getLabel());
   }
 
   @Test
@@ -70,9 +78,9 @@ public class AbstractAttributeMapperTest extends BuildViewTestCase {
         "cc_binary(name = 'myrule',",
         "          srcs = ['a', 'b', 'c'])");
     Package pkg = rule.getPackage();
-    assertThat(mapper.getPackageDefaultHdrsCheck()).isEqualTo(pkg.getDefaultHdrsCheck());
-    assertThat(mapper.getPackageDefaultTestOnly()).isEqualTo(pkg.getDefaultTestOnly());
-    assertThat(mapper.getPackageDefaultDeprecation()).isEqualTo(pkg.getDefaultDeprecation());
+    assertEquals(pkg.getDefaultHdrsCheck(), mapper.getPackageDefaultHdrsCheck());
+    assertEquals(pkg.getDefaultTestOnly(), mapper.getPackageDefaultTestOnly());
+    assertEquals(pkg.getDefaultDeprecation(), mapper.getPackageDefaultDeprecation());
   }
 
   @Test
@@ -99,37 +107,44 @@ public class AbstractAttributeMapperTest extends BuildViewTestCase {
 
   @Test
   public void testGetAttributeType() throws Exception {
-    assertThat(mapper.getAttributeType("srcs")).isEqualTo(BuildType.LABEL_LIST);
-    assertThat(mapper.getAttributeType("nonsense")).isNull();
+    assertEquals(BuildType.LABEL_LIST, mapper.getAttributeType("srcs"));
+    assertNull(mapper.getAttributeType("nonsense"));
   }
 
   @Test
   public void testGetAttributeDefinition() {
-    assertThat(mapper.getAttributeDefinition("srcs").getName()).isEqualTo("srcs");
-    assertThat(mapper.getAttributeDefinition("nonsense")).isNull();
+    assertEquals("srcs", mapper.getAttributeDefinition("srcs").getName());
+    assertNull(mapper.getAttributeDefinition("nonsense"));
   }
 
   @Test
   public void testIsAttributeExplicitlySpecified() throws Exception {
-    assertThat(mapper.isAttributeValueExplicitlySpecified("srcs")).isTrue();
-    assertThat(mapper.isAttributeValueExplicitlySpecified("deps")).isFalse();
-    assertThat(mapper.isAttributeValueExplicitlySpecified("nonsense")).isFalse();
+    assertTrue(mapper.isAttributeValueExplicitlySpecified("srcs"));
+    assertFalse(mapper.isAttributeValueExplicitlySpecified("deps"));
+    assertFalse(mapper.isAttributeValueExplicitlySpecified("nonsense"));
+  }
+
+  protected static class VisitationRecorder implements AttributeMap.AcceptsLabelAttribute {
+    public List<String> labelsVisited = Lists.newArrayList();
+    private final String attrName;
+
+    public VisitationRecorder(String attrName) {
+      this.attrName = attrName;
+    }
+
+    @Override
+    public void acceptLabelAttribute(Label label, Attribute attribute) {
+      if (attribute.getName().equals(attrName)) {
+        labelsVisited.add(label.toString());
+      }
+    }
   }
 
   @Test
   public void testVisitation() throws Exception {
-    assertThat(getLabelsForAttribute(mapper, "srcs")).containsExactly("//p:a", "//p:b", "//p:c");
-  }
-
-  protected static List<String> getLabelsForAttribute(
-      AttributeMap attributeMap, String attributeName) throws InterruptedException {
-    return attributeMap
-        .visitLabels()
-        .stream()
-        .filter((d) -> d.getAttribute().getName().equals(attributeName))
-        .map(AttributeMap.DepEdge::getLabel)
-        .map(Label::toString)
-        .collect(Collectors.toList());
+    VisitationRecorder recorder = new VisitationRecorder("srcs");
+    mapper.visitLabels(recorder);
+    assertThat(recorder.labelsVisited).containsExactly("//p:a", "//p:b", "//p:c");
   }
 
   @Test
@@ -138,6 +153,6 @@ public class AbstractAttributeMapperTest extends BuildViewTestCase {
     assertThat(mapper.getComputedDefault("$stl_default", BuildType.LABEL))
         .isInstanceOf(Attribute.ComputedDefault.class);
     // Should return null since this *isn't* a computed default:
-    assertThat(mapper.getComputedDefault("srcs", BuildType.LABEL_LIST)).isNull();
+    assertNull(mapper.getComputedDefault("srcs", BuildType.LABEL_LIST));
   }
 }

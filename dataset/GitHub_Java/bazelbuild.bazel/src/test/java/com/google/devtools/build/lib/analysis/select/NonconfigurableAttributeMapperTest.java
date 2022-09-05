@@ -14,11 +14,13 @@
 package com.google.devtools.build.lib.analysis.select;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.syntax.Type;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -44,8 +46,8 @@ public class NonconfigurableAttributeMapperTest extends AbstractAttributeMapperT
 
   @Test
   public void testGetNonconfigurableAttribute() throws Exception {
-    assertThat(NonconfigurableAttributeMapper.of(rule).get("deprecation", Type.STRING))
-        .isEqualTo("this rule is deprecated!");
+    assertEquals("this rule is deprecated!",
+        NonconfigurableAttributeMapper.of(rule).get("deprecation", Type.STRING));
   }
 
   @Test
@@ -55,9 +57,8 @@ public class NonconfigurableAttributeMapperTest extends AbstractAttributeMapperT
       fail("Expected NonconfigurableAttributeMapper to fail on a configurable attribute type");
     } catch (IllegalStateException e) {
       // Expected outcome.
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo("Attribute 'linkstatic' is potentially configurable - not allowed here");
+      assertThat(e).hasMessage(
+          "Attribute 'linkstatic' is potentially configurable - not allowed here");
     }
   }
 }
