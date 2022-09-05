@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.runtime;
 
 import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
-import com.google.devtools.build.lib.analysis.NoBuildRequestFinishedEvent;
 
 /**
  * A passive version of {@link ExperimentalEventHandler}.
@@ -34,10 +33,5 @@ public class PassiveExperimentalEventHandler {
   @Subscribe
   public void noBuild(NoBuildEvent event) {
     eventHandler.noBuild(event);
-  }
-
-  @Subscribe
-  public void noBuildFinished(NoBuildRequestFinishedEvent event) {
-    eventHandler.noBuildFinished(event);
   }
 }

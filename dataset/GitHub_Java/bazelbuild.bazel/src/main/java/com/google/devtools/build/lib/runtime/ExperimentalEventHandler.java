@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.buildtool.buildevent.ExecutionProgressRecei
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseCompleteEvent;
-import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.util.io.AnsiTerminal;
 import com.google.devtools.build.lib.util.io.LineCountingAnsiTerminalWriter;
 import com.google.devtools.build.lib.util.io.LineWrappingAnsiTerminalWriter;
@@ -50,13 +49,12 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
 
   public final int terminalWidth;
 
-  public ExperimentalEventHandler(
-      OutErr outErr, BlazeCommandEventHandler.Options options, Clock clock) {
+  public ExperimentalEventHandler(OutErr outErr, BlazeCommandEventHandler.Options options) {
     super(outErr, options);
     this.terminal = new AnsiTerminal(outErr.getErrorStream());
     this.terminalWidth = (options.terminalColumns > 0 ? options.terminalColumns : 80);
     this.debugAllEvents = options.experimentalUiDebugAllEvents;
-    this.stateTracker = new ExperimentalStateTracker(clock);
+    this.stateTracker = new ExperimentalStateTracker();
     this.numLinesProgressBar = 0;
   }
 
@@ -96,7 +94,6 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
           case ERROR:
           case WARNING:
           case INFO:
-          case SUBCOMMAND:
             if (!buildComplete) {
               clearProgressBar();
             }
@@ -134,8 +131,6 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
       case INFO:
         terminal.textGreen();
         break;
-      case SUBCOMMAND:
-        terminal.textBlue();
     }
   }
 
