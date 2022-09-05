@@ -54,7 +54,6 @@ import com.google.devtools.build.lib.rules.android.AndroidSdkProvider;
 import com.google.devtools.build.lib.rules.java.JavaExportsProvider;
 import com.google.devtools.build.lib.rules.java.JavaGenJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -156,6 +155,10 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
       providerBuilder.ideInfoFilesBuilder().addTransitive(depProvider.getIdeInfoFiles());
       providerBuilder.ideInfoTextFilesBuilder().addTransitive(depProvider.getIdeInfoTextFiles());
       providerBuilder.ideResolveFilesBuilder().addTransitive(depProvider.getIdeResolveFiles());
+      providerBuilder.transitiveDependenciesBuilder().addTransitive(
+          depProvider.getTransitiveDependencies());
+      providerBuilder.transitiveResourcesBuilder().addTransitive(
+          depProvider.getTransitiveResources());
     }
     for (TransitiveInfoCollection dep : prerequisites) {
       dependenciesBuilder.add(dep.getLabel());
@@ -179,7 +182,9 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
       }
     }
 
-    return dependenciesBuilder.build();
+    NestedSet<Label> directDependencies = dependenciesBuilder.build();
+    providerBuilder.transitiveDependenciesBuilder().addTransitive(directDependencies);
+    return directDependencies;
   }
 
   private static AndroidSdkRuleInfo makeAndroidSdkRuleInfo(AndroidSdkProvider provider) {
@@ -226,15 +231,14 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
         || ruleKind == Kind.ANDROID_LIBRARY
         || ruleKind == Kind.ANDROID_BINARY
         || ruleKind == Kind.ANDROID_TEST
-        || ruleKind == Kind.ANDROID_ROBOELECTRIC_TEST
-        || ruleKind == Kind.PROTO_LIBRARY) {
+        || ruleKind == Kind.ANDROID_ROBOELECTRIC_TEST) {
       outputBuilder.setJavaRuleIdeInfo(makeJavaRuleIdeInfo(base, ruleContext, ideResolveArtifacts));
     }
     if (ruleKind == Kind.ANDROID_LIBRARY
         || ruleKind == Kind.ANDROID_BINARY
         || ruleKind == Kind.ANDROID_TEST) {
       outputBuilder.setAndroidRuleIdeInfo(
-          makeAndroidRuleIdeInfo(ruleContext, base, ideResolveArtifacts));
+          makeAndroidRuleIdeInfo(ruleContext, base, ideResolveArtifacts, providerBuilder));
     }
     if (ruleKind == Kind.ANDROID_SDK) {
       outputBuilder.setAndroidSdkRuleInfo(
@@ -244,6 +248,8 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
     AndroidStudioInfoFilesProvider provider = providerBuilder.build();
 
     outputBuilder.addAllDependencies(transform(directDependencies, LABEL_TO_STRING));
+    outputBuilder.addAllTransitiveDependencies(
+        transform(provider.getTransitiveDependencies(), LABEL_TO_STRING));
 
     outputBuilder.addAllTags(base.getTarget().getAssociatedRule().getRuleTags());
 
@@ -272,7 +278,8 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
   private static AndroidRuleIdeInfo makeAndroidRuleIdeInfo(
       RuleContext ruleContext,
       ConfiguredTarget base,
-      NestedSetBuilder<Artifact> ideResolveArtifacts) {
+      NestedSetBuilder<Artifact> ideResolveArtifacts,
+      AndroidStudioInfoFilesProvider.Builder providerBuilder) {
     AndroidRuleIdeInfo.Builder builder = AndroidRuleIdeInfo.newBuilder();
     AndroidIdeInfoProvider provider = base.getProvider(AndroidIdeInfoProvider.class);
     assert provider != null;
@@ -295,9 +302,15 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
     for (SourceDirectory resourceDir : provider.getResourceDirs()) {
       ArtifactLocation artifactLocation = makeArtifactLocation(resourceDir);
       builder.addResources(artifactLocation);
+      providerBuilder.transitiveResourcesBuilder().add(resourceDir);
     }
 
     builder.setJavaPackage(AndroidCommon.getJavaPackage(ruleContext));
+
+    NestedSet<SourceDirectory> transitiveResources = providerBuilder.getTransitiveResources();
+    for (SourceDirectory transitiveResource : transitiveResources) {
+      builder.addTransitiveResources(makeArtifactLocation(transitiveResource));
+    }
 
     boolean hasIdlSources = !provider.getIdlSrcs().isEmpty();
     builder.setHasIdlSources(hasIdlSources);
@@ -437,27 +450,25 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
       NestedSetBuilder<Artifact> ideResolveArtifacts,
       JavaRuleOutputJarsProvider outputJarsProvider) {
     LibraryArtifact.Builder jarsBuilder = LibraryArtifact.newBuilder();
-    for (OutputJar outputJar : outputJarsProvider.getOutputJars()) {
-      Artifact classJar = outputJar.getClassJar();
-      if (classJar != null) {
-        jarsBuilder.setJar(makeArtifactLocation(classJar));
-        ideResolveArtifacts.add(classJar);
-      }
-      Artifact iJar = outputJar.getIJar();
-      if (iJar != null) {
-        jarsBuilder.setInterfaceJar(makeArtifactLocation(iJar));
-        ideResolveArtifacts.add(iJar);
-      }
-      Artifact srcJar = outputJar.getSrcJar();
-      if (srcJar != null) {
-        jarsBuilder.setSourceJar(makeArtifactLocation(srcJar));
-        ideResolveArtifacts.add(srcJar);
-      }
+    Artifact classJar = outputJarsProvider.getClassJar();
+    if (classJar != null) {
+      jarsBuilder.setJar(makeArtifactLocation(classJar));
+      ideResolveArtifacts.add(classJar);
+    }
+    Artifact iJar = outputJarsProvider.getIJar();
+    if (iJar != null) {
+      jarsBuilder.setInterfaceJar(makeArtifactLocation(iJar));
+      ideResolveArtifacts.add(iJar);
+    }
+    Artifact srcJar = outputJarsProvider.getSrcJar();
+    if (srcJar != null) {
+      jarsBuilder.setSourceJar(makeArtifactLocation(srcJar));
+      ideResolveArtifacts.add(srcJar);
+    }
 
-      // We don't want to add anything that doesn't have a class jar
-      if (classJar != null) {
-        builder.addJars(jarsBuilder.build());
-      }
+    // We don't want to add anything that doesn't have a class jar
+    if (classJar != null) {
+      builder.addJars(jarsBuilder.build());
     }
   }
 
@@ -516,8 +527,6 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
         return Kind.ANDROID_TEST;
       case "android_robolectric_test":
         return Kind.ANDROID_ROBOELECTRIC_TEST;
-      case "proto_library":
-        return Kind.PROTO_LIBRARY;
       default:
         {
           if (base.getProvider(AndroidSdkProvider.class) != null) {
