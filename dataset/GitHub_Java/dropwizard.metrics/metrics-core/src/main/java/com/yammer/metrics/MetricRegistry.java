@@ -343,7 +343,7 @@ public class MetricRegistry {
      * A quick and easy way of capturing the notion of default metrics.
      */
     private interface MetricBuilder<T extends Metric> {
-        MetricBuilder<Counter> COUNTERS = new MetricBuilder<Counter>() {
+        final MetricBuilder<Counter> COUNTERS = new MetricBuilder<Counter>() {
             @Override
             public Counter newMetric(MetricRegistry registry) {
                 return new Counter();
@@ -355,7 +355,7 @@ public class MetricRegistry {
             }
         };
 
-        MetricBuilder<Histogram> HISTOGRAMS = new MetricBuilder<Histogram>() {
+        final MetricBuilder<Histogram> HISTOGRAMS = new MetricBuilder<Histogram>() {
             @Override
             public Histogram newMetric(MetricRegistry registry) {
                 return new Histogram(SampleType.BIASED);
@@ -367,7 +367,7 @@ public class MetricRegistry {
             }
         };
 
-        MetricBuilder<Meter> METERS = new MetricBuilder<Meter>() {
+        final MetricBuilder<Meter> METERS = new MetricBuilder<Meter>() {
             @Override
             public Meter newMetric(MetricRegistry registry) {
                 return new Meter(registry.getClock());
@@ -379,7 +379,7 @@ public class MetricRegistry {
             }
         };
 
-        MetricBuilder<Timer> TIMERS = new MetricBuilder<Timer>() {
+        final MetricBuilder<Timer> TIMERS = new MetricBuilder<Timer>() {
             @Override
             public Timer newMetric(MetricRegistry registry) {
                 return new Timer(registry.getClock());
