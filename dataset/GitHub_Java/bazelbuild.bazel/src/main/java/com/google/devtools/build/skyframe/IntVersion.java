@@ -14,11 +14,11 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
+import com.google.common.collect.Interners;
 
 /** Versioning scheme based on integers. */
 final class IntVersion implements Version {
-  private static final Interner<IntVersion> interner = BlazeInterners.newWeakInterner();
+  private static final Interner<IntVersion> interner = Interners.newWeakInterner();
 
   private final long val;
 
