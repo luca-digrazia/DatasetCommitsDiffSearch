@@ -13,9 +13,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class InstrumentedAppenderTest {
-
-    public static final String METRIC_NAME_PREFIX = "org.apache.log4j.Appender";
-
     private final MetricRegistry registry = new MetricRegistry();
     private final InstrumentedAppender appender = new InstrumentedAppender(registry);
     private final LoggingEvent event = mock(LoggingEvent.class);
@@ -23,6 +20,8 @@ public class InstrumentedAppenderTest {
     @Before
     public void setUp() throws Exception {
         appender.activateOptions();
+
+        when(event.getLevel()).thenReturn(Level.INFO);
     }
 
     @After
@@ -33,95 +32,83 @@ public class InstrumentedAppenderTest {
     @Test
     public void metersTraceEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.TRACE);
-
         appender.doAppend(event);
 
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".all").getCount())
+        assertThat(registry.meter("org.apache.log4j.Appender.all").getCount())
                 .isEqualTo(1);
 
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".trace").getCount())
+        assertThat(registry.meter("org.apache.log4j.Appender.trace").getCount())
                 .isEqualTo(1);
     }
 
     @Test
     public void metersDebugEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.DEBUG);
-
         appender.doAppend(event);
 
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".all").getCount())
+        assertThat(registry.meter("org.apache.log4j.Appender.all").getCount())
                 .isEqualTo(1);
 
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".debug").getCount())
+        assertThat(registry.meter("org.apache.log4j.Appender.debug").getCount())
                 .isEqualTo(1);
     }
 
     @Test
     public void metersInfoEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.INFO);
-
         appender.doAppend(event);
 
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".all").getCount())
+        assertThat(registry.meter("org.apache.log4j.Appender.all").getCount())
                 .isEqualTo(1);
 
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".info").getCount())
+        assertThat(registry.meter("org.apache.log4j.Appender.info").getCount())
                 .isEqualTo(1);
     }
 
     @Test
     public void metersWarnEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.WARN);
-
         appender.doAppend(event);
 
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".all").getCount())
+        assertThat(registry.meter("org.apache.log4j.Appender.all").getCount())
                 .isEqualTo(1);
 
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".warn").getCount())
+        assertThat(registry.meter("org.apache.log4j.Appender.warn").getCount())
                 .isEqualTo(1);
     }
 
     @Test
     public void metersErrorEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.ERROR);
-
         appender.doAppend(event);
 
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".all").getCount())
+        assertThat(registry.meter("org.apache.log4j.Appender.all").getCount())
                 .isEqualTo(1);
 
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".error").getCount())
+        assertThat(registry.meter("org.apache.log4j.Appender.error").getCount())
                 .isEqualTo(1);
     }
 
     @Test
     public void metersFatalEvents() throws Exception {
         when(event.getLevel()).thenReturn(Level.FATAL);
-
         appender.doAppend(event);
 
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".all").getCount())
+        assertThat(registry.meter("org.apache.log4j.Appender.all").getCount())
                 .isEqualTo(1);
 
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".fatal").getCount())
+        assertThat(registry.meter("org.apache.log4j.Appender.fatal").getCount())
                 .isEqualTo(1);
     }
 
     @Test
     public void usesSharedRegistries() throws Exception {
-        String registryName = "registry";
-
-        SharedMetricRegistries.add(registryName, registry);
-
-        final InstrumentedAppender shared = new InstrumentedAppender(registryName);
+        SharedMetricRegistries.add("reg", registry);
+        final InstrumentedAppender shared = new InstrumentedAppender("reg");
         shared.activateOptions();
-
-        when(event.getLevel()).thenReturn(Level.INFO);
-
         shared.doAppend(event);
 
-        assertThat(registry.meter(METRIC_NAME_PREFIX + ".info").getCount())
+        assertThat(registry.meter("org.apache.log4j.Appender.info").getCount())
                 .isEqualTo(1);
     }
 }
