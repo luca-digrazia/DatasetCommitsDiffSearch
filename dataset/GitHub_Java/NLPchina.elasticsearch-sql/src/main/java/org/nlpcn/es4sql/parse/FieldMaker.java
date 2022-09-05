@@ -188,26 +188,21 @@ public class FieldMaker {
     private static Field handleIdentifier(SQLExpr expr, String alias, String tableAlias) throws SqlParseException {
         String name = expr.toString().replace("`", "");
         String newFieldName = name;
-        Field field = null;
         if (tableAlias != null) {
             String aliasPrefix = tableAlias + ".";
             if (name.startsWith(aliasPrefix)) {
                 newFieldName = name.replaceFirst(aliasPrefix, "");
-                field = new Field(newFieldName, alias);
             }
-        }
-
-        if (tableAlias == null) {
-            field = new Field(newFieldName, alias);
         }
 
         if (alias != null && alias != name && !isFromJoinTable(expr)) {
             List<SQLExpr> paramers = Lists.newArrayList();
             paramers.add(new SQLCharExpr(alias));
             paramers.add(new SQLCharExpr("doc['" + newFieldName + "'].value"));
-            field = makeMethodField("script", paramers, null, alias, true);
+            return makeMethodField("script", paramers, null, alias, true);
         }
-        return field;
+
+        return new Field(newFieldName, alias);
     }
 
     private static MethodField makeMethodField(String name, List<SQLExpr> arguments, SQLAggregateOption option, String alias, boolean first) throws SqlParseException {

@@ -75,7 +75,9 @@ public class Test {
                 "group by key ";
         String TEST_INDEX = "elasticsearch-sql_test_index";
 
-        sql =  "select count(t.*) as counts,sum(t.size) from xxx/locs as t group by t.kk";
+        sql =  String.format("select c.name.firstname , d.* from %s/gotCharacters c " +
+                        "JOIN %s/gotHouses d on d.hname = c.house "
+                ,  TEST_INDEX, TEST_INDEX);
 
         System.out.println("sql" + sql + ":\n----------\n" + sqlToEsQuery(sql));
 
