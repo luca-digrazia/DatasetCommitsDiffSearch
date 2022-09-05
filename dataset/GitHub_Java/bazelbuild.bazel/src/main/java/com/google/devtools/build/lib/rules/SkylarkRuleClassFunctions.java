@@ -217,7 +217,7 @@ public class SkylarkRuleClassFunctions {
       "Creates a declared provider 'constructor'. The return value of this"
           + "function can be used to create \"struct-like\" values. Example:<br>"
           + "<pre class=\"language-python\">data = provider()\n"
-          + "d = data(x = 2, y = 3)\n"
+          + "d = data(x = 2, y = 3)"
           + "return d.x + d.y # returns 5</pre>",
       useLocation = true
   )
@@ -285,10 +285,7 @@ public class SkylarkRuleClassFunctions {
             doc = "<i>(Experimental)</i> "
                 + "If true, this rule will expose its actions for inspection by rules that depend "
                 + "on it via an <a href=\"ActionsSkylarkApiProvider.html\">actions</a> provider."
-                + "The provider is also available to the rule itself by calling "
-                + "<code>ctx.created_actions()</code>."
-                + ""
-                + "<p>This should only be used for testing the analysis-time behavior of Skylark "
+                + "This should only be used for testing the analysis-time behavior of Skylark "
                 + "rules. This flag may be removed in the future.")},
       useAst = true, useEnvironment = true)
   private static final BuiltinFunction rule = new BuiltinFunction("rule") {
