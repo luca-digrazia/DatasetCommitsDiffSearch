@@ -89,7 +89,7 @@ public abstract class FileStateValue implements SkyValue {
     Path path = rootedPath.asPath();
     if (statNoFollow.isFile()) {
       return statNoFollow.isSpecialFile()
-          ? SpecialFileStateValue.fromStat(path.asFragment(), statNoFollow, tsgm)
+          ? SpecialFileStateValue.fromStat(statNoFollow, tsgm)
           : RegularFileStateValue.fromPath(path, statNoFollow, tsgm);
     } else if (statNoFollow.isDirectory()) {
       return DIRECTORY_FILE_STATE_NODE;
@@ -172,7 +172,7 @@ public abstract class FileStateValue implements SkyValue {
           // Note that TimestampGranularityMonitor#notifyDependenceOnFileTime is a thread-safe
           // method.
           if (tsgm != null) {
-            tsgm.notifyDependenceOnFileTime(path.asFragment(), mtime);
+            tsgm.notifyDependenceOnFileTime(mtime);
           }
           return new RegularFileStateValue(stat.getSize(), stat.getLastModifiedTime(), null,
               FileContentsProxy.create(mtime, stat.getNodeId()));
@@ -261,13 +261,13 @@ public abstract class FileStateValue implements SkyValue {
       this.contentsProxy = contentsProxy;
     }
 
-    static SpecialFileStateValue fromStat(PathFragment path, FileStatusWithDigest stat,
+    static SpecialFileStateValue fromStat(FileStatusWithDigest stat,
         @Nullable TimestampGranularityMonitor tsgm) throws IOException {
       long mtime = stat.getLastModifiedTime();
       // Note that TimestampGranularityMonitor#notifyDependenceOnFileTime is a thread-safe
       // method.
       if (tsgm != null) {
-        tsgm.notifyDependenceOnFileTime(path, mtime);
+        tsgm.notifyDependenceOnFileTime(mtime);
       }
       return new SpecialFileStateValue(FileContentsProxy.create(mtime, stat.getNodeId()));
     }
