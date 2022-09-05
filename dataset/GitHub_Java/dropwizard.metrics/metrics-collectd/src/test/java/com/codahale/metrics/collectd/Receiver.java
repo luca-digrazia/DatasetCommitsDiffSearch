@@ -6,16 +6,20 @@ import org.collectd.protocol.Dispatcher;
 import org.collectd.protocol.UdpReceiver;
 import org.junit.rules.ExternalResource;
 
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 public final class Receiver extends ExternalResource {
 
-    private int port;
+    private final int port;
+
     private UdpReceiver receiver;
-    private Thread receiverThread;
-    private BlockingQueue<ValueList> queue;
+    private DatagramSocket socket;
+    private BlockingQueue<ValueList> queue = new LinkedBlockingQueue<>();
 
     public Receiver(int port) {
         this.port = port;
@@ -23,52 +27,37 @@ public final class Receiver extends ExternalResource {
 
     @Override
     protected void before() throws Throwable {
-        queue = new LinkedBlockingQueue<ValueList>();
-        receiver = new UdpReceiver(new QueueDispatcher(queue));
-        receiver.setPort(port);
-        start();
-    }
+        socket = new DatagramSocket(null);
+        socket.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
 
-    private void start() {
-        receiverThread = new Thread(() -> {
+        receiver = new UdpReceiver(new Dispatcher() {
+            @Override
+            public void dispatch(ValueList values) {
+                queue.offer(new ValueList(values));
+            }
+
+            @Override
+            public void dispatch(Notification notification) {
+                throw new UnsupportedOperationException();
+            }
+        });
+        receiver.setPort(port);
+        new Thread(() -> {
             try {
-                receiver.listen();
+                receiver.listen(socket);
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        });
-        receiverThread.start();
+        }).start();
     }
 
     public ValueList next() throws InterruptedException {
-        return queue.poll(1, TimeUnit.SECONDS);
+        return queue.poll(2, TimeUnit.SECONDS);
     }
 
     @Override
     protected void after() {
-        stop();
-    }
-
-    private void stop() {
         receiver.shutdown();
-    }
-
-    class QueueDispatcher implements Dispatcher {
-
-        private final BlockingQueue<ValueList> queue;
-
-        QueueDispatcher(BlockingQueue<ValueList> queue) {
-            this.queue = queue;
-        }
-
-        @Override
-        public void dispatch(ValueList valueList) {
-            queue.offer(new ValueList(valueList));
-        }
-
-        @Override
-        public void dispatch(Notification notification) {
-            throw new UnsupportedOperationException();
-        }
+        socket.close();
     }
 }
