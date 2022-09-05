@@ -73,8 +73,6 @@ public class UpdateInfo implements Serializable {
 
         public int patchType;
 
-        public boolean resetHotPatch = false;
-
         public long dexpatchVersion = -1;
 
         public boolean reset = false;
@@ -89,7 +87,6 @@ public class UpdateInfo implements Serializable {
             item.patchType = origin.patchType;
             item.dexpatchVersion = origin.dexpatchVersion;
             item.reset = origin.reset;
-            item.resetHotPatch = origin.resetHotPatch;
             if (null != origin.dependency) {
                 List<String> copyDependency = new ArrayList<>(origin.dependency.size());
                 copyDependency.addAll(origin.dependency);
