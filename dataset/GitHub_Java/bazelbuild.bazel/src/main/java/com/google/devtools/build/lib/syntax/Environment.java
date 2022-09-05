@@ -777,7 +777,7 @@ public final class Environment implements Freezable {
     return knownGlobalVariables != null && knownGlobalVariables.contains(varname);
   }
 
-  public void handleEvent(Event event) {
+  void handleEvent(Event event) {
     eventHandler.handle(event);
   }
 
@@ -934,7 +934,7 @@ public final class Environment implements Freezable {
       valid.validateAst(result.statements, eventHandler);
       statements = result.statements;
     } else {
-      statements = Parser.parseFile(input, eventHandler).statements;
+      statements = Parser.parseFile(input, eventHandler, /*parsePython=*/false).statements;
     }
     // Force the validation of imports
     BuildFileAST.fetchLoads(statements, eventHandler);

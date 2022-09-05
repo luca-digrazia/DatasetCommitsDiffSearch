@@ -707,25 +707,29 @@ public class Parser {
 
   // substring_suffix ::= '[' expression? ':' expression?  ':' expression? ']'
   private Expression parseSubstringSuffix(int start, Expression receiver) {
+    List<Argument.Passed> args = new ArrayList<>();
     Expression startExpr;
 
     expect(TokenKind.LBRACKET);
+    int loc1 = token.left;
     if (token.kind == TokenKind.COLON) {
       startExpr = setLocation(new Identifier("None"), token.left, token.right);
     } else {
       startExpr = parseExpression();
     }
-    // This is an index/key access
+    args.add(setLocation(new Argument.Positional(startExpr), loc1, startExpr));
+    // This is a dictionary access
     if (token.kind == TokenKind.RBRACKET) {
       expect(TokenKind.RBRACKET);
-      return setLocation(new IndexExpression(receiver, startExpr), start, token.right);
+      return makeFuncallExpression(receiver, new Identifier("$index"), args,
+                                   start, token.right);
     }
     // This is a slice (or substring)
-    Expression endExpr = parseSliceArgument(new Identifier("None"));
-    Expression stepExpr = parseSliceArgument(new IntegerLiteral(1));
+    args.add(parseSliceArgument(new Identifier("None")));
+    args.add(parseSliceArgument(new IntegerLiteral(1)));
     expect(TokenKind.RBRACKET);
-    return setLocation(new SliceExpression(receiver, startExpr, endExpr, stepExpr),
-        start, token.right);
+    return makeFuncallExpression(receiver, new Identifier("$slice"), args,
+                                 start, token.right);
   }
 
   /**
@@ -733,12 +737,11 @@ public class Parser {
    * operation. If no such expression is found, this method returns an argument that represents
    * {@code defaultValue}.
    */
-  private Expression parseSliceArgument(Expression defaultValue) {
+  private Argument.Positional parseSliceArgument(Expression defaultValue) {
     Expression explicitArg = getSliceEndOrStepExpression();
-    if (explicitArg == null) {
-      return setLocation(defaultValue, token.left, token.right);
-    }
-    return explicitArg;
+    Expression argValue =
+        (explicitArg == null) ? setLocation(defaultValue, token.left, token.right) : explicitArg;
+    return setLocation(new Argument.Positional(argValue), token.left, argValue);
   }
 
   private Expression getSliceEndOrStepExpression() {
@@ -1070,8 +1073,7 @@ public class Parser {
    * entry in the map.
    */
   private void parseLoadSymbol(Map<Identifier, String> symbols) {
-    Token nameToken;
-    Token declaredToken;
+    Token nameToken, declaredToken;
 
     if (token.kind == TokenKind.STRING) {
       nameToken = token;

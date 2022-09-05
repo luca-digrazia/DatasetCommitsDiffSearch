@@ -14,8 +14,16 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.syntax.compiler.DebugInfo;
+import com.google.devtools.build.lib.syntax.compiler.LoopLabels;
+import com.google.devtools.build.lib.syntax.compiler.VariableScope;
+
+import net.bytebuddy.implementation.bytecode.ByteCodeAppender;
+
 import java.util.Map;
 
 /**
@@ -23,9 +31,10 @@ import java.util.Map;
  */
 public final class LoadStatement extends Statement {
 
-  private final ImmutableMap<Identifier, String> symbolMap;
+  private final ImmutableMap<Identifier, String> symbols;
   private final ImmutableList<Identifier> cachedSymbols; // to save time
-  private final StringLiteral imp;
+  private final String imp;
+  private final Location importLocation;
 
   /**
    * Constructs an import statement.
@@ -34,33 +43,34 @@ public final class LoadStatement extends Statement {
    * the bzl file that should be loaded. If aliasing is used, the value differs from its key's
    * {@code symbol.getName()}. Otherwise, both values are identical.
    */
-  public LoadStatement(StringLiteral imp, Map<Identifier, String> symbolMap) {
+  LoadStatement(String imp, Location importLocation, Map<Identifier, String> symbols) {
     this.imp = imp;
-    this.symbolMap = ImmutableMap.copyOf(symbolMap);
-    this.cachedSymbols = ImmutableList.copyOf(symbolMap.keySet());
+    this.importLocation = importLocation;
+    this.symbols = ImmutableMap.copyOf(symbols);
+    this.cachedSymbols = ImmutableList.copyOf(symbols.keySet());
   }
 
-  public ImmutableMap<Identifier, String> getSymbolMap() {
-    return symbolMap;
+  public Location getImportLocation() {
+    return importLocation;
   }
 
   public ImmutableList<Identifier> getSymbols() {
     return cachedSymbols;
   }
 
-  public StringLiteral getImport() {
+  public String getImport() {
     return imp;
   }
 
   @Override
   public String toString() {
     return String.format(
-        "load(\"%s\", %s)", imp.getValue(), Joiner.on(", ").join(cachedSymbols));
+        "load(\"%s\", %s)", imp, Joiner.on(", ").join(cachedSymbols));
   }
 
   @Override
   void doExec(Environment env) throws EvalException, InterruptedException {
-    for (Map.Entry<Identifier, String> entry : symbolMap.entrySet()) {
+    for (Map.Entry<Identifier, String> entry : symbols.entrySet()) {
       try {
         Identifier name = entry.getKey();
         Identifier declared = new Identifier(entry.getValue());
@@ -71,7 +81,7 @@ public final class LoadStatement extends Statement {
         }
         // The key is the original name that was used to define the symbol
         // in the loaded bzl file.
-        env.importSymbol(imp.getValue(), name, declared.getName());
+        env.importSymbol(imp, name, declared.getName());
       } catch (Environment.LoadFailedException e) {
         throw new EvalException(getLocation(), e.getMessage());
       }
@@ -88,5 +98,13 @@ public final class LoadStatement extends Statement {
     for (Identifier symbol : cachedSymbols) {
       env.declare(symbol.getName(), getLocation());
     }
+  }
+
+  @Override
+  ByteCodeAppender compile(
+      VariableScope scope, Optional<LoopLabels> loopLabels, DebugInfo debugInfo) {
+    throw new UnsupportedOperationException(
+        "load statements should never appear in method bodies and"
+            + " should never be compiled in general");
   }
 }
