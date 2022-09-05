@@ -6,7 +6,7 @@ import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.assertThat;
 import static org.junit.Assume.assumeTrue;
 import static org.mockito.Mockito.mock;
 
@@ -49,12 +49,10 @@ public class FileDescriptorRatioGaugeTest {
         }
 
         // overridden on Java 1.7; random crap on Java 1.6
-        @Override
         public ObjectName getObjectName() {
             return null;
         }
     };
-
     private final FileDescriptorRatioGauge gauge = new FileDescriptorRatioGauge(os);
 
     @Test
