@@ -847,11 +847,14 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
       Path path = output.getPath();
       if (metadataHandler.isInjected(output)) {
         // We trust the files created by the execution-engine to be non symlinks with expected
-        // chmod() settings already applied.
+        // chmod() settings already applied. The follow stanza implies a total of 6 system calls,
+        // since the UnixFileSystem implementation of setWritable() and setExecutable() both
+        // do a stat() internally.
         continue;
       }
       if (path.isFile(Symlinks.NOFOLLOW)) { // i.e. regular files only.
-        path.chmod(0555);  // Sets the file read-only and executable.
+        path.setWritable(false);
+        path.setExecutable(true);
       }
     }
   }
