@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.query2;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Ascii;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
@@ -232,6 +231,13 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     ExecutorUtil.interruptibleShutdown(threadPool);
   }
 
+  private static String getLogString(QueryExpression queryExpression) {
+    String queryExpressionString = queryExpression.toString();
+    return queryExpressionString.length() <= MAX_QUERY_EXPRESSION_LOG_CHARS
+        ? queryExpressionString
+        : queryExpressionString.substring(0, MAX_QUERY_EXPRESSION_LOG_CHARS) + "...[truncated]";
+  }
+
   @Override
   public QueryExpression transformParsedQuery(QueryExpression queryExpression) {
     // Transform each occurrence of an expressions of the form 'rdeps(<universeScope>, <T>)' to
@@ -265,10 +271,8 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     QueryExpression transformedQueryExpression = queryExpression.getMapped(rdepsToAllRDepsMapper);
     LOG.info(String.format(
         "transformed query [%s] to [%s]",
-        Ascii.truncate(
-            queryExpression.toString(), MAX_QUERY_EXPRESSION_LOG_CHARS, "[truncated]"),
-        Ascii.truncate(
-            transformedQueryExpression.toString(), MAX_QUERY_EXPRESSION_LOG_CHARS, "[truncated]")));
+        getLogString(queryExpression),
+        getLogString(transformedQueryExpression)));
     return transformedQueryExpression;
   }
 
