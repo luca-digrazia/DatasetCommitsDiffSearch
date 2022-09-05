@@ -61,7 +61,7 @@ public final class AspectFunction implements SkyFunction {
   @Nullable
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
-      throws AspectFunctionException, InterruptedException {
+      throws AspectFunctionException {
     SkyframeBuildView view = buildViewProvider.getSkyframeBuildView();
     NestedSetBuilder<Package> transitivePackages = NestedSetBuilder.stableOrder();
     AspectKey key = (AspectKey) skyKey.argument();
