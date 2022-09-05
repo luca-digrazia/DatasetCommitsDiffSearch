@@ -55,13 +55,13 @@ public final class AspectDefinition {
   private final ImmutableSet<Class<?>> requiredProviders;
   private final ImmutableSet<String> requiredProviderNames;
   private final ImmutableMap<String, Attribute> attributes;
-  private final ImmutableMultimap<String, AspectClass> attributeAspects;
+  private final ImmutableMultimap<String, Class<? extends AspectFactory<?, ?, ?>>> attributeAspects;
 
   private AspectDefinition(
       String name,
       ImmutableSet<Class<?>> requiredProviders,
       ImmutableMap<String, Attribute> attributes,
-      ImmutableMultimap<String, AspectClass> attributeAspects) {
+      ImmutableMultimap<String, Class<? extends AspectFactory<?, ?, ?>>> attributeAspects) {
     this.name = name;
     this.requiredProviders = requiredProviders;
     this.requiredProviderNames = toStringSet(requiredProviders);
@@ -116,7 +116,7 @@ public final class AspectDefinition {
    * <p>Note that the map actually contains {@link AspectFactory}
    * instances, except that we cannot reference that class here.
    */
-  public ImmutableMultimap<String, AspectClass> getAttributeAspects() {
+  public ImmutableMultimap<String, Class<? extends AspectFactory<?, ?, ?>>> getAttributeAspects() {
     return attributeAspects;
   }
 
@@ -144,7 +144,7 @@ public final class AspectDefinition {
     }
 
     LinkedHashMultimap<Attribute, Label> result = LinkedHashMultimap.create();
-    for (AspectClass candidateClass : attribute.getAspects()) {
+    for (Class<? extends AspectFactory<?, ?, ?>> candidateClass : attribute.getAspects()) {
       AspectFactory<?, ?, ?> candidate = AspectFactory.Util.create(candidateClass);
       // Check if target satisfies condition for this aspect (has to provide all required
       // TransitiveInfoProviders)
@@ -195,7 +195,8 @@ public final class AspectDefinition {
     private final String name;
     private final Map<String, Attribute> attributes = new LinkedHashMap<>();
     private final Set<Class<?>> requiredProviders = new LinkedHashSet<>();
-    private final Multimap<String, AspectClass> attributeAspects = LinkedHashMultimap.create();
+    private final Multimap<String, Class<? extends AspectFactory<?, ?, ?>>> attributeAspects =
+        LinkedHashMultimap.create();
 
     public Builder(String name) {
       this.name = name;
@@ -222,8 +223,7 @@ public final class AspectDefinition {
         String attribute, Class<? extends AspectFactory<?, ?, ?>>... aspectFactories) {
       Preconditions.checkNotNull(attribute);
       for (Class<? extends AspectFactory<?, ?, ?>> aspectFactory : aspectFactories) {
-        this.attributeAspects.put(
-                attribute, new NativeAspectClass(Preconditions.checkNotNull(aspectFactory)));
+        this.attributeAspects.put(attribute, Preconditions.checkNotNull(aspectFactory));
       }
       return this;
     }
