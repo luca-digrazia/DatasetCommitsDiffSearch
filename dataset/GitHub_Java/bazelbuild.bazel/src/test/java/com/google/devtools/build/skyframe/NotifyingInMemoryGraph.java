@@ -89,17 +89,13 @@ public class NotifyingInMemoryGraph extends InMemoryGraph {
   public enum EventType {
     CREATE_IF_ABSENT,
     ADD_REVERSE_DEP,
-    REMOVE_REVERSE_DEP,
     SIGNAL,
     SET_VALUE,
     MARK_DIRTY,
     MARK_CLEAN,
     IS_CHANGED,
     GET_VALUE_WITH_METADATA,
-    IS_DIRTY,
-    IS_READY,
-    CHECK_IF_DONE,
-    GET_ALL_DIRECT_DEPS_FOR_INCOMPLETE_NODE
+    IS_DIRTY
   }
 
   public enum Order {
@@ -125,13 +121,6 @@ public class NotifyingInMemoryGraph extends InMemoryGraph {
     }
 
     @Override
-    public synchronized void removeReverseDep(SkyKey reverseDep) {
-      graphListener.accept(myKey, EventType.REMOVE_REVERSE_DEP, Order.BEFORE, reverseDep);
-      super.removeReverseDep(reverseDep);
-      graphListener.accept(myKey, EventType.REMOVE_REVERSE_DEP, Order.AFTER, reverseDep);
-    }
-
-    @Override
     public boolean signalDep(Version childVersion) {
       graphListener.accept(myKey, EventType.SIGNAL, Order.BEFORE, childVersion);
       boolean result = super.signalDep(childVersion);
@@ -148,9 +137,9 @@ public class NotifyingInMemoryGraph extends InMemoryGraph {
     }
 
     @Override
-    public boolean markDirty(boolean isChanged) {
+    public Iterable<SkyKey> markDirty(boolean isChanged) {
       graphListener.accept(myKey, EventType.MARK_DIRTY, Order.BEFORE, isChanged);
-      boolean result = super.markDirty(isChanged);
+      Iterable<SkyKey> result = super.markDirty(isChanged);
       graphListener.accept(myKey, EventType.MARK_DIRTY, Order.AFTER, isChanged);
       return result;
     }
@@ -176,28 +165,9 @@ public class NotifyingInMemoryGraph extends InMemoryGraph {
     }
 
     @Override
-    public synchronized boolean isReady() {
-      graphListener.accept(myKey, EventType.IS_READY, Order.BEFORE, this);
-      return super.isReady();
-    }
-
-    @Override
     public SkyValue getValueMaybeWithMetadata() {
       graphListener.accept(myKey, EventType.GET_VALUE_WITH_METADATA, Order.BEFORE, this);
       return super.getValueMaybeWithMetadata();
-    }
-
-    @Override
-    public synchronized DependencyState checkIfDoneForDirtyReverseDep(SkyKey reverseDep) {
-      graphListener.accept(myKey, EventType.CHECK_IF_DONE, Order.BEFORE, reverseDep);
-      return super.checkIfDoneForDirtyReverseDep(reverseDep);
-    }
-
-    @Override
-    public synchronized Iterable<SkyKey> getAllDirectDepsForIncompleteNode() {
-      graphListener.accept(
-          myKey, EventType.GET_ALL_DIRECT_DEPS_FOR_INCOMPLETE_NODE, Order.BEFORE, this);
-      return super.getAllDirectDepsForIncompleteNode();
     }
   }
 }
