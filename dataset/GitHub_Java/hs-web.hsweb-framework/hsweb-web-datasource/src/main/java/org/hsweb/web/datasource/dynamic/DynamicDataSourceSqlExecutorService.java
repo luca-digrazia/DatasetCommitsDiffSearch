@@ -16,16 +16,19 @@
 
 package org.hsweb.web.datasource.dynamic;
 
-import org.hsweb.ezorm.executor.AbstractJdbcSqlExecutor;
-import org.hsweb.ezorm.executor.SQL;
-import org.hsweb.ezorm.meta.expand.ObjectWrapper;
-import org.hsweb.ezorm.meta.expand.SimpleMapWrapper;
-import org.hsweb.ezorm.render.support.simple.SimpleSQL;
+import org.hsweb.ezorm.core.ObjectWrapper;
+import org.hsweb.ezorm.rdb.executor.AbstractJdbcSqlExecutor;
+import org.hsweb.ezorm.rdb.executor.SQL;
+import org.hsweb.ezorm.rdb.render.support.simple.SimpleSQL;
+import org.hsweb.web.core.authorize.ExpressionScopeBean;
+import org.hsweb.web.core.datasource.DataSourceHolder;
 import org.hsweb.web.core.datasource.DynamicDataSource;
 import org.springframework.jdbc.datasource.DataSourceUtils;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
@@ -34,18 +37,27 @@ import java.util.Map;
 /**
  * 动态数据源sql执行器
  */
-public class DynamicDataSourceSqlExecutorService extends AbstractJdbcSqlExecutor {
+public class DynamicDataSourceSqlExecutorService extends AbstractJdbcSqlExecutor implements ExpressionScopeBean {
 
     @Resource
     protected DynamicDataSource dynamicDataSource;
 
     @Override
     public Connection getConnection() {
-        return DataSourceUtils.getConnection(dynamicDataSource.getActiveDataSource());
+        DataSource dataSource = dynamicDataSource.getActiveDataSource();
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        boolean isConnectionTransactional = DataSourceUtils.isConnectionTransactional(connection, dataSource);
+        if (logger.isDebugEnabled()) {
+            logger.debug("DataSource ({}) JDBC Connection [{}] will {} be managed by Spring", DataSourceHolder.getActiveSourceId(), connection, (isConnectionTransactional ? "" : "not"));
+        }
+        return connection;
     }
 
     @Override
     public void releaseConnection(Connection connection) throws SQLException {
+        if (logger.isDebugEnabled()) {
+            logger.debug("Releasing DataSource ({}) JDBC Connection [{}]", DataSourceHolder.getActiveSourceId(), connection);
+        }
         DataSourceUtils.releaseConnection(connection, dynamicDataSource.getActiveDataSource());
     }
 
@@ -63,47 +75,44 @@ public class DynamicDataSourceSqlExecutorService extends AbstractJdbcSqlExecutor
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> list(SQL sql) throws SQLException {
-        List<Map<String, Object>> data = list(sql, new SimpleMapWrapper());
-        return data;
+        return super.list(sql);
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> single(SQL sql) throws Exception {
-        Map<String, Object> data = single(sql, new SimpleMapWrapper());
-        return data;
+    public Map<String, Object> single(SQL sql) throws SQLException {
+        return super.single(sql);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list(String sql) throws Exception {
-        List<Map<String, Object>> data = list(create(sql), new SimpleMapWrapper());
-        return data;
+    public List<Map<String, Object>> list(String sql) throws SQLException {
+        return super.list(sql);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list(String sql, Map<String, Object> param) throws Exception {
-        List<Map<String, Object>> data = list(create(sql, param), new SimpleMapWrapper());
-        return data;
+    public List<Map<String, Object>> list(String sql, Object param) throws SQLException {
+        return super.list(sql, param);
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> single(String sql) throws Exception {
-        Map<String, Object> data = single(create(sql));
-        return data;
+    public Map<String, Object> single(String sql) throws SQLException {
+        return super.single(sql);
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> single(String sql, Map<String, Object> param) throws Exception {
-        Map<String, Object> data = single(create(sql, param));
-        return data;
+    public Map<String, Object> single(String sql, Object param) throws SQLException {
+        return super.single(sql, param);
     }
 
-    public SQL create(String sql) {
-        return new SimpleSQL(sql);
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void exec(String sql) throws SQLException {
+        super.exec(new SimpleSQL(sql));
     }
 
-    public SQL create(String sql, Map<String, Object> param) {
-        SimpleSQL sql1 = new SimpleSQL(sql, param);
-        return sql1;
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void exec(SQL sql) throws SQLException {
+        super.exec(sql);
     }
 
 }
