@@ -46,6 +46,7 @@ import com.google.devtools.build.lib.analysis.util.ExpectedDynamicConfigurationE
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
@@ -455,7 +456,7 @@ public class BuildViewTest extends BuildViewTestBase {
     try {
       update("//foo:top");
       fail();
-    } catch (ViewCreationFailedException e) {
+    } catch (LoadingFailedException | ViewCreationFailedException e) {
       // Expected.
     }
     assertContainsEvent("no such target '//badbuild:isweird': target 'isweird' not declared in "
@@ -911,6 +912,9 @@ public class BuildViewTest extends BuildViewTestBase {
     try {
       update("//foo:test");
       fail();
+    } catch (LoadingFailedException expected) {
+      Truth.assertThat(expected.getMessage())
+          .matches("Loading failed; build aborted.*");
     } catch (ViewCreationFailedException expected) {
       Truth.assertThat(expected.getMessage())
           .matches("Analysis of target '//foo:test' failed; build aborted.*");
@@ -930,10 +934,17 @@ public class BuildViewTest extends BuildViewTestBase {
     try {
       update("//cycle:foo");
       fail();
-    } catch (ViewCreationFailedException expected) {
+    } catch (LoadingFailedException | ViewCreationFailedException expected) {
       assertContainsEvent("in cc_library rule //cycle:foo: cycle in dependency graph:");
-      assertThat(expected.getMessage())
-          .contains("Analysis of target '//cycle:foo' failed; build aborted");
+      // In the legacy case, SkyframeLabelVisitor prints the loading error for //cycle:foo. In the
+      // interleaved case, the SkyframeBuildView only throws the exception, but doesn't print the
+      // error - the error is printed by the BuildTool, which isn't used in this test.
+      if (defaultFlags().contains(Flag.SKYFRAME_LOADING_PHASE)) {
+        assertThat(expected.getMessage())
+            .contains("Analysis of target '//cycle:foo' failed; build aborted");
+      } else {
+        assertContainsEvent("Loading of target '//cycle:foo' failed; build aborted");
+      }
     }
   }
 
@@ -960,17 +971,31 @@ public class BuildViewTest extends BuildViewTestBase {
         "//cycle:foo", "//cycle:bat", "//cycle:baz");
     assertContainsEvent("in cc_library rule //cycle:foo: cycle in dependency graph:");
     assertContainsEvent("in cc_library rule //cycle:bas: cycle in dependency graph:");
-    assertContainsEvent(
-        "errors encountered while analyzing target '//cycle:foo': it will not be built");
-    assertContainsEvent(
-        "errors encountered while analyzing target '//cycle:bat': it will not be built");
-    // With interleaved loading and analysis, we can no longer distinguish loading-phase cycles
-    // and analysis-phase cycles. This was previously reported as a loading-phase cycle, as it
-    // happens with any configuration (cycle is hard-coded in the BUILD files). Also see the
-    // test below.
-    assertThat(Iterables.transform(analysisFailureRecorder.events, ANALYSIS_EVENT_TO_STRING_PAIR))
-        .containsExactly(
-            Pair.of("//cycle:foo", "//cycle:foo"), Pair.of("//cycle:bat", "//cycle:bas"));
+    if (defaultFlags().contains(Flag.SKYFRAME_LOADING_PHASE)) {
+      assertContainsEvent(
+          "errors encountered while analyzing target '//cycle:foo': it will not be built");
+      assertContainsEvent(
+          "errors encountered while analyzing target '//cycle:bat': it will not be built");
+      // With interleaved loading and analysis, we can no longer distinguish loading-phase cycles
+      // and analysis-phase cycles. This was previously reported as a loading-phase cycle, as it
+      // happens with any configuration (cycle is hard-coded in the BUILD files). Also see the
+      // test below.
+      assertThat(Iterables.transform(analysisFailureRecorder.events, ANALYSIS_EVENT_TO_STRING_PAIR))
+          .containsExactly(
+              Pair.of("//cycle:foo", "//cycle:foo"), Pair.of("//cycle:bat", "//cycle:bas"));
+    } else {
+      assertContainsEvent("errors encountered while loading target '//cycle:foo'");
+      assertContainsEvent("errors encountered while loading target '//cycle:bat'");
+
+      assertThat(Iterables.transform(loadingFailureRecorder.events,
+          new Function<Pair<Label, Label>, Pair<String, String>>() {
+            @Override
+            public Pair<String, String> apply(Pair<Label, Label> labelPair) {
+              return Pair.of(labelPair.getFirst().toString(), labelPair.getSecond().toString());
+            }
+          })).containsExactly(
+              Pair.of("//cycle:foo", "//cycle:foo"), Pair.of("//cycle:bat", "//cycle:bas"));
+    }
   }
 
   @Test
@@ -1015,7 +1040,7 @@ public class BuildViewTest extends BuildViewTestBase {
     try {
       update(defaultFlags().with(Flag.KEEP_GOING));
       fail();
-    } catch (InvalidConfigurationException e) {
+    } catch (LoadingFailedException | InvalidConfigurationException e) {
       assertThat(e.getMessage()).contains("third_party/crosstool/v2");
     }
   }
@@ -1028,7 +1053,7 @@ public class BuildViewTest extends BuildViewTestBase {
     try {
       update(defaultFlags().with(Flag.KEEP_GOING));
       fail();
-    } catch (InvalidConfigurationException e) {
+    } catch (LoadingFailedException | InvalidConfigurationException e) {
       assertContainsEvent(
           "no such package 'does/not/exist': BUILD file not found on package path");
     }
@@ -1048,7 +1073,7 @@ public class BuildViewTest extends BuildViewTestBase {
     try {
       update(defaultFlags().with(Flag.KEEP_GOING));
       fail();
-    } catch (InvalidConfigurationException e) {
+    } catch (LoadingFailedException | InvalidConfigurationException e) {
       // Expected
     }
   }
@@ -1064,7 +1089,7 @@ public class BuildViewTest extends BuildViewTestBase {
     try {
       update(defaultFlags().with(Flag.KEEP_GOING));
       fail();
-    } catch (InvalidConfigurationException e) {
+    } catch (LoadingFailedException | InvalidConfigurationException e) {
       assertThat(e.getMessage()).contains("//xcode:does_not_exist");
     }
   }
@@ -1080,7 +1105,7 @@ public class BuildViewTest extends BuildViewTestBase {
     try {
       update("//z/b:b");
       fail();
-    } catch (ViewCreationFailedException expected) {
+    } catch (LoadingFailedException | ViewCreationFailedException expected) {
       assertContainsEvent("no such package 'nonexistent'");
     }
   }
@@ -1097,7 +1122,7 @@ public class BuildViewTest extends BuildViewTestBase {
     try {
       update("//z/b:b");
       fail();
-    } catch (ViewCreationFailedException expected) {
+    } catch (LoadingFailedException | ViewCreationFailedException expected) {
       assertContainsEvent("no such package 'b'");
     }
   }
@@ -1113,7 +1138,7 @@ public class BuildViewTest extends BuildViewTestBase {
     try {
       update("//parent:a");
       fail();
-    } catch (ViewCreationFailedException expected) {
+    } catch (LoadingFailedException | ViewCreationFailedException expected) {
     }
     assertContainsEventWithFrequency("name 'undefined_symbol' is not defined", 1);
     assertContainsEventWithFrequency(
@@ -1150,7 +1175,7 @@ public class BuildViewTest extends BuildViewTestBase {
     try {
       update("//okay");
       fail();
-    } catch (ViewCreationFailedException e) {
+    } catch (LoadingFailedException | ViewCreationFailedException e) {
     }
     assertContainsEventWithFrequency("name 'undefined_symbol' is not defined", 1);
     assertContainsEventWithFrequency(
@@ -1169,7 +1194,11 @@ public class BuildViewTest extends BuildViewTestBase {
         "sh_binary(name = 'okay', srcs = ['okay.sh'])");
     useConfiguration("--experimental_action_listener=//parent:a");
     reporter.removeHandler(failFastHandler);
-    update(defaultFlags().with(Flag.KEEP_GOING), "//okay");
+    try {
+      update(defaultFlags().with(Flag.KEEP_GOING), "//okay");
+    } catch (LoadingFailedException ignored) {
+      // In the legacy case, we get a loading exception even with keep going. Why?
+    }
     assertContainsEventWithFrequency("name 'undefined_symbol' is not defined", 1);
     assertContainsEventWithFrequency(
         "Target '//child:b' contains an error and its package is in error and referenced "
