@@ -124,7 +124,6 @@ public class CppLinkActionBuilder {
   @Nullable private final RuleContext ruleContext;
   private final AnalysisEnvironment analysisEnvironment;
   private final Artifact output;
-  @Nullable private String mnemonic;
 
   // can be null for CppLinkAction.createTestBuilder()
   @Nullable private final CcToolchainProvider toolchain;
@@ -163,7 +162,7 @@ public class CppLinkActionBuilder {
   private Iterable<LTOBackendArtifacts> allLTOArtifacts = null;
   
   private final List<VariablesExtension> variablesExtensions = new ArrayList<>();
-  private final NestedSetBuilder<Artifact> linkActionInputs = NestedSetBuilder.stableOrder();
+  private final List<Artifact> linkActionInputs = new ArrayList<>();
 
   /**
    * Creates a builder that builds {@link CppLinkAction} instances.
@@ -443,11 +442,8 @@ public class CppLinkActionBuilder {
 
   /** Builds the Action as configured and returns it. */
   public CppLinkAction build() throws InterruptedException {
-    // Executable links do not have library identifiers.
-    boolean hasIdentifier = (libraryIdentifier != null);
-    boolean isExecutable = linkType.isExecutable();
-    Preconditions.checkState(hasIdentifier != isExecutable);    
-
+    Preconditions.checkState(
+        (libraryIdentifier == null) == (linkType == LinkTargetType.EXECUTABLE));
     if (interfaceOutput != null && (fake || linkType != LinkTargetType.DYNAMIC_LIBRARY)) {
       throw new RuntimeException(
           "Interface output can only be used " + "with non-fake DYNAMIC_LIBRARY targets");
@@ -489,7 +485,7 @@ public class CppLinkActionBuilder {
       }
     }
 
-    final LibraryToLink outputLibrary = linkType.isExecutable()
+    final LibraryToLink outputLibrary = linkType == LinkTargetType.EXECUTABLE
         ? null
         : LinkerInputs.newInputLibrary(output,
             linkType.getLinkerOutput(),
@@ -655,7 +651,7 @@ public class CppLinkActionBuilder {
     NestedSetBuilder<Artifact> dependencyInputsBuilder = NestedSetBuilder.stableOrder();
     dependencyInputsBuilder.addTransitive(crosstoolInputs);
     dependencyInputsBuilder.add(toolchain.getLinkDynamicLibraryTool());
-    dependencyInputsBuilder.addTransitive(linkActionInputs.build());
+    dependencyInputsBuilder.addAll(linkActionInputs);
     if (runtimeMiddleman != null) {
       dependencyInputsBuilder.add(runtimeMiddleman);
     }
@@ -741,7 +737,6 @@ public class CppLinkActionBuilder {
 
     return new CppLinkAction(
         getOwner(),
-        mnemonic,
         inputsBuilder.deduplicate().build(),
         actionOutputs,
         cppConfiguration,
@@ -844,12 +839,6 @@ public class CppLinkActionBuilder {
 
   protected ActionOwner getOwner() {
     return ruleContext.getActionOwner();
-  }
-  
-  /** Sets the mnemonic for the link action. */
-  public CppLinkActionBuilder setMnemonic(String mnemonic) {
-    this.mnemonic = mnemonic;
-    return this;
   }
 
   /** Set the crosstool inputs required for the action. */
@@ -1154,26 +1143,10 @@ public class CppLinkActionBuilder {
   }
   
   /**
-   * Adds an extra input artifact to the link action.
+   * Sets extra input artifacts to the link action.
    */
-  public CppLinkActionBuilder addActionInput(Artifact input) {
-    this.linkActionInputs.add(input);
-    return this;
-  }
-  
-  /**
-   * Adds extra input artifacts to the link action.
-   */
-  public CppLinkActionBuilder addActionInputs(Iterable<Artifact> inputs) {
+  public CppLinkActionBuilder addActionInputs(Collection<Artifact> inputs) {
     this.linkActionInputs.addAll(inputs);
-    return this;
-  }
-  
-  /**
-   * Adds extra input artifacts to the link actions.
-   */
-  public CppLinkActionBuilder addTransitiveActionInputs(NestedSet<Artifact> inputs) {
-    this.linkActionInputs.addTransitive(inputs);
     return this;
   }
 

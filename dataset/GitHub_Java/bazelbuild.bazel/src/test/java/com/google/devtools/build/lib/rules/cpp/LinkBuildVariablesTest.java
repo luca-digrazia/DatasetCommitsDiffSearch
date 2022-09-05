@@ -57,13 +57,11 @@ public class LinkBuildVariablesTest extends BuildViewTestCase {
     return (CppLinkAction) getGeneratingAction(linkerOutput);
   }
 
-  /** Returns active build variables for a link action of given type for given target. */
-  protected Variables getLinkBuildVariables(ConfiguredTarget target, Link.LinkTargetType type) {
+  private Variables getLinkBuildVariables(ConfiguredTarget target, Link.LinkTargetType type) {
     return getCppLinkAction(target, type).getLinkCommandLine().getBuildVariables();
   }
 
-  /** Returns the value of a given variable in context of the given Variables instance. */
-  protected List<String> getVariableValue(Variables variables, String variable) throws Exception {
+  private List<String> getVariableValue(Variables variables, String variable) throws Exception {
     FeatureConfiguration mockFeatureConfiguration =
         CcToolchainFeaturesTest.buildFeatures(
                 "feature {",
