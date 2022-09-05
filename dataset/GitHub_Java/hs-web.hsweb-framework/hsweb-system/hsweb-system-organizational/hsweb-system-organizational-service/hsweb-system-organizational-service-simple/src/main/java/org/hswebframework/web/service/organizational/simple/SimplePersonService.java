@@ -19,8 +19,6 @@ package org.hswebframework.web.service.organizational.simple;
 import org.hswebframework.web.commons.entity.TreeSupportEntity;
 import org.hswebframework.web.dao.dynamic.QueryByEntityDao;
 import org.hswebframework.web.dao.organizational.*;
-import org.hswebframework.web.entity.authorization.UserEntity;
-import org.hswebframework.web.entity.authorization.bind.BindRoleUserEntity;
 import org.hswebframework.web.entity.organizational.*;
 import org.hswebframework.web.id.IDGenerator;
 import org.hswebframework.web.organizational.authorization.PersonnelAuthorization;
@@ -30,27 +28,22 @@ import org.hswebframework.web.organizational.authorization.simple.SimplePersonne
 import org.hswebframework.web.organizational.authorization.simple.SimplePersonnelAuthorization;
 import org.hswebframework.web.service.DefaultDSLQueryService;
 import org.hswebframework.web.service.EnableCacheGernericEntityService;
-import org.hswebframework.web.service.authorization.AuthorizationSettingTypeSupplier;
-import org.hswebframework.web.service.authorization.UserService;
+import org.hswebframework.web.service.GenericEntityService;
 import org.hswebframework.web.service.organizational.PersonService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-
-import static org.hswebframework.web.service.DefaultDSLQueryService.*;
-import static org.springframework.util.StringUtils.*;
 
 /**
  * 默认的服务实现
@@ -60,11 +53,7 @@ import static org.springframework.util.StringUtils.*;
 @Service("personService")
 @CacheConfig(cacheNames = "person")
 public class SimplePersonService extends EnableCacheGernericEntityService<PersonEntity, String>
-        implements PersonService, PersonnelAuthorizationManager, AuthorizationSettingTypeSupplier {
-
-    private static String SETTING_TYPE_PERSON   = "person";
-    private static String SETTING_TYPE_POSITION = "position";
-
+        implements PersonService, PersonnelAuthorizationManager {
     @Autowired
     private PersonDao personDao;
 
@@ -80,9 +69,6 @@ public class SimplePersonService extends EnableCacheGernericEntityService<Person
     @Autowired
     private OrganizationalDao organizationalDao;
 
-    @Autowired(required = false)
-    private UserService userService;
-
     @Override
     protected IDGenerator<String> getIDGenerator() {
         return IDGenerator.MD5;
@@ -94,60 +80,12 @@ public class SimplePersonService extends EnableCacheGernericEntityService<Person
     }
 
     @Override
-    @CacheEvict(allEntries = true)
-    public String insert(PersonAuthBindEntity authBindEntity) {
-        // TODO: 17-6-1 应该使用锁,防止并发同步用户,导致多个人员使用相同的用户
-        if (authBindEntity.getPersonUser() != null) {
-            syncUserInfo(authBindEntity);
-        }
-        String id = this.insert(((PersonEntity) authBindEntity));
-        if (authBindEntity.getPositionIds() != null) {
-            syncPositionInfo(id, authBindEntity.getPositionIds());
+    public String insert(PersonEntity entity) {
+        String id = super.insert(entity);
+        if (entity.getPositionIds() != null) {
+            syncPositionInfo(id, entity.getPositionIds());
         }
         return id;
-    }
-
-    @Override
-    @CacheEvict(allEntries = true)
-    public int updateByPk(PersonAuthBindEntity authBindEntity) {
-        // TODO: 17-6-1 应该使用锁,防止并发同步用户,导致多个人员使用相同的用户
-        if (authBindEntity.getPositionIds() != null) {
-            personPositionDao.deleteByPersonId(authBindEntity.getId());
-            syncPositionInfo(authBindEntity.getId(), authBindEntity.getPositionIds());
-        }
-        if (authBindEntity.getPersonUser() != null) {
-            syncUserInfo(authBindEntity);
-        }
-        return this.updateByPk(((PersonEntity) authBindEntity));
-    }
-
-    @Override
-    @Cacheable(key = "'auth-bind'+#id")
-    public PersonAuthBindEntity selectAuthBindByPk(String id) {
-        PersonEntity personEntity = this.selectByPk(id);
-        if (personEntity == null) return null;
-
-        if (personEntity instanceof PersonAuthBindEntity) return ((PersonAuthBindEntity) personEntity);
-
-        PersonAuthBindEntity bindEntity = entityFactory.newInstance(PersonAuthBindEntity.class);
-        entityFactory.copyProperties(personEntity, bindEntity);
-        Set<String> positionIds = DefaultDSLQueryService.createQuery(personPositionDao)
-                .where(PersonPositionEntity.personId, id)
-                .listNoPaging().stream()
-                .map(PersonPositionEntity::getPositionId)
-                .collect(Collectors.toSet());
-
-        bindEntity.setPositionIds(positionIds);
-
-        if (null != userService) {
-            UserEntity userEntity = userService.selectByPk(bindEntity.getUserId());
-            if (null != userEntity) {
-                PersonUserEntity entity = entityFactory.newInstance(PersonUserEntity.class);
-                entity.setUsername(userEntity.getUsername());
-                bindEntity.setPersonUser(entity);
-            }
-        }
-        return bindEntity;
     }
 
     protected void syncPositionInfo(String personId, Set<String> positionIds) {
@@ -159,54 +97,15 @@ public class SimplePersonService extends EnableCacheGernericEntityService<Person
         }
     }
 
-    protected void syncUserInfo(PersonAuthBindEntity bindEntity) {
-        if (isEmpty(bindEntity.getPersonUser().getUsername())) return;
-        //获取所有职位
-        Set<String> positionIds = bindEntity.getPositionIds();
-        if (positionIds.isEmpty()) return;
-        //是否使用了权限管理的userService.
-        if (null == userService) {
-            logger.warn("userService not ready!");
-            return;
+    @Override
+    protected int updateByPk(PersonEntity entity) {
+        int size = super.updateByPk(entity);
+        if (entity.getPositionIds() != null) {
+            personPositionDao.deleteByPersonId(entity.getId());
+            syncPositionInfo(entity.getId(), entity.getPositionIds());
         }
-        //获取职位实体
-        List<PositionEntity> positionEntities = DefaultDSLQueryService.createQuery(positionDao)
-                .where().in(PositionEntity.id, positionIds)
-                .listNoPaging();
-        if (positionEntities.isEmpty()) return;
-        //获取用户是否存在
-        UserEntity oldUser = userService.selectByUsername(bindEntity.getPersonUser().getUsername());
-        if (null != oldUser) {
-            //判断用户是否已经绑定了其他人员
-            int userBindSize = createQuery().where()
-                    .is(PersonEntity.userId, oldUser.getId())
-                    .not(PersonEntity.id, bindEntity.getId())
-                    .total();
-            tryValidateProperty(userBindSize == 0, "personUser.username", "用户已绑定其他人员");
-        }
-        // 初始化用户后的操作方式
-        Function<UserEntity, String> userOperationFunction =
-                oldUser == null ? userService::insert : //为空新增,不为空修改
-                        user -> {
-                            userService.update(oldUser.getId(), user);
-                            return oldUser.getId();
-                        };
-        //初始化用户信息
-        //全部角色信息
-        Set<String> roleIds = positionEntities.stream()
-                .map(PositionEntity::getRoles)
-                .filter(Objects::nonNull)
-                .flatMap(List::stream)
-                .collect(Collectors.toSet());
-        BindRoleUserEntity userEntity = entityFactory.newInstance(BindRoleUserEntity.class);
-        userEntity.setUsername(bindEntity.getPersonUser().getUsername());
-        userEntity.setPassword(bindEntity.getPersonUser().getPassword());
-        userEntity.setName(bindEntity.getName());
-        userEntity.setRoles(new ArrayList<>(roleIds));
-        String userId = userOperationFunction.apply(userEntity);
-        bindEntity.setUserId(userId);
+        return size;
     }
-
 
     @Override
     public int deleteByPk(String id) {
@@ -232,7 +131,7 @@ public class SimplePersonService extends EnableCacheGernericEntityService<Person
         // 获取用户的职位ID集合(多个职位)
         Set<String> positionIds = DefaultDSLQueryService.createQuery(personPositionDao)
                 .where(PersonPositionEntity.personId, personId)
-                .listNoPaging().stream()
+                .list().stream()
                 .map(PersonPositionEntity::getPositionId)
                 .collect(Collectors.toSet());
         //获取所有职位,并得到根职位(树结构)
@@ -276,7 +175,7 @@ public class SimplePersonService extends EnableCacheGernericEntityService<Person
         //获取根节点
         List<T> root = DefaultDSLQueryService.createQuery(dao)
                 .where().in(TreeSupportEntity.id, rootIds)
-                .listNoPaging();
+                .list();
         //节点不存在?
         if (!root.isEmpty()) {
             //所有子节点,使用节点的path属性进行快速查询,查询结果包含了根节点
@@ -284,7 +183,7 @@ public class SimplePersonService extends EnableCacheGernericEntityService<Person
                     .createQuery(dao)
                     //遍历生成查询条件: like path like ?||'%' or path like ?||'%'  ....
                     .each(root, (query, data) -> query.or().like$(TreeSupportEntity.path, data.getPath()))
-                    .listNoPaging();
+                    .list();
             //转为树形结构
             List<T> tree = TreeSupportEntity
                     .list2tree(allNode, childAccepter,
@@ -320,26 +219,5 @@ public class SimplePersonService extends EnableCacheGernericEntityService<Person
         PersonEntity entity = createQuery().where(PersonEntity.userId, userId).single();
         assertNotNull(entity);
         return getPersonnelAuthorizationByPersonId(entity.getId());
-    }
-
-    @Override
-    public Set<SettingInfo> get(String userId) {
-        //支持职位和人员 设置权限
-        PersonEntity entity = createQuery().where(PersonEntity.userId, userId).single();
-        if (entity == null) return new HashSet<>();
-        Set<SettingInfo> settingInfo = new HashSet<>();
-        //岗位设置
-        //TODO 2017/06/08 是否将子级岗位的设置也放进来??
-        DefaultDSLQueryService.createQuery(personPositionDao)
-                .where(PersonPositionEntity.personId, entity.getId())
-                .listNoPaging()
-                .stream()
-                .map(position -> new SettingInfo(SETTING_TYPE_POSITION, position.getPositionId()))
-                .forEach(settingInfo::add);
-        //其他设置支持?
-
-        //人员配置
-        settingInfo.add(new SettingInfo(SETTING_TYPE_PERSON, entity.getId()));
-        return settingInfo;
     }
 }
