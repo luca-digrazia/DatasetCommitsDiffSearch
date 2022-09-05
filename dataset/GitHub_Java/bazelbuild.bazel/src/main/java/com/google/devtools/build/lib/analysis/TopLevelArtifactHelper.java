@@ -108,28 +108,57 @@ public final class TopLevelArtifactHelper {
       TopLevelArtifactContext context) {
     NestedSetBuilder<Artifact> importantBuilder = NestedSetBuilder.stableOrder();
     NestedSetBuilder<Artifact> allBuilder = NestedSetBuilder.stableOrder();
+    TempsProvider tempsProvider = target.getProvider(TempsProvider.class);
+    if (tempsProvider != null) {
+      importantBuilder.addAll(tempsProvider.getTemps());
+    }
 
     TopLevelArtifactProvider topLevelArtifactProvider =
         target.getProvider(TopLevelArtifactProvider.class);
-
-    for (String outputGroup : context.outputGroups()) {
-      NestedSet<Artifact> results = null;
-
-      if (outputGroup.equals(TopLevelArtifactProvider.DEFAULT)) {
-        FileProvider fileProvider = target.getProvider(FileProvider.class);
-        if (fileProvider != null) {
-          results = fileProvider.getFilesToBuild();
+    if (topLevelArtifactProvider != null) {
+      for (String outputGroup : context.outputGroups()) {
+        NestedSet<Artifact> results = topLevelArtifactProvider.getOutputGroup(outputGroup);
+        if (results != null) {
+          if (outputGroup.startsWith(TopLevelArtifactProvider.HIDDEN_OUTPUT_GROUP_PREFIX)) {
+            allBuilder.addTransitive(results);
+          } else {
+            importantBuilder.addTransitive(results);
+          }
         }
-      } else if (topLevelArtifactProvider != null) {
-        results = topLevelArtifactProvider.getOutputGroup(outputGroup);
+      }
+    }
+
+    if (context.compileOnly()) {
+      FilesToCompileProvider provider = target.getProvider(FilesToCompileProvider.class);
+      if (provider != null) {
+        importantBuilder.addAll(provider.getFilesToCompile());
+      }
+    } else if (context.compilationPrerequisitesOnly()) {
+      CompilationPrerequisitesProvider provider =
+          target.getProvider(CompilationPrerequisitesProvider.class);
+      if (provider != null) {
+        importantBuilder.addTransitive(provider.getCompilationPrerequisites());
+      }
+    } else if (context.buildDefaultArtifacts()) {
+      FilesToRunProvider filesToRunProvider = target.getProvider(FilesToRunProvider.class);
+      boolean hasRunfilesSupport = false;
+      if (filesToRunProvider != null) {
+        importantBuilder.addAll(filesToRunProvider.getFilesToRun());
+        hasRunfilesSupport = filesToRunProvider.getRunfilesSupport() != null;
       }
 
-      if (results != null) {
-        if (outputGroup.startsWith(TopLevelArtifactProvider.HIDDEN_OUTPUT_GROUP_PREFIX)) {
-          allBuilder.addTransitive(results);
-        } else {
-          importantBuilder.addTransitive(results);
+      if (!hasRunfilesSupport) {
+        RunfilesProvider runfilesProvider =
+            target.getProvider(RunfilesProvider.class);
+        if (runfilesProvider != null) {
+          allBuilder.addTransitive(runfilesProvider.getDefaultRunfiles().getAllArtifacts());
         }
+      }
+
+      AlwaysBuiltArtifactsProvider forcedArtifacts = target.getProvider(
+          AlwaysBuiltArtifactsProvider.class);
+      if (forcedArtifacts != null) {
+        allBuilder.addTransitive(forcedArtifacts.getArtifactsToAlwaysBuild());
       }
     }
 
