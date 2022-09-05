@@ -44,11 +44,10 @@ public final class BazelIosTest extends IosTest {
     NestedSetBuilder<Artifact> filesToBuildBuilder = NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(filesToBuild);
 
-    TestSupport testSupport =
-        new TestSupport(ruleContext)
-            .registerTestRunnerActions()
-            .addRunfiles(runfilesBuilder)
-            .addFilesToBuild(filesToBuildBuilder);
+    TestSupport testSupport = new TestSupport(ruleContext)
+        .registerTestRunnerActions()
+        .addRunfiles(runfilesBuilder, common.getObjcProvider())
+        .addFilesToBuild(filesToBuildBuilder);
 
     Artifact executable = testSupport.generatedTestScript();
 
@@ -60,10 +59,9 @@ public final class BazelIosTest extends IosTest {
         .setFilesToBuild(filesToBuildBuilder.build())
         .add(XcodeProvider.class, xcodeProvider)
         .add(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
-        .add(
-            ExecutionInfoProvider.class,
+        .add(ExecutionInfoProvider.class,
             new ExecutionInfoProvider(ImmutableMap.of(ExecutionRequirements.REQUIRES_DARWIN, "")))
-        .addProviders(testSupport.getExtraProviders())
+        .addProviders(testSupport.getExtraProviders(common.getObjcProvider()))
         .setRunfilesSupport(runfilesSupport, executable)
         .build();
   }
