@@ -15,12 +15,13 @@ package com.google.devtools.build.lib.bazel.rules.common;
 
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -30,6 +31,9 @@ import com.google.devtools.build.lib.rules.extra.ExtraActionFactory;
 /**
  * Rule definition for extra_action rule.
  */
+@BlazeRule(name = "extra_action",
+             ancestors = { BaseRuleClasses.RuleBase.class },
+             factoryClass = ExtraActionFactory.class)
 public final class BazelExtraActionRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
@@ -116,15 +120,6 @@ public final class BazelExtraActionRule implements RuleDefinition {
         .add(attr("requires_action_output", BOOLEAN))
         .removeAttribute("deps")
         .removeAttribute(":action_listener")
-        .build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("extra_action")
-        .ancestors(BaseRuleClasses.RuleBase.class)
-        .factoryClass(ExtraActionFactory.class)
         .build();
   }
 }
