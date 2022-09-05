@@ -68,6 +68,7 @@ import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.TriState;
+
 import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -84,6 +85,7 @@ import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
 import java.util.TreeMap;
+
 import javax.annotation.Nullable;
 
 /**
@@ -161,6 +163,13 @@ public final class BuildConfiguration {
       ListMultimap<String, Label> implicitLabels = ArrayListMultimap.create();
       addImplicitLabels(implicitLabels);
       return implicitLabels;
+    }
+
+    /*
+     * Returns the command-line "Make" variable overrides.
+     */
+    public ImmutableMap<String, String> getCommandLineDefines() {
+      return ImmutableMap.of();
     }
 
     /**
@@ -441,16 +450,6 @@ public final class BuildConfiguration {
     public String getCpu() {
       return cpu;
     }
-
-    @Option(
-      name = "define",
-      converter = Converters.AssignmentConverter.class,
-      defaultValue = "",
-      category = "semantics",
-      allowMultiple = true,
-      help = "Each --define option specifies an assignment for a build variable."
-    )
-    public List<Map.Entry<String, String>> commandLineBuildVariables;
 
     @Option(name = "cpu",
         defaultValue = "null",
@@ -863,7 +862,6 @@ public final class BuildConfiguration {
       host.compilationMode = CompilationMode.OPT;
       host.isHost = true;
       host.useDynamicConfigurations = useDynamicConfigurations;
-      host.commandLineBuildVariables = commandLineBuildVariables;
       host.enforceConstraints = enforceConstraints;
 
       if (fallback) {
@@ -1043,7 +1041,6 @@ public final class BuildConfiguration {
   private final String platformName;
 
   private final ImmutableMap<String, String> testEnvironment;
-  private final ImmutableMap<String, String> commandLineBuildVariables;
 
   /**
    * Helper container for {@link #transitiveOptionsMap} below.
@@ -1205,15 +1202,6 @@ public final class BuildConfiguration {
     }
 
     this.testEnvironment = ImmutableMap.copyOf(testEnv);
-
-    // We can't use an ImmutableMap.Builder here; we need the ability to add entries with keys that
-    // are already in the map so that the same define can be specified on the command line twice,
-    // and ImmutableMap.Builder does not support that.
-    Map<String, String> commandLineDefinesBuilder = new TreeMap<>();
-    for (Map.Entry<String, String> define : options.commandLineBuildVariables) {
-      commandLineDefinesBuilder.put(define.getKey(), define.getValue());
-    }
-    commandLineBuildVariables = ImmutableMap.copyOf(commandLineDefinesBuilder);
 
     this.mnemonic = buildMnemonic();
     String outputDirName = (options.outputDirectoryName != null)
@@ -2069,7 +2057,9 @@ public final class BuildConfiguration {
   public Map<String, String> getMakeEnvironment() {
     Map<String, String> makeEnvironment = new HashMap<>();
     makeEnvironment.putAll(globalMakeEnv);
-    makeEnvironment.putAll(commandLineBuildVariables);
+    for (Fragment fragment : fragments.values()) {
+      makeEnvironment.putAll(fragment.getCommandLineDefines());
+    }
     return ImmutableMap.copyOf(makeEnvironment);
   }
 
@@ -2078,8 +2068,12 @@ public final class BuildConfiguration {
    * (Fragments, in particular the Google C++ support, can set variables through the
    * command line.)
    */
-  public Map<String, String> getCommandLineBuildVariables() {
-    return commandLineBuildVariables;
+  public Map<String, String> getCommandLineDefines() {
+    ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
+    for (Fragment fragment : fragments.values()) {
+      builder.putAll(fragment.getCommandLineDefines());
+    }
+    return builder.build();
   }
 
   /**
