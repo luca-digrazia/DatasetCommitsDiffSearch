@@ -47,13 +47,10 @@ public class SkylarkModules {
    * modules. They are also registered with the {@link ValidationEnvironment} and the
    * {@link SkylarkEnvironment}. Note that only {@link SkylarkFunction}s are handled properly.
    */
-  // TODO(bazel-team): find a more general, more automated way of registering classes and building
-  // initial environments. And don't give syntax.Environment and packages.MethodLibrary a special
-  // treatment, have them use the same registration mechanism as other classes currently below.
   public static final ImmutableList<Class<?>> MODULES = ImmutableList.of(
+      SkylarkNativeModule.class,
       SkylarkAttr.class,
       SkylarkCommandLine.class,
-      SkylarkNativeModule.class,
       SkylarkRuleClassFunctions.class,
       SkylarkRuleImplementationFunctions.class);
 
@@ -143,7 +140,7 @@ public class SkylarkModules {
   }
 
   /**
-   * Collects the Functions from the fields of the class of the object parameter
+   * Collects the SkylarkFunctions from the fields of the class of the object parameter
    * and adds them into the builder.
    */
   private static void collectSkylarkFunctionsAndObjectsFromFields(Class<?> type,
@@ -151,19 +148,18 @@ public class SkylarkModules {
     try {
       for (Field field : type.getDeclaredFields()) {
         if (field.isAnnotationPresent(SkylarkBuiltin.class)) {
-          // Fields in Skylark modules are sometimes private.
-          // Nevertheless they have to be annotated with SkylarkBuiltin.
+          // Fields in Skylark modules are sometimes private. Nevertheless they have to
+          // be annotated with SkylarkBuiltin.
           field.setAccessible(true);
           SkylarkBuiltin annotation = field.getAnnotation(SkylarkBuiltin.class);
-          Object value = field.get(null);
           if (SkylarkFunction.class.isAssignableFrom(field.getType())) {
-            SkylarkFunction function = (SkylarkFunction) value;
+            SkylarkFunction function = (SkylarkFunction) field.get(null);
             if (!function.isConfigured()) {
               function.configure(annotation);
             }
             functions.add(function);
           } else {
-            objects.put(annotation.name(), value);
+            objects.put(annotation.name(), field.get(null));
           }
         }
       }
@@ -174,7 +170,7 @@ public class SkylarkModules {
   }
 
   /**
-   * Collects the Functions from the fields of the class of the object parameter
+   * Collects the SkylarkFunctions from the fields of the class of the object parameter
    * and adds their class and their corresponding return value to the builder.
    */
   private static void collectSkylarkTypesFromFields(Class<?> classObject, Set<String> builtIn) {

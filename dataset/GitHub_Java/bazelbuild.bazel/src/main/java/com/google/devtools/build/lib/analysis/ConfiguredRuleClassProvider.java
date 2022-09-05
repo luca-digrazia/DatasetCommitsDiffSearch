@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.graph.Node;
-import com.google.devtools.build.lib.packages.AspectFactory;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
@@ -41,6 +40,7 @@ import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SkylarkEnvironment;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.ValidationEnvironment;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsClassProvider;
 
 import java.lang.reflect.Constructor;
@@ -76,15 +76,13 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    * Builder for {@link ConfiguredRuleClassProvider}.
    */
   public static class Builder implements RuleDefinitionEnvironment {
-    private final StringBuilder defaultWorkspaceFile = new StringBuilder();
+    private final List<PathFragment> defaultWorkspaceFiles = new ArrayList<>();
     private final List<ConfigurationFragmentFactory> configurationFragments = new ArrayList<>();
     private final List<BuildInfoFactory> buildInfoFactories = new ArrayList<>();
     private final List<Class<? extends FragmentOptions>> configurationOptions = new ArrayList<>();
 
     private final Map<String, RuleClass> ruleClassMap = new HashMap<>();
     private final  Map<String, Class<? extends RuleDefinition>> ruleDefinitionMap =
-        new HashMap<>();
-    private final Map<String, Class<? extends AspectFactory<?, ?, ?>>> aspectFactoryMap =
         new HashMap<>();
     private final Map<Class<? extends RuleDefinition>, RuleClass> ruleMap = new HashMap<>();
     private final Map<Class<? extends RuleDefinition>, RuleDefinition> ruleDefinitionInstanceCache =
@@ -95,8 +93,8 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private PrerequisiteValidator prerequisiteValidator;
     private ImmutableMap<String, SkylarkType> skylarkAccessibleJavaClasses = ImmutableMap.of();
 
-    public void addWorkspaceFile(String contents) {
-      defaultWorkspaceFile.append(contents);
+    public void addWorkspaceFile(PathFragment defaultWorkspace) {
+      defaultWorkspaceFiles.add(defaultWorkspace);
     }
 
     public Builder setPrerequisiteValidator(PrerequisiteValidator prerequisiteValidator) {
@@ -116,13 +114,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       for (Class<? extends RuleDefinition> ancestor : ruleDefinition.getMetadata().ancestors()) {
         dependencyGraph.addEdge(ancestor, ruleDefinitionClass);
       }
-
-      return this;
-    }
-
-    public Builder addAspectFactory(
-        String name, Class<? extends AspectFactory<?, ?, ?>> configuredAspectFactoryClass) {
-      aspectFactoryMap.put(name, configuredAspectFactoryClass);
 
       return this;
     }
@@ -209,8 +200,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       return new ConfiguredRuleClassProvider(
           ImmutableMap.copyOf(ruleClassMap),
           ImmutableMap.copyOf(ruleDefinitionMap),
-          ImmutableMap.copyOf(aspectFactoryMap),
-          defaultWorkspaceFile.toString(),
+          ImmutableList.copyOf(defaultWorkspaceFiles),
           ImmutableList.copyOf(buildInfoFactories),
           ImmutableList.copyOf(configurationOptions),
           ImmutableList.copyOf(configurationFragments),
@@ -245,7 +235,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    * A list of relative paths to the WORKSPACE files needed to provide external dependencies for
    * the rule classes.
    */
-  String defaultWorkspaceFile;
+  private ImmutableList<PathFragment> defaultWorkspaceFiles;
 
   /**
    * Maps rule class name to the metaclass instance for that rule.
@@ -256,11 +246,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    * Maps rule class name to the rule definition metaclasses.
    */
   private final ImmutableMap<String, Class<? extends RuleDefinition>> ruleDefinitionMap;
-
-  /**
-   * Maps aspect name to the aspect factory meta class.
-   */
-  private final ImmutableMap<String, Class<? extends AspectFactory<?, ?, ?>>> aspectFactoryMap;
 
   /**
    * The configuration options that affect the behavior of the rules.
@@ -288,8 +273,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   public ConfiguredRuleClassProvider(
       ImmutableMap<String, RuleClass> ruleClassMap,
       ImmutableMap<String, Class<? extends RuleDefinition>> ruleDefinitionMap,
-      ImmutableMap<String, Class<? extends AspectFactory<?, ?, ?>>> aspectFactoryMap,
-      String defaultWorkspaceFile,
+      ImmutableList<PathFragment> defaultWorkspaceFiles,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       ImmutableList<Class<? extends FragmentOptions>> configurationOptions,
       ImmutableList<ConfigurationFragmentFactory> configurationFragments,
@@ -299,8 +283,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
     this.ruleClassMap = ruleClassMap;
     this.ruleDefinitionMap = ruleDefinitionMap;
-    this.aspectFactoryMap = aspectFactoryMap;
-    this.defaultWorkspaceFile = defaultWorkspaceFile;
+    this.defaultWorkspaceFiles = defaultWorkspaceFiles;
     this.buildInfoFactories = buildInfoFactories;
     this.configurationOptions = configurationOptions;
     this.configurationFragments = configurationFragments;
@@ -318,11 +301,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   @Override
   public Map<String, RuleClass> getRuleClassMap() {
     return ruleClassMap;
-  }
-
-  @Override
-  public Map<String, Class<? extends AspectFactory<?, ?, ?>>> getAspectFactoryMap() {
-    return aspectFactoryMap;
   }
 
   /**
@@ -398,7 +376,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   }
 
   @Override
-  public String getDefaultWorkspaceFile() {
-    return defaultWorkspaceFile;
+  public List<PathFragment> getWorkspaceFiles() {
+    return defaultWorkspaceFiles;
   }
 }
