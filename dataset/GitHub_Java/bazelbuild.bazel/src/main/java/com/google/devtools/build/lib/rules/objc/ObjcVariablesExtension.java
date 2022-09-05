@@ -25,8 +25,8 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
+import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.StringSequenceBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariablesExtension;
@@ -37,6 +37,7 @@ class ObjcVariablesExtension implements VariablesExtension {
 
   static final String PCH_FILE_VARIABLE_NAME = "pch_file";
   static final String FRAMEWORKS_VARIABLE_NAME = "framework_paths";
+  static final String VERSION_MIN_VARIABLE_NAME = "version_min";
   static final String MODULES_MAPS_DIR_NAME = "module_maps_dir";
   static final String OBJC_MODULE_CACHE_DIR_NAME = "_objc_module_cache";
   static final String OBJC_MODULE_CACHE_KEY = "modules_cache_path";
@@ -105,6 +106,7 @@ class ObjcVariablesExtension implements VariablesExtension {
   public void addVariables(CcToolchainFeatures.Variables.Builder builder) {
     addPchVariables(builder);
     addFrameworkVariables(builder);
+    addArchVariables(builder);
     addModuleMapVariables(builder);
     if (activeVariableCategories.contains(VariableCategory.ARCHIVE_VARIABLES)) {
       addArchiveVariables(builder);
@@ -118,8 +120,7 @@ class ObjcVariablesExtension implements VariablesExtension {
   }
 
   private void addPchVariables(CcToolchainFeatures.Variables.Builder builder) {
-    if (ruleContext.attributes().has("pch", BuildType.LABEL)
-        && ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET) != null) {
+    if (ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET) != null) {
       builder.addStringVariable(
           PCH_FILE_VARIABLE_NAME,
           ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET).getExecPathString());
@@ -147,6 +148,13 @@ class ObjcVariablesExtension implements VariablesExtension {
     builder.addStringVariable(
         OBJC_MODULE_CACHE_KEY,
         buildConfiguration.getGenfilesFragment() + "/" + OBJC_MODULE_CACHE_DIR_NAME);
+  }
+
+  private void addArchVariables(CcToolchainFeatures.Variables.Builder builder) {
+    Platform platform = appleConfiguration.getSingleArchPlatform();
+    builder.addStringVariable(
+        VERSION_MIN_VARIABLE_NAME,
+        appleConfiguration.getMinimumOsForPlatformType(platform.getType()).toString());
   }
 
   private void addArchiveVariables(CcToolchainFeatures.Variables.Builder builder) {

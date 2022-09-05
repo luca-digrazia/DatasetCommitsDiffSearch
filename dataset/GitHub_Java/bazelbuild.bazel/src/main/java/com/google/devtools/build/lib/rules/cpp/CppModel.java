@@ -350,6 +350,23 @@ public final class CppModel {
     return result.build();
   }
 
+  /**
+   * Select .pcm inputs to pass on the command line depending on whether we are in pic or non-pic
+   * mode.
+   */
+  private ImmutableSet<String> getHeaderModulePaths(
+      CppCompileActionBuilder builder, boolean usePic) {
+    ImmutableSet.Builder<String> result = ImmutableSet.builder();
+    Iterable<Artifact> artifacts =
+        featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULE_INCLUDES_DEPENDENCIES)
+            ? builder.getContext().getTopLevelModules(usePic)
+            : builder.getContext().getTransitiveModules(usePic);
+    for (Artifact artifact : artifacts) {
+      result.add(artifact.getExecPathString());
+    }
+    return result.build();
+  }
+
   private void setupCompileBuildVariables(
       CppCompileActionBuilder builder,
       boolean usePic,
@@ -409,8 +426,8 @@ public final class CppModel {
       buildVariables.addCustomBuiltVariable("dependent_module_map_files", sequence);
     }
     if (featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES)) {
-      // Module inputs will be set later when the action is executed.
-      buildVariables.addStringSequenceVariable("module_files", ImmutableSet.<String>of());
+      buildVariables.addStringSequenceVariable(
+          "module_files", getHeaderModulePaths(builder, usePic));
     }
     if (featureConfiguration.isEnabled(CppRuleClasses.INCLUDE_PATHS)) {
       buildVariables.addStringSequenceVariable(

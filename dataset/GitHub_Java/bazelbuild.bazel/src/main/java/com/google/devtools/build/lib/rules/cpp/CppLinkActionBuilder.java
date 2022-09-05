@@ -646,7 +646,6 @@ public class CppLinkActionBuilder {
     } else {
       List<String> opts = new ArrayList<>(linkopts);
       opts.addAll(featureConfiguration.getCommandLine("lto-indexing", buildVariables));
-      opts.addAll(cppConfiguration.getLTOIndexOptions());
       linkCommandLineBuilder.setLinkopts(ImmutableList.copyOf(opts));
     }
 
@@ -728,7 +727,7 @@ public class CppLinkActionBuilder {
       analysisEnvironment.registerAction(parameterFileWriteAction);
     }
 
-    ImmutableMap<String, String> toolchainEnv =
+    Map<String, String> toolchainEnv =
         featureConfiguration.getEnvironmentVariables(getActionName(), buildVariables);
 
     // If the crosstool uses action_configs to configure cc compilation, collect execution info
@@ -753,8 +752,6 @@ public class CppLinkActionBuilder {
         isLTOIndexing,
         allLTOArtifacts,
         linkCommandLine,
-        configuration.getVariableShellEnvironment(),
-        configuration.getLocalShellEnvironment(),
         toolchainEnv,
         executionRequirements.build());
   }
