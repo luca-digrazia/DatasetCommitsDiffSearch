@@ -62,7 +62,6 @@ import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeJarProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
-import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
@@ -739,7 +738,8 @@ public class AndroidCommon {
       ResourceApk resourceApk,
       Artifact zipAlignedApk,
       Iterable<Artifact> apksUnderTest) {
-
+    javaCommon.addTransitiveInfoProviders(builder, filesToBuild, classJar, ANDROID_COLLECTION_SPEC);
+    javaCommon.addGenJarsProvider(builder, genClassJar, genSourceJar);
     idlHelper.addTransitiveInfoProviders(builder, classJar, manifestProtoOutput);
 
     if (generatedExtensionRegistryProvider != null) {
@@ -751,32 +751,17 @@ public class AndroidCommon {
       javaRuleOutputJarsProviderBuilder.addOutputJar(resourceJar);
     }
 
-    JavaRuleOutputJarsProvider ruleOutputJarsProvider =
-        javaRuleOutputJarsProviderBuilder
-            .addOutputJar(classJar, iJar, srcJar)
-            .setJdeps(outputDepsProto)
-            .build();
-    JavaSourceJarsProvider sourceJarsProvider = javaSourceJarsProviderBuilder.build();
-    JavaCompilationArgsProvider compilationArgsProvider =
-        JavaCompilationArgsProvider.create(
-            javaCompilationArgs,
-            recursiveJavaCompilationArgs,
-            compileTimeDependencyArtifacts,
-            NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER));
-    JavaSkylarkApiProvider.Builder skylarkApiProvider =
-        JavaSkylarkApiProvider.builder()
-            .setRuleOutputJarsProvider(ruleOutputJarsProvider)
-            .setSourceJarsProvider(sourceJarsProvider)
-            .setCompilationArgsProvider(compilationArgsProvider);
-    javaCommon.addTransitiveInfoProviders(
-        builder, skylarkApiProvider, filesToBuild, classJar, ANDROID_COLLECTION_SPEC);
-    javaCommon.addGenJarsProvider(builder, skylarkApiProvider, genClassJar, genSourceJar);
+    JavaSourceJarsProvider javaSourceJarsProvider = javaSourceJarsProviderBuilder.build();
 
     return builder
         .setFilesToBuild(filesToBuild)
-        .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, skylarkApiProvider.build())
-        .add(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
-        .add(JavaSourceJarsProvider.class, sourceJarsProvider)
+        .add(
+            JavaRuleOutputJarsProvider.class,
+            javaRuleOutputJarsProviderBuilder
+                .addOutputJar(classJar, iJar, srcJar)
+                .setJdeps(outputDepsProto)
+                .build())
+        .add(JavaSourceJarsProvider.class, javaSourceJarsProvider)
         .add(
             JavaRuntimeJarProvider.class,
             new JavaRuntimeJarProvider(javaCommon.getJavaCompilationArtifacts().getRuntimeJars()))
@@ -793,7 +778,13 @@ public class AndroidCommon {
                 resourceApk,
                 zipAlignedApk,
                 apksUnderTest))
-        .add(JavaCompilationArgsProvider.class, compilationArgsProvider)
+        .add(
+            JavaCompilationArgsProvider.class,
+            JavaCompilationArgsProvider.create(
+                javaCompilationArgs,
+                recursiveJavaCompilationArgs,
+                compileTimeDependencyArtifacts,
+                NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)))
         .add(
             JackLibraryProvider.class,
             asNeverLink
@@ -803,7 +794,8 @@ public class AndroidCommon {
         .addOutputGroup(
             OutputGroupProvider.HIDDEN_TOP_LEVEL, collectHiddenTopLevelArtifacts(ruleContext))
         .addOutputGroup(
-            JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, sourceJarsProvider.getTransitiveSourceJars());
+            JavaSemantics.SOURCE_JARS_OUTPUT_GROUP,
+            javaSourceJarsProvider.getTransitiveSourceJars());
   }
 
   private Runfiles getRunfiles() {
