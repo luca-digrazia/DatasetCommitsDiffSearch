@@ -190,9 +190,6 @@ public class SqlParser {
 				// multiple items in their own list
 				SQLListExpr listExpr = (SQLListExpr) sqlExpr;
 				select.addGroupBy(convertExprsToFields(listExpr.getItems()));
-			} else {
-				// something else
-				standardGroupBys.add(sqlExpr);
 			}
 		}
 		if (!standardGroupBys.isEmpty()) {
