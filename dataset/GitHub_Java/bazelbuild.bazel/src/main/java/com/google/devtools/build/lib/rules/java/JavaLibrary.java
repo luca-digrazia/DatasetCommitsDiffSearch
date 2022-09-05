@@ -65,8 +65,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     JavaCompilationHelper helper = new JavaCompilationHelper(
         ruleContext, semantics, common.getJavacOpts(), attributesBuilder);
     helper.addLibrariesToAttributes(common.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
-    helper.addProvidersToAttributes(common.compilationArgsFromSources(),
-        JavaCommon.isNeverLink(ruleContext));
+    helper.addProvidersToAttributes(common.compilationArgsFromSources(), common.isNeverLink());
 
     if (ruleContext.hasErrors()) {
       return null;
@@ -132,19 +131,18 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
           javaArtifactsBuilder);
     }
 
-    boolean neverLink = JavaCommon.isNeverLink(ruleContext);
     common.setJavaCompilationArtifacts(javaArtifactsBuilder.build());
     common.setClassPathFragment(new ClasspathConfiguredFragment(
-        common.getJavaCompilationArtifacts(), attributes, neverLink));
+        common.getJavaCompilationArtifacts(), attributes, common.isNeverLink()));
     CppCompilationContext transitiveCppDeps = common.collectTransitiveCppDeps();
 
     NestedSet<Artifact> transitiveSourceJars = common.collectTransitiveSourceJars(srcJar);
 
     // If sources are empty, treat this library as a forwarding node for dependencies.
     JavaCompilationArgs javaCompilationArgs = common.collectJavaCompilationArgs(
-        false, neverLink, common.compilationArgsFromSources());
+        false, common.isNeverLink(), common.compilationArgsFromSources());
     JavaCompilationArgs recursiveJavaCompilationArgs = common.collectJavaCompilationArgs(
-        true, neverLink, common.compilationArgsFromSources());
+        true, common.isNeverLink(), common.compilationArgsFromSources());
     NestedSet<Artifact> compileTimeJavaDepArtifacts = common.collectCompileTimeDependencyArtifacts(
         common.getJavaCompilationArtifacts().getCompileTimeDependencyArtifact());
     NestedSet<Artifact> runTimeJavaDepArtifacts = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
@@ -177,7 +175,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     // The "neverlink" attribute is transitive, so we don't add any
     // runfiles from this target or its dependencies.
     Runfiles runfiles = Runfiles.EMPTY;
-    if (!neverLink) {
+    if (!common.isNeverLink()) {
       Runfiles.Builder runfilesBuilder = new Runfiles.Builder().addArtifacts(
           common.getJavaCompilationArtifacts().getRuntimeJars());
 
@@ -219,11 +217,9 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     common.addTransitiveInfoProviders(builder, filesToBuild, classJar);
 
     builder
-        .add(JavaRuntimeJarProvider.class,
-            new JavaRuntimeJarProvider(common.getJavaCompilationArtifacts().getRuntimeJars()))
         .add(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
         .setFilesToBuild(filesToBuild)
-        .add(JavaNeverlinkInfoProvider.class, new JavaNeverlinkInfoProvider(neverLink))
+        .add(JavaNeverlinkInfoProvider.class, new JavaNeverlinkInfoProvider(common.isNeverLink()))
         .add(CppCompilationContext.class, transitiveCppDeps)
         .add(JavaCompilationArgsProvider.class, new JavaCompilationArgsProvider(
             javaCompilationArgs, recursiveJavaCompilationArgs,
