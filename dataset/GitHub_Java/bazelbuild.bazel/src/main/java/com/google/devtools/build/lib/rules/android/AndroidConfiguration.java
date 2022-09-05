@@ -162,16 +162,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         help = "Enables sanity checks for Jack and Jill compilation.")
     public boolean jackSanityChecks;
 
-    // TODO(cushon): enable by default, then delete the flag
-    @Option(
-      name = "treat_srcjars_as_srcs_for_strict_deps",
-      defaultValue = "false",
-      category = "semantics",
-      help = "Causes deps of android_library rules with .srcjars (but no Java srcs)"
-          + " to be promoted to exports."
-    )
-    public boolean treatSrcjarsAsSrcsForStrictDeps;
-
     @Override
     public void addAllLabels(Multimap<String, Label> labelMap) {
       if (proguard != null) {
@@ -207,14 +197,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       }
 
       return Label.parseAbsoluteUnchecked(Constants.ANDROID_DEFAULT_CROSSTOOL);
-    }
-
-    public List<String> realFatApkCpus() {
-      if (fatApkCpus.isEmpty()) {
-        return Constants.ANDROID_DEFAULT_FAT_APK_CPUS;
-      } else {
-        return fatApkCpus;
-      }
     }
 
     @Override
@@ -259,7 +241,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final Label proguard;
   private final boolean useJackForDexing;
   private final boolean jackSanityChecks;
-  private final boolean treatSrcjarsAsSrcsForStrictDeps;
 
   AndroidConfiguration(Options options) {
     this.sdk = options.realSdk();
@@ -267,12 +248,11 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.strictDeps = options.strictDeps;
     this.legacyNativeSupport = options.legacyNativeSupport;
     this.cpu = options.cpu;
-    this.fatApk = !options.realFatApkCpus().isEmpty();
+    this.fatApk = !options.fatApkCpus.isEmpty();
     this.configurationDistinguisher = options.configurationDistinguisher;
     this.proguard = options.proguard;
     this.useJackForDexing = options.useJackForDexing;
     this.jackSanityChecks = options.jackSanityChecks;
-    this.treatSrcjarsAsSrcsForStrictDeps = options.treatSrcjarsAsSrcsForStrictDeps;
   }
 
   public String getCpu() {
@@ -308,14 +288,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
    */
   public boolean isJackSanityChecked() {
     return jackSanityChecks;
-  }
-
-  /**
-   * Returns true if srcjars should be treated as sources when deciding to promote
-   * deps to exports for Strict Java Deps.
-   */
-  public boolean treatSrcjarsAsSrcsForStrictDeps() {
-    return treatSrcjarsAsSrcsForStrictDeps;
   }
 
   public boolean useIncrementalNativeLibs() {
