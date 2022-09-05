@@ -29,9 +29,9 @@ import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.Argument;
-import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
+import com.google.devtools.build.lib.syntax.Function;
 import com.google.devtools.build.lib.syntax.GlobList;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Label.SyntaxException;
@@ -427,7 +427,7 @@ public final class RuleClass {
         PredicatesWithMessage.<Rule>alwaysTrue();
     private Predicate<String> preferredDependencyPredicate = Predicates.alwaysFalse();
     private List<Class<?>> advertisedProviders = new ArrayList<>();
-    private BaseFunction configuredTargetFunction = null;
+    private Function configuredTargetFunction = null;
     private SkylarkEnvironment ruleDefinitionEnvironment = null;
     private Set<Class<?>> configurationFragments = new LinkedHashSet<>();
     private boolean failIfMissingConfigurationFragment;
@@ -470,8 +470,6 @@ public final class RuleClass {
               name);
           attributes.put(attrName, attribute);
         }
-
-        advertisedProviders.addAll(parent.getAdvertisedProviders());
       }
       // TODO(bazel-team): move this testonly attribute setting to somewhere else
       // preferably to some base RuleClass implementation.
@@ -683,7 +681,7 @@ public final class RuleClass {
     /**
      * Sets the rule implementation function. Meant for Skylark usage.
      */
-    public Builder setConfiguredTargetFunction(BaseFunction func) {
+    public Builder setConfiguredTargetFunction(Function func) {
       this.configuredTargetFunction = func;
       return this;
     }
@@ -836,7 +834,7 @@ public final class RuleClass {
   /**
    * The Skylark rule implementation of this RuleClass. Null for non Skylark executable RuleClasses.
    */
-  @Nullable private final BaseFunction configuredTargetFunction;
+  @Nullable private final Function configuredTargetFunction;
 
   /**
    * The Skylark rule definition environment of this RuleClass.
@@ -897,7 +895,7 @@ public final class RuleClass {
       ConfiguredTargetFactory<?, ?> configuredTargetFactory,
       PredicateWithMessage<Rule> validityPredicate, Predicate<String> preferredDependencyPredicate,
       ImmutableSet<Class<?>> advertisedProviders,
-      @Nullable BaseFunction configuredTargetFunction,
+      @Nullable Function configuredTargetFunction,
       @Nullable SkylarkEnvironment ruleDefinitionEnvironment,
       Set<Class<?>> allowedConfigurationFragments, boolean failIfMissingConfigurationFragment,
       boolean supportsConstraintChecking,
@@ -1505,7 +1503,7 @@ public final class RuleClass {
   /**
    * Returns this RuleClass's custom Skylark rule implementation.
    */
-  @Nullable public BaseFunction getConfiguredTargetFunction() {
+  @Nullable public Function getConfiguredTargetFunction() {
     return configuredTargetFunction;
   }
 

@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.query2.output.OutputFormatter;
 import com.google.devtools.build.lib.rules.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue.Injected;
-import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutorFactory;
 import com.google.devtools.build.lib.syntax.BaseFunction;
@@ -194,10 +193,6 @@ public abstract class BlazeModule {
     return ImmutableMap.<String, String>of();
   }
 
-  public Iterable<SkyValueDirtinessChecker> getCustomDirtinessCheckers() {
-    return ImmutableList.of();
-  }
-
   /**
    * Services provided for Blaze modules via BlazeRuntime.
    */
@@ -234,15 +229,6 @@ public abstract class BlazeModule {
   @SuppressWarnings("unused")
   public OutputService getOutputService() throws AbruptExitException {
     return null;
-  }
-
-  /**
-   * Does any handling of options needed by the command.
-   *
-   * <p>This method will be called at the beginning of each command (after #beforeCommand).
-   */
-  @SuppressWarnings("unused")
-  public void handleOptions(OptionsProvider optionsProvider) {
   }
 
   /**
@@ -312,24 +298,24 @@ public abstract class BlazeModule {
   }
 
   /**
-   * Returns the action context providers the module contributes to Blaze, if any.
+   * Returns the action context provider the module contributes to Blaze, if any.
    *
    * <p>This method will be called at the beginning of the execution phase, e.g. of the
    * "blaze build" command.
    */
-  public Iterable<ActionContextProvider> getActionContextProviders() {
-    return ImmutableList.of();
+  public ActionContextProvider getActionContextProvider() {
+    return null;
   }
 
   /**
-   * Returns the action context consumers that pulls in action contexts required by this module,
+   * Returns the action context consumer that pulls in action contexts required by this module,
    * if any.
    *
    * <p>This method will be called at the beginning of the execution phase, e.g. of the
    * "blaze build" command.
    */
-  public Iterable<ActionContextConsumer> getActionContextConsumers() {
-    return ImmutableList.of();
+  public ActionContextConsumer getActionContextConsumer() {
+    return null;
   }
 
   /**
@@ -349,12 +335,6 @@ public abstract class BlazeModule {
    */
   public Predicate<PathFragment> getAllowedMissingInputs() {
     return null;
-  }
-
-  /**
-   * Perform module specific check of current blaze runtime.
-   */
-  public void checkRuntime(BlazeRuntime runtime) {
   }
 
   /**

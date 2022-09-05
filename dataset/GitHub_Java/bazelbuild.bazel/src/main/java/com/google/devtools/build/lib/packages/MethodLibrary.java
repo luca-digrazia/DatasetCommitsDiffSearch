@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -23,7 +22,6 @@ import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
-import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.BuiltinFunction;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
@@ -32,6 +30,7 @@ import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
+import com.google.devtools.build.lib.syntax.Function;
 import com.google.devtools.build.lib.syntax.SelectorList;
 import com.google.devtools.build.lib.syntax.SelectorValue;
 import com.google.devtools.build.lib.syntax.SkylarkEnvironment;
@@ -666,31 +665,19 @@ public class MethodLibrary {
     }
   };
 
-  @SkylarkSignature(name = "int", returnType = Integer.class, doc = "Converts a value to int. "
-      + "If the argument is a string, it is converted using base 10 and raises an error if the "
-      + "conversion fails. If the argument is a bool, it returns 0 (False) or 1 (True). "
-      + "If the argument is an int, it is simply returned."
+  @SkylarkSignature(name = "int", returnType = Integer.class, doc = "Converts a string to int, "
+      + "using base 10. It raises an error if the conversion fails."
       + "<pre class=\"language-python\">int(\"123\") == 123</pre>",
       mandatoryPositionals = {
-        @Param(name = "x", type = Object.class, doc = "The string to convert.")},
+        @Param(name = "x", type = String.class, doc = "The string to convert.")},
       useLocation = true)
   private static BuiltinFunction int_ = new BuiltinFunction("int") {
-    public Integer invoke(Object x, Location loc) throws EvalException {
-      if (x instanceof Boolean) {
-        return ((Boolean) x).booleanValue() ? 1 : 0;
-      } else if (x instanceof Integer) {
-        return (Integer) x;
-      } else if (x instanceof String) {
-        try {
-          return Integer.parseInt((String) x);
-        } catch (NumberFormatException e) {
-          throw new EvalException(loc,
-              "invalid literal for int(): " + EvalUtils.prettyPrintValue(x));
-        }
-      } else {
+    public Integer invoke(String x, Location loc) throws EvalException {
+      try {
+        return Integer.parseInt(x);
+      } catch (NumberFormatException e) {
         throw new EvalException(loc,
-            String.format("argument must be string, int, or bool, not '%s'",
-                EvalUtils.prettyPrintValue(x)));
+            "invalid literal for int(): " + EvalUtils.prettyPrintValue(x));
       }
     }
   };
@@ -1037,24 +1024,24 @@ public class MethodLibrary {
       + "</pre>")
   public static final class DictModule {}
 
-  public static final List<BaseFunction> stringFunctions = ImmutableList.<BaseFunction>of(
+  public static final List<Function> stringFunctions = ImmutableList.<Function>of(
       count, endswith, find, index, join, lower, replace, rfind,
       rindex, slice, split, startswith, strip, upper);
 
-  public static final List<BaseFunction> listPureFunctions = ImmutableList.<BaseFunction>of(
+  public static final List<Function> listPureFunctions = ImmutableList.<Function>of(
       slice);
 
-  public static final List<BaseFunction> listFunctions = ImmutableList.<BaseFunction>of(
+  public static final List<Function> listFunctions = ImmutableList.<Function>of(
       append, extend);
 
-  public static final List<BaseFunction> dictFunctions = ImmutableList.<BaseFunction>of(
+  public static final List<Function> dictFunctions = ImmutableList.<Function>of(
       items, get, keys, values);
 
-  private static final List<BaseFunction> pureGlobalFunctions = ImmutableList.<BaseFunction>of(
+  private static final List<Function> pureGlobalFunctions = ImmutableList.<Function>of(
       bool, int_, len, minus, select, sorted, str);
 
-  private static final List<BaseFunction> skylarkGlobalFunctions =
-      ImmutableList.<BaseFunction>builder()
+  private static final List<Function> skylarkGlobalFunctions = ImmutableList
+      .<Function>builder()
       .addAll(pureGlobalFunctions)
       .add(list, struct, hasattr, getattr, set, dir, enumerate, range, type, fail, print, zip)
       .build();
@@ -1084,14 +1071,14 @@ public class MethodLibrary {
   }
 
   private static void setupMethodEnvironment(
-      Environment env, Class<?> nameSpace, Iterable<BaseFunction> functions) {
-    for (BaseFunction function : functions) {
+      Environment env, Class<?> nameSpace, Iterable<Function> functions) {
+    for (Function function : functions) {
       env.registerFunction(nameSpace, function.getName(), function);
     }
   }
 
-  private static void setupMethodEnvironment(Environment env, Iterable<BaseFunction> functions) {
-    for (BaseFunction function : functions) {
+  private static void setupMethodEnvironment(Environment env, Iterable<Function> functions) {
+    for (Function function : functions) {
       env.update(function.getName(), function);
     }
   }
@@ -1100,7 +1087,7 @@ public class MethodLibrary {
    * Collect global functions for the validation environment.
    */
   public static void setupValidationEnvironment(Set<String> builtIn) {
-    for (BaseFunction function : skylarkGlobalFunctions) {
+    for (Function function : skylarkGlobalFunctions) {
       builtIn.add(function.getName());
     }
   }

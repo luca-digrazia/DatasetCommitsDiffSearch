@@ -26,7 +26,6 @@ import static com.google.devtools.build.lib.syntax.SkylarkType.castList;
 import static com.google.devtools.build.lib.syntax.SkylarkType.castMap;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -64,6 +63,7 @@ import com.google.devtools.build.lib.syntax.Environment.NoSuchVariableException;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
+import com.google.devtools.build.lib.syntax.Function;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SkylarkCallbackFunction;
@@ -180,9 +180,9 @@ public class SkylarkRuleClassFunctions {
       "Creates a new rule. Store it in a global value, so that it can be loaded and called "
       + "from BUILD files.",
       onlyLoadingPhase = true,
-      returnType = BaseFunction.class,
+      returnType = Function.class,
       mandatoryPositionals = {
-        @Param(name = "implementation", type = BaseFunction.class,
+        @Param(name = "implementation", type = Function.class,
             doc = "the function implementing this rule, has to have exactly one parameter: "
             + "<code>ctx</code>. The function is called during analysis phase for each "
             + "instance of the rule. It can access the attributes provided by the user. "
@@ -215,12 +215,11 @@ public class SkylarkRuleClassFunctions {
   private static final BuiltinFunction rule = new BuiltinFunction("rule") {
       @SuppressWarnings({"rawtypes", "unchecked"}) // castMap produces
       // an Attribute.Builder instead of a Attribute.Builder<?> but it's OK.
-      public BaseFunction invoke(BaseFunction implementation, Boolean test,
+      public Function invoke(Function implementation, Boolean test,
           Object attrs, Object implicitOutputs, Boolean executable, Boolean outputToGenfiles,
           FuncallExpression ast, Environment funcallEnv)
            throws EvalException, ConversionException {
 
-        Preconditions.checkState(funcallEnv instanceof SkylarkEnvironment);
         RuleClassType type = test ? RuleClassType.TEST : RuleClassType.NORMAL;
 
         // We'll set the name later, pass the empty string for now.
@@ -245,9 +244,14 @@ public class SkylarkRuleClassFunctions {
           builder.setOutputsDefaultExecutable();
         }
 
+        if (!(funcallEnv instanceof SkylarkEnvironment)) {
+          System.out.println("rule called from non-Skylark environment!");
+          // throw new EvaluationException("rule not accessible at the toplevel");
+        }
+
         if (implicitOutputs != Environment.NONE) {
-          if (implicitOutputs instanceof BaseFunction) {
-            BaseFunction func = (BaseFunction) implicitOutputs;
+          if (implicitOutputs instanceof Function) {
+            Function func = (Function) implicitOutputs;
             final SkylarkCallbackFunction callback =
                 new SkylarkCallbackFunction(func, ast, (SkylarkEnvironment) funcallEnv);
             builder.setImplicitOutputsFunction(

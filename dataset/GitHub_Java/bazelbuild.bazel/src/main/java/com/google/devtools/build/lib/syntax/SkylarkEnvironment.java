@@ -75,6 +75,7 @@ public class SkylarkEnvironment extends Environment implements Serializable {
       // This should never happen.
       throw new IllegalStateException(e);
     }
+    childEnv.disabledVariables = callerEnv.disabledVariables;
     childEnv.disabledNameSpaces = callerEnv.disabledNameSpaces;
     return childEnv;
   }
@@ -122,7 +123,7 @@ public class SkylarkEnvironment extends Environment implements Serializable {
     for (Entry<String, Object> entry : env.entrySet()) {
       newEnv.env.put(entry.getKey(), entry.getValue());
     }
-    for (Map.Entry<Class<?>, Map<String, BaseFunction>> functionMap : functions.entrySet()) {
+    for (Map.Entry<Class<?>, Map<String, Function>> functionMap : functions.entrySet()) {
       newEnv.functions.put(functionMap.getKey(), functionMap.getValue());
     }
     return newEnv;
@@ -162,6 +163,9 @@ public class SkylarkEnvironment extends Environment implements Serializable {
    */
   @Override
   public Object lookup(String varname) throws NoSuchVariableException {
+    if (disabledVariables.contains(varname)) {
+      throw new NoSuchVariableException(varname);
+    }
     Object value = env.get(varname);
     if (value == null) {
       if (parent != null && parent.hasVariable(varname)) {
@@ -197,15 +201,22 @@ public class SkylarkEnvironment extends Environment implements Serializable {
    * only during the loading phase.
    */
   public void disableOnlyLoadingPhaseObjects() {
+    List<String> objectsToRemove = new ArrayList<>();
     List<Class<?>> modulesToRemove = new ArrayList<>();
     for (Map.Entry<String, Object> entry : env.entrySet()) {
       Object object = entry.getValue();
-      if (object.getClass().isAnnotationPresent(SkylarkModule.class)) {
+      if (object instanceof BaseFunction) {
+        if (((BaseFunction) object).isOnlyLoadingPhase()) {
+          objectsToRemove.add(entry.getKey());
+        }
+      } else if (object.getClass().isAnnotationPresent(SkylarkModule.class)) {
         if (object.getClass().getAnnotation(SkylarkModule.class).onlyLoadingPhase()) {
+          objectsToRemove.add(entry.getKey());
           modulesToRemove.add(entry.getValue().getClass());
         }
       }
     }
+    disabledVariables.addAll(objectsToRemove);
     disabledNameSpaces.addAll(modulesToRemove);
   }
 
