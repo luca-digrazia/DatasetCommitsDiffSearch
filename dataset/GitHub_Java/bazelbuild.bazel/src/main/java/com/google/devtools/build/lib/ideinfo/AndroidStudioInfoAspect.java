@@ -204,9 +204,7 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
         || ruleKind == Kind.JAVA_TEST
         || ruleKind == Kind.JAVA_BINARY) {
       outputBuilder.setJavaRuleIdeInfo(makeJavaRuleIdeInfo(base));
-    } else if (ruleKind == Kind.ANDROID_LIBRARY
-        || ruleKind == Kind.ANDROID_BINARY
-        || ruleKind == Kind.ANDROID_TEST) {
+    } else if (ruleKind == Kind.ANDROID_LIBRARY || ruleKind == Kind.ANDROID_BINARY) {
       outputBuilder.setJavaRuleIdeInfo(makeJavaRuleIdeInfo(base));
       outputBuilder.setAndroidRuleIdeInfo(
           makeAndroidRuleIdeInfo(ruleContext, base, providerBuilder));
@@ -450,8 +448,6 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
         return Kind.ANDROID_LIBRARY;
       case "android_binary":
         return Kind.ANDROID_BINARY;
-      case "android_test":
-        return Kind.ANDROID_TEST;
       default:
         {
           if (base.getProvider(AndroidSdkProvider.class) != null) {
