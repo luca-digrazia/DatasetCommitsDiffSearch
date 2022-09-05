@@ -97,7 +97,7 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
             defaultFeatures = ToString.DEFAULT_FEATURE;
         }
         defaultIgnoreProperties = classIgnore == null ?
-                new HashSet<>(new java.util.HashSet<>())
+                new HashSet<>(Collections.emptySet())
                 : new HashSet<>(Arrays.asList(classIgnore.value()));
 
         //是否打码
@@ -303,9 +303,9 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
                     if (isSimpleType || propertyType == null) {
                         entry.setValue("");
                     } else if (propertyType.isArray() || Collection.class.isAssignableFrom(propertyType)) {
-                        entry.setValue(new java.util.ArrayList<>());
+                        entry.setValue(Collections.emptyList());
                     } else {
-                        entry.setValue(new java.util.HashMap<>());
+                        entry.setValue(Collections.emptyMap());
                     }
                 }
                 continue;
