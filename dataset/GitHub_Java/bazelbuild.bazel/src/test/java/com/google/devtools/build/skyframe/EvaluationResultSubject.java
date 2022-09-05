@@ -13,14 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.skyframe.ErrorInfoSubjectFactory.assertThatErrorInfo;
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.truth.DefaultSubject;
 import com.google.common.truth.FailureStrategy;
 import com.google.common.truth.IterableSubject;
 import com.google.common.truth.Subject;
+import com.google.common.truth.Truth;
 
 /**
  * {@link Subject} for {@link EvaluationResult}. Please add to this class if you need more
@@ -45,23 +43,17 @@ public class EvaluationResultSubject extends Subject<EvaluationResultSubject, Ev
   }
 
   public DefaultSubject hasEntryThat(SkyKey key) {
-    return assertThat(getSubject().get(key)).named("Entry for " + getDisplaySubject());
+    return Truth.assertThat(getSubject().get(key)).named("Entry for " + getDisplaySubject());
   }
 
-  public ErrorInfoSubject hasErrorEntryForKeyThat(SkyKey key) {
-    return assertThatErrorInfo(getSubject().getError(key))
+  public DefaultSubject hasErrorEntryForKeyThat(SkyKey key) {
+    return Truth.assertThat(getSubject().getError(key))
         .named("Error entry for " + getDisplaySubject());
   }
 
   public IterableSubject hasDirectDepsInGraphThat(SkyKey parent) {
-    return assertThat(
+    return Truth.assertThat(
             getSubject().getWalkableGraph().getDirectDeps(ImmutableList.of(parent)).get(parent))
         .named("Direct deps for " + parent + " in " + getDisplaySubject());
-  }
-
-  public IterableSubject hasReverseDepsInGraphThat(SkyKey child) {
-    return assertThat(
-            getSubject().getWalkableGraph().getReverseDeps(ImmutableList.of(child)).get(child))
-        .named("Reverse deps for " + child + " in " + getDisplaySubject());
   }
 }
