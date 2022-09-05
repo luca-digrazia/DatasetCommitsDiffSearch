@@ -16,12 +16,10 @@ package com.google.devtools.build.lib.bazel.repository;
 
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
-import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
 import com.google.devtools.build.lib.bazel.rules.workspace.GitRepositoryRule;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
@@ -34,13 +32,6 @@ import java.util.Map;
  */
 public class GitRepositoryFunction extends RepositoryFunction {
 
-  protected HttpDownloader downloader;
-
-  public GitRepositoryFunction(HttpDownloader httpDownloader) {
-    Preconditions.checkNotNull(httpDownloader);
-    this.downloader = httpDownloader;
-  }
-
   @Override
   public boolean isLocal(Rule rule) {
     return false;
@@ -51,7 +42,7 @@ public class GitRepositoryFunction extends RepositoryFunction {
       BlazeDirectories directories, Environment env, Map<String, String> markerData)
       throws InterruptedException, RepositoryFunctionException {
     createDirectory(outputDirectory, rule);
-    GitCloner.clone(rule, outputDirectory, env.getListener(), clientEnvironment, downloader);
+    GitCloner.clone(rule, outputDirectory, env.getListener(), clientEnvironment);
     return RepositoryDirectoryValue.builder().setPath(outputDirectory);
   }
 

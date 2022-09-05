@@ -17,19 +17,13 @@ package com.google.devtools.build.lib.rules.repository;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.skyframe.FileSymlinkException;
 import com.google.devtools.build.lib.skyframe.FileValue;
-import com.google.devtools.build.lib.skyframe.InconsistentFilesystemException;
-import com.google.devtools.build.lib.skyframe.PackageLookupValue;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
-import com.google.devtools.build.skyframe.SkyKey;
 import java.io.IOException;
 import java.util.Map;
-import javax.annotation.Nullable;
 
 /**
  * Access a repository on the local filesystem.
@@ -46,20 +40,14 @@ public class LocalRepositoryFunction extends RepositoryFunction {
       BlazeDirectories directories, Environment env, Map<String, String> markerData)
       throws InterruptedException, RepositoryFunctionException {
     PathFragment pathFragment = RepositoryFunction.getTargetPath(rule, directories.getWorkspace());
-    return LocalRepositoryFunction.symlink(outputDirectory, pathFragment, env);
-  }
-
-  public static RepositoryDirectoryValue.Builder symlink(
-      Path source, PathFragment destination, Environment env)
-      throws RepositoryFunctionException, InterruptedException {
     try {
-      source.createSymbolicLink(destination);
+      outputDirectory.createSymbolicLink(pathFragment);
     } catch (IOException e) {
       throw new RepositoryFunctionException(
-          new IOException("Could not create symlink to repository " + destination + ": "
+          new IOException("Could not create symlink to repository " + pathFragment + ": "
               + e.getMessage(), e), Transience.TRANSIENT);
     }
-    FileValue repositoryValue = getRepositoryDirectory(source, env);
+    FileValue repositoryValue = getRepositoryDirectory(outputDirectory, env);
     if (repositoryValue == null) {
       // TODO(bazel-team): If this returns null, we unnecessarily recreate the symlink above on the
       // second execution.
@@ -68,55 +56,14 @@ public class LocalRepositoryFunction extends RepositoryFunction {
 
     if (!repositoryValue.isDirectory()) {
       throw new RepositoryFunctionException(
-          new IOException(source + " must be an existing directory"), Transience.PERSISTENT);
+          new IOException(rule + " must specify an existing directory"), Transience.TRANSIENT);
     }
 
-    // Check that the repository contains a WORKSPACE file.
-    // It's important to check the real path, otherwise this looks under the "external/[repo]" path
-    // and cause a Skyframe cycle in the lookup.
-    FileValue workspaceFileValue = getWorkspaceFile(repositoryValue.realRootedPath(), env);
-    if (workspaceFileValue == null) {
-      return null;
-    }
-
-    if (!workspaceFileValue.exists()) {
-      throw new RepositoryFunctionException(
-          new IOException("No WORKSPACE file found in " + source), Transience.PERSISTENT);
-    }
-
-    return RepositoryDirectoryValue.builder().setPath(source);
+    return RepositoryDirectoryValue.builder().setPath(outputDirectory);
   }
 
   @Override
   public Class<? extends RuleDefinition> getRuleDefinition() {
     return LocalRepositoryRule.class;
-  }
-
-  @Nullable
-  protected static FileValue getWorkspaceFile(RootedPath directory, Environment env)
-      throws RepositoryFunctionException, InterruptedException {
-    RootedPath workspaceRootedFile =
-        RootedPath.toRootedPath(
-            directory.getRoot(),
-            directory
-                .getRelativePath()
-                .getChild(PackageLookupValue.BuildFileName.WORKSPACE.getFilename()));
-
-    SkyKey workspaceFileKey = FileValue.key(workspaceRootedFile);
-    FileValue value;
-    try {
-      value =
-          (FileValue)
-              env.getValueOrThrow(
-                  workspaceFileKey,
-                  IOException.class,
-                  FileSymlinkException.class,
-                  InconsistentFilesystemException.class);
-    } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
-      throw new RepositoryFunctionException(
-          new IOException("Could not access " + workspaceRootedFile + ": " + e.getMessage()),
-          Transience.PERSISTENT);
-    }
-    return value;
   }
 }

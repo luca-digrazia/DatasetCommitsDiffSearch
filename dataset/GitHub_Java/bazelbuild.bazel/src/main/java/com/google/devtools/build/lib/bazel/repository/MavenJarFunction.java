@@ -14,15 +14,13 @@
 
 package com.google.devtools.build.lib.bazel.repository;
 
-import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
-import com.google.devtools.build.lib.bazel.repository.MavenDownloader.JarPaths;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenJarRule;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
+import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
@@ -100,27 +98,22 @@ public class MavenJarFunction extends HttpArchiveFunction {
     if (env.valuesMissing()) {
       return null;
     }
-
+    
     Path outputDir = getExternalRepositoryDirectory(directories).getRelative(rule.getName());
-    return createOutputTree(rule, outputDir, serverValue, env.getListener());
+    return createOutputTree(rule, outputDir, serverValue);
   }
 
-  private RepositoryDirectoryValue.Builder createOutputTree(
-      Rule rule,
-      Path outputDirectory,
-      MavenServerValue serverValue,
-      ExtendedEventHandler eventHandler)
-      throws RepositoryFunctionException {
+  private RepositoryDirectoryValue.Builder createOutputTree(Rule rule, Path outputDirectory,
+      MavenServerValue serverValue) throws RepositoryFunctionException, InterruptedException {
     Preconditions.checkState(downloader instanceof MavenDownloader);
     MavenDownloader mavenDownloader = (MavenDownloader) downloader;
 
     createDirectory(outputDirectory);
     String name = rule.getName();
-    final JarPaths repositoryJars;
+    Path repositoryJar;
     try {
-      repositoryJars =
-          mavenDownloader.download(
-              name, WorkspaceAttributeMapper.of(rule), outputDirectory, serverValue, eventHandler);
+      repositoryJar = mavenDownloader.download(
+          name, WorkspaceAttributeMapper.of(rule), outputDirectory, serverValue);
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     } catch (EvalException e) {
@@ -128,29 +121,21 @@ public class MavenJarFunction extends HttpArchiveFunction {
     }
 
     // Add a WORKSPACE file & BUILD file to the Maven jar.
-    DecompressorDescriptor jar = getDescriptorBuilder(name, repositoryJars.jar, outputDirectory);
-    DecompressorDescriptor srcjar =
-        repositoryJars.srcjar.isPresent()
-            ? getDescriptorBuilder(name, repositoryJars.srcjar.get(), outputDirectory)
-            : null;
-    JarDecompressor decompressor = (JarDecompressor) jar.getDecompressor();
-    Path result = decompressor.decompressWithSrcjar(jar, Optional.fromNullable(srcjar));
-    return RepositoryDirectoryValue.builder().setPath(result);
-  }
-
-  private DecompressorDescriptor getDescriptorBuilder(String name, Path jar, Path outputDirectory)
-      throws RepositoryFunctionException {
-    return DecompressorDescriptor.builder()
+    Path result = DecompressorValue.decompress(DecompressorDescriptor.builder()
         .setDecompressor(JarDecompressor.INSTANCE)
         .setTargetKind(MavenJarRule.NAME)
         .setTargetName(name)
-        .setArchivePath(jar)
-        .setRepositoryPath(outputDirectory)
-        .build();
+        .setArchivePath(repositoryJar)
+        .setRepositoryPath(outputDirectory).build());
+    return RepositoryDirectoryValue.builder().setPath(result);
   }
 
+  /**
+   * @see RepositoryFunction#getRule(RepositoryName, String, Environment)
+   */
   @Override
   public Class<? extends RuleDefinition> getRuleDefinition() {
     return MavenJarRule.class;
   }
+
 }

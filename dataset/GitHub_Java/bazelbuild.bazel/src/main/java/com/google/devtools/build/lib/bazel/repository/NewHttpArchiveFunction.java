@@ -17,12 +17,10 @@ package com.google.devtools.build.lib.bazel.repository;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.rules.repository.NewRepositoryFileHandler;
+import com.google.devtools.build.lib.rules.repository.NewRepositoryBuildFileHandler;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
-import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -47,26 +45,9 @@ public class NewHttpArchiveFunction extends HttpArchiveFunction {
   public RepositoryDirectoryValue.Builder fetch(Rule rule, Path outputDirectory,
       BlazeDirectories directories, Environment env, Map<String, String> markerData)
       throws RepositoryFunctionException, InterruptedException {
-    // Deprecation in favor of the Skylark variant.
-    SkylarkSemantics skylarkSemantics = PrecomputedValue.SKYLARK_SEMANTICS.get(env);
-    if (skylarkSemantics == null) {
-      return null;
-    }
-    if (skylarkSemantics.incompatibleRemoveNativeHttpArchive()) {
-      throw new RepositoryFunctionException(
-          new EvalException(
-              null,
-              "The native new_http_archive rule is deprecated."
-              + " load(\"@bazel_tools//tools/build_defs/repo:http.bzl\", \"http_archive\") for a"
-              + " drop-in replacement."
-              + "\nUse --incompatible_remove_native_http_archive=false to temporarily continue"
-              + " using the native rule."),
-          Transience.PERSISTENT);
-    }
-
-    // The output directory is always under output_base/external (to stay out of the way of
-    NewRepositoryFileHandler fileHandler = new NewRepositoryFileHandler(directories.getWorkspace());
-    if (!fileHandler.prepareFile(rule, env)) {
+    NewRepositoryBuildFileHandler buildFileHandler =
+        new NewRepositoryBuildFileHandler(directories.getWorkspace());
+    if (!buildFileHandler.prepareBuildFile(rule, env)) {
       return null;
     }
 
@@ -82,6 +63,7 @@ public class NewHttpArchiveFunction extends HttpArchiveFunction {
         rule, outputDirectory, env.getListener(), clientEnvironment);
 
     // Decompress.
+    Path decompressed;
     WorkspaceAttributeMapper mapper = WorkspaceAttributeMapper.of(rule);
     String prefix = null;
     if (mapper.isAttributeValueExplicitlySpecified("strip_prefix")) {
@@ -91,17 +73,17 @@ public class NewHttpArchiveFunction extends HttpArchiveFunction {
         throw new RepositoryFunctionException(e, Transience.PERSISTENT);
       }
     }
-    DecompressorValue.decompress(
-        DecompressorDescriptor.builder()
-            .setTargetKind(rule.getTargetKind())
-            .setTargetName(rule.getName())
-            .setArchivePath(downloadedPath)
-            .setRepositoryPath(outputDirectory)
-            .setPrefix(prefix)
-            .build());
+    decompressed = DecompressorValue.decompress(DecompressorDescriptor.builder()
+        .setTargetKind(rule.getTargetKind())
+        .setTargetName(rule.getName())
+        .setArchivePath(downloadedPath)
+        .setRepositoryPath(outputDirectory)
+        .setPrefix(prefix)
+        .build());
 
     // Finally, write WORKSPACE and BUILD files.
-    fileHandler.finishFile(rule, outputDirectory, markerData);
+    createWorkspaceFile(decompressed, rule.getTargetKind(), rule.getName());
+    buildFileHandler.finishBuildFile(outputDirectory);
 
     return RepositoryDirectoryValue.builder().setPath(outputDirectory);
   }
