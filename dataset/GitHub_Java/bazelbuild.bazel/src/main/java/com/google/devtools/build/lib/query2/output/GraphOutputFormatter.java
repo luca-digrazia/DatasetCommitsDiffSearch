@@ -24,9 +24,7 @@ import com.google.devtools.build.lib.graph.Node;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.query2.output.QueryOptions.OrderOutput;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -55,11 +53,9 @@ class GraphOutputFormatter extends OutputFormatter {
 
     boolean sortLabels = options.orderOutput == OrderOutput.FULL;
     if (options.graphFactored) {
-      outputFactored(result, new PrintWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8)),
-          sortLabels);
+      outputFactored(result, new PrintWriter(out), sortLabels);
     } else {
-      outputUnfactored(result, new PrintWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8)),
-          sortLabels, options);
+      outputUnfactored(result, new PrintWriter(out), sortLabels, options);
     }
   }
 
@@ -161,7 +157,6 @@ class GraphOutputFormatter extends OutputFormatter {
    *
    * TODO(bazel-team): Make this a method of Digraph.
    */
-  @SuppressWarnings("ReferenceEquality")
   private static <LABEL> EquivalenceRelation<Node<LABEL>> createEquivalenceRelation() {
     return new EquivalenceRelation<Node<LABEL>>() {
       @Override

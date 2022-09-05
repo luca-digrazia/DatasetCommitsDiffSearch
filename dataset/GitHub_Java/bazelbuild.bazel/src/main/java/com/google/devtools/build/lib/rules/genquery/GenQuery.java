@@ -56,8 +56,7 @@ import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunctio
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpressionEvalListener;
-import com.google.devtools.build.lib.query2.engine.QueryUtil;
-import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllOutputFormatterCallback;
+import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllCallback;
 import com.google.devtools.build.lib.query2.engine.SkyframeRestartQueryException;
 import com.google.devtools.build.lib.query2.output.OutputFormatter;
 import com.google.devtools.build.lib.query2.output.QueryOptions;
@@ -262,8 +261,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
 
     DigraphQueryEvalResult<Target> queryResult;
     OutputFormatter formatter;
-    AggregateAllOutputFormatterCallback<Target> targets =
-        QueryUtil.newAggregateAllOutputFormatterCallback();
+    AggregateAllCallback<Target> targets = new AggregateAllCallback<>();
     try {
       Set<Setting> settings = queryOptions.toSettings();
 
@@ -307,8 +305,6 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     } catch (QueryException e) {
       ruleContext.ruleError("query failed: " + e.getMessage());
       return null;
-    } catch (IOException e) {
-      throw new RuntimeException(e);
     }
 
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
