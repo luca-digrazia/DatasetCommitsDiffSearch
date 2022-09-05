@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.management.*;
-import java.io.Closeable;
 import java.lang.management.ManagementFactory;
 import java.util.Collections;
 import java.util.Locale;
@@ -16,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * A reporter which listens for new metrics and exposes them as namespaced MBeans.
  */
-public class JmxReporter implements Closeable {
+public class JmxReporter {
     /**
      * Returns a new {@link Builder} for {@link JmxReporter}.
      *
@@ -703,13 +702,5 @@ public class JmxReporter implements Closeable {
     public void stop() {
         registry.removeListener(listener);
         listener.unregisterAll();
-    }
-
-    /**
-     * Stops the reporter.
-     */
-    @Override
-    public void close() {
-        stop();
     }
 }
