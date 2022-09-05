@@ -5,7 +5,6 @@ import org.hswebframework.ezorm.rdb.mapping.ReactiveDelete;
 import org.hswebframework.ezorm.rdb.mapping.ReactiveRepository;
 import org.hswebframework.ezorm.rdb.mapping.ReactiveUpdate;
 import org.hswebframework.ezorm.rdb.mapping.defaults.SaveResult;
-import org.hswebframework.web.authorization.Dimension;
 import org.hswebframework.web.authorization.DimensionProvider;
 import org.hswebframework.web.authorization.DimensionType;
 import org.hswebframework.web.crud.service.GenericReactiveCrudService;
@@ -60,16 +59,6 @@ public class DefaultDimensionService
         return dimensionTypeRepository
                 .createQuery()
                 .fetch();
-    }
-
-    @Override
-    public Mono<DynamicDimension> getDimensionById(DimensionType type, String id) {
-
-        return createQuery()
-                .where(DimensionEntity::getId,id)
-                .fetch()
-                .singleOrEmpty()
-                .map(entity-> DynamicDimension.of(entity, type));
     }
 
     @Override
