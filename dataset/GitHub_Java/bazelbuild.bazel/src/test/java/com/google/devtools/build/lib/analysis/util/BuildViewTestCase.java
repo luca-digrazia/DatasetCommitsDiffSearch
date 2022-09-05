@@ -195,6 +195,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     pkgFactory = new PackageFactory(ruleClassProvider, getEnvironmentExtensions());
     skyframeExecutor =
         SequencedSkyframeExecutor.create(
+            reporter,
             pkgFactory,
             new TimestampGranularityMonitor(BlazeClock.instance()),
             directories,

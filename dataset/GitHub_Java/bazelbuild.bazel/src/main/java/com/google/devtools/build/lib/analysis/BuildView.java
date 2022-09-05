@@ -265,6 +265,82 @@ public class BuildView {
     return skyframeExecutor.getLastWorkspaceStatusActionForTesting();
   }
 
+  @VisibleForTesting
+  public Iterable<ConfiguredTarget> getDirectPrerequisitesForTesting(
+      EventHandler eventHandler, ConfiguredTarget ct, BuildConfigurationCollection configurations)
+          throws InterruptedException {
+    return skyframeExecutor.getConfiguredTargets(
+        eventHandler, ct.getConfiguration(),
+        getDirectPrerequisiteDependenciesForTesting(eventHandler, ct, null, configurations), false);
+  }
+
+  @VisibleForTesting
+  public Iterable<Dependency> getDirectPrerequisiteDependenciesForTesting(
+      EventHandler eventHandler, ConfiguredTarget ct,
+      @Nullable final LoadingCache<Label, Target> targetCache,
+      BuildConfigurationCollection configurations) throws InterruptedException {
+    if (!(ct.getTarget() instanceof Rule)) {
+      return ImmutableList.of();
+    }
+
+    class SilentDependencyResolver extends DependencyResolver {
+      @Override
+      protected void invalidVisibilityReferenceHook(TargetAndConfiguration node, Label label) {
+        // The error must have been reported already during analysis.
+      }
+
+      @Override
+      protected void invalidPackageGroupReferenceHook(TargetAndConfiguration node, Label label) {
+        // The error must have been reported already during analysis.
+      }
+
+      @Override
+      protected Target getTarget(Label label) throws NoSuchThingException {
+        if (targetCache == null) {
+          return packageManager.getLoadedTarget(label);
+        }
+
+        try {
+          return targetCache.get(label);
+        } catch (ExecutionException e) {
+          // All lookups should succeed because we should not be looking up any targets in error.
+          throw new IllegalStateException(e);
+        }
+      }
+    }
+
+    DependencyResolver dependencyResolver = new SilentDependencyResolver();
+    TargetAndConfiguration ctgNode =
+        new TargetAndConfiguration(ct.getTarget(), ct.getConfiguration());
+    return dependencyResolver.dependentNodes(ctgNode, configurations.getHostConfiguration(),
+        getConfigurableAttributeKeysForTesting(eventHandler, ctgNode));
+  }
+
+  /**
+   * Returns ConfigMatchingProvider instances corresponding to the configurable attribute keys
+   * present in this rule's attributes.
+   */
+  private Set<ConfigMatchingProvider> getConfigurableAttributeKeysForTesting(
+      EventHandler eventHandler, TargetAndConfiguration ctg) {
+    if (!(ctg.getTarget() instanceof Rule)) {
+      return ImmutableSet.of();
+    }
+    Rule rule = (Rule) ctg.getTarget();
+    ImmutableSet.Builder<ConfigMatchingProvider> keys = ImmutableSet.builder();
+    RawAttributeMapper mapper = RawAttributeMapper.of(rule);
+    for (Attribute attribute : rule.getAttributes()) {
+      for (Label label : mapper.getConfigurabilityKeys(attribute.getName(), attribute.getType())) {
+        if (BuildType.Selector.isReservedLabel(label)) {
+          continue;
+        }
+        ConfiguredTarget ct = getConfiguredTargetForTesting(
+            eventHandler, label, ctg.getConfiguration());
+        keys.add(Preconditions.checkNotNull(ct.getProvider(ConfigMatchingProvider.class)));
+      }
+    }
+    return keys.build();
+  }
+
   public TransitiveInfoCollection getGeneratingRule(OutputFileConfiguredTarget target) {
     return target.getGeneratingRule();
   }
@@ -680,60 +756,6 @@ public class BuildView {
     return ImmutableList.copyOf(nodes);
   }
 
-  /**
-   * Sets the possible artifact roots in the artifact factory. This allows the factory to resolve
-   * paths with unknown roots to artifacts.
-   */
-  @VisibleForTesting // for BuildViewTestCase
-  public void setArtifactRoots(ImmutableMap<PackageIdentifier, Path> packageRoots,
-      BuildConfigurationCollection configurations) {
-    Map<Path, Root> rootMap = new HashMap<>();
-    Map<PackageIdentifier, Root> realPackageRoots = new HashMap<>();
-    for (Map.Entry<PackageIdentifier, Path> entry : packageRoots.entrySet()) {
-      Root root = rootMap.get(entry.getValue());
-      if (root == null) {
-        root = Root.asSourceRoot(entry.getValue());
-        rootMap.put(entry.getValue(), root);
-      }
-      realPackageRoots.put(entry.getKey(), root);
-    }
-    // Source Artifact roots:
-    getArtifactFactory().setPackageRoots(realPackageRoots);
-
-    // Derived Artifact roots:
-    ImmutableList.Builder<Root> roots = ImmutableList.builder();
-
-    // build-info.txt and friends; this root is not configuration specific.
-    roots.add(directories.getBuildDataDirectory());
-
-    // The roots for each configuration - duplicates are automatically removed in the call below.
-    for (BuildConfiguration cfg : configurations.getAllConfigurations()) {
-      roots.addAll(cfg.getRoots());
-    }
-
-    getArtifactFactory().setDerivedArtifactRoots(roots.build());
-  }
-
-  /**
-   * Tests and clears the current thread's pending "interrupted" status, and
-   * throws InterruptedException iff it was set.
-   */
-  protected final void pollInterruptedStatus() throws InterruptedException {
-    if (Thread.interrupted()) {
-      throw new InterruptedException();
-    }
-  }
-
-  /**
-   * Drops the analysis cache. If building with Skyframe, targets in {@code topLevelTargets} may
-   * remain in the cache for use during the execution phase.
-   *
-   * @see BuildView.Options#discardAnalysisCache
-   */
-  public void clearAnalysisCache(Collection<ConfiguredTarget> topLevelTargets) {
-    skyframeBuildView.clearAnalysisCache(topLevelTargets);
-  }
-
   // For ide_build_info
   public ConfiguredTarget getConfiguredTargetForIdeInfo(
       EventHandler eventHandler, Label label, BuildConfiguration configuration) {
@@ -763,83 +785,6 @@ public class BuildView {
       BuildConfigurationCollection configurations) throws InterruptedException {
     return getDirectPrerequisiteDependenciesForTesting(
         eventHandler, ct, targetCache, configurations);
-  }
-
-  // For testing
-  @VisibleForTesting
-  public Iterable<ConfiguredTarget> getDirectPrerequisitesForTesting(
-      EventHandler eventHandler, ConfiguredTarget ct, BuildConfigurationCollection configurations)
-          throws InterruptedException {
-    return skyframeExecutor.getConfiguredTargets(
-        eventHandler, ct.getConfiguration(),
-        getDirectPrerequisiteDependenciesForTesting(eventHandler, ct, null, configurations), false);
-  }
-
-  @VisibleForTesting
-  public Iterable<Dependency> getDirectPrerequisiteDependenciesForTesting(
-      EventHandler eventHandler, ConfiguredTarget ct,
-      @Nullable final LoadingCache<Label, Target> targetCache,
-      BuildConfigurationCollection configurations) throws InterruptedException {
-    if (!(ct.getTarget() instanceof Rule)) {
-      return ImmutableList.of();
-    }
-
-    class SilentDependencyResolver extends DependencyResolver {
-      @Override
-      protected void invalidVisibilityReferenceHook(TargetAndConfiguration node, Label label) {
-        // The error must have been reported already during analysis.
-      }
-
-      @Override
-      protected void invalidPackageGroupReferenceHook(TargetAndConfiguration node, Label label) {
-        // The error must have been reported already during analysis.
-      }
-
-      @Override
-      protected Target getTarget(Label label) throws NoSuchThingException {
-        if (targetCache == null) {
-          return packageManager.getLoadedTarget(label);
-        }
-
-        try {
-          return targetCache.get(label);
-        } catch (ExecutionException e) {
-          // All lookups should succeed because we should not be looking up any targets in error.
-          throw new IllegalStateException(e);
-        }
-      }
-    }
-
-    DependencyResolver dependencyResolver = new SilentDependencyResolver();
-    TargetAndConfiguration ctgNode =
-        new TargetAndConfiguration(ct.getTarget(), ct.getConfiguration());
-    return dependencyResolver.dependentNodes(ctgNode, configurations.getHostConfiguration(),
-        getConfigurableAttributeKeysForTesting(eventHandler, ctgNode));
-  }
-
-  /**
-   * Returns ConfigMatchingProvider instances corresponding to the configurable attribute keys
-   * present in this rule's attributes.
-   */
-  private Set<ConfigMatchingProvider> getConfigurableAttributeKeysForTesting(
-      EventHandler eventHandler, TargetAndConfiguration ctg) {
-    if (!(ctg.getTarget() instanceof Rule)) {
-      return ImmutableSet.of();
-    }
-    Rule rule = (Rule) ctg.getTarget();
-    ImmutableSet.Builder<ConfigMatchingProvider> keys = ImmutableSet.builder();
-    RawAttributeMapper mapper = RawAttributeMapper.of(rule);
-    for (Attribute attribute : rule.getAttributes()) {
-      for (Label label : mapper.getConfigurabilityKeys(attribute.getName(), attribute.getType())) {
-        if (BuildType.Selector.isReservedLabel(label)) {
-          continue;
-        }
-        ConfiguredTarget ct = getConfiguredTargetForTesting(
-            eventHandler, label, ctg.getConfiguration());
-        keys.add(Preconditions.checkNotNull(ct.getProvider(ConfigMatchingProvider.class)));
-      }
-    }
-    return keys.build();
   }
 
   private ListMultimap<Attribute, ConfiguredTarget> getPrerequisiteMapForTesting(
@@ -872,8 +817,7 @@ public class BuildView {
     }
 
     ImmutableMap<Dependency, ConfiguredTarget> cts = skyframeExecutor.getConfiguredTargetMap(
-        eventHandler,
-        ctNode.getConfiguration(), ImmutableSet.copyOf(depNodeNames.values()), false);
+        eventHandler, ctNode.getConfiguration(), ImmutableSet.copyOf(depNodeNames.values()), false);
 
     ImmutableListMultimap.Builder<Attribute, ConfiguredTarget> builder =
         ImmutableListMultimap.builder();
@@ -881,6 +825,40 @@ public class BuildView {
       builder.put(entry.getKey(), cts.get(entry.getValue()));
     }
     return builder.build();
+  }
+
+  /**
+   * Sets the possible artifact roots in the artifact factory. This allows the factory to resolve
+   * paths with unknown roots to artifacts.
+   */
+  @VisibleForTesting // for BuildViewTestCase
+  public void setArtifactRoots(ImmutableMap<PackageIdentifier, Path> packageRoots,
+      BuildConfigurationCollection configurations) {
+    Map<Path, Root> rootMap = new HashMap<>();
+    Map<PackageIdentifier, Root> realPackageRoots = new HashMap<>();
+    for (Map.Entry<PackageIdentifier, Path> entry : packageRoots.entrySet()) {
+      Root root = rootMap.get(entry.getValue());
+      if (root == null) {
+        root = Root.asSourceRoot(entry.getValue());
+        rootMap.put(entry.getValue(), root);
+      }
+      realPackageRoots.put(entry.getKey(), root);
+    }
+    // Source Artifact roots:
+    getArtifactFactory().setPackageRoots(realPackageRoots);
+
+    // Derived Artifact roots:
+    ImmutableList.Builder<Root> roots = ImmutableList.builder();
+
+    // build-info.txt and friends; this root is not configuration specific.
+    roots.add(directories.getBuildDataDirectory());
+
+    // The roots for each configuration - duplicates are automatically removed in the call below.
+    for (BuildConfiguration cfg : configurations.getAllConfigurations()) {
+      roots.addAll(cfg.getRoots());
+    }
+
+    getArtifactFactory().setDerivedArtifactRoots(roots.build());
   }
 
   /**
@@ -946,5 +924,25 @@ public class BuildView {
       }
     }
     return null;
+  }
+
+  /**
+   * Tests and clears the current thread's pending "interrupted" status, and
+   * throws InterruptedException iff it was set.
+   */
+  protected final void pollInterruptedStatus() throws InterruptedException {
+    if (Thread.interrupted()) {
+      throw new InterruptedException();
+    }
+  }
+
+  /**
+   * Drops the analysis cache. If building with Skyframe, targets in {@code topLevelTargets} may
+   * remain in the cache for use during the execution phase.
+   *
+   * @see BuildView.Options#discardAnalysisCache
+   */
+  public void clearAnalysisCache(Collection<ConfiguredTarget> topLevelTargets) {
+    skyframeBuildView.clearAnalysisCache(topLevelTargets);
   }
 }
