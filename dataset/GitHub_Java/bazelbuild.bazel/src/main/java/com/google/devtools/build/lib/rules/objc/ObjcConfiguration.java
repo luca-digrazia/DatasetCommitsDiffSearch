@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.xcode.common.Platform;
 
 import java.util.List;
 
@@ -198,22 +199,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
    */
   public List<String> getIosMultiCpus() {
     return iosMultiCpus;
-  }
-
-  /**
-   * Returns the architecture for which we keep dependencies that should be present only once (in a
-   * single architecture).
-   *
-   * <p>When building with multiple architectures there are some dependencies we want to avoid
-   * duplicating: they would show up more than once in the same location in the final application
-   * bundle which is illegal. Instead we pick one architecture for which to keep all dependencies
-   * and discard any others.
-   */
-  public String getDependencySingleArchitecture() {
-    if (!getIosMultiCpus().isEmpty()) {
-      return getIosMultiCpus().get(0);
-    }
-    return getIosCpu();
   }
 
   @Override

@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.xcode.common.Platform;
 
 /**
  * A loader that creates ObjcConfiguration instances based on Objective-C configurations and
@@ -47,7 +48,7 @@ public class ObjcConfigurationLoader implements ConfigurationFragmentFactory {
     }
 
     Label defaultProvisioningProfileLabel = null;
-    if (getPlatform(objcOptions) == Platform.DEVICE) {
+    if (Platform.forArch(objcOptions.iosCpu) == Platform.DEVICE) {
       defaultProvisioningProfileLabel = forceLoad(env, "//tools/objc:default_provisioning_profile");
     }
 
@@ -60,19 +61,11 @@ public class ObjcConfigurationLoader implements ConfigurationFragmentFactory {
     return ObjcConfiguration.class;
   }
 
-  private Platform getPlatform(ObjcCommandLineOptions objcOptions) {
-    for (String architecture : objcOptions.iosMultiCpus) {
-      if (Platform.forArch(architecture) == Platform.DEVICE) {
-        return Platform.DEVICE;
-      }
-    }
-    return Platform.forArch(objcOptions.iosCpu);
-  }
-
   private static Label forceLoad(ConfigurationEnvironment env, String target)
       throws InvalidConfigurationException {
+    Label label = null;
     try {
-      Label label = Label.parseAbsolute(target);
+      label = Label.parseAbsolute(target);
       env.getTarget(label);
       return label;
     } catch (Label.SyntaxException | NoSuchPackageException | NoSuchTargetException e) {
