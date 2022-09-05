@@ -209,6 +209,7 @@
 
 package com.android.build.gradle.internal;
 
+import java.io.File;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -223,14 +224,15 @@ import com.taobao.android.builder.dependency.AtlasDependencyTree;
 import com.taobao.android.builder.dependency.parser.AtlasDepTreeParser;
 import com.taobao.android.builder.extension.AtlasExtension;
 import com.taobao.android.builder.extension.TBuildType;
+import com.taobao.android.builder.tasks.ExtractAPTask;
 import com.taobao.android.builder.tasks.incremental.ApDependencies;
 import com.taobao.android.builder.tools.PluginTypeUtils;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
-import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
-import org.gradle.api.artifacts.result.ResolvedComponentResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static com.android.build.gradle.internal.api.ApContext.DEPENDENCIES_FILENAME;
 
 /**
  * A manager to resolve configuration dependencies.
@@ -298,15 +300,19 @@ public class AtlasDependencyManager extends DependencyManager {
             return null;
         }
 
-        return new ApDependencies(project, tBuildType);
+        ExtractAPTask.ConfigAction configAction = new ExtractAPTask.ConfigAction(project, variantDeps.getName(),
+                                                                                 tBuildType);
+        ExtractAPTask extractAPTask = project.getTasks().create(configAction.getName(), configAction.getType());
+        configAction.execute(extractAPTask);
+        extractAPTask.execute();
+
+        return new ApDependencies(project, new File(extractAPTask.getExplodedDir(), DEPENDENCIES_FILENAME));
     }
 
     @Override
     protected boolean checkForExclusion(@NonNull VariantDependencies configDependencies,
-                                        ModuleVersionIdentifier moduleVersion,
-                                        ResolvedComponentResult resolvedComponentResult) {
-        return super.checkForExclusion(configDependencies, moduleVersion, resolvedComponentResult) || (
-            apDependencies != null && apDependencies.hasSameResolvedDependency(moduleVersion)
-            && !(resolvedComponentResult.getId() instanceof ProjectComponentIdentifier));
+                                        ModuleVersionIdentifier moduleVersion) {
+        return super.checkForExclusion(configDependencies, moduleVersion) || (apDependencies != null && apDependencies
+            .hasSameResolvedDependency(moduleVersion));
     }
 }

@@ -300,7 +300,7 @@ public class ExtractAPTask extends DefaultTask {
 
         @Override
         public String getName() {
-            return "extract" + StringHelper.capitalize(variantName) + "AP";
+            return "prepare" + StringHelper.capitalize(variantName) + "AP2";
         }
 
         @Override
