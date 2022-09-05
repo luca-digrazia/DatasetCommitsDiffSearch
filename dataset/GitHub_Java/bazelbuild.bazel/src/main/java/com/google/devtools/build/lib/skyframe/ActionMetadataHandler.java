@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.cache.Md5Digest;
 import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
+import com.google.devtools.build.lib.skyframe.TreeArtifactValue.TreeArtifactException;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileStatus;
@@ -306,7 +307,11 @@ public class ActionMetadataHandler implements MetadataHandler {
       // should be single threaded and there should be no race condition.
       // The current design of ActionMetadataHandler makes this hard to enforce.
       Set<PathFragment> paths = null;
-      paths = TreeArtifactValue.explodeDirectory(artifact);
+      try {
+        paths = TreeArtifactValue.explodeDirectory(artifact);
+      } catch (TreeArtifactException e) {
+        throw new IllegalStateException(e);
+      }
       Set<TreeFileArtifact> diskFiles = ActionInputHelper.asTreeFileArtifacts(artifact, paths);
       if (!diskFiles.equals(registeredContents)) {
         // There might be more than one error here. We first look for missing output files.
@@ -317,13 +322,13 @@ public class ActionMetadataHandler implements MetadataHandler {
           // Currently it's hard to report this error without refactoring, since checkOutputs()
           // likes to substitute its own error messages upon catching IOException, and falls
           // through to unrecoverable error behavior on any other exception.
-          throw new IOException("Output file " + missingFiles.iterator().next()
+          throw new IllegalStateException("Output file " + missingFiles.iterator().next()
               + " was registered, but not present on disk");
         }
 
         Set<TreeFileArtifact> extraFiles = Sets.difference(diskFiles, registeredContents);
         // extraFiles cannot be empty
-        throw new IOException(
+        throw new IllegalStateException(
             "File " + extraFiles.iterator().next().getParentRelativePath()
             + ", present in TreeArtifact " + artifact + ", was not registered");
       }
@@ -376,7 +381,11 @@ public class ActionMetadataHandler implements MetadataHandler {
     }
 
     Set<PathFragment> paths = null;
-    paths = TreeArtifactValue.explodeDirectory(artifact);
+    try {
+      paths = TreeArtifactValue.explodeDirectory(artifact);
+    } catch (TreeArtifactException e) {
+      throw new IllegalStateException(e);
+    }
     // If you're reading tree artifacts from disk while outputDirectoryListings are being injected,
     // something has gone terribly wrong.
     Object previousDirectoryListing =
@@ -470,6 +479,12 @@ public class ActionMetadataHandler implements MetadataHandler {
     outputDirectoryListings.clear();
     outputTreeArtifactData.clear();
     additionalOutputData.clear();
+  }
+
+  @Override
+  public boolean artifactExists(Artifact artifact) {
+    Preconditions.checkState(!artifactOmitted(artifact), artifact);
+    return getMetadataMaybe(artifact) != null;
   }
 
   @Override
