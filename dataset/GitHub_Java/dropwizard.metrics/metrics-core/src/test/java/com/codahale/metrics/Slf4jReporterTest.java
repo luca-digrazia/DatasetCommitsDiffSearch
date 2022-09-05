@@ -35,7 +35,6 @@ public class Slf4jReporterTest {
 
     @Test
     public void reportsGaugeValuesAtError() throws Exception {
-        when(logger.isErrorEnabled(marker)).thenReturn(true);
         errorReporter.report(map("gauge", gauge("value")),
                 this.<Counter>map(),
                 this.<Histogram>map(),
@@ -49,7 +48,6 @@ public class Slf4jReporterTest {
     public void reportsCounterValuesAtError() throws Exception {
         final Counter counter = mock(Counter.class);
         when(counter.getCount()).thenReturn(100L);
-        when(logger.isErrorEnabled(marker)).thenReturn(true);
 
         errorReporter.report(this.<Gauge>map(),
                 map("test.counter", counter),
@@ -78,7 +76,6 @@ public class Slf4jReporterTest {
         when(snapshot.get999thPercentile()).thenReturn(11.0);
 
         when(histogram.getSnapshot()).thenReturn(snapshot);
-        when(logger.isErrorEnabled(marker)).thenReturn(true);
 
         errorReporter.report(this.<Gauge>map(),
                 this.<Counter>map(),
@@ -110,7 +107,6 @@ public class Slf4jReporterTest {
         when(meter.getOneMinuteRate()).thenReturn(3.0);
         when(meter.getFiveMinuteRate()).thenReturn(4.0);
         when(meter.getFifteenMinuteRate()).thenReturn(5.0);
-        when(logger.isErrorEnabled(marker)).thenReturn(true);
 
         errorReporter.report(this.<Gauge>map(),
                 this.<Counter>map(),
@@ -154,8 +150,6 @@ public class Slf4jReporterTest {
 
         when(timer.getSnapshot()).thenReturn(snapshot);
 
-        when(logger.isErrorEnabled(marker)).thenReturn(true);
-
         errorReporter.report(this.<Gauge>map(),
                 this.<Counter>map(),
                 this.<Histogram>map(),
@@ -186,7 +180,6 @@ public class Slf4jReporterTest {
 
     @Test
     public void reportsGaugeValues() throws Exception {
-        when(logger.isInfoEnabled(marker)).thenReturn(true);
         infoReporter.report(map("gauge", gauge("value")),
                 this.<Counter>map(),
                 this.<Histogram>map(),
@@ -200,7 +193,6 @@ public class Slf4jReporterTest {
     public void reportsCounterValues() throws Exception {
         final Counter counter = mock(Counter.class);
         when(counter.getCount()).thenReturn(100L);
-        when(logger.isInfoEnabled(marker)).thenReturn(true);
 
         infoReporter.report(this.<Gauge>map(),
                 map("test.counter", counter),
@@ -229,7 +221,6 @@ public class Slf4jReporterTest {
         when(snapshot.get999thPercentile()).thenReturn(11.0);
 
         when(histogram.getSnapshot()).thenReturn(snapshot);
-        when(logger.isInfoEnabled(marker)).thenReturn(true);
 
         infoReporter.report(this.<Gauge>map(),
                 this.<Counter>map(),
@@ -261,7 +252,6 @@ public class Slf4jReporterTest {
         when(meter.getOneMinuteRate()).thenReturn(3.0);
         when(meter.getFiveMinuteRate()).thenReturn(4.0);
         when(meter.getFifteenMinuteRate()).thenReturn(5.0);
-        when(logger.isInfoEnabled(marker)).thenReturn(true);
 
         infoReporter.report(this.<Gauge>map(),
                 this.<Counter>map(),
@@ -304,7 +294,6 @@ public class Slf4jReporterTest {
                 .toNanos(1000));
 
         when(timer.getSnapshot()).thenReturn(snapshot);
-        when(logger.isInfoEnabled(marker)).thenReturn(true);
 
         infoReporter.report(this.<Gauge>map(),
                 this.<Counter>map(),
