@@ -212,24 +212,25 @@ package com.taobao.android.builder.tools.cache;
 import java.io.File;
 import java.io.IOException;
 
+import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.tools.log.FileLogger;
 import org.apache.commons.io.FileUtils;
 
 /**
  * Created by wuzhong on 2017/6/8.
  *
- * Unified file cache center
+ * 统一文件缓存中心
  */
 public class FileCacheCenter {
 
-    public static final boolean BUILD_CACHE_ENABLED = true;
+    public static final boolean BUILD_CACHE_ENABLED = AtlasBuildContext.sBuilderAdapter.isBuildCacheEnabled();
     private static FileLogger logger = FileLogger.getInstance("filecache");
 
     public static Cache networkCache;
     public static Cache localCache = new SimpleLocalCache();
 
     /**
-     * Cache files or folders
+     * 缓存文件或者文件夹
      *
      * @param type
      * @param key
@@ -254,7 +255,7 @@ public class FileCacheCenter {
     }
 
     /**
-     * Query the file, if the local file does not exist, try to read the cache from the cloud
+     * 查询文件，如果本地文件不存在，尝试从云端读取缓存
      *
      * @param type
      * @param key
