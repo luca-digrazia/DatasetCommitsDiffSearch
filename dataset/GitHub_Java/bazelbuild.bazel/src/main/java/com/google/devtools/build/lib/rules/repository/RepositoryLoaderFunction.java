@@ -14,13 +14,13 @@
 
 package com.google.devtools.build.lib.rules.repository;
 
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.skyframe.ExternalPackageFunction;
+import com.google.devtools.build.lib.skyframe.PackageValue;
 import com.google.devtools.build.lib.skyframe.RepositoryValue;
-import com.google.devtools.build.lib.skyframe.WorkspaceFileValue;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -35,7 +35,6 @@ import javax.annotation.Nullable;
  * Creates a local or remote repository and checks its WORKSPACE file.
  */
 public class RepositoryLoaderFunction implements SkyFunction {
-
   @Nullable
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
@@ -50,10 +49,9 @@ public class RepositoryLoaderFunction implements SkyFunction {
       return null;
     }
 
-    SkyKey workspaceKey =
-        WorkspaceFileValue.key(
-            RootedPath.toRootedPath(repository.getPath(), PathFragment.create("WORKSPACE")));
-    WorkspaceFileValue workspacePackage = (WorkspaceFileValue) env.getValue(workspaceKey);
+    SkyKey workspaceKey = ExternalPackageFunction.key(
+        RootedPath.toRootedPath(repository.getPath(), new PathFragment("WORKSPACE")));
+    PackageValue workspacePackage = (PackageValue) env.getValue(workspaceKey);
     if (workspacePackage == null) {
       return null;
     }
@@ -67,14 +65,12 @@ public class RepositoryLoaderFunction implements SkyFunction {
       throw new IllegalStateException(e);
     }
 
-    if (!workspaceName.isDefault()
-        && !workspaceName.strippedName().equals(Label.DEFAULT_REPOSITORY_DIRECTORY)
-        && !nameFromRule.equals(workspaceName)) {
+    if (!workspaceName.isDefault() && !nameFromRule.equals(workspaceName)) {
       Path workspacePath = repository.getPath().getRelative("WORKSPACE");
       env.getListener().handle(Event.warn(Location.fromFile(workspacePath),
           "Workspace name in " + workspacePath + " (" + workspaceName + ") does not match the "
               + "name given in the repository's definition (" + nameFromRule + "); this will "
-              + "cause a build error in future versions"));
+              + "cause a build error in future versions."));
     }
 
     return new RepositoryValue(nameFromRule, repository);
