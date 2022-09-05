@@ -29,7 +29,6 @@ import org.hswebframework.web.validator.group.UpdateGroup;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
-import org.springframework.util.StringUtils;
 
 import javax.annotation.PostConstruct;
 import java.util.ArrayList;
@@ -121,7 +120,7 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
     @Override
     public PK insert(E entity) {
         if (entity.getId() != null) {
-            if ((entity.getId() instanceof String) && !StringUtils.isEmpty(entity.getId())) {
+            if ((entity.getId() instanceof String)) {
                 tryValidateProperty(entity.getId().toString().matches("[a-zA-Z0-9_\\-]+"), "id", "只能由数字,字母,下划线,和-组成");
             }
             tryValidateProperty(selectByPk(entity.getId()) == null, "id", entity.getId() + "已存在");
