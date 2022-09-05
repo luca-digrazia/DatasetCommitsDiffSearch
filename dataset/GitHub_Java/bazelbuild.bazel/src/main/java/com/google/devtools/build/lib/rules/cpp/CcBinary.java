@@ -156,9 +156,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     return CcBinary.init(semantics, context, /*fake =*/ false, /*isTest =*/ false);
   }
 
-  public static ConfiguredTarget init(
-      CppSemantics semantics, RuleContext ruleContext, boolean fake, boolean isTest)
-      throws InterruptedException, RuleErrorException {
+  public static ConfiguredTarget init(CppSemantics semantics, RuleContext ruleContext, boolean fake,
+      boolean isTest) throws InterruptedException {
     ruleContext.checkSrcsSamePackage(true);
     FeatureConfiguration featureConfiguration = CcCommon.configureFeatures(ruleContext);
     CcCommon common = new CcCommon(ruleContext);
@@ -671,8 +670,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         .addOutputGroup(
             OutputGroupProvider.COMPILATION_PREREQUISITES,
             CcCommon.collectCompilationPrerequisites(ruleContext, cppCompilationContext));
-
-    CppHelper.maybeAddStaticLinkMarkerProvider(builder, ruleContext);
   }
 
   private static NestedSet<Artifact> collectHiddenTopLevelArtifacts(RuleContext ruleContext) {

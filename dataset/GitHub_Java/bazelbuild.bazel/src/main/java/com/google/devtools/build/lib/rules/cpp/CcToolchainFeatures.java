@@ -26,14 +26,10 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain.Tool;
-
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
@@ -71,7 +67,7 @@ public class CcToolchainFeatures implements Serializable {
   
   /**
    * Thrown when a flag value cannot be expanded under a set of build variables.
-   *
+   * 
    * <p>This happens for example when a flag references a variable that is not provided by the
    * action, or when a flag group references multiple variables of sequence type.
    */
@@ -80,17 +76,13 @@ public class CcToolchainFeatures implements Serializable {
       super(message);
     }
   }
-
-  /** Error message thrown when a toolchain does not provide a required artifact_name_pattern. */
-  public static final String MISSING_ARTIFACT_NAME_PATTERN_ERROR_TEMPLATE =
-      "Toolchain must provide artifact_name_pattern for category %s";
-
+  
   /**
    * A piece of a single string value.
-   *
-   * <p>A single value can contain a combination of text and variables (for example "-f
-   * %{var1}/%{var2}"). We split the string into chunks, where each chunk represents either a text
-   * snippet, or a variable that is to be replaced.
+   * 
+   * <p>A single value can contain a combination of text and variables (for example
+   * "-f %{var1}/%{var2}"). We split the string into chunks, where each chunk represents either a
+   * text snippet, or a variable that is to be replaced.
    */
   interface StringChunk {
     
@@ -154,21 +146,22 @@ public class CcToolchainFeatures implements Serializable {
   
   /**
    * Parser for toolchain string values.
-   *
+   * 
    * <p>A string value contains a snippet of text supporting variable expansion. For example, a
-   * string value "-f %{var1}/%{var2}" will expand the values of the variables "var1" and "var2" in
-   * the corresponding places in the string.
-   *
-   * <p>The {@code StringValueParser} takes a string and parses it into a list of {@link
-   * StringChunk} objects, where each chunk represents either a snippet of text or a variable to be
-   * expanded. In the above example, the resulting chunks would be ["-f ", var1, "/", var2].
-   *
+   * string value "-f %{var1}/%{var2}" will expand the values of the variables "var1" and "var2"
+   * in the corresponding places in the string.
+   * 
+   * <p>The {@code StringValueParser} takes a string and parses it into a list of
+   * {@link StringChunk} objects, where each chunk represents either a snippet of text or a
+   * variable to be expanded. In the above example, the resulting chunks would be
+   * ["-f ", var1, "/", var2].
+   * 
    * <p>In addition to the list of chunks, the {@link StringValueParser} also provides the set of
    * variables necessary for the expansion of this flag via {@link #getUsedVariables}.
-   *
+   * 
    * <p>To get a literal percent character, "%%" can be used in the string.
    */
-  static class StringValueParser {
+  private static class StringValueParser {
 
     private final String value;
     
@@ -180,18 +173,22 @@ public class CcToolchainFeatures implements Serializable {
     private final ImmutableList.Builder<StringChunk> chunks = ImmutableList.builder();
     private final ImmutableSet.Builder<String> usedVariables = ImmutableSet.builder();
     
-    StringValueParser(String value) throws InvalidConfigurationException {
+    private StringValueParser(String value) throws InvalidConfigurationException {
       this.value = value;
       parse();
     }
     
-    /** @return the parsed chunks for this string. */
-    ImmutableList<StringChunk> getChunks() {
+    /**
+     * @return the parsed chunks for this string.
+     */
+    private ImmutableList<StringChunk> getChunks() {
       return chunks.build();
     }
     
-    /** @return all variable names needed to expand this string. */
-    ImmutableSet<String> getUsedVariables() {
+    /**
+     * @return all variable names needed to expand this string.
+     */
+    private ImmutableSet<String> getUsedVariables() {
       return usedVariables.build();
     }
     
@@ -405,15 +402,14 @@ public class CcToolchainFeatures implements Serializable {
 
     /**
      * Expands all flags in this group and adds them to {@code commandLine}.
-     *
+     * 
      * <p>The flags of the group will be expanded either:
-     *
      * <ul>
-     * <li>once, if there is no variable of sequence type in any of the group's flags, or
-     * <li>for each element in the sequence, if there is one variable of sequence type within the
-     *     flags.
+     * <li>once, if there is no variable of sequence type in any of the group's flags, or</li>
+     * <li>for each element in the sequence, if there is one variable of sequence type within
+     * the flags.</li>
      * </ul>
-     *
+     * 
      * <p>Having more than a single variable of sequence type in a single flag group is not
      * supported.
      */
@@ -637,7 +633,6 @@ public class CcToolchainFeatures implements Serializable {
       this.configName = actionConfig.getConfigName();
       this.actionName = actionConfig.getActionName();
       this.tools = actionConfig.getToolList();
-
       ImmutableList.Builder<FlagSet> flagSetBuilder = ImmutableList.builder();
       for (CToolchain.FlagSet flagSet : actionConfig.getFlagSetList()) {
         if (!flagSet.getActionList().isEmpty()) {
@@ -699,72 +694,23 @@ public class CcToolchainFeatures implements Serializable {
       }
     }
   }
-
-  /** A description of how artifacts of a certain type are named. */
-  @Immutable
-  private static class ArtifactNamePattern {
-
-    private final ArtifactCategory artifactCategory;
-    private final ImmutableSet<String> variables;
-    private final ImmutableList<StringChunk> chunks;
-
-    private ArtifactNamePattern(CToolchain.ArtifactNamePattern artifactNamePattern)
-        throws InvalidConfigurationException {
-
-      ArtifactCategory foundCategory = null;
-      for (ArtifactCategory artifactCategory : ArtifactCategory.values()) {
-        if (artifactNamePattern.getCategoryName().equals(artifactCategory.getCategoryName())) {
-          foundCategory = artifactCategory;
-        }
-      }
-      if (foundCategory == null) {
-        throw new ExpansionException(
-            String.format(
-                "Artifact category %s not recognized", artifactNamePattern.getCategoryName()));
-      }
-      this.artifactCategory = foundCategory;
-      
-      StringValueParser parser = new StringValueParser(artifactNamePattern.getPattern());
-      this.variables = parser.getUsedVariables();
-      this.chunks = parser.getChunks();
-    }
-
-    /** Returns the ArtifactCategory for this ArtifactNamePattern. */
-    ArtifactCategory getArtifactCategory() {
-      return this.artifactCategory;
-    }
-
-    /**
-     * Returns the artifact name that pattern selects for a given rule.
-     */
-    public String getArtifactName(RuleContext ruleContext) {
-      StringBuilder result = new StringBuilder();
-      Variables.View artifactNameVariables =
-          new Variables.Builder()
-              .addAllVariables(artifactCategory.getTemplateVariables(ruleContext))
-              .build()
-              .getView(variables);
-      for (StringChunk chunk : chunks) {
-        chunk.expand(artifactNameVariables.getVariables(), result);
-      }
-      return result.toString();
-    }
-  }
   
   /**
    * Configured build variables usable by the toolchain configuration.
    */
   @Immutable
   public static class Variables {
-    
+   
+    /** An empty variables instance. */
+    public static final Variables EMPTY = new Variables.Builder().build();
+
     /**
-     * Variables can be set as an arbitrarily deeply nested recursive sequence, which
-     * we represent as a tree of {@code Sequence} nodes.
-     * The nodes are {@code NestedSequence} objects, while the leafs are {@code ValueSequence}
-     * objects. We do not allow {@code Value} objects in the tree, as the object memory overhead
-     * is too large when we have millions of values.
-     * If we find single element {@code ValueSequence} in memory profiles in the future, we
-     * can introduce another special case type.
+     * Variables can be set as an arbitrarily deeply nested recursive sequence, which we represent
+     * as a tree of {@code Sequence} nodes. The nodes are {@code NestedSequence} objects, while the
+     * leafs are {@code ValueSequence} objects. We do not allow {@code Value} objects in the tree,
+     * as the object memory overhead is too large when we have millions of values. If we find single
+     * element {@code ValueSequence} in memory profiles in the future, we can introduce another
+     * special case type.
      */
     interface Sequence {
 
@@ -1089,10 +1035,8 @@ public class CcToolchainFeatures implements Serializable {
       return new NestedView(viewMap, sequenceName, sequenceVariables.get(sequenceName));
     }
 
-    /**
-     * Returns whether {@code variable} is set.
-     */
-    private boolean isAvailable(String variable) {
+    /** Returns whether {@code variable} is set. */
+    boolean isAvailable(String variable) {
       return variables.containsKey(variable) || sequenceVariables.containsKey(variable);
     }
   }
@@ -1188,9 +1132,6 @@ public class CcToolchainFeatures implements Serializable {
       return actionConfig.getTool(enabledFeatureNames);
     }
   }
-
-  /** All artifact name patterns defined in this feature configuration. */
-  private final ImmutableList<ArtifactNamePattern> artifactNamePatterns;
   
   /**
    * All features and action configs in the order in which they were specified in the configuration.
@@ -1253,7 +1194,6 @@ public class CcToolchainFeatures implements Serializable {
    *
    * @param toolchain the toolchain configuration as specified by the user.
    * @throws InvalidConfigurationException if the configuration has logical errors.
-   * @throws ArtifactNamePatternNotProvidedException
    */
   @VisibleForTesting
   public CcToolchainFeatures(CToolchain toolchain) throws InvalidConfigurationException {
@@ -1279,7 +1219,7 @@ public class CcToolchainFeatures implements Serializable {
       selectablesByName.put(actionConfig.getName(), actionConfig);
       actionConfigsByActionName.put(actionConfig.getActionName(), actionConfig);
     }
-       
+
     this.selectables = selectablesBuilder.build();
     this.selectablesByName = ImmutableMap.copyOf(selectablesByName);
 
@@ -1287,14 +1227,6 @@ public class CcToolchainFeatures implements Serializable {
     checkForActivatableDups(this.selectables);
 
     this.actionConfigsByActionName = actionConfigsByActionName.build();
-
-    ImmutableList.Builder<ArtifactNamePattern> artifactNamePatternsBuilder =
-        ImmutableList.builder();
-    for (CToolchain.ArtifactNamePattern artifactNamePattern :
-        toolchain.getArtifactNamePatternList()) {
-      artifactNamePatternsBuilder.add(new ArtifactNamePattern(artifactNamePattern));
-    }
-    this.artifactNamePatterns = artifactNamePatternsBuilder.build();
 
     // Next, we build up all forward references for 'implies' and 'requires' edges.
     ImmutableMultimap.Builder<CrosstoolSelectable, CrosstoolSelectable> implies =
@@ -1451,42 +1383,10 @@ public class CcToolchainFeatures implements Serializable {
   }
   
   /**
-   * Returns the artifact selected by the toolchain for the given action type and action category,
-   * or null if the category is not supported by the action config.
-   */
-  Artifact getArtifactForCategory(ArtifactCategory artifactCategory, RuleContext ruleContext)
-      throws ExpansionException {
-    ArtifactNamePattern patternForCategory = null;
-    for (ArtifactNamePattern artifactNamePattern : artifactNamePatterns) {
-      if (artifactNamePattern.getArtifactCategory() == artifactCategory) {
-        patternForCategory = artifactNamePattern;
-      }
-    }
-    if (patternForCategory == null) {
-      throw new ExpansionException(
-          String.format(
-              MISSING_ARTIFACT_NAME_PATTERN_ERROR_TEMPLATE, artifactCategory.getCategoryName()));
-    }
-
-    String templatedName = patternForCategory.getArtifactName(ruleContext);
-    return artifactCategory.getArtifactForName(templatedName, ruleContext);
-  }
-
-  /** Returns true if the toolchain defines an ArtifactNamePattern for the given category. */
-  boolean hasPatternForArtifactCategory(ArtifactCategory artifactCategory) {
-    for (ArtifactNamePattern artifactNamePattern : artifactNamePatterns) {
-      if (artifactNamePattern.getArtifactCategory() == artifactCategory) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
    * Implements the feature selection algorithm.
-   *
-   * <p>Feature selection is done by first enabling all features reachable by an 'implies' edge, and
-   * then iteratively pruning features that have unmet requirements.
+   * 
+   * <p>Feature selection is done by first enabling all features reachable by an 'implies' edge,
+   * and then iteratively pruning features that have unmet requirements.
    */
   private class FeatureSelection {
     

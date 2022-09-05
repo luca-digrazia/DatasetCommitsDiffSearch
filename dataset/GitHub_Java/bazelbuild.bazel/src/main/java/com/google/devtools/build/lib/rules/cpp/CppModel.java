@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.FailAction;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -27,9 +26,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationOutputs.Builder;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariablesExtension;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
@@ -740,49 +737,6 @@ public final class CppModel {
   }
 
   /**
-   * Returns the linked artifact resulting from a linking of the given type. Consults the feature
-   * configuration to obtain an action_config that provides the artifact. If the feature
-   * configuration provides no artifact, uses a default.
-   *
-   * <p>We cannot assume that the feature configuration contains an action_config for the link
-   * action, because the linux link action depends on hardcoded values in
-   * LinkCommandLine.getRawLinkArgv(), which are applied on the condition that an action_config is
-   * not present.
-   * TODO(b/30393154): Assert that the given link action has an action_config.
-   *
-   * @throws RuleErrorException
-   */
-  private Artifact getLinkedArtifact(LinkTargetType linkTargetType) throws RuleErrorException {
-    Artifact result = null;
-    Artifact linuxDefault = CppHelper.getLinuxLinkedArtifact(ruleContext, linkTargetType);
-    CcToolchainFeatures toolchain = CppHelper.getToolchain(ruleContext).getFeatures();
-
-    if (toolchain.hasPatternForArtifactCategory(linkTargetType.getLinkerOutput())) {
-      try {
-        result = toolchain.getArtifactForCategory(linkTargetType.getLinkerOutput(), ruleContext);
-      } catch (ExpansionException e) {
-        ruleContext.throwWithRuleError(e.getMessage());
-      }
-    } else {
-      return linuxDefault;
-    }
-    // If the linked artifact is not the linux default, then a FailAction is generated for the
-    // linux default to satisfy the requirement of the implicit output.
-    // TODO(b/30132703): Remove the implicit outputs of cc_library.
-    if (!result.equals(linuxDefault)) {
-      ruleContext.registerAction(
-          new FailAction(
-              ruleContext.getActionOwner(),
-              ImmutableList.of(linuxDefault),
-              String.format(
-                  "the given toolchain supports creation of %s instead of %s",
-                  linuxDefault.getExecPathString(), result.getExecPathString())));
-    }
-
-    return result;
-  }
-
-  /**
    * Constructs the C++ linker actions. It generally generates two actions, one for a static library
    * and one for a dynamic library. If PIC is required for shared libraries, but not for binaries,
    * it additionally creates a third action to generate a PIC static library.
@@ -791,11 +745,8 @@ public final class CppModel {
    * can be used for linking, but doesn't contain any executable code. This increases the number of
    * cache hits for link actions. Call {@link #setAllowInterfaceSharedObjects(boolean)} to enable
    * this behavior.
-   *
-   * @throws RuleErrorException
    */
-  public CcLinkingOutputs createCcLinkActions(CcCompilationOutputs ccOutputs)
-      throws RuleErrorException {
+  public CcLinkingOutputs createCcLinkActions(CcCompilationOutputs ccOutputs) {
     // For now only handle static links. Note that the dynamic library link below ignores linkType.
     // TODO(bazel-team): Either support non-static links or move this check to setLinkType().
     Preconditions.checkState(linkType.isStaticLibraryLink(), "can only handle static links");
@@ -824,11 +775,7 @@ public final class CppModel {
     //
     // Presumably, it is done this way because the .a file is an implicit output of every cc_library
     // rule, so we can't use ".pic.a" that in the always-PIC case.
-
-    // If the crosstool is configured to select an output artifact, we use that selection.
-    // Otherwise, we use linux defaults.
-    Artifact linkedArtifact = getLinkedArtifact(linkType);
-
+    Artifact linkedArtifact = CppHelper.getLinkedArtifact(ruleContext, linkType);
     CppLinkAction maybePicAction =
         newLinkActionBuilder(linkedArtifact)
             .addNonLibraryInputs(ccOutputs.getObjectFiles(usePicForBinaries))
@@ -849,10 +796,7 @@ public final class CppModel {
           ? LinkTargetType.ALWAYS_LINK_PIC_STATIC_LIBRARY
           : LinkTargetType.PIC_STATIC_LIBRARY;
 
-      // If the crosstool is configured to select an output artifact, we use that selection.
-      // Otherwise, we use linux defaults.
-      Artifact picArtifact = getLinkedArtifact(picLinkType);
-
+      Artifact picArtifact = CppHelper.getLinkedArtifact(ruleContext, picLinkType);
       CppLinkAction picAction =
           newLinkActionBuilder(picArtifact)
               .addNonLibraryInputs(ccOutputs.getObjectFiles(true))
@@ -873,9 +817,7 @@ public final class CppModel {
     // Create dynamic library.
     Artifact soImpl;
     if (soImplArtifact == null) {
-      // If the crosstool is configured to select an output artifact, we use that selection.
-      // Otherwise, we use linux defaults.
-      soImpl = getLinkedArtifact(LinkTargetType.DYNAMIC_LIBRARY);
+      soImpl = CppHelper.getLinkedArtifact(ruleContext, LinkTargetType.DYNAMIC_LIBRARY);
     } else {
       soImpl = soImplArtifact;
     }
@@ -884,7 +826,7 @@ public final class CppModel {
     Artifact soInterface = null;
     if (cppConfiguration.useInterfaceSharedObjects() && allowInterfaceSharedObjects) {
       soInterface =
-          CppHelper.getLinuxLinkedArtifact(ruleContext, LinkTargetType.INTERFACE_DYNAMIC_LIBRARY);
+          CppHelper.getLinkedArtifact(ruleContext, LinkTargetType.INTERFACE_DYNAMIC_LIBRARY);
       sonameLinkopts = ImmutableList.of("-Wl,-soname=" +
           SolibSymlinkAction.getDynamicLibrarySoname(soImpl.getRootRelativePath(), false));
     }

@@ -131,33 +131,4 @@ public class LinkBuildVariablesTest extends BuildViewTestCase {
         getVariableValue(variables, CppLinkActionBuilder.GLOBAL_WHOLE_ARCHIVE_VARIABLE);
     assertThat(variableValue).contains("");
   }
-
-  /**
-   * Tests that "--whole_archive" is not propagated twice through whole archive inputs and global
-   * whole archive.
-   */
-  @Test
-  public void testGlobalWholeArchiveOrWholeArchiveBuildVariables() throws Exception {
-    scratch.file(
-        "x/BUILD",
-        "cc_binary(",
-        "   name = 'bin',",
-        "   srcs = ['a.cc', 'b.lo'],",
-        "   linkopts = ['-shared'],",
-        "   linkstatic = 1,",
-        ")");
-    scratch.file("x/a.cc");
-    scratch.file("x/b.lo");
-
-    ConfiguredTarget target = getConfiguredTarget("//x:bin");
-    Variables variables = getLinkBuildVariables(target, Link.LinkTargetType.EXECUTABLE);
-    List<String> globalWholeArchiveVariableValue =
-        getVariableValue(variables, CppLinkActionBuilder.GLOBAL_WHOLE_ARCHIVE_VARIABLE);
-    List<String> wholeArchiveInputVariableValue =
-        getVariableValue(
-            variables, CppLinkActionBuilder.WHOLE_ARCHIVE_LINKER_INPUT_PARAMS_VARIABLE);
-    assertThat(globalWholeArchiveVariableValue).contains("");
-    assertThat(wholeArchiveInputVariableValue).isEmpty();
-    ;
-  }
 }
