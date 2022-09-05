@@ -8,7 +8,6 @@ import android.taobao.atlas.framework.Framework;
 import android.taobao.atlas.framework.bundlestorage.BundleArchive;
 import android.taobao.atlas.runtime.RuntimeVariables;
 import android.taobao.atlas.util.ApkUtils;
-import android.taobao.atlas.util.IOUtil;
 import android.taobao.atlas.util.WrapperUtil;
 import android.taobao.atlas.versionInfo.BaselineInfoManager;
 import android.text.TextUtils;
@@ -95,7 +94,7 @@ public class PatchMerger {
                     File targetBundle = new File(outputDirectory, entryName);
                     OutputStream outputStream = new FileOutputStream(targetBundle);
                     InputStream inputStream = patchZip.getInputStream(entry);
-                    IOUtil.copyStream(inputStream, outputStream);
+                    copyStream(inputStream, outputStream);
                     mergeOutputs.put(bundleName, new Pair<>(targetBundle.getAbsolutePath(), item));
                 } else {
                     if(item.reset){
@@ -230,7 +229,7 @@ public class PatchMerger {
                 String entryName = String.format("lib/armeabi/%s", oldBundleFileName);
                 if (apkZip.getEntry(entryName) != null) {
                     oldBundleStream = apkZip.getInputStream(apkZip.getEntry(entryName));
-//                    return oldBundle;
+                    return oldBundle;
                 }
             }
             if(oldBundleStream!= null){
@@ -256,4 +255,32 @@ public class PatchMerger {
         return (lowDisk || supportMerge)&&bundleName.equals(MAIN_DEX);
 
     }
+
+    private void copyStream(InputStream in, OutputStream out) throws IOException {
+
+        try {
+            int c;
+            byte[] by = new byte[BUFFEREDSIZE];
+            while ((c = in.read(by)) != -1) {
+                out.write(by, 0, c);
+            }
+            out.flush();
+        } catch (IOException e) {
+            throw e;
+        } finally {
+            closeQuitely(out);
+            closeQuitely(in);
+        }
+    }
+
+
+    private void closeQuitely(Closeable stream) {
+        try {
+            if (stream != null)
+                stream.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
 }

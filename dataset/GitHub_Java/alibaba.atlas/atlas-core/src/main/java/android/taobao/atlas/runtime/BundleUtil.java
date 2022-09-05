@@ -223,7 +223,7 @@ public class BundleUtil {
             return false;
         }
         BundleImpl impl = (BundleImpl)Atlas.getInstance().getBundle(bundleName);
-        if(impl==null){
+        if(impl==null || !impl.checkValidate()){
             BundleInstaller installer = BundleInstallerFetcher.obtainInstaller();
             installer.installTransitivelySync(new String[]{bundleName});
         }
@@ -236,11 +236,16 @@ public class BundleUtil {
             return false;
         }
         BundleImpl impl = (BundleImpl)Atlas.getInstance().getBundle(bundleName);
-        if(impl==null){
+        if(impl==null || !impl.checkValidate()){
             BundleInstaller installer = BundleInstallerFetcher.obtainInstaller();
             installer.installTransitivelySync(new String[]{bundleName});
         }
         return true;
+    }
+
+    public static void checkBundleStateSync(final String[] bundleName){
+        BundleInstaller installer = BundleInstallerFetcher.obtainInstaller();
+        installer.installSync(bundleName);
     }
     /**
      * 如果是主线程发起类查找，且可以打断，则异步执行
