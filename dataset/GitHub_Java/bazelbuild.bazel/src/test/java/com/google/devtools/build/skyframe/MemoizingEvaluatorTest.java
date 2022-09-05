@@ -736,7 +736,8 @@ public class MemoizingEvaluatorTest {
     assertThat(cycleInfo.getPathToCycle()).containsExactly(topKey, midKey).inOrder();
   }
 
-  private void changeCycle(boolean keepGoing) throws Exception {
+  @Test
+  public void changeCycle() throws Exception {
     initializeTester();
     SkyKey aKey = GraphTester.toSkyKey("a");
     SkyKey bKey = GraphTester.toSkyKey("b");
@@ -746,7 +747,7 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(midKey).addDependency(aKey).setComputedValue(COPY);
     tester.getOrCreate(aKey).addDependency(bKey).setComputedValue(COPY);
     tester.getOrCreate(bKey).addDependency(aKey);
-    EvaluationResult<StringValue> result = tester.eval(keepGoing, topKey);
+    EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, topKey);
     assertEquals(null, result.get(topKey));
     ErrorInfo errorInfo = result.getError(topKey);
     CycleInfo cycleInfo = Iterables.getOnlyElement(errorInfo.getCycleInfo());
@@ -756,19 +757,9 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(bKey).removeDependency(aKey);
     tester.set(bKey, new StringValue("bValue"));
     tester.invalidate();
-    result = tester.eval(keepGoing, topKey);
+    result = tester.eval(/*keepGoing=*/false, topKey);
     assertEquals(new StringValue("bValue"), result.get(topKey));
     assertEquals(null, result.getError(topKey));
-  }
-
-  @Test
-  public void changeCycle_NoKeepGoing() throws Exception {
-    changeCycle(false);
-  }
-
-  @Test
-  public void changeCycle_KeepGoing() throws Exception {
-    changeCycle(true);
   }
 
   /** Regression test: "crash in cycle checker with dirty values". */

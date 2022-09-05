@@ -156,9 +156,9 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   @Override
-  public synchronized SkyValue getValueMaybeWithMetadata() {
+  public synchronized ValueWithMetadata getValueWithMetadata() {
     Preconditions.checkState(isDone(), "no value until done: %s", this);
-    return value;
+    return ValueWithMetadata.wrapWithMetadata(value);
   }
 
   @Override

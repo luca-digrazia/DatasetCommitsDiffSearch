@@ -1127,11 +1127,7 @@ public final class ParallelEvaluator implements Evaluator {
         // always the case in a keepGoing evaluation, since it is assumed that done nodes do not
         // need to be traversed. In this case, we hope the caller is tolerant of a possibly empty
         // result, and return prematurely.
-        bubbleErrorInfo =
-            ImmutableMap.of(
-                errorKey,
-                ValueWithMetadata.wrapWithMetadata(
-                    graph.get(errorKey).getValueMaybeWithMetadata()));
+        bubbleErrorInfo = ImmutableMap.of(errorKey, graph.get(errorKey).getValueWithMetadata());
       }
     }
 
@@ -1653,9 +1649,7 @@ public final class ParallelEvaluator implements Evaluator {
           "Value cannot have error before evaluation started", key, value);
       return ValueWithMetadata.wrapWithMetadata(value);
     }
-    return isDoneForBuild(entry)
-        ? ValueWithMetadata.wrapWithMetadata(entry.getValueMaybeWithMetadata())
-        : null;
+    return isDoneForBuild(entry) ? entry.getValueWithMetadata() : null;
   }
 
   @Nullable

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,9 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.common.options.OptionsClassProvider;
 
 import javax.annotation.Nullable;
 
@@ -28,7 +27,7 @@ public class SequentialBuildDriver implements BuildDriver {
 
   public SequentialBuildDriver(MemoizingEvaluator evaluator) {
     this.memoizingEvaluator = Preconditions.checkNotNull(evaluator);
-    this.curVersion = IntVersion.of(0);
+    this.curVersion = new IntVersion(0);
   }
 
   @Override
@@ -43,7 +42,7 @@ public class SequentialBuildDriver implements BuildDriver {
   }
 
  @Override
- public String meta(Iterable<SkyKey> of, OptionsClassProvider options) {
+ public String meta(Iterable<SkyKey> of) {
    return "";
  }
 
