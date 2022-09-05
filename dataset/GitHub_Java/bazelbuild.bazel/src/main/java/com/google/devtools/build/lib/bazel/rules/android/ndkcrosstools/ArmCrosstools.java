@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CompilationMode;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CompilationModeFlags;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.ToolPath;
 
 import java.util.List;
 
@@ -93,6 +94,9 @@ class ArmCrosstools {
 
         .addAllToolPath(ndkPaths.createToolpaths(toolchainName, targetPlatform))
 
+        .addAllCxxBuiltinIncludeDirectory(ndkPaths.createToolchainIncludePaths(
+            toolchainName, targetPlatform, "4.9"))
+
         .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("arm64"))
 
         // Compiler flags
@@ -124,7 +128,6 @@ class ArmCrosstools {
             .addCompilerFlag("-fno-omit-frame-pointer")
             .addCompilerFlag("-fno-strict-aliasing"));
 
-    ndkPaths.addToolchainIncludePaths(toolchain, toolchainName, targetPlatform, "4.9");
     stlImpl.addStlImpl(toolchain, "4.9");
     return toolchain;
   }
@@ -143,6 +146,9 @@ class ArmCrosstools {
         .setCompiler("clang" + clangVersion)
 
         .addAllToolPath(ndkPaths.createClangToolpaths(toolchainName, targetPlatform, clangVersion))
+
+        .addAllCxxBuiltinIncludeDirectory(ndkPaths.createToolchainIncludePaths(
+            toolchainName, targetPlatform, "4.9"))
 
         .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("arm64"))
 
@@ -183,7 +189,6 @@ class ArmCrosstools {
             .addCompilerFlag("-fno-omit-frame-pointer")
             .addCompilerFlag("-fno-strict-aliasing"));
 
-    ndkPaths.addToolchainIncludePaths(toolchain, toolchainName, targetPlatform, "4.9");
     stlImpl.addStlImpl(toolchain, "4.9");
     return toolchain;
   }
@@ -245,11 +250,22 @@ class ArmCrosstools {
     String toolchainName = "arm-linux-androideabi-" + gccVersion;
     String targetPlatform = "arm-linux-androideabi";
 
-    CToolchain.Builder toolchain = CToolchain.newBuilder()
+    ImmutableList<ToolPath> toolPaths = ndkPaths.createToolpaths(
+        toolchainName,
+        targetPlatform,
+        excludedTools);
+
+    ImmutableList<String> toolchainIncludes = ndkPaths.createToolchainIncludePaths(
+        toolchainName,
+        targetPlatform,
+        gccVersion);
+
+    CToolchain.Builder builder = CToolchain.newBuilder()
         .setTargetSystemName(targetPlatform)
         .setCompiler("gcc-" + gccVersion)
 
-        .addAllToolPath(ndkPaths.createToolpaths(toolchainName, targetPlatform, excludedTools))
+        .addAllToolPath(toolPaths)
+        .addAllCxxBuiltinIncludeDirectory(toolchainIncludes)
         .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("arm"))
 
         .addCompilerFlag(stackProtectorFlag)
@@ -264,7 +280,7 @@ class ArmCrosstools {
         .addLinkerFlag("-no-canonical-prefixes");
 
     if (thumb) {
-      toolchain.addCompilationModeFlags(CompilationModeFlags.newBuilder()
+      builder.addCompilationModeFlags(CompilationModeFlags.newBuilder()
           .setMode(CompilationMode.OPT)
           .addCompilerFlag("-mthumb")
           .addCompilerFlag("-Os")
@@ -274,7 +290,7 @@ class ArmCrosstools {
           .addCompilerFlag("-fno-strict-aliasing")
           .addCompilerFlag("-finline-limit=64"));
 
-      toolchain.addCompilationModeFlags(CompilationModeFlags.newBuilder()
+      builder.addCompilationModeFlags(CompilationModeFlags.newBuilder()
           .setMode(CompilationMode.DBG)
           .addCompilerFlag("-g")
           .addCompilerFlag("-fno-strict-aliasing")
@@ -284,7 +300,7 @@ class ArmCrosstools {
           .addCompilerFlag("-marm")
           .addCompilerFlag("-fno-omit-frame-pointer"));
     } else {
-      toolchain.addCompilationModeFlags(CompilationModeFlags.newBuilder()
+      builder.addCompilationModeFlags(CompilationModeFlags.newBuilder()
           .setMode(CompilationMode.OPT)
           .addCompilerFlag("-O2")
           .addCompilerFlag("-g")
@@ -294,7 +310,7 @@ class ArmCrosstools {
           .addCompilerFlag("-funswitch-loops")
           .addCompilerFlag("-finline-limit=300"));
 
-      toolchain.addCompilationModeFlags(CompilationModeFlags.newBuilder()
+      builder.addCompilationModeFlags(CompilationModeFlags.newBuilder()
           .setMode(CompilationMode.DBG)
           .addCompilerFlag("-g")
           .addCompilerFlag("-funswitch-loops")
@@ -305,8 +321,7 @@ class ArmCrosstools {
           .addCompilerFlag("-fno-strict-aliasing"));
     }
 
-    ndkPaths.addToolchainIncludePaths(toolchain, toolchainName, targetPlatform, gccVersion);
-    return toolchain;
+    return builder;
   }
 
   private List<CToolchain.Builder> createArmeabiClangToolchain(String clangVersion, boolean thumb) {
@@ -371,7 +386,7 @@ class ArmCrosstools {
     String targetPlatform = "arm-linux-androideabi";
     String gccToolchain = ndkPaths.createGccToolchainPath("arm-linux-androideabi-4.8");
 
-    CToolchain.Builder toolchain = CToolchain.newBuilder()
+    CToolchain.Builder builder = CToolchain.newBuilder()
         .setTargetSystemName("arm-linux-androideabi")
         .setCompiler("clang" + clangVersion)
 
@@ -381,6 +396,9 @@ class ArmCrosstools {
             clangVersion,
             // gcc-4.8 arm doesn't have gcov-tool
             CppConfiguration.Tool.GCOVTOOL))
+
+        .addAllCxxBuiltinIncludeDirectory(ndkPaths.createToolchainIncludePaths(
+            toolchainName, targetPlatform, "4.8"))
 
         .setBuiltinSysroot(ndkPaths.createBuiltinSysroot("arm"))
 
@@ -402,7 +420,7 @@ class ArmCrosstools {
         .addLinkerFlag("-no-canonical-prefixes");
 
     if (thumb) {
-      toolchain.addCompilationModeFlags(CompilationModeFlags.newBuilder()
+      builder.addCompilationModeFlags(CompilationModeFlags.newBuilder()
           .setMode(CompilationMode.OPT)
           .addCompilerFlag("-mthumb")
           .addCompilerFlag("-Os")
@@ -411,7 +429,7 @@ class ArmCrosstools {
           .addCompilerFlag("-fomit-frame-pointer")
           .addCompilerFlag("-fno-strict-aliasing"));
 
-      toolchain.addCompilationModeFlags(CompilationModeFlags.newBuilder()
+      builder.addCompilationModeFlags(CompilationModeFlags.newBuilder()
           .setMode(CompilationMode.DBG)
           .addCompilerFlag("-g")
           .addCompilerFlag("-fno-strict-aliasing")
@@ -420,7 +438,7 @@ class ArmCrosstools {
           .addCompilerFlag("-marm")
           .addCompilerFlag("-fno-omit-frame-pointer"));
     } else {
-      toolchain.addCompilationModeFlags(CompilationModeFlags.newBuilder()
+      builder.addCompilationModeFlags(CompilationModeFlags.newBuilder()
           .setMode(CompilationMode.OPT)
           .addCompilerFlag("-O2")
           .addCompilerFlag("-g")
@@ -428,7 +446,7 @@ class ArmCrosstools {
           .addCompilerFlag("-fomit-frame-pointer")
           .addCompilerFlag("-fstrict-aliasing"));
 
-      toolchain.addCompilationModeFlags(CompilationModeFlags.newBuilder()
+      builder.addCompilationModeFlags(CompilationModeFlags.newBuilder()
           .setMode(CompilationMode.DBG)
           .addCompilerFlag("-g")
           .addCompilerFlag("-O0")
@@ -436,9 +454,8 @@ class ArmCrosstools {
           .addCompilerFlag("-fno-omit-frame-pointer")
           .addCompilerFlag("-fno-strict-aliasing"));
     }
-
-    ndkPaths.addToolchainIncludePaths(toolchain, toolchainName, targetPlatform, "4.8");
-    return toolchain;
+    
+    return builder;
   }
 
   private static String createArmeabiName(String base, String gccVersion, boolean thumb) {
