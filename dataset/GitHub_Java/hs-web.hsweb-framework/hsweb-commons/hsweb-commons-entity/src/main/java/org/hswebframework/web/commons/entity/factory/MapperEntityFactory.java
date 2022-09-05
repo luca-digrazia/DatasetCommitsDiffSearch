@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2020 http://www.hswebframework.org
+ *  * Copyright 2016 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -13,29 +13,20 @@
  *  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  * See the License for the specific language governing permissions and
  *  * limitations under the License.
- *
+ *  
  */
 
 package org.hswebframework.web.commons.entity.factory;
 
 import lombok.SneakyThrows;
-import org.hswebframework.utils.ClassUtils;
 import org.hswebframework.web.NotFoundException;
-import org.hswebframework.web.bean.BeanFactory;
+import org.hswebframework.utils.ClassUtils;
 import org.hswebframework.web.bean.FastBeanCopier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.ServiceLoader;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Supplier;
 
 /**
@@ -43,15 +34,15 @@ import java.util.function.Supplier;
  * @since 3.0
  */
 @SuppressWarnings("unchecked")
-public class MapperEntityFactory implements EntityFactory, BeanFactory {
-    private Map<Class, Mapper>          realTypeMapper = new HashMap<>();
-    private Logger                      logger         = LoggerFactory.getLogger(this.getClass());
-    private Map<String, PropertyCopier> copierCache    = new HashMap<>();
+public class MapperEntityFactory implements EntityFactory {
+    private Map<Class, Mapper> realTypeMapper = new HashMap<>();
+    private Logger logger = LoggerFactory.getLogger(this.getClass());
+    private Map<String, PropertyCopier> copierCache = new HashMap<>();
 
     private static final DefaultMapperFactory DEFAULT_MAPPER_FACTORY = clazz -> {
         String simpleClassName = clazz.getPackage().getName().concat(".Simple").concat(clazz.getSimpleName());
         try {
-            return defaultMapper(org.springframework.util.ClassUtils.forName(simpleClassName, null));
+            return defaultMapper(Class.forName(simpleClassName));
         } catch (ClassNotFoundException ignore) {
             // throw new NotFoundException(e.getMessage());
         }
@@ -167,15 +158,6 @@ public class MapperEntityFactory implements EntityFactory, BeanFactory {
         if (defaultClass != null) {
             return newInstance(defaultClass);
         }
-        if (Map.class == beanClass) {
-            return (T) new HashMap<>();
-        }
-        if (List.class == beanClass) {
-            return (T) new ArrayList<>();
-        }
-        if (Set.class == beanClass) {
-            return (T) new HashSet<>();
-        }
 
         throw new NotFoundException("can't create instance for " + beanClass);
     }
@@ -207,7 +189,7 @@ public class MapperEntityFactory implements EntityFactory, BeanFactory {
     }
 
     public static class Mapper<T> {
-        Class<T>    target;
+        Class<T> target;
         Supplier<T> instanceGetter;
 
         public Mapper(Class<T> target, Supplier<T> instanceGetter) {
