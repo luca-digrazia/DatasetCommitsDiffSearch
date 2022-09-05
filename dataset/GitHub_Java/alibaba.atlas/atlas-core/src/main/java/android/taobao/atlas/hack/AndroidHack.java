@@ -220,7 +220,6 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.taobao.atlas.framework.Atlas;
-import android.taobao.atlas.framework.Framework;
 import android.taobao.atlas.runtime.ActivityTaskMgr;
 import android.taobao.atlas.runtime.ActivityThreadHook;
 import android.taobao.atlas.runtime.DelegateClassLoader;
@@ -341,24 +340,24 @@ public class AndroidHack {
         }
     }
 
-//    private static Method findMethod(Object instance, String name,Class<?>... params) throws NoSuchFieldException {
-//        for (Class<?> clazz = instance.getClass(); clazz != null; clazz = clazz.getSuperclass()) {
-//            try {
-//                Method method = clazz.getDeclaredMethod(name, params);
-//
-//
-//                if (!method.isAccessible()) {
-//                    method.setAccessible(true);
-//                }
-//
-//                return method;
-//            } catch (NoSuchMethodException e) {
-//                // ignore and search next
-//            }
-//        }
-//
-//        throw new NoSuchFieldException("Field " + name + " not found in " + instance.getClass());
-//    }
+    private static Method findMethod(Object instance, String name,Class<?>... params) throws NoSuchFieldException {
+        for (Class<?> clazz = instance.getClass(); clazz != null; clazz = clazz.getSuperclass()) {
+            try {
+                Method method = clazz.getDeclaredMethod(name, params);
+
+
+                if (!method.isAccessible()) {
+                    method.setAccessible(true);
+                }
+
+                return method;
+            } catch (NoSuchMethodException e) {
+                // ignore and search next
+            }
+        }
+
+        throw new NoSuchFieldException("Field " + name + " not found in " + instance.getClass());
+    }
 
     /**
      * Set classLoader to LoadedApk.mClassLoader and set LoadedApk.mApplication to null
@@ -368,22 +367,6 @@ public class AndroidHack {
      * @throws Exception
      */
     public static void injectClassLoader(String packageName, ClassLoader classLoader) throws Exception {
-
-        try {
-            Object oApplicationLoaders = AtlasHacks.ApplicationLoaders_getDefault.invoke(null);
-            Map<String, ClassLoader> mLoaders = (Map<String, ClassLoader>) AtlasHacks.ApplicationLoaders_mLoaders.get(oApplicationLoaders);
-            for (Map.Entry<String, ClassLoader> e : mLoaders.entrySet()) {
-//                log.v(TAG, "loader: " + e.getKey() + " -> " + e.getValue());
-                if (e.getValue() == Framework.getSystemClassLoader()) {
-//                    log.v(TAG, " YES, that is we want!");
-                    e.setValue(classLoader);
-                }
-            }
-        } catch (Throwable ex) {
-//            log.e(TAG, "fail to replace ApplicationLoaders.mLoaders[PKG]", ex);
-            ex.printStackTrace();
-        }
-
         Object activityThread = getActivityThread();
         if (activityThread == null) {
             throw new Exception("Failed to get ActivityThread.sCurrentActivityThread");
@@ -568,23 +551,6 @@ public class AndroidHack {
         }
 
         throw new NoSuchFieldException("Field " + name + " not found in " + instance.getClass());
-    }
-
-    public static Method findMethod(Object instance, String name,Class<?>... args) throws NoSuchMethodException {
-        for (Class<?> clazz = instance.getClass(); clazz != null; clazz = clazz.getSuperclass()) {
-            try {
-                Method method = clazz.getDeclaredMethod(name,args);
-
-                if (!method.isAccessible()) {
-                    method.setAccessible(true);
-                }
-
-                return method;
-            } catch (NoSuchMethodException e) {
-                // ignore and search next
-            }
-        }
-        throw new NoSuchMethodException("Method " + name + " not found in " + instance.getClass());
     }
 
     public static Instrumentation getInstrumentation() throws Exception {
