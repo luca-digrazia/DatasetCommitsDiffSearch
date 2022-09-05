@@ -236,7 +236,7 @@ public class SkylarkRuleImplementationFunctions {
             // When we use a shell command, add an empty argument before other arguments.
             //   e.g.  bash -c "cmd" '' 'arg1' 'arg2'
             // bash will use the empty argument as the value of $0 (which we don't care about).
-            // arg1 and arg2 will be $1 and $2, as a user expects.
+            // arg1 and arg2 will be $1 and $2, as a user exects.
             builder.addArgument("");
           }
           builder.addArguments(arguments.getContents(String.class, "arguments"));
@@ -292,9 +292,9 @@ public class SkylarkRuleImplementationFunctions {
             }
           }
 
-          String mnemonic = mnemonicUnchecked == Runtime.NONE
-              ? "Generating" : (String) mnemonicUnchecked;
-          builder.setMnemonic(mnemonic);
+          if (mnemonicUnchecked != Runtime.NONE) {
+            builder.setMnemonic((String) mnemonicUnchecked);
+          }
           if (envUnchecked != Runtime.NONE) {
             builder.setEnvironment(
                 ImmutableMap.copyOf(
@@ -460,10 +460,10 @@ public class SkylarkRuleImplementationFunctions {
         @Param(name = "self", type = SkylarkRuleContext.class, doc = "this context"),
         @Param(name = "template", type = Artifact.class,
             named = true, positional = false,
-            doc = "the template file, which is a UTF-8 encoded text file"),
+            doc = "the template file"),
         @Param(name = "output", type = Artifact.class,
             named = true, positional = false,
-            doc = "the output file, which is a UTF-8 encoded text file"),
+            doc = "the output file"),
         @Param(name = "substitutions", type = SkylarkDict.class,
             named = true, positional = false,
             doc = "substitutions to make when expanding the template"),

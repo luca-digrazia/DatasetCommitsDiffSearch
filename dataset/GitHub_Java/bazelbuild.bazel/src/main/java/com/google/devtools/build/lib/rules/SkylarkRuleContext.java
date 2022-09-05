@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package com.google.devtools.build.lib.rules;
 
 import com.google.common.base.Function;
@@ -22,7 +21,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
-import com.google.devtools.build.lib.analysis.ActionsProvider;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.ConfigurationMakeVariableContext;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
@@ -44,7 +42,6 @@ import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImp
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
-import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
 import com.google.devtools.build.lib.shell.ShellUtils;
@@ -142,7 +139,6 @@ public final class SkylarkRuleContext {
   private final FragmentCollection fragments;
 
   private final FragmentCollection hostFragments;
-  private final SkylarkAspect skylarkAspect;
 
   private final SkylarkDict<String, String> makeVariables;
   private final SkylarkRuleAttributesCollection attributesCollection;
@@ -153,19 +149,24 @@ public final class SkylarkRuleContext {
   private final SkylarkClassObject outputsObject;
 
   /**
+   * Determines whether this context is for rule implementation or for aspect implementation.
+   */
+  public enum Kind {
+    RULE,
+    ASPECT
+  }
+
+  /**
    * Creates a new SkylarkRuleContext using ruleContext.
-   * @param skylarkAspect aspect for which the context is created, or <code>null</code>
-   *        if it is for a rule.
    * @throws InterruptedException
    */
-  public SkylarkRuleContext(RuleContext ruleContext, @Nullable SkylarkAspect skylarkAspect)
+  public SkylarkRuleContext(RuleContext ruleContext, Kind kind)
       throws EvalException, InterruptedException {
     this.ruleContext = Preconditions.checkNotNull(ruleContext);
-    this.fragments = new FragmentCollection(ruleContext, ConfigurationTransition.NONE);
-    this.hostFragments = new FragmentCollection(ruleContext, ConfigurationTransition.HOST);
-    this.skylarkAspect = skylarkAspect;
+    fragments = new FragmentCollection(ruleContext, ConfigurationTransition.NONE);
+    hostFragments = new FragmentCollection(ruleContext, ConfigurationTransition.HOST);
 
-    if (skylarkAspect == null) {
+    if (kind == Kind.RULE) {
       Collection<Attribute> attributes = ruleContext.getRule().getAttributes();
       HashMap<String, Object> outputsBuilder = new HashMap<>();
       if (ruleContext.getRule().getRuleClassObject().outputsDefaultExecutable()) {
@@ -241,11 +242,6 @@ public final class SkylarkRuleContext {
     }
 
     makeVariables = ruleContext.getConfigurationMakeVariableContext().collectMakeVariables();
-  }
-
-  @Nullable
-  public SkylarkAspect getSkylarkAspect() {
-    return skylarkAspect;
   }
 
   private Function<Attribute, Object> attributeValueExtractorForRule(
@@ -420,24 +416,6 @@ public final class SkylarkRuleContext {
    */
   public RuleContext getRuleContext() {
     return ruleContext;
-  }
-
-  @SkylarkCallable(name = "created_actions",
-      doc = "For rules marked <code>_skylark_testable=True</code>, this returns an "
-          + "<a href=\"ActionsSkylarkApiProvider.html\">actions</a> provider representing all "
-          + "actions created so far for the current rule. For all other rules, returns None. "
-          + "Note that the provider is not updated when subsequent actions are created, so you "
-          + "will have to call this function again if you wish to inspect them. "
-          + ""
-          + "<p>This is intended to help test rule-implementation helper functions that take in a "
-          + "<a href=\"ctx.html\">ctx</a> object and create actions for it.")
-  public Object createdActions() {
-    if (ruleContext.getRule().getRuleClassObject().isSkylarkTestable()) {
-      return ActionsProvider.create(
-          ruleContext.getAnalysisEnvironment().getRegisteredActions());
-    } else {
-      return Runtime.NONE;
-    }
   }
 
   @SkylarkCallable(name = "attr", structField = true, doc = ATTR_DOC)

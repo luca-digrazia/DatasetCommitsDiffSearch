@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.rules.SkylarkRuleContext;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.python.PyCommon;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
-import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
@@ -628,7 +627,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   public void testGetExecutablePrerequisite() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:androidlib");
     Object result = evalRuleContextCode(ruleContext, "ruleContext.executable._jarjar_bin");
-    assertThat(((Artifact) result).getFilename()).matches("^jarjar_bin(\\.cmd){0,1}$");
+    assertEquals("jarjar_bin", ((Artifact) result).getFilename());
   }
 
   @Test
@@ -645,7 +644,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         (SpawnAction)
             Iterables.getOnlyElement(
                 ruleContext.getRuleContext().getAnalysisEnvironment().getRegisteredActions());
-    assertThat(action.getCommandFilename()).matches("^.*/jarjar_bin(\\.cmd){0,1}$");
+    assertThat(action.getCommandFilename()).endsWith("/jarjar_bin");
   }
 
   @Test
@@ -1016,70 +1015,51 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     assertThat(filename).isEqualTo("../foo/bar.txt");
   }
 
-  // Borrowed from Scratch.java.
-  private static String linesAsString(String... lines) {
-    StringBuilder builder = new StringBuilder();
-    for (String line : lines) {
-      builder.append(line);
-      builder.append('\n');
-    }
-    return builder.toString();
+  private void setUpActionTest() throws Exception {
+    scratch.file("test/rules.bzl",
+        "def _testable_impl(ctx):",
+        "  out = ctx.outputs.out",
+        "  ctx.action(outputs=[out], command='echo foo123 > ' + out.path)",
+        "testable_rule = rule(",
+        "  implementation = _testable_impl,",
+        "  outputs = {'out': '%{name}.txt'},",
+        "  _skylark_testable = True,",
+        ")",
+        "def _nontestable_impl(ctx):",
+        "  out = ctx.outputs.out",
+        "  ctx.action(outputs=[out], command='echo bar123 > ' + out.path)",
+        "nontestable_rule = rule(",
+        "  implementation = _nontestable_impl,",
+        "  outputs = {'out': '%{name}.txt'},",
+        ")",
+        "def _testing_impl(ctx):",
+        "  pass",
+        "testing_rule = rule(",
+        "  implementation = _testing_impl,",
+        "  attrs = {'dep1': attr.label(),",
+        "           'dep2': attr.label(),},",
+        ")");
+    scratch.file("test/BUILD",
+        "load(':rules.bzl', 'testable_rule', 'nontestable_rule', 'testing_rule')",
+        "testable_rule(",
+        "    name = 'testable',",
+        ")",
+        "nontestable_rule(",
+        "    name = 'nontestable',",
+        ")",
+        "testing_rule(",
+        "    name = 'testing',",
+        "    dep1 = ':testable',",
+        "    dep2 = ':nontestable',",
+        ")");
   }
-
-  // The common structure of the following actions tests is a rule under test depended upon by
-  // a testing rule, where the rule under test has one output and one caller-supplied action.
-
-  private String getSimpleUnderTestDefinition(String actionLine, boolean withSkylarkTestable) {
-    return linesAsString(
-      "def _undertest_impl(ctx):",
-      "  out = ctx.outputs.out",
-      "  " + actionLine,
-      "undertest_rule = rule(",
-      "  implementation = _undertest_impl,",
-      "  outputs = {'out': '%{name}.txt'},",
-      withSkylarkTestable ? "  _skylark_testable = True," : "",
-      ")");
-  }
-
-  private String getSimpleUnderTestDefinition(String actionLine) {
-    return getSimpleUnderTestDefinition(actionLine, true);
-  }
-
-  private String getSimpleNontestableUnderTestDefinition(String actionLine) {
-    return getSimpleUnderTestDefinition(actionLine, false);
-  }
-
-  private final String testingRuleDefinition =
-    linesAsString(
-      "def _testing_impl(ctx):",
-      "  pass",
-      "testing_rule = rule(",
-      "  implementation = _testing_impl,",
-      "  attrs = {'dep': attr.label()},",
-      ")");
-
-  private final String simpleBuildDefinition =
-    linesAsString(
-      "load(':rules.bzl', 'undertest_rule', 'testing_rule')",
-      "undertest_rule(",
-      "    name = 'undertest',",
-      ")",
-      "testing_rule(",
-      "    name = 'testing',",
-      "    dep = ':undertest',",
-      ")");
 
   @Test
   public void testDependencyActionsProvider() throws Exception {
-    scratch.file("test/rules.bzl",
-        getSimpleUnderTestDefinition(
-            "ctx.action(outputs=[out], command='echo foo123 > ' + out.path)"),
-        testingRuleDefinition);
-    scratch.file("test/BUILD",
-        simpleBuildDefinition);
+    setUpActionTest();
     SkylarkRuleContext ruleContext = createRuleContext("//test:testing");
 
-    Object provider = evalRuleContextCode(ruleContext, "ruleContext.attr.dep[Actions]");
+    Object provider = evalRuleContextCode(ruleContext, "ruleContext.attr.dep1[Actions]");
     assertThat(provider).isInstanceOf(SkylarkClassObject.class);
     assertThat(((SkylarkClassObject) provider).getConstructor())
         .isEqualTo(ActionsProvider.ACTIONS_PROVIDER);
@@ -1088,7 +1068,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     Object mapping = eval("actions.by_file");
     assertThat(mapping).isInstanceOf(SkylarkDict.class);
     assertThat((SkylarkDict<?, ?>) mapping).hasSize(1);
-    update("file", eval("list(ruleContext.attr.dep.files)[0]"));
+    update("file", eval("list(ruleContext.attr.dep1.files)[0]"));
     Object actionUnchecked = eval("actions.by_file[file]");
     assertThat(actionUnchecked).isInstanceOf(ActionAnalysisMetadata.class);
   }
@@ -1096,204 +1076,15 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   @Test
   public void testNoAccessToDependencyActionsWithoutSkylarkTest() throws Exception {
     reporter.removeHandler(failFastHandler);
-    scratch.file("test/rules.bzl",
-        getSimpleNontestableUnderTestDefinition(
-            "ctx.action(outputs=[out], command='echo foo123 > ' + out.path)"),
-        testingRuleDefinition);
-    scratch.file("test/BUILD",
-        simpleBuildDefinition);
+    setUpActionTest();
     SkylarkRuleContext ruleContext = createRuleContext("//test:testing");
 
     try {
-      evalRuleContextCode(ruleContext, "ruleContext.attr.dep[Actions]");
+      evalRuleContextCode(ruleContext, "ruleContext.attr.dep2[Actions]");
       fail("Should have failed due to trying to access actions of a rule not marked "
           + "_skylark_testable");
     } catch (Exception e) {
       assertThat(e).hasMessage("Object of type Target doesn't contain declared provider Actions");
     }
-  }
-
-  @Test
-  public void testAbstractActionInterface() throws Exception {
-    scratch.file("test/rules.bzl",
-        "def _undertest_impl(ctx):",
-        "  out1 = ctx.outputs.out1",
-        "  out2 = ctx.outputs.out2",
-        "  ctx.file_action(output=out1, content='foo123')",
-        "  ctx.action(outputs=[out2], inputs=[out1], command='cp ' + out1.path + ' ' + out2.path)",
-        "  return struct(out1=out1, out2=out2)",
-        "undertest_rule = rule(",
-        "  implementation = _undertest_impl,",
-        "  outputs = {'out1': '%{name}1.txt',",
-        "             'out2': '%{name}2.txt'},",
-        "  _skylark_testable = True,",
-        ")",
-        testingRuleDefinition);
-    scratch.file("test/BUILD",
-        simpleBuildDefinition);
-    SkylarkRuleContext ruleContext = createRuleContext("//test:testing");
-    update("ruleContext", ruleContext);
-    update("file1", eval("ruleContext.attr.dep.out1"));
-    update("file2", eval("ruleContext.attr.dep.out2"));
-    update("action1", eval("ruleContext.attr.dep[Actions].by_file[file1]"));
-    update("action2", eval("ruleContext.attr.dep[Actions].by_file[file2]"));
-
-    assertThat(eval("action1.inputs")).isInstanceOf(SkylarkNestedSet.class);
-    assertThat(eval("action1.outputs")).isInstanceOf(SkylarkNestedSet.class);
-
-    assertThat(eval("action1.argv")).isEqualTo(Runtime.NONE);
-    assertThat(eval("action2.content")).isEqualTo(Runtime.NONE);
-    assertThat(eval("action1.substitutions")).isEqualTo(Runtime.NONE);
-
-    assertThat(eval("list(action1.inputs)")).isEqualTo(eval("[]"));
-    assertThat(eval("list(action1.outputs)")).isEqualTo(eval("[file1]"));
-    assertThat(eval("list(action2.inputs)")).isEqualTo(eval("[file1]"));
-    assertThat(eval("list(action2.outputs)")).isEqualTo(eval("[file2]"));
-  }
-
-  // For created_actions() tests, the "undertest" rule represents both the code under test and the
-  // Skylark user test code itself.
-
-  @Test
-  public void testCreatedActions() throws Exception {
-    // createRuleContext() gives us the context for a rule upon entry into its analysis function.
-    // But we need to inspect the result of calling created_actions() after the rule context has
-    // been modified by creating actions. So we'll call created_actions() from within the analysis
-    // function and pass it along as a provider.
-    scratch.file("test/rules.bzl",
-        "def _undertest_impl(ctx):",
-        "  out1 = ctx.outputs.out1",
-        "  out2 = ctx.outputs.out2",
-        "  ctx.action(outputs=[out1], command='echo foo123 > ' + out1.path,",
-        "             mnemonic='foo')",
-        "  v = ctx.created_actions().by_file",
-        "  ctx.action(outputs=[out2], command='echo bar123 > ' + out2.path)",
-        "  return struct(v=v, out1=out1, out2=out2)",
-        "undertest_rule = rule(",
-        "  implementation = _undertest_impl,",
-        "  outputs = {'out1': '%{name}1.txt',",
-        "             'out2': '%{name}2.txt'},",
-        "  _skylark_testable = True,",
-        ")",
-        testingRuleDefinition
-        );
-    scratch.file("test/BUILD",
-        simpleBuildDefinition);
-    SkylarkRuleContext ruleContext = createRuleContext("//test:testing");
-
-    Object mapUnchecked = evalRuleContextCode(ruleContext, "ruleContext.attr.dep.v");
-    assertThat(mapUnchecked).isInstanceOf(SkylarkDict.class);
-    SkylarkDict<?, ?> map = (SkylarkDict<?, ?>) mapUnchecked;
-    // Should only have the first action because created_actions() was called
-    // before the second action was created.
-    Object file = eval("ruleContext.attr.dep.out1");
-    assertThat(map).hasSize(1);
-    assertThat(map).containsKey(file);
-    Object actionUnchecked = map.get(file);
-    assertThat(actionUnchecked).isInstanceOf(ActionAnalysisMetadata.class);
-    assertThat(((ActionAnalysisMetadata) actionUnchecked).getMnemonic()).isEqualTo("foo");
-  }
-
-  @Test
-  public void testNoAccessToCreatedActionsWithoutSkylarkTest() throws Exception {
-    scratch.file("test/rules.bzl",
-        getSimpleNontestableUnderTestDefinition(
-            "ctx.action(outputs=[out], command='echo foo123 > ' + out.path)")
-        );
-    scratch.file("test/BUILD",
-        "load(':rules.bzl', 'undertest_rule')",
-        "undertest_rule(",
-        "    name = 'undertest',",
-        ")");
-    SkylarkRuleContext ruleContext = createRuleContext("//test:undertest");
-
-    Object result = evalRuleContextCode(ruleContext, "ruleContext.created_actions()");
-    assertThat(result).isEqualTo(Runtime.NONE);
-  }
-
-  @Test
-  public void testSpawnActionInterface() throws Exception {
-    scratch.file("test/rules.bzl",
-        getSimpleUnderTestDefinition(
-            "ctx.action(outputs=[out], command='echo foo123 > ' + out.path)"),
-        testingRuleDefinition);
-    scratch.file("test/BUILD",
-        simpleBuildDefinition);
-    SkylarkRuleContext ruleContext = createRuleContext("//test:testing");
-    update("ruleContext", ruleContext);
-    update("file", eval("list(ruleContext.attr.dep.files)[0]"));
-    update("action", eval("ruleContext.attr.dep[Actions].by_file[file]"));
-
-    assertThat(eval("type(action)")).isEqualTo("Action");
-
-    Object argvUnchecked = eval("action.argv");
-    assertThat(argvUnchecked).isInstanceOf(SkylarkList.MutableList.class);
-    SkylarkList.MutableList<?> argv = (SkylarkList.MutableList<?>) argvUnchecked;
-    assertThat(argv).hasSize(3);
-    assertThat(argv.isImmutable()).isTrue();
-    Object result = eval("action.argv[2].startswith('echo foo123')");
-    assertThat((Boolean) result).isTrue();
-  }
-
-  @Test
-  public void testFileWriteActionInterface() throws Exception {
-    scratch.file("test/rules.bzl",
-        getSimpleUnderTestDefinition(
-            "ctx.file_action(output=out, content='foo123')"),
-        testingRuleDefinition);
-    scratch.file("test/BUILD",
-        simpleBuildDefinition);
-    SkylarkRuleContext ruleContext = createRuleContext("//test:testing");
-    update("ruleContext", ruleContext);
-    update("file", eval("list(ruleContext.attr.dep.files)[0]"));
-    update("action", eval("ruleContext.attr.dep[Actions].by_file[file]"));
-
-    assertThat(eval("type(action)")).isEqualTo("Action");
-
-    Object contentUnchecked = eval("action.content");
-    assertThat(contentUnchecked).isInstanceOf(String.class);
-    assertThat(contentUnchecked).isEqualTo("foo123");
-  }
-
-  @Test
-  public void testTemplateExpansionActionInterface() throws Exception {
-    scratch.file("test/rules.bzl",
-        "def _undertest_impl(ctx):",
-        "  out = ctx.outputs.out",
-        "  ctx.template_action(output=out, template=ctx.file.template, substitutions={'a': 'b'})",
-        "undertest_rule = rule(",
-        "  implementation = _undertest_impl,",
-        "  outputs = {'out': '%{name}.txt'},",
-        "  attrs = {'template': attr.label(allow_single_file=True)},",
-        "  _skylark_testable = True,",
-        ")",
-        testingRuleDefinition);
-    scratch.file("test/template.txt",
-        "aaaaa",
-        "bcdef");
-    scratch.file("test/BUILD",
-        "load(':rules.bzl', 'undertest_rule', 'testing_rule')",
-        "undertest_rule(",
-        "    name = 'undertest',",
-        "    template = ':template.txt',",
-        ")",
-        "testing_rule(",
-        "    name = 'testing',",
-        "    dep = ':undertest',",
-        ")");
-    SkylarkRuleContext ruleContext = createRuleContext("//test:testing");
-    update("ruleContext", ruleContext);
-    update("file", eval("list(ruleContext.attr.dep.files)[0]"));
-    update("action", eval("ruleContext.attr.dep[Actions].by_file[file]"));
-
-    assertThat(eval("type(action)")).isEqualTo("Action");
-
-    Object contentUnchecked = eval("action.content");
-    assertThat(contentUnchecked).isInstanceOf(String.class);
-    assertThat(contentUnchecked).isEqualTo("bbbbb\nbcdef\n");
-
-    Object substitutionsUnchecked = eval("action.substitutions");
-    assertThat(substitutionsUnchecked).isInstanceOf(SkylarkDict.class);
-    assertThat(substitutionsUnchecked).isEqualTo(SkylarkDict.of(null, "a", "b"));
   }
 }

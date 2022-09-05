@@ -24,14 +24,14 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.protobuf.ByteString;
+
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
@@ -97,7 +97,7 @@ public final class TemplateExpansionAction extends AbstractFileWriteAction {
         }
       };
     }
-
+    
     /**
      * Returns an immutable Substitution instance for the key and map of values.  Corresponding
      * values in the map will be joined with "=", and pairs will be joined by spaces before
@@ -119,7 +119,7 @@ public final class TemplateExpansionAction extends AbstractFileWriteAction {
         }
       };
     }
-
+    
     @Override
     public boolean equals(Object object) {
       if (this == object) {
@@ -347,14 +347,14 @@ public final class TemplateExpansionAction extends AbstractFileWriteAction {
   }
 
   @Override
-  public String getSkylarkContent() throws IOException {
-    return getFileContents();
-  }
-
-  @Override
   public DeterministicWriter newDeterministicWriter(ActionExecutionContext ctx) throws IOException {
-    return new ByteStringDeterministicWriter(
-        ByteString.copyFrom(getFileContents().getBytes(Template.DEFAULT_CHARSET)));
+    final byte[] bytes = getFileContents().getBytes(Template.DEFAULT_CHARSET);
+    return new DeterministicWriter() {
+      @Override
+      public void writeOutputFile(OutputStream out) throws IOException {
+        out.write(bytes);
+      }
+    };
   }
 
   @Override
@@ -383,14 +383,5 @@ public final class TemplateExpansionAction extends AbstractFileWriteAction {
 
   public List<Substitution> getSubstitutions() {
     return substitutions;
-  }
-
-  @Override
-  public SkylarkDict<String, String> getSkylarkSubstitutions() {
-    ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
-    for (Substitution entry : substitutions) {
-      builder.put(entry.getKey(), entry.getValue());
-    }
-    return SkylarkDict.copyOf(null, builder.build());
   }
 }
