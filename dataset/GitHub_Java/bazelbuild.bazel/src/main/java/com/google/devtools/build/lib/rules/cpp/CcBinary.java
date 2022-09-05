@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
-import com.google.devtools.build.lib.analysis.TopLevelArtifactProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.Util;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
@@ -41,7 +40,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
@@ -154,14 +152,13 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   public static ConfiguredTarget init(CppSemantics semantics, RuleContext ruleContext, boolean fake,
       boolean useTestOnlyFlags) {
     ruleContext.checkSrcsSamePackage(true);
-    FeatureConfiguration featureConfiguration = CcCommon.configureFeatures(ruleContext);
-    CcCommon common = new CcCommon(ruleContext, featureConfiguration);
+    CcCommon common = new CcCommon(ruleContext);
     CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
 
     LinkTargetType linkType =
         isLinkShared(ruleContext) ? LinkTargetType.DYNAMIC_LIBRARY : LinkTargetType.EXECUTABLE;
 
-    CcLibraryHelper helper = new CcLibraryHelper(ruleContext, semantics, featureConfiguration)
+    CcLibraryHelper helper = new CcLibraryHelper(ruleContext, semantics)
         .setLinkType(linkType)
         .setHeadersCheckingMode(common.determineHeadersCheckingMode())
         .addCopts(common.getCopts())
@@ -306,11 +303,11 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             CppDebugPackageProvider.class,
             new CppDebugPackageProvider(strippedFile, executable, explicitDwpFile))
         .setRunfilesSupport(runfilesSupport, executable)
+        .setBaselineCoverageArtifacts(createBaselineCoverageArtifacts(
+            ruleContext, common, ccCompilationOutputs, fake))
         .addProvider(LipoContextProvider.class, new LipoContextProvider(
             cppCompilationContext, ImmutableMap.copyOf(scannableMap)))
         .addProvider(CppLinkAction.Context.class, linkContext)
-        .addOutputGroup(TopLevelArtifactProvider.BASELINE_COVERAGE,
-            createBaselineCoverageArtifacts(ruleContext, common, ccCompilationOutputs, fake))
         .build();
   }
 
@@ -626,7 +623,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     return builder.build();
   }
 
-  private static NestedSet<Artifact> createBaselineCoverageArtifacts(
+  private static ImmutableList<Artifact> createBaselineCoverageArtifacts(
       RuleContext context, CcCommon common, CcCompilationOutputs compilationOutputs,
       boolean fake) {
     if (!TargetUtils.isTestRule(context.getRule()) && !fake) {
@@ -635,7 +632,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       return BaselineCoverageAction.getBaselineCoverageArtifacts(context,
           common.getInstrumentedFilesProvider(objectFiles).getInstrumentedFiles());
     } else {
-      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+      return ImmutableList.of();
     }
   }
 }
