@@ -22,98 +22,88 @@ import static com.codahale.metrics.MetricRegistry.name;
  * instance.
  */
 public class InstrumentedHandler extends HandlerWrapper {
-    private final MetricRegistry metricRegistry;
-
-    private String name;
-
     // the requests handled by this handler, excluding active
-    private Timer requests;
+    private final Timer requests;
 
     // the number of dispatches seen by this handler, excluding active
-    private Timer dispatches;
+    private final Timer dispatches;
 
     // the number of active requests
-    private Counter activeRequests;
+    private final Counter activeRequests;
 
     // the number of active dispatches
-    private Counter activeDispatches;
+    private final Counter activeDispatches;
 
     // the number of requests currently suspended.
-    private Counter activeSuspended;
+    private final Counter activeSuspended;
 
     // the number of requests that have been asynchronously dispatched
-    private Meter asyncDispatches;
+    private final Meter asyncDispatches;
 
     // the number of requests that expired while suspended
-    private Meter asyncTimeouts;
+    private final Meter asyncTimeouts;
 
-    private Meter[] responses;
+    private final Meter[] responses;
 
-    private Timer getRequests;
-    private Timer postRequests;
-    private Timer headRequests;
-    private Timer putRequests;
-    private Timer deleteRequests;
-    private Timer optionsRequests;
-    private Timer traceRequests;
-    private Timer connectRequests;
-    private Timer moveRequests;
-    private Timer otherRequests;
+    private final Timer getRequests;
+    private final Timer postRequests;
+    private final Timer headRequests;
+    private final Timer putRequests;
+    private final Timer deleteRequests;
+    private final Timer optionsRequests;
+    private final Timer traceRequests;
+    private final Timer connectRequests;
+    private final Timer otherRequests;
 
-    private AsyncListener listener;
+    private final AsyncListener listener;
 
     /**
-     * Create a new instrumented handler using a given metrics registry.
+     * Create a new instrumented handler using a given metrics registry. The name of the metric will
+     * be derived from the class of the Handler.
      *
      * @param registry   the registry for the metrics
-     *
+     * @param underlying the handler about which metrics will be collected
      */
-    public InstrumentedHandler(MetricRegistry registry) {
-        this.metricRegistry = registry;
+    public InstrumentedHandler(MetricRegistry registry, Handler underlying) {
+        this(registry, underlying, name(underlying.getClass()));
     }
 
-    public String getName() {
-        return name;
-    }
+    /**
+     * Create a new instrumented handler using a given metrics registry and a custom prefix.
+     *
+     * @param registry   the registry for the metrics
+     * @param underlying the handler about which metrics will be collected
+     * @param prefix     the prefix to use for the metrics names
+     */
+    public InstrumentedHandler(MetricRegistry registry, Handler underlying, String prefix) {
+        super();
+        this.requests = registry.timer(name(prefix, "requests"));
+        this.dispatches = registry.timer(name(prefix, "dispatches"));
 
-    public void setName(String name) {
-        this.name = name;
-    }
+        this.activeRequests = registry.counter(name(prefix, "active-requests"));
+        this.activeDispatches = registry.counter(name(prefix, "active-dispatches"));
+        this.activeSuspended = registry.counter(name(prefix, "active-suspended"));
 
-    @Override
-    protected void doStart() throws Exception {
-        super.doStart();
-
-        final String prefix = name(getHandler().getClass(), name);
-
-        this.requests = metricRegistry.timer(name(prefix, "requests"));
-        this.dispatches = metricRegistry.timer(name(prefix, "dispatches"));
-
-        this.activeRequests = metricRegistry.counter(name(prefix, "active-requests"));
-        this.activeDispatches = metricRegistry.counter(name(prefix, "active-dispatches"));
-        this.activeSuspended = metricRegistry.counter(name(prefix, "active-suspended"));
-
-        this.asyncDispatches = metricRegistry.meter(name(prefix, "async-dispatches"));
-        this.asyncTimeouts = metricRegistry.meter(name(prefix, "async-timeouts"));
+        this.asyncDispatches = registry.meter(name(prefix, "async-dispatches"));
+        this.asyncTimeouts = registry.meter(name(prefix, "async-timeouts"));
 
         this.responses = new Meter[]{
-                metricRegistry.meter(name(prefix, "1xx-responses")), // 1xx
-                metricRegistry.meter(name(prefix, "2xx-responses")), // 2xx
-                metricRegistry.meter(name(prefix, "3xx-responses")), // 3xx
-                metricRegistry.meter(name(prefix, "4xx-responses")), // 4xx
-                metricRegistry.meter(name(prefix, "5xx-responses"))  // 5xx
+                registry.meter(name(prefix, "1xx-responses")), // 1xx
+                registry.meter(name(prefix, "2xx-responses")), // 2xx
+                registry.meter(name(prefix, "3xx-responses")), // 3xx
+                registry.meter(name(prefix, "4xx-responses")), // 4xx
+                registry.meter(name(prefix, "5xx-responses"))  // 5xx
         };
 
-        this.getRequests = metricRegistry.timer(name(prefix, "get-requests"));
-        this.postRequests = metricRegistry.timer(name(prefix, "post-requests"));
-        this.headRequests = metricRegistry.timer(name(prefix, "head-requests"));
-        this.putRequests = metricRegistry.timer(name(prefix, "put-requests"));
-        this.deleteRequests = metricRegistry.timer(name(prefix, "delete-requests"));
-        this.optionsRequests = metricRegistry.timer(name(prefix, "options-requests"));
-        this.traceRequests = metricRegistry.timer(name(prefix, "trace-requests"));
-        this.connectRequests = metricRegistry.timer(name(prefix, "connect-requests"));
-        this.moveRequests = metricRegistry.timer(name(prefix, "move-requests"));
-        this.otherRequests = metricRegistry.timer(name(prefix, "other-requests"));
+        this.getRequests = registry.timer(name(prefix, "get-requests"));
+        this.postRequests = registry.timer(name(prefix, "post-requests"));
+        this.headRequests = registry.timer(name(prefix, "head-requests"));
+        this.putRequests = registry.timer(name(prefix, "put-requests"));
+        this.deleteRequests = registry.timer(name(prefix, "delete-requests"));
+        this.optionsRequests = registry.timer(name(prefix, "options-requests"));
+        this.traceRequests = registry.timer(name(prefix, "trace-requests"));
+        this.connectRequests = registry.timer(name(prefix, "connect-requests"));
+        this.otherRequests = registry.timer(name(prefix, "other-requests"));
 
         this.listener = new AsyncListener() {
             @Override
@@ -134,12 +124,15 @@ public class InstrumentedHandler extends HandlerWrapper {
             public void onComplete(AsyncEvent event) throws IOException {
                 final HttpChannelState state = (HttpChannelState) event.getAsyncContext();
                 final Request request = state.getBaseRequest();
+                activeRequests.dec();
                 updateResponses(request);
                 if (!state.isDispatched()) {
                     activeSuspended.dec();
                 }
             }
         };
+
+        setHandler(underlying);
     }
 
     @Override
@@ -180,6 +173,7 @@ public class InstrumentedHandler extends HandlerWrapper {
                 }
                 activeSuspended.inc();
             } else if (state.isInitial()) {
+                activeRequests.dec();
                 requests.update(dispatched, TimeUnit.MILLISECONDS);
                 updateResponses(request);
             }
@@ -209,8 +203,6 @@ public class InstrumentedHandler extends HandlerWrapper {
                     return traceRequests;
                 case CONNECT:
                     return connectRequests;
-                case MOVE:
-                    return moveRequests;
                 default:
                     return otherRequests;
             }
