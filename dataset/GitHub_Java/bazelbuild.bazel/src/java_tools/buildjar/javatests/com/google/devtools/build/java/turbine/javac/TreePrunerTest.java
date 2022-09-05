@@ -19,6 +19,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Joiner;
+
 import com.sun.tools.javac.file.JavacFileManager;
 import com.sun.tools.javac.parser.JavacParser;
 import com.sun.tools.javac.parser.ParserFactory;
@@ -26,7 +27,7 @@ import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
 import com.sun.tools.javac.tree.JCTree.JCVariableDecl;
 import com.sun.tools.javac.util.Context;
-import org.junit.Before;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -35,16 +36,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class TreePrunerTest {
 
-  Context context;
-
-  @Before
-  public void setUp() {
-    this.context = new Context();
-    // registers itself in the context as a side effect
-    new JavacFileManager(context, true, UTF_8);
-  }
-
-  JCCompilationUnit parseLines(String... lines) {
+  static JCCompilationUnit parseLines(String... lines) {
     Context context = new Context();
     try (JavacFileManager fm = new JavacFileManager(context, true, UTF_8)) {
       ParserFactory parserFactory = ParserFactory.instance(context);
@@ -56,31 +48,33 @@ public class TreePrunerTest {
     }
   }
 
-  JCVariableDecl parseField(String line) {
+  static JCVariableDecl parseField(String line) {
     JCCompilationUnit unit = parseLines("class T {", line, "}");
     JCClassDecl classDecl = (JCClassDecl) getOnlyElement(unit.defs);
     return (JCVariableDecl) getOnlyElement(classDecl.defs);
   }
 
-  String printPruned(String line) {
+  static String printPruned(String line) {
     JCVariableDecl tree = parseField(line);
-    TreePruner.prune(context, tree);
+    TreePruner.prune(tree);
     return tree.toString();
   }
 
   @Test
   public void hello() {
     String[] lines = {
-      "class Test {", //
+      "class Test {",
+      // TODO(cushon): fix google-java-format's handling of lists of string literals
       "  void f() {",
       "    System.err.println(\"hello\");",
       "  }",
       "}",
     };
     JCCompilationUnit tree = parseLines(lines);
-    TreePruner.prune(context, tree);
+    TreePruner.prune(tree);
     String[] expected = {
-      "class Test {", //
+      "class Test {",
+      // TODO(cushon): fix google-java-format's handling of lists of string literals
       "    ",
       "    void f() {",
       "    }",
@@ -102,14 +96,13 @@ public class TreePrunerTest {
       "}",
     };
     JCCompilationUnit tree = parseLines(lines);
-    TreePruner.prune(context, tree);
+    TreePruner.prune(tree);
     String[] expected = {
-      "class Test {", //
+      "class Test {",
+      // TODO(cushon): fix google-java-format's handling of lists of string literals
       "    {",
-      "        throw new AssertionError();",
       "    }",
       "    static {",
-      "        throw new AssertionError();",
       "    }",
       "}",
     };
@@ -119,7 +112,8 @@ public class TreePrunerTest {
   @Test
   public void nonConstantFieldInitializers() {
     String[] lines = {
-      "class Test {", //
+      "class Test {",
+      // TODO(cushon): fix google-java-format's handling of lists of string literals
       "  Object a = null;",
       "  int[] b = {1};",
       "  int c = g();",
@@ -127,9 +121,10 @@ public class TreePrunerTest {
       "}",
     };
     JCCompilationUnit tree = parseLines(lines);
-    TreePruner.prune(context, tree);
+    TreePruner.prune(tree);
     String[] expected = {
-      "class Test {", //
+      "class Test {",
+      // TODO(cushon): fix google-java-format's handling of lists of string literals
       "    Object a;",
       "    int[] b;",
       "    int c;",
@@ -243,7 +238,7 @@ public class TreePrunerTest {
       "}",
     };
     JCCompilationUnit tree = parseLines(lines);
-    TreePruner.prune(context, tree);
+    TreePruner.prune(tree);
     String[] expected = {
       "class Test {",
       "    ",
@@ -276,7 +271,7 @@ public class TreePrunerTest {
       "}",
     };
     JCCompilationUnit tree = parseLines(lines);
-    TreePruner.prune(context, tree);
+    TreePruner.prune(tree);
     String[] expected = {
       "@interface Anno {",
       "    ",
@@ -297,7 +292,7 @@ public class TreePrunerTest {
       "}",
     };
     JCCompilationUnit tree = parseLines(lines);
-    TreePruner.prune(context, tree);
+    TreePruner.prune(tree);
     String[] expected = {
       "interface Intf {",
       "    int CONST = 42;",
@@ -323,7 +318,7 @@ public class TreePrunerTest {
       "}",
     };
     JCCompilationUnit tree = parseLines(lines);
-    TreePruner.prune(context, tree);
+    TreePruner.prune(tree);
     String[] expected = {
         "class Test {",
         "    ",
