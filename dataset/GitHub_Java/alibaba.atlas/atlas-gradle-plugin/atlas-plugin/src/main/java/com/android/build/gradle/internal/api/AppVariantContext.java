@@ -241,8 +241,8 @@ import org.gradle.api.Project;
 import org.gradle.api.file.ConfigurableFileTree;
 
 /**
- * ApplicaitonThe compiled context
- * Created by shenghua.nish on 2016-05-04 3:46 afternoon.
+ * Applicaiton的编译的context
+ * Created by shenghua.nish on 2016-05-04 下午3:46.
  */
 public class AppVariantContext<T extends BaseVariantImpl, Z extends BaseExtension, E extends AtlasExtension>
     extends VariantContext<ApplicationVariantImpl, AppExtension, AtlasExtension> {
@@ -254,7 +254,7 @@ public class AppVariantContext<T extends BaseVariantImpl, Z extends BaseExtensio
     private final Map<String, AppVariantOutputContext> outputContextMap = Maps.newHashMap();
 
     /**
-     * buildCache The manifest of the directory cannot be changed, So save the modified manifest reference
+     * buildCache 目录的manifest不能变更， 所以保存修改后的manifest引用
      */
     public Map<String, File> manifestMap = new HashMap<>();
     public String unit_tag = "";
@@ -263,7 +263,7 @@ public class AppVariantContext<T extends BaseVariantImpl, Z extends BaseExtensio
     public DependencyDiff dependencyDiff;
 
     /**
-     * bundleList file
+     * bundle列表清单文件
      */
     public File bundleListCfg;
 

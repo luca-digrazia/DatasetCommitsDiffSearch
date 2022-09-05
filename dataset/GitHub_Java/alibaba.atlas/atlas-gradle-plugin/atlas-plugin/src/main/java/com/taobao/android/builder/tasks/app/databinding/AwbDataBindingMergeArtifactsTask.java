@@ -255,7 +255,7 @@ public class AwbDataBindingMergeArtifactsTask extends BaseTask {
     private ApkVariantOutputData variantOutputData;
 
     /**
-     * Directory of so
+     * 生成so的目录
      */
     @TaskAction
     void createAwbPackages() throws ExecutionException, InterruptedException {

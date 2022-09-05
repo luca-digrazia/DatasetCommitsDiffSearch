@@ -344,7 +344,7 @@ public class ProcessAwbAndroidResources extends IncrementalTask {
                                      instantRunManifest != null &&
                                      instantRunManifest.exists() ? instantRunManifest : getManifestFile();
 
-        //Add additional parameters required for the awb module to compile
+        //增加awb模块编译所需要的额外参数
         addAaptOptions();
         AaptPackageProcessBuilder aaptPackageCommandBuilder = new AaptPackageProcessBuilder(
                 manifestFileToPackage,
@@ -417,16 +417,16 @@ public class ProcessAwbAndroidResources extends IncrementalTask {
         }
     }
 
-    //Add special command parameters
+    //增加特殊的命令参数
     private void addAaptOptions() {
-        //BUGFIX , The direct access property is written without access to the property name of the dynamic class
+        //BUGFIX , 直接访问属性的写法是访问不到的,动态类的属性名称
         List<String> options = new ArrayList<String>();
         String customPackageId = getCustomPackageId();
         if (StringUtils.isNotBlank(customPackageId)) {
             String[] split = customPackageId.split("\\.");
             options.add("--forced-package-id");
             options.add(split[0]);
-            if (split.length > 1) { // After using the decimal point, one represents type idOffset position
+            if (split.length > 1) { // 使用小数点的后一位代表type id的偏移位置
                 options.add("--type-id-offset");
                 options.add(split[1]);
             }
@@ -523,7 +523,7 @@ public class ProcessAwbAndroidResources extends IncrementalTask {
                 processResources.splits = allFilters;
             }
 
-            //Set the special parameters needed for the AWB resource processing
+            //设置AWB的resource处理所需要的特殊参数
             ConventionMappingHelper.map(processResources, "mainSymbolFile", new Callable<File>() {
                 @Override
                 public File call() throws Exception {
@@ -582,7 +582,7 @@ public class ProcessAwbAndroidResources extends IncrementalTask {
             // only generate code if the density filter is null, and if we haven't generated
             // it yet (if you have abi + density splits, then several abi output will have no
             // densityFilter)
-            //TODO  What's the use of removing this if logic
+            //TODO  先把这个if逻辑去掉,不知道有什么用处
             //            if (variantOutputData.getMainOutputFile()
             //                    .getFilter(com.android.build.OutputFile.DENSITY) == null
             //                    && variantData.generateRClassTask == null) {
@@ -619,7 +619,7 @@ public class ProcessAwbAndroidResources extends IncrementalTask {
                     awbBundle));
             processResources.setTextSymbolOutputDir(symbolLocation);
 
-            //AWbDo not do shrinkResource work for a while
+            //AWb暂时不做shrinkResource的工作
             //                if (config.getBuildType().isMinifyEnabled()) {
             //                    if (config.getBuildType().isShrinkResources() && config.getUseJack()) {
             //                        LoggingUtil.displayWarning(Logging.getLogger(getClass()),

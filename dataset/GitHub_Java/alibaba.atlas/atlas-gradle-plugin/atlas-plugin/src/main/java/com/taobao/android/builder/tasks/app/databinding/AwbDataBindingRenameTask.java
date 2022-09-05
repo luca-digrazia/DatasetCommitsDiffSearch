@@ -249,7 +249,7 @@ public class AwbDataBindingRenameTask extends BaseTask {
     private ApkVariantOutputData variantOutputData;
 
     /**
-     * Directory of so
+     * 生成so的目录
      */
     @TaskAction
     void createAwbPackages() throws ExecutionException, InterruptedException {
@@ -285,7 +285,7 @@ public class AwbDataBindingRenameTask extends BaseTask {
                         String packageName = awbBundle.getPackageName();
                         String appName = awbBundle.getPackageName() + "._bundleapp_";
 
-                        //Remove classes that already exist
+                        //删除那些已经存在的类
                         File dataMapperClazz = new File(dataBindingClazzFolder,
                                                         "android/databinding/DataBinderMapper.class");
                         if (!dataMapperClazz.exists()) {
