@@ -20,31 +20,56 @@ package org.hswebframework.web.authorization.starter;
 
 import org.hswebframework.web.authorization.AuthenticationInitializeService;
 import org.hswebframework.web.authorization.AuthenticationManager;
+import org.hswebframework.web.authorization.basic.embed.EmbedAuthenticationManager;
 import org.hswebframework.web.authorization.simple.DefaultAuthorizationAutoConfiguration;
-import org.hswebframework.web.authorization.token.UserTokenManager;
-import org.hswebframework.web.service.authorization.UserService;
 import org.hswebframework.web.service.authorization.simple.SimpleAuthenticationManager;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 /**
  * @author zhouhao
  */
 @Configuration
 @ComponentScan({"org.hswebframework.web.service.authorization.simple"
-        , "org.hswebframework.web.controller.authorization"})
-@AutoConfigureBefore(DefaultAuthorizationAutoConfiguration.class)
+        , "org.hswebframework.web.authorization.controller"})
+@MapperScan("org.hswebframework.web.authorization.dao")
+@AutoConfigureBefore(value = {
+        DefaultAuthorizationAutoConfiguration.class
+}, name = "org.hswebframework.web.authorization.basic.configuration.AuthorizingHandlerAutoConfiguration")
 public class AuthorizationAutoConfiguration {
 
-    @Bean
-    @ConditionalOnMissingBean(AuthenticationManager.class)
-    public AuthenticationManager authenticationManager(AuthenticationInitializeService authenticationInitializeService) {
-        return new SimpleAuthenticationManager(authenticationInitializeService);
+    @ConditionalOnMissingClass("org.hswebframework.web.authorization.basic.embed.EmbedAuthenticationManager")
+    @Configuration
+    public static class NoEmbedAuthenticationManagerAutoConfiguration {
+        @Bean
+        @Primary
+        public AuthenticationManager authenticationManager(AuthenticationInitializeService authenticationInitializeService) {
+            return new SimpleAuthenticationManager(authenticationInitializeService);
+        }
+
+    }
+
+    @ConditionalOnClass(EmbedAuthenticationManager.class)
+    @Configuration
+    public static class EmbedAuthenticationManagerAutoConfiguration {
+        @Bean
+        public EmbedAuthenticationManager embedAuthenticationManager() {
+            return new EmbedAuthenticationManager();
+        }
+
+        @Bean
+        @Primary
+        public AuthenticationManager authenticationManager(EmbedAuthenticationManager embedAuthenticationManager,
+                                                           AuthenticationInitializeService authenticationInitializeService) {
+            return new SimpleAuthenticationManager(authenticationInitializeService, embedAuthenticationManager);
+        }
     }
 
     @Bean
@@ -53,10 +78,4 @@ public class AuthorizationAutoConfiguration {
         return new AutoSyncPermission();
     }
 
-    @Bean
-    @ConditionalOnProperty(prefix = "hsweb.authorize", name = "basic-authorization", havingValue = "true")
-    @ConditionalOnClass(name = "org.hswebframework.web.authorization.basic.web.UserTokenForTypeParser")
-    public BasicAuthorizationTokenParser basicAuthorizationTokenParser(UserService userService, UserTokenManager tokenManager) {
-        return new BasicAuthorizationTokenParser(userService, tokenManager);
-    }
 }
