@@ -30,8 +30,10 @@ import com.google.devtools.build.lib.util.Pair;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Utility class for providing static predicates for rules, to help filter the rules.
@@ -48,8 +50,7 @@ public class RuleSetUtils {
         RuleClassType.INVISIBLE.checkName(input);
         return true;
       } catch (IllegalArgumentException e) {
-        return input.equals("testing_dummy_rule")
-            || input.equals("testing_rule_for_mandatory_providers");
+        return input.equals("testing_dummy_rule");
       }
     }
   };
@@ -62,6 +63,16 @@ public class RuleSetUtils {
     public boolean apply(final RuleClass input) {
       List<Attribute> li = new ArrayList<>(input.getAttributes());
       return Iterables.any(li, MANDATORY);
+    }
+  };
+
+  /**
+   * Predicate for checking if a rule allows an empty srcs attribute.
+   */
+  public static final Predicate<RuleClass> EMPTY_SOURCES_ALLOWED = new Predicate<RuleClass>() {
+    @Override
+    public boolean apply(final RuleClass input) {
+      return !input.getAttributeByName("srcs").isNonEmpty();
     }
   };
 
@@ -92,7 +103,7 @@ public class RuleSetUtils {
    */
   public static class HasAttributes implements Predicate<RuleClass> {
 
-    private enum Operator {
+    private static enum Operator {
       ANY, ALL
     }
 
@@ -126,9 +137,14 @@ public class RuleSetUtils {
     }
   }
 
-  public static Predicate<RuleClass> hasAnyAttributes(
+  public static final Predicate<RuleClass> hasAnyAttributes(
       Collection<Pair<String, Type<?>>> attributes) {
     return new HasAttributes(attributes, HasAttributes.Operator.ANY);
+  }
+
+  public static final Predicate<RuleClass> hasAllAttributes(
+      Collection<Pair<String, Type<?>>> attributes) {
+    return new HasAttributes(attributes, HasAttributes.Operator.ALL);
   }
 
   /**
@@ -148,6 +164,18 @@ public class RuleSetUtils {
     @Override
     public boolean apply(final Attribute input) {
       return input.getName().equals("deps");
+    }
+  };
+
+  /**
+   * Predicate for checking if all the strings in a list of strings are different.
+   */
+  public static final Predicate<List<String>> ELEMENTS_ALL_DIFFERENT =
+      new Predicate<List<String>>() {
+    @Override
+    public boolean apply(final List<String> input) {
+      Set<String> inputAsSet = new HashSet<>(input);
+      return input.size() == inputAsSet.size();
     }
   };
 
