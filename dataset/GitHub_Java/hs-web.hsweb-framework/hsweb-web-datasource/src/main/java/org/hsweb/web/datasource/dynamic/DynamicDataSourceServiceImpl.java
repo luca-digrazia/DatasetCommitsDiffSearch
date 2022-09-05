@@ -64,7 +64,6 @@ public class DynamicDataSourceServiceImpl implements DynamicDataSourceService {
     @PreDestroy
     public void destroyAll() throws Exception {
         cache.values().stream().map(CacheInfo::getDataSource).forEach(this::closeDataSource);
-        cache.clear();
     }
 
     protected void closeDataSource(javax.sql.CommonDataSource ds) {
@@ -157,7 +156,6 @@ public class DynamicDataSourceServiceImpl implements DynamicDataSourceService {
                 success[0] = true;
             } catch (AtomikosSQLException e) {
                 closeDataSource(dataSourceBean);
-                cache.remove(dataSource.getId());
             }
         }).start();
         //初始化检测
@@ -167,7 +165,6 @@ public class DynamicDataSourceServiceImpl implements DynamicDataSourceService {
                 if (!success[0]) {
                     logger.error("初始化jdbc超时:{}", dataSourceBean);
                     closeDataSource(dataSourceBean);
-                    cache.remove(dataSource.getId());
                 }
             } catch (Exception e) {
 
@@ -178,7 +175,7 @@ public class DynamicDataSourceServiceImpl implements DynamicDataSourceService {
 
     @PostConstruct
     public void init() {
-        if (null != dynamicDataSource && dynamicDataSource instanceof DynamicXaDataSourceImpl)
+        if (null != dynamicDataSource)
             ((DynamicXaDataSourceImpl) dynamicDataSource).setDynamicDataSourceService(this);
     }
 
