@@ -1,6 +1,5 @@
 package com.prolificinteractive.materialcalendarview;
 
-import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.res.ColorStateList;
@@ -20,16 +19,15 @@ import android.widget.CheckedTextView;
 /**
  * Display one day of a {@linkplain MaterialCalendarView}
  */
-@SuppressLint("ViewConstructor")
 class DayView extends CheckedTextView {
 
-    private CalendarDay date;
+    private CalendarDay date = CalendarDay.today();
     private int selectionColor = Color.GRAY;
 
     private final int fadeTime;
     private Drawable customBackground = null;
 
-    public DayView(Context context, CalendarDay day) {
+    public DayView(Context context) {
         super(context);
 
         fadeTime = getResources().getInteger(android.R.integer.config_shortAnimTime);
@@ -42,7 +40,9 @@ class DayView extends CheckedTextView {
             setTextAlignment(TEXT_ALIGNMENT_CENTER);
         }
 
-        setDay(day);
+        if(isInEditMode()) {
+            setText("99");
+        }
     }
 
     public void setDay(CalendarDay date) {

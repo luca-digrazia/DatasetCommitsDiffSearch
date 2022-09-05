@@ -1,8 +1,6 @@
 package com.prolificinteractive.materialcalendarview.sample.decorators;
 
-import android.graphics.Typeface;
-import android.text.style.RelativeSizeSpan;
-import android.text.style.StyleSpan;
+import android.text.SpannableStringBuilder;
 
 import com.prolificinteractive.materialcalendarview.CalendarDay;
 import com.prolificinteractive.materialcalendarview.DayViewDecorator;
@@ -12,25 +10,27 @@ import com.prolificinteractive.materialcalendarview.MaterialCalendarView;
 import java.util.Date;
 
 /**
- * Decorate a day by making the text big and bold
+ * Decorate a day with a symbol in front of text
  */
 public class OneDayDecorator implements DayViewDecorator {
 
     Date date;
+    CharSequence symbol;
 
-    public OneDayDecorator() {
-        date = new Date();
+    public OneDayDecorator(CharSequence symbol) {
+        this.symbol = symbol;
     }
 
     @Override
     public boolean shouldDecorate(CalendarDay day) {
-        return date != null && day.equals(new CalendarDay(date));
+        return date != null && day.equals(CalendarDay.from(date));
     }
 
     @Override
     public void decorate(DayViewFacade view) {
-        view.addSpan(new StyleSpan(Typeface.BOLD));
-        view.addSpan(new RelativeSizeSpan(1.4f));
+        view.setText(
+            new SpannableStringBuilder().append(symbol).append(" ").append(view.getText())
+        );
     }
 
     /**

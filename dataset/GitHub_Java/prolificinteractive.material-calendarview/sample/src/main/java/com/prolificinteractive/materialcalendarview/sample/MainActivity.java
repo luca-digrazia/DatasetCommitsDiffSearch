@@ -5,7 +5,7 @@ import android.app.DatePickerDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.support.v7.app.AppCompatActivity;
+import android.support.v7.app.ActionBarActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
@@ -21,7 +21,7 @@ import java.util.List;
 /**
  * Routing Activity for other samples
  */
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends ActionBarActivity {
 
     private static final List<Route> ROUTES = Arrays.asList(
         new Route(R.string.title_activity_old_calendar, OldCalendarViewActivity.class),
@@ -105,7 +105,7 @@ public class MainActivity extends AppCompatActivity {
     public static void showDatePickerDialog(Context context, CalendarDay day,
         DatePickerDialog.OnDateSetListener callback) {
         if(day == null) {
-            day = new CalendarDay();
+            day = CalendarDay.today();
         }
         DatePickerDialog dialog = new DatePickerDialog(
             context, 0, callback, day.getYear(), day.getMonth(), day.getDay()
