@@ -13,48 +13,47 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertContainsRegex;
+import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.vfs.FileSystemUtils.writeIsoLatin1;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
 import com.google.devtools.build.lib.packages.util.SubincludePreprocessor;
-import com.google.devtools.build.lib.syntax.Environment;
-import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.vfs.Path;
-
 import java.io.IOException;
 import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 @TestSpec(size = Suite.MEDIUM_TESTS)
+@RunWith(JUnit4.class)
 public class SubincludePreprocessorTest extends PackageLoadingTestCase {
   private Path packageRoot;
   protected SubincludePreprocessor preprocessor;
-  protected Environment globalEnv =
-      Environment.builder(Mutability.create("test"))
-          .setGlobals(Environment.BUILD)
-          .setEventHandler(reporter)
-          .build();
 
   public SubincludePreprocessorTest() {}
 
-  @Override
-  protected void setUp() throws Exception {
-    super.setUp();
+  @Before
+  public final void createPreprocessor() throws Exception {
     preprocessor = new SubincludePreprocessor(scratch.getFileSystem(), getPackageManager());
     packageRoot = rootDirectory.getChild("preprocessing");
     assertTrue(packageRoot.createDirectory());
     reporter.removeHandler(failFastHandler);
   }
 
-  @Override
-  protected void tearDown() throws Exception {
+  @After
+  public final void resetPreprocessor() throws Exception {
     preprocessor = null;
-    super.tearDown();
   }
 
   private ParserInputSource createInputSource(String... lines) throws Exception {
@@ -75,12 +74,12 @@ public class SubincludePreprocessorTest extends PackageLoadingTestCase {
             buildFileBytes,
             packageName, /*globber=*/
             null,
-            globalEnv.getGlobals(),
             /*ruleNames=*/ null);
     Event.replayEventsOn(reporter, result.events);
     return result;
   }
 
+  @Test
   public void testPreprocessingInclude() throws Exception {
     ParserInputSource in = createInputSource("subinclude('//foo:bar')");
 
@@ -89,20 +88,22 @@ public class SubincludePreprocessorTest extends PackageLoadingTestCase {
     scratch.file("foo/baz", "genrule('turtle2')");
 
     String out = assertPreprocessingSucceeds(in);
-    assertContainsRegex("turtle1", out);
-    assertContainsRegex("turtle2", out);
-    assertContainsRegex("mocksubinclude\\('//foo:bar', *'/workspace/foo/bar'\\)", out);
-    assertContainsRegex("mocksubinclude\\('//foo:baz', *'/workspace/foo/baz'\\)", out);
+    assertThat(out).containsMatch("turtle1");
+    assertThat(out).containsMatch("turtle2");
+    assertThat(out).containsMatch("mocksubinclude\\('//foo:bar', *'/workspace/foo/bar'\\)");
+    assertThat(out).containsMatch("mocksubinclude\\('//foo:baz', *'/workspace/foo/baz'\\)");
   }
 
+  @Test
   public void testSubincludeNotFound() throws Exception {
     ParserInputSource in = createInputSource("subinclude('//nonexistent:bar')");
     scratch.file("foo/BUILD");
     String out = assertPreprocessingSucceeds(in);
-    assertContainsRegex("mocksubinclude\\('//nonexistent:bar', *''\\)", out);
+    assertThat(out).containsMatch("mocksubinclude\\('//nonexistent:bar', *''\\)");
     assertContainsEvent("Cannot find subincluded file");
   }
 
+  @Test
   public void testError() throws Exception {
     ParserInputSource in = createInputSource("subinclude('//foo:bar')");
     scratch.file("foo/BUILD");
