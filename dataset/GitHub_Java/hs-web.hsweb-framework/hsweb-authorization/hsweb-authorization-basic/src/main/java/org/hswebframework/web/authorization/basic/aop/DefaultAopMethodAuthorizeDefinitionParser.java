@@ -29,13 +29,13 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
 
     private Map<CacheKey, AuthorizeDefinition> cache = new ConcurrentHashMap<>();
 
-    private List<AopMethodAuthorizeDefinitionCustomizerParser> parserCustomizers;
+    private List<AopMethodAuthorizeDefinitionCustomizerParser> parserCustomers;
 
     private static Set<String> excludeMethodName = new HashSet<>(Arrays.asList("toString", "clone", "hashCode", "getClass"));
 
     @Autowired(required = false)
-    public void setParserCustomizers(List<AopMethodAuthorizeDefinitionCustomizerParser> parserCustomizers) {
-        this.parserCustomizers = parserCustomizers;
+    public void setParserCustomers(List<AopMethodAuthorizeDefinitionCustomizerParser> parserCustomers) {
+        this.parserCustomers = parserCustomers;
     }
 
     @Override
@@ -59,9 +59,9 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
             return definition;
         }
         //使用自定义
-        if (!CollectionUtils.isEmpty(parserCustomizers)) {
-            definition = parserCustomizers.stream()
-                    .map(customizer -> customizer.parse(target, method, context))
+        if (!CollectionUtils.isEmpty(parserCustomers)) {
+            definition = parserCustomers.stream()
+                    .map(customer -> customer.parse(target, method, context))
                     .filter(Objects::nonNull)
                     .findAny().orElse(null);
             if (definition instanceof EmptyAuthorizeDefinition) {
@@ -100,13 +100,15 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
 
         authorizeDefinition.put(expression);
 
+        if (methodAuth != null) {
+            authorizeDefinition.put(methodAuth.dataAccess());
+        }
         authorizeDefinition.put(classDataAccess);
 
         authorizeDefinition.put(methodDataAccess);
 
         if (authorizeDefinition.getPermissionDescription().length == 0) {
             if (classAuth != null) {
-                authorizeDefinition.put(classAuth.dataAccess());
                 String[] desc = classAuth.description();
                 if (desc.length > 0) {
                     authorizeDefinition.setPermissionDescription(desc);
