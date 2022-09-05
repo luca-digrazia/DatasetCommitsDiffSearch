@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.objc.J2ObjcConfiguration;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.common.options.Options;
 
@@ -47,7 +48,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testBasics() throws Exception {
-    if (getAnalysisMock().isThisBazel()) {
+    if (TestConstants.THIS_IS_BAZEL) {
       return;
     }
 
@@ -69,7 +70,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testPlatformSuffix() throws Exception {
-    if (getAnalysisMock().isThisBazel()) {
+    if (TestConstants.THIS_IS_BAZEL) {
       return;
     }
 
@@ -80,7 +81,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testEnvironment() throws Exception {
-    if (getAnalysisMock().isThisBazel()) {
+    if (TestConstants.THIS_IS_BAZEL) {
       return;
     }
 
@@ -106,7 +107,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testHostCrosstoolTop() throws Exception {
-    if (getAnalysisMock().isThisBazel()) {
+    if (TestConstants.THIS_IS_BAZEL) {
       return;
     }
 
@@ -159,7 +160,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testMultiCpu() throws Exception {
-    if (getAnalysisMock().isThisBazel()) {
+    if (TestConstants.THIS_IS_BAZEL) {
       return;
     }
 
@@ -176,7 +177,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
    */
   @Test
   public void testMultiCpuSorting() throws Exception {
-    if (getAnalysisMock().isThisBazel()) {
+    if (TestConstants.THIS_IS_BAZEL) {
       return;
     }
 

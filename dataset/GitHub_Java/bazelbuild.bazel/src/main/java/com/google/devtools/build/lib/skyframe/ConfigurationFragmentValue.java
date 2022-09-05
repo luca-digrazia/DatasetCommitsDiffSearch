@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
-import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -57,20 +56,17 @@ public class ConfigurationFragmentValue implements SkyValue {
             BuildConfiguration.getOptionsClasses(
                 ImmutableList.<Class<? extends BuildConfiguration.Fragment>>of(fragmentType),
                 ruleClassProvider));
-    return SkyKey.create(
-        SkyFunctions.CONFIGURATION_FRAGMENT,
+    return new SkyKey(SkyFunctions.CONFIGURATION_FRAGMENT,
         new ConfigurationFragmentKey(optionsKey, fragmentType));
   }
 
   static final class ConfigurationFragmentKey implements Serializable {
     private final BuildOptions buildOptions;
-    private final String checksum;
     private final Class<? extends Fragment> fragmentType;
 
     public ConfigurationFragmentKey(BuildOptions buildOptions,
         Class<? extends Fragment> fragmentType) {
       this.buildOptions = Preconditions.checkNotNull(buildOptions);
-      this.checksum = Fingerprint.md5Digest(buildOptions.computeCacheKey());
       this.fragmentType = Preconditions.checkNotNull(fragmentType);
     }
 
@@ -98,12 +94,6 @@ public class ConfigurationFragmentValue implements SkyValue {
     @Override
     public int hashCode() {
       return Objects.hash(buildOptions, fragmentType);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("ConfigurationFragmentKey(class=%s, checksum=%s)",
-          fragmentType.getName(), checksum);
     }
   }
 }
