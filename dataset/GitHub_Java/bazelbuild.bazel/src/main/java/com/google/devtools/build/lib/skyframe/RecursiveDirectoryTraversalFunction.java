@@ -116,9 +116,9 @@ abstract class RecursiveDirectoryTraversalFunction
     FileValue fileValue;
     try {
       fileValue = (FileValue) env.getValueOrThrow(fileKey, InconsistentFilesystemException.class,
-          FileSymlinkException.class, IOException.class);
-    } catch (InconsistentFilesystemException | FileSymlinkException | IOException e) {
-      return reportErrorAndReturn("Failed to get information about path", e, rootRelativePath,
+          FileSymlinkCycleException.class, IOException.class);
+    } catch (InconsistentFilesystemException | FileSymlinkCycleException | IOException e) {
+      return reportErrorAndReturn(FileValue.class.getSimpleName(), e, rootRelativePath,
           env.getListener());
     }
     if (fileValue == null) {
@@ -141,7 +141,7 @@ abstract class RecursiveDirectoryTraversalFunction
       pkgLookupValue = (PackageLookupValue) env.getValueOrThrow(PackageLookupValue.key(packageId),
           NoSuchPackageException.class, InconsistentFilesystemException.class);
     } catch (NoSuchPackageException | InconsistentFilesystemException e) {
-      return reportErrorAndReturn("Failed to load package", e, rootRelativePath,
+      return reportErrorAndReturn(PackageLookupValue.class.getSimpleName(), e, rootRelativePath,
           env.getListener());
     }
     if (pkgLookupValue == null) {
@@ -196,11 +196,11 @@ abstract class RecursiveDirectoryTraversalFunction
     try {
       dirValue = (DirectoryListingValue) env.getValueOrThrow(DirectoryListingValue.key(rootedPath),
           InconsistentFilesystemException.class, IOException.class,
-          FileSymlinkException.class);
+          FileSymlinkCycleException.class);
     } catch (InconsistentFilesystemException | IOException e) {
-      return reportErrorAndReturn("Failed to list directory contents", e, rootRelativePath,
+      return reportErrorAndReturn(DirectoryListingValue.class.getSimpleName(), e, rootRelativePath,
           env.getListener());
-    } catch (FileSymlinkException e) {
+    } catch (FileSymlinkCycleException e) {
       // DirectoryListingFunction only throws FileSymlinkCycleException when FileFunction throws it,
       // but FileFunction was evaluated for rootedPath above, and didn't throw there. It shouldn't
       // be able to avoid throwing there but throw here.
@@ -263,9 +263,9 @@ abstract class RecursiveDirectoryTraversalFunction
   }
 
   // Ignore all errors in traversal and return an empty value.
-  private TReturn reportErrorAndReturn(String errorPrefix, Exception e,
+  private TReturn reportErrorAndReturn(String lookupValueName, Exception e,
       PathFragment rootRelativePath, EventHandler handler) {
-    handler.handle(Event.warn(errorPrefix + ", for " + rootRelativePath
+    handler.handle(Event.warn("Error finding " + lookupValueName + " value for " + rootRelativePath
         + ", skipping: " + e.getMessage()));
     return getEmptyReturn();
   }
