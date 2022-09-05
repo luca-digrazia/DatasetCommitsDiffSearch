@@ -135,7 +135,7 @@ public class DefaultUserTokenManager implements UserTokenManager {
             return false;
         }
         for (UserToken userToken : getByUserId(userId)) {
-            if (userToken.isNormal()) {
+            if (userToken.isEffective()) {
                 return true;
             }
         }
@@ -247,7 +247,7 @@ public class DefaultUserTokenManager implements UserTokenManager {
                     .filter(userToken -> type.equals(userToken.getType()))
                     .map(SimpleUserToken.class::cast)
                     .peek(this::checkTimeout)
-                    .anyMatch(UserToken::isNormal);
+                    .anyMatch(UserToken::isEffective);
             if (hasAnotherToken) {
                 throw new AccessDenyException("该用户已在其他地方登陆");
             }
@@ -261,7 +261,7 @@ public class DefaultUserTokenManager implements UserTokenManager {
                 }
             }
         }
-        detail.setState(TokenState.normal);
+        detail.setState(TokenState.effective);
         tokenStorage.put(token, detail);
 
         getUserToken(userId).add(token);
