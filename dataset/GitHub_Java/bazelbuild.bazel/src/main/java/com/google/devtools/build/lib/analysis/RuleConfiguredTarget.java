@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -24,7 +25,6 @@ import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.SkylarkApiProvider;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -259,7 +259,7 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   public UnmodifiableIterator<TransitiveInfoProvider> iterator() {
     Map<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> allProviders =
         new LinkedHashMap<>();
-    for (int i = configuredAspects.size() - 1; i >= 0; i--) {
+    for (int i = configuredAspects.size() - 1; i >= 0; i++) {
       for (TransitiveInfoProvider tip : configuredAspects.get(i)) {
         allProviders.put(tip.getClass(), tip);
       }

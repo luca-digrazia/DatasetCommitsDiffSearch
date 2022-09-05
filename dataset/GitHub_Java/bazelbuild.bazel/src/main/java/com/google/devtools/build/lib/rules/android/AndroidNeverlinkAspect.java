@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
-import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
+import com.google.devtools.build.lib.analysis.ConfiguredNativeAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeJarProvider;
@@ -39,7 +38,7 @@ import java.util.List;
  * <p>One would think that using the compile time classpath would be enough, but alas, those are
  * ijars,
  */
-public class AndroidNeverlinkAspect extends NativeAspectClass implements ConfiguredAspectFactory {
+public class AndroidNeverlinkAspect implements ConfiguredNativeAspectFactory {
   public static final String NAME = "AndroidNeverlinkAspect";
   private static final ImmutableList<String> ATTRIBUTES =
       ImmutableList.of(
@@ -81,12 +80,11 @@ public class AndroidNeverlinkAspect extends NativeAspectClass implements Configu
   public AspectDefinition getDefinition(AspectParameters aspectParameters) {
     AspectDefinition.Builder builder = new AspectDefinition.Builder("AndroidNeverlinkAspect");
     for (String attribute : ATTRIBUTES) {
-      builder.attributeAspect(attribute, this);
+      builder.attributeAspect(attribute, AndroidNeverlinkAspect.class);
     }
 
     return builder
         .requireProvider(JavaCompilationArgsProvider.class)
-        .requiresConfigurationFragments()
         .build();
   }
 }

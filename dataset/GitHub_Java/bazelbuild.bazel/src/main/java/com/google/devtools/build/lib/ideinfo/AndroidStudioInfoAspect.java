@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.rules.android.AndroidCommon;
 import com.google.devtools.build.lib.rules.android.AndroidIdeInfoProvider;
 import com.google.devtools.build.lib.rules.android.AndroidIdeInfoProvider.SourceDirectory;
 import com.google.devtools.build.lib.rules.android.AndroidSdkProvider;
-import com.google.devtools.build.lib.rules.android.LocalResourceContainer;
 import com.google.devtools.build.lib.rules.java.JavaExportsProvider;
 import com.google.devtools.build.lib.rules.java.JavaGenJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
@@ -92,9 +91,8 @@ public class AndroidStudioInfoAspect implements ConfiguredNativeAspectFactory {
   public static final PrerequisiteAttr[] PREREQUISITE_ATTRS = {
       new PrerequisiteAttr("deps", BuildType.LABEL_LIST),
       new PrerequisiteAttr("exports", BuildType.LABEL_LIST),
-      new PrerequisiteAttr("$robolectric", BuildType.LABEL_LIST), // From android_robolectric_test
-      new PrerequisiteAttr("$junit", BuildType.LABEL), // From android_robolectric_test
-      new PrerequisiteAttr("binary_under_test", BuildType.LABEL), // From android_test
+      new PrerequisiteAttr("$robolectric", BuildType.LABEL_LIST),
+      new PrerequisiteAttr("$junit", BuildType.LABEL)
   };
 
   // File suffixes.
@@ -352,9 +350,6 @@ public class AndroidStudioInfoAspect implements ConfiguredNativeAspectFactory {
         builder.setIdlJar(jarBuilder.build());
       }
     }
-
-    builder.setGenerateResourceClass(
-        LocalResourceContainer.definesAndroidResources(ruleContext.attributes()));
 
     return builder.build();
   }

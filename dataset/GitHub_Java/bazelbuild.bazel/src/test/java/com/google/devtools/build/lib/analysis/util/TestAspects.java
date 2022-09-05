@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
-import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
@@ -66,7 +65,7 @@ public class TestAspects {
 
   public static final LateBoundLabel EMPTY_LATE_BOUND_LABEL = new LateBoundLabel<Object>() {
     @Override
-    public Label resolve(Rule rule, AttributeMap attributes, Object configuration) {
+    public Label getDefault(Rule rule, Object configuration) {
       return null;
     }
   };
@@ -250,7 +249,6 @@ public class TestAspects {
       return builder.build();
     }
 
-    @Override
     public ConfiguredAspect create(
         ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters) {
       StringBuilder information = new StringBuilder("aspect " + ruleContext.getLabel());

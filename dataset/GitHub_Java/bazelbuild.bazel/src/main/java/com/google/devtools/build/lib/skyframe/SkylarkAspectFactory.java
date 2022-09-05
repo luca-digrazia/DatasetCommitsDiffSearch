@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions.SkylarkAspect;
 import com.google.devtools.build.lib.rules.SkylarkRuleContext;
-import com.google.devtools.build.lib.rules.SkylarkRuleContext.Kind;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -51,7 +50,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
     try (Mutability mutability = Mutability.create("aspect")) {
       SkylarkRuleContext skylarkRuleContext;
       try {
-        skylarkRuleContext = new SkylarkRuleContext(ruleContext, Kind.ASPECT);
+        skylarkRuleContext = new SkylarkRuleContext(ruleContext);
       } catch (EvalException e) {
         ruleContext.ruleError(e.getMessage());
         return null;
