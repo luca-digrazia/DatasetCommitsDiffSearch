@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,6 +50,8 @@ public final class BazelPyBinaryRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = py_binary, TYPE = BINARY, FAMILY = Python) -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>
   A <code>py_binary</code> is an executable Python program consisting
   of a collection of <code>.py</code> source files (possibly belonging
@@ -58,6 +60,8 @@ public final class BazelPyBinaryRule implements RuleDefinition {
   program at run-time, and a stub script that starts up the program with
   the correct initial environment and data.
 </p>
+
+${ATTRIBUTE_DEFINITION}
 
 <h4 id="py_binary_examples">Examples</h4>
 

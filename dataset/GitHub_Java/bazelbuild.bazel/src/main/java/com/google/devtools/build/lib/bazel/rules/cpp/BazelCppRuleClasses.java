@@ -117,13 +117,6 @@ public class BazelCppRuleClasses {
       new RuleClass.Configurator<BuildConfiguration, Rule>() {
     @Override
     public BuildConfiguration apply(Rule rule, BuildConfiguration configuration) {
-      if (configuration.useDynamicConfigurations()) {
-        // Dynamic configurations don't currently work with LIPO. partially because of lack of
-        // support for TARGET_CONFIG_FOR_LIPO. We can't check for LIPO here because we have
-        // to apply TARGET_CONFIG_FOR_LIPO to determine it, So we just assume LIPO is disabled.
-        // This is safe because Bazel errors out if the two options are combined.
-        return configuration;
-      }
       BuildConfiguration toplevelConfig =
           configuration.getConfiguration(CppTransition.TARGET_CONFIG_FOR_LIPO);
       // If LIPO is enabled, override the default configuration.
@@ -135,15 +128,10 @@ public class BazelCppRuleClasses {
         return (rule.getLabel().equals(
             toplevelConfig.getFragment(CppConfiguration.class).getLipoContextLabel()))
             ? toplevelConfig
-            : configuration.getTransitions().getStaticConfiguration(ConfigurationTransition.DATA);
+            : configuration.getTransitions().getConfiguration(ConfigurationTransition.DATA);
       }
       return configuration;
     }
-
-    @Override
-    public String getCategory() {
-      return "lipo";
-    };
   };
 
   /**
