@@ -289,7 +289,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     @Override
     public List<UserEntity> selectByUserByRole(List<String> roleIdList) {
         if (CollectionUtils.isEmpty(roleIdList)) {
-            return new java.util.ArrayList<>();
+            return Collections.emptyList();
         }
         return createQuery()
                 .where("id", "user-in-role", roleIdList)
