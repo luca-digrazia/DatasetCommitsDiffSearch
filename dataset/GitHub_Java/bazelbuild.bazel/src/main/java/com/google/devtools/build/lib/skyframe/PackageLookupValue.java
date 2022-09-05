@@ -13,12 +13,15 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
+import java.util.Objects;
 
 /**
  * A value that represents a package lookup result.
@@ -56,6 +59,11 @@ public abstract class PackageLookupValue implements SkyValue {
     return new SuccessfulPackageLookupValue(root);
   }
 
+  public static PackageLookupValue overlaidBuildFile(
+      Path root, Optional<FileValue> overlaidBuildFile) {
+    return new OverlaidPackageLookupValue(root, overlaidBuildFile);
+  }
+
   public static PackageLookupValue workspace(Path root) {
     return new WorkspacePackageLookupValue(root);
   }
@@ -89,7 +97,7 @@ public abstract class PackageLookupValue implements SkyValue {
    * For an unsuccessful package lookup, gets a detailed error message for {@link #getErrorReason}
    * that is suitable for reporting to a user.
    */
-  public abstract String getErrorMsg();
+  abstract String getErrorMsg();
 
   static SkyKey key(PathFragment directory) {
     Preconditions.checkArgument(!directory.isAbsolute(), directory);
@@ -97,11 +105,10 @@ public abstract class PackageLookupValue implements SkyValue {
   }
 
   public static SkyKey key(PackageIdentifier pkgIdentifier) {
-    return SkyKey.create(SkyFunctions.PACKAGE_LOOKUP, pkgIdentifier);
+    return new SkyKey(SkyFunctions.PACKAGE_LOOKUP, pkgIdentifier);
   }
 
-  /** Successful lookup value. */
-  public static class SuccessfulPackageLookupValue extends PackageLookupValue {
+  private static class SuccessfulPackageLookupValue extends PackageLookupValue {
 
     private final Path root;
 
@@ -125,7 +132,7 @@ public abstract class PackageLookupValue implements SkyValue {
     }
 
     @Override
-    public String getErrorMsg() {
+    String getErrorMsg() {
       throw new IllegalStateException();
     }
 
@@ -144,10 +151,38 @@ public abstract class PackageLookupValue implements SkyValue {
     }
   }
 
+  /**
+   * A package under external/ that has a BUILD file that is not under external/.
+   *
+   * <p>This is kind of a hack to get around our assumption that external/ is immutable.</p>
+   */
+  private static class OverlaidPackageLookupValue extends SuccessfulPackageLookupValue {
+
+    private final Optional<FileValue> overlaidBuildFile;
+
+    public OverlaidPackageLookupValue(Path root, Optional<FileValue> overlaidBuildFile) {
+      super(root);
+      this.overlaidBuildFile = overlaidBuildFile;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (!(obj instanceof OverlaidPackageLookupValue)) {
+        return false;
+      }
+      OverlaidPackageLookupValue other = (OverlaidPackageLookupValue) obj;
+      return super.equals(other) && overlaidBuildFile.equals(other.overlaidBuildFile);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(super.hashCode(), overlaidBuildFile);
+    }
+  }
+
   // TODO(kchodorow): fix these semantics.  This class should not exist, WORKSPACE lookup should
   // just return success/failure like a "normal" package.
-  /** Successful workspace package lookup value. */
-  public static class WorkspacePackageLookupValue extends SuccessfulPackageLookupValue {
+  private static class WorkspacePackageLookupValue extends SuccessfulPackageLookupValue {
 
     private WorkspacePackageLookupValue(Path root) {
       super(root);
@@ -191,13 +226,12 @@ public abstract class PackageLookupValue implements SkyValue {
     }
 
     @Override
-    public String getErrorMsg() {
+    String getErrorMsg() {
       return "BUILD file not found on package path";
     }
   }
 
-  /** Value indicating the package name was in error. */
-  public static class InvalidNamePackageLookupValue extends UnsuccessfulPackageLookupValue {
+  private static class InvalidNamePackageLookupValue extends UnsuccessfulPackageLookupValue {
 
     private final String errorMsg;
 
@@ -211,7 +245,7 @@ public abstract class PackageLookupValue implements SkyValue {
     }
 
     @Override
-    public String getErrorMsg() {
+    String getErrorMsg() {
       return errorMsg;
     }
 
@@ -242,7 +276,7 @@ public abstract class PackageLookupValue implements SkyValue {
     }
 
     @Override
-    public String getErrorMsg() {
+    String getErrorMsg() {
       return "Package is considered deleted due to --deleted_packages";
     }
   }
