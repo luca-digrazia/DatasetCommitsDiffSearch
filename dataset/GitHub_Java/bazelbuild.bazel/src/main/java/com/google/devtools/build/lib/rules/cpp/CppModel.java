@@ -500,15 +500,6 @@ public final class CppModel {
       boolean addObject,
       boolean enableCoverage) {
     PathFragment ccRelativeName = semantics.getEffectiveSourcePath(sourceArtifact);
-    if (cppConfiguration.isLipoOptimization()) {
-      // TODO(bazel-team): we shouldn't be needing this, merging context with the binary
-      // is a superset of necessary information.
-      LipoContextProvider lipoProvider =
-          Preconditions.checkNotNull(CppHelper.getLipoContextProvider(ruleContext), outputName);
-      builder.setContext(CppCompilationContext.mergeForLipo(lipoProvider.getLipoContext(),
-          context));
-    }
-
     boolean generatePicAction = getGeneratePicActions();
     // If we always need pic for everything, then don't bother to create a no-pic action.
     boolean generateNoPicAction = getGenerateNoPicActions();
