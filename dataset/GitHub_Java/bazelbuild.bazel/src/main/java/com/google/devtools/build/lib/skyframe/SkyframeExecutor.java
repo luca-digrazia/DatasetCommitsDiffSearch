@@ -702,34 +702,15 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   // TODO(bazel-team): Make this take a PackageIdentifier.
-  public Map<PathFragment, Root> getArtifactRootsForFiles(final EventHandler eventHandler,
-      Iterable<PathFragment> execPaths) throws PackageRootResolutionException {
-    return getArtifactRoots(eventHandler, execPaths, true);
-  }
-
   public Map<PathFragment, Root> getArtifactRoots(final EventHandler eventHandler,
       Iterable<PathFragment> execPaths) throws PackageRootResolutionException {
-    return getArtifactRoots(eventHandler, execPaths, false);
-  }
-
-  private Map<PathFragment, Root> getArtifactRoots(final EventHandler eventHandler,
-      Iterable<PathFragment> execPaths, boolean forFiles) throws PackageRootResolutionException {
-
     final List<SkyKey> packageKeys = new ArrayList<>();
-    if (forFiles) {
-      for (PathFragment execPath : execPaths) {
-        PathFragment parent = Preconditions.checkNotNull(
-            execPath.getParentDirectory(), "Must pass in files, not root directory");
-        Preconditions.checkArgument(!parent.isAbsolute(), execPath);
-        packageKeys.add(ContainingPackageLookupValue.key(
-            PackageIdentifier.createInMainRepo(parent)));
-      }
-    } else {
-      for (PathFragment execPath : execPaths) {
-        Preconditions.checkArgument(!execPath.isAbsolute(), execPath);
-        packageKeys.add(ContainingPackageLookupValue.key(
-            PackageIdentifier.createInMainRepo(execPath)));
-      }
+    for (PathFragment execPath : execPaths) {
+      PathFragment parent = Preconditions.checkNotNull(
+          execPath.getParentDirectory(), "Must pass in files, not root directory");
+      Preconditions.checkArgument(!parent.isAbsolute(), execPath);
+      packageKeys.add(ContainingPackageLookupValue.key(
+          PackageIdentifier.createInDefaultRepo(parent)));
     }
 
     EvaluationResult<ContainingPackageLookupValue> result;
@@ -755,7 +736,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     Map<PathFragment, Root> roots = new HashMap<>();
     for (PathFragment execPath : execPaths) {
       ContainingPackageLookupValue value = result.get(ContainingPackageLookupValue.key(
-          PackageIdentifier.createInMainRepo(forFiles ? execPath.getParentDirectory() : execPath)));
+          PackageIdentifier.createInDefaultRepo(execPath.getParentDirectory())));
       if (value.hasContainingPackage()) {
         roots.put(execPath, Root.asSourceRoot(value.getContainingPackageRoot()));
       } else {
@@ -1571,8 +1552,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
      * Returns whether the given package should be consider deleted and thus should be ignored.
      */
     public boolean isPackageDeleted(PackageIdentifier packageName) {
-      Preconditions.checkState(!packageName.getRepository().isDefault(),
-          "package must be absolute: %s", packageName);
       return deletedPackages.get().contains(packageName);
     }
 
@@ -1607,7 +1586,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             workingDirectory),
         packageCacheOptions.defaultVisibility, packageCacheOptions.showLoadingProgress,
         packageCacheOptions.globbingThreads, defaultsPackageContents, commandId);
-    setDeletedPackages(packageCacheOptions.getDeletedPackages());
+    setDeletedPackages(ImmutableSet.copyOf(packageCacheOptions.deletedPackages));
 
     incrementalBuildMonitor = new SkyframeIncrementalBuildMonitor();
     invalidateTransientErrors();

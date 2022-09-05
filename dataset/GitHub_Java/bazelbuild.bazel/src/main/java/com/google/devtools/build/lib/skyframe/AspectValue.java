@@ -85,6 +85,10 @@ public final class AspectValue extends ActionLookupValue {
       return aspect.getParameters();
     }
 
+    public Aspect getAspect() {
+      return aspect;
+    }
+
     @Override
     public String getDescription() {
       return String.format("%s of %s", aspect.getAspectClass().getName(), getLabel());
@@ -227,7 +231,6 @@ public final class AspectValue extends ActionLookupValue {
 
 
   private final Label label;
-  private final Aspect aspect;
   private final Location location;
   private final AspectKey key;
   private final ConfiguredAspect configuredAspect;
@@ -235,14 +238,12 @@ public final class AspectValue extends ActionLookupValue {
 
   public AspectValue(
       AspectKey key,
-      Aspect aspect,
       Label label,
       Location location,
       ConfiguredAspect configuredAspect,
       Iterable<Action> actions,
       NestedSet<Package> transitivePackages) {
     super(actions);
-    this.aspect = aspect;
     this.location = location;
     this.label = label;
     this.key = key;
@@ -266,10 +267,6 @@ public final class AspectValue extends ActionLookupValue {
     return key;
   }
 
-  public Aspect getAspect() {
-    return aspect;
-  }
-
   public NestedSet<Package> getTransitivePackages() {
     return transitivePackages;
   }
@@ -283,14 +280,14 @@ public final class AspectValue extends ActionLookupValue {
       BuildConfiguration baseConfiguration,
       AspectClass aspectFactory,
       AspectParameters additionalConfiguration) {
-    return SkyKey.create(
+    return new SkyKey(
         SkyFunctions.ASPECT,
         new AspectKey(
             label, aspectConfiguration, baseConfiguration, aspectFactory, additionalConfiguration));
   }
 
   public static SkyKey key(AspectValueKey aspectKey) {
-    return SkyKey.create(aspectKey.getType(), aspectKey);
+    return new SkyKey(aspectKey.getType(), aspectKey);
   }
 
   public static AspectKey createAspectKey(
