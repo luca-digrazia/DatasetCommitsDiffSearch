@@ -151,7 +151,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
   @VisibleForTesting
   final CppConfiguration cppConfiguration;
-  protected final Class<? extends CppCompileActionContext> actionContext;
+  private final Class<? extends CppCompileActionContext> actionContext;
   private final IncludeResolver includeResolver;
 
   /**
@@ -441,6 +441,10 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
    */
   public DotdFile getDotdFile() {
     return cppCompileCommandLine.dotdFile;
+  }
+
+  protected boolean needsIncludeScanning(Executor executor) {
+    return executor.getContext(actionContext).needsIncludeScanning();
   }
 
   @Override
