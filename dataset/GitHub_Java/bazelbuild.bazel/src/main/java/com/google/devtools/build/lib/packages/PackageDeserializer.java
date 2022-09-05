@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.cache.CacheBuilder;
@@ -23,8 +22,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Location;
@@ -483,7 +480,7 @@ public class PackageDeserializer {
     try {
       builder = new Package.Builder(
           new PackageIdentifier(packagePb.getRepository(), new PathFragment(packagePb.getName())));
-    } catch (TargetParsingException e) {
+    } catch (SyntaxException e) {
       throw new PackageDeserializationException(e);
     }
     StoredEventHandler eventHandler = new StoredEventHandler();
@@ -533,8 +530,7 @@ public class PackageDeserializer {
   }
 
   // TODO(bazel-team): Verify that these put sane values in the attribute
-  @VisibleForTesting
-  static Object deserializeAttributeValue(Type<?> expectedType,
+  private static Object deserializeAttributeValue(Type<?> expectedType,
       Build.Attribute attrPb)
       throws PackageDeserializationException {
     switch (attrPb.getType()) {
@@ -639,9 +635,6 @@ public class PackageDeserializer {
 
       case TRISTATE:
         return attrPb.hasStringValue() ? deserializeTriStateValue(attrPb.getStringValue()) : null;
-
-      case INTEGER_LIST:
-        return ImmutableList.copyOf(attrPb.getIntListValueList());
 
       default:
           throw new PackageDeserializationException("Invalid discriminator: " + attrPb.getType());
