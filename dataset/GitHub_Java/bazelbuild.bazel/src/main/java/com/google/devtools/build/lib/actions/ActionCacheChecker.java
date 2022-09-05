@@ -18,7 +18,6 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action.MiddlemanType;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
-import com.google.devtools.build.lib.actions.cache.ActionCache.Entry;
 import com.google.devtools.build.lib.actions.cache.Digest;
 import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
@@ -86,19 +85,17 @@ public class ActionCacheChecker {
    *
    * @param entry cached action information.
    * @param action action to be validated.
-   * @param actionInputs the inputs of the action. Normally just the result of action.getInputs(),
-   * but if this action doesn't yet know its inputs, we check the inputs from the cache.
    * @param metadataHandler provider of metadata for the artifacts this action interacts with.
    * @param checkOutput true to validate output artifacts, Otherwise, just
    *                    validate inputs.
    *
    * @return true if at least one artifact has changed, false - otherwise.
    */
-  private boolean validateArtifacts(Entry entry, Action action,
-      Iterable<Artifact> actionInputs, MetadataHandler metadataHandler, boolean checkOutput) {
+  private boolean validateArtifacts(ActionCache.Entry entry, Action action,
+      MetadataHandler metadataHandler, boolean checkOutput) {
     Iterable<Artifact> artifacts = checkOutput
-        ? Iterables.concat(action.getOutputs(), actionInputs)
-        : actionInputs;
+        ? Iterables.concat(action.getOutputs(), action.getInputs())
+        : action.getInputs();
     Map<String, Metadata> mdMap = new HashMap<>();
     for (Artifact artifact : artifacts) {
       mdMap.put(artifact.getExecPathString(), metadataHandler.getMetadataMaybe(artifact));
@@ -153,35 +150,40 @@ public class ActionCacheChecker {
       }
       return null;
     }
-    Iterable<Artifact> actionInputs = action.getInputs();
-    ActionCache.Entry entry = getCacheEntry(action);
-    // Resolve action inputs from cache, if necessary.
+    ActionCache.Entry entry = null; // Populated lazily.
+
+    // Update action inputs from cache, if necessary.
     boolean inputsKnown = action.inputsKnown();
-    if (entry != null && !entry.isCorrupted() && !inputsKnown) {
-      Preconditions.checkState(action.discoversInputs(), action);
-      actionInputs = resolveCachedActionInputs(action, entry, resolver);
-      if (actionInputs == null) {
-        // Not all inputs could be resolved. Try again next time.
+    if (!inputsKnown) {
+      Preconditions.checkState(action.discoversInputs());
+      entry = getCacheEntry(action);
+      boolean ranSuccessfully = updateActionInputs(action, entry, resolver);
+      // If during update of inputs skyframe was missing some dependencies (for example,
+      // ContainingPackageLookupValue inside of ArtifactFactory.resolveSourceArtifact), we need to
+      // wait for those dependencies to be resolved. So next time when we will call corresponding
+      // ActionExecutionFunction all those dependencies will have been resolved and we can continue
+      // action execution process.
+      if (!ranSuccessfully) {
         return Token.NEED_TO_RERUN;
       }
     }
-    if (mustExecute(action, entry, handler, metadataHandler, actionInputs)) {
+    if (mustExecute(action, entry, handler, metadataHandler)) {
       return new Token(getKeyString(action));
-    }
-
-    if (!inputsKnown) {
-      action.updateInputs(actionInputs);
     }
     return null;
   }
 
   protected boolean mustExecute(Action action, @Nullable ActionCache.Entry entry,
-      EventHandler handler, MetadataHandler metadataHandler, Iterable<Artifact> actionInputs) {
+      EventHandler handler, MetadataHandler metadataHandler) {
     // Unconditional execution can be applied only for actions that are allowed to be executed.
     if (unconditionalExecution(action)) {
       Preconditions.checkState(action.isVolatile());
       reportUnconditionalExecution(handler, action);
       return true; // must execute - unconditional execution is requested.
+    }
+
+    if (entry == null) {
+      entry = getCacheEntry(action);
     }
     if (entry == null) {
       reportNewAction(handler, action);
@@ -191,7 +193,7 @@ public class ActionCacheChecker {
     if (entry.isCorrupted()) {
       reportCorruptedCacheEntry(handler, action);
       return true; // cache entry is corrupted - must execute
-    } else if (validateArtifacts(entry, action, actionInputs, metadataHandler, true)) {
+    } else if (validateArtifacts(entry, action, metadataHandler, true)) {
       reportChanged(handler, action);
       return true; // files have changed
     } else if (!entry.getActionKey().equals(action.getKey())){
@@ -228,10 +230,11 @@ public class ActionCacheChecker {
     actionCache.put(key, entry);
   }
 
-  private Iterable<Artifact> resolveCachedActionInputs(Action action, ActionCache.Entry entry,
+  protected boolean updateActionInputs(Action action, ActionCache.Entry entry,
       PackageRootResolver resolver) {
-    Preconditions.checkNotNull(entry, action);
-    Preconditions.checkState(!entry.isCorrupted(), action);
+    if (entry == null || entry.isCorrupted()) {
+      return true;
+    }
 
     List<PathFragment> outputs = new ArrayList<>();
     for (Artifact output : action.getOutputs()) {
@@ -246,7 +249,7 @@ public class ActionCacheChecker {
         inputs.add(execPath);
       }
     }
-    return action.resolveInputsFromCache(artifactResolver, resolver, inputs);
+    return action.updateInputsFromCache(artifactResolver, resolver, inputs);
   }
 
   /**
@@ -270,7 +273,7 @@ public class ActionCacheChecker {
       if (entry.isCorrupted()) {
         reportCorruptedCacheEntry(handler, action);
         changed = true;
-      } else if (validateArtifacts(entry, action, action.getInputs(), metadataHandler, false)) {
+      } else if (validateArtifacts(entry, action, metadataHandler, false)) {
         reportChanged(handler, action);
         changed = true;
       }

@@ -397,6 +397,11 @@ public class ResourceManagerTest {
     }
 
     @Override
+    public int getInputCount() {
+      throw new IllegalStateException();
+    }
+
+    @Override
     public ImmutableSet<Artifact> getOutputs() {
       throw new IllegalStateException();
     }
