@@ -54,7 +54,8 @@ public class BuildConfigurationFunction implements SkyFunction {
   }
 
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env) throws SkyFunctionException {
+  public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException,
+      SkyFunctionException {
     BuildConfigurationValue.Key key = (BuildConfigurationValue.Key) skyKey.argument();
     Set<Fragment> fragments;
     try {

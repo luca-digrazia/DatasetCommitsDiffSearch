@@ -17,6 +17,7 @@ import static com.google.devtools.build.lib.concurrent.Uninterruptibles.callUnin
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Stopwatch;
@@ -110,7 +111,6 @@ import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompl
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ResourceUsage;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.BatchStat;
@@ -1444,7 +1444,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   @Override
   public EvaluationResult<SkyValue> prepareAndGet(Collection<String> patterns, String offset,
       int numThreads, EventHandler eventHandler) throws InterruptedException {
-    SkyKey skyKey = getUniverseKey(patterns, offset);
+    SkyKey skyKey = getPrepareDepsKey(patterns, offset);
     EvaluationResult<SkyValue> evaluationResult =
         buildDriver.evaluate(ImmutableList.of(skyKey), true, numThreads, eventHandler);
     Preconditions.checkNotNull(evaluationResult.getWalkableGraph(), patterns);
@@ -1456,11 +1456,10 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * underlying evaluation implementation.
    */
   public String prepareAndGetMetadata(Collection<String> patterns, String offset) {
-    return buildDriver.meta(ImmutableList.of(getUniverseKey(patterns, offset)));
+    return buildDriver.meta(ImmutableList.of(getPrepareDepsKey(patterns, offset)));
   }
 
-  @Override
-  public SkyKey getUniverseKey(Collection<String> patterns, String offset) {
+  private SkyKey getPrepareDepsKey(Collection<String> patterns, String offset) {
     return PrepareDepsOfPatternsValue.key(ImmutableList.copyOf(patterns), offset);
   }
 
