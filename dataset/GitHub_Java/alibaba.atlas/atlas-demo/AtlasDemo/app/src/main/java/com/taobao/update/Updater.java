@@ -208,26 +208,18 @@
 
 package com.taobao.update;
 
-import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
-import android.text.TextUtils;
-import android.util.Log;
-import android.widget.Toast;
+import java.io.File;
 
 import com.alibaba.fastjson.JSON;
 
+import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
+import android.widget.Toast;
 import com.taobao.atlas.dex.util.FileUtils;
 import com.taobao.atlas.update.AtlasUpdater;
 import com.taobao.atlas.update.model.UpdateInfo;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Created by wuzhong on 2016/12/20.
@@ -251,7 +243,7 @@ public class Updater {
             UpdateInfo info = JSON.parseObject(jsonStr, UpdateInfo.class);
 
             File patchFile = new File(context.getExternalCacheDir(),
-                "patch-" + info.updateVersion + "@" + info.baseVersion + ".tpatch");
+                                      "patch-" + info.updateVersion + "@" + info.baseVersion + ".tpatch");
             AtlasUpdater.update(info, patchFile);
             Log.e("update", "update success");
             toast("更新成功，请重启app", context);
@@ -261,22 +253,24 @@ public class Updater {
         }
     }
 
+
     private static void toast(final String msg, final Context context) {
-        new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, msg, Toast.LENGTH_LONG).show());
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
-    public static boolean dexPatchUpdate(Context context) {
+    public static void dexPatchUpdate(Context context) {
+        UpdateInfo info = loadUpdateInfo(context);
+        if (null == info) return;
 
-        boolean success = false;
+        File patchFile = new File(context.getExternalCacheDir(), "patch-" + info.updateVersion + "@" + info.baseVersion + ".tpatch");
 
-        UpdateInfo info = loadDexPatchInfo(context);
-        if (null == info) {
-            toast("dexpatch 失败，请检查log，按照文档步骤操作", context);
-            return success;
-        }
-        File patchFile = new File(context.getExternalCacheDir(), info.baseVersion + "@" + info.baseVersion + ".tpatch");
         try {
-            AtlasUpdater.dexpatchUpdate(context, info, patchFile, new AtlasUpdater.IDexpatchMonitor() {
+            AtlasUpdater.dexpatchUpdate(context,info, patchFile, new AtlasUpdater.IDexpatchMonitor() {
                 @Override
                 public void merge(boolean success, String bundleName, long version, String errMsg) {
                     Log.d("update", "merge: " + success + " " + bundleName + " " + version + " " + errMsg);
@@ -288,73 +282,26 @@ public class Updater {
                 }
             });
             Log.d("update", "update success");
-            success = true;
-        } catch (Exception e) {
+        } catch (Throwable e) {
             Log.e("update", "更新失败", e);
         }
-        return success;
     }
 
-    private static UpdateInfo loadDexPatchInfo(Context context) {
+    public static UpdateInfo loadUpdateInfo(Context context) {
         String versionName = null;
         try {
             versionName = context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Throwable e) {
         }
-        if (TextUtils.isEmpty(versionName)) {
-            Log.e("update", "loadDexPatchInfo: versionName is empty !");
+        File updateInfo = new File(context.getExternalCacheDir(), "update-" + versionName + ".json");
+
+        if (!updateInfo.exists()) {
+            Log.e("update", "更新信息不存在，请先 执行 buildTpatch.sh");
             return null;
         }
 
-        File patchsFile = new File(context.getExternalCacheDir(), "dexpatch-" + versionName + ".json");
-        if (!patchsFile.exists()) {
-            Log.e("update", "dexpatch更新信息不存在， 将patchs.json push到目录中.");
-            Log.e("update", "dexpatch文档地址 :https://alibaba.github.io/atlas/update/dexpatch_use_guide.html");
-            return null;
-        }
-        UpdateInfo info = null;
-        String jsonStr = new String(FileUtils.readFile(patchsFile));
-        try {
-            info = parseDexPatchJson(new JSONObject(jsonStr));
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-        return info;
+        String jsonStr = new String(FileUtils.readFile(updateInfo));
+        return JSON.parseObject(jsonStr, UpdateInfo.class);
     }
 
-    private static UpdateInfo parseDexPatchJson(JSONObject data) throws JSONException {
-        if (null == data) {
-            return null;
-        }
-        JSONObject updateJson = data.getJSONArray("patches").getJSONObject(0);
-        JSONArray bundles = updateJson.getJSONArray("bundles");
-        if (null == bundles || bundles.length() < 1) {
-            return null;
-        }
-        UpdateInfo updateInfo = new UpdateInfo();
-        updateInfo.dexPatch = updateJson.optBoolean("dexPatch", true);
-        updateInfo.baseVersion = data.getString("baseVersion");
-        updateInfo.updateBundles = new ArrayList<>(bundles.length());
-        for (int i = 0; i < bundles.length(); i++) {
-            JSONObject object = bundles.getJSONObject(i);
-            JSONArray dependencies = object.getJSONArray("dependency");
-            List<String> dep = new ArrayList<>();
-            if (dependencies != null && dependencies.length() > 0) {
-                for (int j = 0; j < dependencies.length(); j++) {
-                    dep.add((String)dependencies.get(j));
-                }
-            }
-            UpdateInfo.Item item = new UpdateInfo.Item();
-            item.dependency = dep;
-            item.dexpatchVersion = object.getLong("dexpatchVersion");
-            item.isMainDex = object.getBoolean("isMainDex");
-            item.reset = object.optBoolean("reset", false);
-            item.name = object.getString("name");
-            item.unitTag = object.getString("unitTag");
-            item.srcUnitTag = object.getString("srcUnitTag");
-            updateInfo.updateBundles.add(item);
-        }
-        return updateInfo;
-    }
 }
