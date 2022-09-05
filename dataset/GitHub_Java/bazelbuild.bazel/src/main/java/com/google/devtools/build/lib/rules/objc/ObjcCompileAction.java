@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
@@ -31,7 +30,6 @@ import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.PackageRootResolutionException;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.ResourceSet;
-import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -42,7 +40,6 @@ import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
-import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.cpp.HeaderDiscovery;
 import com.google.devtools.build.lib.rules.cpp.HeaderDiscovery.DotdPruningMode;
 import com.google.devtools.build.lib.rules.cpp.IncludeScanningContext;
@@ -69,30 +66,10 @@ import javax.annotation.concurrent.GuardedBy;
  */
 public class ObjcCompileAction extends SpawnAction {
 
- /**
-   * A spawn that provides all headers to sandboxed execution to allow pruned headers to be
-   * re-introduced into action inputs.
-   */
-  public class ObjcCompileActionSpawn extends ActionSpawn {
-    
-    public ObjcCompileActionSpawn(Map<String, String> clientEnv) {
-      super(clientEnv);
-    }
-
-    @Override
-    public Iterable<? extends ActionInput> getInputFiles() {
-      return ImmutableList.<ActionInput>builder()
-          .addAll(super.getInputFiles())
-          .addAll(filterHeaderFiles())
-          .build();      
-    }
-  }
-  
   private final DotdFile dotdFile;
   private final Artifact sourceFile;
   private final NestedSet<Artifact> mandatoryInputs;
   private final HeaderDiscovery.DotdPruningMode dotdPruningPlan;
-  private final NestedSet<Artifact> headers;
 
   // This can be read/written from multiple threads, so accesses must be synchronized.
   @GuardedBy("this")
@@ -117,8 +94,7 @@ public class ObjcCompileAction extends SpawnAction {
       DotdFile dotdFile,
       Artifact sourceFile,
       NestedSet<Artifact> mandatoryInputs,
-      HeaderDiscovery.DotdPruningMode dotdPruningPlan,
-      NestedSet<Artifact> headers) {
+      HeaderDiscovery.DotdPruningMode dotdPruningPlan) {
     super(
         owner,
         tools,
@@ -140,18 +116,6 @@ public class ObjcCompileAction extends SpawnAction {
     this.mandatoryInputs = mandatoryInputs;
     this.dotdPruningPlan = dotdPruningPlan;
     this.inputsKnown = (dotdPruningPlan == DotdPruningMode.DO_NOT_USE);
-    this.headers = headers;
-  }
-
-  private Iterable<Artifact> filterHeaderFiles() {
-    ImmutableList.Builder<Artifact> inputs = ImmutableList.<Artifact>builder();
-
-    for (Artifact headerArtifact : headers) {
-      if (CppFileTypes.OBJC_HEADER.matches(headerArtifact.getFilename())) {
-          inputs.add(headerArtifact);
-        }
-    }
-    return inputs.build();    
   }
 
   /** Returns the DotdPruningPlan for this compile */
@@ -166,23 +130,14 @@ public class ObjcCompileAction extends SpawnAction {
   }
   
   @Override
-  public final Spawn getSpawn(Map<String, String> clientEnv) {
-    return new ObjcCompileActionSpawn(clientEnv);
-  }
-  
-  @Override
   public boolean discoversInputs() {
     return true;
   }
 
   @Override
   public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext) {
+    // We do not use include scanning for objc
     return null;
-  }
-
-  @Override
-  public Iterable<Artifact> getInputsWhenSkippingInputDiscovery() {
-    return filterHeaderFiles();
   }
  
   // Keep in sync with {@link CppCompileAction#resolveInputsFromCache}
@@ -193,7 +148,8 @@ public class ObjcCompileAction extends SpawnAction {
       Collection<PathFragment> inputPaths)
       throws PackageRootResolutionException, InterruptedException {
     // Note that this method may trigger a violation of the desirable invariant that getInputs()
-    // is a superset of getMandatoryInputs().
+    // is a superset of getMandatoryInputs(). See bug about an "action not in canonical form"
+    // error message and the integration test test_crosstool_change_and_failure().
     Map<PathFragment, Artifact> allowedDerivedInputsMap = getAllowedDerivedInputsMap();
     List<Artifact> inputs = new ArrayList<>();
     List<PathFragment> unresolvedPaths = new ArrayList<>();
@@ -340,7 +296,6 @@ public class ObjcCompileAction extends SpawnAction {
     private Artifact sourceFile;
     private final NestedSetBuilder<Artifact> mandatoryInputs = new NestedSetBuilder<>(STABLE_ORDER);
     private HeaderDiscovery.DotdPruningMode dotdPruningPlan;
-    private final NestedSetBuilder<Artifact> headers = NestedSetBuilder.stableOrder();
 
     /**
      * Creates a new compile action builder with apple environment variables set that are typically
@@ -408,20 +363,6 @@ public class ObjcCompileAction extends SpawnAction {
       this.dotdPruningPlan = dotdPruningPlan;
       return this;
     }
-    
-    /** Adds to the set of all possible headers that could be required by this compile action. */
-    public Builder addTransitiveHeaders(NestedSet<Artifact> headers) {
-      this.headers.addTransitive(Preconditions.checkNotNull(headers));
-      this.addTransitiveInputs(headers);
-      return this;
-    }
-
-    /** Adds to the set of all possible headers that could be required by this compile action. */
-    public Builder addHeaders(Iterable<Artifact> headers) {
-      this.headers.addAll(Preconditions.checkNotNull(headers));
-      this.addInputs(headers);
-      return this;
-    }
 
     @Override
     protected SpawnAction createSpawnAction(
@@ -454,8 +395,7 @@ public class ObjcCompileAction extends SpawnAction {
           dotdFile,
           sourceFile,
           mandatoryInputs.build(),
-          dotdPruningPlan,
-          headers.build());
+          dotdPruningPlan);
     }
   }
 }
