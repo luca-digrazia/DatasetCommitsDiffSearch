@@ -15,37 +15,33 @@
 package com.google.devtools.build.lib.bazel.repository;
 
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
+
 import org.eclipse.jgit.lib.ProgressMonitor;
 
 /**
  * ProgressMonitor for reporting progress for Git repository rules.
  */
 class GitProgressMonitor implements ProgressMonitor {
-  private final String remote;
-  private final String message;
-  private final ExtendedEventHandler eventHandler;
+  private String message;
+  private EventHandler eventHandler;
 
   private String workTitle;
   private int totalWork;
   private int completedWork;
-  private int unfinishedTasks;
 
-  GitProgressMonitor(String remote, String message, ExtendedEventHandler eventHandler) {
-    this.remote = remote;
+  GitProgressMonitor(String message, EventHandler eventHandler) {
     this.message = message;
     this.eventHandler = eventHandler;
   }
 
   @Override
-  public void start(int totalTasks) {
-    this.unfinishedTasks = totalTasks;
-  }
+  public void start(int totalTasks) { }
 
   private void report() {
-    String progress = workTitle + " (" + completedWork + " / " + totalWork + ")";
-    eventHandler.handle(Event.progress(message + ": " + progress));
-    eventHandler.post(new GitFetchProgress(remote, progress));
+    eventHandler.handle(
+        Event.progress(message + ": " + workTitle
+            + " (" + completedWork + " / " + totalWork + ")"));
   }
 
   @Override
@@ -66,12 +62,5 @@ class GitProgressMonitor implements ProgressMonitor {
   }
 
   @Override
-  public void endTask() {
-    unfinishedTasks--;
-    // The number of tasks to do as reported on the start event is sometimes underestimated, so
-    // report a finished event after each task that could be the last one.
-    if (unfinishedTasks <= 0) {
-      eventHandler.post(new GitFetchProgress(remote, "done", true));
-    }
-  }
+  public void endTask() { }
 }
