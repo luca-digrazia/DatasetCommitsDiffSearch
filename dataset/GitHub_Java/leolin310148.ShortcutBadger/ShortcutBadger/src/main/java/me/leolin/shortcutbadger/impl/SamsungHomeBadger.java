@@ -28,21 +28,14 @@ public class SamsungHomeBadger extends ShortcutBadger {
         try {
             cursor = contentResolver.query(mUri, CONTENT_PROJECTION, "package=?", new String[]{getContextPackageName()}, null);
             if (cursor != null) {
-                String entryActivityName = getEntryActivityName();
-                boolean entryActivityExist = false;
                 while (cursor.moveToNext()) {
                     int id = cursor.getInt(0);
                     ContentValues contentValues = getContentValues(badgeCount, false);
                     contentResolver.update(mUri, contentValues, "_id=?", new String[]{String.valueOf(id)});
-                    if (entryActivityName.equals(cursor.getString(cursor.getColumnIndex("class")))) {
-                        entryActivityExist = true;
-                    }
                 }
-
-                if (!entryActivityExist) {
-                    ContentValues contentValues = getContentValues(badgeCount, true);
-                    contentResolver.insert(mUri, contentValues);
-                }
+            } else {
+                ContentValues contentValues = getContentValues(badgeCount, true);
+                contentResolver.insert(mUri, contentValues);
             }
         } finally {
             CloseHelper.close(cursor);
