@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.cpp.CcLibraryHelper.SourceCategory;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
@@ -357,15 +358,14 @@ public final class CcCommon {
     List<PathFragment> result = new ArrayList<>();
     // The package directory of the rule contributes includes. Note that this also covers all
     // non-subpackage sub-directories.
-    PathFragment rulePackage = ruleContext.getLabel().getPackageIdentifier()
-        .getPathUnderExecRoot();
+    PathFragment rulePackage = ruleContext.getLabel().getPackageIdentifier().getSourceRoot();
     result.add(rulePackage);
 
     // Gather up all the dirs from the rule's srcs as well as any of the srcs outputs.
     if (hasAttribute("srcs", BuildType.LABEL_LIST)) {
       for (TransitiveInfoCollection src :
           ruleContext.getPrerequisitesIf("srcs", Mode.TARGET, FileProvider.class)) {
-        PathFragment packageDir = src.getLabel().getPackageIdentifier().getPathUnderExecRoot();
+        PathFragment packageDir = src.getLabel().getPackageIdentifier().getSourceRoot();
         for (Artifact a : src.getProvider(FileProvider.class).getFilesToBuild()) {
           result.add(packageDir);
           // Attempt to gather subdirectories that might contain include files.
@@ -377,7 +377,7 @@ public final class CcCommon {
     // Add in any 'includes' attribute values as relative path fragments
     if (ruleContext.getRule().isAttributeValueExplicitlySpecified("includes")) {
       PathFragment packageFragment = ruleContext.getLabel().getPackageIdentifier()
-          .getPathUnderExecRoot();
+          .getSourceRoot();
       // For now, anything with an 'includes' needs a blanket declaration
       result.add(packageFragment.getRelative("**"));
     }
@@ -387,7 +387,7 @@ public final class CcCommon {
   List<PathFragment> getSystemIncludeDirs() {
     List<PathFragment> result = new ArrayList<>();
     PackageIdentifier packageIdentifier = ruleContext.getLabel().getPackageIdentifier();
-    PathFragment packageFragment = packageIdentifier.getPathUnderExecRoot();
+    PathFragment packageFragment = packageIdentifier.getSourceRoot();
     for (String includesAttr : ruleContext.attributes().get("includes", Type.STRING_LIST)) {
       includesAttr = ruleContext.expandMakeVariables("includes", includesAttr);
       if (includesAttr.startsWith("/")) {
@@ -417,6 +417,18 @@ public final class CcCommon {
                 + includesPath
                 + "' not below the relative path of its package '"
                 + packageFragment
+                + "'. This will be an error in the future");
+        // TODO(janakr): Add a link to a page explaining the problem and fixes?
+      } else if (packageIdentifier.getRepository().isMain()
+          && !includesPath.startsWith(RuleClass.THIRD_PARTY_PREFIX)) {
+        ruleContext.attributeWarning(
+            "includes",
+            "'"
+                + includesAttr
+                + "' resolves to '"
+                + includesPath
+                + "' not in '"
+                + RuleClass.THIRD_PARTY_PREFIX
                 + "'. This will be an error in the future");
       }
       result.add(includesPath);

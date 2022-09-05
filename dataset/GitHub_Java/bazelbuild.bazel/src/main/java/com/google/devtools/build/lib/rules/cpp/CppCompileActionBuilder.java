@@ -38,9 +38,7 @@ import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -78,7 +76,6 @@ public class CppCompileActionBuilder {
   private ImmutableMap<Artifact, IncludeScannable> lipoScannableMap;
   private RuleContext ruleContext = null;
   private Boolean shouldScanIncludes;
-  private Map<String, String> environment = new LinkedHashMap<>();
   // New fields need to be added to the copy constructor.
 
   /**
@@ -146,7 +143,6 @@ public class CppCompileActionBuilder {
     this.lipoScannableMap = other.lipoScannableMap;
     this.ruleContext = other.ruleContext;
     this.shouldScanIncludes = other.shouldScanIncludes;
-    this.environment = new LinkedHashMap<>(other.environment);
   }
 
   public PathFragment getTempOutputFile() {
@@ -267,7 +263,7 @@ public class CppCompileActionBuilder {
       executionRequirements =
           featureConfiguration.getToolForAction(getActionName()).getExecutionRequirements();
     }
-
+    
     // Copying the collections is needed to make the builder reusable.
     if (fake) {
       return new FakeCppCompileAction(
@@ -318,7 +314,6 @@ public class CppCompileActionBuilder {
           getLipoScannables(realMandatoryInputs),
           actionClassId,
           executionRequirements,
-          ImmutableMap.copyOf(environment),
           getActionName(),
           ruleContext);
     }
@@ -338,11 +333,6 @@ public class CppCompileActionBuilder {
    */
   public CppCompileActionBuilder setVariables(CcToolchainFeatures.Variables variables) {
     this.variables = variables;
-    return this;
-  }
-
-  public CppCompileActionBuilder addEnvironment(Map<String, String> environment) {
-    this.environment.putAll(environment);
     return this;
   }
 

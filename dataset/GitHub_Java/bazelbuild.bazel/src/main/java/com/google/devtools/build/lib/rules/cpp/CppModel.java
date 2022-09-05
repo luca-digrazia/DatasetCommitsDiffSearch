@@ -1015,7 +1015,6 @@ public final class CppModel {
         ruleContext, source, label);
 
     builder.setContext(forInterface ? interfaceContext : context).addCopts(copts);
-    builder.addEnvironment(CppHelper.getToolchain(ruleContext).getEnvironment());
     return builder;
   }
 
