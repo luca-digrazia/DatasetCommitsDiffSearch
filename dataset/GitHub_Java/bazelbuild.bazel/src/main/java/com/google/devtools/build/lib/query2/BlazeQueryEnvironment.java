@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.query2;
 
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
-import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -68,12 +67,6 @@ import java.util.concurrent.ForkJoinPool;
  * The environment of a Blaze query. Not thread-safe.
  */
 public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
-  private static final Function<Target, Label> TO_LABEL = new Function<Target, Label>() {
-    @Override
-    public Label apply(Target input) {
-      return input.getLabel();
-    }
-  };
 
   private static final int MAX_DEPTH_FULL_SCAN_LIMIT = 20;
   private final Map<String, Set<Target>> resolvedTargetPatterns = new HashMap<>();
@@ -310,12 +303,12 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   private void preloadTransitiveClosure(Set<Target> targets, int maxDepth)
-      throws InterruptedException {
+      throws QueryException, InterruptedException {
     if (maxDepth >= MAX_DEPTH_FULL_SCAN_LIMIT && transitivePackageLoader != null) {
       // Only do the full visitation if "maxDepth" is large enough. Otherwise, the benefits of
       // preloading will be outweighed by the cost of doing more work than necessary.
-      Set<Label> labels = ImmutableSet.copyOf(Collections2.transform(targets, TO_LABEL));
-      transitivePackageLoader.sync(eventHandler, labels, keepGoing, loadingPhaseThreads);
+      transitivePackageLoader.sync(
+          eventHandler, targets, ImmutableSet.<Label>of(), keepGoing, loadingPhaseThreads, -1);
     }
   }
 

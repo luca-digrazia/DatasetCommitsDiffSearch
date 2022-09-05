@@ -43,7 +43,6 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.DependencyFilter;
-import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
@@ -729,6 +728,9 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   public Target getTarget(Label label)
       throws TargetNotFoundException, QueryException, InterruptedException {
     SkyKey packageKey = PackageValue.key(label.getPackageIdentifier());
+    if (!graph.exists(packageKey)) {
+      throw new QueryException(packageKey + " does not exist in graph");
+    }
     try {
       PackageValue packageValue = (PackageValue) graph.getValue(packageKey);
       if (packageValue != null) {
@@ -738,16 +740,8 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
         }
         return packageValue.getPackage().getTarget(label.getName());
       } else {
-        NoSuchThingException exception = (NoSuchThingException) graph.getException(packageKey);
-        if (exception != null) {
-          throw exception;
-        }
-        if (graph.isCycle(packageKey)) {
-          throw new NoSuchPackageException(
-              label.getPackageIdentifier(), "Package depends on a cycle");
-        } else {
-          throw new QueryException(packageKey + " does not exist in graph");
-        }
+        throw (NoSuchThingException) Preconditions.checkNotNull(
+            graph.getException(packageKey), label);
       }
     } catch (NoSuchThingException e) {
       throw new TargetNotFoundException(e);
