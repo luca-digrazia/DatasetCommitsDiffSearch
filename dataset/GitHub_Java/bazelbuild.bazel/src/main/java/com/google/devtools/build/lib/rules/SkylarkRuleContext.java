@@ -116,6 +116,17 @@ public final class SkylarkRuleContext {
   private final ImmutableMap<String, String> makeVariables;
 
   /**
+   * In native code, private values start with $.
+   * In Skylark, private values start with _, because of the grammar.
+   */
+  private String attributeToSkylark(String oldName) {
+    if (!oldName.isEmpty() && (oldName.charAt(0) == '$' || oldName.charAt(0) == ':')) {
+      return "_" + oldName.substring(1);
+    }
+    return oldName;
+  }
+
+  /**
    * Creates a new SkylarkRuleContext using ruleContext.
    */
   public SkylarkRuleContext(RuleContext ruleContext) throws EvalException {
@@ -182,12 +193,12 @@ public final class SkylarkRuleContext {
       Type<?> type = a.getType();
       Object val = ruleContext.attributes().get(a.getName(), type);
       if (type != Type.LABEL && type != Type.LABEL_LIST) {
-        attrBuilder.put(a.getPublicName(), val == null ? Environment.NONE
+        attrBuilder.put(attributeToSkylark(a.getName()), val == null ? Environment.NONE
             // Attribute values should be type safe
             : SkylarkType.convertToSkylark(val, null));
         continue;
       }
-      String skyname = a.getPublicName();
+      String skyname = attributeToSkylark(a.getName());
       Mode mode = getMode(a.getName());
       if (a.isExecutable()) {
         // In Skylark only label (not label list) type attributes can have the Executable flag.
@@ -318,14 +329,14 @@ public final class SkylarkRuleContext {
   }
 
   @SkylarkCallable(name = "configuration", structField = true,
-      doc = "Returns the default configuration. See the <a href=\"configuration.html\">"
+      doc = "Returns the default configuration. See the <a href=\"#modules.configuration\">"
           + "configuration</a> type for more details.")
   public BuildConfiguration getConfiguration() {
     return ruleContext.getConfiguration();
   }
 
   @SkylarkCallable(name = "host_configuration", structField = true,
-      doc = "Returns the host configuration. See the <a href=\"configuration.html\">"
+      doc = "Returns the host configuration. See the <a href=\"#modules.configuration\">"
           + "configuration</a> type for more details.")
   public BuildConfiguration getHostConfiguration() {
     return ruleContext.getHostConfiguration();

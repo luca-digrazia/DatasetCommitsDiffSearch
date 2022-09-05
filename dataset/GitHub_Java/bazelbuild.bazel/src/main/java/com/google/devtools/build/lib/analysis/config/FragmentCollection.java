@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,57 +17,42 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableCollection;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.ClassObject;
+import com.google.devtools.build.lib.syntax.SkylarkModule;
 
 import javax.annotation.Nullable;
 
 /**
  * Represents a collection of configuration fragments in Skylark.
  */
-// Documentation can be found at ctx.fragments
 @Immutable
-@SkylarkModule(name = "fragments", documented = false, doc = "")
+@SkylarkModule(name = "fragments", doc = "Allows access to configuration fragments.")
 public class FragmentCollection implements ClassObject {
   private final RuleContext ruleContext;
-  private final ConfigurationTransition config;
 
-  public FragmentCollection(RuleContext ruleContext, ConfigurationTransition config) {
+  public FragmentCollection(RuleContext ruleContext) {
     this.ruleContext = ruleContext;
-    this.config = config;
   }
 
   @Override
   @Nullable
   public Object getValue(String name) {
-    return ruleContext.getSkylarkFragment(name, config);
+    return ruleContext.getSkylarkFragment(name);
   }
 
   @Override
   public ImmutableCollection<String> getKeys() {
-    return ruleContext.getSkylarkFragmentNames(config);
+    return ruleContext.getSkylarkFragmentNames();
   }
 
   @Override
   @Nullable
   public String errorMessage(String name) {
-    return String.format(
-        "There is no configuration fragment named '%s' in %s configuration. "
-        + "Available fragments: %s",
-        name, getConfigurationName(config), printKeys());
+    return String.format("There is no configuration fragment named '%s'. Available fragments: %s",
+        name, printKeys());
   }
 
   private String printKeys() {
     return String.format("'%s'", Joiner.on("', '").join(getKeys()));
-  }
-
-  public static String getConfigurationName(ConfigurationTransition config) {
-    return (config == ConfigurationTransition.HOST) ? "host" : "target";
-  }
-
-  @Override
-  public String toString() {
-    return getConfigurationName(config) + ": [ " + printKeys() + "]";
   }
 }
