@@ -1,5 +1,6 @@
 package org.hswebframework.web.service.file.simple;
 
+import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.hswebframework.utils.time.DateFormatter;
 import org.hswebframework.web.NotFoundException;
@@ -7,12 +8,15 @@ import org.hswebframework.web.commons.entity.DataStatus;
 import org.hswebframework.web.entity.file.FileInfoEntity;
 import org.hswebframework.web.service.file.FileInfoService;
 import org.hswebframework.web.service.file.FileService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
 
 import java.io.*;
+import java.security.MessageDigest;
 import java.util.Date;
 
 /**
@@ -21,31 +25,32 @@ import java.util.Date;
  * @author zhouhao
  * @since 3.0
  */
-@Service("fileService")
+//@Service("fileService")
 public class LocalFileService implements FileService {
     private FileInfoService fileInfoService;
 
+    private Logger logger = LoggerFactory.getLogger(this.getClass());
     /**
      * 静态文件存储目录,不能以/结尾
      */
-    private String staticFilePath = "./static";
+    private String staticFilePath = "./static/upload";
 
     /**
      * 静态文件访问地址,上传静态文件后,将返回此地址+文件相对地址,以/结尾
      */
-    private String staticLocation = "/";
+    private String staticLocation = "/upload/";
 
     /**
      * 文件上传目录
      */
-    private String filePath = "./upload";
+    private String filePath = "./upload/file";
 
-    @Value("${hsweb.web.upload.static-file-path:./static}")
+    @Value("${hsweb.web.upload.static-file-path:./static/upload}")
     public void setStaticFilePath(String staticFilePath) {
         this.staticFilePath = staticFilePath;
     }
 
-    @Value("${hsweb.web.upload.static-location:/upload/static}")
+    @Value("${hsweb.web.upload.static-location:/upload/}")
     public void setStaticLocation(String staticLocation) {
         this.staticLocation = staticLocation;
     }
@@ -73,13 +78,13 @@ public class LocalFileService implements FileService {
     }
 
     @Override
-    public InputStream readFile(String fileId) {
-        FileInfoEntity fileInfo = fileInfoService.selectByMd5(fileId);
+    public InputStream readFile(String fileIdOrMd5) {
+        FileInfoEntity fileInfo = fileInfoService.selectByIdOrMd5(fileIdOrMd5);
         if (fileInfo == null || !DataStatus.STATUS_ENABLED.equals(fileInfo.getStatus())) {
             throw new NotFoundException("file not found or disabled");
         }
         //配置中的文件上传根路径
-        String filePath = fileInfo.getLocation();
+        String filePath = getFilePath() + "/" + fileInfo.getLocation();
         File file = new File(filePath);
         if (!file.exists()) {
             throw new NotFoundException("file not found");
@@ -102,7 +107,7 @@ public class LocalFileService implements FileService {
         String filePath = DateFormatter.toString(new Date(), "yyyyMMdd");
 
         //创建目录
-        new File(getStaticFilePath()+"/"+filePath).mkdirs();
+        new File(getStaticFilePath() + "/" + filePath).mkdirs();
 
         // 存储的文件名
         String realFileName = System.nanoTime() + suffix;
@@ -116,6 +121,7 @@ public class LocalFileService implements FileService {
     }
 
     @Override
+    @SuppressWarnings("all")
     public FileInfoEntity saveFile(InputStream fileStream, String fileName, String type, String creatorId) throws IOException {
         //配置中的文件上传根路径
         String fileBasePath = getFilePath();
@@ -124,35 +130,68 @@ public class LocalFileService implements FileService {
         //文件存储绝对路径
         String absPath = fileBasePath.concat("/").concat(filePath);
         File path = new File(absPath);
-        if (!path.exists()) path.mkdirs(); //创建目录
+        if (!path.exists()) {
+            path.mkdirs(); //创建目录
+        }
         String newName = String.valueOf(System.nanoTime()); //临时文件名 ,纳秒的md5值
         String fileAbsName = absPath.concat("/").concat(newName);
-        //try with resource
-        long fileLength = 0;
-        try (BufferedInputStream in = new BufferedInputStream(fileStream);
-             BufferedOutputStream os = new BufferedOutputStream(new FileOutputStream(fileAbsName))) {
-            byte[] buffer = new byte[2048 * 10];
-            int len;
-            while ((len = in.read(buffer)) != -1) {
-                fileLength += len;
-                os.write(buffer, 0, len);
+        int fileSize;
+        MessageDigest digest = DigestUtils.getMd5Digest();
+
+        try (InputStream in =new InputStream() {
+            @Override
+            public int read(byte[] b, int off, int len) throws IOException {
+                int l = fileStream.read(b, off, len);
+                digest.update(b, off, len);
+                return l;
             }
-            os.flush();
+
+            @Override
+            public void close() throws IOException {
+                fileStream.close();
+                super.close();
+            }
+
+            @Override
+            public int available() throws IOException {
+                return fileStream.available();
+            }
+
+            @Override
+            public int read() throws IOException {
+                return fileStream.read();
+            }
+        }; FileOutputStream os = new FileOutputStream(fileAbsName)) {
+            int remainBytes=fileSize= in.available();
+            byte[] buff = new byte[remainBytes>1024*10?1024*10:remainBytes];
+            int bytes;
+            logger.info("开始写出文件:{}到:{}, size: {} bytes",fileName,fileAbsName,fileSize);
+            while (remainBytes > 0) {
+                bytes = in.read(buff, 0, remainBytes > buff.length ? buff.length :  remainBytes);
+                os.write(buff, 0, bytes);
+                remainBytes -= bytes;
+                logger.info("写出文件:{}:{},剩余数据量: {} bytes",fileName,fileAbsName, remainBytes);
+            }
+           // StreamUtils.copy(in, os);
         }
+
+        String md5 = Hex.encodeHexString(digest.digest());
+
         File newFile = new File(fileAbsName);
         //获取文件的md5值
-        String md5;
-        try (FileInputStream inputStream = new FileInputStream(newFile)) {
-            md5 = DigestUtils.md5Hex(inputStream);
-        }
-        //  判断文件是否已经存在
-        FileInfoEntity resources = fileInfoService.selectByMd5(md5);
-        if (resources != null) {
-            newFile.delete();//文件已存在则删除临时文件不做处理
-            return resources;
+        //判断文件是否已经存在
+        FileInfoEntity fileInfo = fileInfoService.selectByMd5(md5);
+        if (fileInfo != null) {
+            logger.info("文件:{}已上传过",fileAbsName);
+            if (new File(getFilePath() + "/" + fileInfo.getLocation()).exists()) {
+                newFile.delete();//文件已存在则删除临时文件不做处理
+            } else {
+                newFile.renameTo(new File(absPath.concat("/").concat(md5)));
+            }
+            return fileInfo;
         } else {
-            newName = md5;
-            newFile.renameTo(new File(absPath.concat("/").concat(newName)));
+            logger.info("上传文件{}完成:{}->{}",fileName,fileAbsName,absPath.concat("/").concat(md5));
+            newFile.renameTo(new File(absPath.concat("/").concat(md5)));
         }
         FileInfoEntity infoEntity = fileInfoService.createEntity();
         infoEntity.setCreateTimeNow();
@@ -160,7 +199,7 @@ public class LocalFileService implements FileService {
         infoEntity.setLocation(filePath.concat("/").concat(md5));
         infoEntity.setName(fileName);
         infoEntity.setType(type);
-        infoEntity.setSize(fileLength);
+        infoEntity.setSize((long)fileSize);
         infoEntity.setMd5(md5);
         infoEntity.setStatus(DataStatus.STATUS_ENABLED);
         fileInfoService.insert(infoEntity);
@@ -170,13 +209,10 @@ public class LocalFileService implements FileService {
     @Override
     public void writeFile(String fileId, OutputStream out, long skip) throws IOException {
         try (InputStream inputStream = readFile(fileId)) {
-            BufferedOutputStream outputStream = out instanceof BufferedOutputStream ? ((BufferedOutputStream) out) : new BufferedOutputStream(out);
-            if (skip > 0) inputStream.skip(skip);
-            byte b[] = new byte[2048 * 10];
-            while ((inputStream.read(b)) != -1) {
-                outputStream.write(b);
+            if (skip > 0) {
+                inputStream.skip(skip);
             }
-            outputStream.flush();
+            StreamUtils.copy(inputStream, out);
         }
     }
 
