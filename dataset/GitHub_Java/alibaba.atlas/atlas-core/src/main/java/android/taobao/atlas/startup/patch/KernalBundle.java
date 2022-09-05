@@ -315,7 +315,7 @@ public class KernalBundle{
                     bundle.installKernalBundle(KernalConstants.baseContext.getClassLoader(), patchFile, new DexFile[]{patchDexFile,dexFile}, null,
                                                true /*(app_info.flags & ApplicationInfo.FLAG_VM_SAFE_MODE) != 0*/);
                     if(bundle.needReplaceClassLoader(application)){
-                        NClassLoader loader = new NClassLoader(".",KernalBundle.class.getClassLoader().getParent());
+                        NClassLoader loader = new NClassLoader(".",KernalBundle.class.getClassLoader());
                         try {
                             NClassLoader.replacePathClassLoader(KernalConstants.baseContext,KernalBundle.class.getClassLoader(),loader);
                         } catch (Exception e) {
@@ -394,14 +394,8 @@ public class KernalBundle{
         if ((dexFile != null&&dexFile.length>0) || archive.getLibraryDirectory().exists()) {
             installKernalBundle(KernalConstants.baseContext.getClassLoader(),archive.getArchiveFile(),archive.getOdexFile(),archive.getLibraryDirectory());
             boolean needReplaceClassLoader = needReplaceClassLoader(application);
-            boolean dexPatch = dexFile[dexFile.length - 1].getName().contains(KernalBundleArchive.DEXPATCH_DIR);
-            int newFrameworkPropertiesDexIndex;
-            if (dexPatch) {
-                newFrameworkPropertiesDexIndex = dexFile.length > 1 ? dexFile.length - 2 : dexFile.length - 1;
-            } else {
-                newFrameworkPropertiesDexIndex = dexFile.length - 1;
-            }
-            if (!needReplaceClassLoader) {
+            int newFrameworkPropertiesDexIndex = dexFile[dexFile.length-1].getName().indexOf(KernalBundleArchive.DEXPATCH_DIR)>=0 ? dexFile.length-2 : dexFile.length-1;
+            if(!needReplaceClassLoader) {
                 FrameworkPropertiesClazz = archive.getOdexFile()[newFrameworkPropertiesDexIndex].loadClass("android.taobao.atlas.framework.FrameworkProperties", application.getClassLoader());
             }else{
                 replaceClassLoader = new NClassLoader(".",KernalBundle.class.getClassLoader());
