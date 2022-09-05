@@ -40,10 +40,6 @@ public class SyntaxTreeVisitor {
     visit(node.getValue());
   }
 
-  public void visit(Parameter node) {
-    // leaf node (we need the function for overrides)
-  }
-
   public void visit(BuildFileAST node) {
     visitAll(node.getStatements());
     visitAll(node.getComments());
@@ -114,7 +110,7 @@ public class SyntaxTreeVisitor {
 
   public void visit(FunctionDefStatement node) {
     visit(node.getIdent());
-    List<Expression> defaults = node.getSignature().getDefaultValues();
+    List<Expression> defaults = node.getArgs().getDefaultValues();
     if (defaults != null) {
       visitAll(defaults);
     }
