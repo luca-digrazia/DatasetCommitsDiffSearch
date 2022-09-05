@@ -6,8 +6,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 
-import com.yammer.metrics.core.HistogramMetric.SampleType;
-
 /**
  * A set of factory methods for creating centrally registered metric instances.
  *
@@ -50,30 +48,15 @@ public class Metrics {
 	}
 
 	/**
-	 * Creates a new {@link HistogramMetric} and registers it under the given
-	 * class and name.
-	 *
-	 * @param klass the class which owns the metric
-	 * @param name the name of the metric
-	 * @param biased whether or not the histogram should be biased
-	 * @return a new {@link HistogramMetric}
-	 */
-	public static HistogramMetric newHistogram(Class<?> klass, String name,
-											   boolean biased) {
-		return getOrAdd(new MetricName(klass, name),
-				new HistogramMetric(biased ? SampleType.BIASED : SampleType.UNIFORM));
-	}
-
-	/**
-	 * Creates a new non-baised {@link HistogramMetric} and registers it under
-	 * the given class and name.
+	 * Creates a new {@link HistogramMetric} and registers it under the given class
+	 * and name.
 	 *
 	 * @param klass the class which owns the metric
 	 * @param name the name of the metric
 	 * @return a new {@link HistogramMetric}
 	 */
 	public static HistogramMetric newHistogram(Class<?> klass, String name) {
-		return newHistogram(klass, name, false);
+		return getOrAdd(new MetricName(klass, name), new HistogramMetric());
 	}
 
 	/**
@@ -145,16 +128,6 @@ public class Metrics {
 	 */
 	public static void registerHealthCheck(String name, HealthCheck healthCheck) {
 		HEALTH_CHECKS.putIfAbsent(name, healthCheck);
-	}
-
-	/**
-	 * Returns {@code true} if any {@link HealthCheck}s have been registered,
-	 * {@code false} otherwise.
-	 *
-	 * @return if any {@link HealthCheck}s have been registered
-	 */
-	public static boolean hasHealthChecks() {
-		return !HEALTH_CHECKS.isEmpty();
 	}
 
 	/**
