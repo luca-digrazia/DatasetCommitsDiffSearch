@@ -170,7 +170,6 @@ public class CcCommonTest extends BuildViewTestCase {
    */
   @Test
   public void testArchiveInCcLibrarySrcs() throws Exception {
-    useConfiguration("--cpu=k8");
     ConfiguredTarget archiveInSrcsTest =
         scratchConfiguredTarget(
             "archive_in_srcs",
@@ -180,9 +179,9 @@ public class CcCommonTest extends BuildViewTestCase {
             "           deps = [':archive_in_srcs_lib'])",
             "cc_library(name = 'archive_in_srcs_lib',",
             "           srcs = ['libstatic.a', 'libboth.a', 'libboth.so'])");
-    List<String> artifactNames = baseArtifactNames(getLinkerInputs(archiveInSrcsTest));
-    assertThat(artifactNames).containsAllOf("libboth.so", "libstatic.a");
-    assertThat(artifactNames).doesNotContain("libboth.a");
+    Iterable<Artifact> libraries = getLinkerInputs(archiveInSrcsTest);
+    assertThat(baseArtifactNames(libraries))
+        .containsAllOf("archive_in_srcs_test.pic.o", "libboth.so", "libstatic.a");
   }
 
   private Iterable<Artifact> getLinkerInputs(ConfiguredTarget target) {
@@ -364,10 +363,13 @@ public class CcCommonTest extends BuildViewTestCase {
 
   @Test
   public void testPicModeAssembly() throws Exception {
-    useConfiguration("--cpu=k8");
+    CrosstoolConfigurationHelper.overwriteCrosstoolWithToolchain(
+        directories.getWorkspace(),
+        CrosstoolConfig.CToolchain.newBuilder().setNeedsPic(true).buildPartial());
+
     scratch.file("a/BUILD", "cc_library(name='preprocess', srcs=['preprocess.S'])");
-    List<String> argv = getCppCompileAction("//a:preprocess").getArgv();
-    assertThat(argv).contains("-fPIC");
+
+    assertThat(getCppCompileAction("//a:preprocess").getArgv()).contains("-fPIC");
   }
 
   private CppCompileAction getCppCompileAction(String label) throws Exception {
@@ -586,8 +588,10 @@ public class CcCommonTest extends BuildViewTestCase {
             "          deps = [ ':sophosengine' ],",
             "          linkstatic=1)");
 
-    List<String> artifactNames = baseArtifactNames(getLinkerInputs(wrapsophos));
-    assertThat(artifactNames).contains("libsavi.so");
+    Iterable<Artifact> libraries = getLinkerInputs(wrapsophos);
+
+    assertThat(baseArtifactNames(libraries))
+        .containsAllOf("wrapsophos.pic.o", "libsophosengine.a", "libsavi.so");
   }
 
   @Test
@@ -771,8 +775,9 @@ public class CcCommonTest extends BuildViewTestCase {
             "           deps = [':mylib'])",
             "cc_library(name = 'mylib',",
             "           srcs = ['libshared.so', 'libshared.so.1.1', 'foo.cc'])");
-    List<String> artifactNames = baseArtifactNames(getLinkerInputs(target));
-    assertThat(artifactNames).containsAllOf("libshared.so", "libshared.so.1.1");
+    Iterable<Artifact> libraries = getLinkerInputs(target);
+    assertThat(baseArtifactNames(libraries))
+        .containsAllOf("mybinary.pic.o", "libmylib.a", "libshared.so", "libshared.so.1.1");
   }
 
   @Test

@@ -67,6 +67,10 @@ public final class BazelAnalysisMock extends AnalysisMock {
                 "  actual = '//objcproto:ProtocolBuffers_lib',",
                 ")",
                 "bind(",
+                "  name = 'objc_proto_cpp_lib',",
+                "  actual = '//objcproto:ProtocolBuffersCPP_lib',",
+                ")",
+                "bind(",
                 "  name = 'objc_protobuf_lib',",
                 "  actual = '//objcproto:protobuf_lib',",
                 ")",
@@ -156,8 +160,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
 
     androidBuildContents
         .add("sh_binary(name = 'aar_generator', srcs = ['empty.sh'])")
-        .add("sh_binary(name = 'desugar_java8', srcs = ['empty.sh'])")
-        .add("filegroup(name = 'desugar_java8_extra_bootclasspath', srcs = ['fake.jar'])")
         .add("sh_binary(name = 'dexbuilder', srcs = ['empty.sh'])")
         .add("sh_binary(name = 'dexmerger', srcs = ['empty.sh'])")
         .add("sh_binary(name = 'manifest_merger', srcs = ['empty.sh'])")
