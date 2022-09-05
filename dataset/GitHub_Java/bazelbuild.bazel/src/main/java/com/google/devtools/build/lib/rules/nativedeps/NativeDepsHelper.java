@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.Util;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -96,7 +97,10 @@ public abstract class NativeDepsHelper {
    */
   public static NativeDepsRunfiles maybeCreateNativeDepsAction(final RuleContext ruleContext,
       CcLinkParams linkParams, Collection<String> extraLinkOpts, boolean includeMalloc,
-      final BuildConfiguration configuration) {
+      BuildConfiguration configuration) {
+    PathFragment relativePath = Util.getWorkspaceRelativePath(ruleContext.getRule());
+    PathFragment nativeDepsPath = relativePath.replaceName(
+        relativePath.getBaseName() + Constants.NATIVE_DEPS_LIB_SUFFIX + ".so");
     if (includeMalloc) {
       // Add in the custom malloc dependency if it was requested.
       CcLinkParams.Builder linkParamsBuilder = CcLinkParams.builder(true, true);
@@ -104,19 +108,8 @@ public abstract class NativeDepsHelper {
       linkParamsBuilder.addTransitiveTarget(CppHelper.mallocForTarget(ruleContext));
       linkParams = linkParamsBuilder.build();
     }
-
-    if (linkParams.getLibraries().isEmpty()) {
-      return NativeDepsRunfiles.EMPTY;
-    }
-
-    PathFragment relativePath = new PathFragment(ruleContext.getLabel().getName());
-    PathFragment nativeDepsPath = relativePath.replaceName(
-        relativePath.getBaseName() + Constants.NATIVE_DEPS_LIB_SUFFIX + ".so");
-    Artifact nativeDeps = ruleContext.getPackageRelativeArtifact(nativeDepsPath,
-        configuration.getBinDirectory());
-
-    return createNativeDepsAction(ruleContext, linkParams, extraLinkOpts, configuration,
-        CppHelper.getToolchain(ruleContext), nativeDeps,
+    return maybeCreateNativeDepsAction(ruleContext, linkParams, extraLinkOpts, configuration,
+        CppHelper.getToolchain(ruleContext), nativeDepsPath,
         ruleContext.getConfiguration().getBinDirectory());
   }
 
@@ -141,27 +134,24 @@ public abstract class NativeDepsHelper {
    *         no native code libraries, its fields are null.
    */
   public static Artifact maybeCreateAndroidNativeDepsAction(final RuleContext ruleContext,
-      CcLinkParams linkParams, final BuildConfiguration configuration,
-      CcToolchainProvider toolchain) {
-    if (linkParams.getLibraries().isEmpty()) {
-      return null;
-    }
-
-    PathFragment labelName = new PathFragment(ruleContext.getLabel().getName());
-    Artifact nativeDeps = ruleContext.getUniqueDirectoryArtifact(ANDROID_UNIQUE_DIR,
-        labelName.replaceName("lib" + labelName.getBaseName() + ".so"),
-        configuration.getBinDirectory());
-
-    return createNativeDepsAction(
-        ruleContext, linkParams, /** extraLinkOpts */ImmutableList.<String>of(),
-        configuration, toolchain, nativeDeps, configuration.getBinDirectory()).getLibrary();
+      CcLinkParams linkParams, BuildConfiguration configuration, CcToolchainProvider toolchain) {
+    PathFragment uniquePath = ruleContext.getUniqueDirectory(ANDROID_UNIQUE_DIR);
+    PathFragment nativeDepsPath =
+        uniquePath.replaceName("lib" + uniquePath.getBaseName() + ".so");
+    return maybeCreateNativeDepsAction(
+        ruleContext, linkParams, /** extraLinkOpts */ ImmutableList.<String>of(),
+        configuration, toolchain, nativeDepsPath, configuration.getBinDirectory()).getLibrary();
   }
 
-  private static NativeDepsRunfiles createNativeDepsAction(final RuleContext ruleContext,
+  private static NativeDepsRunfiles maybeCreateNativeDepsAction(final RuleContext ruleContext,
       CcLinkParams linkParams, Collection<String> extraLinkOpts, BuildConfiguration configuration,
-      CcToolchainProvider toolchain, Artifact nativeDeps, Root bindirIfShared) {
+      CcToolchainProvider toolchain, PathFragment nativeDepsPath, Root bindirIfShared) {
     Preconditions.checkState(ruleContext.isLegalFragment(CppConfiguration.class),
         "%s does not have access to CppConfiguration", ruleContext.getRule().getRuleClass());
+    if (linkParams.getLibraries().isEmpty()) {
+      return NativeDepsRunfiles.EMPTY;
+    }
+
     List<String> linkopts = new ArrayList<>(extraLinkOpts);
     linkopts.addAll(linkParams.flattenedLinkopts());
 
@@ -173,13 +163,13 @@ public abstract class NativeDepsHelper {
 
     boolean shareNativeDeps = configuration.getFragment(CppConfiguration.class).shareNativeDeps();
     NestedSet<LibraryToLink> linkerInputs = linkParams.getLibraries();
-    Artifact sharedLibrary = shareNativeDeps
-        ? ruleContext.getShareableArtifact(getSharedNativeDepsPath(
-            LinkerInputs.toLibraryArtifacts(linkerInputs),
-                linkopts, linkstamps.keySet(), buildInfoArtifacts,
-                ruleContext.getFeatures()),
-            ruleContext.getConfiguration().getBinDirectory())
-        : nativeDeps;
+    PathFragment linkerOutputPath = shareNativeDeps
+        ? getSharedNativeDepsPath(LinkerInputs.toLibraryArtifacts(linkerInputs),
+            linkopts, linkstamps.keySet(), buildInfoArtifacts,
+            ruleContext.getFeatures())
+        : nativeDepsPath;
+    Artifact sharedLibrary = ruleContext.getShareableArtifact(
+        linkerOutputPath, configuration.getBinDirectory());
     CppLinkAction.Builder builder = new CppLinkAction.Builder(
         ruleContext, sharedLibrary, configuration, toolchain);
     builder.setLinkArtifactFactory(SHAREABLE_LINK_ARTIFACT_FACTORY);
@@ -216,9 +206,11 @@ public abstract class NativeDepsHelper {
         runtimeSymlinks.add(runtimeSymlink);
       }
 
+      Artifact symlink = ruleContext.getAnalysisEnvironment().getDerivedArtifact(
+          nativeDepsPath, bindirIfShared);
       ruleContext.registerAction(
-          new SymlinkAction(ruleContext.getActionOwner(), linkerOutput, nativeDeps, null));
-      return new NativeDepsRunfiles(nativeDeps, runtimeSymlinks);
+          new SymlinkAction(ruleContext.getActionOwner(), linkerOutput, symlink, null));
+      return new NativeDepsRunfiles(symlink, runtimeSymlinks);
     }
 
     return new NativeDepsRunfiles(linkerOutput, runtimeSymlinks);
