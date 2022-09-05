@@ -184,7 +184,6 @@ public abstract class SkylarkFunction extends AbstractFunction {
       ConversionException,
       IllegalArgumentException,
       IllegalStateException,
-      InterruptedException,
       ClassCastException,
       ClassNotFoundException,
       ExecutionException;

@@ -50,6 +50,7 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleFactory;
 import com.google.devtools.build.lib.packages.RuleFactory.InvalidRuleException;
+import com.google.devtools.build.lib.packages.SkylarkFileType;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.packages.Type;
@@ -91,6 +92,22 @@ public class SkylarkRuleClassFunctions {
   @SkylarkBuiltin(name = "HOST_CFG", returnType = ConfigurationTransition.class,
       doc = "The default runfiles collection state.")
   private static final Object hostTransition = ConfigurationTransition.HOST;
+
+  private static final Attribute.ComputedDefault DEPRECATION =
+      new Attribute.ComputedDefault() {
+        @Override
+        public Object getDefault(AttributeMap rule) {
+          return rule.getPackageDefaultDeprecation();
+        }
+      };
+
+  private static final Attribute.ComputedDefault TEST_ONLY =
+      new Attribute.ComputedDefault() {
+        @Override
+        public Object getDefault(AttributeMap rule) {
+          return rule.getPackageDefaultTestOnly();
+        }
+     };
 
   private static final LateBoundLabel<BuildConfiguration> RUN_UNDER =
       new LateBoundLabel<BuildConfiguration>() {
@@ -192,7 +209,7 @@ public class SkylarkRuleClassFunctions {
       optionalParams = {
       @Param(name = "test", type = Boolean.class, doc = "Whether this rule is a test rule. "
              + "If True, the rule must end with <code>_test</code> (otherwise it cannot)."),
-      @Param(name = "attrs", type = Map.class, doc =
+      @Param(name = "attrs", doc =
           "dictionary to declare all the attributes of the rule. It maps from an attribute name "
           + "to an attribute object (see 'attr' module). Attributes starting with <code>_</code> "
           + "are private, and can be used to add an implicit dependency on a label."),
