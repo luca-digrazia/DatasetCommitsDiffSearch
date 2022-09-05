@@ -736,7 +736,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     }
   }
 
-  ActionExecutionException processAndThrow(
+  private ActionExecutionException processAndThrow(
       ActionExecutionException e, Action action, FileOutErr outErrBuffer)
       throws ActionExecutionException {
     reportActionExecution(action, e, outErrBuffer);
