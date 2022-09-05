@@ -35,16 +35,6 @@ public interface IDGenerator<T> {
     T generate();
 
     /**
-     * 空ID生成器
-     */
-    IDGenerator<?> NULL = () -> null;
-
-    @SuppressWarnings("unchecked")
-    static <T> IDGenerator<T> getNullGenerator() {
-        return (IDGenerator) NULL;
-    }
-
-    /**
      * 使用UUID生成id
      */
     IDGenerator<String> UUID = () -> java.util.UUID.randomUUID().toString();
@@ -70,7 +60,7 @@ public interface IDGenerator<T> {
     /**
      * 雪花算法
      */
-    IDGenerator<Long> SNOW_FLAKE = SnowflakeIdGenerator.getInstance()::nextId;
+    IDGenerator<Long>   SNOW_FLAKE        = SnowflakeIdGenerator.getInstance()::nextId;
 
     /**
      * 雪花算法转String
