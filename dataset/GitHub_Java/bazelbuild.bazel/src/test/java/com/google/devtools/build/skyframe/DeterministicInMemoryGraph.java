@@ -21,9 +21,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
 
 /** {@link NotifyingInMemoryGraph} that returns reverse deps ordered alphabetically. */
@@ -47,13 +45,6 @@ public class DeterministicInMemoryGraph extends NotifyingInMemoryGraph {
   @Override
   protected DeterministicValueEntry getEntry(SkyKey key) {
     return new DeterministicValueEntry(key);
-  }
-
-  @Override
-  public Map<SkyKey, NodeEntry> getBatch(Set<SkyKey> keys) {
-    Map<SkyKey, NodeEntry> result = new TreeMap<>(ALPHABETICAL_SKYKEY_COMPARATOR);
-    result.putAll(super.getBatch(keys));
-    return result;
   }
 
   /**
