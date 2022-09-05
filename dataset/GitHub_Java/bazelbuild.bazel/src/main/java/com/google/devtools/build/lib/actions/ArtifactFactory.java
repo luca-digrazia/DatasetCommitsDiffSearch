@@ -348,8 +348,7 @@ public class ArtifactFactory implements ArtifactResolver, ArtifactSerializer, Ar
   }
 
   @Override
-  public Artifact resolveSourceArtifact(PathFragment execPath,
-      @SuppressWarnings("unused") RepositoryName repositoryName) {
+  public Artifact resolveSourceArtifact(PathFragment execPath) {
     return resolveSourceArtifactWithAncestor(execPath, null, null);
   }
 

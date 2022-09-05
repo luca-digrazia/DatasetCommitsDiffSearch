@@ -202,7 +202,9 @@ public class AndroidStudioInfoAspect extends NativeAspectClass implements Config
         .addOutputGroup(IDE_INFO_TEXT, provider.getIdeInfoTextFiles())
         .addOutputGroup(IDE_RESOLVE, provider.getIdeResolveFiles())
         .addOutputGroup(IDE_COMPILE, provider.getIdeCompileFiles())
-        .addProvider(provider);
+        .addProvider(
+            AndroidStudioInfoFilesProvider.class,
+            provider);
 
     return builder.build();
   }

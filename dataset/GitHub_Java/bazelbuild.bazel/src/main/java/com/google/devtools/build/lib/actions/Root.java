@@ -181,7 +181,7 @@ public final class Root implements Comparable<Root>, Serializable {
 
   @Override
   public int hashCode() {
-    return Objects.hash(execRoot, path.hashCode(), isMainRepo);
+    return Objects.hash(execRoot, path.hashCode());
   }
 
   @Override
@@ -193,8 +193,7 @@ public final class Root implements Comparable<Root>, Serializable {
       return false;
     }
     Root r = (Root) o;
-    return path.equals(r.path) && Objects.equals(execRoot, r.execRoot)
-        && Objects.equals(isMainRepo, r.isMainRepo);
+    return path.equals(r.path) && Objects.equals(execRoot, r.execRoot);
   }
 
   @Override

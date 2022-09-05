@@ -228,7 +228,6 @@ public final class ConfiguredTargetFactory {
                 env,
                 rule,
                 null,
-                null,
                 configuration,
                 hostConfiguration,
                 ruleClassProvider.getPrerequisiteValidator(),
@@ -318,16 +317,13 @@ public final class ConfiguredTargetFactory {
       BuildConfiguration aspectConfiguration,
       BuildConfiguration hostConfiguration)
       throws InterruptedException {
-    RuleContext.Builder builder =
-        new RuleContext.Builder(
-            env,
-            associatedTarget.getTarget(),
-            aspect.getAspectClass().getName(),
-            aspect.getParameters(),
-            aspectConfiguration,
-            hostConfiguration,
-            ruleClassProvider.getPrerequisiteValidator(),
-            aspect.getDefinition().getConfigurationFragmentPolicy());
+    RuleContext.Builder builder = new RuleContext.Builder(env,
+        associatedTarget.getTarget(),
+        aspect.getAspectClass().getName(),
+        aspectConfiguration,
+        hostConfiguration,
+        ruleClassProvider.getPrerequisiteValidator(),
+        aspect.getDefinition().getConfigurationFragmentPolicy());
     RuleContext ruleContext =
         builder
             .setVisibility(
