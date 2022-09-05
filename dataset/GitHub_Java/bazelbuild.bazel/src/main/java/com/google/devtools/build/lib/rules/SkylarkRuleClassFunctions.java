@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundLabelList;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.packages.AttributeValueSource;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunctionWithCallback;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunctionWithMap;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
@@ -229,6 +228,28 @@ public class SkylarkRuleClassFunctions {
         .build();
   }
 
+  /**
+   * In native code, private values start with $.
+   * In Skylark, private values start with _, because of the grammar.
+   */
+  public static String attributeToNative(String oldName, Location loc, boolean isLateBound)
+      throws EvalException {
+    if (oldName.isEmpty()) {
+      throw new EvalException(loc, "Attribute name cannot be empty");
+    }
+    if (isLateBound) {
+      if (oldName.charAt(0) != '_') {
+        throw new EvalException(loc, "When an attribute value is a function, "
+            + "the attribute must be private (start with '_')");
+      }
+      return ":" + oldName.substring(1);
+    }
+    if (oldName.charAt(0) == '_') {
+      return "$" + oldName.substring(1);
+    }
+    return oldName;
+  }
+
   // TODO(bazel-team): implement attribute copy and other rule properties
   @SkylarkSignature(name = "rule", doc =
       "Creates a new rule. Store it in a global value, so that it can be loaded and called "
@@ -347,8 +368,11 @@ public class SkylarkRuleClassFunctions {
       for (Map.Entry<String, Descriptor> attr :
           castMap(attrs, String.class, Descriptor.class, "attrs").entrySet()) {
         Descriptor attrDescriptor = attr.getValue();
-        AttributeValueSource source = attrDescriptor.getAttributeBuilder().getValueSource();
-        String attrName = source.convertToNativeName(attr.getKey(), ast.getLocation());
+        String attrName =
+            attributeToNative(
+                attr.getKey(),
+                ast.getLocation(),
+                attrDescriptor.getAttributeBuilder().hasLateBoundValue());
         attributes.add(Pair.of(attrName, attrDescriptor));
       }
     }
@@ -434,12 +458,10 @@ public class SkylarkRuleClassFunctions {
             if (!attrName.startsWith("_")) {
               attrAspects.add(attrName);
             } else  {
-              // Implicit attribute names mean either implicit or late-bound attributes
+              // Implicit attribute names mean ether implicit or late-bound attributes
               // (``$attr`` or ``:attr``). Depend on both.
-              attrAspects.add(
-                  AttributeValueSource.COMPUTED_DEFAULT.convertToNativeName(attrName, location));
-              attrAspects.add(
-                  AttributeValueSource.LATE_BOUND.convertToNativeName(attrName, location));
+              attrAspects.add(attributeToNative(attrName, location, false));
+              attrAspects.add(attributeToNative(attrName, location, true));
             }
           }
 
@@ -551,13 +573,7 @@ public class SkylarkRuleClassFunctions {
         PackageContext pkgContext = (PackageContext) env.lookup(PackageFactory.PKG_CONTEXT);
         BuildLangTypedAttributeValuesMap attributeValues =
             new BuildLangTypedAttributeValuesMap((Map<String, Object>) args[0]);
-        return RuleFactory.createAndAddRule(
-            pkgContext,
-            ruleClass,
-            attributeValues,
-            ast,
-            env,
-            pkgContext.getAttributeContainerFactory().apply(ruleClass));
+        return RuleFactory.createAndAddRule(pkgContext, ruleClass, attributeValues, ast, env);
       } catch (InvalidRuleException | NameConflictException | NoSuchVariableException e) {
         throw new EvalException(ast.getLocation(), e.getMessage());
       }
