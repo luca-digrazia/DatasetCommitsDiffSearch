@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.bazel.rules;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableBiMap;
@@ -162,7 +160,6 @@ public class BazelRuleClassProvider {
   public static ConfiguredRuleClassProvider create() {
     ConfiguredRuleClassProvider.Builder builder =
         new ConfiguredRuleClassProvider.Builder();
-    builder.setToolsRepository(TOOLS_REPOSITORY);
     setup(builder);
     return builder.build();
   }
@@ -267,15 +264,14 @@ public class BazelRuleClassProvider {
               ObjcProvider.OBJC_SKYLARK_PROVIDER_NAME, ObjcProvider.class);
 
   public static void setup(ConfiguredRuleClassProvider.Builder builder) {
-    // The tools repository prefix must be set before calling this method.
-    String toolsRepository = checkNotNull(builder.getToolsRepository());
     builder
         .addBuildInfoFactory(new BazelJavaBuildInfoFactory())
         .addBuildInfoFactory(new CppBuildInfo())
         .addBuildInfoFactory(new ObjcBuildInfoFactory())
         .setConfigurationCollectionFactory(new BazelConfigurationCollection())
         .setPrelude("//tools/build_rules:prelude_bazel")
-        .setRunfilesPrefix(Label.DEFAULT_REPOSITORY_DIRECTORY)
+        .setRunfilesPrefix("__main__")
+        .setToolsRepository(TOOLS_REPOSITORY)
         .setPrerequisiteValidator(new BazelPrerequisiteValidator())
         .setSkylarkAccessibleTopLevels(SKYLARK_BUILT_IN_JAVA_OBJECTS)
         .setSkylarkProviderRegistry(SKYLARK_PROVIDERS_TO_REGISTER);
@@ -283,12 +279,12 @@ public class BazelRuleClassProvider {
     builder.addConfigurationOptions(BUILD_OPTIONS);
 
     AndroidNeverlinkAspect androidNeverlinkAspect = new AndroidNeverlinkAspect();
-    DexArchiveAspect dexArchiveAspect = new DexArchiveAspect(toolsRepository);
-    JackAspect jackAspect = new JackAspect(toolsRepository);
-    BazelJ2ObjcProtoAspect bazelJ2ObjcProtoAspect = new BazelJ2ObjcProtoAspect(toolsRepository);
-    J2ObjcAspect j2ObjcAspect = new J2ObjcAspect(toolsRepository, bazelJ2ObjcProtoAspect);
+    DexArchiveAspect dexArchiveAspect = new DexArchiveAspect(TOOLS_REPOSITORY);
+    JackAspect jackAspect = new JackAspect(TOOLS_REPOSITORY);
+    BazelJ2ObjcProtoAspect bazelJ2ObjcProtoAspect = new BazelJ2ObjcProtoAspect(TOOLS_REPOSITORY);
+    J2ObjcAspect j2ObjcAspect = new J2ObjcAspect(TOOLS_REPOSITORY, bazelJ2ObjcProtoAspect);
     AndroidStudioInfoAspect androidStudioInfoAspect =
-        new AndroidStudioInfoAspect(toolsRepository, new BazelAndroidStudioInfoSemantics());
+        new AndroidStudioInfoAspect(TOOLS_REPOSITORY, new BazelAndroidStudioInfoSemantics());
     ObjcProtoAspect objcProtoAspect = new ObjcProtoAspect();
 
     builder.addNativeAspectClass(androidNeverlinkAspect);
@@ -414,7 +410,7 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new ObjcRuleClasses.WatchExtensionBundleRule());
     builder.addRuleDefinition(new ObjcRuleClasses.WatchApplicationBundleRule());
     builder.addRuleDefinition(new ObjcRuleClasses.CrosstoolRule());
-    builder.addRuleDefinition(new AppleToolchain.RequiresXcodeConfigRule(toolsRepository));
+    builder.addRuleDefinition(new AppleToolchain.RequiresXcodeConfigRule(TOOLS_REPOSITORY));
     builder.addRuleDefinition(new AppleWatch1ExtensionRule());
     builder.addRuleDefinition(new AppleWatchExtensionBinaryRule());
     builder.addRuleDefinition(new IosApplicationRule());

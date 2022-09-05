@@ -43,7 +43,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
-
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -66,7 +65,8 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     OptionsParser optionsParser = OptionsParser.newOptionsParser(testFragments);
     try {
       optionsParser.parse(args);
-      InvocationPolicyEnforcer optionsPolicyEnforcer = analysisMock.getInvocationPolicyEnforcer();
+      InvocationPolicyEnforcer optionsPolicyEnforcer =
+          new InvocationPolicyEnforcer(TestConstants.TEST_INVOCATION_POLICY);
       optionsPolicyEnforcer.enforce(optionsParser);
     } catch (OptionsParsingException e) {
       throw new IllegalStateException(e);
@@ -691,7 +691,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             TestConstants.TOOLS_REPOSITORY,
             new PathFragment(
                 new PathFragment(TestConstants.TOOLS_REPOSITORY_PATH), new PathFragment(path)));
-    return packageIdentifier.getSourceRoot();
+    return packageIdentifier.getPathFragment();
   }
 
   private void checkToolchainB(CppConfigurationLoader loader, LipoMode lipoMode, String... args)
