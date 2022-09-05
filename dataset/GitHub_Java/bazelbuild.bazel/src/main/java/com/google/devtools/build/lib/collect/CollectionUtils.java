@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,11 +15,12 @@ package com.google.devtools.build.lib.collect;
 
 import static com.google.common.collect.Sets.newEnumSet;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -81,7 +82,12 @@ public final class CollectionUtils {
    */
   public static <T> Collection<Set<T>> partition(Collection<T> elements,
       final EquivalenceRelation<T> equivalenceRelation) {
-    return partition(elements, (Comparator<T>) equivalenceRelation::compare);
+    return partition(elements, new Comparator<T>() {
+      @Override
+      public int compare(T o1, T o2) {
+        return equivalenceRelation.compare(o1, o2);
+      }
+    });
   }
 
   /**
