@@ -19,7 +19,7 @@ import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.PrintingEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.syntax.EvaluationContext;
-import com.google.devtools.build.lib.testutil.MoreAsserts;
+import com.google.devtools.build.lib.testutil.JunitTestUtils;
 import com.google.devtools.build.lib.util.io.OutErr;
 
 import java.util.List;
@@ -103,7 +103,7 @@ public class EventCollectionApparatus {
    *    initialized by calling {@link #reporter()} or {@link #collector()}.
    */
   public void assertNoEvents() {
-    MoreAsserts.assertNoEvents(eventCollector);
+    JunitTestUtils.assertNoEvents(eventCollector);
   }
 
   /**
@@ -111,13 +111,13 @@ public class EventCollectionApparatus {
    * event with the {@code expectedMessage}.
    */
   public Event assertContainsEvent(String expectedMessage) {
-    return MoreAsserts.assertContainsEvent(eventCollector,
+    return JunitTestUtils.assertContainsEvent(eventCollector,
                                               expectedMessage);
   }
 
   public List<Event> assertContainsEventWithFrequency(String expectedMessage,
       int expectedFrequency) {
-    return MoreAsserts.assertContainsEventWithFrequency(eventCollector, expectedMessage,
+    return JunitTestUtils.assertContainsEventWithFrequency(eventCollector, expectedMessage,
         expectedFrequency);
   }
 
@@ -127,7 +127,7 @@ public class EventCollectionApparatus {
    */
 
   public Event assertContainsEventWithWordsInQuotes(String... words) {
-    return MoreAsserts.assertContainsEventWithWordsInQuotes(
+    return JunitTestUtils.assertContainsEventWithWordsInQuotes(
         eventCollector, words);
   }
 }

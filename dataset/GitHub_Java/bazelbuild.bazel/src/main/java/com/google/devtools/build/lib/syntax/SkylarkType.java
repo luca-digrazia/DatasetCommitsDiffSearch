@@ -778,12 +778,7 @@ public abstract class SkylarkType {
   /** Build a map of the given key, value types from an Iterable of Map.Entry-s */
   public static <KEY_TYPE, VALUE_TYPE> ImmutableMap<KEY_TYPE, VALUE_TYPE> toMap(
       Iterable<Map.Entry<KEY_TYPE, VALUE_TYPE>> obj) {
-    ImmutableMap.Builder<KEY_TYPE, VALUE_TYPE> result = ImmutableMap.builder();
-    for (Map.Entry<KEY_TYPE, VALUE_TYPE> entry : obj) {
-      result.put(entry);
-    }
-
-    return result.build();
+    return ImmutableMap.copyOf(obj);
   }
 
   /**
