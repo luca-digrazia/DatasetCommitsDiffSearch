@@ -13,13 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.worker;
 
-import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.TreeSet;
-import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.commons.pool2.BaseKeyedPooledObjectFactory;
 import org.apache.commons.pool2.PooledObject;
 import org.apache.commons.pool2.impl.DefaultPooledObject;
@@ -28,63 +25,26 @@ import org.apache.commons.pool2.impl.DefaultPooledObject;
  * Factory used by the pool to create / destroy / validate worker processes.
  */
 final class WorkerFactory extends BaseKeyedPooledObjectFactory<WorkerKey, Worker> {
-
-  // It's fine to use an AtomicInteger here (which is 32-bit), because it is only incremented when
-  // spawning a new worker, thus even under worst-case circumstances and buggy workers quitting
-  // after each action, this should never overflow.
-  private static final AtomicInteger pidCounter = new AtomicInteger();
-
-  private WorkerOptions workerOptions;
-  private final Path workerBaseDir;
+  private final Path logDir;
   private Reporter reporter;
+  private boolean verbose;
 
-  public WorkerFactory(WorkerOptions workerOptions, Path workerBaseDir) {
-    this.workerOptions = workerOptions;
-    this.workerBaseDir = workerBaseDir;
+  public WorkerFactory(Path logDir) {
+    super();
+    this.logDir = logDir;
   }
 
   public void setReporter(Reporter reporter) {
     this.reporter = reporter;
   }
 
-  public void setOptions(WorkerOptions workerOptions) {
-    this.workerOptions = workerOptions;
+  public void setVerbose(boolean verbose) {
+    this.verbose = verbose;
   }
 
   @Override
   public Worker create(WorkerKey key) throws Exception {
-    int workerId = pidCounter.getAndIncrement();
-    Path logFile =
-        workerBaseDir.getRelative("worker-" + workerId + "-" + key.getMnemonic() + ".log");
-
-    Worker worker;
-    boolean sandboxed = workerOptions.workerSandboxing || key.mustBeSandboxed();
-    if (sandboxed) {
-      Path workDir = getSandboxedWorkerPath(key, workerId);
-      worker = new SandboxedWorker(key, workerId, workDir, logFile);
-    } else {
-      worker = new Worker(key, workerId, key.getExecRoot(), logFile);
-    }
-    worker.prepareExecution(key);
-    worker.createProcess();
-    if (workerOptions.workerVerbose) {
-      reporter.handle(
-          Event.info(
-              String.format(
-                  "Created new %s %s worker (id %d), logging to %s",
-                  sandboxed ? "sandboxed" : "non-sandboxed",
-                  key.getMnemonic(),
-                  workerId,
-                  logFile)));
-    }
-    return worker;
-  }
-
-  Path getSandboxedWorkerPath(WorkerKey key, int workerId) {
-    String workspaceName = key.getExecRoot().getBaseName();
-    return workerBaseDir
-        .getRelative("worker-" + workerId + "-" + key.getMnemonic())
-        .getRelative(workspaceName);
+    return Worker.create(key, logDir, reporter, verbose);
   }
 
   /**
@@ -100,47 +60,55 @@ final class WorkerFactory extends BaseKeyedPooledObjectFactory<WorkerKey, Worker
    */
   @Override
   public void destroyObject(WorkerKey key, PooledObject<Worker> p) throws Exception {
-    if (workerOptions.workerVerbose) {
+    if (verbose) {
       reporter.handle(
           Event.info(
-              String.format(
-                  "Destroying %s worker (id %d)", key.getMnemonic(), p.getObject().getWorkerId())));
+              "Destroying "
+                  + key.getMnemonic()
+                  + " worker (id "
+                  + p.getObject().getWorkerId()
+                  + ")."));
     }
     p.getObject().destroy();
   }
 
-  /** The worker is considered to be valid when its files have not changed on disk. */
+  /**
+   * The worker is considered to be valid when its files have not changed on disk and its process is
+   * still alive.
+   */
   @Override
   public boolean validateObject(WorkerKey key, PooledObject<Worker> p) {
     Worker worker = p.getObject();
-    boolean hashMatches =
-        key.getWorkerFilesCombinedHash().equals(worker.getWorkerFilesCombinedHash());
 
-    if (reporter != null && !hashMatches) {
+    boolean hashMatches = key.getWorkerFilesHash().equals(worker.getWorkerFilesHash());
+    boolean workerIsAlive = worker.isAlive();
+    boolean workerIsStillValid = hashMatches && workerIsAlive;
+
+    if (reporter != null && !workerIsStillValid) {
       StringBuilder msg = new StringBuilder();
-      msg.append(
-          String.format(
-              "%s worker (id %d) can no longer be used, because its files have changed on disk:",
-              key.getMnemonic(), worker.getWorkerId()));
-      TreeSet<PathFragment> files = new TreeSet<>();
-      files.addAll(key.getWorkerFilesWithHashes().keySet());
-      files.addAll(worker.getWorkerFilesWithHashes().keySet());
-      for (PathFragment file : files) {
-        HashCode oldHash = key.getWorkerFilesWithHashes().get(file);
-        HashCode newHash = worker.getWorkerFilesWithHashes().get(file);
-        if (!oldHash.equals(newHash)) {
-          msg.append("\n")
-              .append(file.getPathString())
-              .append(": ")
-              .append(oldHash != null ? oldHash : "<none>")
-              .append(" -> ")
-              .append(newHash != null ? newHash : "<none>");
+      msg.append(key.getMnemonic());
+      msg.append(" worker (id ");
+      msg.append(p.getObject().getWorkerId());
+      msg.append(") can no longer be used, because");
+
+      if (!workerIsAlive) {
+        msg.append(" its process terminated itself or got killed");
+      }
+
+      if (!hashMatches) {
+        if (!workerIsAlive) {
+          msg.append(" and");
         }
+        msg.append(" its files have changed on disk [");
+        msg.append(worker.getWorkerFilesHash());
+        msg.append(" -> ");
+        msg.append(key.getWorkerFilesHash());
+        msg.append("]");
       }
 
       reporter.handle(Event.warn(msg.toString()));
     }
 
-    return hashMatches;
+    return workerIsStillValid;
   }
 }
