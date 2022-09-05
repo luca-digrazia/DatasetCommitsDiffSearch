@@ -68,11 +68,6 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     }
 
     @Override
-    public Iterable<TreeFileArtifact> getExpandedOutputs(Artifact artifact) {
-      throw new UnsupportedOperationException(artifact.prettyPrint());
-    }
-
-    @Override
     public Metadata getMetadataMaybe(Artifact artifact) {
       throw new UnsupportedOperationException(artifact.prettyPrint());
     }
