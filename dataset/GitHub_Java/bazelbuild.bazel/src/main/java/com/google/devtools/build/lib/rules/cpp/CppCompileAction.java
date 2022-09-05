@@ -153,7 +153,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   private final CppCompilationContext context;
   private final Collection<PathFragment> extraSystemIncludePrefixes;
   private final Iterable<IncludeScannable> lipoScannables;
-  private final ImmutableList<Artifact> builtinIncludeFiles;
   private final CppCompileCommandLine cppCompileCommandLine;
   private final boolean usePic;
 
@@ -277,7 +276,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     // We do not need to include the middleman artifact since it is a generated
     // artifact and will definitely exist prior to this action execution.
     this.mandatoryInputs = mandatoryInputs;
-    this.builtinIncludeFiles = CppHelper.getToolchain(ruleContext).getBuiltinIncludeFiles();
     verifyIncludePaths(ruleContext);
   }
 
@@ -344,8 +342,8 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
   @Nullable
   @Override
-  public List<Artifact> getBuiltInIncludeFiles() {
-    return builtinIncludeFiles;
+  public Artifact getBuiltInIncludeFile() {
+    return cppConfiguration.getBuiltInIncludeFile();
   }
 
   public String getHostSystemName() {
@@ -1108,10 +1106,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     f.addPaths(getDeclaredIncludeSrcsInStableOrder());
     f.addPaths(getExtraSystemIncludePrefixes());
     f.addPaths(Artifact.asSortedPathFragments(getMandatoryInputs()));
-    // I'm not sure if getBuiltInIncludeFiles() is necessary here, since before an action cache hit
-    // is reported, include scanning needs to be run, and thus the changed set of files would be
-    // noticed. Better be safe than sorry.
-    f.addPaths(Artifact.asSortedPathFragments(getBuiltInIncludeFiles()));
     return f.hexDigestAndReset();
   }
 
