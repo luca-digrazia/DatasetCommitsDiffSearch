@@ -338,6 +338,7 @@ public class Metrics {
      */
     public static void shutdown() {
         try {
+            DEFAULT_REGISTRY.shutdown();
             JmxReporter.shutdownDefault();
             Runtime.getRuntime().removeShutdownHook(SHUTDOWN_HOOK);
         } catch (IllegalStateException ignored) {}
