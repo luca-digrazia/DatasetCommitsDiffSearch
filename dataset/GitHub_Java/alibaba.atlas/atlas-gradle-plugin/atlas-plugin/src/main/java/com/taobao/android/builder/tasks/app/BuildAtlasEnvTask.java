@@ -278,7 +278,7 @@ public class BuildAtlasEnvTask extends BaseTask {
             field.setAccessible(true);
             field.set(mergeResources, new MainArtifactsCollection((ArtifactCollection) field.get(mergeResources), getProject()));
             appVariantOutputContext.getAwbTransformMap().values().stream().forEach(awbTransform -> {
-                if (isMBundle(appVariantContext,awbTransform.getAwbBundle())) {
+                if (appVariantContext.getAtlasExtension().getTBuildConfig().getAllBundlesToMdex() || appVariantContext.getAtlasExtension().getTBuildConfig().getBundleToMdex().contains(awbTransform.getAwbBundle().getPackageName())) {
                     try {
                         awbTransform.getAwbBundle().isMBundle = true;
                         awbTransform.getAwbBundle().bundleInfo.setIsMBundle(true);
@@ -316,7 +316,7 @@ public class BuildAtlasEnvTask extends BaseTask {
             assetsField.setAccessible(true);
             assetsField.set(mergeSourceSetFolders, new MainArtifactsCollection((ArtifactCollection) assetsField.get(mergeSourceSetFolders), getProject()));
             appVariantOutputContext.getAwbTransformMap().values().stream().forEach(awbTransform -> {
-                if (isMBundle(appVariantContext,awbTransform.getAwbBundle())) {
+                if (appVariantContext.getAtlasExtension().getTBuildConfig().getAllBundlesToMdex() || appVariantContext.getAtlasExtension().getTBuildConfig().getBundleToMdex().contains(awbTransform.getAwbBundle().getPackageName())) {
                     try {
                         awbTransform.getAwbBundle().isMBundle = true;
                         awbTransform.getAwbBundle().bundleInfo.setIsMBundle(true);
@@ -602,15 +602,5 @@ public class BuildAtlasEnvTask extends BaseTask {
             default:
                 throw new RuntimeException("unknown ArtifactScope value");
         }
-    }
-
-    private boolean isMBundle(AppVariantContext appVariantContext,AwbBundle awbBundle){
-
-        if (appVariantContext.getAtlasExtension().getTBuildConfig().getOutOfApkBundles().contains(awbBundle.getPackageName())){
-            return false;
-        }
-
-        return appVariantContext.getAtlasExtension().getTBuildConfig().getAllBundlesToMdex() || appVariantContext.getAtlasExtension().getTBuildConfig().getBundleToMdex().contains(awbBundle.getPackageName());
-
     }
 }
