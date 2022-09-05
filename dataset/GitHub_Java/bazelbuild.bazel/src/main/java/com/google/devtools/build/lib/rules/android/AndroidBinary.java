@@ -281,8 +281,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   }
 
 
-  public static RuleConfiguredTargetBuilder createAndroidBinary(
-      RuleContext ruleContext,
+  public static RuleConfiguredTargetBuilder createAndroidBinary(RuleContext ruleContext,
       NestedSetBuilder<Artifact> filesBuilder,
       Artifact deployJar,
       JavaCommon javaCommon,
@@ -298,24 +297,17 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       ImmutableList<Artifact> apksUnderTest,
       Artifact proguardMapping) {
 
-    ImmutableList<Artifact> proguardSpecs =
-        getTransitiveProguardSpecs(
-            ruleContext,
-            resourceApk,
-            ruleContext.getPrerequisiteArtifacts(PROGUARD_SPECS, Mode.TARGET).list());
-
-    ProguardOutput proguardOutput =
-        applyProguard(
-            ruleContext,
-            androidCommon,
-            deployJar,
-            filesBuilder,
-            proguardSpecs,
-            proguardMapping);
+    ProguardOutput proguardOutput = applyProguard(ruleContext,
+        androidCommon,
+        deployJar,
+        filesBuilder,
+        resourceApk,
+        ruleContext.getPrerequisiteArtifacts(PROGUARD_SPECS, Mode.TARGET).list(),
+        proguardMapping);
     Artifact jarToDex = proguardOutput.outputJar;
     DexingOutput dexingOutput =
         shouldDexWithJack(ruleContext)
-            ? dexWithJack(ruleContext, androidCommon, proguardSpecs)
+            ? dexWithJack(ruleContext, androidCommon)
             : dex(
                 ruleContext,
                 getMultidexMode(ruleContext),
@@ -681,35 +673,13 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     }
   }
 
-  /**
-   * Retrieves the full set of proguard specs that should be applied to this binary.
-   *
-   * <p>If an empty list is passed (i.e., there are no proguardSpecs on this rule), an empty list
-   * will be returned, regardless of any specs from dependencies or the resourceApk.
-   */
-  private static ImmutableList<Artifact> getTransitiveProguardSpecs(
-      RuleContext ruleContext, ResourceApk resourceApk, ImmutableList<Artifact> proguardSpecs) {
-    if (proguardSpecs.isEmpty()) {
-      return proguardSpecs;
-    }
-
-    ImmutableSortedSet.Builder<Artifact> builder =
-        ImmutableSortedSet.<Artifact>orderedBy(Artifact.EXEC_PATH_COMPARATOR).addAll(proguardSpecs);
-    for (ProguardSpecProvider dep :
-        ruleContext.getPrerequisites("deps", Mode.TARGET, ProguardSpecProvider.class)) {
-      builder.addAll(dep.getTransitiveProguardSpecs());
-    }
-    Artifact output = resourceApk.getResourceProguardConfig();
-    builder.add(output);
-    return builder.build().asList();
-  }
-
   /** Applies the proguard specifications, and creates a ProguardedJar. */
   private static ProguardOutput applyProguard(
       RuleContext ruleContext,
       AndroidCommon common,
       Artifact deployJarArtifact,
       NestedSetBuilder<Artifact> filesBuilder,
+      ResourceApk resourceApk,
       ImmutableList<Artifact> proguardSpecs,
       Artifact proguardMapping) {
     Artifact proguardOutputJar =
@@ -725,6 +695,15 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       return createEmptyProguardAction(ruleContext, proguardOutputJar, deployJarArtifact);
     }
 
+    ImmutableSortedSet.Builder<Artifact> builder =
+        ImmutableSortedSet.<Artifact>orderedBy(Artifact.EXEC_PATH_COMPARATOR).addAll(proguardSpecs);
+    for (ProguardSpecProvider dep : ruleContext.getPrerequisites("deps", Mode.TARGET,
+        ProguardSpecProvider.class)) {
+      builder.addAll(dep.getTransitiveProguardSpecs());
+    }
+    Artifact output = resourceApk.getResourceProguardConfig();
+    builder.add(output);
+    proguardSpecs = builder.build().asList();
     AndroidSdkProvider sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
     return createProguardAction(ruleContext, common, sdk.getProguard(), deployJarArtifact,
         proguardSpecs, proguardMapping, sdk.getAndroidJar(), proguardOutputJar, filesBuilder);
@@ -822,14 +801,13 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .isJackUsedForDexing();
   }
 
-  static DexingOutput dexWithJack(
-      RuleContext ruleContext, AndroidCommon androidCommon, ImmutableList<Artifact> proguardSpecs) {
+  static DexingOutput dexWithJack(RuleContext ruleContext, AndroidCommon androidCommon) {
     Artifact classesDexZip =
         androidCommon.compileDexWithJack(
             getMultidexMode(ruleContext),
             Optional.fromNullable(
                 ruleContext.getPrerequisiteArtifact("main_dex_list", Mode.TARGET)),
-            proguardSpecs);
+            ruleContext.getPrerequisiteArtifacts(PROGUARD_SPECS, Mode.TARGET).list());
     return new DexingOutput(classesDexZip, null, ImmutableList.of(classesDexZip));
   }
 
