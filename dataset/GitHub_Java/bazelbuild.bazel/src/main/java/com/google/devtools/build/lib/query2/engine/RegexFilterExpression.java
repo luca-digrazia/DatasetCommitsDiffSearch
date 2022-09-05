@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunctio
 import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 /**
  * An abstract class that provides generic regex filter expression. Actual
@@ -40,18 +39,12 @@ public abstract class RegexFilterExpression implements QueryFunction {
       final List<Argument> args,
       Callback<T> callback)
       throws QueryException, InterruptedException {
-    String rawPattern = getPattern(args);
     final Pattern compiledPattern;
     try {
-      compiledPattern = Pattern.compile(rawPattern);
-    } catch (PatternSyntaxException e) {
-      throw new QueryException(
-          expression,
-          String.format(
-              "illegal '%s' pattern regexp '%s': %s",
-              getName(),
-              rawPattern,
-              e.getMessage()));
+      compiledPattern = Pattern.compile(getPattern(args));
+    } catch (IllegalArgumentException e) {
+      throw new QueryException(expression, "illegal pattern regexp in '" + this + "': "
+                               + e.getMessage());
     }
 
     // Note that Patttern#matcher is thread-safe and so this Predicate can safely be used
