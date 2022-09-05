@@ -228,8 +228,6 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
   }
 
   protected static Iterable<Label> extractLabels(Type type, Object value) {
-    return value == null
-        ? ImmutableList.<Label>of()
-        : Iterables.filter(type.flatten(value), Label.class);
+    return Iterables.filter(type.flatten(value), Label.class);
   }
 }
