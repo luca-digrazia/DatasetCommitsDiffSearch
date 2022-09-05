@@ -1,7 +1,10 @@
 package com.yammer.metrics.core;
 
 import java.lang.management.ManagementFactory;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -155,8 +158,6 @@ public class JmxReporter implements Runnable {
 		public double get99thPercentile();
 
 		public double get999thPercentile();
-
-		public List<Long> values();
 	}
 
 	public class Histogram implements HistogramMBean {
@@ -227,11 +228,6 @@ public class JmxReporter implements Runnable {
 		public double get999thPercentile() {
 			return metric.percentiles(0.999)[0];
 		}
-
-		@Override
-		public List<Long> values() {
-			return metric.values();
-		}
 	}
 
 	public static interface TimerMBean extends MetricMBean {
@@ -268,8 +264,6 @@ public class JmxReporter implements Runnable {
 		public double get99thPercentile();
 
 		public double get999thPercentile();
-
-		public List<Double> values();
 	}
 
 	public class Timer implements TimerMBean {
@@ -369,11 +363,6 @@ public class JmxReporter implements Runnable {
 		@Override
 		public double get999thPercentile() {
 			return metric.percentiles(0.999)[0];
-		}
-
-		@Override
-		public List<Double> values() {
-			return metric.values();
 		}
 	}
 
