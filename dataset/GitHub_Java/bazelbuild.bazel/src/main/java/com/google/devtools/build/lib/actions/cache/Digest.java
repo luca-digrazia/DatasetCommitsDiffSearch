@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions.cache;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
+import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.VarInt;
 
@@ -46,10 +45,8 @@ public class Digest {
    * Construct the digest from the given bytes.
    * @param digest an MD5 digest. Must be sized properly.
    */
-  @VisibleForTesting
-  Digest(byte[] digest) {
-    Preconditions.checkState(digest.length == MD5_SIZE);
-    this.digest = Arrays.copyOf(digest, digest.length);
+  private Digest(byte[] digest) {
+    this.digest = digest;
   }
 
   /**
@@ -88,7 +85,6 @@ public class Digest {
     Fingerprint fp = new Fingerprint();
     for (Map.Entry<String, Metadata> entry : mdMap.entrySet()) {
       xorWith(result, getDigest(fp, entry.getKey(), entry.getValue()));
-      fp.reset();
     }
     return new Digest(result);
   }
@@ -112,11 +108,11 @@ public class Digest {
 
   @Override
   public String toString() {
-    return Fingerprint.hexDigest(digest);
+    return HashCode.fromBytes(digest).toString();
   }
 
   private static byte[] getDigest(Fingerprint fp, String execPath, Metadata md) {
-    fp.addString(execPath);
+    fp.addStringLatin1(execPath);
 
     if (md == null) {
       // Move along, nothing to see here.
