@@ -13,19 +13,19 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.RecursivePkgValue.RecursivePkgKey;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.Dirent.Type;
 import com.google.devtools.build.lib.vfs.Path;
@@ -37,7 +37,6 @@ import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException4;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,14 +48,6 @@ import java.util.Set;
  */
 abstract class RecursiveDirectoryTraversalFunction
     <TVisitor extends RecursiveDirectoryTraversalFunction.Visitor, TReturn> {
-  private static final String SENTINEL_FILE_NAME_FOR_NOT_TRAVERSING_SYMLINKS =
-      "DONT_FOLLOW_SYMLINKS_WHEN_TRAVERSING_THIS_DIRECTORY_VIA_A_RECURSIVE_TARGET_PATTERN";
-
-  private final BlazeDirectories directories;
-
-  protected RecursiveDirectoryTraversalFunction(BlazeDirectories directories) {
-    this.directories = directories;
-  }
 
   /**
    * Returned from {@link #visitDirectory} if its {@code recursivePkgKey} is a symlink or not a
@@ -151,18 +142,6 @@ abstract class RecursiveDirectoryTraversalFunction
 
     PackageIdentifier packageId = PackageIdentifier.create(
         recursivePkgKey.getRepository(), rootRelativePath);
-
-    if (packageId.getRepository().isDefault()
-      && fileValue.isSymlink()
-      && fileValue.getUnresolvedLinkTarget().startsWith(directories.getOutputBase().asFragment())) {
-      // Symlinks back to the output base are not traversed so that we avoid convenience symlinks.
-      // Note that it's not enough to just check for the convenience symlinks themselves, because
-      // if the value of --symlink_prefix changes, the old symlinks are left in place. This
-      // algorithm also covers more creative use cases where people create convenience symlinks
-      // somewhere in the directory tree manually.
-      return getEmptyReturn();
-    }
-
     SkyKey pkgLookupKey = PackageLookupValue.key(packageId);
     SkyKey dirListingKey = DirectoryListingValue.key(rootedPath);
     Map<SkyKey,
@@ -252,19 +231,17 @@ abstract class RecursiveDirectoryTraversalFunction
       throw new IllegalStateException(e);
     }
 
-    boolean followSymlinks = shouldFollowSymlinksWhenTraversing(dirListingValue.getDirents());
-    List<SkyKey> childDeps = new ArrayList<>();
+    List<SkyKey> childDeps = Lists.newArrayList();
     for (Dirent dirent : dirListingValue.getDirents()) {
-      Type type = dirent.getType();
-      if (type != Type.DIRECTORY
-          && (type != Type.SYMLINK || (type == Type.SYMLINK && !followSymlinks))) {
+      if (dirent.getType() != Type.DIRECTORY && dirent.getType() != Type.SYMLINK) {
         // Non-directories can never host packages. Symlinks to non-directories are weeded out at
         // the next level of recursion when we check if its FileValue is a directory. This is slower
         // if there are a lot of symlinks in the tree, but faster if there are only a few, which is
         // the case most of the time.
         //
-        // We are not afraid of weird symlink structure here: both cyclical ones and ones that give
-        // rise to infinite directory trees are diagnosed by FileValue.
+        // We are not afraid of weird symlink structure here: cyclical ones are diagnosed by
+        // FileValue and ones that give rise to infinite directory trees work just like they do with
+        // globbing: they work until a certain level of nesting, after which they fail.
         continue;
       }
       String basename = dirent.getName();
@@ -303,20 +280,6 @@ abstract class RecursiveDirectoryTraversalFunction
       return null;
     }
     return aggregateWithSubdirectorySkyValues(visitor, subdirectorySkyValues);
-  }
-
-  private static boolean shouldFollowSymlinksWhenTraversing(Dirents dirents) {
-    for (Dirent dirent : dirents) {
-      // This is a specical sentinel file whose existence tells Blaze not to follow symlinks when
-      // recursively traversing through this directory.
-      //
-      // This admittedly ugly feature is used to support workspaces with directories with weird
-      // symlink structures that aren't intended to be consumed by Blaze.
-      if (dirent.getName().equals(SENTINEL_FILE_NAME_FOR_NOT_TRAVERSING_SYMLINKS)) {
-        return false;
-      }
-    }
-    return true;
   }
 
   // Ignore all errors in traversal and return an empty value.

@@ -31,7 +31,7 @@ import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.ResolvedFile;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.TraversalRequest;
-import com.google.devtools.build.lib.testutil.FoundationTestCaseForJunit4;
+import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
@@ -49,11 +49,6 @@ import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -65,8 +60,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 /** Tests for {@link RecursiveFilesystemTraversalFunction}. */
-@RunWith(JUnit4.class)
-public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTestCaseForJunit4 {
+public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTestCase {
 
   private TimestampGranularityMonitor tsgm = new TimestampGranularityMonitor(BlazeClock.instance());
   private RecordingEvaluationProgressReceiver progressReceiver;
@@ -75,8 +69,10 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
   private RecordingDifferencer differencer;
   private AtomicReference<PathPackageLocator> pkgLocator;
 
-  @Before
-  public final void setUp() throws Exception  {
+  @Override
+  protected void setUp() throws Exception {
+    super.setUp();
+
     pkgLocator = new AtomicReference<>(
         new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)));
     AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages =
@@ -338,17 +334,14 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     progressReceiver.clear();
   }
 
-  @Test
   public void testTraversalOfSourceFile() throws Exception {
     assertTraversalOfFile(sourceArtifact("foo/bar.txt"));
   }
 
-  @Test
   public void testTraversalOfGeneratedFile() throws Exception {
     assertTraversalOfFile(derivedArtifact("foo/bar.txt"));
   }
 
-  @Test
   public void testTraversalOfSymlinkToFile() throws Exception {
     Artifact linkNameArtifact = sourceArtifact("foo/baz/qux.sym");
     Artifact linkTargetArtifact = sourceArtifact("foo/bar/baz.txt");
@@ -375,7 +368,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     assertThat(v2).isNotEqualTo(v1);
   }
 
-  @Test
   public void testTraversalOfTransitiveSymlinkToFile() throws Exception {
     Artifact directLinkArtifact = sourceArtifact("direct/file.sym");
     Artifact transitiveLinkArtifact = sourceArtifact("transitive/sym.sym");
@@ -451,17 +443,14 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     assertThat(progressReceiver.invalidations).doesNotContain(rftvSkyKey(traversalRoot));
   }
 
-  @Test
   public void testTraversalOfSourceDirectory() throws Exception {
     assertTraversalOfDirectory(sourceArtifact("dir"));
   }
 
-  @Test
   public void testTraversalOfGeneratedDirectory() throws Exception {
     assertTraversalOfDirectory(derivedArtifact("dir"));
   }
 
-  @Test
   public void testTraversalOfTransitiveSymlinkToDirectory() throws Exception {
     Artifact directLinkArtifact = sourceArtifact("direct/dir.sym");
     Artifact transitiveLinkArtifact = sourceArtifact("transitive/sym.sym");
@@ -489,7 +478,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
         resolvedFile(childOf(transitiveLinkArtifact, "file.a")));
   }
 
-  @Test
   public void testTraversePackage() throws Exception {
     Artifact buildFile = sourceArtifact("pkg/BUILD");
     RootedPath buildFilePath = createFile(rootedPath(buildFile));
@@ -501,7 +489,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
         resolvedFile(file1));
   }
 
-  @Test
   public void testTraversalOfSymlinkToDirectory() throws Exception {
     Artifact linkNameArtifact = sourceArtifact("link/foo.sym");
     Artifact linkTargetArtifact = sourceArtifact("dir");
@@ -556,7 +543,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     assertThat(progressReceiver.invalidations).doesNotContain(rftvSkyKey(traversalRoot));
   }
 
-  @Test
   public void testTraversalOfDanglingSymlink() throws Exception {
     Artifact linkArtifact = sourceArtifact("a/dangling.sym");
     RootedPath link = rootedPath(linkArtifact);
@@ -567,7 +553,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
         fileLikeRoot(linkArtifact, DONT_CROSS), resolvedDanglingSymlink(link, linkTarget));
   }
 
-  @Test
   public void testTraversalOfDanglingSymlinkInADirectory() throws Exception {
     Artifact dirArtifact = sourceArtifact("a");
     RootedPath file = createFile(childOf(dirArtifact, "file.txt"));
@@ -614,22 +599,18 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     }
   }
 
-  @Test
   public void testTraverseSubpackages() throws Exception {
     assertTraverseSubpackages(CROSS);
   }
 
-  @Test
   public void testDoNotTraverseSubpackages() throws Exception {
     assertTraverseSubpackages(DONT_CROSS);
   }
 
-  @Test
   public void testReportErrorWhenTraversingSubpackages() throws Exception {
     assertTraverseSubpackages(REPORT_ERROR);
   }
 
-  @Test
   public void testSwitchPackageRootsWhenUsingMultiplePackagePaths() throws Exception {
     // Layout:
     //   pp1://a/BUILD
@@ -707,7 +688,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
         resolvedFile(pp1aSubdirFileB));
   }
 
-  @Test
   public void testFileDigestChangeCausesRebuild() throws Exception {
     Artifact artifact = sourceArtifact("foo/bar.txt");
     RootedPath path = rootedPath(artifact);
@@ -727,7 +707,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     assertThat(v2).isNotEqualTo(v1);
   }
 
-  @Test
   public void testFileMtimeChangeDoesNotCauseRebuildIfDigestIsUnchanged() throws Exception {
     Artifact artifact = sourceArtifact("foo/bar.txt");
     RootedPath path = rootedPath(artifact);
@@ -748,7 +727,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     assertThat(v2).isEqualTo(v1);
   }
 
-  @Test
   public void testRegexp() throws Exception {
     Artifact wantedArtifact = sourceArtifact("foo/bar/baz.txt");
     Artifact unwantedArtifact = sourceArtifact("foo/boo/baztxt.bak");
@@ -767,7 +745,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     traverseAndAssertFiles(traversalRoot, expected);
   }
 
-  @Test
   public void testGeneratedDirectoryConflictsWithPackage() throws Exception {
     Artifact genDir = derivedArtifact("a/b");
     createFile(rootedPath(sourceArtifact("a/b/c/file.real")));
