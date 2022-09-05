@@ -155,6 +155,7 @@ public class Graphite implements GraphiteSender {
     @Override
     public void close() throws IOException {
         try {
+            flush();
             if (writer != null) {
                 writer.close();
             }
