@@ -189,8 +189,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   @Before
   public final void initializeSkyframeExecutor() throws Exception {
     AnalysisMock mock = getAnalysisMock();
-    directories = new BlazeDirectories(outputBase, outputBase, rootDirectory,
-        TestConstants.PRODUCT_NAME);
+    directories = new BlazeDirectories(outputBase, outputBase, rootDirectory);
     binTools = BinTools.forUnitTesting(directories, TestConstants.EMBEDDED_TOOLS);
     mockToolsConfig = new MockToolsConfig(rootDirectory, false);
     mock.setupMockClient(mockToolsConfig);
@@ -216,8 +215,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             getPreprocessorFactorySupplier(),
             mock.getSkyFunctions(),
             getPrecomputedValues(),
-            ImmutableList.<SkyValueDirtinessChecker>of(),
-            TestConstants.PRODUCT_NAME);
+            ImmutableList.<SkyValueDirtinessChecker>of());
     skyframeExecutor.preparePackageLoading(
         new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
         ConstantRuleVisibility.PUBLIC, true, 7, "",
