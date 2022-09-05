@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.testutil;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.common.truth.Truth.assert_;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Function;
@@ -82,7 +83,12 @@ public class MoreAsserts {
    */
   public static void assertInstanceOfNotReachable(
       Object start, final Class<?> clazz) {
-    Predicate<Object> p = obj -> clazz.isAssignableFrom(obj.getClass());
+    Predicate<Object> p = new Predicate<Object>() {
+      @Override
+      public boolean apply(Object obj) {
+        return clazz.isAssignableFrom(obj.getClass());
+      }
+    };
     if (isRetained(p, start)) {
       assert_().fail(
           "Found an instance of " + clazz.getCanonicalName() + " reachable from " + start);
@@ -179,9 +185,8 @@ public class MoreAsserts {
   public static void assertContainsWordsWithQuotes(String message,
       String... strings) {
     for (String string : strings) {
-      assertWithMessage(message + " should contain '" + string + "' (with quotes)")
-          .that(message.contains("'" + string + "'"))
-          .isTrue();
+      assertTrue(message + " should contain '" + string + "' (with quotes)",
+          message.contains("'" + string + "'"));
     }
   }
 
@@ -406,11 +411,14 @@ public class MoreAsserts {
    */
   protected static void assertContainsEventsInOrder(Iterable<Event> eventCollector,
       String... expectedMessages) {
-    String failure =
-        containsSublistWithGapsAndEqualityChecker(
-            ImmutableList.copyOf(eventCollector),
-            pair -> pair.first.getMessage().contains(pair.second),
-            expectedMessages);
+    String failure = containsSublistWithGapsAndEqualityChecker(
+        ImmutableList.copyOf(eventCollector),
+        new Function<Pair<Event, String>, Boolean> () {
+      @Override
+      public Boolean apply(Pair<Event, String> pair) {
+        return pair.first.getMessage().contains(pair.second);
+      }
+    }, expectedMessages);
 
     String eventsString = eventsToString(eventCollector);
     assertWithMessage("Event '" + failure + "' not found in proper order"
