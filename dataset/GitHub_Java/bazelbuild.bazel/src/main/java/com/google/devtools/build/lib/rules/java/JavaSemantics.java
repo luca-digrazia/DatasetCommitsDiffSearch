@@ -327,7 +327,7 @@ public interface JavaSemantics {
   /**
    * Translates XMB messages to translations artifact suitable for Java targets.
    */
-  ImmutableList<Artifact> translate(RuleContext ruleContext, JavaConfiguration javaConfig,
+  Collection<Artifact> translate(RuleContext ruleContext, JavaConfiguration javaConfig,
       List<Artifact> messages);
 
   /**

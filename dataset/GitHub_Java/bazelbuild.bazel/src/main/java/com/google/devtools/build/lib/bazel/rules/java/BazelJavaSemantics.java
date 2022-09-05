@@ -79,6 +79,9 @@ public class BazelJavaSemantics implements JavaSemantics {
 
   @Override
   public void checkRule(RuleContext ruleContext, JavaCommon javaCommon) {
+    if (isJavaBinaryOrJavaTest(ruleContext)) {
+      checkMainClass(ruleContext, javaCommon.getSrcsArtifacts());
+    }
   }
   
   private String getMainClassInternal(RuleContext ruleContext, ImmutableList<Artifact> sources) {
