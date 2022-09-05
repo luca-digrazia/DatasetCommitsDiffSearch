@@ -27,9 +27,7 @@ import static org.nlpcn.es4sql.TestsConstants.*;
 		BugTest.class,
 		DeleteTest.class,
 		ExplainTest.class,
-        WktToGeoJsonConverterTests.class,
-        SqlParserTests.class,
-        //JoinTests.class
+        WktToGeoJsonConverterTests.class
 })
 public class MainTestSuite {
 
@@ -50,7 +48,6 @@ public class MainTestSuite {
 		loadBulk("src/test/resources/accounts.json");
 		loadBulk("src/test/resources/online.json");
         loadBulk("src/test/resources/phrases.json");
-        loadBulk("src/test/resources/dogs.json");
 
         prepareOdbcIndex();
         loadBulk("src/test/resources/odbc-date-formats.json");
