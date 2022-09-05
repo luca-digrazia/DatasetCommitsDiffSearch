@@ -244,7 +244,7 @@ class OptionsParserImpl {
       = LinkedHashMultimap.create();
 
   private final List<String> warnings = Lists.newArrayList();
-
+  
   private boolean allowSingleDashLongOptions = false;
 
   /**
@@ -261,7 +261,7 @@ class OptionsParserImpl {
   void setAllowSingleDashLongOptions(boolean allowSingleDashLongOptions) {
     this.allowSingleDashLongOptions = allowSingleDashLongOptions;
   }
-
+  
   /**
    * The implementation of {@link OptionsBase#asMap}.
    */
@@ -468,6 +468,11 @@ class OptionsParserImpl {
     }
   }
 
+  private Object getValue(Field field) {
+    ParsedOptionEntry entry = parsedValues.get(field);
+    return entry == null ? null : entry.getValue();
+  }
+
   OptionValueDescription getOptionValueDescription(String name) {
     Field field = optionsData.getFieldFromName(name);
     if (field == null) {
@@ -654,7 +659,7 @@ class OptionsParserImpl {
                 sourceFunction.apply(originalName),
                 expandedFrom == null);
         unparsedValues.add(unparsedOptionValueDescription);
-        if (option.allowMultiple()) {
+        if (option.allowMultiple()) {          
           canonicalizeValues.put(field, unparsedOptionValueDescription);
         } else {
           canonicalizeValues.replaceValues(field, ImmutableList.of(unparsedOptionValueDescription));
@@ -749,12 +754,9 @@ class OptionsParserImpl {
 
     // Set the fields
     for (Field field : optionsData.getFieldsForClass(optionsClass)) {
-      Object value;
-      ParsedOptionEntry entry = parsedValues.get(field);
-      if (entry == null) {
+      Object value = getValue(field);
+      if (value == null) {
         value = optionsData.getDefaultValue(field);
-      } else {
-        value = entry.getValue();
       }
       try {
         field.set(optionsInstance, value);
