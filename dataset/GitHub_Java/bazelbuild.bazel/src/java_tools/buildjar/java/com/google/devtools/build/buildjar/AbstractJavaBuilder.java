@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,27 +13,28 @@
 // limitations under the License.
 
 package com.google.devtools.build.buildjar;
-import com.google.common.annotations.VisibleForTesting;
+
+import com.google.common.collect.ImmutableList;
 import com.google.common.io.Files;
+import com.google.devtools.build.buildjar.instrumentation.JacocoInstrumentationProcessor;
+import com.google.devtools.build.buildjar.javac.BlazeJavacArguments;
+import com.google.devtools.build.buildjar.javac.BlazeJavacMain;
 import com.google.devtools.build.buildjar.javac.JavacRunner;
-import com.google.devtools.build.buildjar.javac.JavacRunnerImpl;
-
+import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
 import com.sun.tools.javac.main.Main.Result;
-
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.util.List;
 import java.util.zip.ZipEntry;
 
 /**
- * A command line interface to compile a java_library rule using in-process
- * javac. This allows us to spawn multiple java_library compilations on a
- * single machine or distribute Java compilations to multiple machines.
+ * A command line interface to compile a java_library rule using in-process javac. This allows us to
+ * spawn multiple java_library compilations on a single machine or distribute Java compilations to
+ * multiple machines.
  */
 public abstract class AbstractJavaBuilder extends AbstractLibraryBuilder {
 
@@ -43,181 +44,73 @@ public abstract class AbstractJavaBuilder extends AbstractLibraryBuilder {
   /** Enables more verbose output from the compiler. */
   protected boolean debug = false;
 
-  @Override
-  protected boolean keepFileDuringCleanup(File file) {
-    return false;
-  }
-
   /**
-   * Flush the buffers of this JavaBuilder
-   */
-  @SuppressWarnings("unused")  // IOException
-  public synchronized void flush(OutputStream err) throws IOException {
-  }
-
-  /**
-   * Shut this JavaBuilder down
-   */
-  @SuppressWarnings("unused")  // IOException
-  public synchronized void shutdown(OutputStream err) throws IOException {
-  }
-
-  /**
-   * Prepares a compilation run and sets everything up so that the source files
-   * in the build request can be compiled. Invokes compileSources to do the
-   * actual compilation.
-   *
-   * @param build A JavaLibraryBuildRequest request object describing what to
-   *              compile
-   * @param err PrintWriter for logging any diagnostic output
-   */
-  public void compileJavaLibrary(final JavaLibraryBuildRequest build, final OutputStream err)
-      throws IOException {
-    prepareSourceCompilation(build);
-
-    final String[] message = { null };
-    final JavacRunner javacRunner = new JavacRunnerImpl(build.getPlugins());
-    runWithLargeStack(new Runnable() {
-        @Override
-        public void run() {
-          try {
-            internalCompileJavaLibrary(build, javacRunner, err);
-          } catch (JavacException e) {
-            message[0] = e.getMessage();
-          } catch (Exception e) {
-            // Some exceptions have a null message, yet the stack trace is useful
-            e.printStackTrace();
-            message[0] = "java compilation threw exception: " + e.getMessage();
-          }
-        }
-      }, 4L * 1024 * 1024);  // 4MB stack
-
-    if (message[0] != null) {
-      throw new IOException("Error compiling java source: " + message[0]);
-    }
-  }
-
-  /**
-   * Compiles the java files of the java library specified in the build request.<p>
-   * The compilation consists of two parts:<p>
-   * First, javac is invoked directly to compile the java files in the build request.<p>
-   * Second, additional processing is done to the .class files that came out of the compile.<p>
+   * Prepares a compilation run and sets everything up so that the source files in the build request
+   * can be compiled. Invokes compileSources to do the actual compilation.
    *
    * @param build A JavaLibraryBuildRequest request object describing what to compile
-   * @param err OutputStream for logging any diagnostic output
+   * @param err PrintWriter for logging any diagnostic output
    */
-  private void internalCompileJavaLibrary(JavaLibraryBuildRequest build, JavacRunner javacRunner,
-      OutputStream err) throws IOException, JavacException {
-    // result may not be null, in case somebody changes the set of source files
-    // to the empty set
-    Result result = Result.OK;
-    if (!build.getSourceFiles().isEmpty()) {
-      PrintWriter javacErrorOutputWriter = new PrintWriter(err);
-      try {
-        result = compileSources(build, javacRunner, javacErrorOutputWriter);
-      } finally {
-        javacErrorOutputWriter.flush();
-      }
+  public Result compileJavaLibrary(final JavaLibraryBuildRequest build, final PrintWriter err)
+      throws Exception {
+    prepareSourceCompilation(build);
+    if (build.getSourceFiles().isEmpty()) {
+      return Result.OK;
     }
-
-    if (!result.isOK()) {
-      throw new JavacException(result);
+    JavacRunner javacRunner =
+        new JavacRunner() {
+          @Override
+          public Result invokeJavac(
+              ImmutableList<BlazeJavaCompilerPlugin> plugins,
+              BlazeJavacArguments arguments,
+              PrintWriter output) {
+            return new BlazeJavacMain(output, plugins).compile(arguments);
+          }
+        };
+    Result result = compileSources(build, javacRunner, err);
+    JacocoInstrumentationProcessor processor = build.getJacocoInstrumentationProcessor();
+    if (processor != null) {
+      processor.processRequest(build);
     }
-    runClassPostProcessing(build);
+    return result;
   }
 
-  /**
-   * Build a jar file containing source files that were generated by an annotation processor.
-   */
-  public abstract void buildGensrcJar(JavaLibraryBuildRequest build, OutputStream err)
-      throws IOException;
-
-  @VisibleForTesting
-  protected void runClassPostProcessing(JavaLibraryBuildRequest build)
-      throws IOException {
-    for (AbstractPostProcessor postProcessor : build.getPostProcessors()) {
-      postProcessor.initialize(build);
-      postProcessor.processRequest();
-    }
-  }
+  /** Build a jar file containing source files that were generated by an annotation processor. */
+  public abstract void buildGensrcJar(JavaLibraryBuildRequest build) throws IOException;
 
   /**
-   * Compiles the java files specified in 'JavaLibraryBuildRequest'.
-   * Implementations can try to avoid recompiling the java files. Whenever
-   * this function is invoked, it is guaranteed that the build request
-   * contains files to compile.
+   * Compiles the java files specified in 'JavaLibraryBuildRequest'. Implementations can try to
+   * avoid recompiling the java files. Whenever this function is invoked, it is guaranteed that the
+   * build request contains files to compile.
    *
-   * @param build A JavaLibraryBuildRequest request object describing what to
-   *              compile
+   * @param build A JavaLibraryBuildRequest request object describing what to compile
    * @param err PrintWriter for logging any diagnostic output
    * @return the exit status of the java compiler.
    */
-  abstract Result compileSources(JavaLibraryBuildRequest build, JavacRunner javacRunner,
-      PrintWriter err) throws IOException;
+  abstract Result compileSources(
+      JavaLibraryBuildRequest build, JavacRunner javacRunner, PrintWriter err) throws IOException;
 
-  /**
-   * Perform the build.
-   */
-  public void run(JavaLibraryBuildRequest build, PrintStream err)
-      throws IOException {
-    boolean successful = false;
+  /** Perform the build. */
+  public Result run(JavaLibraryBuildRequest build, PrintWriter err) throws Exception {
+    Result result = Result.ERROR;
     try {
-      compileJavaLibrary(build, err);
-      buildJar(build);
+      result = compileJavaLibrary(build, err);
+      if (result.isOK()) {
+        buildJar(build);
+      }
       if (!build.getProcessors().isEmpty()) {
         if (build.getGeneratedSourcesOutputJar() != null) {
-          buildGensrcJar(build, err);
+          buildGensrcJar(build);
         }
       }
-      successful = true;
     } finally {
-      build.getDependencyModule().emitUsedClasspath(build.getClassPath());
-      build.getDependencyModule().emitDependencyInformation(build.getClassPath(), successful);
-      shutdown(err);
+      build.getDependencyModule().emitDependencyInformation(build.getClassPath(), result.isOK());
+      build.getProcessingModule().emitManifestProto();
     }
+    return result;
   }
 
-  // Utility functions
-
-  /**
-   * Runs "run" in another thread (whose lifetime is contained within the
-   * activation of this function call) using a stack size of 'stackSize' bytes.
-   * Unchecked exceptions thrown by the Runnable will be re-thrown in the main
-   * thread.
-   */
-  private static void runWithLargeStack(final Runnable run, long stackSize) {
-    final Throwable[] unchecked = { null };
-    Thread t = new Thread(null, run, "runWithLargeStack", stackSize);
-    t.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-        @Override
-        public void uncaughtException(Thread t, Throwable e) {
-          unchecked[0] = e;
-        }
-      });
-    t.start();
-    boolean wasInterrupted = false;
-    for (;;) {
-      try {
-        t.join(0);
-        break;
-      } catch (InterruptedException e) {
-        wasInterrupted = true;
-      }
-    }
-    if (wasInterrupted) {
-      Thread.currentThread().interrupt();
-    }
-    if (unchecked[0] instanceof Error) {
-      throw (Error) unchecked[0];
-    } else if (unchecked[0] instanceof RuntimeException) {
-      throw (RuntimeException) unchecked[0];
-    }
-  }
-
-  /**
-   * A SourceJarEntryListener that collects protobuf meta data files from the
-   * source jar files.
-   */
+  /** A SourceJarEntryListener that collects protobuf meta data files from the source jar files. */
   private static class ProtoMetaFileCollector implements SourceJarEntryListener {
 
     private final String sourceDir;
@@ -240,8 +133,8 @@ public abstract class AbstractJavaBuilder extends AbstractLibraryBuilder {
     }
 
     /**
-     * Writes the combined the meta files into the output directory. Delete the
-     * stalling meta file if no meta file is collected.
+     * Writes the combined the meta files into the output directory. Delete the stalling meta file
+     * if no meta file is collected.
      */
     @Override
     public void finish() throws IOException {
@@ -258,11 +151,9 @@ public abstract class AbstractJavaBuilder extends AbstractLibraryBuilder {
   }
 
   @Override
-  protected List<SourceJarEntryListener> getSourceJarEntryListeners(
-      JavaLibraryBuildRequest build) {
+  protected List<SourceJarEntryListener> getSourceJarEntryListeners(JavaLibraryBuildRequest build) {
     List<SourceJarEntryListener> result = super.getSourceJarEntryListeners(build);
-    result.add(new ProtoMetaFileCollector(
-        build.getTempDir(), build.getClassDir()));
+    result.add(new ProtoMetaFileCollector(build.getTempDir(), build.getClassDir()));
     return result;
   }
 }
