@@ -25,13 +25,11 @@ import com.google.devtools.build.lib.rules.SkylarkModules;
 import com.google.devtools.build.lib.rules.SkylarkRuleContext;
 import com.google.devtools.build.lib.rules.android.AndroidSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.swift.SwiftConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.Jvm;
-import com.google.devtools.build.lib.rules.objc.ObjcConfiguration;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -40,6 +38,7 @@ import com.google.devtools.build.lib.syntax.BazelLibrary;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.MethodLibrary;
 import com.google.devtools.build.lib.syntax.Runtime;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Deque;
@@ -86,10 +85,7 @@ final class SkylarkDocumentationCollector {
     for (SkylarkModuleDoc builtinObject : builtinModules.values()) {
       // Check the return type for built-in functions, it can be a module previously not added.
       for (SkylarkBuiltinMethodDoc builtinMethod : builtinObject.getBuiltinMethods().values()) {
-        Class<?> type = builtinMethod.getAnnotation().documentationReturnType();
-        if (type == Object.class) {
-          type = builtinMethod.getAnnotation().returnType();
-        }
+        Class<?> type = builtinMethod.getAnnotation().returnType();
         if (type.isAnnotationPresent(SkylarkModule.class)) {
           collectJavaObjects(type.getAnnotation(SkylarkModule.class), type, modules);
         }
@@ -199,10 +195,8 @@ final class SkylarkDocumentationCollector {
     collectBuiltinModule(modules, AbstractAction.class);
 
     collectBuiltinModule(modules, AppleConfiguration.class);
-    collectBuiltinModule(modules, ObjcConfiguration.class);
     collectBuiltinModule(modules, CppConfiguration.class);
     collectBuiltinModule(modules, JavaConfiguration.class);
-    collectBuiltinModule(modules, SwiftConfiguration.class);
     collectBuiltinModule(modules, Jvm.class);
     collectBuiltinModule(modules, JavaSkylarkApiProvider.class);
     collectBuiltinModule(modules, JavaRuleOutputJarsProvider.OutputJar.class);

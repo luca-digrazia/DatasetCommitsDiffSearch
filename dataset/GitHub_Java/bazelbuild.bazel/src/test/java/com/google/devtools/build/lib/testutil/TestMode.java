@@ -39,6 +39,7 @@ public abstract class TestMode {
         @Override
         public Environment createEnvironment(EventHandler eventHandler, Environment environment) {
           return Environment.builder(Mutability.create("skylark test"))
+              .setSkylark()
               .setGlobals(environment == null ? BazelLibrary.GLOBALS : environment.getGlobals())
               .setEventHandler(eventHandler)
               .build();
