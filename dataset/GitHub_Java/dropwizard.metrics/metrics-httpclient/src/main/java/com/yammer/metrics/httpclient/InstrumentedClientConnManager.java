@@ -4,11 +4,9 @@ import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.http.conn.ClientConnectionManager;
-import org.apache.http.conn.DnsResolver;
 import org.apache.http.conn.scheme.SchemeRegistry;
 import org.apache.http.impl.conn.PoolingClientConnectionManager;
 import org.apache.http.impl.conn.SchemeRegistryFactory;
-import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 
 import java.util.concurrent.TimeUnit;
 
@@ -34,15 +32,7 @@ public class InstrumentedClientConnManager extends PoolingClientConnectionManage
                                          SchemeRegistry registry,
                                          long connTTL,
                                          TimeUnit connTTLTimeUnit) {
-        this(metricsRegistry, registry, connTTL, connTTLTimeUnit, new SystemDefaultDnsResolver());
-    }
-
-    public InstrumentedClientConnManager(MetricsRegistry metricsRegistry,
-                                         SchemeRegistry schemeRegistry,
-                                         long connTTL,
-                                         TimeUnit connTTLTimeUnit,
-                                         DnsResolver dnsResolver) {
-        super(schemeRegistry, connTTL, connTTLTimeUnit, dnsResolver);
+        super(registry, connTTL, connTTLTimeUnit);
         metricsRegistry.newGauge(ClientConnectionManager.class,
                                  "available-connections",
                                  new Gauge<Integer>() {
