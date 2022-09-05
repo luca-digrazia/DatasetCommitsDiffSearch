@@ -1,6 +1,5 @@
 package org.hswebframework.web.workflow.service.imp;
 
-import org.activiti.engine.impl.persistence.entity.ExecutionEntity;
 import org.activiti.engine.repository.ProcessDefinition;
 import org.activiti.engine.runtime.Job;
 import org.activiti.engine.runtime.ProcessInstance;
@@ -8,11 +7,12 @@ import org.activiti.engine.task.Task;
 import org.hswebframework.utils.StringUtils;
 import org.hswebframework.web.NotFoundException;
 import org.hswebframework.web.id.IDGenerator;
-import org.hswebframework.web.workflow.dao.entity.ProcessHistoryEntity;
+import org.hswebframework.web.service.form.DynamicFormOperationService;
+import org.hswebframework.web.workflow.service.ActivityConfigurationService;
 import org.hswebframework.web.workflow.service.BpmProcessService;
 import org.hswebframework.web.workflow.service.BpmTaskService;
-import org.hswebframework.web.workflow.service.ProcessHistoryService;
 import org.hswebframework.web.workflow.service.WorkFlowFormService;
+import org.hswebframework.web.workflow.service.dto.ActivityCandidateInfo;
 import org.hswebframework.web.workflow.service.request.SaveFormRequest;
 import org.hswebframework.web.workflow.service.request.StartProcessRequest;
 import org.slf4j.Logger;
@@ -22,7 +22,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.InputStream;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
@@ -39,9 +42,6 @@ public class BpmProcessServiceImpl extends AbstractFlowableService implements Bp
 
     @Autowired
     private WorkFlowFormService workFlowFormService;
-
-    @Autowired
-    private ProcessHistoryService processHistoryService;
 
     @Override
     public List<ProcessDefinition> getAllProcessDefinition() {
@@ -86,18 +86,31 @@ public class BpmProcessServiceImpl extends AbstractFlowableService implements Bp
 
             List<Task> tasks = bpmTaskService.selectTaskByProcessId(processInstance.getProcessDefinitionId());
 
-            //当前节点
-            String activityId = processInstance.getActivityId();
-            if (activityId == null) {
-                //所有task设置候选人
-                tasks.forEach(candidateUserSetter);
+            //指定了下一环节
+            if (!StringUtils.isNullOrEmpty(request.getNextActivityId())) {
+                //跳转
+                Task afterJump = bpmTaskService.jumpTask(processInstance.getProcessDefinitionId(), request.getNextActivityId());
+
+                //设置候选人
+                candidateUserSetter.accept(afterJump);
+
+                tasks.stream()
+                        .map(Task::getId)
+                        .forEach(bpmTaskService::removeHiTask);
             } else {
-                candidateUserSetter.accept(taskService
-                        .createTaskQuery()
-                        .processInstanceId(processInstance.getProcessInstanceId())
-                        .taskDefinitionKey(activityId)
-                        .active()
-                        .singleResult());
+                //当前节点
+                String activityId = processInstance.getActivityId();
+                if (activityId == null) {
+                    //所有task设置候选人
+                    tasks.forEach(candidateUserSetter);
+                } else {
+                    candidateUserSetter.accept(taskService
+                            .createTaskQuery()
+                            .processInstanceId(processInstance.getProcessInstanceId())
+                            .taskDefinitionKey(activityId)
+                            .active()
+                            .singleResult());
+                }
             }
 
             workFlowFormService.saveProcessForm(processInstance, SaveFormRequest
@@ -106,20 +119,6 @@ public class BpmProcessServiceImpl extends AbstractFlowableService implements Bp
                     .userName(request.getCreatorName())
                     .formData(request.getFormData())
                     .build());
-
-            ProcessHistoryEntity history = ProcessHistoryEntity.builder()
-                    .type("start")
-                    .typeText("启动流程")
-                    .businessKey(businessKey)
-                    .creatorId(request.getCreatorId())
-                    .creatorName(request.getCreatorName())
-                    .processInstanceId(processInstance.getProcessInstanceId())
-                    .processDefineId(processInstance.getProcessDefinitionId())
-                    .build();
-
-            processHistoryService.insert(history);
-
-
         } finally {
             identityService.setAuthenticatedUserId(null);
         }
