@@ -1,6 +1,8 @@
 package org.hsweb.web.core.utils;
 
 import org.hsweb.web.bean.po.user.User;
+import org.hsweb.web.core.authorize.oauth2.OAuth2Manager;
+import org.hsweb.web.core.authorize.oauth2.OAuth2ManagerHolder;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -52,6 +54,16 @@ public class WebUtil {
         return null;
     }
 
+    public static User setCurrentUser(User user) {
+        ThreadLocalUtils.put("current-user", user);
+        return user;
+    }
+
+    public static void removeCurrentUser() {
+        ThreadLocalUtils.remove("current-user");
+    }
+
+
     /**
      * 在HttpServletRequest中获取当前登录的用户
      *
@@ -59,8 +71,19 @@ public class WebUtil {
      * @return 当前登录的用户
      */
     public static User getLoginUser(HttpServletRequest request) {
-        if (request == null) return null;
-        return getLoginUser(request.getSession());
+        if (request == null) return ThreadLocalUtils.get("current-user");
+        HttpSession session = request.getSession(false);
+        User user = null;
+        if (session != null) {
+            user = getLoginUser(session);
+        }
+        if (user == null) {
+            OAuth2Manager manager = OAuth2ManagerHolder.getManager();
+            if (manager != null) {
+                user = manager.getUserByRequest(request);
+            }
+        }
+        return user;
     }
 
     public static Map<String, String> getHeaders(HttpServletRequest request) {
