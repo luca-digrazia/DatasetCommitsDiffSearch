@@ -34,7 +34,8 @@ public class AnalysisPhaseCompleteEvent {
   public AnalysisPhaseCompleteEvent(Collection<? extends ConfiguredTarget> topLevelTargets,
       int targetsVisited, long timeInMs) {
     this.timeInMs = timeInMs;
-    this.topLevelTargets = ImmutableList.copyOf(topLevelTargets);
+    // Do not remove <ConfiguredTarget>: workaround for Java 7 type inference.
+    this.topLevelTargets = ImmutableList.<ConfiguredTarget>copyOf(topLevelTargets);
     this.targetsVisited = targetsVisited;
   }
 
