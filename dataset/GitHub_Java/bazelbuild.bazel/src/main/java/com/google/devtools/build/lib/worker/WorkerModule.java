@@ -29,19 +29,19 @@ import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsBase;
 
+import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
+
 import java.io.IOException;
 
 /**
  * A module that adds the WorkerActionContextProvider to the available action context providers.
  */
 public class WorkerModule extends BlazeModule {
+  private WorkerPool workers;
+
   private CommandEnvironment env;
   private BuildRequest buildRequest;
   private boolean verbose;
-
-  private WorkerFactory workerFactory;
-  private WorkerPool workerPool;
-  private WorkerPoolConfig workerPoolConfig;
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
@@ -54,91 +54,65 @@ public class WorkerModule extends BlazeModule {
   public void beforeCommand(Command command, CommandEnvironment env) {
     this.env = env;
     env.getEventBus().register(this);
-  }
 
-  @Subscribe
-  public void buildStarting(BuildStartingEvent event) {
-    buildRequest = event.getRequest();
-    WorkerOptions options = buildRequest.getOptions(WorkerOptions.class);
-    verbose = options.workerVerbose;
-
-    if (workerFactory == null) {
+    if (workers == null) {
       Path logDir = env.getOutputBase().getRelative("worker-logs");
       try {
-        if (!logDir.createDirectory()) {
-          // Clean out old log files.
-          for (Path logFile : logDir.getDirectoryEntries()) {
-            try {
-              logFile.delete();
-            } catch (IOException e) {
-              env.getReporter().handle(Event.error("Could not delete old worker log: " + logFile));
-            }
-          }
-        }
+        logDir.createDirectory();
       } catch (IOException e) {
         env
             .getReporter()
             .handle(Event.error("Could not create directory for worker logs: " + logDir));
       }
 
-      workerFactory = new WorkerFactory(logDir);
-    }
+      GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
 
-    workerFactory.setReporter(env.getReporter());
-    workerFactory.setVerbose(options.workerVerbose);
+      // It's better to re-use a worker as often as possible and keep it hot, in order to profit
+      // from JIT optimizations as much as possible.
+      config.setLifo(true);
 
-    WorkerPoolConfig newConfig = createWorkerPoolConfig(options);
+      // Check for & deal with idle workers every 5 seconds.
+      config.setTimeBetweenEvictionRunsMillis(5 * 1000);
 
-    // If the config changed compared to the last run, we have to create a new pool.
-    if (workerPoolConfig != null && !workerPoolConfig.equals(newConfig)) {
-      shutdownPool("Worker configuration has changed, restarting worker pool...");
-    }
+      // Always test the liveliness of worker processes.
+      config.setTestOnBorrow(true);
+      config.setTestOnCreate(true);
+      config.setTestOnReturn(true);
+      config.setTestWhileIdle(true);
 
-    if (workerPool == null) {
-      workerPoolConfig = newConfig;
-      workerPool = new WorkerPool(workerFactory, workerPoolConfig);
+      // Don't limit the total number of worker processes, as otherwise the pool might be full of
+      // e.g. Java workers and could never accommodate another request for a different kind of
+      // worker.
+      config.setMaxTotal(-1);
+
+      workers = new WorkerPool(new WorkerFactory(), config);
+      workers.setReporter(env.getReporter());
+      workers.setLogDirectory(logDir);
     }
   }
 
-  private WorkerPoolConfig createWorkerPoolConfig(WorkerOptions options) {
-    WorkerPoolConfig config = new WorkerPoolConfig();
+  @Subscribe
+  public void buildStarting(BuildStartingEvent event) {
+    Preconditions.checkNotNull(workers);
 
-    // It's better to re-use a worker as often as possible and keep it hot, in order to profit
-    // from JIT optimizations as much as possible.
-    config.setLifo(true);
+    this.buildRequest = event.getRequest();
 
-    // Keep a fixed number of workers running per key.
-    config.setMaxIdlePerKey(options.workerMaxInstances);
-    config.setMaxTotalPerKey(options.workerMaxInstances);
-    config.setMinIdlePerKey(options.workerMaxInstances);
-
-    // Don't limit the total number of worker processes, as otherwise the pool might be full of
-    // e.g. Java workers and could never accommodate another request for a different kind of
-    // worker.
-    config.setMaxTotal(-1);
-
-    // Wait for a worker to become ready when a thread needs one.
-    config.setBlockWhenExhausted(true);
-
-    // Always test the liveliness of worker processes.
-    config.setTestOnBorrow(true);
-    config.setTestOnCreate(true);
-    config.setTestOnReturn(true);
-
-    // No eviction of idle workers.
-    config.setTimeBetweenEvictionRunsMillis(-1);
-
-    return config;
+    WorkerOptions options = buildRequest.getOptions(WorkerOptions.class);
+    workers.setMaxTotalPerKey(options.workerMaxInstances);
+    workers.setMaxIdlePerKey(options.workerMaxInstances);
+    workers.setMinIdlePerKey(options.workerMaxInstances);
+    workers.setVerbose(options.workerVerbose);
+    this.verbose = options.workerVerbose;
   }
 
   @Override
   public Iterable<ActionContextProvider> getActionContextProviders() {
     Preconditions.checkNotNull(env);
     Preconditions.checkNotNull(buildRequest);
-    Preconditions.checkNotNull(workerPool);
+    Preconditions.checkNotNull(workers);
 
     return ImmutableList.<ActionContextProvider>of(
-        new WorkerActionContextProvider(env, buildRequest, workerPool));
+        new WorkerActionContextProvider(env, buildRequest, workers));
   }
 
   @Override
@@ -148,10 +122,16 @@ public class WorkerModule extends BlazeModule {
 
   @Subscribe
   public void buildComplete(BuildCompleteEvent event) {
-    if (buildRequest != null
+    if (workers != null && buildRequest != null
         && buildRequest.getOptions(WorkerOptions.class) != null
         && buildRequest.getOptions(WorkerOptions.class).workerQuitAfterBuild) {
-      shutdownPool("Build completed, shutting down worker pool...");
+      if (verbose) {
+        env
+            .getReporter()
+            .handle(Event.info("Build completed, shutting down worker pool..."));
+      }
+      workers.close();
+      workers = null;
     }
   }
 
@@ -160,21 +140,14 @@ public class WorkerModule extends BlazeModule {
   // for them to finish.
   @Subscribe
   public void buildInterrupted(BuildInterruptedEvent event) {
-    shutdownPool("Build interrupted, shutting down worker pool...");
-  }
-
-  /**
-   * Shuts down the worker pool and sets {#code workerPool} to null.
-   */
-  private void shutdownPool(String reason) {
-    Preconditions.checkArgument(!reason.isEmpty());
-
-    if (workerPool != null) {
+    if (workers != null) {
       if (verbose) {
-        env.getReporter().handle(Event.info(reason));
+        env
+            .getReporter()
+            .handle(Event.info("Build interrupted, shutting down worker pool..."));
       }
-      workerPool.close();
-      workerPool = null;
+      workers.close();
+      workers = null;
     }
   }
 
@@ -183,9 +156,5 @@ public class WorkerModule extends BlazeModule {
     this.env = null;
     this.buildRequest = null;
     this.verbose = false;
-
-    if (this.workerFactory != null) {
-      this.workerFactory.setReporter(null);
-    }
   }
 }
