@@ -24,23 +24,13 @@ import com.google.devtools.build.lib.packages.Target;
 import java.util.concurrent.Callable;
 
 /**
- * A bridge class that implements the legacy semantics of {@link #getLoadedTarget} using a normal
- * {@link PackageProvider} instance.
+ * Read-only API for retrieving packages, i.e., calling this API should not result in packages being
+ * loaded.
  *
- * <p>DO NOT USE! It will be removed when the transition to Skyframe is complete.
+ * <p><b>Concurrency</b>: Implementations should be thread-safe.
  */
-public final class LoadedPackageProvider {
-  private final PackageProvider packageProvider;
-  private final EventHandler eventHandler;
-
-  public LoadedPackageProvider(PackageProvider packageProvider, EventHandler eventHandler) {
-    this.packageProvider = packageProvider;
-    this.eventHandler = eventHandler;
-  }
-
-  public EventHandler getEventHandler() {
-    return eventHandler;
-  }
+// TODO(bazel-team): Skyframe doesn't really implement this - can we remove it?
+public interface LoadedPackageProvider {
 
   /**
    * Returns a target if it was recently loaded, i.e., since the most recent cache sync. This
@@ -48,30 +38,48 @@ public final class LoadedPackageProvider {
    * surrounding package. If the surrounding package is in error, still attempts to retrieve the
    * target.
    */
-  public Target getLoadedTarget(Label label) throws NoSuchPackageException, NoSuchTargetException {
-    return getLoadedTarget(packageProvider, eventHandler, label);
-  }
+  Target getLoadedTarget(Label label) throws NoSuchPackageException, NoSuchTargetException;
 
   /**
-   * Uninterruptible method to convert a label into a target using a given package provider and
-   * event handler.
+   * A bridge class that implements the legacy semantics of {@link #getLoadedTarget} using a
+   * normal {@link PackageProvider} instance.
    */
-  @VisibleForTesting
-  public static Target getLoadedTarget(
-      final PackageProvider packageProvider, final EventHandler eventHandler, final Label label)
-          throws NoSuchPackageException, NoSuchTargetException {
-    try {
-      return Uninterruptibles.callUninterruptibly(new Callable<Target>() {
-        @Override
-        public Target call()
-            throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
-          return packageProvider.getTarget(eventHandler, label);
-        }
-      });
-    } catch (NoSuchPackageException | NoSuchTargetException e) {
-      throw e;
-    } catch (Exception e) {
-      throw new IllegalStateException(e);
+  public static final class Bridge implements LoadedPackageProvider {
+    private final PackageProvider packageProvider;
+    private final EventHandler eventHandler;
+
+    public Bridge(PackageProvider packageProvider, EventHandler eventHandler) {
+      this.packageProvider = packageProvider;
+      this.eventHandler = eventHandler;
+    }
+
+    @Override
+    public Target getLoadedTarget(Label label)
+        throws NoSuchPackageException, NoSuchTargetException {
+      return getLoadedTarget(packageProvider, eventHandler, label);
+    }
+
+    /**
+     * Uninterruptible method to convert a label into a target using a given package provider and
+     * event handler.
+     */
+    @VisibleForTesting
+    public static Target getLoadedTarget(
+        final PackageProvider packageProvider, final EventHandler eventHandler, final Label label)
+            throws NoSuchPackageException, NoSuchTargetException {
+      try {
+        return Uninterruptibles.callUninterruptibly(new Callable<Target>() {
+          @Override
+          public Target call()
+              throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
+            return packageProvider.getTarget(eventHandler, label);
+          }
+        });
+      } catch (NoSuchPackageException | NoSuchTargetException e) {
+        throw e;
+      } catch (Exception e) {
+        throw new IllegalStateException(e);
+      }
     }
   }
 }
