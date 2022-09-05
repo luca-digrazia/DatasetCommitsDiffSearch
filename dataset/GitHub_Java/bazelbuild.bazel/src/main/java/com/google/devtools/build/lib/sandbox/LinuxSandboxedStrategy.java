@@ -90,7 +90,7 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
     Executor executor = actionExecutionContext.getExecutor();
 
     // Certain actions can't run remotely or in a sandbox - pass them on to the standalone strategy.
-    if (!spawn.isRemotable() || spawn.hasNoSandbox()) {
+    if (!spawn.isRemotable()) {
       SandboxHelpers.fallbackToNonSandboxedExecution(spawn, actionExecutionContext, executor);
       return;
     }
@@ -101,17 +101,15 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
     // Each invocation of "exec" gets its own sandbox.
     Path sandboxPath = SandboxHelpers.getSandboxRoot(blazeDirs, productName, uuid, execCounter);
     Path sandboxExecRoot = sandboxPath.getRelative("execroot").getRelative(execRoot.getBaseName());
-    Path sandboxTempDir = sandboxPath.getRelative("tmp");
 
+    Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment());
 
     try {
       // Build the execRoot for the sandbox.
       SymlinkedExecRoot symlinkedExecRoot = new SymlinkedExecRoot(sandboxExecRoot);
       ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
-      Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment(), outputs);
       symlinkedExecRoot.createFileSystem(
           getMounts(spawn, actionExecutionContext), outputs, writableDirs);
-      sandboxTempDir.createDirectory();
 
       final SandboxRunner runner;
       if (fullySupported) {
@@ -120,10 +118,8 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
                 execRoot,
                 sandboxPath,
                 sandboxExecRoot,
-                sandboxTempDir,
-                getWritableDirs(sandboxExecRoot, spawn.getEnvironment(), outputs),
+                getWritableDirs(sandboxExecRoot, spawn.getEnvironment()),
                 getInaccessiblePaths(),
-                getBindMounts(blazeDirs),
                 verboseFailures,
                 sandboxOptions.sandboxDebug);
       } else {
@@ -145,19 +141,6 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
     } catch (IOException e) {
       throw new UserExecException("I/O error during sandboxed execution", e);
     }
-  }
-
-  private ImmutableSet<Path> getBindMounts(BlazeDirectories blazeDirs) {
-    Path tmpPath = blazeDirs.getFileSystem().getPath("/tmp");
-    ImmutableSet.Builder<Path> bindMounts = ImmutableSet.builder();
-    if (blazeDirs.getWorkspace().startsWith(tmpPath)) {
-
-      bindMounts.add(blazeDirs.getWorkspace());
-    }
-    if (blazeDirs.getOutputBase().startsWith(tmpPath)) {
-      bindMounts.add(blazeDirs.getOutputBase());
-    }
-    return bindMounts.build();
   }
 
 }
