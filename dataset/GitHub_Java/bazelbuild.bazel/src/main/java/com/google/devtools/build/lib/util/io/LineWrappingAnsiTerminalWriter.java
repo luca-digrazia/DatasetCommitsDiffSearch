@@ -48,16 +48,13 @@ public class LineWrappingAnsiTerminalWriter implements AnsiTerminalWriter {
     if (c == '\n') {
       terminalWriter.newline();
       position = 0;
-    } else if (position + 1 < width) {
+    } else if (position + 2 < width) {
       terminalWriter.append(Character.toString(c));
       position++;
     } else {
-      // The last usable character of the line was already been written,
-      // hence we have to start a continuation before writing the symbol.
-      terminalWriter.append(Character.toString(continuationCharacter));
+      terminalWriter.append(new String(new char[] {c, continuationCharacter}));
       terminalWriter.newline();
-      terminalWriter.append(Character.toString(c));
-      position = 1;
+      position = 0;
     }
   }
 
