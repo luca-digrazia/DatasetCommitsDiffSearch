@@ -35,7 +35,7 @@ public class ClockTest {
 
     @Test
     public void defaultsToUserTime() throws Exception {
-        assertThat(Clock.defaultClock(),
+        assertThat(Clock.DEFAULT,
                    is(instanceOf(Clock.UserTimeClock.class)));
     }
 }
