@@ -299,6 +299,8 @@ public class ExecutionTool {
         env.getEventBus(),
         runtime.getClock(),
         request,
+        request.getOptions(ExecutionOptions.class).verboseFailures,
+        request.getOptions(ExecutionOptions.class).showSubcommands,
         strategies,
         spawnStrategyMap,
         actionContextProviders);
@@ -352,16 +354,13 @@ public class ExecutionTool {
     BuildConfiguration targetConfiguration = targetConfigurations.size() == 1
         ? targetConfigurations.get(0) : null;
     if (targetConfigurations.size() == 1) {
+      String productName = runtime.getProductName();
       String dirName = env.getWorkspaceName();
       String workspaceName = analysisResult.getWorkspaceName();
       OutputDirectoryLinksUtils.createOutputDirectoryLinks(
-          dirName,
-          env.getWorkspace(),
-          env.getDirectories().getExecRoot(workspaceName),
-          env.getDirectories().getOutputPath(workspaceName),
-          getReporter(),
-          targetConfiguration,
-          request.getBuildOptions().getSymlinkPrefix(runtime.getProductName()));
+          dirName, env.getWorkspace(), env.getDirectories().getExecRoot(workspaceName),
+          env.getDirectories().getOutputPath(workspaceName), getReporter(), targetConfiguration,
+          request.getBuildOptions().getSymlinkPrefix(productName), productName);
     }
 
     ActionCache actionCache = getActionCache();

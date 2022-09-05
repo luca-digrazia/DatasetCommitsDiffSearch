@@ -129,7 +129,7 @@ public final class CommandEnvironment {
     this.workspace = workspace;
     this.directories = workspace.getDirectories();
     this.commandId = null; // Will be set once we get the client environment
-    this.reporter = new Reporter(eventBus);
+    this.reporter = new Reporter();
     this.eventBus = eventBus;
     this.commandThread = commandThread;
     this.blazeModuleEnvironment = new BlazeModuleEnvironment();
@@ -477,7 +477,9 @@ public final class CommandEnvironment {
         getWorkingDirectory(),
         defaultsPackageContents,
         getCommandId(),
-        clientEnv,
+        // TODO(bazel-team): this optimization disallows rule-specified additional dependencies
+        // on the client environment!
+        getWhitelistedClientEnv(),
         timestampGranularityMonitor,
         options);
   }
