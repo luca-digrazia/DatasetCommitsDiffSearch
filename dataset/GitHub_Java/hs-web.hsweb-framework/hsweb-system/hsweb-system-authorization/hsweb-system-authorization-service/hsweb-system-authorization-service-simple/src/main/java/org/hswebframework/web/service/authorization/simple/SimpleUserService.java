@@ -17,14 +17,12 @@ import org.hswebframework.web.service.DefaultDSLUpdateService;
 import org.hswebframework.web.service.authorization.*;
 import org.hswebframework.web.validate.ValidationException;
 import org.hswebframework.utils.ListUtils;
-import org.hswebframework.web.validator.group.CreateGroup;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
-import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.util.*;
@@ -75,29 +73,15 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     @Override
     @Transactional(readOnly = true)
     public UserEntity selectByUsername(String username) {
-        if (null == username) {
-            return null;
-        }
+        tryValidateProperty(StringUtils.hasLength(username), UserEntity.username, "id:{not_be_null}");
+        Assert.notNull(username, "username:{not_be_null}");
         return createQuery().where("username", username).single();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public UserEntity selectByUserNameAndPassword(String plainUsername, String plainPassword) {
-        Objects.requireNonNull(plainUsername);
-        Objects.requireNonNull(plainPassword);
-
-        return Optional.ofNullable(selectByUsername(plainUsername))
-                .filter(user -> encodePassword(plainPassword, user.getSalt()).equals(user.getPassword()))
-                .orElse(null);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public UserEntity selectByPk(String id) {
-        if (null == id) {
-            return null;
-        }
+        tryValidateProperty(StringUtils.hasLength(id), UserEntity.id, "id:{not_be_null}");
         UserEntity userEntity = createQuery().where(UserEntity.id, id).single();
         if (null != userEntity) {
             List<String> roleId = userRoleDao.selectByUserId(id).stream().map(UserRoleEntity::getRoleId).collect(Collectors.toList());
@@ -110,9 +94,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
 
     @Override
     public List<UserEntity> selectByPk(List<String> id) {
-        if (CollectionUtils.isEmpty(id)) {
-            return new ArrayList<>();
-        }
+        tryValidateProperty(id != null && !id.isEmpty(), UserEntity.id, "id:{not_be_null}");
         return createQuery().where().in(UserEntity.id, id).listNoPaging();
     }
 
@@ -130,7 +112,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         userEntity.setSalt(IDGenerator.RANDOM.generate());
         userEntity.setStatus(DataStatus.STATUS_ENABLED);
         //验证其他属性
-        tryValidate(userEntity, CreateGroup.class);
+        tryValidate(userEntity);
         //密码MD5
         userEntity.setPassword(encodePassword(userEntity.getPassword(), userEntity.getSalt()));
         //创建用户
@@ -160,8 +142,6 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     @Caching(evict = {
             @CacheEvict(value = USER_CACHE_NAME, key = "#userId"),
             @CacheEvict(value = USER_AUTH_CACHE_NAME, key = "#userId"),
-            @CacheEvict(value = USER_AUTH_CACHE_NAME, key = "'user-menu-list:'+#userId"),
-            @CacheEvict(value = USER_AUTH_CACHE_NAME, key = "'menu-tree:'+#userId")
     })
     public void update(String userId, UserEntity userEntity) {
         userEntity.setId(userId);
@@ -232,9 +212,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     public List<RoleEntity> getUserRole(String userId) {
         Objects.requireNonNull(userId);
         List<UserRoleEntity> roleEntities = userRoleDao.selectByUserId(userId);
-        if (roleEntities.isEmpty()) {
-            return new ArrayList<>();
-        }
+        if (roleEntities.isEmpty()) return new ArrayList<>();
         List<String> roleIdList = roleEntities.stream().map(UserRoleEntity::getRoleId).collect(Collectors.toList());
         return DefaultDSLQueryService
                 .createQuery(roleDao).where()
@@ -251,9 +229,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     @Override
     public Set<SettingInfo> get(String userId) {
         UserEntity userEntity = selectByPk(userId);
-        if (null == userEntity) {
-            return new HashSet<>();
-        }
+        if (null == userEntity) return new HashSet<>();
         List<UserRoleEntity> roleEntities = userRoleDao.selectByUserId(userId);
         //使用角色配置
         Set<SettingInfo> settingInfo = roleEntities.stream()
