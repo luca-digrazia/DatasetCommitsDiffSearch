@@ -15,45 +15,57 @@
 package com.google.testing.junit.runner.junit4;
 
 import com.google.testing.junit.runner.internal.SignalHandlers;
-import com.google.testing.junit.runner.internal.Xml;
-import com.google.testing.junit.runner.internal.junit4.JUnit4TestNameListener;
-import com.google.testing.junit.runner.internal.junit4.JUnit4TestStackTraceListener;
-import com.google.testing.junit.runner.internal.junit4.JUnit4TestXmlListener;
-import com.google.testing.junit.runner.internal.junit4.SettableCurrentRunningTest;
 import com.google.testing.junit.runner.util.TestNameProvider;
 import com.google.testing.junit.runner.util.Ticker;
+
+import dagger.Module;
+import dagger.Provides;
+import dagger.multibindings.IntoSet;
+
+import org.junit.runner.notification.RunListener;
+
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.nio.file.Path;
 import javax.annotation.Nullable;
 import javax.inject.Singleton;
-import org.junit.runner.notification.RunListener;
 
 /**
- * Utility class for real test runs. This is a legacy Dagger module.
+ * Dagger module for real test runs.
  */
+@Module(includes = {JUnit4RunnerBaseModule.class, JUnit4InstanceModules.Config.class})
 public final class JUnit4RunnerModule {
+  @Provides
   static Ticker ticker() {
     return Ticker.systemTicker();
   }
 
+  @Provides
   static SignalHandlers.HandlerInstaller signalHandlerInstaller() {
     return SignalHandlers.createRealHandlerInstaller();
   }
 
+  @Provides
+  @IntoSet
   static RunListener nameListener(JUnit4TestNameListener impl) {
     return impl;
   }
 
+  @Provides
+  @IntoSet
   static RunListener xmlListener(JUnit4TestXmlListener impl) {
     return impl;
   }
 
+  @Provides
+  @IntoSet
   static RunListener stackTraceListener(JUnit4TestStackTraceListener impl) {
     return impl;
   }
 
+
+  @Provides
   @Singleton
   @Xml
   static OutputStream provideXmlStream(JUnit4Config config) {
@@ -99,11 +111,11 @@ public final class JUnit4RunnerModule {
     };
   }
 
-  @Singleton
+  @Provides @Singleton
   SettableCurrentRunningTest provideCurrentRunningTest() {
     return new SettableCurrentRunningTest() {
       @Override
-      protected void setGlobalTestNameProvider(TestNameProvider provider) {
+      void setGlobalTestNameProvider(TestNameProvider provider) {
         testNameProvider = provider;
       }
     };
