@@ -1,6 +1,5 @@
 package org.nlpcn.es4sql;
 
-import com.alibaba.druid.support.json.JSONUtils;
 import com.google.common.io.Files;
 import org.junit.Test;
 import org.nlpcn.es4sql.exception.SqlParseException;
@@ -10,7 +9,6 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLFeatureNotSupportedException;
-import java.util.Map;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
@@ -76,7 +74,7 @@ public class ExplainTest {
     @Test
     public void orderByOnNestedFieldTest() throws Exception {
         String result = explain(String.format("SELECT * FROM %s ORDER BY NESTED('message.info','message')", TEST_INDEX_NESTED_TYPE));
-        assertThat(result.replaceAll("\\s+", ""), equalTo("{\"from\":0,\"size\":1000,\"sort\":[{\"message.info\":{\"order\":\"asc\",\"nested\":{\"path\":\"message\"}}}]}"));
+        assertThat(result.replaceAll("\\s+", ""), equalTo("{\"from\":0,\"size\":200,\"sort\":[{\"message.info\":{\"order\":\"asc\",\"nested\":{\"path\":\"message\"}}}]}"));
     }
 
     @Test
@@ -96,22 +94,6 @@ public class ExplainTest {
     @Test
     public void testSpanNearQueryExplain() throws SqlParseException, SQLFeatureNotSupportedException {
         System.out.println(explain("SELECT * FROM index WHERE q=span_near(boost=10.0,slop=12,in_order=false,clauses='[{\"span_term\":{\"field\":\"value1\"}},{\"span_term\":{\"field\":\"value2\"}},{\"span_term\":{\"field\":\"value3\"}}]')"));
-    }
-
-    @Test
-    public void testCountDistinctExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        System.out.println(explain("SELECT COUNT(DISTINCT sourceIP.keyword) AS size FROM dataflow WHERE startTime > 525757149439 AND startTime < 1525757449439 GROUP BY appName.keyword ORDER BY size DESC"));
-    }
-
-    @Test
-    public void testStatsGroupsExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        Map map = (Map) JSONUtils.parse(explain("SELECT /*! STATS(group1, group2) */ * FROM index"));
-        assertThat(map.get("stats").toString(), equalTo("[group1, group2]"));
-    }
-
-    @Test
-    public void testCastInWhereExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        System.out.println(explain("select * from file1 where cast(offset as int) > 20"));
     }
 
     private String explain(String sql) throws SQLFeatureNotSupportedException, SqlParseException {
