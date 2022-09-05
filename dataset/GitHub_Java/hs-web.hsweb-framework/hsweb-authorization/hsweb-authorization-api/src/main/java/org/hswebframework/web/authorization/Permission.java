@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 http://www.hswebframework.org
+ * Copyright 2016 http://www.hswebframework.org
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,8 +84,6 @@ public interface Permission extends Serializable {
      * @return 权限ID，权限的唯一标识
      */
     String getId();
-
-    String getName();
 
     /**
      * 用户对此权限的可操作事件(按钮)
