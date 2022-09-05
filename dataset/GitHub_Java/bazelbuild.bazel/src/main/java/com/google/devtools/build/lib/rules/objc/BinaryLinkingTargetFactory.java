@@ -220,10 +220,6 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
       builder.addDebugArtifacts();
     }
 
-    if (ObjcRuleClasses.objcConfiguration(ruleContext).generateLinkmap()) {
-      builder.setLinkmapFile(intermediateArtifacts.linkmap());
-    }
-
     return builder.build();
   }
 
