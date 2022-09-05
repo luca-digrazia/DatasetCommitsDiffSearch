@@ -40,8 +40,4 @@ public class AutoSizeUtils {
     public static int sp2px(Context context, float value) {
         return (int) (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, value, context.getResources().getDisplayMetrics()) + 0.5f);
     }
-
-    public static int in2px(Context context, float value) {
-        return (int) (TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_IN, value, context.getResources().getDisplayMetrics()) + 0.5f);
-    }
 }
