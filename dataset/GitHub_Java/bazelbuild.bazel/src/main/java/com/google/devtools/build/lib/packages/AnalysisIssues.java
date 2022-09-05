@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,13 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import javax.annotation.Nullable;
@@ -57,6 +56,15 @@ public final class AnalysisIssues extends Exception {
       }
     }
 
+    private void reportTo(StringBuilder sb) {
+      String msg = String.format(messageTemplate, arguments);
+      if (attribute == null) {
+        sb.append("ERROR: ").append(msg);
+      } else {
+        sb.append("ERROR: in attribute \"").append(attribute).append("\": ").append(msg);
+      }
+    }
+
     @Override
     public String toString() {
       if (attribute == null) {
@@ -64,7 +72,7 @@ public final class AnalysisIssues extends Exception {
       } else {
         List<Object> args = new ArrayList<>();
         args.add(attribute);
-        args.addAll(Arrays.asList(arguments));
+        Collections.addAll(args, arguments);
         return String.format("ERROR in '%s': " + messageTemplate, args.toArray());
       }
     }
@@ -102,8 +110,27 @@ public final class AnalysisIssues extends Exception {
     }
   }
 
+  @Nullable
+  private String asString() {
+    if (entries == null) {
+      return null;
+    }
+
+    StringBuilder sb = new StringBuilder();
+    for (Entry e : entries) {
+      e.reportTo(sb);
+    }
+    return sb.toString();
+  }
+
+  @Override
+  public String getMessage() {
+    return asString();
+  }
+
   @Override
   public String toString() {
-    return "Errors during analysis:\n" + Joiner.on("\n").join(entries);
+    String s = asString();
+    return s == null ? "" : s;
   }
 }
