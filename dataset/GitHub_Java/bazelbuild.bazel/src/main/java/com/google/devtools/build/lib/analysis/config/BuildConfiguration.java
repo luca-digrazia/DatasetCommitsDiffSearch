@@ -165,6 +165,13 @@ public final class BuildConfiguration {
     }
 
     /**
+     * Adds all the roots from this fragment.
+     */
+    @SuppressWarnings("unused")
+    public void addRoots(List<Root> roots) {
+    }
+
+    /**
      * Returns a (key, value) mapping to insert into the subcommand environment for coverage.
      */
     public Map<String, String> getCoverageEnvironment() {
@@ -2338,6 +2345,11 @@ public final class BuildConfiguration {
     roots.add(getIncludeDirectory());
     roots.add(getMiddlemanDirectory());
     roots.add(getTestLogsDirectory());
+
+    // Fragment-defined roots
+    for (Fragment fragment : fragments.values()) {
+      fragment.addRoots(roots);
+    }
 
     return ImmutableList.copyOf(roots);
   }
