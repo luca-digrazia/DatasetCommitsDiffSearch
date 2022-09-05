@@ -195,19 +195,29 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   @Override
+  public Collection<Target> getFwdDeps(Target target) {
+    return getTargetsFromNodes(getNode(target).getSuccessors());
+  }
+
+  @Override
   public Collection<Target> getFwdDeps(Iterable<Target> targets) {
     Set<Target> result = new HashSet<>();
     for (Target target : targets) {
-      result.addAll(getTargetsFromNodes(getNode(target).getSuccessors()));
+      result.addAll(getFwdDeps(target));
     }
     return result;
+  }
+
+  @Override
+  public Collection<Target> getReverseDeps(Target target) {
+    return getTargetsFromNodes(getNode(target).getPredecessors());
   }
 
   @Override
   public Collection<Target> getReverseDeps(Iterable<Target> targets) {
     Set<Target> result = new HashSet<>();
     for (Target target : targets) {
-      result.addAll(getTargetsFromNodes(getNode(target).getPredecessors()));
+      result.addAll(getReverseDeps(target));
     }
     return result;
   }
