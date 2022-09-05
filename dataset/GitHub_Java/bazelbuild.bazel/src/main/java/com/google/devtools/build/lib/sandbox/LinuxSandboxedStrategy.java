@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
@@ -80,7 +81,6 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
   private final List<String> sandboxAddPath;
   private final UUID uuid = UUID.randomUUID();
   private final AtomicInteger execCounter = new AtomicInteger();
-  private final String productName;
 
   public LinuxSandboxedStrategy(
       Map<String, String> clientEnv,
@@ -89,8 +89,7 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
       boolean verboseFailures,
       boolean sandboxDebug,
       List<String> sandboxAddPath,
-      boolean unblockNetwork,
-      String productName) {
+      boolean unblockNetwork) {
     this.clientEnv = ImmutableMap.copyOf(clientEnv);
     this.blazeDirs = blazeDirs;
     this.execRoot = blazeDirs.getExecRoot();
@@ -99,9 +98,7 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
     this.sandboxDebug = sandboxDebug;
     this.sandboxAddPath = sandboxAddPath;
     this.unblockNetwork = unblockNetwork;
-    this.standaloneStrategy = new StandaloneSpawnStrategy(
-        blazeDirs.getExecRoot(), verboseFailures, productName);
-    this.productName = productName;
+    this.standaloneStrategy = new StandaloneSpawnStrategy(blazeDirs.getExecRoot(), verboseFailures);
   }
 
   /**
@@ -135,7 +132,7 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
 
     // Each invocation of "exec" gets its own sandbox.
     Path sandboxPath =
-        execRoot.getRelative(productName + "-sandbox").getRelative(execId);
+        execRoot.getRelative(Constants.PRODUCT_NAME + "-sandbox").getRelative(execId);
 
     ImmutableMap<Path, Path> mounts;
     try {
