@@ -16,37 +16,45 @@ package com.google.testing.junit.runner.junit4;
 
 import static com.google.testing.junit.runner.sharding.ShardingFilters.DEFAULT_SHARDING_STRATEGY;
 
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import com.google.testing.junit.junit4.runner.MemoizingRequest;
 import com.google.testing.junit.runner.internal.Stdout;
 import com.google.testing.junit.runner.junit4.JUnit4InstanceModules.SuiteClass;
 import com.google.testing.junit.runner.model.TestSuiteModel;
 import com.google.testing.junit.runner.sharding.api.ShardingFilterFactory;
-import com.google.testing.junit.runner.util.MemoizingSupplier;
-import com.google.testing.junit.runner.util.Supplier;
+
 import dagger.Module;
+import dagger.Multibindings;
 import dagger.Provides;
 import dagger.multibindings.IntoSet;
-import dagger.multibindings.Multibinds;
+
+import org.junit.internal.TextListener;
+import org.junit.runner.Request;
+import org.junit.runner.notification.RunListener;
+
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
+
 import javax.inject.Singleton;
-import org.junit.internal.TextListener;
-import org.junit.runner.Request;
-import org.junit.runner.notification.RunListener;
 
 /**
- * Dagger module for creating a {@link JUnit4Runner}. This contains the common bindings used when
- * either the runner runs actual tests or when we do integration tests of the runner itself.
+ * Dagger module for creating a {@link JUnit4Runner}. This contains the common
+ * bindings used when either the runner runs actual tests or when we do
+ * integration tests of the runner itself.
+ *
  */
 @Module(includes = SuiteClass.class)
-public abstract class JUnit4RunnerBaseModule {
+public final class JUnit4RunnerBaseModule {
 
-  @Multibinds
-  abstract Set<JUnit4Runner.Initializer> initializers();
-  
+  @Multibindings
+  interface MultiBindings {
+    Set<JUnit4Runner.Initializer> initializers();
+  }
+
   @Provides
   static ShardingFilterFactory shardingFilterFactory() {
     return DEFAULT_SHARDING_STRATEGY;
@@ -62,7 +70,7 @@ public abstract class JUnit4RunnerBaseModule {
   @Provides
   @Singleton
   static Supplier<TestSuiteModel> provideTestSuiteModelSupplier(JUnit4TestModelBuilder builder) {
-    return new MemoizingSupplier<>(builder);
+    return Suppliers.memoize(builder);
   }
 
   @Provides
@@ -90,6 +98,4 @@ public abstract class JUnit4RunnerBaseModule {
     Request request = Request.aClass(suiteClass);
     return new MemoizingRequest(request);
   }
-
-  private JUnit4RunnerBaseModule() {} // no instances
 }
