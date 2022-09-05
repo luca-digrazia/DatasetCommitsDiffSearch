@@ -100,7 +100,9 @@ public class AggregationQueryAction extends QueryAction {
 
                 for (int i = 1; i < groupBy.size(); i++) {
                     field = groupBy.get(i);
-                    AggregationBuilder<?> subAgg = getGroupAgg(field, select);
+					AggregationBuilder<?> subAgg = getGroupAgg(field, select);
+					
+                    AggregationBuilder<?> subAgg = aggMaker.makeGroupAgg(field);
                     if (subAgg instanceof TermsBuilder && !(field instanceof MethodField)) {
                         ((TermsBuilder) subAgg).size(0);
                     }
