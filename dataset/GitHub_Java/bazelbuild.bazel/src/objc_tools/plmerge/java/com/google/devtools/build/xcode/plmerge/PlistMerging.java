@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 import javax.xml.parsers.ParserConfigurationException;
 
@@ -62,11 +61,7 @@ import javax.xml.parsers.ParserConfigurationException;
  */
 public class PlistMerging extends Value<PlistMerging> {
   private static final String BUNDLE_IDENTIFIER_PLIST_KEY = "CFBundleIdentifier";
-  private static final String BUNDLE_IDENTIFIER_DEFAULT = "com.generic.bundleidentifier";
-  private static final String BUNDLE_VERSION_PLIST_KEY = "CFBundleVersion";
-  private static final String BUNDLE_VERSION_DEFAULT = "1.0.0";
-  private static final String BUNDLE_SHORT_VERSION_STRING_PLIST_KEY = "CFBundleShortVersionString";
-  private static final String BUNDLE_SHORT_VERSION_STRING_DEFAULT = "1.0";
+
   private static final ImmutableBiMap<String, Integer> DEVICE_FAMILIES =
       ImmutableBiMap.of("IPHONE", 1, "IPAD", 2);
 
@@ -170,6 +165,15 @@ public class PlistMerging extends Value<PlistMerging> {
     result.put("CFBundleSupportedPlatforms", new NSArray(NSObject.wrap(platform.getNameInPlist())));
     result.put("MinimumOSVersion", NSObject.wrap(minimumOsVersion));
 
+    // Adding these here by brute force to override values inserted by
+    // release bundling support which are wrong.
+    // These shall be removed once the errors in release bundling support are fixed.
+    // These values are taken from an Xcode 6.2 device build.
+    // Adding them to a simulator build causes no problems when tested with Xcode 6.2.
+    result.put("DTPlatformBuild", NSObject.wrap("12D508"));
+    result.put("DTSDKBuild", NSObject.wrap("12D508"));
+    result.put("DTXcode", NSObject.wrap("0620"));
+    result.put("DTXcodeBuild", NSObject.wrap("6C131e"));
     return result.build();
   }
 
@@ -182,7 +186,12 @@ public class PlistMerging extends Value<PlistMerging> {
           throws IOException {
     NSDictionary merged = PlistMerging.merge(sourceFiles);
 
-    Set<String> conflictingEntries = Sets.intersection(automaticEntries.keySet(), merged.keySet());
+    // Remove the entries that we have added by brute force in automaticEntries so that our
+    // check for conflictingEntries still works.
+    // This shall be removed once the errors in release bundling support are fixed.
+    Set<String> conflictingEntries = Sets.difference(
+        Sets.intersection(automaticEntries.keySet(), merged.keySet()),
+        ImmutableSet.of("DTPlatformBuild", "DTSDKBuild", "DTXcode", "DTXcodeBuild"));
 
     Preconditions.checkArgument(conflictingEntries.isEmpty(),
         "The following plist entries are generated automatically, but are present in more than one "
@@ -200,30 +209,6 @@ public class PlistMerging extends Value<PlistMerging> {
     for (String key : keysToRemoveIfEmptyString) {
       if (Equaling.of(Mapping.of(merged, key), Optional.<NSObject>of(new NSString("")))) {
         merged.remove(key);
-      }
-    }
-
-    // Info.plist files must contain a valid CFBundleVersion and a valid CFBundleShortVersionString,
-    // or it will be rejected by Apple.
-    // A valid Bundle Version is 18 characters or less, and only contains [0-9.]
-    // TODO(bazel-team): warn user if we replace their values.
-    Pattern versionPattern = Pattern.compile("[^0-9.]");
-    if (!merged.containsKey(BUNDLE_VERSION_PLIST_KEY)) {
-      merged.put(BUNDLE_VERSION_PLIST_KEY, BUNDLE_VERSION_DEFAULT);
-    } else {
-      NSObject nsVersion = merged.get(BUNDLE_VERSION_PLIST_KEY);
-      String version = (String) nsVersion.toJavaObject();
-      if (version.length() > 18 || versionPattern.matcher(version).find()) {
-        merged.put(BUNDLE_VERSION_PLIST_KEY, BUNDLE_VERSION_DEFAULT);
-      }
-    }
-    if (!merged.containsKey(BUNDLE_SHORT_VERSION_STRING_PLIST_KEY)) {
-      merged.put(BUNDLE_SHORT_VERSION_STRING_PLIST_KEY, BUNDLE_SHORT_VERSION_STRING_DEFAULT);
-    } else {
-      NSObject nsVersion = merged.get(BUNDLE_SHORT_VERSION_STRING_PLIST_KEY);
-      String version = (String) nsVersion.toJavaObject();
-      if (version.length() > 18 || versionPattern.matcher(version).find()) {
-        merged.put(BUNDLE_SHORT_VERSION_STRING_PLIST_KEY, BUNDLE_SHORT_VERSION_STRING_DEFAULT);
       }
     }
 
@@ -289,16 +274,11 @@ public class PlistMerging extends Value<PlistMerging> {
    */
   public PlistMerging setBundleIdentifier(String primaryIdentifier, String fallbackIdentifier) {
     NSString bundleIdentifier = (NSString) merged.get(BUNDLE_IDENTIFIER_PLIST_KEY);
-
+        
     if (primaryIdentifier != null) {
       merged.put(BUNDLE_IDENTIFIER_PLIST_KEY, primaryIdentifier);
-    } else if (bundleIdentifier == null) {
-      if (fallbackIdentifier != null) {
-        merged.put(BUNDLE_IDENTIFIER_PLIST_KEY, fallbackIdentifier);
-      } else {
-        // TODO(bazel-team): We shouldn't be generating an info.plist in this case.
-        merged.put(BUNDLE_IDENTIFIER_PLIST_KEY, BUNDLE_IDENTIFIER_DEFAULT);
-      }
+    } else if (bundleIdentifier == null && fallbackIdentifier != null) {
+      merged.put(BUNDLE_IDENTIFIER_PLIST_KEY, fallbackIdentifier);
     }
 
     return this;
@@ -322,6 +302,7 @@ public class PlistMerging extends Value<PlistMerging> {
       byte[] buffer = new byte[UTF8_BOM.length];
       int read = stream.read(buffer);
       stream.reset();
+      buffer = Arrays.copyOf(buffer, read);
 
       if (UTF8_BOM.length == read && Arrays.equals(buffer, UTF8_BOM)) {
         stream.skip(UTF8_BOM.length);
