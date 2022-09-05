@@ -22,6 +22,8 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.EmptyToNullLabelConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelConverter;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsConverter;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
@@ -276,6 +278,15 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     )
     public DynamicModeFlag dynamicMode;
 
+    @Option(name = "strict_android_deps",
+        allowMultiple = false,
+        defaultValue = "default",
+        converter = StrictDepsConverter.class,
+        category = "semantics",
+        help = "If true, checks that an Android target explicitly declares all directly used "
+            + "targets as dependencies.")
+    public StrictDepsMode strictDeps;
+
     // Label of filegroup combining all Android tools used as implicit dependencies of
     // android_* rules
     @Option(name = "android_sdk",
@@ -489,6 +500,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   }
 
   private final Label sdk;
+  private final StrictDepsMode strictDeps;
   private final String cpu;
   private final boolean incrementalNativeLibs;
   private final ConfigurationDistinguisher configurationDistinguisher;
@@ -509,6 +521,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   AndroidConfiguration(Options options, Label androidSdk) {
     this.sdk = androidSdk;
     this.incrementalNativeLibs = options.incrementalNativeLibs;
+    this.strictDeps = options.strictDeps;
     this.cpu = options.cpu;
     this.configurationDistinguisher = options.configurationDistinguisher;
     this.useJackForDexing = options.useJackForDexing;
@@ -538,6 +551,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public Label getSdk() {
     return sdk;
+  }
+
+  public StrictDepsMode getStrictDeps() {
+    return strictDeps;
   }
 
   /**
