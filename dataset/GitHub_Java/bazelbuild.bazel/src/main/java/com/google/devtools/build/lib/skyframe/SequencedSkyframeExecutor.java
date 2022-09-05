@@ -101,7 +101,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     super(reporter, evaluatorSupplier, pkgFactory, tsgm, directories,
         workspaceStatusActionFactory, buildInfoFactories, immutableDirectories,
         allowedMissingInputs, preprocessorFactorySupplier,
-        extraSkyFunctions, extraPrecomputedValues, /*errorOnExternalFiles=*/false);
+        extraSkyFunctions, extraPrecomputedValues);
     this.diffAwarenessManager = new DiffAwarenessManager(diffAwarenessFactories, reporter);
   }
 
