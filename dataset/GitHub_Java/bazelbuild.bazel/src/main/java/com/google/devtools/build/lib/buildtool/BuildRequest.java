@@ -47,7 +47,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.regex.Pattern;
 
 /**
  * A BuildRequest represents a single invocation of the build tool by a user.
@@ -81,7 +80,7 @@ public class BuildRequest implements OptionsClassProvider {
   /**
    * Options interface--can be used to parse command-line arguments.
    *
-   * <p>See also ExecutionOptions; from the user's point of view, there's no
+   * See also ExecutionOptions; from the user's point of view, there's no
    * qualitative difference between these two sets of options.
    */
   public static class BuildRequestOptions extends OptionsBase {
@@ -120,14 +119,6 @@ public class BuildRequest implements OptionsClassProvider {
             help = "Increases the verbosity of the explanations issued if --explain is enabled. "
             + "Has no effect if --explain is not enabled.")
     public boolean verboseExplanations;
-
-    @Option(name = "output_filter",
-        converter = Converters.RegexPatternConverter.class,
-        defaultValue = "null",
-        category = "flags",
-        help = "Only shows warnings for rules with a name matching the provided regular "
-            + "expression.")
-    public Pattern outputFilter;
 
     @Deprecated
     @Option(name = "dump_makefile",
@@ -261,15 +252,6 @@ public class BuildRequest implements OptionsClassProvider {
             help = "Check for modifications made to the output files of a build. Consider setting "
                 + "this flag to false to see the effect on incremental build times.")
     public boolean checkOutputFiles;
-
-    @Option(
-      name = "aspects",
-      converter = Converters.CommaSeparatedOptionListConverter.class,
-      defaultValue = "",
-      category = "undocumented", // for now
-      help = "List of top-level aspects"
-    )
-    public List<String> aspects;
   }
 
   /**
@@ -529,10 +511,6 @@ public class BuildRequest implements OptionsClassProvider {
 
   public ImmutableSortedSet<String> getMultiCpus() {
     return ImmutableSortedSet.copyOf(getBuildOptions().multiCpus);
-  }
-
-  public ImmutableList<String> getAspects() {
-    return ImmutableList.copyOf(getBuildOptions().aspects);
   }
 
   public static BuildRequest create(String commandName, OptionsProvider options,
