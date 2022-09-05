@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.rules.objc;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.Type.LABEL;
 
-import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -48,7 +47,7 @@ public final class ExperimentalIosTestRule implements RuleDefinition {
             ImplicitOutputsFunction.fromFunctions(ReleaseBundlingSupport.IPA, XcodeSupport.PBXPROJ))
         .override(attr(IosTest.TARGET_DEVICE, LABEL)
             .allowedFileTypes()
-            .allowedRuleClasses(Constants.IOS_DEVICE_RULE_CLASSES)
+            .allowedRuleClasses("ios_device")
             .value(env.getLabel("//tools/objc/sim_devices:default")))
         .add(attr("$test_template", LABEL)
             .value(env.getLabel("//tools/objc:ios_test.sh.bazel_template")))

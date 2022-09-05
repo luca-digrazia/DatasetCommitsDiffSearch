@@ -22,10 +22,8 @@ import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
-import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.util.FileType;
 
@@ -62,6 +60,8 @@ class TestSupport {
     // xctestIpa is the app bundle being tested
     Artifact xctestIpa = xctestIpa();
 
+    IosDeviceProvider targetDevice = targetDevice();
+
     List<Substitution> substitutions = new ImmutableList.Builder<Substitution>()
         .add(Substitution.of("%(test_app_ipa)s", testIpa.getRootRelativePathString()))
         .add(Substitution.of("%(test_app_name)s", baseNameWithoutIpa(testIpa)))
@@ -71,7 +71,7 @@ class TestSupport {
 
         .add(Substitution.of("%(iossim_path)s", iossim().getRootRelativePath().getPathString()))
 
-        .addAll(deviceSubstitutions().getSubstitutionsForTestRunnerScript())
+        .addAll(targetDevice.getSubstitutionsForTestRunnerScript())
 
         .build();
 
@@ -81,9 +81,8 @@ class TestSupport {
         template, generatedTestScript(), substitutions, /*executable=*/true));
   }
 
-  private IosTestSubstitutionProvider deviceSubstitutions() {
-    return ruleContext.getPrerequisite(
-        "target_device", Mode.TARGET, IosTestSubstitutionProvider.class);
+  private IosDeviceProvider targetDevice() {
+    return ruleContext.getPrerequisite("target_device", Mode.TARGET, IosDeviceProvider.class);
   }
 
   private Artifact testIpa() {
@@ -109,17 +108,8 @@ class TestSupport {
         .addArtifact(testIpa())
         .addArtifact(xctestIpa())
         .addArtifact(generatedTestScript())
-        .addArtifact(iossim())
-        .addTransitiveArtifacts(deviceRunfiles());
+        .addArtifact(iossim());
     return this;
-  }
-
-  /**
-   * Runfiles required in order to use the specified target device.
-   */
-  private NestedSet<Artifact> deviceRunfiles() {
-    return ruleContext.getPrerequisite("target_device", Mode.TARGET, RunfilesProvider.class)
-        .getDefaultRunfiles().getAllArtifacts();
   }
 
   /**
