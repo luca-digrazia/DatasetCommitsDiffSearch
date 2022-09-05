@@ -209,46 +209,92 @@
 
 package com.taobao.android.builder.extension;
 
-import java.io.File;
-import java.util.HashSet;
-import java.util.Set;
-
 import com.google.common.collect.Sets;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.extension.annotation.Config;
-import com.taobao.android.builder.tools.EnvHelper;
 import org.apache.commons.lang.StringUtils;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 /**
- * Created by shenghua.nish on 2016-05-17 上午9:57.
+ * Created by shenghua.nish on 2016-05-17 As in the morning.
  */
 public class PatchConfig {
 
     private String name;
 
-    @Config(message = "app注册的签名的应用名称", order = 0, advance = false, group = "atlas_patch")
+    @Config(message = "appThe application name of the registered signature", order = 0, advance = false, group = "atlas_patch")
     private String appSignName;
 
-    @Config(message = " 打andfix patch 包 ", order = 1, advance = true, group = "atlas_patch")
+    @Config(message = " Play andfix patch bag ", order = 1, advance = true, group = "atlas_patch")
     private boolean createAPatch = false;
 
-    @Config(message = " 打动态部署 patch 包 ", order = 2, group = "atlas_patch")
+    @Config(message = " Dynamic deployment patch bag ", order = 2, group = "atlas_patch")
     private boolean createTPatch = false;
 
-    @Config(message = "动态部署不包含的文件列表", order = 3, advance = true, group = "atlas_patch")
+    @Config(message = "Dynamic deployment does not contain a list of files", order = 3, advance = true, group = "atlas_patch")
     private Set<String> tPatchNotIncludeFiles = Sets.newHashSet();
 
-    @Config(message = " andfix 打包过滤 class 列表文件 ", order = 4, advance = true, group = "atlas_patch")
+    @Config(message = " andfix Package filtering class A list of files ", order = 4, advance = true, group = "atlas_patch")
     private File filterFile;
 
-    @Config(message = " andfix 打包过滤 class 列表 ", order = 5, advance = true, group = "atlas_patch")
+    @Config(message = " andfix Package filtering class tabulation ", order = 5, advance = true, group = "atlas_patch")
     private Set<String> filterClasses = new HashSet<String>();
 
     private boolean apForBaseFile = true;
 
+    public boolean isDiffNativeSo() {
+        return diffNativeSo;
+    }
+
+    public void setDiffNativeSo(boolean diffNativeSo) {
+        this.diffNativeSo = diffNativeSo;
+    }
+
+    private boolean diffNativeSo = false;
+
+    public Set<String> getJ2cPatchClasses() {
+        return j2cPatchClasses;
+    }
+
+    public void setJ2cPatchClasses(Set<String> j2cPatchClasses) {
+        this.j2cPatchClasses = j2cPatchClasses;
+    }
+
+    private Set<String> j2cPatchClasses = new HashSet<>();
+
     private File apExploredFolder;
 
     private File finalBasePatchFile;
+
+    public File getHotClassListFile() {
+        return hotClassListFile;
+    }
+
+    public void setHotClassListFile(File hotClassListFile) {
+        this.hotClassListFile = hotClassListFile;
+    }
+
+    private File hotClassListFile;
+
+    public Set<String> getExcludeClasses() {
+        if (excludeClasses.size() > 0){
+            return excludeClasses;
+        }else {
+            return Sets.newHashSet("Landroid/taobao/atlas/framework/FrameworkProperties;","Landroid/taobao/atlas/bundleInfo/AtlasBundleInfoGenerator;");
+        }
+    }
+
+    public void setExcludeClasses(Set<String> excludeClasses) {
+        this.excludeClasses = excludeClasses;
+    }
+
+    //排除的class列表
+    private Set<String>excludeClasses = new HashSet<>();
 
     private Boolean devlopMode = false;
 
@@ -264,6 +310,19 @@ public class PatchConfig {
 
     private String tpatchHistoryUrl = "/rpc/dynamicBundle/getAllPatchInfo.json";
 
+    public String getLastPatchUrl() {
+        if (StringUtils.isEmpty(AtlasBuildContext.sBuilderAdapter.tpatchHistoryUrl)) {
+            return "";
+        }
+        return "http://" + AtlasBuildContext.sBuilderAdapter.tpatchHistoryUrl + LastPatchUrl;
+    }
+
+    public void setLastPatchUrl(String lastPatchUrl) {
+        LastPatchUrl = lastPatchUrl;
+    }
+
+    private String LastPatchUrl = "/rpc/dynamicBundle/getLastPatch.json?";
+
     private Boolean onlyBuildModifyAwb = false;
 
     private String noPatchBundles = "";
@@ -271,6 +330,10 @@ public class PatchConfig {
     private String buildId = "";
 
     private boolean tpatchWriteBuildInfo = true;
+
+    private boolean fullResValues;
+
+    private List<String> patchVersions = new ArrayList<>();
 
     public PatchConfig(String name) {
         this.name = name;
@@ -429,14 +492,12 @@ public class PatchConfig {
     }
 
     /**
-     * 是否要打历史patch， 可以通过 -DdexPatchEnabled=true 来开启
+     * Whether to play the historical patch, Can be achieved by -DdexPatchEnabled=true To turn on
      *
      * @return
      */
     public String getTpatchHistoryUrl() {
-        if ("true".equals(EnvHelper.getEnv("dexPatchEnabled", "false"))) {
-            return "";
-        }
+
         if (StringUtils.isEmpty(AtlasBuildContext.sBuilderAdapter.tpatchHistoryUrl)) {
             return "";
         }
@@ -453,5 +514,21 @@ public class PatchConfig {
 
     public void setAppSignName(String appSignName) {
         this.appSignName = appSignName;
+    }
+
+    public List<String> getPatchVersions() {
+        return patchVersions;
+    }
+
+    public void setPatchVersions(List<String> patchVersions) {
+        this.patchVersions = patchVersions;
+    }
+
+    public boolean isFullResValues() {
+        return fullResValues;
+    }
+
+    public void setFullResValues(boolean fullResValues) {
+        this.fullResValues = fullResValues;
     }
 }
