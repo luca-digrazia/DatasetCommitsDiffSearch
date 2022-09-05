@@ -3,7 +3,6 @@ package com.yammer.metrics.ganglia;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.*;
 import com.yammer.metrics.reporting.AbstractPollingReporter;
-import com.yammer.metrics.reporting.MetricDispatcher;
 import com.yammer.metrics.stats.Snapshot;
 import com.yammer.metrics.core.MetricPredicate;
 import org.slf4j.Logger;
@@ -29,16 +28,17 @@ import java.util.concurrent.TimeUnit;
  * from Hadoop.
  */
 public class GangliaReporter extends AbstractPollingReporter implements MetricProcessor<String> {
+    /* for use as metricType parameter to sendMetricData() */
+    public static final String GANGLIA_INT_TYPE = "int32";
+    public static final String GANGLIA_DOUBLE_TYPE = "double";
+    public static final String GANGLIA_STRING_TYPE = "string";
+
     private static final Logger LOG = LoggerFactory.getLogger(GangliaReporter.class);
     private static final int GANGLIA_TMAX = 60;
     private static final int GANGLIA_DMAX = 0;
-    private static final String GANGLIA_INT_TYPE = "int32";
-    private static final String GANGLIA_DOUBLE_TYPE = "double";
-    private static final String GANGLIA_STRING_TYPE = "string";
     private final MetricPredicate predicate;
     private final VirtualMachineMetrics vm;
     private final Locale locale = Locale.US;
-    private final MetricDispatcher dispatcher = new MetricDispatcher();
     private String hostLabel;
     private String groupPrefix = "";
     private boolean compressPackageNames;
@@ -247,7 +247,7 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
         super(metricsRegistry, "ganglia-reporter");
         this.gangliaMessageBuilder = gangliaMessageBuilder;
         this.groupPrefix = groupPrefix + "_";
-        this.hostLabel = getHostLabel();
+        this.hostLabel = getDefaultHostLabel();
         this.predicate = predicate;
         this.compressPackageNames = compressPackageNames;
         this.vm = vm;
@@ -268,7 +268,7 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
                 final Metric metric = subEntry.getValue();
                 if (metric != null) {
                     try {
-                        dispatcher.dispatch(subEntry.getValue(), subEntry.getKey(), this, null);
+                        metric.processWith(this, subEntry.getKey(), null);
                     } catch (Exception ignored) {
                         LOG.error("Error printing regular metrics:", ignored);
                     }
@@ -295,12 +295,27 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
     }
 
     private void sendMetricData(String metricType, String metricName, String metricValue, String groupName, String units) throws IOException {
+        sendMetricData(getHostLabel(), metricType, metricName, metricValue, groupName, units);
+    }
 
+    /**
+     * allow subclasses to send UDP metrics directly, unchecked.
+     * <b>note:</b> hostName <u>must</u> be in the format IP:HOST
+     * (ex: 127.0.0.0:my.host.name) or ganglia will drop the packet.
+     * no parameters are permitted to be null.
+     *
+     * @param hostName IP:HOST formatted string
+     * @param metricType "int32", "double", "float", etc
+     * @param metricName name of metric
+     * @param groupName correlates with ganglia cluster names.
+     * @param units unit of measure.  empty string is OK.
+     */
+    protected void sendMetricData(String hostName, String metricType, String metricName, String metricValue, String groupName, String units) throws IOException {
         this.gangliaMessageBuilder.newMessage()
                 .addInt(128)// metric_id = metadata_msg
-                .addString(this.hostLabel)// hostname
+                .addString(hostName)// hostname
                 .addString(metricName)// metric name
-                .addInt(0)// spoof = True
+                .addInt(hostName.equals(getHostLabel()) ? 0 : 1)// spoof = True/1
                 .addString(metricType)// metric type
                 .addString(metricName)// metric name
                 .addString(units)// units
@@ -314,9 +329,9 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
 
         this.gangliaMessageBuilder.newMessage()
                 .addInt(133)// we are sending a string value
-                .addString(this.hostLabel)// hostLabel
+                .addString(hostName)// hostLabel
                 .addString(metricName)// metric name
-                .addInt(0)// spoof = True
+                .addInt(hostName.equals(getHostLabel()) ? 0 : 1)// spoof = True/1
                 .addString("%s")// format field
                 .addString(metricValue) // metric value
                 .send();
@@ -447,7 +462,7 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
         }
     }
 
-    String getHostLabel() {
+    String getDefaultHostLabel() {
         try {
             final InetAddress addr = InetAddress.getLocalHost();
             return addr.getHostAddress() + ":" + addr.getHostName();
@@ -455,6 +470,11 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
             LOG.error("Unable to get local gangliaHost name: ", e);
             return "unknown";
         }
+    }
+
+    /* subclass to override in metric packets */
+    protected String getHostLabel() {
+        return hostLabel;
     }
 
     protected String sanitizeName(MetricName name) {
