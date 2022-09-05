@@ -35,14 +35,11 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.google.common.eventbus.EventBus;
 import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventCollector;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.testutil.TestThread;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.skyframe.GraphTester.StringValue;
@@ -99,11 +96,10 @@ public class ParallelEvaluatorTest {
       EventFilter storedEventFilter) {
     Version oldGraphVersion = graphVersion;
     graphVersion = graphVersion.next();
-    return new ParallelEvaluator(
-        graph,
+    return new ParallelEvaluator(graph,
         oldGraphVersion,
         builders,
-        new Reporter(new EventBus(), eventCollector),
+        eventCollector,
         new MemoizingEvaluator.EmittedEventState(),
         storedEventFilter,
         keepGoing,
@@ -1842,15 +1838,12 @@ public class ParallelEvaluatorTest {
       }
     };
 
-    ExtendedEventHandler reporter =
-        new Reporter(
-            new EventBus(),
-            new EventHandler() {
-              @Override
-              public void handle(Event e) {
-                throw new IllegalStateException();
-              }
-            });
+    EventHandler reporter = new EventHandler() {
+      @Override
+      public void handle(Event e) {
+        throw new IllegalStateException();
+      }
+    };
 
     MemoizingEvaluator aug = new InMemoryMemoizingEvaluator(
         ImmutableMap.of(GraphTester.NODE_TYPE, tester.getFunction()), new RecordingDifferencer(),
