@@ -65,6 +65,7 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
+import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException;
@@ -150,7 +151,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
     Package pkg = packageValue.getPackage();
     if (pkg.containsErrors()) {
       throw new ConfiguredTargetFunctionException(
-          new BuildFileContainsErrorsException(lc.getLabel().getPackageIdentifier()));
+          new BuildFileContainsErrorsException(lc.getLabel().getPackageIdentifier()),
+          Transience.PERSISTENT);
     }
     Target target;
     try {
@@ -167,11 +169,14 @@ final class ConfiguredTargetFunction implements SkyFunction {
     if (!target.isConfigurable()) {
       configuration = null;
     }
-
-    SkyframeDependencyResolver resolver = view.createDependencyResolver(env);
-
     TargetAndConfiguration ctgValue =
         new TargetAndConfiguration(target, configuration);
+
+    SkyframeDependencyResolver resolver = view.createDependencyResolver(env);
+    if (resolver == null) {
+      return null;
+    }
+
     try {
       // Get the configuration targets that trigger this rule's configurable attributes.
       Set<ConfigMatchingProvider> configConditions =
@@ -640,8 +645,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
       for (Label configLabel : attributeMap.getConfigurabilityKeys(a.getName(), a.getType())) {
         if (!BuildType.Selector.isReservedLabel(configLabel)) {
           configLabelMap.put(a, LabelAndConfiguration.of(
-              target.getLabel().resolveRepositoryRelative(configLabel),
-              ctgValue.getConfiguration()));
+              configLabel, ctgValue.getConfiguration()));
         }
       }
     }
@@ -749,7 +753,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
     if (events.hasErrors()) {
       analysisEnvironment.disable(target);
       throw new ConfiguredTargetFunctionException(new ConfiguredValueCreationException(
-          "Analysis of target '" + target.getLabel() + "' failed; build aborted"));
+              "Analysis of target '" + target.getLabel() + "' failed; build aborted"));
     }
     Preconditions.checkState(!analysisEnvironment.hasErrors(),
         "Analysis environment hasError() but no errors reported");
@@ -760,16 +764,13 @@ final class ConfiguredTargetFunction implements SkyFunction {
     analysisEnvironment.disable(target);
     Preconditions.checkNotNull(configuredTarget, target);
 
-    Map<Artifact, Action> generatingActions;
-    // Check for conflicting actions within this configured target (that indicates a bug in the
-    // rule implementation).
     try {
-      generatingActions = filterSharedActionsAndThrowIfConflict(analysisEnvironment.getRegisteredActions());
+      return new ConfiguredTargetValue(configuredTarget,
+          filterSharedActionsAndThrowIfConflict(analysisEnvironment.getRegisteredActions()),
+          transitivePackages.build());
     } catch (ActionConflictException e) {
       throw new ConfiguredTargetFunctionException(e);
     }
-    return new ConfiguredTargetValue(
-        configuredTarget, generatingActions, transitivePackages.build());
   }
 
   static Map<Artifact, Action> filterSharedActionsAndThrowIfConflict(Iterable<Action> actions)
@@ -792,6 +793,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
    * a ConfiguredTargetValue.
    */
   public static final class ConfiguredValueCreationException extends Exception {
+
     public ConfiguredValueCreationException(String message) {
       super(message);
     }
@@ -802,8 +804,13 @@ final class ConfiguredTargetFunction implements SkyFunction {
    * {@link ConfiguredTargetFunction#compute}.
    */
   public static final class ConfiguredTargetFunctionException extends SkyFunctionException {
-    public ConfiguredTargetFunctionException(NoSuchThingException e) {
+    public ConfiguredTargetFunctionException(NoSuchTargetException e) {
       super(e, Transience.PERSISTENT);
+    }
+
+    public ConfiguredTargetFunctionException(
+        BuildFileContainsErrorsException e, Transience transience) {
+      super(e, transience);
     }
 
     private ConfiguredTargetFunctionException(ConfiguredValueCreationException error) {
