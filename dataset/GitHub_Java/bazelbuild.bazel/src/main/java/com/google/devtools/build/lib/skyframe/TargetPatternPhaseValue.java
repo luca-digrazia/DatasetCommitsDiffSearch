@@ -24,10 +24,12 @@ import com.google.devtools.build.lib.pkgcache.TestFilter;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Objects;
+
 import javax.annotation.Nullable;
 
 /**
@@ -51,12 +53,11 @@ public final class TargetPatternPhaseValue implements SkyValue {
   // TODO(ulfjack): Support EventBus event posting in Skyframe, and remove this code again.
   private final ImmutableSet<Target> originalTargets;
   private final ImmutableSet<Target> testSuiteTargets;
-  private final String workspaceName;
 
   TargetPatternPhaseValue(ImmutableSet<Target> targets, @Nullable ImmutableSet<Target> testsToRun,
       boolean hasError, boolean hasPostExpansionError, ImmutableSet<Target> filteredTargets,
       ImmutableSet<Target> testFilteredTargets, ImmutableSet<Target> originalTargets,
-      ImmutableSet<Target> testSuiteTargets, String workspaceName) {
+      ImmutableSet<Target> testSuiteTargets) {
     this.targets = Preconditions.checkNotNull(targets);
     this.testsToRun = testsToRun;
     this.hasError = hasError;
@@ -65,7 +66,6 @@ public final class TargetPatternPhaseValue implements SkyValue {
     this.testFilteredTargets = Preconditions.checkNotNull(testFilteredTargets);
     this.originalTargets = Preconditions.checkNotNull(originalTargets);
     this.testSuiteTargets = Preconditions.checkNotNull(testSuiteTargets);
-    this.workspaceName = workspaceName;
   }
 
   public ImmutableSet<Target> getTargets() {
@@ -101,13 +101,8 @@ public final class TargetPatternPhaseValue implements SkyValue {
     return testSuiteTargets;
   }
 
-  public String getWorkspaceName() {
-    return workspaceName;
-  }
-
   public LoadingResult toLoadingResult() {
-    return new LoadingResult(
-        hasError(), hasPostExpansionError(), getTargets(), getTestsToRun(), getWorkspaceName());
+    return new LoadingResult(hasError(), hasPostExpansionError(), getTargets(), getTestsToRun());
   }
 
   @SuppressWarnings("unused")
@@ -129,18 +124,9 @@ public final class TargetPatternPhaseValue implements SkyValue {
   @ThreadSafe
   public static SkyKey key(ImmutableList<String> targetPatterns, String offset,
       boolean compileOneDependency, boolean buildTestsOnly, boolean determineTests,
-      ImmutableList<String> buildTargetFilter,
       @Nullable TestFilter testFilter) {
-    return SkyKey.create(
-        SkyFunctions.TARGET_PATTERN_PHASE,
-        new TargetPatternList(
-            targetPatterns,
-            offset,
-            compileOneDependency,
-            buildTestsOnly,
-            determineTests,
-            buildTargetFilter,
-            testFilter));
+    return new SkyKey(SkyFunctions.TARGET_PATTERN_PHASE, new TargetPatternList(
+        targetPatterns, offset, compileOneDependency, buildTestsOnly, determineTests, testFilter));
   }
 
   /**
@@ -154,18 +140,16 @@ public final class TargetPatternPhaseValue implements SkyValue {
     private final boolean compileOneDependency;
     private final boolean buildTestsOnly;
     private final boolean determineTests;
-    private final ImmutableList<String> buildTargetFilter;
     @Nullable private final TestFilter testFilter;
 
     public TargetPatternList(ImmutableList<String> targetPatterns, String offset,
         boolean compileOneDependency, boolean buildTestsOnly, boolean determineTests,
-        ImmutableList<String> buildTargetFilter, @Nullable TestFilter testFilter) {
+        @Nullable TestFilter testFilter) {
       this.targetPatterns = Preconditions.checkNotNull(targetPatterns);
       this.offset = Preconditions.checkNotNull(offset);
       this.compileOneDependency = compileOneDependency;
       this.buildTestsOnly = buildTestsOnly;
       this.determineTests = determineTests;
-      this.buildTargetFilter = Preconditions.checkNotNull(buildTargetFilter);
       this.testFilter = testFilter;
       if (buildTestsOnly || determineTests) {
         Preconditions.checkNotNull(testFilter);
@@ -190,10 +174,6 @@ public final class TargetPatternPhaseValue implements SkyValue {
 
     public boolean getDetermineTests() {
       return determineTests;
-    }
-
-    public ImmutableList<String> getBuildTargetFilter() {
-      return buildTargetFilter;
     }
 
     public TestFilter getTestFilter() {
@@ -234,7 +214,6 @@ public final class TargetPatternPhaseValue implements SkyValue {
           && other.compileOneDependency == compileOneDependency
           && other.buildTestsOnly == buildTestsOnly
           && other.determineTests == determineTests
-          && other.buildTargetFilter.equals(buildTargetFilter)
           && Objects.equals(other.testFilter, testFilter);
     }
   }

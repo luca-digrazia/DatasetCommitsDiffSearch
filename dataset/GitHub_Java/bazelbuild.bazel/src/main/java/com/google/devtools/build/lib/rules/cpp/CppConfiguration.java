@@ -1193,10 +1193,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * They may be absolute if they are also installed on the remote build nodes or
    * for local compilation.
    */
-  @SkylarkCallable(name = "built_in_include_directories", structField = true,
-      doc = "Built-in system include paths for the toolchain compiler. All paths in this list"
-      + " should be relative to the exec directory. They may be absolute if they are also installed"
-      + " on the remote build nodes or for local compilation.")
   public List<PathFragment> getBuiltInIncludeDirectories() {
     return builtInIncludeDirectories;
   }
@@ -1703,8 +1699,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * Returns the path to the GNU binutils 'cpp' binary that should be used
    * by this build. Relative paths are relative to the execution root.
    */
-  @SkylarkCallable(name = "preprocessor_executable", structField = true,
-      doc = "Path to C/C++ preprocessor binary")
   public PathFragment getCpreprocessorExecutable() {
     return getToolPathFragment(CppConfiguration.Tool.CPP);
   }
@@ -2025,8 +2019,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     // until they're read from the CROSSTOOL. Feed the CROSSTOOL defaults in here.
     return ImmutableMap.<String, Object>of(
         "cpu", getTargetCpu(),
-        "compiler", getCompiler(),
-        "glibc", getTargetLibc()
+        "compiler", getCompiler()
     );
   }
 

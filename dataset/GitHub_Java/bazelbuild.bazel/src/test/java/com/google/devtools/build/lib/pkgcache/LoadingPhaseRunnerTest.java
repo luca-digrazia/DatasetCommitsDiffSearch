@@ -642,6 +642,7 @@ public class LoadingPhaseRunnerTest {
       BlazeDirectories directories =
           new BlazeDirectories(fs.getPath("/install"), fs.getPath("/output"), workspace);
       skyframeExecutor = SequencedSkyframeExecutor.create(pkgFactory,
+          new TimestampGranularityMonitor(clock),
           directories,
           null,  /* binTools -- not used */
           null,  /* workspaceStatusActionFactory -- not used */
@@ -657,7 +658,7 @@ public class LoadingPhaseRunnerTest {
       skyframeExecutor.preparePackageLoading(pkgLocator,
           ConstantRuleVisibility.PRIVATE, true,
           7, TestRuleClassProvider.getRuleClassProvider().getDefaultsPackageContent(),
-          UUID.randomUUID(), new TimestampGranularityMonitor(clock));
+          UUID.randomUUID());
       loadingPhaseRunner = skyframeExecutor.getLoadingPhaseRunner(
           pkgFactory.getRuleClassNames(), useNewImpl);
       this.options = Options.getDefaults(LoadingOptions.class);

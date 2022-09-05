@@ -20,6 +20,7 @@ import static org.junit.Assert.assertNotSame;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -32,7 +33,7 @@ import com.google.devtools.build.lib.events.EventCollector;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
-import com.google.devtools.build.lib.packages.Preprocessor;
+import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
 import com.google.devtools.build.lib.packages.util.PreprocessorUtils;
@@ -70,10 +71,7 @@ abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCas
   protected PreprocessorUtils.MutableFactorySupplier preprocessorFactorySupplier =
       new PreprocessorUtils.MutableFactorySupplier(null);
 
-  @Override
-  protected Preprocessor.Factory.Supplier getPreprocessorFactorySupplier() {
-    return preprocessorFactorySupplier;
-  }
+  abstract public PackageFactory.EnvironmentExtension getPackageEnvironmentExtension();
 
   @Override
   protected FileSystem createFileSystem() {
@@ -281,7 +279,9 @@ abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCas
 
   @Before
   public final void initializeVisitor() throws Exception {
-    setUpSkyframe(ConstantRuleVisibility.PRIVATE, ruleClassProvider.getDefaultsPackageContent());
+    skyframeExecutor = super.createSkyframeExecutor(
+        ImmutableList.of(getPackageEnvironmentExtension()), preprocessorFactorySupplier,
+        ConstantRuleVisibility.PRIVATE, ruleClassProvider.getDefaultsPackageContent());
     this.visitor = skyframeExecutor.pkgLoader();
   }
 
