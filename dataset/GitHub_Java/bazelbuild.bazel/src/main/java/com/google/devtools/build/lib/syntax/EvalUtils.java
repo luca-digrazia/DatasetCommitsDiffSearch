@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
-import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.compiler.ByteCodeUtils;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -94,6 +93,28 @@ public final class EvalUtils {
     }
   };
 
+  /**
+   * @return true if the specified sequence is a tuple; false if it's a modifiable list.
+   */
+  public static boolean isTuple(List<?> l) {
+    return isTuple(l.getClass());
+  }
+
+  public static boolean isTuple(Class<?> c) {
+    Preconditions.checkState(List.class.isAssignableFrom(c));
+    return ImmutableList.class.isAssignableFrom(c);
+  }
+
+  public static boolean isTuple(Object o) {
+    if (o instanceof SkylarkList) {
+      return ((SkylarkList) o).isTuple(); // tuples are immutable, lists are not.
+    }
+    if (o instanceof List<?>) {
+      return isTuple(o.getClass());
+    }
+    return false;
+  }
+
   public static final StackManipulation checkValidDictKey =
       ByteCodeUtils.invoke(EvalUtils.class, "checkValidDictKey", Object.class);
 
@@ -116,24 +137,22 @@ public final class EvalUtils {
    * @param o an Object
    * @return true if the object is known to be an immutable value.
    */
-  // NB: This is used as the basis for accepting objects in SkylarkNestedSet-s,
-  // as well as for accepting objects as keys for Skylark dict-s.
   public static boolean isImmutable(Object o) {
-    if (o instanceof Tuple) {
-      for (Object item : (Tuple) o) {
-        if (!isImmutable(item)) {
-          return false;
-        }
-      }
-      return true;
-    }
-    if (o instanceof SkylarkMutable) {
-      return false;
-    }
     if (o instanceof SkylarkValue) {
       return ((SkylarkValue) o).isImmutable();
     }
-    return isImmutable(o.getClass());
+    if (!(o instanceof List<?>)) {
+      return isImmutable(o.getClass());
+    }
+    if (!isTuple((List<?>) o)) {
+      return false;
+    }
+    for (Object item : (List<?>) o) {
+      if (!isImmutable(item)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -205,9 +224,7 @@ public final class EvalUtils {
    * @return a super-class of c to be used in validation-time type inference.
    */
   public static Class<?> getSkylarkType(Class<?> c) {
-    if (SkylarkList.class.isAssignableFrom(c)) {
-      return c;
-    } else if (ImmutableList.class.isAssignableFrom(c)) {
+    if (ImmutableList.class.isAssignableFrom(c)) {
       return ImmutableList.class;
     } else if (List.class.isAssignableFrom(c)) {
       return List.class;
@@ -243,19 +260,24 @@ public final class EvalUtils {
    * Returns a pretty name for the datatype of object {@code object} in Skylark
    * or the BUILD language, with full details if the {@code full} boolean is true.
    */
-  public static String getDataTypeName(Object object, boolean fullDetails) {
+  public static String getDataTypeName(Object object, boolean full) {
     Preconditions.checkNotNull(object);
-    if (fullDetails) {
-      if (object instanceof SkylarkNestedSet) {
-        SkylarkNestedSet set = (SkylarkNestedSet) object;
-        return "set of " + set.getContentType() + "s";
+    if (object instanceof SkylarkList) {
+      SkylarkList list = (SkylarkList) object;
+      if (list.isTuple()) {
+        return "tuple";
+      } else {
+        return "list";
       }
-      if (object instanceof SelectorList) {
-        SelectorList list = (SelectorList) object;
-        return "select of " + getDataTypeNameFromClass(list.getType());
-      }
+    } else if (object instanceof SkylarkNestedSet) {
+      SkylarkNestedSet set = (SkylarkNestedSet) object;
+      return "set" + (full ? " of " + set.getContentType() + "s" : "");
+    } else if (object instanceof SelectorList) {
+      SelectorList list = (SelectorList) object;
+      return "select" + (full ? " of " + getDataTypeNameFromClass(list.getType()) : "");
+    } else {
+      return getDataTypeNameFromClass(object.getClass());
     }
-    return getDataTypeNameFromClass(object.getClass());
   }
 
   /**
@@ -283,6 +305,11 @@ public final class EvalUtils {
       return "int";
     } else if (c.equals(Boolean.class)) {
       return "bool";
+    } else if (List.class.isAssignableFrom(c)) {
+      // NB: the capital here is a subtle way to distinguish java List and Tuple (ImmutableList)
+      // from native SkylarkList list and tuple.
+      // TODO(bazel-team): use SkylarkList everywhere instead of java List.
+      return isTuple(c) ? "Tuple" : "List";
     } else if (Map.class.isAssignableFrom(c)) {
       return "dict";
     } else if (BaseFunction.class.isAssignableFrom(c)) {
@@ -301,6 +328,13 @@ public final class EvalUtils {
         return c.getSimpleName();
       }
     }
+  }
+
+  /**
+   * Returns a sequence of the appropriate list/tuple datatype for 'seq', based on 'isTuple'.
+   */
+  public static List<?> makeSequence(List<?> seq, boolean isTuple) {
+    return isTuple ? ImmutableList.copyOf(seq) : seq;
   }
 
   public static Object checkNotNull(Expression expr, Object obj) throws EvalException {
