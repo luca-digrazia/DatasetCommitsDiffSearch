@@ -25,7 +25,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.util.ConfigurationTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
@@ -54,15 +53,15 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
         + "/workspace/blaze-out/gcc-4.4.0-glibc-2.3.6-grte-piii-fastbuild";
 
     assertEquals(outputDirPrefix,
-                 config.getOutputDirectory(RepositoryName.MAIN).getPath().toString());
+                 config.getOutputDirectory().getPath().toString());
     assertEquals(outputDirPrefix + "/bin",
-                 config.getBinDirectory(RepositoryName.MAIN).getPath().toString());
+                 config.getBinDirectory().getPath().toString());
     assertEquals(outputDirPrefix + "/include",
-                 config.getIncludeDirectory(RepositoryName.MAIN).getPath().toString());
+                 config.getIncludeDirectory().getPath().toString());
     assertEquals(outputDirPrefix + "/genfiles",
-                 config.getGenfilesDirectory(RepositoryName.MAIN).getPath().toString());
+                 config.getGenfilesDirectory().getPath().toString());
     assertEquals(outputDirPrefix + "/testlogs",
-                 config.getTestLogsDirectory(RepositoryName.MAIN).getPath().toString());
+                 config.getTestLogsDirectory().getPath().toString());
   }
 
   @Test
@@ -73,7 +72,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
     BuildConfiguration config = create("--platform_suffix=-test");
     assertEquals(outputBase + "/workspace/blaze-out/gcc-4.4.0-glibc-2.3.6-grte-k8-fastbuild-test",
-        config.getOutputDirectory(RepositoryName.MAIN).getPath().toString());
+        config.getOutputDirectory().getPath().toString());
   }
 
   @Test
@@ -221,11 +220,13 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
       @Override
       public Fragment create(ConfigurationEnvironment env, BuildOptions buildOptions)
-          throws InvalidConfigurationException, InterruptedException {
+          throws InvalidConfigurationException {
         for (Class<? extends Fragment> fragmentType : dependsOn) {
           env.getFragment(buildOptions, fragmentType);
         }
-        return new Fragment() {};
+        return new Fragment() {
+
+        };
       }
     };
   }
@@ -298,12 +299,9 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testNoDistinctHostConfigurationUnsupportedWithDynamicConfigs() throws Exception {
-    String expectedError =
-        "--nodistinct_host_configuration does not currently work with dynamic configurations";
-    checkError(expectedError,
-        "--nodistinct_host_configuration", "--experimental_dynamic_configs=on");
-    checkError(expectedError,
-        "--nodistinct_host_configuration", "--experimental_dynamic_configs=notrim");
+    checkError(
+        "--nodistinct_host_configuration does not currently work with dynamic configurations",
+        "--nodistinct_host_configuration", "--experimental_dynamic_configs");
   }
 
   @Test
