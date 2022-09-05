@@ -146,7 +146,7 @@ public abstract class Link {
     /** An objc executable. */
     OBJC_EXECUTABLE(
         "",
-        Staticness.DYNAMIC,
+        Staticness.STATIC,
         "objc-executable",
         Picness.NOPIC,
         ArtifactCategory.EXECUTABLE,
@@ -155,7 +155,7 @@ public abstract class Link {
     /** An objc executable that includes objc++/c++ source. */
     OBJCPP_EXECUTABLE(
         "",
-        Staticness.DYNAMIC,
+        Staticness.STATIC,
         "objc++-executable",
         Picness.NOPIC,
         ArtifactCategory.EXECUTABLE,
