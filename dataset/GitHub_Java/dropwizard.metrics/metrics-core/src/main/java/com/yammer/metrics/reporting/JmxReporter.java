@@ -1,8 +1,6 @@
 package com.yammer.metrics.reporting;
 
 import com.yammer.metrics.core.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.management.*;
 import java.lang.management.ManagementFactory;
@@ -16,8 +14,6 @@ import java.util.concurrent.TimeUnit;
  */
 public class JmxReporter extends AbstractReporter implements MetricsRegistryListener,
                                                              MetricProcessor<JmxReporter.Context> {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(JmxReporter.class);
 
     private final Map<MetricName, ObjectName> registeredBeans;
     private final MBeanServer server;
@@ -359,8 +355,7 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
                 metric.processWith(this,
                                    name,
                                    new Context(name, new ObjectName(name.getMBeanName())));
-            } catch (Exception e) {
-                LOGGER.warn("Error processing " + name, e);
+            } catch (Exception ignored) {
             }
         }
     }
@@ -403,8 +398,7 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
         if (objectName != null) {
             try {
                 server.unregisterMBean(objectName);
-            } catch (Exception e) {
-                LOGGER.warn("Error unregistering " + name, e);
+            } catch (Exception ignored) {
             }
         }
     }
@@ -424,8 +418,8 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
         for (ObjectName name : registeredBeans.values()) {
             try {
                 server.unregisterMBean(name);
-            } catch (Exception e) {
-                LOGGER.warn("Error unregistering " + name, e);
+            } catch (Exception ignored) {
+
             }
         }
         registeredBeans.clear();
