@@ -12,21 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
-
-import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.Assert.assertEquals;
 
 import com.google.common.base.Joiner;
-import com.google.devtools.build.lib.testutil.FoundationTestCase;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
+import com.google.devtools.build.lib.testutil.FoundationTestCaseForJunit4;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Tests for {@link WriteBuildInfoPropertiesAction} utilities methods */
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
+/**
+ * Tests for {@link WriteBuildInfoPropertiesAction} utilities methods
+ */
 @RunWith(JUnit4.class)
-public class WriteBuildInfoPropertiesActionTest extends FoundationTestCase {
+public class WriteBuildInfoPropertiesActionTest extends FoundationTestCaseForJunit4 {
 
   private static final Joiner LINE_JOINER = Joiner.on("\r\n");
   private static final Joiner LINEFEED_JOINER = Joiner.on("\n");
@@ -39,7 +42,7 @@ public class WriteBuildInfoPropertiesActionTest extends FoundationTestCase {
         writer.write(testCase);
       }
     }
-    assertThat(new String(out.toByteArray(), UTF_8)).isEqualTo(expected);
+    assertEquals(expected, new String(out.toByteArray(), UTF_8));
   }
 
   @Test
