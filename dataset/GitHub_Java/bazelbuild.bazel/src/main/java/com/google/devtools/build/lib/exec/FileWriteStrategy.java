@@ -71,4 +71,9 @@ public final class FileWriteStrategy implements FileWriteActionContext {
   public ResourceSet estimateResourceConsumption(AbstractFileWriteAction action) {
     return action.estimateResourceConsumptionLocal();
   }
+
+  @Override
+  public String strategyLocality(AbstractFileWriteAction action) {
+    return "local";
+  }
 }
