@@ -22,13 +22,20 @@ public class Source {
 
     private int age3;
 
+    private Date deleteTime = new Date();
+
+    private Date createTime = new Date();
+
+    private String updateTime = "2018-01-01";
+
 
     private NestObject nestObject;
 
+    private List<NestObject> nestObjects = Arrays.asList(new NestObject("test", 1, "1234567"), new NestObject("test", 1, "1234567"));
+
     private Map<String, Object> nestObject2 = new HashMap<>();
 
-    private NestObject nestObject3;
-
+    private NestObject nestObject3 = new NestObject("test", 1, "1234567");
 
     private Color color = Color.RED;
 
@@ -48,6 +55,11 @@ public class Source {
 
     private String[] arr6 = {"1", "2"};
 
+    private Color[] colors ={Color.BLUE,Color.RED};
+
+    private String source;
+
+    private String target;
 
 }
 
