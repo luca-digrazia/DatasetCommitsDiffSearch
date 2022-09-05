@@ -313,7 +313,6 @@ public abstract class SkylarkType implements Serializable {
       this.argType = argType;
     }
 
-    @Override
     public boolean contains(Object value) {
       // The empty collection is member of compatible types
       if (value == null || !genericType.contains(value)) {
@@ -403,7 +402,6 @@ public abstract class SkylarkType implements Serializable {
       this.types = types;
     }
 
-    @Override
     public boolean contains(Object value) {
       for (SkylarkType type : types) {
         if (type.contains(value)) {
@@ -553,7 +551,6 @@ public abstract class SkylarkType implements Serializable {
           + "function";
     }
 
-    @Override
     public boolean contains(Object value) {
       // This returns true a bit too much, not looking at the result type.
       return value instanceof BaseFunction;
