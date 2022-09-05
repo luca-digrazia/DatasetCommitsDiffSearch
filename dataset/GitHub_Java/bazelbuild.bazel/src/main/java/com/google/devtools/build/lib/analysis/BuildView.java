@@ -214,12 +214,20 @@ public class BuildView {
   // Same as skyframeExecutor.getPackageManager().
   private final LoadedPackageProvider packageManager;
 
+  private BuildConfigurationCollection configurations;
+
   private final ConfiguredRuleClassProvider ruleClassProvider;
 
   /**
    * A factory class to create the coverage report action. May be null.
    */
   @Nullable private final CoverageReportActionFactory coverageReportActionFactory;
+
+  /**
+   * If the last build was executed with {@code Options#discard_analysis_cache} and we are not
+   * running Skyframe full, we should clear the legacy data since it is out-of-sync.
+   */
+  private boolean skyframeAnalysisWasDiscarded;
 
   @VisibleForTesting
   public Set<SkyKey> getSkyframeEvaluatedTargetKeysForTesting() {
@@ -256,7 +264,8 @@ public class BuildView {
    */
   @VisibleForTesting
   public void setConfigurationsForTesting(BuildConfigurationCollection configurations) {
-    skyframeBuildView.setConfigurations(configurations);
+    this.configurations = configurations;
+    skyframeBuildView.setTopLevelHostConfiguration(configurations.getHostConfiguration());
   }
 
   public ArtifactFactory getArtifactFactory() {
@@ -551,7 +560,19 @@ public class BuildView {
     Collection<Target> targets = loadingResult.getTargets();
     eventBus.post(new AnalysisPhaseStartedEvent(targets));
 
-    skyframeBuildView.setConfigurations(configurations);
+    // Clear all cached ConfiguredTargets on configuration change.
+    // TODO(ulfjack): Can we remove this now?
+    //
+    // Also if --discard_analysis_cache was used in the last build we want to clear the legacy
+    // data.
+    if ((this.configurations != null && !configurations.equals(this.configurations))
+        || skyframeAnalysisWasDiscarded) {
+      LOG.info("Discarding analysis cache: configurations have changed.");
+      skyframeExecutor.dropConfiguredTargets();
+    }
+    skyframeAnalysisWasDiscarded = false;
+    this.configurations = configurations;
+    skyframeBuildView.setTopLevelHostConfiguration(this.configurations.getHostConfiguration());
 
     // Determine the configurations.
     List<TargetAndConfiguration> nodes = nodesForTargets(configurations, targets);
@@ -987,6 +1008,8 @@ public class BuildView {
    * @see BuildView.Options#discardAnalysisCache
    */
   public void clearAnalysisCache(Collection<ConfiguredTarget> topLevelTargets) {
-    skyframeBuildView.clearAnalysisCache(topLevelTargets);
+    // TODO(bazel-team): Consider clearing packages too to save more memory.
+    skyframeAnalysisWasDiscarded = true;
+    skyframeExecutor.clearAnalysisCache(topLevelTargets);
   }
 }
