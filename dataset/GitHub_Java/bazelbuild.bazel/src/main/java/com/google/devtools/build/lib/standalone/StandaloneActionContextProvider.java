@@ -26,8 +26,8 @@ import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.FileWriteStrategy;
 import com.google.devtools.build.lib.rules.cpp.IncludeScanningContext;
-import com.google.devtools.build.lib.rules.cpp.SpawnGccStrategy;
-import com.google.devtools.build.lib.rules.cpp.SpawnLinkStrategy;
+import com.google.devtools.build.lib.rules.cpp.LocalGccStrategy;
+import com.google.devtools.build.lib.rules.cpp.LocalLinkStrategy;
 import com.google.devtools.build.lib.rules.test.ExclusiveTestStrategy;
 import com.google.devtools.build.lib.rules.test.StandaloneTestStrategy;
 import com.google.devtools.build.lib.rules.test.TestActionContext;
@@ -60,7 +60,7 @@ public class StandaloneActionContextProvider extends ActionContextProvider {
 
     @Override
     public ArtifactResolver getArtifactResolver() {
-      return env.getSkyframeBuildView().getArtifactFactory();
+      return env.getView().getArtifactFactory();
     }
   }
 
@@ -84,10 +84,10 @@ public class StandaloneActionContextProvider extends ActionContextProvider {
     strategiesBuilder.add(
         new StandaloneSpawnStrategy(runtime.getExecRoot(), verboseFailures),
         new DummyIncludeScanningContext(),
-        new SpawnLinkStrategy(),
-        new SpawnGccStrategy(),
+        new LocalLinkStrategy(),
         testStrategy,
         new ExclusiveTestStrategy(testStrategy),
+        new LocalGccStrategy(),
         new FileWriteStrategy());
 
     this.strategies = strategiesBuilder.build();
