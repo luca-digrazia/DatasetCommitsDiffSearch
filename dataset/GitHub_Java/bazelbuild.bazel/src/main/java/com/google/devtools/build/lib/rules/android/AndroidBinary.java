@@ -14,9 +14,6 @@
 package com.google.devtools.build.lib.rules.android;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Predicates.in;
-import static com.google.common.base.Predicates.not;
-import static com.google.common.collect.Iterables.filter;
 import static com.google.devtools.build.lib.analysis.OutputGroupProvider.INTERNAL_SUFFIX;
 
 import com.google.common.base.Function;
@@ -71,14 +68,12 @@ import com.google.devtools.build.lib.rules.java.ProguardHelper.ProguardOutput;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import javax.annotation.Nullable;
 
 /**
@@ -849,7 +844,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext,
       Artifact apkManfiest,
       boolean textProto,
-      final AndroidCommon androidCommon,
+      AndroidCommon androidCommon,
       JavaTargetAttributes resourceClasses,
       ResourceApk resourceApk,
       NativeLibs nativeLibs,
@@ -858,21 +853,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     Iterable<Artifact> jars = IterablesChain.concat(
         resourceClasses.getArchiveInputs(true), androidCommon.getRuntimeJars());
 
-    // The resources jars from android_library rules contain stub ids, so filter those out of the
-    // transitive jars.
-    Iterable<AndroidLibraryResourceClassJarProvider> libraryResourceJarProviders =
-        AndroidCommon.getTransitivePrerequisites(
-            ruleContext, Mode.TARGET, AndroidLibraryResourceClassJarProvider.class);
-
-    NestedSetBuilder<Artifact> libraryResourceJarsBuilder = NestedSetBuilder.naiveLinkOrder();
-    for (AndroidLibraryResourceClassJarProvider provider : libraryResourceJarProviders) {
-      libraryResourceJarsBuilder.addTransitive(provider.getResourceClassJars());
-    }
-    NestedSet<Artifact> libraryResourceJars = libraryResourceJarsBuilder.build();
-
-    Iterable<Artifact> filteredJars = ImmutableList.copyOf(
-        filter(jars, not(in(libraryResourceJars.toSet())))); 
-
     AndroidSdkProvider sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
 
     ApkManifestAction manifestAction = new ApkManifestAction(
@@ -880,7 +860,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         apkManfiest,
         textProto,
         sdk,
-        filteredJars,
+        jars,
         resourceApk,
         nativeLibs,
         debugKeystore);
