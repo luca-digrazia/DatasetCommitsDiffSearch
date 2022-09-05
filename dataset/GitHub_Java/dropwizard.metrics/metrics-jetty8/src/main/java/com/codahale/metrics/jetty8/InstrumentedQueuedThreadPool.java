@@ -29,5 +29,19 @@ public class InstrumentedQueuedThreadPool extends QueuedThreadPool {
                 return getIdleThreads();
             }
         });
+        registry.register(name(QueuedThreadPool.class, "jobs"), new Gauge<Integer>() {
+            @Override
+            public Integer getValue() {
+                // This assumes the QueuedThreadPool is using a BlockingArrayQueue or
+                // ArrayBlockingQueue for its queue, and is therefore a constant-time operation.
+                return getQueue() != null ? getQueue().size() : 0;
+            }
+        });
+        registry.register(name(QueuedThreadPool.class, "utilization-max"), new RatioGauge() {
+            @Override
+            protected Ratio getRatio() {
+                return Ratio.of(getThreads() - getIdleThreads(), getMaxThreads());
+            }
+        });
     }
 }
