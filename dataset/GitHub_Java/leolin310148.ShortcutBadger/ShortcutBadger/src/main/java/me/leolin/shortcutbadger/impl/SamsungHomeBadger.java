@@ -9,15 +9,12 @@ import me.leolin.shortcutbadger.ShortcutBadgeException;
 import me.leolin.shortcutbadger.ShortcutBadger;
 import me.leolin.shortcutbadger.util.CloseHelper;
 
-import java.util.Arrays;
-import java.util.List;
-
 /**
  * @author Leo Lin
  */
 public class SamsungHomeBadger extends ShortcutBadger {
     private static final String CONTENT_URI = "content://com.sec.badge/apps?notify=true";
-    private static final String[] CONTENT_PROJECTION = new String[]{"_id","class"};
+    private static final String[] CONTENT_PROJECTION = new String[]{"_id",};
 
     public SamsungHomeBadger(Context context) {
         super(context);
@@ -62,13 +59,5 @@ public class SamsungHomeBadger extends ShortcutBadger {
         contentValues.put("badgecount", badgeCount);
 
         return contentValues;
-    }
-
-    @Override
-    public List<String> getSupportLaunchers() {
-        return Arrays.asList(
-                "com.sec.android.app.launcher",
-                "com.sec.android.app.twlauncher"
-        );
     }
 }
