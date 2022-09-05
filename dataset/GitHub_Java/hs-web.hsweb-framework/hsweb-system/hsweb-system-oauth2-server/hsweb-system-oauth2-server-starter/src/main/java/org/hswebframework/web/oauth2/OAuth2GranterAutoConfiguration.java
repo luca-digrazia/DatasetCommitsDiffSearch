@@ -18,7 +18,7 @@
 
 package org.hswebframework.web.oauth2;
 
-import org.hswebframework.web.authorization.oauth2.server.client.OAuth2ClientConfigRepository;
+import org.hswebframework.web.authorization.oauth2.server.client.OAuth2ClientService;
 import org.hswebframework.web.authorization.oauth2.server.support.AbstractAuthorizationService;
 import org.hswebframework.web.authorization.oauth2.server.support.DefaultOAuth2Granter;
 import org.hswebframework.web.authorization.oauth2.server.support.client.ClientCredentialGranter;
@@ -34,7 +34,6 @@ import org.hswebframework.web.authorization.oauth2.server.support.password.Passw
 import org.hswebframework.web.authorization.oauth2.server.support.refresh.DefaultRefreshTokenGranter;
 import org.hswebframework.web.authorization.oauth2.server.support.refresh.RefreshTokenGranter;
 import org.hswebframework.web.authorization.oauth2.server.token.AccessTokenService;
-import org.hswebframework.web.authorization.token.UserTokenManager;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
 import org.hswebframework.web.dao.oauth2.AuthorizationCodeDao;
 import org.hswebframework.web.dao.oauth2.OAuth2AccessDao;
@@ -44,7 +43,6 @@ import org.hswebframework.web.service.oauth2.server.simple.*;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -66,6 +64,11 @@ public class OAuth2GranterAutoConfiguration {
     @Autowired(required = false)
     private TokenGenerator tokenGenerator;
 
+    @Bean
+    public OAuth2ServerErrorControllerAdvice oAuth2ServerErrorControllerAdvice() {
+        return new OAuth2ServerErrorControllerAdvice();
+    }
+
     @ConditionalOnMissingBean(AuthorizationCodeService.class)
     @Bean
     public SimpleAuthorizationCodeService simpleAuthorizationCodeService(AuthorizationCodeDao authorizationCodeDao,
@@ -74,10 +77,10 @@ public class OAuth2GranterAutoConfiguration {
                 .setCodeGenerator(codeGenerator);
     }
 
-    @ConditionalOnMissingBean(OAuth2ClientConfigRepository.class)
+    @ConditionalOnMissingBean(OAuth2ClientService.class)
     @Bean
-    public SimpleClientConfigRepository simpleClientService(OAuth2ClientDao oAuth2ClientDao) {
-        return new SimpleClientConfigRepository(oAuth2ClientDao);
+    public SimpleClientService simpleClientService(OAuth2ClientDao oAuth2ClientDao) {
+        return new SimpleClientService(oAuth2ClientDao);
     }
 
     @ConditionalOnMissingBean(PasswordService.class)
@@ -93,26 +96,20 @@ public class OAuth2GranterAutoConfiguration {
                 .setTokenGenerator(tokenGenerator);
     }
 
-    @Bean
-    @ConditionalOnBean(UserTokenManager.class)
-    public OAuth2GrantEventListener oAuth2GrantEventListener(UserTokenManager userTokenManager) {
-        return new OAuth2GrantEventListener(userTokenManager);
-    }
-
     @Configuration
     public static class OAuth2GranterConfiguration {
         @Autowired
-        private AuthorizationCodeService     authorizationCodeService;
+        private AuthorizationCodeService authorizationCodeService;
         @Autowired
-        private OAuth2ClientConfigRepository oAuth2ClientConfigRepository;
+        private OAuth2ClientService      oAuth2ClientService;
         @Autowired
-        private AccessTokenService           accessTokenService;
+        private AccessTokenService       accessTokenService;
         @Autowired
-        private PasswordService              passwordService;
+        private PasswordService          passwordService;
 
         private <T extends AbstractAuthorizationService> T setProperty(T abstractAuthorizationService) {
             abstractAuthorizationService.setAccessTokenService(accessTokenService);
-            abstractAuthorizationService.setRepository(oAuth2ClientConfigRepository);
+            abstractAuthorizationService.setClientService(oAuth2ClientService);
             return abstractAuthorizationService;
         }
 

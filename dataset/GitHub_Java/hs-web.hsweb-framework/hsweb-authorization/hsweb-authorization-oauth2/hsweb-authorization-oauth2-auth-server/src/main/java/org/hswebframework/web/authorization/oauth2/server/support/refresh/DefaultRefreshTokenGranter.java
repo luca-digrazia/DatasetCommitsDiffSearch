@@ -35,13 +35,11 @@ import static org.hswebframework.web.oauth2.core.ErrorType.*;
 
 /**
  * @author zhouhao
- * @see RefreshTokenGranter
- * @since 3.0
  */
 public class DefaultRefreshTokenGranter extends AbstractAuthorizationService implements RefreshTokenGranter {
 
     //默认有效时间为1年
-    private long refreshTokenTimeOut = 365_24_60_60_1000L;
+    private long refreshTokenTimeOut = 1 * 365 * 24 * 60 * 60 * 1000;
 
     public void setRefreshTokenTimeOut(long refreshTokenTimeOut) {
         this.refreshTokenTimeOut = refreshTokenTimeOut;
@@ -61,17 +59,13 @@ public class DefaultRefreshTokenGranter extends AbstractAuthorizationService imp
 
         OAuth2AccessToken accessToken = accessTokenService.getTokenByRefreshToken(refreshToken);
         if (accessToken == null) {
-            throw new GrantTokenException(EXPIRED_REFRESH_TOKEN);
+            throw new GrantTokenException(ILLEGAL_REFRESH_TOKEN);
         }
         if (System.currentTimeMillis() - accessToken.getCreateTime() > refreshTokenTimeOut) {
             throw new GrantTokenException(EXPIRED_REFRESH_TOKEN);
         }
-        //更新间隔小于10秒 返回原始token
-        if (System.currentTimeMillis() - accessToken.getUpdateTime() < 10000) {
-            return accessToken;
-        }
         Set<String> newRange = request.getScope() != null ? request.getScope() : accessToken.getScope();
-        if (accessToken.getScope() != null && !accessToken.getScope().containsAll(newRange)) {
+        if (!accessToken.getScope().containsAll(newRange)) {
             throw new GrantTokenException(ErrorType.SCOPE_OUT_OF_RANGE);
         }
         accessToken.setAccessToken(accessTokenService.createToken().getAccessToken());
