@@ -2,7 +2,6 @@ package org.nlpcn.es4sql.query;
 
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.nlpcn.es4sql.domain.Field;
-import org.nlpcn.es4sql.domain.Select;
 
 import java.util.List;
 
@@ -13,7 +12,6 @@ public class TableInJoinRequestBuilder {
     private SearchRequestBuilder requestBuilder;
     private String alias;
     private List<Field> returnedFields;
-    private Select originalSelect;
 
     public TableInJoinRequestBuilder() {
     }
@@ -40,13 +38,5 @@ public class TableInJoinRequestBuilder {
 
     public void setReturnedFields(List<Field> returnedFields) {
         this.returnedFields = returnedFields;
-    }
-
-    public Select getOriginalSelect() {
-        return originalSelect;
-    }
-
-    public void setOriginalSelect(Select originalSelect) {
-        this.originalSelect = originalSelect;
     }
 }

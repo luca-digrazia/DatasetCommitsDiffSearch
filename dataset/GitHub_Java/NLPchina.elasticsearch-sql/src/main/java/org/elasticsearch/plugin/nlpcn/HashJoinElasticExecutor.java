@@ -1,6 +1,5 @@
 package org.elasticsearch.plugin.nlpcn;
 
-import com.alibaba.druid.sql.ast.statement.SQLJoinTableSource;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.text.StringText;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -19,7 +18,6 @@ import org.nlpcn.es4sql.query.TableInJoinRequestBuilder;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.regex.MatchResult;
 
 /**
  * Created by Eliran on 22/8/2015.
@@ -75,15 +73,15 @@ public class HashJoinElasticExecutor {
     public void run() throws IOException {
         TableInJoinRequestBuilder firstTableRequest = requestBuilder.getFirstTable();
         SearchHits firstTableHits = firstTableRequest.getRequestBuilder().get().getHits();
-        Map<String,SearchHitsResult> comparisonKeyToSearchHits = new HashMap<>();
+        Map<String,List<InternalSearchHit>> comparisonKeyToSearchHits = new HashMap<>();
         List<Map.Entry<Field, Field>> t1ToT2FieldsComparison = requestBuilder.getT1ToT2FieldsComparison();
         int ids = 1;
         for(SearchHit hit : firstTableHits){
             String key = getComparisonKey(t1ToT2FieldsComparison, hit,true);
-            SearchHitsResult currentSearchHitsResult = comparisonKeyToSearchHits.get(key);
-            if(currentSearchHitsResult == null) {
-                currentSearchHitsResult = new SearchHitsResult(new ArrayList<InternalSearchHit>(),false);
-                comparisonKeyToSearchHits.put(key,currentSearchHitsResult);
+            List<InternalSearchHit> currentSearchHits = comparisonKeyToSearchHits.get(key);
+            if(currentSearchHits == null) {
+                currentSearchHits = new ArrayList<>();
+                comparisonKeyToSearchHits.put(key,currentSearchHits);
             }
             //int docid , id
             InternalSearchHit searchHit = new InternalSearchHit(ids, hit.id(), new StringText(hit.getType()), hit.getFields());
@@ -91,7 +89,7 @@ public class HashJoinElasticExecutor {
 
             onlyReturnedFields(searchHit.sourceAsMap(), firstTableRequest.getReturnedFields());
             ids++;
-            currentSearchHitsResult.getSearchHits().add(searchHit);
+            currentSearchHits.add(searchHit);
         }
 
 
@@ -104,11 +102,9 @@ public class HashJoinElasticExecutor {
 
             String key = getComparisonKey(t1ToT2FieldsComparison,secondTableHit,false);
 
-            SearchHitsResult searchHitsResult = comparisonKeyToSearchHits.get(key);
-
-            if(searchHitsResult!=null && searchHitsResult.getSearchHits().size() > 0){
-                searchHitsResult.setMatchedWithOtherTable(true);
-                List<InternalSearchHit> searchHits = searchHitsResult.getSearchHits();
+            List<InternalSearchHit> searchHits = comparisonKeyToSearchHits.get(key);
+            //TODO decide what to do according to left join. now assume regular join.
+            if(searchHits!=null && searchHits.size() > 0){
                 for(InternalSearchHit matchingHit : searchHits){
                     onlyReturnedFields(secondTableHit.sourceAsMap(), secondTableRequest.getReturnedFields());
 
@@ -117,7 +113,7 @@ public class HashJoinElasticExecutor {
                     searchHit.sourceRef(matchingHit.getSourceRef());
                     searchHit.sourceAsMap().clear();
                     searchHit.sourceAsMap().putAll(matchingHit.sourceAsMap());
-                    mergeSourceAndAddAliases(secondTableHit.getSource(), searchHit);
+                    mergeSourceAndAddAliases(secondTableHit, searchHit);
 
                     finalResult.add(searchHit);
                     ids++;
@@ -125,39 +121,9 @@ public class HashJoinElasticExecutor {
             }
         }
 
-        if(requestBuilder.getJoinType() == SQLJoinTableSource.JoinType.LEFT_OUTER_JOIN){
-            addUnmatchedResults(finalResult,comparisonKeyToSearchHits.values(),requestBuilder.getSecondTable().getReturnedFields(),ids);
-        }
         InternalSearchHit[] hits = finalResult.toArray(new InternalSearchHit[ids]);
         this.results = new InternalSearchHits(hits,ids,1.0f);
 
-    }
-
-    private void addUnmatchedResults(List<InternalSearchHit> finalResult, Collection<SearchHitsResult> firstTableSearchHits, List<Field> secondTableReturnedFields,int currentNumOfIds) {
-        for(SearchHitsResult hitsResult : firstTableSearchHits){
-            if(!hitsResult.isMatchedWithOtherTable()){
-                for(SearchHit hit: hitsResult.getSearchHits() ) {
-                    //todo: decide which id to put or type. or maby its ok this way. just need to doc.
-                    InternalSearchHit searchHit = new InternalSearchHit(currentNumOfIds, hit.id() + "|0", new StringText(hit.getType() + "|null"), hit.getFields());
-                    searchHit.sourceRef(hit.getSourceRef());
-                    searchHit.sourceAsMap().clear();
-                    searchHit.sourceAsMap().putAll(hit.sourceAsMap());
-                    Map<String,Object> emptySecondTableHitSource = createNullsSource(secondTableReturnedFields);
-                    mergeSourceAndAddAliases(emptySecondTableHitSource, searchHit);
-
-                    finalResult.add(searchHit);
-                    currentNumOfIds++;
-                }
-            }
-        }
-    }
-
-    private Map<String, Object> createNullsSource(List<Field> secondTableReturnedFields) {
-        Map<String,Object> nulledSource = new HashMap<>();
-        for(Field field : secondTableReturnedFields){
-            nulledSource.put(field.getName(),null);
-        }
-        return nulledSource;
     }
 
     private String getComparisonKey(List<Map.Entry<Field, Field>> t1ToT2FieldsComparison, SearchHit hit, boolean firstTable) {
@@ -178,9 +144,9 @@ public class HashJoinElasticExecutor {
         return key;
     }
 
-    private void mergeSourceAndAddAliases(Map<String,Object> secondTableHitSource, InternalSearchHit searchHit) {
+    private void mergeSourceAndAddAliases(SearchHit secondTableHit, InternalSearchHit searchHit) {
         Map<String,Object> results = mapWithAliases(searchHit.getSource(), requestBuilder.getFirstTable().getAlias());
-        results.putAll(mapWithAliases(secondTableHitSource, requestBuilder.getSecondTable().getAlias()));
+        results.putAll(mapWithAliases(secondTableHit.getSource(), requestBuilder.getSecondTable().getAlias()));
         searchHit.getSource().clear();
         searchHit.getSource().putAll(results);
     }
