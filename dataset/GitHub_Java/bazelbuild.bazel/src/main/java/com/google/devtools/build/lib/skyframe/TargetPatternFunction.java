@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
@@ -48,16 +47,16 @@ public class TargetPatternFunction implements SkyFunction {
       InterruptedException {
     TargetPatternValue.TargetPatternKey patternKey =
         ((TargetPatternValue.TargetPatternKey) key.argument());
-    ResolvedTargets<Target> resolvedTargets;
+    TargetPattern.Parser parser = new TargetPattern.Parser(patternKey.getOffset());
+    ResolvedTargets<Target> resolvedTargets = null;
     try {
       EnvironmentBackedRecursivePackageProvider provider =
           new EnvironmentBackedRecursivePackageProvider(env);
       RecursivePackageProviderBackedTargetPatternResolver resolver =
           new RecursivePackageProviderBackedTargetPatternResolver(provider, env.getListener(),
               patternKey.getPolicy(), pkgPath.get());
-      TargetPattern parsedPattern = patternKey.getParsedPattern();
-      ImmutableSet<String> excludedSubdirectories = patternKey.getExcludedSubdirectories();
-      resolvedTargets = parsedPattern.eval(resolver, excludedSubdirectories);
+      TargetPattern resolvedPattern = parser.parse(patternKey.getPattern());
+      resolvedTargets = resolvedPattern.eval(resolver);
     } catch (TargetParsingException e) {
       throw new TargetPatternFunctionException(e);
     } catch (MissingDepException e) {

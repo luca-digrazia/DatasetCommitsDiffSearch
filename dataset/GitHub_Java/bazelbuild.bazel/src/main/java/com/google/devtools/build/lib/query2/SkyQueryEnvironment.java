@@ -361,10 +361,11 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
       } else {
         // If the graph doesn't contain a value for this target pattern, try to directly evaluate
         // it, by making use of packages already present in the graph.
+        TargetPattern.Parser parser = new TargetPattern.Parser(targetPatternKey.getOffset());
         RecursivePackageProviderBackedTargetPatternResolver resolver =
             new RecursivePackageProviderBackedTargetPatternResolver(provider, eventHandler,
                 targetPatternKey.getPolicy(), pkgPath);
-        TargetPattern parsedPattern = targetPatternKey.getParsedPattern();
+        TargetPattern parsedPattern = parser.parse(targetPatternKey.getPattern());
         try {
           result.put(pattern, parsedPattern.eval(resolver));
         } catch (TargetParsingException e) {
