@@ -9,6 +9,9 @@ import java.util.List;
 public interface DictDefineRepository {
     DictDefine getDefine(String id);
 
+    List<DictDefine> getAllDefine();
+
+    @Deprecated
     List<ClassDictDefine> getDefine(Class type);
 
     void addDefine(DictDefine dictDefine);

@@ -488,20 +488,18 @@ public class SimpleDynamicFormService extends GenericEntityService<DynamicFormEn
             } else {
                 columnMeta.setDataType(column.getDataType());
             }
-            columnMeta.setValueConverter(initColumnValueConvert(columnMeta.getJdbcType(), columnMeta.getJavaType()));
-
+            List<ValueConverter> converters = new ArrayList<>();
+            converters.add(initColumnValueConvert(columnMeta.getJdbcType(), columnMeta.getJavaType()));
             if (optionalConvertBuilder != null && null != column.getDictConfig()) {
                 try {
                     DictConfig config = JSON.parseObject(column.getDictConfig(), DictConfig.class);
                     columnMeta.setOptionConverter(optionalConvertBuilder.build(config));
-                    ValueConverter converter = optionalConvertBuilder.buildValueConverter(config);
-                    if (null != converter) {
-                        columnMeta.setValueConverter(converter);
-                    }
+                    converters.add(optionalConvertBuilder.buildValueConverter(config));
                 } catch (Exception e) {
                     logger.warn("创建字典转换器失败", e);
                 }
             }
+            columnMeta.setValueConverter(new SmartValueConverter(converters));
             customColumnSetting(database, form, metaData, column, columnMeta);
             metaData.addColumn(columnMeta);
         });

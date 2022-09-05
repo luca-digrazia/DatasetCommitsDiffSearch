@@ -25,7 +25,6 @@ public class DefaultDictDefineRepository implements DictDefineRepository {
         parsedDict.put(define.getId(), define);
     }
 
-    @SuppressWarnings("all")
     public static <T extends Enum & EnumDict> ClassDictDefine parseEnumDict(Class<T> type) {
         log.debug("parse enum dict :{}", type);
 
@@ -44,9 +43,7 @@ public class DefaultDictDefineRepository implements DictDefineRepository {
             define.setComments(type.getSimpleName());
         }
 
-        List dicts = Arrays.asList(type.getEnumConstants());
-
-        define.setItems(new ArrayList<>(dicts));
+        define.setItems(Arrays.asList(type.getEnumConstants()));
 
         return define;
 
@@ -64,7 +61,7 @@ public class DefaultDictDefineRepository implements DictDefineRepository {
 
     @Override
     public List<ClassDictDefine> getDefine(Class type) {
-        return new java.util.ArrayList<>();
+        return Collections.emptyList();
     }
 
 
