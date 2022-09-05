@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.buildtool;
 
 import com.google.common.base.Joiner;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -32,17 +33,15 @@ import javax.annotation.Nullable;
  * Static utilities for managing output directory symlinks.
  */
 public class OutputDirectoryLinksUtils {
+  public static final String OUTPUT_SYMLINK_NAME = Constants.PRODUCT_NAME + "-out";
+
   // Used in getPrettyPath() method below.
   private static final String[] LINKS = { "bin", "genfiles", "includes" };
 
   private static final String NO_CREATE_SYMLINKS_PREFIX = "/";
 
-  public static final String getOutputSymlinkName(String productName) {
-    return productName + "-out";
-  }
-
-  private static String execRootSymlink(String productName, String workspaceName) {
-    return productName + "-" + workspaceName;
+  private static String execRootSymlink(String workspaceName) {
+    return Constants.PRODUCT_NAME + "-" + workspaceName;
   }
   /**
    * Attempts to create convenience symlinks in the workspaceDirectory and in
@@ -52,8 +51,7 @@ public class OutputDirectoryLinksUtils {
    */
   public static void createOutputDirectoryLinks(String workspaceName,
       Path workspace, Path execRoot, Path outputPath,
-      EventHandler eventHandler, @Nullable BuildConfiguration targetConfig,
-      String symlinkPrefix, String productName) {
+      EventHandler eventHandler, @Nullable BuildConfiguration targetConfig, String symlinkPrefix) {
     if (NO_CREATE_SYMLINKS_PREFIX.equals(symlinkPrefix)) {
       return;
     }
@@ -62,10 +60,10 @@ public class OutputDirectoryLinksUtils {
     // Make the two non-specific links from the workspace to the output area,
     // and the configuration-specific links in both the workspace and the execution root dirs.
     // NB!  Keep in sync with removeOutputDirectoryLinks below.
-    createLink(workspace, getOutputSymlinkName(productName), outputPath, failures);
+    createLink(workspace, OUTPUT_SYMLINK_NAME, outputPath, failures);
 
     // Points to execroot
-    createLink(workspace, execRootSymlink(productName, workspaceName), execRoot, failures);
+    createLink(workspace, execRootSymlink(workspaceName), execRoot, failures);
 
     if (targetConfig != null) {
       createLink(workspace, symlinkPrefix + "bin",
@@ -92,7 +90,7 @@ public class OutputDirectoryLinksUtils {
    * before, the pretty path may be incorrect if the symlinks end up pointing somewhere new.
    */
   public static PathFragment getPrettyPath(Path file, String workspaceName,
-      Path workspaceDirectory, String symlinkPrefix, String productName) {
+      Path workspaceDirectory, String symlinkPrefix) {
     for (String link : LINKS) {
       PathFragment result = relativize(file, workspaceDirectory, symlinkPrefix + link);
       if (result != null) {
@@ -100,13 +98,12 @@ public class OutputDirectoryLinksUtils {
       }
     }
 
-    PathFragment result = relativize(file, workspaceDirectory,
-        execRootSymlink(productName, workspaceName));
+    PathFragment result = relativize(file, workspaceDirectory, execRootSymlink(workspaceName));
     if (result != null) {
       return result;
     }
 
-    result = relativize(file, workspaceDirectory, getOutputSymlinkName(productName));
+    result = relativize(file, workspaceDirectory, OUTPUT_SYMLINK_NAME);
     if (result != null) {
       return result;
     }
@@ -140,17 +137,16 @@ public class OutputDirectoryLinksUtils {
    * @param workspace the runtime's workspace
    * @param eventHandler the error eventHandler
    * @param symlinkPrefix the symlink prefix which should be removed
-   * @param productName the product name
    */
   public static void removeOutputDirectoryLinks(String workspaceName, Path workspace,
-      EventHandler eventHandler, String symlinkPrefix, String productName) {
+      EventHandler eventHandler, String symlinkPrefix) {
     if (NO_CREATE_SYMLINKS_PREFIX.equals(symlinkPrefix)) {
       return;
     }
     List<String> failures = new ArrayList<>();
 
-    removeLink(workspace, getOutputSymlinkName(productName), failures);
-    removeLink(workspace, execRootSymlink(productName, workspaceName), failures);
+    removeLink(workspace, OUTPUT_SYMLINK_NAME, failures);
+    removeLink(workspace, execRootSymlink(workspaceName), failures);
     removeLink(workspace, symlinkPrefix + "bin", failures);
     removeLink(workspace, symlinkPrefix + "testlogs", failures);
     removeLink(workspace, symlinkPrefix + "genfiles", failures);
