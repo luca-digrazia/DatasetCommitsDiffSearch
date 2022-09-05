@@ -3,7 +3,7 @@ package com.yammer.metrics.reporting;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.*;
 import com.yammer.metrics.stats.Snapshot;
-import com.yammer.metrics.core.MetricPredicate;
+import com.yammer.metrics.util.MetricPredicate;
 
 import java.io.PrintStream;
 import java.text.DateFormat;
@@ -72,7 +72,7 @@ public class ConsoleReporter extends AbstractPollingReporter implements
      *                        output
      */
     public ConsoleReporter(MetricsRegistry metricsRegistry, PrintStream out, MetricPredicate predicate) {
-        this(metricsRegistry, out, predicate, Clock.defaultClock(), TimeZone.getDefault());
+        this(metricsRegistry, out, predicate, Clock.DEFAULT, TimeZone.getDefault());
     }
 
     /**

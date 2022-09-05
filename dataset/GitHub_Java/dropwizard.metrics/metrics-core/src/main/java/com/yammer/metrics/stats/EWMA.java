@@ -85,7 +85,7 @@ public class EWMA {
      */
     public void tick() {
         final long count = uncounted.getAndSet(0);
-        final double instantRate = count / interval;
+        double instantRate = count / interval;
         if (initialized) {
             rate += (alpha * (instantRate - rate));
         } else {

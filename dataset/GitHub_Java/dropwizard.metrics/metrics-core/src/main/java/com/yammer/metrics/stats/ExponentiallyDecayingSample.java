@@ -1,16 +1,16 @@
 package com.yammer.metrics.stats;
 
-import static java.lang.Math.exp;
-import static java.lang.Math.min;
-
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.Map;
+import java.util.List;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import com.yammer.metrics.core.Clock;
+import static java.lang.Math.*;
 
 /**
  * An exponentially-decaying random sample of {@code long}s. Uses Cormode et al's forward-decaying
@@ -30,8 +30,6 @@ public class ExponentiallyDecayingSample implements Sample {
     private final AtomicLong count = new AtomicLong(0);
     private volatile long startTime;
     private final AtomicLong nextScaleTime = new AtomicLong(0);
-    private final Clock clock;
-    
 
     /**
      * Creates a new {@link ExponentiallyDecayingSample}.
@@ -41,22 +39,10 @@ public class ExponentiallyDecayingSample implements Sample {
      *                      sample will be towards newer values
      */
     public ExponentiallyDecayingSample(int reservoirSize, double alpha) {
-    	this(reservoirSize,alpha,Clock.defaultClock());
-    }
-    
-    /**
-     * Creates a new {@link ExponentiallyDecayingSample}.
-     *
-     * @param reservoirSize the number of samples to keep in the sampling reservoir
-     * @param alpha         the exponential decay factor; the higher this is, the more biased the
-     *                      sample will be towards newer values
-     */
-    public ExponentiallyDecayingSample(int reservoirSize, double alpha, Clock clock) {
         this.values = new ConcurrentSkipListMap<Double, Long>();
         this.lock = new ReentrantReadWriteLock();
         this.alpha = alpha;
         this.reservoirSize = reservoirSize;
-        this.clock = clock;
         clear();
     }
 
@@ -66,8 +52,8 @@ public class ExponentiallyDecayingSample implements Sample {
         try {
             values.clear();
             count.set(0);
-            this.startTime = currentTimeInSeconds();
-            nextScaleTime.set(clock.tick() + RESCALE_THRESHOLD);
+            this.startTime = tick();
+            nextScaleTime.set(System.nanoTime() + RESCALE_THRESHOLD);
         } finally {
             unlockForRescale();
         }
@@ -80,7 +66,7 @@ public class ExponentiallyDecayingSample implements Sample {
 
     @Override
     public void update(long value) {
-        update(value, currentTimeInSeconds());
+        update(value, tick());
     }
 
     /**
@@ -90,12 +76,9 @@ public class ExponentiallyDecayingSample implements Sample {
      * @param timestamp the epoch timestamp of {@code value} in seconds
      */
     public void update(long value, long timestamp) {
-        
-    	rescaleIfNeeded();
-    	
         lockForRegularUsage();
         try {
-            final double priority = weight(timestamp - startTime) / ThreadLocalRandom.current().nextDouble();
+            final double priority = weight(timestamp - startTime) / random();
             final long newCount = count.incrementAndGet();
             if (newCount <= reservoirSize) {
                 values.put(priority, value);
@@ -114,16 +97,12 @@ public class ExponentiallyDecayingSample implements Sample {
             unlockForRegularUsage();
         }
 
-
-    }
-
-	private void rescaleIfNeeded() {
-		final long now = clock.tick();
+        final long now = System.nanoTime();
         final long next = nextScaleTime.get();
         if (now >= next) {
             rescale(now, next);
         }
-	}
+    }
 
     @Override
     public Snapshot getSnapshot() {
@@ -135,8 +114,31 @@ public class ExponentiallyDecayingSample implements Sample {
         }
     }
 
-    private long currentTimeInSeconds() {
-        return TimeUnit.MILLISECONDS.toSeconds(clock.time());
+    @Override
+    public List<Long> values() {
+        lockForRegularUsage();
+        try {
+            return new ArrayList<Long>(values.values());
+        } finally {
+            unlockForRegularUsage();
+        }
+    }
+
+    @Override
+    public void dump(File output) throws IOException {
+        final PrintWriter writer = new PrintWriter(output);
+        try {
+            final List<Long> values = values();
+            for (Long value : values) {
+                writer.printf("%d\n", value);
+            }
+        } finally {
+            writer.close();
+        }
+    }
+
+    private long tick() {
+        return TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
     }
 
     private double weight(long t) {
@@ -166,15 +168,12 @@ public class ExponentiallyDecayingSample implements Sample {
             lockForRescale();
             try {
                 final long oldStartTime = startTime;
-                this.startTime = currentTimeInSeconds();
+                this.startTime = tick();
                 final ArrayList<Double> keys = new ArrayList<Double>(values.keySet());
                 for (Double key : keys) {
                     final Long value = values.remove(key);
                     values.put(key * exp(-alpha * (startTime - oldStartTime)), value);
                 }
-                
-                // make sure the counter is in sync with the number of stored samples.
-                count.set(values.size());
             } finally {
                 unlockForRescale();
             }
@@ -196,10 +195,4 @@ public class ExponentiallyDecayingSample implements Sample {
     private void unlockForRegularUsage() {
         lock.readLock().unlock();
     }
-
-	public Map<Double, Long> getValues() {
-		return values;
-	}
-    
-    
 }
