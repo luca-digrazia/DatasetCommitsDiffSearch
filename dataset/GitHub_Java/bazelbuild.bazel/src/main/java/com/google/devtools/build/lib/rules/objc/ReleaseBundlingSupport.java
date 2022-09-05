@@ -991,7 +991,6 @@ public final class ReleaseBundlingSupport {
     ruleContext.registerAction(
         ObjcRuleClasses.spawnBashOnDarwinActionBuilder(shellCommand)
             .setMnemonic("ExtractIosTeamPrefix")
-            .disableSandboxing()
             .addInput(releaseBundling.getProvisioningProfile())
             .addOutput(teamPrefixFile)
             .build(ruleContext));
@@ -1011,7 +1010,6 @@ public final class ReleaseBundlingSupport {
     ruleContext.registerAction(
         ObjcRuleClasses.spawnBashOnDarwinActionBuilder(shellCommand)
             .setMnemonic("ExtractIosEntitlements")
-            .disableSandboxing()
             .setProgressMessage("Extracting entitlements: " + ruleContext.getLabel())
             .addInput(releaseBundling.getProvisioningProfile())
             .addOutput(entitlements)
