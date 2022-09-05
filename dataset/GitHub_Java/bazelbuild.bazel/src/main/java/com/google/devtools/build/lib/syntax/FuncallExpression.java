@@ -550,7 +550,7 @@ public final class FuncallExpression extends Expression {
   }
 
   @Override
-  void validate(ValidationEnvironment env) throws EvalException {
+  SkylarkType validate(ValidationEnvironment env) throws EvalException {
     for (Argument.Passed arg : args) {
       arg.getValue().validate(env);
     }
@@ -561,5 +561,6 @@ public final class FuncallExpression extends Expression {
       throw new EvalException(getLocation(),
           String.format("function '%s' does not exist", func.getName()));
     }
+    return SkylarkType.UNKNOWN;
   }
 }

@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.SkylarkType.SkylarkFunctionType;
 
@@ -35,7 +36,7 @@ public class ValidationEnvironment {
 
   private final ValidationEnvironment parent;
 
-  private Map<String, SkylarkType> variableTypes = new HashMap<>();
+  private Map<SkylarkType, Map<String, SkylarkType>> variableTypes = new HashMap<>();
 
   private Map<String, Location> variableLocations = new HashMap<>();
 
@@ -51,26 +52,28 @@ public class ValidationEnvironment {
   // Whether this validation environment is not modified therefore clonable or not.
   private boolean clonable;
 
-  public ValidationEnvironment(Map<String, SkylarkType> builtinVariableTypes) {
+  public ValidationEnvironment(
+      ImmutableMap<SkylarkType, ImmutableMap<String, SkylarkType>> builtinVariableTypes) {
     parent = null;
-    variableTypes = new HashMap<>(builtinVariableTypes);
-    readOnlyVariables.addAll(builtinVariableTypes.keySet());
+    variableTypes = CollectionUtils.copyOf(builtinVariableTypes);
+    readOnlyVariables.addAll(builtinVariableTypes.get(SkylarkType.GLOBAL).keySet());
     clonable = true;
   }
 
-  private ValidationEnvironment(Map<String, SkylarkType> builtinVariableTypes,
+  private ValidationEnvironment(Map<SkylarkType, Map<String, SkylarkType>> builtinVariableTypes,
       Set<String> readOnlyVariables) {
     parent = null;
-    this.variableTypes = new HashMap<>(builtinVariableTypes);
+    this.variableTypes = CollectionUtils.copyOf(builtinVariableTypes);
     this.readOnlyVariables = new HashSet<>(readOnlyVariables);
     clonable = false;
   }
 
   // ValidationEnvironment for a new Environment()
-  private static ImmutableMap<String, SkylarkType> globalTypes =
-      new ImmutableMap.Builder<String, SkylarkType> ()
-      .put("False", SkylarkType.BOOL).put("True", SkylarkType.BOOL)
-      .put("None", SkylarkType.TOP).build();
+  private static ImmutableMap<SkylarkType, ImmutableMap<String, SkylarkType>> globalTypes =
+      ImmutableMap.<SkylarkType, ImmutableMap<String, SkylarkType>>of(SkylarkType.GLOBAL,
+          new ImmutableMap.Builder<String, SkylarkType> ()
+          .put("False", SkylarkType.BOOL).put("True", SkylarkType.BOOL)
+          .put("None", SkylarkType.TOP).build());
 
   public ValidationEnvironment() {
     this(globalTypes);
@@ -88,7 +91,7 @@ public class ValidationEnvironment {
   public ValidationEnvironment(ValidationEnvironment parent, SkylarkFunctionType currentFunction) {
     // Don't copy readOnlyVariables: Variables may shadow global values.
     this.parent = parent;
-    this.variableTypes = new HashMap<String, SkylarkType>();
+    this.variableTypes.put(SkylarkType.GLOBAL, new HashMap<String, SkylarkType>());
     this.currentFunction = currentFunction;
     this.clonable = false;
   }
@@ -113,7 +116,7 @@ public class ValidationEnvironment {
         futureReadOnlyVariables.peek().add(varname);
       }
     }
-    variableTypes.put(varname, SkylarkType.UNKNOWN);
+    variableTypes.get(SkylarkType.GLOBAL).put(varname, SkylarkType.UNKNOWN);
     variableLocations.put(varname, location);
     clonable = false;
   }
@@ -128,15 +131,15 @@ public class ValidationEnvironment {
    * Returns true if the symbol exists in the validation environment.
    */
   public boolean hasSymbolInEnvironment(String varname) {
-    return variableTypes.containsKey(varname)
-        || topLevel().variableTypes.containsKey(varname);
+    return variableTypes.get(SkylarkType.GLOBAL).containsKey(varname)
+        || topLevel().variableTypes.get(SkylarkType.GLOBAL).containsKey(varname);
   }
 
   /**
    * Returns the type of the existing variable.
    */
   public SkylarkType getVartype(String varname) {
-    SkylarkType type = variableTypes.get(varname);
+    SkylarkType type = variableTypes.get(SkylarkType.GLOBAL).get(varname);
     if (type == null && parent != null) {
       type = parent.getVartype(varname);
     }
@@ -158,10 +161,10 @@ public class ValidationEnvironment {
   public void updateFunction(String name, SkylarkFunctionType type, Location loc)
       throws EvalException {
     checkReadonly(name, loc);
-    if (variableTypes.containsKey(name)) {
+    if (variableTypes.get(SkylarkType.GLOBAL).containsKey(name)) {
       throw new EvalException(loc, "function " + name + " already exists");
     }
-    variableTypes.put(name, type);
+    variableTypes.get(SkylarkType.GLOBAL).put(name, type);
     clonable = false;
   }
 

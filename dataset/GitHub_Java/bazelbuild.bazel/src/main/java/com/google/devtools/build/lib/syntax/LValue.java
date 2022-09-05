@@ -29,6 +29,7 @@ import java.util.Collection;
  * An LValue can be a simple variable or something more complex like a tuple.
  */
 public class LValue implements Serializable {
+  // Currently, expr can only be an Ident, but we plan to support more.
   private final Expression expr;
 
   public LValue(Expression expr) {
@@ -97,7 +98,7 @@ public class LValue implements Serializable {
           && !variableType.equals(Environment.NoneType.class)) {
         throw new EvalException(loc, String.format("Incompatible variable types, "
             + "trying to assign %s (type of %s) to variable %s which is already %s",
-            Printer.repr(result),
+            EvalUtils.prettyPrintValue(result),
             EvalUtils.getDataTypeName(result),
             ident.getName(),
             EvalUtils.getDataTypeNameFromClass(variableType)));

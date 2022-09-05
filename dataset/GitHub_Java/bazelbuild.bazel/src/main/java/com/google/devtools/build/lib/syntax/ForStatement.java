@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.syntax.FlowStatement.FlowException;
 
 import java.util.List;
 
@@ -64,20 +63,11 @@ public final class ForStatement extends Statement {
     int i = 0;
     for (Object it : ImmutableList.copyOf(col)) {
       variable.assign(env, getLocation(), it);
-
-      try {
-        for (Statement stmt : block) {
-          stmt.exec(env);
-        }
-      } catch (FlowException ex) {
-        if (ex.mustTerminateLoop()) {
-          return;
-        }
+      for (Statement stmt : block) {
+        stmt.exec(env);
       }
-
       i++;
     }
-    
     // TODO(bazel-team): This should not happen if every collection is immutable.
     if (i != EvalUtils.size(col)) {
       throw new EvalException(getLocation(),
@@ -93,20 +83,14 @@ public final class ForStatement extends Statement {
   @Override
   void validate(ValidationEnvironment env) throws EvalException {
     if (env.isTopLevel()) {
-      throw new EvalException(getLocation(), "'For' is not allowed as a top level statement");
+      throw new EvalException(getLocation(),
+          "'For' is not allowed as a top level statement");
     }
-    env.enterLoop();
-
-    try {
-      // TODO(bazel-team): validate variable. Maybe make it temporarily readonly.
-      collection.validate(env);
-      variable.validate(env, getLocation());
-
-      for (Statement stmt : block) {
-        stmt.validate(env);
-      }
-    } finally {
-      env.exitLoop(getLocation());
+    // TODO(bazel-team): validate variable. Maybe make it temporarily readonly.
+    collection.validate(env);
+    variable.validate(env, getLocation());
+    for (Statement stmt : block) {
+      stmt.validate(env);
     }
   }
 }
