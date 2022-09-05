@@ -7,15 +7,12 @@ import java.util.Map;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.BoolFilterBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.aggregations.AbstractAggregationBuilder;
-import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.bucket.nested.NestedBuilder;
-import org.elasticsearch.search.aggregations.bucket.nested.ReverseNested;
-import org.elasticsearch.search.aggregations.bucket.nested.ReverseNestedBuilder;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.aggregations.bucket.terms.TermsBuilder;
 import org.elasticsearch.search.sort.SortOrder;
@@ -25,11 +22,9 @@ import org.nlpcn.es4sql.domain.MethodField;
 import org.nlpcn.es4sql.domain.Order;
 import org.nlpcn.es4sql.domain.Select;
 import org.nlpcn.es4sql.domain.Where;
-import org.nlpcn.es4sql.domain.hints.Hint;
-import org.nlpcn.es4sql.domain.hints.HintType;
 import org.nlpcn.es4sql.exception.SqlParseException;
 import org.nlpcn.es4sql.query.maker.AggMaker;
-import org.nlpcn.es4sql.query.maker.QueryMaker;
+import org.nlpcn.es4sql.query.maker.FilterMaker;
 
 /**
  * Transform SQL query to Elasticsearch aggregations query
@@ -48,7 +43,7 @@ public class AggregationQueryAction extends QueryAction {
 	@Override
 	public SqlElasticSearchRequestBuilder explain() throws SqlParseException {
 		this.request = client.prepareSearch();
-
+		request.setListenerThreaded(false);
 		setIndicesAndTypes();
 
 		setWhere(select.getWhere());
@@ -64,15 +59,15 @@ public class AggregationQueryAction extends QueryAction {
 				}
 
                 if(field.isNested()){
-
-                    AggregationBuilder nestedBuilder = createNestedAggregation(field);
+                    NestedBuilder nestedBuilder = AggregationBuilders.nested(getNestedAggName(field))
+                            .path(field.getNestedPath());
                     if(insertFilterIfExistsAfter(lastAgg, groupBy, nestedBuilder,1)){
                         groupBy.remove(1);
                     }
                     else {
                         nestedBuilder.subAggregation(lastAgg);
                     }
-                    request.addAggregation(wrapNestedIfNeeded(nestedBuilder,field.isReverseNested()));
+                    request.addAggregation(nestedBuilder);
                 }
                 else {
                     request.addAggregation(lastAgg);
@@ -81,12 +76,14 @@ public class AggregationQueryAction extends QueryAction {
 				for (int i = 1; i < groupBy.size(); i++) {
 					field = groupBy.get(i);
 					AggregationBuilder<?> subAgg = aggMaker.makeGroupAgg(field);
-					if (subAgg instanceof TermsBuilder && !(field instanceof MethodField ) ) {
+					if (subAgg instanceof TermsBuilder) {
 						((TermsBuilder) subAgg).size(0);
 					}
 
                     if(field.isNested()){
-                        AggregationBuilder nestedBuilder = createNestedAggregation(field);
+
+                        NestedBuilder nestedBuilder = AggregationBuilders.nested(getNestedAggName(field))
+                                .path(field.getNestedPath());
                         if(insertFilterIfExistsAfter(subAgg, groupBy, nestedBuilder,i+1)){
                             groupBy.remove(i+1);
                             i++;
@@ -94,7 +91,7 @@ public class AggregationQueryAction extends QueryAction {
                         else {
                             nestedBuilder.subAggregation(subAgg);
                         }
-                        lastAgg.subAggregation(wrapNestedIfNeeded(nestedBuilder,field.isReverseNested()));
+                        lastAgg.subAggregation(nestedBuilder);
 
                     }
                     else {
@@ -139,8 +136,7 @@ public class AggregationQueryAction extends QueryAction {
 				}
 			}
 		}
-
-		setLimitFromHint(this.select.getHints());
+		setLimit(select.getOffset(), select.getRowCount());
 
 		request.setSearchType(SearchType.DEFAULT);
         updateWithIndicesOptionsIfNeeded(select,request);
@@ -148,35 +144,10 @@ public class AggregationQueryAction extends QueryAction {
         return sqlElasticRequestBuilder;
 	}
 
-    private AbstractAggregationBuilder wrapNestedIfNeeded(AggregationBuilder nestedBuilder, boolean reverseNested) {
-        if(!reverseNested) return nestedBuilder;
-        if(reverseNested && ! (nestedBuilder instanceof NestedBuilder)) return nestedBuilder;
-        //we need to jump back to root
-        return AggregationBuilders.reverseNested(nestedBuilder.getName()+"_REVERSED").subAggregation(nestedBuilder);
-    }
-
-    private AggregationBuilder createNestedAggregation(Field field) {
-        AggregationBuilder nestedBuilder;
-        String nestedPath = field.getNestedPath();
-        if(field.isReverseNested() ) {
-            if(nestedPath == null || !nestedPath.startsWith("~"))
-                return AggregationBuilders.reverseNested(getNestedAggName(field)).path(nestedPath);
-            nestedPath = nestedPath.substring(1);
-        }
-        nestedBuilder = AggregationBuilders.nested(getNestedAggName(field)).path(nestedPath);
-        return nestedBuilder;
-    }
-
     private String getNestedAggName(Field field) {
         String prefix;
         if(field instanceof MethodField){
-            String nestedPath = field.getNestedPath();
-            if(nestedPath != null){
-                prefix = nestedPath;
-            }
-            else {
-                prefix = field.getAlias();
-            }
+            prefix = field.getNestedPath();
         }
         else {
             prefix = field.getName();
@@ -185,7 +156,7 @@ public class AggregationQueryAction extends QueryAction {
     }
 
 
-    private boolean insertFilterIfExistsAfter(AggregationBuilder<?> agg, List<Field> groupBy, AggregationBuilder builder, int nextPosition) throws SqlParseException {
+    private boolean insertFilterIfExistsAfter(AggregationBuilder<?> agg, List<Field> groupBy, NestedBuilder builder, int nextPosition) throws SqlParseException {
         if(groupBy.size() <= nextPosition) return false;
         Field filterFieldCandidate = groupBy.get(nextPosition);
         if(! (filterFieldCandidate instanceof MethodField)) return false;
@@ -248,8 +219,8 @@ public class AggregationQueryAction extends QueryAction {
 	 */
 	private void setWhere(Where where) throws SqlParseException {
 		if (where != null) {
-			QueryBuilder whereQuery = QueryMaker.explan(where);
-			request.setQuery(whereQuery);
+			BoolFilterBuilder boolFilter = FilterMaker.explan(where);
+			request.setQuery(QueryBuilders.filteredQuery(null, boolFilter));
 		}
 	}
 
@@ -266,26 +237,11 @@ public class AggregationQueryAction extends QueryAction {
 		}
 	}
 
-    private void setLimitFromHint(List<Hint> hints) {
-        int from = 0;
-        int size = 0;
-        for (Hint hint : hints) {
-            if (hint.getType() == HintType.DOCS_WITH_AGGREGATION) {
-                Integer[] params = (Integer[]) hint.getParams();
-                if (params.length > 1) {
-                    // if 2 or more are given, use the first as the from and the second as the size
-                    // so it is the same as LIMIT from,size
-                    // except written as /*! DOCS_WITH_AGGREGATION(from,size) */
-                    from = params[0];
-                    size = params[1];
-                } else if (params.length == 1) {
-                    // if only 1 parameter is given, use it as the size with a from of 0
-                    size = params[0];
-                }
-                break;
-            }
-        }
-        request.setFrom(from);
-        request.setSize(size);
-    }
+	private void setLimit(int from, int size) {
+		request.setFrom(from);
+
+		if (size > -1) {
+			request.setSize(size);
+		}
+	}
 }

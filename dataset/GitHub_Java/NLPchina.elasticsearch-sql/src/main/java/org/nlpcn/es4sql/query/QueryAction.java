@@ -10,8 +10,6 @@ import org.nlpcn.es4sql.domain.hints.Hint;
 import org.nlpcn.es4sql.domain.hints.HintType;
 import org.nlpcn.es4sql.exception.SqlParseException;
 
-import java.util.ArrayList;
-
 /**
  * Abstract class. used to transform Select object (Represents SQL query) to
  * SearchRequestBuilder (Represents ES query)
@@ -28,21 +26,17 @@ public abstract class QueryAction {
 		this.query = query;
 	}
 
-    protected void updateRequestWithIndexAndRoutingOptions(Select select, SearchRequestBuilder request) {
+    protected void updateWithIndicesOptionsIfNeeded(Select select,SearchRequestBuilder request) {
+        boolean ignore = false;
         for(Hint hint : select.getHints()){
             if(hint.getType() == HintType.IGNORE_UNAVAILABLE){
-                //saving the defaults from TransportClient search
-                request.setIndicesOptions(IndicesOptions.fromOptions(true, false, true, false, IndicesOptions.strictExpandOpenAndForbidClosed()));
-            }
-            if(hint.getType() == HintType.ROUTINGS){
-                Object[] routings = hint.getParams();
-                String[] routingsAsStringArray = new String[routings.length];
-                for(int i=0;i<routings.length;i++){
-                    routingsAsStringArray[i]=routings[i].toString();
-                }
-                request.setRouting(routingsAsStringArray);
+                ignore = true;
+                break;
             }
         }
+        if(ignore)
+            //saving the defaults from TransportClient search
+            request.setIndicesOptions(IndicesOptions.fromOptions(true, false, true, false, IndicesOptions.strictExpandOpenAndForbidClosed()));
     }
 
 
