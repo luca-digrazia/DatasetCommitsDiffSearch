@@ -296,7 +296,7 @@ public class AtlasProguardTransform extends ProGuardTransform {
     @Override
     public void transform(TransformInvocation invocation) throws TransformException {
 
-        firstTime = true;
+        firstTime =true;
         ConfigurableFileCollection oldConfigurableFileCollection = (ConfigurableFileCollection) ReflectUtils.getField(ProguardConfigurable.class, oldTransform,
                 "configurationFiles");
 
@@ -304,12 +304,10 @@ public class AtlasProguardTransform extends ProGuardTransform {
         if (appVariantContext.getAtlasExtension().getTBuildConfig().isFastProguard()) {
             defaultProguardFiles.addAll(
                     appVariantContext.getVariantData().getVariantConfiguration().getBuildType().getProguardFiles());
-        } else {
-
-//            defaultProguardFiles.addAll(oldConfigurableFileCollection.getFiles());
-            defaultProguardFiles.addAll(appVariantContext.getVariantData().getVariantConfiguration().getBuildType().getProguardFiles());
+        }else {
+                    defaultProguardFiles.addAll(oldConfigurableFileCollection.getFiles());
             nonConsumerProguardFiles.addAll(
-                    appVariantContext.getVariantData().getVariantConfiguration().getBuildType().getProguardFiles());
+                appVariantContext.getVariantData().getVariantConfiguration().getBuildType().getProguardFiles());
 
         }
         List<AwbBundle> awbBundles = AtlasBuildContext.androidDependencyTrees.get(
@@ -345,20 +343,19 @@ public class AtlasProguardTransform extends ProGuardTransform {
 
         try {
 
-            oldConfigurableFileCollection = appVariantContext.getProject().files().from(nonConsumerProguardFiles);
 
             ReflectUtils.updateField(this, "configurationFiles", oldConfigurableFileCollection);
 
 
-//            Configuration configuration = (Configuration) ReflectUtils.getField(BaseProguardAction.class,
-//                    oldTransform, "configuration");
-//            if (null == this.configuration.keep) {
-//                this.configuration.keep = new ArrayList();
-//            }
-//            if (null != configuration.keep) {
-//                this.configuration.keep.addAll(configuration.keep);
-//            }
-//
+            Configuration configuration = (Configuration) ReflectUtils.getField(BaseProguardAction.class,
+                    oldTransform, "configuration");
+            if (null == this.configuration.keep) {
+                this.configuration.keep = new ArrayList();
+            }
+            if (null != configuration.keep) {
+                this.configuration.keep.addAll(configuration.keep);
+            }
+
         } catch (Exception e) {
             throw new GradleException(e.getMessage(), e);
         }
@@ -390,9 +387,7 @@ public class AtlasProguardTransform extends ProGuardTransform {
             List<File> mainJars = new ArrayList<>();
             for (TransformInput transformInput : invocation.getInputs()) {
                 for (JarInput jarInput : transformInput.getJarInputs()) {
-                    if (AtlasBuildContext.atlasMainDexHelperMap.get(appVariantContext.getVariantName()).inMainDex(jarInput)) {
-                        mainJars.add(jarInput.getFile());
-                    }
+                    mainJars.add(jarInput.getFile());
                 }
             }
 
@@ -438,14 +433,12 @@ public class AtlasProguardTransform extends ProGuardTransform {
                 File file = jarInput.getFile();
                 if (file.getName().startsWith("combined-rmerge")) {
                     unProguardJars.add(file);
-                } else if (AtlasBuildContext.atlasMainDexHelperMap.get(appVariantContext.getVariantName()).inMainDex(jarInput)) {
+                } else {
                     awbTransform.getInputLibraries().add(file);
                 }
             }
             for (DirectoryInput directoryInput : transformInput.getDirectoryInputs()) {
-                if (AtlasBuildContext.atlasMainDexHelperMap.get(appVariantContext.getVariantName()).getInputDirs().contains(directoryInput.getFile())) {
-                    awbTransform.getInputLibraries().add(directoryInput.getFile());
-                }
+                awbTransform.getInputLibraries().add(directoryInput.getFile());
             }
         }
 
@@ -490,7 +483,7 @@ public class AtlasProguardTransform extends ProGuardTransform {
         OriginalStream originalStream = OriginalStream.builder(appVariantContext.getProject(), "proguard-classes")
                 .addContentTypes(com.android.build.gradle.internal.pipeline.TransformManager.CONTENT_CLASS)
                 .addScope(QualifiedContent.Scope.PROJECT)
-                .setFileCollection(appVariantContext.getProject().files(AtlasBuildContext.atlasMainDexHelperMap.get(appVariantContext.getVariantName()).getAllMainDexJars()))
+                .setFileCollection(appVariantContext.getProject().files(AtlasBuildContext.atlasMainDexHelper.getAllMainDexJars()))
                 .build();
 
         if (nextTransformTask != null) {
@@ -502,18 +495,12 @@ public class AtlasProguardTransform extends ProGuardTransform {
 
     }
 
-    private  void transformInput(Input input) {
-        if (input.maindexFileTransform.size() == 0 && input.maindexFolderTransform.size() == 0) {
+    private static void transformInput(Input input) {
+        if (input.maindexFileTransform.size() == 0){
             return;
+        }else {
+            AtlasBuildContext.atlasMainDexHelper.updateMainDexFiles2(input.maindexFileTransform);
         }
-        AtlasBuildContext.atlasMainDexHelperMap.get(appVariantContext.getVariantName()).updateMainDexFiles2(input.maindexFileTransform);
-        if (input.maindexFolderTransform.size() > 0) {
-            AtlasBuildContext.atlasMainDexHelperMap.get(appVariantContext.getVariantName()).getInputDirs().clear();
-            for (File file : input.maindexFolderTransform.values()) {
-                AtlasBuildContext.atlasMainDexHelperMap.get(appVariantContext.getVariantName()).addMainDex(new BuildAtlasEnvTask.FileIdentity(file.getName(), file, false, false));
-            }
-        }
-
     }
 
 
@@ -565,14 +552,14 @@ public class AtlasProguardTransform extends ProGuardTransform {
 
     @Override
     protected void outJar(@NonNull File file) {
-        if (firstTime) {
-            AtlasBuildContext.atlasMainDexHelperMap.get(appVariantContext.getVariantName()).getMainDexFiles().clear();
-            AtlasBuildContext.atlasMainDexHelperMap.get(appVariantContext.getVariantName()).getInputDirs().clear();
+        if (firstTime){
+            AtlasBuildContext.atlasMainDexHelper.getMainDexFiles().clear();
+            AtlasBuildContext.atlasMainDexHelper.getInputDirs().clear();
 
             firstTime = false;
         }
-        BuildAtlasEnvTask.FileIdentity fileIdentity = new BuildAtlasEnvTask.FileIdentity("proguard-main", file, false, false);
-        AtlasBuildContext.atlasMainDexHelperMap.get(appVariantContext.getVariantName()).getMainDexFiles().add(fileIdentity);
+        BuildAtlasEnvTask.FileIdentity fileIdentity = new BuildAtlasEnvTask.FileIdentity("proguard-main",file,false,false);
+        AtlasBuildContext.atlasMainDexHelper.getMainDexFiles().add(fileIdentity);
         super.outJar(file);
     }
 
@@ -582,14 +569,14 @@ public class AtlasProguardTransform extends ProGuardTransform {
         if (file.isDirectory()) {
             super.inputJar(classPath, file, filter);
         } else {
-            if (AtlasBuildContext.atlasMainDexHelperMap.get(appVariantContext.getVariantName()).inMainDex(file)) {
-                super.inputJar(classPath, file, filter);
-            } else if (appVariantContext.getScope().getGlobalScope().getAndroidBuilder().getBootClasspath(true).contains(file)) {
-                super.inputJar(classPath, file, filter);
-            } else if (AtlasBuildContext.atlasMainDexHelperMap.get(appVariantContext.getVariantName()).getInputDirs().contains(file)) {
-                super.inputJar(classPath, file, filter);
+                if (AtlasBuildContext.atlasMainDexHelper.inMainDex(file)){
+                    super.inputJar(classPath, file, filter);
+                }else if (appVariantContext.getScope().getGlobalScope().getAndroidBuilder().getBootClasspath(true).contains(file)){
+                    super.inputJar(classPath, file, filter);
+                }else if (AtlasBuildContext.atlasMainDexHelper.getInputDirs().contains(file)){
+                    super.inputJar(classPath, file, filter);
 
-            }
+                }
         }
     }
 }
