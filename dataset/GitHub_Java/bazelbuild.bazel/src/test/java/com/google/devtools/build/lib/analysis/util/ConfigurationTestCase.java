@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
@@ -77,6 +78,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
   }
 
   protected SkyframeExecutor skyframeExecutor;
+  protected Map<String, String> clientEnv;
   protected ConfigurationFactory configurationFactory;
   protected Path workspace;
   protected ImmutableList<Class<? extends FragmentOptions>> buildOptionClasses;
@@ -85,6 +87,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
   protected void setUp() throws Exception {
     super.setUp();
     workspace = rootDirectory;
+    clientEnv = Maps.newHashMap();
 
     ConfiguredRuleClassProvider ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
     PathPackageLocator pkgLocator = new PathPackageLocator(rootDirectory);
@@ -110,7 +113,6 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
 
     AnalysisMock analysisMock = getAnalysisMock();
     analysisMock.setupMockClient(new MockToolsConfig(rootDirectory));
-    analysisMock.setupMockWorkspaceFiles(directories.getEmbeddedBinariesRoot());
     configurationFactory = analysisMock.createConfigurationFactory();
     buildOptionClasses = analysisMock.getBuildOptions();
   }
@@ -147,12 +149,10 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
 
     configurationFactory.forbidSanityCheck();
     BuildOptions buildOptions = BuildOptions.of(buildOptionClasses, parser);
-    BuildConfigurationCollection collection = skyframeExecutor.createConfigurations(
-        configurationFactory,
+    BuildConfigurationCollection collection =
+        skyframeExecutor.createConfigurations(configurationFactory,
         new BuildConfigurationKey(buildOptions,
-        new BlazeDirectories(outputBase, outputBase, workspace),
-        ImmutableMap.<String, String>of(),
-        multiCpu));
+        new BlazeDirectories(outputBase, outputBase, workspace), clientEnv, multiCpu));
     return collection;
   }
 
