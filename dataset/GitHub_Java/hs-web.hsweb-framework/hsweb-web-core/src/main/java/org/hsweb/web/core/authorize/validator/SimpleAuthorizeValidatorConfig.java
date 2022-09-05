@@ -4,9 +4,9 @@ import org.hsweb.web.core.authorize.AuthorizeValidatorConfig;
 import org.hsweb.web.core.authorize.annotation.Authorize;
 import org.hsweb.web.core.exception.AuthorizeException;
 import org.hsweb.web.core.exception.AuthorizeForbiddenException;
-import org.hsweb.commons.StringUtils;
-import org.hsweb.expands.script.engine.DynamicScriptEngine;
-import org.hsweb.expands.script.engine.DynamicScriptEngineFactory;
+import org.webbuilder.utils.common.StringUtils;
+import org.webbuilder.utils.script.engine.DynamicScriptEngine;
+import org.webbuilder.utils.script.engine.DynamicScriptEngineFactory;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -20,13 +20,6 @@ public class SimpleAuthorizeValidatorConfig implements AuthorizeValidatorConfig 
     protected Set<String> actions;
     protected Set<Expression> expressions = new LinkedHashSet<>();
     protected Authorize.MOD mod;
-    protected boolean apiSupport;
-
-    @Override
-    public AuthorizeValidatorConfig setApiSupport(boolean apiSupport) {
-        this.apiSupport = apiSupport;
-        return this;
-    }
 
     @Override
     public AuthorizeValidatorConfig setModules(Set<String> modules) {
@@ -91,10 +84,6 @@ public class SimpleAuthorizeValidatorConfig implements AuthorizeValidatorConfig 
         return expressions;
     }
 
-    public boolean isApiSupport() {
-        return apiSupport;
-    }
-
     public void setExpressions(Set<Expression> expressions) {
         this.expressions = expressions;
     }
@@ -105,7 +94,7 @@ public class SimpleAuthorizeValidatorConfig implements AuthorizeValidatorConfig 
 
     @Override
     public boolean isEmpty() {
-        return getModules().isEmpty() && getRoles().isEmpty() && getExpressions().isEmpty();
+        return getModules().isEmpty() && getRoles().isEmpty()  && getExpressions().isEmpty();
     }
 
     public static class Expression {

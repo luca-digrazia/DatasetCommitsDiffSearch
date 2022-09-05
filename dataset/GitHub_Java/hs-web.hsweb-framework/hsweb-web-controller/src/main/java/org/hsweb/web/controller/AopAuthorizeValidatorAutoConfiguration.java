@@ -11,7 +11,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 
+/**
+ * Created by zhouhao on 16-4-28.
+ */
 @Configuration
+@ConditionalOnProperty(name = "login.enable", havingValue = "true")
 public class AopAuthorizeValidatorAutoConfiguration {
 
     @Bean
