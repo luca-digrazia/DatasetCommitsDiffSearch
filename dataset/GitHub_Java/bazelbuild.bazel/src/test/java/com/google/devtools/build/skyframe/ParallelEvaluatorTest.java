@@ -49,6 +49,7 @@ import com.google.devtools.build.skyframe.NotifyingHelper.Order;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -76,8 +77,7 @@ public class ParallelEvaluatorTest {
 
   private EventCollector eventCollector;
 
-  private DirtyTrackingProgressReceiver revalidationReceiver =
-      new DirtyTrackingProgressReceiver(null);
+  private EvaluationProgressReceiver revalidationReceiver;
 
   @Before
   public void initializeReporter() {
@@ -104,7 +104,14 @@ public class ParallelEvaluatorTest {
         storedEventFilter,
         keepGoing,
         150,
-        revalidationReceiver);
+        revalidationReceiver,
+        new DirtyKeyTrackerImpl(),
+        new ParallelEvaluator.Receiver<Collection<SkyKey>>() {
+          @Override
+          public void accept(Collection<SkyKey> object) {
+            // ignore
+          }
+        });
   }
 
   private ParallelEvaluator makeEvaluator(ProcessableGraph graph,
@@ -252,7 +259,7 @@ public class ParallelEvaluatorTest {
       eval(/*keepGoing=*/false, fastKey);
     }
     final Set<SkyKey> receivedValues = Sets.newConcurrentHashSet();
-    revalidationReceiver = new DirtyTrackingProgressReceiver(new EvaluationProgressReceiver() {
+    revalidationReceiver = new EvaluationProgressReceiver() {
       @Override
       public void invalidated(SkyKey skyKey, InvalidationState state) {}
 
@@ -267,7 +274,7 @@ public class ParallelEvaluatorTest {
           EvaluationState state) {
         receivedValues.add(skyKey);
       }
-    });
+    };
     TestThread evalThread = new TestThread() {
       @Override
       public void runTest() throws Exception {
@@ -979,7 +986,6 @@ public class ParallelEvaluatorTest {
         new CycleInfo(ImmutableList.of(aKey), ImmutableList.of(bKey, cKey)));
   }
 
-  @Test
   public void valueAboveCycleAndExceptionReportsException() throws Exception {
     graph = new InMemoryGraphImpl();
     SkyKey aKey = GraphTester.toSkyKey("a");

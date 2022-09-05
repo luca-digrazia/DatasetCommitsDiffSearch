@@ -21,14 +21,16 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.Differencer.Diff;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.DeletingInvalidationState;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.DirtyingInvalidationState;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.InvalidationState;
+import com.google.devtools.build.skyframe.ParallelEvaluator.Receiver;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import java.io.PrintStream;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -50,7 +52,7 @@ import javax.annotation.Nullable;
 public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
 
   private final ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions;
-  private final DirtyTrackingProgressReceiver progressReceiver;
+  @Nullable private final EvaluationProgressReceiver progressReceiver;
   // Not final only for testing.
   private InMemoryGraph graph;
   private IntVersion lastGraphVersion = null;
@@ -59,6 +61,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
   private Set<SkyKey> valuesToDelete = new LinkedHashSet<>();
   private Set<SkyKey> valuesToDirty = new LinkedHashSet<>();
   private Map<SkyKey, SkyValue> valuesToInject = new HashMap<>();
+  private final DirtyKeyTracker dirtyKeyTracker = new DirtyKeyTrackerImpl();
   private final InvalidationState deleterState = new DeletingInvalidationState();
   private final Differencer differencer;
 
@@ -82,19 +85,19 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
   public InMemoryMemoizingEvaluator(
       Map<SkyFunctionName, ? extends SkyFunction> skyFunctions,
       Differencer differencer,
-      @Nullable EvaluationProgressReceiver progressReceiver) {
-    this(skyFunctions, differencer, progressReceiver, new EmittedEventState(), true);
+      @Nullable EvaluationProgressReceiver invalidationReceiver) {
+    this(skyFunctions, differencer, invalidationReceiver, new EmittedEventState(), true);
   }
 
   public InMemoryMemoizingEvaluator(
       Map<SkyFunctionName, ? extends SkyFunction> skyFunctions,
       Differencer differencer,
-      @Nullable EvaluationProgressReceiver progressReceiver,
+      @Nullable EvaluationProgressReceiver invalidationReceiver,
       EmittedEventState emittedEventState,
       boolean keepEdges) {
     this.skyFunctions = ImmutableMap.copyOf(skyFunctions);
     this.differencer = Preconditions.checkNotNull(differencer);
-    this.progressReceiver = new DirtyTrackingProgressReceiver(progressReceiver);
+    this.progressReceiver = invalidationReceiver;
     this.graph = new InMemoryGraphImpl(keepEdges);
     this.emittedEventState = emittedEventState;
     this.keepEdges = keepEdges;
@@ -124,7 +127,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
     Preconditions.checkArgument(versionAgeLimit >= 0);
     final Version threshold = IntVersion.of(lastGraphVersion.getVal() - versionAgeLimit);
     valuesToDelete.addAll(
-        Sets.filter(progressReceiver.getUnenqueuedDirtyKeys(), new Predicate<SkyKey>() {
+        Sets.filter(dirtyKeyTracker.getDirtyKeys(), new Predicate<SkyKey>() {
           @Override
           public boolean apply(SkyKey skyKey) {
             NodeEntry entry = graph.get(null, Reason.OTHER, skyKey);
@@ -136,12 +139,8 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
   }
 
   @Override
-  public <T extends SkyValue> EvaluationResult<T> evaluate(
-      Iterable<SkyKey> roots,
-      Version version,
-      boolean keepGoing,
-      int numThreads,
-      ExtendedEventHandler eventHandler)
+  public <T extends SkyValue> EvaluationResult<T> evaluate(Iterable<SkyKey> roots, Version version,
+          boolean keepGoing, int numThreads, EventHandler eventHandler)
       throws InterruptedException {
     // NOTE: Performance critical code. See bug "Null build performance parity".
     IntVersion intVersion = (IntVersion) version;
@@ -151,9 +150,6 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
         lastGraphVersion, version);
     setAndCheckEvaluateState(true, roots);
     try {
-      // Mark for removal any inflight nodes from the previous evaluation.
-      valuesToDelete.addAll(progressReceiver.getAndClearInflightKeys());
-
       // The RecordingDifferencer implementation is not quite working as it should be at this point.
       // It clears the internal data structures after getDiff is called and will not return
       // diffs for historical versions. This makes the following code sensitive to interrupts.
@@ -168,6 +164,16 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
       performInvalidation();
       injectValues(intVersion);
 
+      // We must delete all nodes that are still in-flight at the end of the evaluation (in case the
+      // evaluation is aborted for some reason). In order to quickly return control to the caller,
+      // we store the set of such nodes for deletion at the start of the next evaluation.
+      Receiver<Collection<SkyKey>> lazyDeletingReceiver =
+          new Receiver<Collection<SkyKey>>() {
+            @Override
+            public void accept(Collection<SkyKey> skyKeys) {
+              valuesToDelete.addAll(skyKeys);
+            }
+          };
       ParallelEvaluator evaluator =
           new ParallelEvaluator(
               graph,
@@ -178,7 +184,9 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
               DEFAULT_STORED_EVENT_FILTER,
               keepGoing,
               numThreads,
-              progressReceiver);
+              progressReceiver,
+              dirtyKeyTracker,
+              lazyDeletingReceiver);
       EvaluationResult<T> result = evaluator.eval(roots);
       return EvaluationResult.<T>builder()
           .mergeFrom(result)
@@ -227,7 +235,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
       return;
     }
     try {
-      ParallelEvaluator.injectValues(valuesToInject, version, graph, progressReceiver);
+      ParallelEvaluator.injectValues(valuesToInject, version, graph, dirtyKeyTracker);
     } catch (InterruptedException e) {
       throw new IllegalStateException("InMemoryGraph doesn't throw interrupts", e);
     }
@@ -236,13 +244,15 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
   }
 
   private void performInvalidation() throws InterruptedException {
-    EagerInvalidator.delete(graph, valuesToDelete, progressReceiver, deleterState, keepEdges);
+    EagerInvalidator.delete(graph, valuesToDelete, progressReceiver, deleterState, keepEdges,
+        dirtyKeyTracker);
     // Note that clearing the valuesToDelete would not do an internal resizing. Therefore, if any
     // build has a large set of dirty values, subsequent operations (even clearing) will be slower.
     // Instead, just start afresh with a new LinkedHashSet.
     valuesToDelete = new LinkedHashSet<>();
 
-    EagerInvalidator.invalidate(graph, valuesToDirty, progressReceiver, invalidatorState);
+    EagerInvalidator.invalidate(graph, valuesToDirty, progressReceiver, invalidatorState,
+        dirtyKeyTracker);
     // Ditto.
     valuesToDirty = new LinkedHashSet<>();
   }
@@ -378,11 +388,11 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
         public MemoizingEvaluator create(
             ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions,
             Differencer differencer,
-            @Nullable EvaluationProgressReceiver progressReceiver,
+            @Nullable EvaluationProgressReceiver invalidationReceiver,
             EmittedEventState emittedEventState,
             boolean keepEdges) {
           return new InMemoryMemoizingEvaluator(
-              skyFunctions, differencer, progressReceiver, emittedEventState, keepEdges);
+              skyFunctions, differencer, invalidationReceiver, emittedEventState, keepEdges);
         }
       };
 }
