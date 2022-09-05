@@ -171,7 +171,7 @@ public final class AndroidRuleClasses {
   public static final LateBoundLabel<BuildConfiguration> ANDROID_SDK =
       new LateBoundLabel<BuildConfiguration>(DEFAULT_ANDROID_SDK, AndroidConfiguration.class) {
         @Override
-        public Label resolve(Rule rule, AttributeMap attributes,
+        public Label getDefault(Rule rule, AttributeMap attributes,
             BuildConfiguration configuration) {
           return configuration.getFragment(AndroidConfiguration.class).getSdk();
         }
@@ -370,6 +370,10 @@ public final class AndroidRuleClasses {
               attr(":java_toolchain", LABEL)
                   .allowedRuleClasses("java_toolchain")
                   .value(JavaSemantics.JAVA_TOOLCHAIN))
+          .add(
+              attr("$javac_bootclasspath", LABEL)
+                  .cfg(HOST)
+                  .value(environment.getLabel(JavaSemantics.JAVAC_BOOTCLASSPATH_LABEL)))
           .build();
     }
 

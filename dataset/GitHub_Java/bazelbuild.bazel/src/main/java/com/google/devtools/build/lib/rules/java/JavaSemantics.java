@@ -91,7 +91,7 @@ public interface JavaSemantics {
   LateBoundLabel<BuildConfiguration> JAVA_TOOLCHAIN =
       new LateBoundLabel<BuildConfiguration>(JAVA_TOOLCHAIN_LABEL, JavaConfiguration.class) {
         @Override
-        public Label resolve(Rule rule, AttributeMap attributes,
+        public Label getDefault(Rule rule, AttributeMap attributes,
             BuildConfiguration configuration) {
           return configuration.getFragment(JavaConfiguration.class).getToolchainLabel();
         }
@@ -111,6 +111,32 @@ public interface JavaSemantics {
       OutputGroupProvider.HIDDEN_OUTPUT_GROUP_PREFIX + "gen_jars";
 
   /**
+   * Label of a pseudo-filegroup that contains the boot-classpath entries.
+   */
+  String JAVAC_BOOTCLASSPATH_LABEL = "//tools/defaults:javac_bootclasspath";
+
+  /**
+   * Label of the javac extdir used for compiling Java source code.
+   */
+  String JAVAC_EXTDIR_LABEL = "//tools/defaults:javac_extdir";
+
+  /**
+   * Label of the JavaBuilder JAR used for compiling Java source code.
+   */
+  String JAVABUILDER_LABEL = "//tools/defaults:javabuilder";
+
+  /**
+   * Label of the SingleJar JAR used for creating deploy jars.
+   */
+  String SINGLEJAR_LABEL = "//tools/defaults:singlejar";
+
+  /**
+   * Label of the GenClass JAR used for creating the jar for classes from sources generated from
+   * annotation processors.
+   */
+  String GENCLASS_LABEL = "//tools/defaults:genclass";
+
+  /**
    * Label of pseudo-cc_binary that tells Blaze a java target's JAVABIN is never to be replaced by
    * the contents of --java_launcher; only the JDK's launcher will ever be used.
    */
@@ -123,7 +149,7 @@ public interface JavaSemantics {
   LateBoundLabel<BuildConfiguration> JVM =
       new LateBoundLabel<BuildConfiguration>(JavaImplicitAttributes.JDK_LABEL, Jvm.class) {
         @Override
-        public Label resolve(Rule rule, AttributeMap attributes,
+        public Label getDefault(Rule rule, AttributeMap attributes,
             BuildConfiguration configuration) {
           return configuration.getFragment(Jvm.class).getJvmLabel();
         }
@@ -140,7 +166,7 @@ public interface JavaSemantics {
         }
 
         @Override
-        public Label resolve(Rule rule, AttributeMap attributes,
+        public Label getDefault(Rule rule, AttributeMap attributes,
             BuildConfiguration configuration) {
           return configuration.getFragment(Jvm.class).getJvmLabel();
         }
@@ -153,7 +179,7 @@ public interface JavaSemantics {
   LateBoundLabel<BuildConfiguration> JAVA_LAUNCHER =
       new LateBoundLabel<BuildConfiguration>(JavaConfiguration.class) {
         @Override
-        public Label resolve(Rule rule, AttributeMap attributes,
+        public Label getDefault(Rule rule, AttributeMap attributes,
             BuildConfiguration configuration) {
           return configuration.getFragment(JavaConfiguration.class).getJavaLauncherLabel();
         }
@@ -162,7 +188,7 @@ public interface JavaSemantics {
   LateBoundLabelList<BuildConfiguration> JAVA_PLUGINS =
       new LateBoundLabelList<BuildConfiguration>() {
         @Override
-        public List<Label> resolve(Rule rule, AttributeMap attributes,
+        public List<Label> getDefault(Rule rule, AttributeMap attributes,
             BuildConfiguration configuration) {
           return ImmutableList.copyOf(configuration.getPlugins());
         }
@@ -174,7 +200,7 @@ public interface JavaSemantics {
   LateBoundLabel<BuildConfiguration> PROGUARD =
       new LateBoundLabel<BuildConfiguration>(JavaConfiguration.class) {
         @Override
-        public Label resolve(Rule rule, AttributeMap attributes,
+        public Label getDefault(Rule rule,  AttributeMap attributes,
             BuildConfiguration configuration) {
           return configuration.getFragment(JavaConfiguration.class).getProguardBinary();
         }
@@ -183,7 +209,7 @@ public interface JavaSemantics {
   LateBoundLabelList<BuildConfiguration> EXTRA_PROGUARD_SPECS =
       new LateBoundLabelList<BuildConfiguration>() {
         @Override
-        public List<Label> resolve(Rule rule, AttributeMap attributes,
+        public List<Label> getDefault(Rule rule, AttributeMap attributes,
             BuildConfiguration configuration) {
           return ImmutableList.copyOf(
               configuration.getFragment(JavaConfiguration.class).getExtraProguardSpecs());
