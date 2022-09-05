@@ -17,17 +17,18 @@ import static java.lang.Math.sqrt;
 /**
  * A metric which calculates the distribution of a value.
  *
- * @see <a href="http://www.johndcook.com/standard_deviation.html">Accurately computing running
- *      variance</a>
+ * @see <a href="http://www.johndcook.com/standard_deviation.html">Accurately
+ * computing running variance</a>
  */
-public class HistogramMetric implements Metric, Percentiled, Summarized {
+public class HistogramMetric implements Metric {
     /**
      * The type of sampling the histogram should be performing.
      */
     public enum SampleType {
         /**
-         * Uses a uniform sample of 1028 elements, which offers a 99.9% confidence level with a 5%
-         * margin of error assuming a normal distribution.
+         * Uses a uniform sample of 1028 elements, which offers a 99.9%
+         * confidence level with a 5% margin of error assuming a normal
+         * distribution.
          */
         UNIFORM {
             @Override
@@ -37,9 +38,10 @@ public class HistogramMetric implements Metric, Percentiled, Summarized {
         },
 
         /**
-         * Uses an exponentially decaying sample of 1028 elements, which offers a 99.9% confidence
-         * level with a 5% margin of error assuming a normal distribution, and an alpha factor of
-         * 0.015, which heavily biases the sample to the past 5 minutes of measurements.
+         * Uses an exponentially decaying sample of 1028 elements, which offers
+         * a 99.9% confidence level with a 5% margin of error assuming a normal
+         * distribution, and an alpha factor of 0.015, which heavily biases
+         * the sample to the past 5 minutes of measurements.
          */
         BIASED {
             @Override
@@ -89,7 +91,7 @@ public class HistogramMetric implements Metric, Percentiled, Summarized {
         _max.set(Long.MIN_VALUE);
         _min.set(Long.MAX_VALUE);
         _sum.set(0);
-        variance.set(new double[]{-1, 0});
+        variance.set(new double[] { -1, 0 });
     }
 
     /**
@@ -120,14 +122,13 @@ public class HistogramMetric implements Metric, Percentiled, Summarized {
      *
      * @return the number of values recorded
      */
-    public long count() {
-        return count.get();
-    }
+    public long count() { return count.get(); }
 
-    /* (non-Javadoc)
-     * @see com.yammer.metrics.core.Summarized#max()
+    /**
+     * Returns the largest recorded value.
+     *
+     * @return the largest recorded value
      */
-    @Override
     public double max() {
         if (count() > 0) {
             return _max.get();
@@ -135,10 +136,11 @@ public class HistogramMetric implements Metric, Percentiled, Summarized {
         return 0.0;
     }
 
-    /* (non-Javadoc)
-     * @see com.yammer.metrics.core.Summarized#min()
+    /**
+     * Returns the smallest recorded value.
+     *
+     * @return the smallest recorded value
      */
-    @Override
     public double min() {
         if (count() > 0) {
             return _min.get();
@@ -146,10 +148,11 @@ public class HistogramMetric implements Metric, Percentiled, Summarized {
         return 0.0;
     }
 
-    /* (non-Javadoc)
-     * @see com.yammer.metrics.core.Summarized#mean()
+    /**
+     * Returns the arithmetic mean of all recorded values.
+     *
+     * @return the arithmetic mean of all recorded values
      */
-    @Override
     public double mean() {
         if (count() > 0) {
             return _sum.get() / (double) count();
@@ -157,10 +160,11 @@ public class HistogramMetric implements Metric, Percentiled, Summarized {
         return 0.0;
     }
 
-    /* (non-Javadoc)
-     * @see com.yammer.metrics.core.Summarized#stdDev()
+    /**
+     * Returns the standard deviation of all recorded values.
+     *
+     * @return the standard deviation of all recorded values
      */
-    @Override
     public double stdDev() {
         if (count() > 0) {
             return sqrt(variance());
@@ -171,10 +175,9 @@ public class HistogramMetric implements Metric, Percentiled, Summarized {
     /**
      * Returns the value at the given percentile.
      *
-     * @param percentile a percentile ({@code 0..1})
+     * @param percentile    a percentile ({@code 0..1})
      * @return the value at the given percentile
      */
-    @Override
     public double percentile(double percentile) {
         return percentiles(percentile)[0];
     }
@@ -185,9 +188,8 @@ public class HistogramMetric implements Metric, Percentiled, Summarized {
      * @param percentiles one or more percentiles ({@code 0..1})
      * @return an array of values at the given percentiles
      */
-    @Override
-    public Double[] percentiles(Double... percentiles) {
-        final Double[] scores = new Double[percentiles.length];
+    public double[] percentiles(double... percentiles) {
+        final double[] scores = new double[percentiles.length];
         for (int i = 0; i < scores.length; i++) {
             scores[i] = 0.0;
 
@@ -201,9 +203,9 @@ public class HistogramMetric implements Metric, Percentiled, Summarized {
                 final double p = percentiles[i];
                 final double pos = p * (values.size() + 1);
                 if (pos < 1) {
-                    scores[i] = Double.valueOf(values.get(0));
+                    scores[i] = values.get(0);
                 } else if (pos >= values.size()) {
-                    scores[i] = Double.valueOf(values.get(values.size() - 1));
+                    scores[i] = values.get(values.size() - 1);
                 } else {
                     final double lower = values.get((int) pos - 1);
                     final double upper = values.get((int) pos);
@@ -261,12 +263,11 @@ public class HistogramMetric implements Metric, Percentiled, Summarized {
      * Cache arrays for the variance calculation, so as to avoid memory allocation.
      */
     private final ThreadLocal<double[]> arrayCache =
-            new ThreadLocal<double[]>() {
-                @Override
-                protected double[] initialValue() {
-                    return new double[2];
-                }
-            };
+        new ThreadLocal<double[]>() {
+            @Override protected double[] initialValue() {
+                return new double [2];
+            }
+        };       
 
     private void updateVariance(long value) {
         boolean done = false;
@@ -292,10 +293,5 @@ public class HistogramMetric implements Metric, Percentiled, Summarized {
                 arrayCache.set(oldValues);
             }
         }
-    }
-
-    @Override
-    public <T> void processWith(MetricsProcessor<T> processor, MetricName name, T context) throws Exception {
-        processor.processHistogram(name, this, context);
     }
 }
