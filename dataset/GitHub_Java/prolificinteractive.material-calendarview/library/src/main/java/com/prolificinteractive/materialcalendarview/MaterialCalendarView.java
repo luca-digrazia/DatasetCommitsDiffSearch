@@ -13,13 +13,10 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.util.SparseArray;
 import android.util.TypedValue;
-import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.prolificinteractive.materialcalendarview.format.ArrayWeekDayFormatter;
@@ -49,12 +46,12 @@ import java.util.LinkedList;
  * {@linkplain com.prolificinteractive.materialcalendarview.OnDateChangedListener}
  * </p>
  *
- * @see R.styleable#MaterialCalendarView_mcv_arrowColor
- * @see R.styleable#MaterialCalendarView_mcv_selectionColor
- * @see R.styleable#MaterialCalendarView_mcv_headerTextAppearance
- * @see R.styleable#MaterialCalendarView_mcv_dateTextAppearance
- * @see R.styleable#MaterialCalendarView_mcv_weekDayTextAppearance
- * @see R.styleable#MaterialCalendarView_mcv_showOtherDates
+ * @see R.styleable#MaterialCalendarView_arrowColor
+ * @see R.styleable#MaterialCalendarView_selectionColor
+ * @see R.styleable#MaterialCalendarView_headerTextAppearance
+ * @see R.styleable#MaterialCalendarView_dateTextAppearance
+ * @see R.styleable#MaterialCalendarView_weekDayTextAppearance
+ * @see R.styleable#MaterialCalendarView_showOtherDates
  */
 public class MaterialCalendarView extends FrameLayout {
 
@@ -82,9 +79,10 @@ public class MaterialCalendarView extends FrameLayout {
     private final OnClickListener onClickListener = new OnClickListener() {
         @Override
         public void onClick(View v) {
-            if(v == buttonFuture) {
+            int id = v.getId();
+            if(id == R.id.cw__calendar_widget_button_forward) {
                 pager.setCurrentItem(pager.getCurrentItem() + 1, true);
-            } else if(v == buttonPast) {
+            } else if(id == R.id.cw__calendar_widget_button_backwards) {
                 pager.setCurrentItem(pager.getCurrentItem() - 1, true);
             }
         }
@@ -121,12 +119,12 @@ public class MaterialCalendarView extends FrameLayout {
         setClipChildren(false);
         setClipToPadding(false);
 
-        buttonPast = new DirectionButton(getContext());
-        title = new TextView(getContext());
-        buttonFuture = new DirectionButton(getContext());
-        pager = new ViewPager(getContext());
+        LayoutInflater.from(getContext()).inflate(R.layout.cw__calendar_widget, this);
 
-        setupChildren();
+        title = (TextView) findViewById(R.id.cw__calendar_widget_title);
+        buttonPast = (DirectionButton) findViewById(R.id.cw__calendar_widget_button_backwards);
+        buttonFuture = (DirectionButton) findViewById(R.id.cw__calendar_widget_button_forward);
+        pager = (ViewPager) findViewById(R.id.cw__pager);
 
         title.setOnClickListener(onClickListener);
         buttonPast.setOnClickListener(onClickListener);
@@ -149,41 +147,41 @@ public class MaterialCalendarView extends FrameLayout {
                 .obtainStyledAttributes(attrs, R.styleable.MaterialCalendarView, 0, 0);
         try {
             setArrowColor(a.getColor(
-                R.styleable.MaterialCalendarView_mcv_arrowColor,
+                R.styleable.MaterialCalendarView_arrowColor,
                 Color.BLACK
             ));
             setSelectionColor(
                 a.getColor(
-                    R.styleable.MaterialCalendarView_mcv_selectionColor,
+                    R.styleable.MaterialCalendarView_selectionColor,
                     getThemeAccentColor(context)
                 )
             );
 
-            CharSequence[] array = a.getTextArray(R.styleable.MaterialCalendarView_mcv_weekDayLabels);
+            CharSequence[] array = a.getTextArray(R.styleable.MaterialCalendarView_weekDayLabels);
             if(array != null) {
                 setWeekDayFormatter(new ArrayWeekDayFormatter(array));
             }
 
-            array = a.getTextArray(R.styleable.MaterialCalendarView_mcv_monthLabels);
+            array = a.getTextArray(R.styleable.MaterialCalendarView_monthLabels);
             if(array != null) {
                 setTitleFormatter(new MonthArrayTitleFormatter(array));
             }
 
             setHeaderTextAppearance(a.getResourceId(
-                    R.styleable.MaterialCalendarView_mcv_headerTextAppearance,
+                    R.styleable.MaterialCalendarView_headerTextAppearance,
                     R.style.TextAppearance_MaterialCalendarWidget_Header
             ));
             setWeekDayTextAppearance(a.getResourceId(
-                    R.styleable.MaterialCalendarView_mcv_weekDayTextAppearance,
-                    R.style.TextAppearance_MaterialCalendarWidget_WeekDay
+                R.styleable.MaterialCalendarView_weekDayTextAppearance,
+                R.style.TextAppearance_MaterialCalendarWidget_WeekDay
             ));
             setDateTextAppearance(a.getResourceId(
-                    R.styleable.MaterialCalendarView_mcv_dateTextAppearance,
-                    R.style.TextAppearance_MaterialCalendarWidget_Date
+                R.styleable.MaterialCalendarView_dateTextAppearance,
+                R.style.TextAppearance_MaterialCalendarWidget_Date
             ));
             setShowOtherDates(a.getBoolean(
-                    R.styleable.MaterialCalendarView_mcv_showOtherDates,
-                    false
+                R.styleable.MaterialCalendarView_showOtherDates,
+                false
             ));
         }
         catch (Exception e) {
@@ -195,41 +193,6 @@ public class MaterialCalendarView extends FrameLayout {
 
         currentMonth = new CalendarDay();
         setCurrentDate(currentMonth);
-    }
-
-    private void setupChildren() {
-        int buttonSize = getResources().getDimensionPixelSize(R.dimen.mcv_default_day_size);
-
-        LinearLayout root = new LinearLayout(getContext());
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setWeightSum(8);
-        root.setClipChildren(false);
-        root.setClipToPadding(false);
-        LayoutParams p = new LayoutParams(buttonSize * 7, buttonSize * 8);
-        p.gravity = Gravity.CENTER;
-        addView(root, p);
-
-        LinearLayout topbar = new LinearLayout(getContext());
-        topbar.setOrientation(LinearLayout.HORIZONTAL);
-        topbar.setWeightSum(7);
-        topbar.setClipChildren(false);
-        topbar.setClipToPadding(false);
-        root.addView(topbar, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 1));
-
-        buttonPast.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        buttonPast.setImageResource(R.drawable.mcv_action_previous);
-        topbar.addView(buttonPast, new LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1));
-
-        title.setGravity(Gravity.CENTER);
-        topbar.addView(title, new LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 5));
-
-        buttonFuture.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        buttonFuture.setImageResource(R.drawable.mcv_action_next);
-        topbar.addView(buttonFuture, new LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1));
-
-        pager.setId(R.id.mcv_pager);
-        pager.setOffscreenPageLimit(1);
-        root.addView(pager, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 7));
     }
 
     /**
@@ -647,7 +610,7 @@ public class MaterialCalendarView extends FrameLayout {
 
     private static class MonthPagerAdapter extends PagerAdapter {
 
-        private static final int TAG_ITEM = R.id.mcv_pager;
+        private static final int TAG_ITEM = R.id.cw__pager;
 
         private final MaterialCalendarView view;
         private final LayoutInflater inflater;
@@ -716,7 +679,8 @@ public class MaterialCalendarView extends FrameLayout {
         @Override
         public Object instantiateItem(ViewGroup container, int position) {
             CalendarDay month = months.get(position);
-            MonthView monthView = new MonthView(container.getContext());
+            MonthView monthView =
+                (MonthView) inflater.inflate(R.layout.cw__month_view, container, false);
             monthView.setTag(TAG_ITEM, month);
 
             monthView.setWeekDayFormatter(weekDayFormatter);
