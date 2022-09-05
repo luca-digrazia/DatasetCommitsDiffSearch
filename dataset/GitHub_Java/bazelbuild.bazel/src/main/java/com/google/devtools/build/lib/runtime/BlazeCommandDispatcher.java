@@ -46,6 +46,7 @@ import com.google.devtools.common.options.OpaqueOptionsData;
 import com.google.devtools.common.options.OptionPriority;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -57,6 +58,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
+
 import javax.annotation.Nullable;
 
 /**
@@ -494,7 +496,9 @@ public class BlazeCommandDispatcher {
       e.printStackTrace();
       BugReport.printBug(outErr, e);
       BugReport.sendBugReport(e, args, crashData);
-      numericExitCode = BugReport.getExitCodeForThrowable(e);
+      numericExitCode = e instanceof OutOfMemoryError
+          ? ExitCode.OOM_ERROR.getNumericExitCode()
+          : ExitCode.BLAZE_INTERNAL_ERROR.getNumericExitCode();
       throw new ShutdownBlazeServerException(numericExitCode, ShutdownMethod.CLEAN, e);
     } finally {
       env.getEventBus().post(new AfterCommandEvent());

@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.runtime;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.Subscribe;
 import com.google.common.primitives.Bytes;
-import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
 import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
@@ -40,13 +39,15 @@ import com.google.devtools.build.lib.util.io.LoggingTerminalWriter;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
+
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.logging.Logger;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
 
 /** An experimental new output stream. */
 public class ExperimentalEventHandler implements EventHandler {
@@ -310,37 +311,31 @@ public class ExperimentalEventHandler implements EventHandler {
   }
 
   @Subscribe
-  public void buildComplete(BuildCompleteEvent event) {
+  public synchronized void buildComplete(BuildCompleteEvent event) {
     // The final progress bar will flow into the scroll-back buffer, to if treat
     // it as an event and add a time stamp, if events are supposed to have a time stmap.
-    synchronized (this) {
-      if (showTimestamp) {
-        stateTracker.buildComplete(event, TIMESTAMP_FORMAT.print(clock.currentTimeMillis()));
-      } else {
-        stateTracker.buildComplete(event);
-      }
-      ignoreRefreshLimitOnce();
-      refresh();
-      buildComplete = true;
+    if (showTimestamp) {
+      stateTracker.buildComplete(event, TIMESTAMP_FORMAT.print(clock.currentTimeMillis()));
+    } else {
+      stateTracker.buildComplete(event);
     }
+    ignoreRefreshLimitOnce();
+    refresh();
+    buildComplete = true;
     stopUpdateThread();
     flushStdOutStdErrBuffers();
   }
 
   @Subscribe
-  public void noBuild(NoBuildEvent event) {
-    synchronized (this) {
-      buildComplete = true;
-    }
+  public synchronized void noBuild(NoBuildEvent event) {
+    buildComplete = true;
     stopUpdateThread();
     flushStdOutStdErrBuffers();
   }
 
   @Subscribe
-  public void afterCommand(AfterCommandEvent event) {
-    synchronized (this) {
-      buildComplete = true;
-    }
+  public synchronized void afterCommand(AfterCommandEvent event) {
+    buildComplete = true;
     stopUpdateThread();
   }
 
@@ -427,7 +422,7 @@ public class ExperimentalEventHandler implements EventHandler {
     }
   }
 
-  private void doRefresh(boolean fromUpdateThread) {
+  private void doRefresh() {
     if (buildComplete) {
       return;
     }
@@ -449,14 +444,8 @@ public class ExperimentalEventHandler implements EventHandler {
       // We skipped an update due to rate limiting. If this however, turned
       // out to be the last update for a long while, we need to show it in a
       // timely manner, as it best describes the current state.
-      if (!fromUpdateThread) {
-        startUpdateThread();
-      }
+      startUpdateThread();
     }
-  }
-
-  private void doRefresh() {
-    doRefresh(false);
   }
 
   private void refreshSoon() {
@@ -517,7 +506,7 @@ public class ExperimentalEventHandler implements EventHandler {
                             && mustRefreshAfterMillis < clock.currentTimeMillis()) {
                           progressBarNeedsRefresh = true;
                         }
-                        eventHandler.doRefresh(/* fromUpdateThread= */ true);
+                        eventHandler.doRefresh();
                       }
                     } catch (InterruptedException e) {
                       // Ignore
@@ -542,7 +531,18 @@ public class ExperimentalEventHandler implements EventHandler {
     }
     if (threadToWaitFor != null) {
       threadToWaitFor.interrupt();
-      Uninterruptibles.joinUninterruptibly(threadToWaitFor);
+      boolean gotInterrupted = false;
+      while (true) {
+        try {
+          threadToWaitFor.join();
+          break;
+        } catch (InterruptedException e) {
+          gotInterrupted = true;
+        }
+      }
+      if (gotInterrupted) {
+        Thread.currentThread().interrupt();
+      }
     }
   }
 
