@@ -107,9 +107,6 @@ final class TestSuiteExpansionFunction implements SkyFunction {
       }
       try {
         builder.add(pkg.getTarget(label.getName()));
-        if (pkg.containsErrors()) {
-          builder.setError();
-        }
       } catch (NoSuchTargetException e) {
         builder.setError();
       }
