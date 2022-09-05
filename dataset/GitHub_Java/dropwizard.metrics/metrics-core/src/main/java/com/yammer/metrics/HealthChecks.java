@@ -2,7 +2,6 @@ package com.yammer.metrics;
 
 import com.yammer.metrics.core.HealthCheck;
 import com.yammer.metrics.core.HealthCheck.Result;
-import com.yammer.metrics.core.HealthCheckRegistry;
 
 import java.util.Map;
 
@@ -34,7 +33,6 @@ public class HealthChecks {
 
     /**
      * Returns the (static) default registry.
-     *
      * @return the registry
      */
     public static HealthCheckRegistry defaultRegistry() {
