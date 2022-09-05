@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -84,9 +84,7 @@ public final class RecursiveFilesystemTraversalFunction implements SkyFunction {
     public final String unresolvedLink;
 
     public DanglingSymlinkException(String path, String unresolvedLink) {
-      super(
-          String.format(
-              "Found dangling symlink: %s, unresolved path: \"%s\"", path, unresolvedLink));
+      super("Found dangling symlink: " + path + ", unresolved path: ");
       Preconditions.checkArgument(path != null && !path.isEmpty());
       Preconditions.checkArgument(unresolvedLink != null && !unresolvedLink.isEmpty());
       this.path = path;
