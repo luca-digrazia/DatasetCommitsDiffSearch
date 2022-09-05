@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -25,7 +26,6 @@ import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.io.IOException;
@@ -202,7 +202,7 @@ public class ActionCacheChecker {
     } else if (validateArtifacts(entry, action, actionInputs, metadataHandler, true)) {
       reportChanged(handler, action);
       return true; // files have changed
-    } else if (!entry.getActionKey().equals(action.getKey())) {
+    } else if (!entry.getActionKey().equals(action.getKey())){
       reportCommand(handler, action);
       return true; // must execute -- action key is different
     }
@@ -219,8 +219,7 @@ public class ActionCacheChecker {
       // This cache entry has already been updated by a shared action. We don't need to do it again.
       return;
     }
-    ActionCache.Entry entry =
-        actionCache.createEntry(action.getKey(), action.discoversInputs());
+    ActionCache.Entry entry = actionCache.createEntry(action.getKey());
     for (Artifact output : action.getOutputs()) {
       // Remove old records from the cache if they used different key.
       String execPath = output.getExecPathString();
@@ -298,7 +297,7 @@ public class ActionCacheChecker {
       // Compute the aggregated middleman digest.
       // Since we never validate action key for middlemen, we should not store
       // it in the cache entry and just use empty string instead.
-      entry = actionCache.createEntry("", false);
+      entry = actionCache.createEntry("");
       for (Artifact input : action.getInputs()) {
         entry.addFile(input.getExecPath(), metadataHandler.getMetadataMaybe(input));
       }
