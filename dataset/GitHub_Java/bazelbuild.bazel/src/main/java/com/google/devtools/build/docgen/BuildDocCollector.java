@@ -44,13 +44,10 @@ import java.util.TreeMap;
 public class BuildDocCollector {
   private static final Splitter SHARP_SPLITTER = Splitter.on('#').limit(2).trimResults();
 
-  private final String productName;
-  private final ConfiguredRuleClassProvider ruleClassProvider;
-  private final boolean printMessages;
+  private ConfiguredRuleClassProvider ruleClassProvider;
+  private boolean printMessages;
 
-  public BuildDocCollector(
-      String productName, ConfiguredRuleClassProvider ruleClassProvider, boolean printMessages) {
-    this.productName = productName;
+  public BuildDocCollector(ConfiguredRuleClassProvider ruleClassProvider, boolean printMessages) {
     this.ruleClassProvider = ruleClassProvider;
     this.printMessages = printMessages;
   }
@@ -163,7 +160,8 @@ public class BuildDocCollector {
    */
   public Map<String, RuleDocumentation> collect(List<String> inputDirs, String blackList)
       throws BuildEncyclopediaDocException, IOException {
-    RuleLinkExpander expander = new RuleLinkExpander(productName, /* singlePage */ false);
+    RuleLinkExpander expander = new RuleLinkExpander(
+        ruleClassProvider.getProductName(), /* singlePage */ false);
     return collect(inputDirs, blackList, expander);
   }
 
@@ -214,17 +212,6 @@ public class BuildDocCollector {
                 }
               }
               if (bestAttributeDoc != null) {
-                try {
-                  // We have to clone the matching RuleDocumentationAttribute here so that we don't
-                  // overwrite the reference to the actual attribute later by another attribute with
-                  // the same ancestor but different default values.
-                  bestAttributeDoc = (RuleDocumentationAttribute) bestAttributeDoc.clone();
-                } catch (CloneNotSupportedException e) {
-                  throw new BuildEncyclopediaDocException(
-                      bestAttributeDoc.getFileName(),
-                      bestAttributeDoc.getStartLineCnt(),
-                      "attribute doesn't support clone: " + e.toString());
-                }
                 // Add reference to the Attribute that the attribute doc is associated with
                 // in order to generate documentation for the Attribute.
                 bestAttributeDoc.setAttribute(attribute);
