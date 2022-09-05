@@ -1,40 +1,36 @@
 package org.nlpcn.es4sql.domain;
 
+import org.nlpcn.es4sql.domain.hints.Hint;
+import org.nlpcn.es4sql.parse.SubQueryExpression;
+
+import java.sql.Array;
 import java.util.ArrayList;
-import java.util.LinkedList;
+import java.util.Arrays;
 import java.util.List;
-
-import org.nlpcn.commons.lang.util.StringUtil;
-import org.nlpcn.es4sql.exception.SqlParseException;
-
-import com.alibaba.druid.sql.ast.SQLExpr;
-import com.alibaba.druid.sql.ast.expr.SQLAggregateExpr.Option;
-import com.alibaba.druid.sql.ast.expr.SQLIdentifierExpr;
 
 /**
  * 将sql语句转换为select 对象
  * 
  * @author ansj
  */
-public class Select {
+public class Select extends Query {
 
-	private List<Index> indexs = new LinkedList<>();
-	private List<Field> fields = new LinkedList<>();
-	private Where where = null;
-	private List<String> groupBys = new LinkedList<>();
-	private List<Order> orderBys = new LinkedList<>();
+	// Using this functions, will cause query to execute as aggregation.
+	private final List<String> aggsFunctions = Arrays.asList("SUM", "MAX", "MIN", "AVG", "TOPHITS", "COUNT", "STATS","EXTENDED_STATS","PERCENTILES","SCRIPTED_METRIC");
+    private List<Hint> hints = new ArrayList<>();
+	private List<Field> fields = new ArrayList<>();
+	private List<List<Field>> groupBys = new ArrayList<>();
+	private List<Order> orderBys = new ArrayList<>();
 	private int offset;
-	private int rowCount = Integer.MAX_VALUE;
-
+	private int rowCount = 200;
+    private boolean containsSubQueries;
+    private List<SubQueryExpression> subQueries;
 	public boolean isQuery = false;
+    private boolean selectAll = false;
 
 	public boolean isAgg = false;
 
 	public Select() {
-	}
-
-	public List<Index> getIndexs() {
-		return indexs;
 	}
 
 	public List<Field> getFields() {
@@ -49,29 +45,18 @@ public class Select {
 		this.rowCount = rowCount;
 	}
 
-	public void addIndexAndType(String from) {
-		if (StringUtil.isBlank(from)) {
-			return;
-		}
-		indexs.add(new Index(from));
+	public void addGroupBy(Field field) {
+		List<Field> wrapper = new ArrayList<>();
+		wrapper.add(field);
+		addGroupBy(wrapper);
 	}
 
-	public void addGroupBy(String field) {
-		if (StringUtil.isNotBlank(field)) {
-			isAgg = true;
-			this.groupBys.add(field);
-		}
+	public void addGroupBy(List<Field> fields) {
+		isAgg = true;
+		this.groupBys.add(fields);
 	}
 
-	public Where getWhere() {
-		return this.where;
-	}
-
-	public void setWhere(Where where) {
-		this.where = where;
-	}
-
-	public List<String> getGroupBys() {
+	public List<List<Field>> getGroupBys() {
 		return groupBys;
 	}
 
@@ -94,46 +79,71 @@ public class Select {
 		this.orderBys.add(new Order(name, type));
 	}
 
-	public String[] getIndexArr() {
-		String[] indexArr = new String[this.indexs.size()];
-		for (int i = 0; i < indexArr.length; i++) {
-			indexArr[i] = this.indexs.get(i).getIndex();
-		}
-		return indexArr;
-	}
 
-	public String[] getTypeArr() {
-		List<String> list = new ArrayList<>();
-		Index index = null;
-		for (int i = 0; i < indexs.size(); i++) {
-			index = indexs.get(i);
-			if (index.getType() != null && !"*".equals(index.getType())) {
-				list.add(index.getType());
-			}
-		}
-		if (list.size() == 0) {
-			return null;
-		}
-
-		return list.toArray(new String[list.size()]);
-	}
-
-	public void addField(String name, String alias) {
-		if ("*".equals(name) || StringUtil.isBlank(name)) {
+	public void addField(Field field) {
+		if (field == null ) {
 			return;
 		}
-		fields.add(new Field(name, alias));
+        if(field.getName().equals("*")){
+            this.selectAll = true;
+        }
+
+		if(field instanceof  MethodField && aggsFunctions.contains(field.getName().toUpperCase())) {
+			isAgg = true;
+		}
+
+		fields.add(field);
 	}
 
-	public void addField(String name, List<SQLExpr> arguments, String alias) throws SqlParseException {
-		isAgg = true ;
-		fields.add(MethodField.makeField(name, arguments, null,alias));
-	}
-	
-	public void addField(String name, List<SQLExpr> arguments, Option option ,String alias) throws SqlParseException {
-		isAgg = true ;
-		fields.add(MethodField.makeField(name, arguments, option==null?null:option.name(),alias));
-	}
+    public List<Hint> getHints() {
+        return hints;
+    }
 
 
+    public void fillSubQueries() {
+        subQueries = new ArrayList<>();
+        Where where = this.getWhere();
+        fillSubQueriesFromWhereRecursive(where);
+    }
+
+    private void fillSubQueriesFromWhereRecursive(Where where) {
+        if(where == null) return;
+        if(where instanceof Condition){
+            Condition condition = (Condition) where;
+            if ( condition.getValue() instanceof SubQueryExpression){
+                this.subQueries.add((SubQueryExpression) condition.getValue());
+                this.containsSubQueries = true;
+            }
+            if(condition.getValue() instanceof Object[]){
+
+                for(Object o : (Object[]) condition.getValue()){
+                    if ( o instanceof SubQueryExpression){
+                        this.subQueries.add((SubQueryExpression) o);
+                        this.containsSubQueries = true;
+                    }
+                }
+            }
+        }
+        else {
+            for(Where innerWhere : where.getWheres())
+                fillSubQueriesFromWhereRecursive(innerWhere);
+        }
+    }
+
+    public boolean containsSubQueries() {
+        return containsSubQueries;
+    }
+
+    public List<SubQueryExpression> getSubQueries() {
+        return subQueries;
+    }
+
+    public boolean isOrderdSelect(){
+        return this.getOrderBys()!=null && this.getOrderBys().size() >0 ;
+    }
+
+    public boolean isSelectAll() {
+        return selectAll;
+    }
 }
+

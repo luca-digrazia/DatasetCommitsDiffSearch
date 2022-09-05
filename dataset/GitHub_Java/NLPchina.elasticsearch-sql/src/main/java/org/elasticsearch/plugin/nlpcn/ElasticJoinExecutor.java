@@ -5,7 +5,7 @@ import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.common.text.Text;
+import org.elasticsearch.common.text.StringText;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
@@ -18,8 +18,6 @@ import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.internal.InternalSearchHit;
 import org.elasticsearch.search.internal.InternalSearchHits;
-import org.elasticsearch.search.sort.FieldSortBuilder;
-import org.elasticsearch.search.sort.SortOrder;
 import org.nlpcn.es4sql.domain.Field;
 import org.nlpcn.es4sql.exception.SqlParseException;
 import org.nlpcn.es4sql.query.SqlElasticRequestBuilder;
@@ -34,7 +32,7 @@ import java.util.*;
 /**
  * Created by Eliran on 15/9/2015.
  */
-public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
+public abstract class ElasticJoinExecutor {
     protected SearchHits results ;
     protected MetaSearchResult metaResults;
     protected final int MAX_RESULTS_ON_ONE_FETCH = 10000;
@@ -52,7 +50,7 @@ public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
 
     public void  sendResponse(RestChannel channel){
         try {
-            String json = ElasticUtils.hitsAsStringResult(results,metaResults);
+            String json = resultAsString();
             BytesRestResponse bytesRestResponse = new BytesRestResponse(RestStatus.OK, json);
             channel.sendResponse(bytesRestResponse);
         } catch (IOException e) {
@@ -70,6 +68,37 @@ public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
         this.metaResults.setTookImMilli(joinTimeInMilli);
     }
 
+    //use our deserializer instead of results toXcontent because the source field is differnet from sourceAsMap.
+    public String resultAsString() throws IOException {
+        if(this.results == null) return null;
+        Object[] searchHits;
+        searchHits = new Object[(int) this.results.totalHits()];
+        int i = 0;
+        for(SearchHit hit : this.results) {
+            HashMap<String,Object> value = new HashMap<>();
+            value.put("_id",hit.getId());
+            value.put("_type", hit.getType());
+            value.put("_score", hit.score());
+            value.put("_source", hit.sourceAsMap());
+            searchHits[i] = value;
+            i++;
+        }
+        HashMap<String,Object> hits = new HashMap<>();
+        hits.put("total",this.results.totalHits());
+        hits.put("max_score",this.results.maxScore());
+        hits.put("hits",searchHits);
+        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON).prettyPrint();
+        builder.startObject();
+        builder.field("took", metaResults.getTookImMilli());
+        builder.field("timed_out",metaResults.isTimedOut());
+        builder.field("_shards", ImmutableMap.of("total", metaResults.getTotalNumOfShards(),
+                "successful", metaResults.getSuccessfulShards()
+                , "failed", metaResults.getFailedShards()));
+        builder.field("hits",hits) ;
+        builder.endObject();
+
+        return builder.string();
+    }
 
     protected abstract List<InternalSearchHit> innerRun() throws IOException, SqlParseException ;
 
@@ -168,7 +197,7 @@ public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
 
     protected InternalSearchHit createUnmachedResult( List<Field> secondTableReturnedFields, int docId, String t1Alias, String t2Alias, SearchHit hit) {
         String unmatchedId = hit.id() + "|0";
-        Text unamatchedType = new Text(hit.getType() + "|null");
+        StringText unamatchedType = new StringText(hit.getType() + "|null");
 
         InternalSearchHit searchHit = new InternalSearchHit(docId, unmatchedId, unamatchedType, hit.getFields());
 
@@ -204,7 +233,7 @@ public abstract class ElasticJoinExecutor implements ElasticHitsExecutor {
                 .setScroll(new TimeValue(60000))
                 .setSize(MAX_RESULTS_ON_ONE_FETCH);
         boolean ordered = tableRequest.getOriginalSelect().isOrderdSelect();
-        if(!ordered) scrollRequest.addSort(FieldSortBuilder.DOC_FIELD_NAME, SortOrder.ASC);
+        if(!ordered) scrollRequest.setSearchType(SearchType.SCAN);
         responseWithHits = scrollRequest.get();
         //on ordered select - not using SCAN , elastic returns hits on first scroll
         if(!ordered)

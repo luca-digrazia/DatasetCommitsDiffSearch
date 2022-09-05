@@ -5,23 +5,21 @@ import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.common.text.Text;
+import org.elasticsearch.common.text.StringText;
 import org.elasticsearch.common.unit.TimeValue;
-
+import org.elasticsearch.index.query.BoolFilterBuilder;
 import org.elasticsearch.index.query.BoolQueryBuilder;
-
+import org.elasticsearch.index.query.FilterBuilders;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.internal.InternalSearchHit;
-import org.elasticsearch.search.sort.FieldSortBuilder;
-import org.elasticsearch.search.sort.SortOrder;
 import org.nlpcn.es4sql.domain.Field;
 import org.nlpcn.es4sql.domain.Select;
 import org.nlpcn.es4sql.domain.Where;
 import org.nlpcn.es4sql.exception.SqlParseException;
 import org.nlpcn.es4sql.query.join.HashJoinElasticRequestBuilder;
 import org.nlpcn.es4sql.query.join.TableInJoinRequestBuilder;
-
+import org.nlpcn.es4sql.query.maker.FilterMaker;
 import org.nlpcn.es4sql.query.maker.QueryMaker;
 
 import java.io.IOException;
@@ -119,6 +117,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
             finishedScrolling = true;
         } else {
             searchResponse = secondTableRequest.getRequestBuilder()
+                    .setSearchType(SearchType.SCAN)
                     .setScroll(new TimeValue(60000))
                     .setSize(MAX_RESULTS_ON_ONE_FETCH).get();
             searchResponse = client.prepareSearchScroll(searchResponse.getScrollId()).setScroll(new TimeValue(600000)).get();
@@ -162,7 +161,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
 
 
 
-                            InternalSearchHit searchHit = new InternalSearchHit(matchingHit.docId(), combinedId, new Text(matchingHit.getType() + "|" + secondTableHit.getType()), matchingHit.getFields());
+                            InternalSearchHit searchHit = new InternalSearchHit(matchingHit.docId(), combinedId, new StringText(matchingHit.getType() + "|" + secondTableHit.getType()), matchingHit.getFields());
                             searchHit.sourceRef(matchingHit.getSourceRef());
                             searchHit.sourceAsMap().clear();
                             searchHit.sourceAsMap().putAll(matchingHit.sourceAsMap());
@@ -209,7 +208,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
                 String key = getComparisonKey(t1ToT2FieldsComparison, hit, true, optimizationTermsFilterStructure.get(comparisonID));
 
                 //int docid , id
-                InternalSearchHit searchHit = new InternalSearchHit(resultIds, hit.id(), new Text(hit.getType()), hit.getFields());
+                InternalSearchHit searchHit = new InternalSearchHit(resultIds, hit.id(), new StringText(hit.getType()), hit.getFields());
                 searchHit.sourceRef(hit.getSourceRef());
 
                 onlyReturnedFields(searchHit.sourceAsMap(), firstTableRequest.getReturnedFields(),firstTableRequest.getOriginalSelect().isSelectAll());
@@ -270,26 +269,37 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
 
     private void updateRequestWithTermsFilter(Map<String,Map<String, List<Object>>> optimizationTermsFilterStructure, TableInJoinRequestBuilder secondTableRequest) throws SqlParseException {
         Select select = secondTableRequest.getOriginalSelect();
-
+        BoolFilterBuilder orFilter = FilterBuilders.boolFilter();
         BoolQueryBuilder orQuery = QueryBuilders.boolQuery();
         for(Map<String,List<Object>> optimization : optimizationTermsFilterStructure.values()) {
+            BoolFilterBuilder andFilter = FilterBuilders.boolFilter();
             BoolQueryBuilder andQuery = QueryBuilders.boolQuery();
             for (Map.Entry<String, List<Object>> keyToValues : optimization.entrySet()) {
                 String fieldName = keyToValues.getKey();
                 List<Object> values = keyToValues.getValue();
-                andQuery.must(QueryBuilders.termsQuery(fieldName, values));
+                if (select.isQuery) andQuery.must(QueryBuilders.termsQuery(fieldName, values));
+                else andFilter.must(FilterBuilders.termsFilter(fieldName, values));
             }
+            orFilter.should(andFilter);
             orQuery.should(andQuery);
         }
 
         Where where = select.getWhere();
-
-        BoolQueryBuilder boolQuery;
-        if (where != null) {
-            boolQuery = QueryMaker.explan(where,false);
-            boolQuery.must(orQuery);
-        } else boolQuery = orQuery;
-        secondTableRequest.getRequestBuilder().setQuery(boolQuery);
+        if (select.isQuery) {
+            BoolQueryBuilder boolQuery;
+            if (where != null) {
+                boolQuery = QueryMaker.explan(where);
+                boolQuery.must(orQuery);
+            } else boolQuery = orQuery;
+            secondTableRequest.getRequestBuilder().setQuery(boolQuery);
+        } else {
+            BoolFilterBuilder boolFilter;
+            if (where != null) {
+                boolFilter = FilterMaker.explan(where);
+                boolFilter.must(orFilter);
+            } else boolFilter = orFilter;
+            secondTableRequest.getRequestBuilder().setQuery(QueryBuilders.filteredQuery(null, boolFilter));
+        }
     }
 
     private String getComparisonKey(List<Map.Entry<Field, Field>> t1ToT2FieldsComparison, SearchHit hit, boolean firstTable, Map<String, List<Object>> optimizationTermsFilterStructure) {
