@@ -135,8 +135,7 @@ public class ExternalAdaptManager {
      *
      * @param run {@code true} 为让管理器启动运行, {@code false} 为让管理器停止运行
      */
-    public ExternalAdaptManager setRun(boolean run) {
+    public void setRun(boolean run) {
         isRun = run;
-        return this;
     }
 }
