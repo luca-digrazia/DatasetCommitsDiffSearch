@@ -697,7 +697,7 @@ class Parser {
       return makeFuncallExpression(receiver, new Ident("$index"), args,
                                    start, token.right);
     }
-    // This is a slice (or substring)
+    // This is a substring
     expect(TokenKind.COLON);
     int loc2 = token.left;
     if (token.kind == TokenKind.RBRACKET) {
@@ -708,7 +708,7 @@ class Parser {
     expect(TokenKind.RBRACKET);
 
     args.add(setLocation(new Argument.Positional(endExpr), loc2, endExpr));
-    return makeFuncallExpression(receiver, new Ident("$slice"), args,
+    return makeFuncallExpression(receiver, new Ident("$substring"), args,
                                  start, token.right);
   }
 
