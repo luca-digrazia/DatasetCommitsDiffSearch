@@ -9,7 +9,7 @@ import java.lang.management.ThreadMXBean;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -26,7 +26,7 @@ public class ThreadStatesGaugeSetTest {
     private final ThreadInfo timedWaitingThread = mock(ThreadInfo.class);
     private final ThreadInfo terminatedThread = mock(ThreadInfo.class);
 
-    private final Set<String> deadlocks = new HashSet<>();
+    private final Set<String> deadlocks = new HashSet<String>();
 
     @Before
     public void setUp() throws Exception {
@@ -40,7 +40,7 @@ public class ThreadStatesGaugeSetTest {
         when(terminatedThread.getThreadState()).thenReturn(Thread.State.TERMINATED);
 
         when(threads.getAllThreadIds()).thenReturn(ids);
-        when(threads.getThreadInfo(ids, 0)).thenReturn(new ThreadInfo[]{
+        when(threads.getThreadInfo(ids)).thenReturn(new ThreadInfo[]{
                 newThread, runnableThread, blockedThread,
                 waitingThread, timedWaitingThread, terminatedThread
         });
