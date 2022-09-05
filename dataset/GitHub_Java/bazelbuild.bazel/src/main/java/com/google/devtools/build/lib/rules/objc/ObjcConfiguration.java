@@ -46,7 +46,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   private final String iosSdkVersion;
   private final String iosMinimumOs;
   private final String iosSimulatorVersion;
-  private final String iosSimulatorDevice;
   private final String iosCpu;
   private final String xcodeOptions;
   private final boolean generateDebugSymbols;
@@ -68,8 +67,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
       @Nullable Label gcovLabel) {
     this.iosSdkVersion = Preconditions.checkNotNull(objcOptions.iosSdkVersion, "iosSdkVersion");
     this.iosMinimumOs = Preconditions.checkNotNull(objcOptions.iosMinimumOs, "iosMinimumOs");
-    this.iosSimulatorDevice =
-        Preconditions.checkNotNull(objcOptions.iosSimulatorDevice, "iosSimulatorDevice");
     this.iosSimulatorVersion =
         Preconditions.checkNotNull(objcOptions.iosSimulatorVersion, "iosSimulatorVersion");
     this.iosCpu = Preconditions.checkNotNull(objcOptions.iosCpu, "iosCpu");
@@ -92,13 +89,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
    */
   public String getMinimumOs() {
     return iosMinimumOs;
-  }
-
-  /**
-   * Returns the type of device (e.g. 'iPhone 6') to simulate when running on the simulator.
-   */
-  public String getIosSimulatorDevice() {
-    return iosSimulatorDevice;
   }
 
   public String getIosSimulatorVersion() {
