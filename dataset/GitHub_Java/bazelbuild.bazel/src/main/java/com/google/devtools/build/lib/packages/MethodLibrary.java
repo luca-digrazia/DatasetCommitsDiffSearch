@@ -52,7 +52,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Matcher;
@@ -485,8 +484,7 @@ public class MethodLibrary {
     @Override
     public Object call(Object self, FuncallExpression ast, Environment env)
         throws EvalException, InterruptedException {
-      // Use a TreeMap to ensure consistent ordering.
-      Map<?, ?> dict = new TreeMap<>((Map<?, ?>) self);
+      Map<?, ?> dict = (Map<?, ?>) self;
       return convert(dict.values(), env, ast.getLocation());
     }
   };
@@ -497,8 +495,7 @@ public class MethodLibrary {
     @Override
     public Object call(Object self, FuncallExpression ast, Environment env)
         throws EvalException, InterruptedException {
-      // Use a TreeMap to ensure consistent ordering.
-      Map<?, ?> dict = new TreeMap<>((Map<?, ?>) self);
+      Map<?, ?> dict = (Map<?, ?>) self;
       List<Object> list = Lists.newArrayListWithCapacity(dict.size());
       for (Map.Entry<?, ?> entries : dict.entrySet()) {
         List<?> item = ImmutableList.of(entries.getKey(), entries.getValue());
