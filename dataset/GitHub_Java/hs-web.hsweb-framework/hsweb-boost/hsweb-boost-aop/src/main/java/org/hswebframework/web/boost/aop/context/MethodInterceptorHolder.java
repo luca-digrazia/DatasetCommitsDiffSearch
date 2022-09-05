@@ -59,7 +59,7 @@ public class MethodInterceptorHolder {
         Object[] args = invocation.getArguments();
         Map<String, Object> argMap = new LinkedHashMap<>();
         for (int i = 0, len = args.length; i < len; i++) {
-            argMap.put(argNames[i] == null ? "arg" + i : argNames[i], args[i]);
+            argMap.put((argNames == null || argNames[i] == null) ? "arg" + i : argNames[i], args[i]);
         }
         return new MethodInterceptorHolder(id,
                 invocation.getMethod(),
@@ -80,7 +80,6 @@ public class MethodInterceptorHolder {
     }
 
     public MethodInterceptorHolder(String id, Method method, Object target, Map<String, Object> args) {
-        Objects.requireNonNull(id);
         Objects.requireNonNull(id);
         Objects.requireNonNull(method);
         Objects.requireNonNull(target);
@@ -112,15 +111,21 @@ public class MethodInterceptorHolder {
     }
 
     public <T extends Annotation> T findClassAnnotation(Class<T> annClass) {
-        return AopUtils.findAnnotation(annClass, annClass);
+        return AopUtils.findAnnotation(target.getClass(), annClass);
     }
 
     public <T extends Annotation> T findAnnotation(Class<T> annClass) {
         return AopUtils.findAnnotation(target.getClass(), method, annClass);
     }
 
-    public MethodInterceptorParamContext createParamContext() {
-        return new MethodInterceptorParamContext() {
+    public MethodInterceptorContext createParamContext() {
+        return createParamContext(null);
+    }
+
+    public MethodInterceptorContext createParamContext(Object invokeResult) {
+        return new MethodInterceptorContext() {
+            private static final long serialVersionUID = -4102787561601219273L;
+
             @Override
             public Object getTarget() {
                 return target;
@@ -133,8 +138,10 @@ public class MethodInterceptorHolder {
 
             @Override
             public <T> Optional<T> getParameter(String name) {
-                if (args == null) return Optional.empty();
-                return Optional.of((T) args.get(name));
+                if (args == null) {
+                    return Optional.empty();
+                }
+                return Optional.ofNullable((T) args.get(name));
             }
 
             @Override
@@ -145,6 +152,11 @@ public class MethodInterceptorHolder {
             @Override
             public Map<String, Object> getParams() {
                 return getArgs();
+            }
+
+            @Override
+            public Object getInvokeResult() {
+                return invokeResult;
             }
         };
     }
