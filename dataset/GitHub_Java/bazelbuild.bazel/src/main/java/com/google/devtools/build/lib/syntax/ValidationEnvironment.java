@@ -18,6 +18,7 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -35,15 +36,15 @@ public final class ValidationEnvironment {
 
   private final ValidationEnvironment parent;
 
-  private final Set<String> variables = new HashSet<>();
+  private Set<String> variables = new HashSet<>();
 
-  private final Map<String, Location> variableLocations = new HashMap<>();
+  private Map<String, Location> variableLocations = new HashMap<>();
 
-  private final Set<String> readOnlyVariables = new HashSet<>();
+  private Set<String> readOnlyVariables = new HashSet<>();
 
   // A stack of variable-sets which are read only but can be assigned in different
   // branches of if-else statements.
-  private final Stack<Set<String>> futureReadOnlyVariables = new Stack<>();
+  private Stack<Set<String>> futureReadOnlyVariables = new Stack<>();
 
   /**
    * Tracks the number of nested for loops that contain the statement that is currently being

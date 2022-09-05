@@ -945,14 +945,10 @@ public final class Environment implements Freezable {
   @VisibleForTesting
   public List<Statement> parseFile(String... inputLines) {
     ParserInputSource input = ParserInputSource.create(Joiner.on("\n").join(inputLines), null);
-    if (isSkylark) {
-      Parser.ParseResult result = Parser.parseFileForSkylark(input, eventHandler);
-      ValidationEnvironment valid = new ValidationEnvironment(this);
-      valid.validateAst(result.statements, eventHandler);
-      return result.statements;
-    }
-
-    return Parser.parseFile(input, eventHandler, /*parsePython=*/ false).statements;
+    Parser.ParseResult result = isSkylark
+        ? Parser.parseFileForSkylark(input, eventHandler, new ValidationEnvironment(this))
+        : Parser.parseFile(input, eventHandler, /*parsePython=*/false);
+    return result.statements;
   }
 
   /**

@@ -20,8 +20,10 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.vfs.Path;
+
 import java.io.IOException;
 import java.util.List;
+
 import javax.annotation.Nullable;
 
 /**
@@ -184,16 +186,18 @@ public class BuildFileAST extends ASTNode {
    *
    * @throws IOException if the file cannot not be read.
    */
-  public static BuildFileAST parseBuildFile(Path buildFile, EventHandler eventHandler)
+  public static BuildFileAST parseBuildFile(Path buildFile, EventHandler eventHandler,
+                                            boolean parsePython)
       throws IOException {
-    return parseBuildFile(buildFile, buildFile.getFileSize(), eventHandler);
+    return parseBuildFile(buildFile, buildFile.getFileSize(), eventHandler, parsePython);
   }
 
   public static BuildFileAST parseBuildFile(Path buildFile, long fileSize,
-                                            EventHandler eventHandler)
+                                            EventHandler eventHandler,
+                                            boolean parsePython)
       throws IOException {
     ParserInputSource inputSource = ParserInputSource.create(buildFile, fileSize);
-    return parseBuildFile(inputSource, eventHandler);
+    return parseBuildFile(inputSource, eventHandler, parsePython);
   }
 
   /**
@@ -202,13 +206,15 @@ public class BuildFileAST extends ASTNode {
    */
   public static BuildFileAST parseBuildFile(ParserInputSource input,
                                             List<Statement> preludeStatements,
-                                            EventHandler eventHandler) {
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler, false);
+                                            EventHandler eventHandler,
+                                            boolean parsePython) {
+    Parser.ParseResult result = Parser.parseFile(input, eventHandler, parsePython);
     return new BuildFileAST(preludeStatements, result);
   }
 
-  public static BuildFileAST parseBuildFile(ParserInputSource input, EventHandler eventHandler) {
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler, false);
+  public static BuildFileAST parseBuildFile(ParserInputSource input, EventHandler eventHandler,
+      boolean parsePython) {
+    Parser.ParseResult result = Parser.parseFile(input, eventHandler, parsePython);
     return new BuildFileAST(ImmutableList.<Statement>of(), result);
   }
 
@@ -253,10 +259,9 @@ public class BuildFileAST extends ASTNode {
    *
    * @return true if the input file is syntactically valid
    */
-  public static boolean checkSyntax(
-      ParserInputSource input, EventHandler eventHandler, boolean parsePython) {
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler, parsePython);
-    return !result.containsErrors;
+  public static boolean checkSyntax(ParserInputSource input,
+                                    EventHandler eventHandler, boolean parsePython) {
+    return !parseBuildFile(input, eventHandler, parsePython).containsErrors();
   }
 
   /**
