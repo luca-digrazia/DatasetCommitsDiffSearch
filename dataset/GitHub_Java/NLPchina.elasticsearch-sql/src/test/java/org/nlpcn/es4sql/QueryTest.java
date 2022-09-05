@@ -8,7 +8,6 @@ import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.common.joda.time.DateTime;
 import org.elasticsearch.common.joda.time.format.DateTimeFormat;
 import org.elasticsearch.common.joda.time.format.DateTimeFormatter;
-import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.junit.Assert;
@@ -786,32 +785,9 @@ public class QueryTest {
     }
 
     @Test
-    public void complexNestedQueryBothOnSameObject() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT * FROM %s/nestedType where nested('message',message.info = 'a' and message.author ='i' ) ", TEST_INDEX));
-        Assert.assertEquals(1, response.getTotalHits());
-    }
-    @Test
-    public void complexNestedQueryNotBothOnSameObject() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT * FROM %s/nestedType where nested('message',message.info = 'a' and message.author ='h' ) ", TEST_INDEX));
-        Assert.assertEquals(0, response.getTotalHits());
-    }
-
-    @Test
     public void nestedOnInTermsQuery() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
         SearchHits response = query(String.format("SELECT * FROM %s/nestedType where nested(message.info) = IN_TERMS(a,b)", TEST_INDEX));
         Assert.assertEquals(3, response.getTotalHits());
-    }
-
-    @Test
-    public void multipleIndicesOneNotExistWithHint() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT /*! IGNORE_UNAVAILABLE */ * FROM %s,%s ", TEST_INDEX,"badindex"));
-        Assert.assertTrue(response.getTotalHits() > 0);
-    }
-
-    @Test(expected=IndexMissingException.class)
-    public void multipleIndicesOneNotExistWithoutHint() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT  * FROM %s,%s ", TEST_INDEX,"badindex"));
-        Assert.assertTrue(response.getTotalHits() > 0);
     }
 
     private SearchHits query(String query) throws SqlParseException, SQLFeatureNotSupportedException, SQLFeatureNotSupportedException {
