@@ -39,7 +39,9 @@ public class HealthCheckModule extends Module {
 
             Map<String, Object> details = result.getDetails();
             if (details != null && !details.isEmpty()) {
-                for (Map.Entry<String, Object> e : details.entrySet()) {
+                Iterator<Map.Entry<String, Object>> it = details.entrySet().iterator();
+                while (it.hasNext()) {
+                    Map.Entry<String, Object> e = it.next();
                     json.writeObjectField(e.getKey(), e.getValue());
                 }
             }
