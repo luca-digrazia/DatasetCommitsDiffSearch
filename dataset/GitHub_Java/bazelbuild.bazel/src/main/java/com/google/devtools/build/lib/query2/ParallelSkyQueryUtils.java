@@ -207,7 +207,7 @@ class ParallelSkyQueryUtils {
         }
 
         if (!reverseDepsMap.containsKey(reverseDepPair.first)) {
-          reverseDepsMap.put(reverseDepPair.first, new LinkedList<SkyKey>());
+          reverseDepsMap.put(reverseDepPair.first, new LinkedList<>());
         }
 
         reverseDepsMap.get(reverseDepPair.first).add(reverseDepPair.second);
