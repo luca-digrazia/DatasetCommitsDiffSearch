@@ -51,7 +51,7 @@ public class EnvironmentCollection {
    * Returns the build labels of each environment in this collection, ordered by
    * their insertion order in {@link Builder}.
    */
-  public ImmutableCollection<Label> getEnvironments() {
+  ImmutableCollection<Label> getEnvironments() {
     return map.values();
   }
 
