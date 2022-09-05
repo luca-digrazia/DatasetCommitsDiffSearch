@@ -255,15 +255,14 @@ public class ResourceShrinkerAction {
          null /* publicResourcesOut */,
          null /* dataBindingInfoOut */);
       if (options.shrunkResources != null) {
-        AndroidResourceOutputs.createResourcesZip(
-            shrunkResources,
-            resourceFiles.resolve("assets"),
-            options.shrunkResources,
-            false /* compress */);
+        resourceProcessor.createResourcesZip(shrunkResources, resourceFiles.resolve("assets"),
+            options.shrunkResources, false /* compress */);
       }
       if (options.rTxtOutput != null) {
-        AndroidResourceOutputs.copyRToOutput(
-            generatedSources, options.rTxtOutput, options.packageType == VariantType.LIBRARY);
+        resourceProcessor.copyRToOutput(
+            generatedSources,
+            options.rTxtOutput,
+            options.packageType == VariantType.LIBRARY);
       }
       logger.fine(String.format("Packing resources finished at %sms",
           timer.elapsed(TimeUnit.MILLISECONDS)));
