@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
@@ -30,7 +29,6 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
-import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.PackageRootResolutionException;
@@ -66,6 +64,7 @@ import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -78,13 +77,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
-/** Action that represents some kind of C++ compilation step. */
+/**
+ * Action that represents some kind of C++ compilation step.
+ */
 @ThreadCompatible
 public class CppCompileAction extends AbstractAction
-    implements IncludeScannable, ExecutionInfoSpecifier, CommandAction {
+    implements IncludeScannable, ExecutionInfoSpecifier {
   /**
    * Represents logic that determines if an artifact is a special input, meaning that it may require
    * additional inputs when it is compiled or may not be available to other actions.
@@ -164,15 +166,14 @@ public class CppCompileAction extends AbstractAction
   private final Artifact optionalSourceFile;
   private final NestedSet<Artifact> mandatoryInputs;
   private final boolean shouldScanIncludes;
-  private final boolean usePic;
   private final CppCompilationContext context;
   private final Iterable<IncludeScannable> lipoScannables;
   private final ImmutableList<Artifact> builtinIncludeFiles;
   @VisibleForTesting public final CppCompileCommandLine cppCompileCommandLine;
   private final ImmutableSet<String> executionRequirements;
 
-  @VisibleForTesting final CppConfiguration cppConfiguration;
-  private final FeatureConfiguration featureConfiguration;
+  @VisibleForTesting
+  final CppConfiguration cppConfiguration;
   protected final Class<? extends CppCompileActionContext> actionContext;
   private final SpecialInputsHandler specialInputsHandler;
 
@@ -193,8 +194,6 @@ public class CppCompileAction extends AbstractAction
    * execution.
    */
   private Collection<Artifact> additionalInputs = null;
-  
-  private CcToolchainFeatures.Variables overwrittenVariables = null;
 
   private ImmutableList<Artifact> resolvedInputs = ImmutableList.<Artifact>of();
 
@@ -237,7 +236,6 @@ public class CppCompileAction extends AbstractAction
       CcToolchainFeatures.Variables variables,
       Artifact sourceFile,
       boolean shouldScanIncludes,
-      boolean usePic,
       Label sourceLabel,
       NestedSet<Artifact> mandatoryInputs,
       Artifact outputFile,
@@ -274,17 +272,22 @@ public class CppCompileAction extends AbstractAction
     this.context = context;
     this.specialInputsHandler = specialInputsHandler;
     this.cppConfiguration = cppConfiguration;
-    this.featureConfiguration = featureConfiguration;
     // inputsKnown begins as the logical negation of shouldScanIncludes.
     // When scanning includes, the inputs begin as not known, and become
     // known after inclusion scanning. When *not* scanning includes,
     // the inputs are as declared, hence known, and remain so.
     this.shouldScanIncludes = shouldScanIncludes;
-    this.usePic = usePic;
     this.inputsKnown = !shouldScanIncludes;
     this.cppCompileCommandLine =
         new CppCompileCommandLine(
-            sourceFile, dotdFile, copts, coptsFilter, features, variables, actionName);
+            sourceFile,
+            dotdFile,
+            copts,
+            coptsFilter,
+            features,
+            featureConfiguration,
+            variables,
+            actionName);
     this.actionContext = actionContext;
     this.lipoScannables = lipoScannables;
     this.actionClassId = actionClassId;
@@ -436,21 +439,6 @@ public class CppCompileAction extends AbstractAction
       this.additionalInputs = ImmutableList.of();
       return null;
     }
-
-    if (featureConfiguration.isEnabled(CppRuleClasses.PRUNE_HEADER_MODULES)) {
-      Set<Artifact> initialResultSet = Sets.newLinkedHashSet(initialResult);
-      List<String> usedModulePaths = Lists.newArrayList();
-      for (Artifact usedModule : context.getUsedModules(usePic, initialResultSet)) {
-        initialResultSet.add(usedModule);
-        usedModulePaths.add(usedModule.getExecPathString());
-      }
-      CcToolchainFeatures.Variables.Builder variableBuilder =
-          new CcToolchainFeatures.Variables.Builder();
-      variableBuilder.addSequenceVariable("module_files", usedModulePaths);
-      this.overwrittenVariables = variableBuilder.build();
-      initialResult = initialResultSet;
-    }
-    
     this.additionalInputs = initialResult;
     // In some cases, execution backends need extra files for each included file. Add them
     // to the set of inputs the caller may need to be aware of.
@@ -604,7 +592,7 @@ public class CppCompileAction extends AbstractAction
       // module map, and we need to include-scan all headers that are referenced in the module map.
       // We need to do include scanning as long as we want to support building code bases that are
       // not fully strict layering clean.
-      builder.addAll(context.getHeaderModuleSrcs());
+      builder.addTransitive(context.getHeaderModuleSrcs());
     } else {
       builder.add(getSourceFile());
     }
@@ -625,7 +613,10 @@ public class CppCompileAction extends AbstractAction
     return context.getDefines();
   }
 
-  @Override
+  /**
+   * Returns an (immutable) map of environment key, value pairs to be
+   * provided to the C++ compiler.
+   */
   public ImmutableMap<String, String> getEnvironment() {
     Map<String, String> environment = new LinkedHashMap<>(configuration.getLocalShellEnvironment());
     if (configuration.isCodeCoverageEnabled()) {
@@ -670,13 +661,8 @@ public class CppCompileAction extends AbstractAction
     return getArgv(getInternalOutputFile());
   }
 
-  @Override
-  public List<String> getArguments() {
-    return getArgv();
-  }
-
   protected final List<String> getArgv(PathFragment outputFile) {
-    return cppCompileCommandLine.getArgv(outputFile, overwrittenVariables);
+    return cppCompileCommandLine.getArgv(outputFile);
   }
 
   @Override
@@ -711,7 +697,7 @@ public class CppCompileAction extends AbstractAction
    */
   @VisibleForTesting
   public List<String> getCompilerOptions() {
-    return cppCompileCommandLine.getCompilerOptions(/*updatedVariables=*/null);
+    return cppCompileCommandLine.getCompilerOptions();
   }
 
   @Override
@@ -966,10 +952,6 @@ public class CppCompileAction extends AbstractAction
       IncludeProblems problems = new IncludeProblems();
       Map<PathFragment, Artifact> allowedDerivedInputsMap = getAllowedDerivedInputsMap();
       for (Path execPath : depSet.getDependencies()) {
-        // Module .pcm files are generated and thus aren't declared inputs.
-        if (execPath.getBaseName().endsWith(".pcm")) {
-          continue;
-        }
         PathFragment execPathFragment = execPath.asFragment();
         if (execPathFragment.isAbsolute()) {
           // Absolute includes from system paths are ignored.
@@ -1012,10 +994,8 @@ public class CppCompileAction extends AbstractAction
 
   @Override
   public Iterable<Artifact> resolveInputsFromCache(
-      ArtifactResolver artifactResolver,
-      PackageRootResolver resolver,
-      Collection<PathFragment> inputPaths)
-      throws PackageRootResolutionException, InterruptedException {
+      ArtifactResolver artifactResolver, PackageRootResolver resolver,
+      Collection<PathFragment> inputPaths) throws PackageRootResolutionException {
     // Note that this method may trigger a violation of the desirable invariant that getInputs()
     // is a superset of getMandatoryInputs(). See bug about an "action not in canonical form"
     // error message and the integration test test_crosstool_change_and_failure().
@@ -1290,6 +1270,7 @@ public class CppCompileAction extends AbstractAction
     private final List<String> copts;
     private final Predicate<String> coptsFilter;
     private final Collection<String> features;
+    private final FeatureConfiguration featureConfiguration;
     @VisibleForTesting public final CcToolchainFeatures.Variables variables;
     private final String actionName;
 
@@ -1299,6 +1280,7 @@ public class CppCompileAction extends AbstractAction
         ImmutableList<String> copts,
         Predicate<String> coptsFilter,
         Collection<String> features,
+        FeatureConfiguration featureConfiguration,
         CcToolchainFeatures.Variables variables,
         String actionName) {
       this.sourceFile = Preconditions.checkNotNull(sourceFile);
@@ -1307,6 +1289,7 @@ public class CppCompileAction extends AbstractAction
       this.copts = Preconditions.checkNotNull(copts);
       this.coptsFilter = coptsFilter;
       this.features = Preconditions.checkNotNull(features);
+      this.featureConfiguration = featureConfiguration;
       this.variables = variables;
       this.actionName = actionName;
     }
@@ -1318,8 +1301,7 @@ public class CppCompileAction extends AbstractAction
       return featureConfiguration.getEnvironmentVariables(actionName, variables);
     }
 
-    protected List<String> getArgv(
-        PathFragment outputFile, CcToolchainFeatures.Variables overwrittenVariables) {
+    protected List<String> getArgv(PathFragment outputFile) {
       List<String> commandLine = new ArrayList<>();
 
       // first: The command name.
@@ -1334,7 +1316,7 @@ public class CppCompileAction extends AbstractAction
       }
 
       // second: The compiler options.
-      commandLine.addAll(getCompilerOptions(overwrittenVariables));
+      commandLine.addAll(getCompilerOptions());
 
       if (!featureConfiguration.isEnabled("compile_action_flags_in_flag_set")) {
         // third: The file to compile!
@@ -1349,8 +1331,7 @@ public class CppCompileAction extends AbstractAction
       return commandLine;
     }
 
-    public List<String> getCompilerOptions(
-        @Nullable CcToolchainFeatures.Variables overwrittenVariables) {
+    public List<String> getCompilerOptions() {
       List<String> options = new ArrayList<>();
       CppConfiguration toolchain = cppConfiguration;
 
@@ -1371,16 +1352,7 @@ public class CppCompileAction extends AbstractAction
       // unfiltered compiler options to inject include paths, which is superseded by the feature
       // configuration; on the other hand toolchains switch off warnings for the layering check
       // that will be re-added by the feature flags.
-      CcToolchainFeatures.Variables updatedVariables = variables;
-      if (overwrittenVariables != null) {
-        CcToolchainFeatures.Variables.Builder variablesBuilder =
-            new CcToolchainFeatures.Variables.Builder();
-        variablesBuilder.addAll(variables);
-        variablesBuilder.addAll(overwrittenVariables);
-        updatedVariables = variablesBuilder.build();
-      }
-      addFilteredOptions(
-          options, featureConfiguration.getCommandLine(actionName, updatedVariables));
+      addFilteredOptions(options, featureConfiguration.getCommandLine(actionName, variables));
 
       // Users don't expect the explicit copts to be filtered by coptsFilter, add them verbatim.
       // Make sure these are added after the options from the feature configuration, so that
