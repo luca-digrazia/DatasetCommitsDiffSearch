@@ -14,32 +14,45 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.auto.value.AutoValue;
+import com.google.common.base.Function;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.util.Collection;
 
 /**
  * The value of an AspectCompletion. Currently this just stores an Aspect.
  */
 public class AspectCompletionValue implements SkyValue {
-  @AutoCodec static final AspectCompletionValue INSTANCE = new AspectCompletionValue();
+  private final AspectValue aspectValue;
 
-  private AspectCompletionValue() {}
+  AspectCompletionValue(AspectValue aspectValue) {
+    this.aspectValue = aspectValue;
+  }
+
+  public AspectValue getAspectValue() {
+    return aspectValue;
+  }
 
   public static Iterable<SkyKey> keys(
       Collection<AspectValue> targets, final TopLevelArtifactContext ctx) {
     return Iterables.transform(
-        targets, aspectValue -> AspectCompletionKey.create(aspectValue.getKey(), ctx));
+        targets,
+        new Function<AspectValue, SkyKey>() {
+          @Override
+          public SkyKey apply(AspectValue aspectValue) {
+            return SkyKey.create(
+                SkyFunctions.ASPECT_COMPLETION,
+                AspectCompletionKey.create(aspectValue.getKey(), ctx));
+          }
+        });
   }
 
-  /** The key of an AspectCompletionValue. */
-  @AutoValue
-  public abstract static class AspectCompletionKey implements SkyKey {
+ @AutoValue
+ abstract static class AspectCompletionKey {
     public static AspectCompletionKey create(
         AspectKey aspectKey, TopLevelArtifactContext topLevelArtifactContext) {
       return new AutoValue_AspectCompletionValue_AspectCompletionKey(
@@ -48,10 +61,5 @@ public class AspectCompletionValue implements SkyValue {
 
     public abstract AspectKey aspectKey();
     public abstract TopLevelArtifactContext topLevelArtifactContext();
-
-    @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.ASPECT_COMPLETION;
-    }
   }
 }

@@ -17,8 +17,8 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.LabelAndConfiguration;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
-import com.google.devtools.build.lib.analysis.test.TestProvider;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.rules.test.TestProvider;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -29,8 +29,12 @@ import com.google.devtools.build.skyframe.SkyValue;
  * runs.
  */
 public final class TestCompletionFunction implements SkyFunction {
+
+  public TestCompletionFunction() {
+  }
+
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
+  public SkyValue compute(SkyKey skyKey, Environment env) {
     TestCompletionValue.TestCompletionKey key =
         (TestCompletionValue.TestCompletionKey) skyKey.argument();
     LabelAndConfiguration lac = key.labelAndConfiguration();
@@ -49,12 +53,12 @@ public final class TestCompletionFunction implements SkyFunction {
     if (key.exclusiveTesting()) {
       // Request test artifacts iteratively if testing exclusively.
       for (Artifact testArtifact : TestProvider.getTestStatusArtifacts(ct)) {
-        if (env.getValue(ArtifactSkyKey.key(testArtifact, /*isMandatory=*/ true)) == null) {
+        if (env.getValue(ArtifactValue.key(testArtifact, /*isMandatory=*/true)) == null) {
           return null;
         }
       }
     } else {
-      env.getValues(ArtifactSkyKey.mandatoryKeys(TestProvider.getTestStatusArtifacts(ct)));
+      env.getValues(ArtifactValue.mandatoryKeys(TestProvider.getTestStatusArtifacts(ct)));
       if (env.valuesMissing()) {
         return null;
       }

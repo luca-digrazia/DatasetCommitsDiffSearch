@@ -31,7 +31,7 @@ import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionProgressReceiverAvailableEvent;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.rules.test.TestProvider;
@@ -48,6 +48,7 @@ import com.google.devtools.build.skyframe.CycleInfo;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -57,6 +58,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
+
 import javax.annotation.Nullable;
 
 /**
@@ -108,14 +110,8 @@ public class SkyframeBuilder implements Builder {
     // Note that executionProgressReceiver accesses builtTargets concurrently (after wrapping in a
     // synchronized collection), so unsynchronized access to this variable is unsafe while it runs.
     ExecutionProgressReceiver executionProgressReceiver =
-        new ExecutionProgressReceiver(
-            Preconditions.checkNotNull(builtTargets),
-            countTestActions(exclusiveTests),
-            ImmutableSet.<ConfiguredTarget>builder()
-                .addAll(parallelTests)
-                .addAll(exclusiveTests)
-                .build(),
-            skyframeExecutor.getEventBus());
+        new ExecutionProgressReceiver(Preconditions.checkNotNull(builtTargets),
+            countTestActions(exclusiveTests), skyframeExecutor.getEventBus());
     skyframeExecutor
         .getEventBus()
         .post(new ExecutionProgressReceiverAvailableEvent(executionProgressReceiver));
@@ -226,14 +222,15 @@ public class SkyframeBuilder implements Builder {
   /**
    * Process the Skyframe update, taking into account the keepGoing setting.
    *
-   * <p>Returns optional {@link ExitCode} based on following conditions: 1. null, if result had no
-   * errors. 2. Optional.absent(), if result had errors but none of the errors specified an exit
-   * code. 3. Optional.of(e), if result had errors and one of them specified exit code 'e'. Throws
-   * on fail-fast failures.
+   * <p> Returns optional {@link ExitCode} based on following conditions:
+   *    1. null, if result had no errors.
+   *    2. Optional.absent(), if result had errors but none of the errors specified an exit code.
+   *    3. Optional.of(e), if result had errors and one of them specified exit code 'e'.
+   * Throws on fail-fast failures.
    */
   @Nullable
   private static Optional<ExitCode> processResult(
-      ExtendedEventHandler eventHandler,
+      EventHandler eventHandler,
       EvaluationResult<?> result,
       boolean keepGoing,
       SkyframeExecutor skyframeExecutor)

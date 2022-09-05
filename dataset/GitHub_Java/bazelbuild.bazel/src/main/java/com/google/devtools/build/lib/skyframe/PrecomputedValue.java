@@ -32,8 +32,10 @@ import com.google.devtools.build.skyframe.Injectable;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.util.Map;
 import java.util.UUID;
+
 import javax.annotation.Nullable;
 
 /**
@@ -58,7 +60,7 @@ public final class PrecomputedValue implements SkyValue {
     }
 
     void inject(Injectable injectable) {
-      injectable.inject(precomputed.key, new PrecomputedValue(supplier.get()));
+      injectable.inject(ImmutableMap.of(precomputed.key, new PrecomputedValue(supplier.get())));
     }
   }
 
@@ -82,9 +84,6 @@ public final class PrecomputedValue implements SkyValue {
 
   static final Precomputed<UUID> BUILD_ID =
       new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "build_id"));
-
-  static final Precomputed<Map<String, String>> CLIENT_ENV =
-      new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "client_env"));
 
   static final Precomputed<WorkspaceStatusAction> WORKSPACE_STATUS_KEY =
       new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "workspace_status_action"));
@@ -139,7 +138,7 @@ public final class PrecomputedValue implements SkyValue {
     return "<BuildVariable " + value + ">";
   }
 
-  public static void dependOnBuildId(SkyFunction.Environment env) throws InterruptedException {
+  public static final void dependOnBuildId(SkyFunction.Environment env) {
     BUILD_ID.get(env);
   }
 
@@ -167,7 +166,7 @@ public final class PrecomputedValue implements SkyValue {
      */
     @Nullable
     @SuppressWarnings("unchecked")
-    public T get(SkyFunction.Environment env) throws InterruptedException {
+    public T get(SkyFunction.Environment env) {
       PrecomputedValue value = (PrecomputedValue) env.getValue(key);
       if (value == null) {
         return null;
@@ -179,7 +178,7 @@ public final class PrecomputedValue implements SkyValue {
      * Injects a new variable value.
      */
     public void set(Injectable injectable, T value) {
-      injectable.inject(key, new PrecomputedValue(value));
+      injectable.inject(ImmutableMap.of(key, new PrecomputedValue(value)));
     }
   }
 }

@@ -14,15 +14,14 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.collect.Interner;
+import com.google.common.base.Function;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.LabelAndConfiguration;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.util.Collection;
 
 /**
@@ -35,10 +34,12 @@ public class TestCompletionValue implements SkyValue {
   private TestCompletionValue() { }
 
   public static SkyKey key(
-      ConfiguredTargetKey lac,
+      LabelAndConfiguration lac,
       final TopLevelArtifactContext topLevelArtifactContext,
       final boolean exclusiveTesting) {
-    return TestCompletionKey.create(lac, topLevelArtifactContext, exclusiveTesting);
+    return SkyKey.create(
+        SkyFunctions.TEST_COMPLETION,
+        TestCompletionKey.create(lac, topLevelArtifactContext, exclusiveTesting));
   }
 
   public static Iterable<SkyKey> keys(Collection<ConfiguredTarget> targets,
@@ -46,39 +47,30 @@ public class TestCompletionValue implements SkyValue {
                                       final boolean exclusiveTesting) {
     return Iterables.transform(
         targets,
-        ct ->
-            TestCompletionKey.create(
-                // Tests are never in host configuration.
-                ConfiguredTargetKey.of(
-                    ct, ct.getConfigurationKey(), /*isHostConfiguration=*/ false),
-                topLevelArtifactContext,
-                exclusiveTesting));
+        new Function<ConfiguredTarget, SkyKey>() {
+          @Override
+          public SkyKey apply(ConfiguredTarget ct) {
+            return SkyKey.create(
+                SkyFunctions.TEST_COMPLETION,
+                TestCompletionKey.create(
+                    LabelAndConfiguration.of(ct), topLevelArtifactContext, exclusiveTesting));
+          }
+        });
   }
 
-  @AutoCodec
   @AutoValue
-  abstract static class TestCompletionKey implements SkyKey {
-    private static final Interner<TestCompletionKey> interner = BlazeInterners.newWeakInterner();
+  abstract static class TestCompletionKey {
 
-    @AutoCodec.VisibleForSerialization
-    @AutoCodec.Instantiator
-    static TestCompletionKey create(
-        ConfiguredTargetKey configuredTargetKey,
+    public static TestCompletionKey create(
+        LabelAndConfiguration labelAndConfiguration,
         TopLevelArtifactContext topLevelArtifactContext,
         boolean exclusiveTesting) {
-      return interner.intern(
-          new AutoValue_TestCompletionValue_TestCompletionKey(
-              configuredTargetKey, topLevelArtifactContext, exclusiveTesting));
+      return new AutoValue_TestCompletionValue_TestCompletionKey(
+          labelAndConfiguration, topLevelArtifactContext, exclusiveTesting);
     }
 
-    abstract ConfiguredTargetKey configuredTargetKey();
-
+    public abstract LabelAndConfiguration labelAndConfiguration();
     public abstract TopLevelArtifactContext topLevelArtifactContext();
     public abstract boolean exclusiveTesting();
-
-    @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.TEST_COMPLETION;
-    }
   }
 }
