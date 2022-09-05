@@ -59,7 +59,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   private final DottedVersion iosSimulatorVersion;
   private final String iosSimulatorDevice;
   private final boolean generateDebugSymbols;
-  private final boolean generateDsym;
   private final boolean generateLinkmap;
   private final boolean runMemleaks;
   private final ImmutableList<String> copts;
@@ -87,7 +86,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.iosSimulatorVersion =
         Preconditions.checkNotNull(objcOptions.iosSimulatorVersion, "iosSimulatorVersion");
     this.generateDebugSymbols = objcOptions.generateDebugSymbols;
-    this.generateDsym = objcOptions.appleGenerateDsym;
     this.generateLinkmap = objcOptions.generateLinkmap;
     this.runMemleaks = objcOptions.runMemleaks;
     this.copts = ImmutableList.copyOf(objcOptions.copts);
@@ -129,18 +127,8 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     return iosSimulatorVersion;
   }
 
-  /**
-   * Returns whether dSYM + breakpad generation is enabled.
-   */
   public boolean generateDebugSymbols() {
     return generateDebugSymbols;
-  }
-
-  /**
-   * Returns whether dSYM generation is enabled.
-   */
-  public boolean generateDsym() {
-    return generateDsym;
   }
 
   public boolean generateLinkmap() {
