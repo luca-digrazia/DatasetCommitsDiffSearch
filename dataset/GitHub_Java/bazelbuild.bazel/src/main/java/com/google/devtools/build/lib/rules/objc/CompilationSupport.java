@@ -289,26 +289,6 @@ public final class CompilationSupport {
     }
   }
 
-  /**
-   * Adds a source file to a command line, honoring the useAbsolutePathForActions flag.
-   */
-  private CustomCommandLine.Builder addSource(CustomCommandLine.Builder commandLine,
-      ObjcConfiguration objcConfiguration, Artifact sourceFile) {
-    PathFragment sourceExecPathFragment = sourceFile.getExecPath();
-    String sourcePath = sourceExecPathFragment.getPathString();
-    if (!sourceExecPathFragment.isAbsolute() && objcConfiguration.getUseAbsolutePathsForActions()) {
-      sourcePath = objcConfiguration.getXcodeWorkspaceRoot() + "/" + sourcePath;
-    }
-    commandLine.add(sourcePath);
-    return commandLine;
-  }
-
-  private CustomCommandLine.Builder addSource(String argName, CustomCommandLine.Builder commandLine,
-      ObjcConfiguration objcConfiguration, Artifact sourceFile) {
-    commandLine.add(argName);
-    return addSource(commandLine, objcConfiguration, sourceFile);
-  }
-
   private void registerCompileAction(
       Artifact sourceFile,
       Artifact objFile,
@@ -360,17 +340,11 @@ public final class CompilationSupport {
         .add(coverageFlags.build())
         .add(objcConfiguration.getCopts())
         .add(attributes.copts())
-        .add(attributes.optionsCopts());
-    PathFragment sourceExecPathFragment = sourceFile.getExecPath();
-    String sourcePath = sourceExecPathFragment.getPathString();
-    if (!sourceExecPathFragment.isAbsolute() && objcConfiguration.getUseAbsolutePathsForActions()) {
-      sourcePath = objcConfiguration.getXcodeWorkspaceRoot() + "/" + sourcePath;
-    }
-    commandLine
-      .add("-c").add(sourcePath)
-      .addExecPath("-o", objFile)
-      .add("-MD")
-      .addExecPath("-MF", dotdFile);
+        .add(attributes.optionsCopts())
+        .addExecPath("-c", sourceFile)
+        .addExecPath("-o", objFile)
+        .add("-MD")
+        .addExecPath("-MF", dotdFile);
 
     if (moduleMap.isPresent()) {
       // -fmodule-map-file only loads the module in Xcode 7, so we add the module maps's directory
@@ -455,8 +429,8 @@ public final class CompilationSupport {
     commandLine
       .add("-Onone")
       .add("-module-name").add(getModuleName())
-      .add("-parse-as-library");
-    addSource("-primary-file", commandLine, objcConfiguration, sourceFile)
+      .add("-parse-as-library")
+      .addExecPath("-primary-file", sourceFile)
       .addExecPaths(otherSwiftSources)
       .addExecPath("-o", objFile)
       .addExecPath("-emit-module-path", intermediateArtifacts.swiftModuleFile(sourceFile))
