@@ -1,158 +1,154 @@
 package org.hswebframework.web.authorization.basic.define;
 
-import org.hswebframework.web.authorization.access.DataAccessController;
-import org.hswebframework.web.authorization.annotation.Authorize;
-import org.hswebframework.web.authorization.annotation.Logical;
-import org.hswebframework.web.authorization.annotation.RequiresDataAccess;
-import org.hswebframework.web.authorization.annotation.RequiresExpression;
-import org.hswebframework.web.authorization.define.AuthorizeDefinition;
-import org.hswebframework.web.authorization.define.DataAccessDefinition;
-import org.hswebframework.web.authorization.define.Script;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import lombok.*;
+import org.hswebframework.web.authorization.annotation.*;
+import org.hswebframework.web.authorization.define.*;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.util.StringUtils;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
- * Created by zhouhao on 2017/8/13.
+ * 默认权限权限定义
+ *
+ * @author zhouhao
+ * @since 3.0
  */
-public class DefaultBasicAuthorizeDefinition implements AuthorizeDefinition {
-    private boolean dataAccessControl;
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@ToString
+public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
 
-    private Set<String> permissions = new HashSet<>();
+    @JsonIgnore
+    private Class<?> targetClass;
 
-    private Set<String> actions = new HashSet<>();
+    @JsonIgnore
+    private Method targetMethod;
 
-    private Set<String> roles = new HashSet<>();
+    private ResourcesDefinition resources = new ResourcesDefinition();
+    private DimensionsDefinition dimensions = new DimensionsDefinition();
 
-    private Set<String> user = new HashSet<>();
+    private String message = "权限不足,拒绝访问";
 
-    private Script script;
-
-    private String message = "{un_authorized}";
-
-    private Logical logical = Logical.DEFAULT;
-
-    private DataAccessDefinition dataAccessDefinition;
-
-    @Override
-    public int getPriority() {
-        return Integer.MIN_VALUE;
-    }
+    private Phased phased;
 
     @Override
-    public boolean isDataAccessControl() {
-        return dataAccessControl;
+    public boolean isEmpty() {
+        return false;
     }
 
-    @Override
-    public Set<String> getPermissions() {
-        return new HashSet<>(permissions);
+    private static final Set<Class<? extends Annotation>> types = new HashSet<>(Arrays.asList(
+            Authorize.class,
+            DataAccess.class,
+            Dimension.class,
+            Resource.class,
+            ResourceAction.class,
+            DataAccessType.class
+    ));
+
+    public static AopAuthorizeDefinition from(Class<?> targetClass, Method method) {
+        AopAuthorizeDefinitionParser parser = new AopAuthorizeDefinitionParser(targetClass, method);
+
+        return parser.parse();
     }
 
-    @Override
-    public Set<String> getActions() {
-        return new HashSet<>(actions);
-    }
-
-    @Override
-    public Set<String> getRoles() {
-        return new HashSet<>(roles);
-    }
-
-    @Override
-    public Set<String> getUser() {
-        return new HashSet<>(user);
-    }
-
-    @Override
-    public Script getScript() {
-        return script;
-    }
-
-    @Override
-    public String getMessage() {
-        return message;
-    }
-
-    @Override
-    public Logical getLogical() {
-        return logical;
-    }
-
-    @Override
-    public DataAccessDefinition getDataAccessDefinition() {
-        return dataAccessDefinition;
-    }
-
-    public void setDataAccessDefinition(DataAccessDefinition dataAccessDefinition) {
-        this.dataAccessDefinition = dataAccessDefinition;
-    }
-
-    public void setActions(Set<String> actions) {
-        this.actions = actions;
-    }
-
-    public void setDataAccessControl(boolean dataAccessControl) {
-        this.dataAccessControl = dataAccessControl;
-    }
-
-    public void setLogical(Logical logical) {
-        this.logical = logical;
-    }
-
-    public void setMessage(String message) {
-        this.message = message;
-    }
-
-    public void setPermissions(Set<String> permissions) {
-        this.permissions = permissions;
-    }
-
-    public void setRoles(Set<String> roles) {
-        this.roles = roles;
-    }
-
-    public void setScript(Script script) {
-        this.script = script;
-    }
-
-    public void setUser(Set<String> user) {
-        this.user = user;
-    }
-
-    public void put(Authorize authorize) {
-        if (null == authorize || authorize.ignore()) return;
-        permissions.addAll(Arrays.asList(authorize.permission()));
-        actions.addAll(Arrays.asList(authorize.action()));
-        roles.addAll(Arrays.asList(authorize.role()));
-        user.addAll(Arrays.asList(authorize.user()));
-        if (authorize.logical() != Logical.DEFAULT) {
-            logical = authorize.logical();
+    public void putAnnotation(Authorize ann) {
+        if (!ann.merge()) {
+            getResources().getResources().clear();
+            getDimensions().getDimensions().clear();
         }
-        message = authorize.message();
-    }
-
-    public void put(RequiresExpression expression) {
-        if (null == expression) return;
-        script = new DefaultScript(expression.language(), expression.value());
-    }
-
-    public void put(RequiresDataAccess dataAccess) {
-        if (null == dataAccess) return;
-        if (!dataAccess.permission().equals("")) {
-            permissions.add(dataAccess.permission());
+        getResources().setPhased(ann.phased());
+        for (Resource resource : ann.resources()) {
+            putAnnotation(resource);
         }
-        actions.addAll(Arrays.asList(dataAccess.action()));
-        DefaultDataAccessDefinition definition = new DefaultDataAccessDefinition();
-
-        if (!"".equals(dataAccess.controllerBeanName())) {
-            definition.setController(dataAccess.controllerBeanName());
-        } else if (DataAccessController.class != dataAccess.controllerClass()) {
-            definition.setController(dataAccess.getClass().getName());
+        for (Dimension dimension : ann.dimension()) {
+            putAnnotation(dimension);
         }
-        dataAccessDefinition = definition;
     }
 
+    public void putAnnotation(Dimension ann) {
+        if (ann.ignore()) {
+            getDimensions().getDimensions().clear();
+            return;
+        }
+        DimensionDefinition definition = new DimensionDefinition();
+        definition.setTypeId(ann.type());
+        definition.setDimensionId(new HashSet<>(Arrays.asList(ann.id())));
+        definition.setLogical(ann.logical());
+        getDimensions().addDimension(definition);
+    }
+
+    public void putAnnotation(Resource ann) {
+        ResourceDefinition resource = new ResourceDefinition();
+        resource.setId(ann.id());
+        resource.setName(ann.name());
+        resource.setLogical(ann.logical());
+        resource.setPhased(ann.phased());
+        resource.setDescription(String.join("\n", ann.description()));
+        for (ResourceAction action : ann.actions()) {
+            putAnnotation(resource, action);
+        }
+        resource.setGroup(new ArrayList<>(Arrays.asList(ann.group())));
+        resources.addResource(resource, ann.merge());
+    }
+
+    public ResourceActionDefinition putAnnotation(ResourceDefinition definition, ResourceAction ann) {
+        ResourceActionDefinition actionDefinition = new ResourceActionDefinition();
+        actionDefinition.setId(ann.id());
+        actionDefinition.setName(ann.name());
+        actionDefinition.setDescription(String.join("\n", ann.description()));
+        for (DataAccess dataAccess : ann.dataAccess()) {
+            putAnnotation(actionDefinition, dataAccess);
+        }
+        definition.addAction(actionDefinition);
+        return actionDefinition;
+    }
+
+
+    public void putAnnotation(ResourceActionDefinition definition, DataAccess ann) {
+        if (ann.ignore()) {
+            return;
+        }
+        DataAccessTypeDefinition typeDefinition = new DataAccessTypeDefinition();
+        for (DataAccessType dataAccessType : ann.type()) {
+            if (dataAccessType.ignore()) {
+                continue;
+            }
+            typeDefinition.setId(dataAccessType.id());
+            typeDefinition.setName(dataAccessType.name());
+            typeDefinition.setController(dataAccessType.controller());
+            typeDefinition.setConfiguration(dataAccessType.configuration());
+            typeDefinition.setDescription(String.join("\n", dataAccessType.description()));
+        }
+        if (StringUtils.isEmpty(typeDefinition.getId())) {
+            return;
+        }
+        definition.getDataAccess()
+                .getDataAccessTypes()
+                .add(typeDefinition);
+    }
+
+    public void putAnnotation(ResourceActionDefinition definition, DataAccessType dataAccessType) {
+        if (dataAccessType.ignore()) {
+            return;
+        }
+        DataAccessTypeDefinition typeDefinition = new DataAccessTypeDefinition();
+        typeDefinition.setId(dataAccessType.id());
+        typeDefinition.setName(dataAccessType.name());
+        typeDefinition.setController(dataAccessType.controller());
+        typeDefinition.setConfiguration(dataAccessType.configuration());
+        typeDefinition.setDescription(String.join("\n", dataAccessType.description()));
+        definition.getDataAccess()
+                .getDataAccessTypes()
+                .add(typeDefinition);
+    }
 
 }
