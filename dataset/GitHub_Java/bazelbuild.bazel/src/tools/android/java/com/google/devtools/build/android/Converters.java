@@ -67,30 +67,8 @@ public final class Converters {
 
     @Override
     public String getTypeDescription() {
-      return "unvalidated android data in the format " + UnvalidatedAndroidData.expectedFormat();
-    }
-  }
-
-  /**
-   * Converter for {@link UnvalidatedAndroidDirectories}.
-   */
-  public static class UnvalidatedAndroidDirectoriesConverter
-      implements Converter<UnvalidatedAndroidDirectories> {
-
-    @Override
-    public UnvalidatedAndroidDirectories convert(String input) throws OptionsParsingException {
-      try {
-        return UnvalidatedAndroidDirectories.valueOf(input);
-      } catch (IllegalArgumentException e) {
-        throw new OptionsParsingException(
-            String.format("invalid UnvalidatedAndroidDirectories: %s", e.getMessage()), e);
-      }
-    }
-
-    @Override
-    public String getTypeDescription() {
-      return "unvalidated android directories in the format "
-          + UnvalidatedAndroidDirectories.expectedFormat();
+      return "unvalidated android data in the format "
+          + "resources[#resources]:assets[#assets]:manifest";
     }
   }
 
@@ -385,6 +363,32 @@ public final class Converters {
     // parameters and not argument type parameters.
     @Override public Map<Path, String> convert(String input) throws OptionsParsingException {
       return super.convert(input);
+    }
+  }
+
+  /**
+   * A converter to handle the migration of the --mergeeManifests flag from a list of paths to a
+   * dictionary of paths to labels.
+   */
+  public static class MergeeManifestsConverter implements Converter<Map<Path, String>> {
+    @Override
+    public Map<Path, String> convert(String input) throws OptionsParsingException {
+      try {
+        List<Path> manifests = new ExistingPathListConverter().convert(input);
+        Map<Path, String> mergeeManifests = new LinkedHashMap<>();
+        for (Path manifest : manifests) {
+          mergeeManifests.put(manifest, manifest.getFileName().toString());
+        }
+        return ImmutableMap.copyOf(mergeeManifests);
+      } catch (OptionsParsingException e) {
+        // Expected if argument change has been released.
+        return new ExistingPathStringDictionaryConverter().convert(input);
+      }
+    }
+
+    @Override
+    public String getTypeDescription() {
+      return "a path to string dictionary with fallback to path list using filename as values";
     }
   }
 }
