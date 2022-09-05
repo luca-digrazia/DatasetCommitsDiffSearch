@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-
 import java.util.Map;
 import java.util.Set;
 
@@ -23,7 +21,6 @@ import javax.annotation.Nullable;
 /**
  * A graph that exposes its entries and structure, for use by classes that must traverse it.
  */
-@ThreadSafe
 public interface QueryableGraph {
   /**
    * Returns the node with the given name, or {@code null} if the node does not exist.
