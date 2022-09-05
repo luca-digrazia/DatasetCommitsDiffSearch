@@ -40,9 +40,10 @@ import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.GotOptionsEvent;
-import com.google.devtools.build.lib.runtime.WorkspaceBuilder;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
+import com.google.devtools.build.skyframe.SkyFunction;
+import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.common.options.Converters.AssignmentConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
@@ -93,18 +94,15 @@ public class BazelRulesModule extends BlazeModule {
     public List<Map.Entry<String, String>> strategy;
   }
 
-  /**
-   * An object describing the {@link ActionContext} implementation that some actions require in
-   * Bazel.
-   */
-  protected static class BazelActionContextConsumer implements ActionContextConsumer {
-    private final BazelExecutionOptions options;
+  private static class BazelActionContextConsumer implements ActionContextConsumer {
+    BazelExecutionOptions options;
 
-    protected BazelActionContextConsumer(BazelExecutionOptions options) {
+    private BazelActionContextConsumer(BazelExecutionOptions options) {
       this.options = options;
+
     }
     @Override
-    public ImmutableMap<String, String> getSpawnActionContexts() {
+    public Map<String, String> getSpawnActionContexts() {
       Map<String, String> contexts = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 
       contexts.put("Genrule", options.genruleStrategy);
@@ -139,7 +137,7 @@ public class BazelRulesModule extends BlazeModule {
   }
 
   private CommandEnvironment env;
-  protected BazelExecutionOptions options;
+  private BazelExecutionOptions options;
 
   @Override
   public void beforeCommand(Command command, CommandEnvironment env) {
@@ -192,9 +190,8 @@ public class BazelRulesModule extends BlazeModule {
   }
 
   @Override
-  public void workspaceInit(BlazeDirectories directories, WorkspaceBuilder builder) {
-    builder.addSkyFunction(FdoSupportValue.SKYFUNCTION, new FdoSupportFunction());
-    builder.addPrecomputedValue(PrecomputedValue.injected(
+  public Iterable<PrecomputedValue.Injected> getPrecomputedSkyframeValues() {
+    return ImmutableList.of(PrecomputedValue.injected(
         GenQuery.QUERY_OUTPUT_FORMATTERS,
         new Supplier<ImmutableList<OutputFormatter>>() {
           @Override
@@ -202,5 +199,11 @@ public class BazelRulesModule extends BlazeModule {
             return env.getRuntime().getQueryOutputFormatters();
           }
         }));
+  }
+
+  @Override
+  public ImmutableMap<SkyFunctionName, SkyFunction> getSkyFunctions(BlazeDirectories directories) {
+    return ImmutableMap.<SkyFunctionName, SkyFunction>of(
+        FdoSupportValue.SKYFUNCTION, new FdoSupportFunction());
   }
 }
