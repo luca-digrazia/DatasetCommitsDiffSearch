@@ -1,7 +1,5 @@
 package org.nlpcn.es4sql.spatial;
-
-
-import com.google.common.base.Joiner;
+import org.elasticsearch.common.base.Joiner;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -62,7 +60,7 @@ public class WktToGeoJsonConverter {
         for (int i=0;i<lineStrings.length;i++){
             coordinates[i] = lineStringCoordinatesFromWkt(lineStrings[i]);
         }
-        String multiLineStringCoordinates = Joiner.on(",").join(coordinates);
+        String multiLineStringCoordinates = Joiner.on(',').join(coordinates);
         return String.format("[%s]", multiLineStringCoordinates);
 
     }
@@ -90,7 +88,7 @@ public class WktToGeoJsonConverter {
         for (int i=0;i<polygons.length;i++){
             polygonsCoordinates[i] = polygonCoordinatesFromWkt(polygons[i]);
         }
-        String coordinates = Joiner.on(",").join(polygonsCoordinates);
+        String coordinates = Joiner.on(',').join(polygonsCoordinates);
         return String.format("[%s]", coordinates);
     }
 
@@ -113,7 +111,7 @@ public class WktToGeoJsonConverter {
                 String polygonCoordinates = getJsonArrayFromListOfPoints(polygons[i]);
                 coordinatesOfPolygons[i] = polygonCoordinates;
             }
-            coordinates = Joiner.on(",").join(coordinatesOfPolygons);
+            coordinates = Joiner.on(',').join(coordinatesOfPolygons);
         }
         else {
             coordinates = getJsonArrayFromListOfPoints(wkt);
@@ -127,8 +125,7 @@ public class WktToGeoJsonConverter {
         for(String point : points){
             coordinates.add(extractCoordinateFromPoint(point));
         }
-
-        String joinedCoordinates = Joiner.on(",").join(coordinates);
+        String joinedCoordinates = Joiner.on(',').join(coordinates);
         return String.format("[%s]", joinedCoordinates);
     }
 
