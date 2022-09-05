@@ -136,7 +136,7 @@ public final class BinaryOperatorExpression extends Expression {
           return SkylarkList.concat((SkylarkList) lval, (SkylarkList) rval, getLocation());
         }
 
-        if (lval instanceof Map<?, ?> && rval instanceof Map<?, ?>) {
+        if (env.isSkylarkEnabled() && lval instanceof Map<?, ?> && rval instanceof Map<?, ?>) {
           Map<?, ?> ldict = (Map<?, ?>) lval;
           Map<?, ?> rdict = (Map<?, ?>) rval;
           Map<Object, Object> result = Maps.newHashMapWithExpectedSize(ldict.size() + rdict.size());
@@ -145,12 +145,13 @@ public final class BinaryOperatorExpression extends Expression {
           return ImmutableMap.copyOf(result);
         }
 
-        if (lval instanceof SkylarkClassObject && rval instanceof SkylarkClassObject) {
+        if (env.isSkylarkEnabled()
+            && lval instanceof SkylarkClassObject && rval instanceof SkylarkClassObject) {
           return SkylarkClassObject.concat(
               (SkylarkClassObject) lval, (SkylarkClassObject) rval, getLocation());
         }
 
-        if (lval instanceof SkylarkNestedSet) {
+        if (env.isSkylarkEnabled() && lval instanceof SkylarkNestedSet) {
           return new SkylarkNestedSet((SkylarkNestedSet) lval, rval, getLocation());
         }
         break;
