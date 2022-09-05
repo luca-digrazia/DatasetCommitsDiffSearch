@@ -987,64 +987,25 @@ public class CcToolchainFeatures implements Serializable {
      * significantly reduces memory overhead.
      */
     @Immutable
-    public static class LibraryToLinkValue implements VariableValue {
+    public static final class LibraryToLinkValue implements VariableValue {
 
-      public static final String OBJECT_FILES_FIELD_NAME = "object_files";
-      public static final String NAME_FIELD_NAME = "name";
-      public static final String TYPE_FIELD_NAME = "type";
+      public static final String NAMES_FIELD_NAME = "names";
       public static final String IS_WHOLE_ARCHIVE_FIELD_NAME = "is_whole_archive";
-      private enum Type {
-        OBJECT_FILE("object_file"),
-        OBJECT_FILE_GROUP("object_file_group"),
-        INTERFACE_LIBRARY("interface_library"),
-        STATIC_LIBRARY("static_library"),
-        DYNAMIC_LIBRARY("dynamic_library"),
-        VERSIONED_DYNAMIC_LIBRARY("versioned_dynamic_library");
+      public static final String IS_LIB_GROUP_FIELD_NAME = "is_lib_group";
 
-        private final String name;
-
-        Type(String name) {
-          this.name = name;
-        }
-      }
-
-      private final String name;
-      private final ImmutableList<String> objectFiles;
+      private final ImmutableList<String> names;
       private final boolean isWholeArchive;
-      private final Type type;
+      private final boolean isLibGroup;
 
-      public static LibraryToLinkValue forDynamicLibrary(String name, boolean isWholeArchive) {
-        return new LibraryToLinkValue(name, null, isWholeArchive, Type.DYNAMIC_LIBRARY);
+      public LibraryToLinkValue(String name, boolean isWholeArchive) {
+        this(ImmutableList.of(name), isWholeArchive, false);
       }
 
-      public static LibraryToLinkValue forVersionedDynamicLibrary(
-          String name, boolean isWholeArchive) {
-        return new LibraryToLinkValue(name, null, isWholeArchive, Type.VERSIONED_DYNAMIC_LIBRARY);
-      }
-
-      public static LibraryToLinkValue forInterfaceLibrary(String name, boolean isWholeArchive) {
-        return new LibraryToLinkValue(name, null, isWholeArchive, Type.INTERFACE_LIBRARY);
-      }
-
-      public static LibraryToLinkValue forStaticLibrary(String name, boolean isWholeArchive) {
-        return new LibraryToLinkValue(name, null, isWholeArchive, Type.STATIC_LIBRARY);
-      }
-
-      public static LibraryToLinkValue forObjectFile(String name, boolean isWholeArchive) {
-        return new LibraryToLinkValue(name, null, isWholeArchive, Type.OBJECT_FILE);
-      }
-
-      public static LibraryToLinkValue forObjectFileGroup(
-          ImmutableList<String> objects, boolean isWholeArchive) {
-        return new LibraryToLinkValue(null, objects, isWholeArchive, Type.OBJECT_FILE_GROUP);
-      }
-
-      private LibraryToLinkValue(
-          String name, ImmutableList<String> objectFiles, boolean isWholeArchive, Type type) {
-        this.name = name;
-        this.objectFiles = objectFiles;
+      public LibraryToLinkValue(
+          ImmutableList<String> names, boolean isWholeArchive, boolean isLibGroup) {
+        this.names = names;
         this.isWholeArchive = isWholeArchive;
-        this.type = type;
+        this.isLibGroup = isLibGroup;
       }
 
       @Override
@@ -1064,27 +1025,22 @@ public class CcToolchainFeatures implements Serializable {
       @Override
       public VariableValue getFieldValue(String variableName, String field) {
         Preconditions.checkNotNull(field);
-        if (NAME_FIELD_NAME.equals(field) && !type.equals(Type.OBJECT_FILE_GROUP)) {
-          return new StringValue(name);
-        } else if (OBJECT_FILES_FIELD_NAME.equals(field) && type.equals(Type.OBJECT_FILE_GROUP)) {
-          return new StringSequence(objectFiles);
-        } else if (TYPE_FIELD_NAME.equals(field)) {
-          return new StringValue(type.name);
+        if (NAMES_FIELD_NAME.equals(field)) {
+          return new StringSequence(names);
         } else if (IS_WHOLE_ARCHIVE_FIELD_NAME.equals(field)) {
           return new IntegerValue(isWholeArchive ? 1 : 0);
+        } else if (IS_LIB_GROUP_FIELD_NAME.equals(field)) {
+          return new IntegerValue(isLibGroup ? 1 : 0);
         } else if ("whole_archive_presence".equals(field)) {
           // TODO(b/33403458): Cleanup this workaround once bazel >=0.4.3 is released.
           return isWholeArchive ? new IntegerValue(0) : null;
         } else if ("no_whole_archive_presence".equals(field)) {
           // TODO(b/33403458): Cleanup this workaround once bazel >=0.4.3 is released.
           return !isWholeArchive ? new IntegerValue(0) : null;
-        } else {
+        } else if ("lib_group_presence".equals(field)) {
           // TODO(b/33403458): Cleanup this workaround once bazel >=0.4.3 is released.
-          for (Type t : Type.values()) {
-            if ((t.name + "_presence").equals(field)) {
-              return type.equals(t) ? new IntegerValue(0) : null;
-            }
-          }
+          return isLibGroup ? new IntegerValue(0) : null;
+        } else {
           return null;
         }
       }
@@ -1407,27 +1363,12 @@ public class CcToolchainFeatures implements Serializable {
       private final Map<String, VariableValue> variablesMap = new LinkedHashMap<>();
       private final Map<String, String> stringVariablesMap = new LinkedHashMap<>();
 
-      public Builder() {};
-
-      public Builder(Variables variables) {
-        variablesMap.putAll(variables.variablesMap);
-        stringVariablesMap.putAll(variables.stringVariablesMap);
-      }
-
       /** Add a variable that expands {@code name} to {@code value}. */
       public Builder addStringVariable(String name, String value) {
         Preconditions.checkArgument(
             !variablesMap.containsKey(name), "Cannot overwrite variable '%s'", name);
         Preconditions.checkArgument(
             !stringVariablesMap.containsKey(name), "Cannot overwrite variable '%s'", name);
-        Preconditions.checkNotNull(
-            value, "Cannot set null as a value for variable '%s'", name);
-        stringVariablesMap.put(name, value);
-        return this;
-      }
-
-      /** Overrides a variable to expands {@code name} to {@code value} instead. */
-      public Builder overrideStringVariable(String name, String value) {
         Preconditions.checkNotNull(
             value, "Cannot set null as a value for variable '%s'", name);
         stringVariablesMap.put(name, value);
@@ -1835,15 +1776,13 @@ public class CcToolchainFeatures implements Serializable {
    * was disabled.
    */
   private final ImmutableMultimap<CrosstoolSelectable, CrosstoolSelectable> requiredBy;
-
-  private final ImmutableList<String> defaultFeatures;
  
   /**
-   * A cache of feature selection results, so we do not recalculate the feature selection for all
-   * actions.
+   * A cache of feature selection results, so we do not recalculate the feature selection for
+   * all actions.
    */
-  private transient LoadingCache<Collection<String>, FeatureConfiguration> configurationCache =
-      buildConfigurationCache();
+  private transient LoadingCache<Collection<String>, FeatureConfiguration>
+      configurationCache = buildConfigurationCache();
 
   /**
    * Constructs the feature configuration from a {@code CToolchain} protocol buffer.
@@ -1863,16 +1802,11 @@ public class CcToolchainFeatures implements Serializable {
     // Also build a map from action -> action_config, for use in tool lookups
     ImmutableMap.Builder<String, ActionConfig> actionConfigsByActionName = ImmutableMap.builder();
 
-    ImmutableList.Builder<String> defaultFeaturesBuilder = ImmutableList.builder();
     for (CToolchain.Feature toolchainFeature : toolchain.getFeatureList()) {
       Feature feature = new Feature(toolchainFeature);
       selectablesBuilder.add(feature);
       selectablesByName.put(feature.getName(), feature);
-      if (toolchainFeature.getEnabled()) {
-        defaultFeaturesBuilder.add(feature.getName());
-      }
     }
-    this.defaultFeatures = defaultFeaturesBuilder.build();
     
     for (CToolchain.ActionConfig toolchainActionConfig : toolchain.getActionConfigList()) {
       ActionConfig actionConfig = new ActionConfig(toolchainActionConfig);
@@ -2026,11 +1960,6 @@ public class CcToolchainFeatures implements Serializable {
    */ 
   public FeatureConfiguration getFeatureConfiguration(String... requestedFeatures) {
     return getFeatureConfiguration(Arrays.asList(requestedFeatures));
-  }
-
-  /** Returns the list of features that specify themselves as enabled by default. */
-  public ImmutableList<String> getDefaultFeatures() {
-    return defaultFeatures;
   }
 
   /**
