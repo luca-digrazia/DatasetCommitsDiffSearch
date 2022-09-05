@@ -173,7 +173,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected WorkspaceStatusAction.Factory workspaceStatusActionFactory;
 
   private MutableActionGraph mutableActionGraph;
-  protected boolean enableLoading = true;
 
   @Override
   protected void setUp() throws Exception {
@@ -368,11 +367,12 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     skyframeExecutor.setupDefaultPackage(defaultsPackageContent);
     skyframeExecutor.dropConfiguredTargets();
 
-    view = new BuildView(directories, ruleClassProvider, skyframeExecutor, binTools, null);
+    view = new BuildView(directories, getPackageManager(), ruleClassProvider, skyframeExecutor,
+        binTools, null);
     view.setConfigurationsForTesting(masterConfig);
 
     view.setArtifactRoots(
-        ImmutableMap.of(PackageIdentifier.createInDefaultRepo(""), rootDirectory), masterConfig);
+        ImmutableMap.of(PackageIdentifier.createInDefaultRepo(""), rootDirectory));
     simulateLoadingPhase();
   }
 
@@ -1300,8 +1300,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     LoadingPhaseRunner runner = new LoadingPhaseRunner(getPackageManager(),
         Collections.unmodifiableSet(ruleClassProvider.getRuleClassMap().keySet()));
     LoadingResult loadingResult = runner.execute(reporter, eventBus, targets, loadingOptions,
-        getTargetConfiguration().getAllLabels(), viewOptions.keepGoing,
-        enableLoading, /*determineTests=*/false, /*callback=*/null);
+        getTargetConfiguration().getAllLabels(),
+        viewOptions.keepGoing, /*determineTests=*/false, /*callback=*/null);
     if (!doAnalysis) {
       // TODO(bazel-team): What's supposed to happen in this case?
       return null;
@@ -1313,8 +1313,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         viewOptions,
         AnalysisTestUtil.TOP_LEVEL_ARTIFACT_CONTEXT,
         reporter,
-        eventBus,
-        enableLoading);
+        eventBus);
   }
 
   protected static Predicate<Artifact> artifactNamed(final String name) {
@@ -1605,9 +1604,5 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     return result.build();
-  }
-
-  protected void disableLoading() {
-    enableLoading = false;
   }
 }

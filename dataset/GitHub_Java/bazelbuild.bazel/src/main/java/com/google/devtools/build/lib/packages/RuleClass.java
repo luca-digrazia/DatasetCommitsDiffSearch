@@ -16,8 +16,8 @@ package com.google.devtools.build.lib.packages;
 
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
-import com.google.devtools.build.lib.packages.BuildType.SelectorList;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.syntax.Argument;
 import com.google.devtools.build.lib.syntax.BaseFunction;
@@ -43,7 +42,6 @@ import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.GlobList;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -1295,8 +1293,7 @@ public final class RuleClass {
     }
 
     String name = fragmentNameResolver.resolveName(configurationFragment);
-    ImmutableSet<String> fragmentNames = requiredConfigurationFragmentNames.get(config);
-    return (name != null && fragmentNames != null && fragmentNames.contains(name));
+    return (name != null && requiredConfigurationFragmentNames.get(config).contains(name));
   }
 
   /**
@@ -1491,7 +1488,7 @@ public final class RuleClass {
 
     Set<Label> configLabels = new LinkedHashSet<>();
     for (Attribute attr : rule.getAttributes()) {
-      SelectorList<?> selectors = attributes.getSelectorList(attr.getName(), attr.getType());
+      Type.SelectorList<?> selectors = attributes.getSelectorList(attr.getName(), attr.getType());
       if (selectors != null) {
         configLabels.addAll(selectors.getKeyLabels());
       }
@@ -1522,7 +1519,7 @@ public final class RuleClass {
    */
   private static void checkForDuplicateLabels(Rule rule, EventHandler eventHandler) {
     for (Attribute attribute : rule.getAttributes()) {
-      if (attribute.getType() == BuildType.LABEL_LIST) {
+      if (attribute.getType() == Type.LABEL_LIST) {
         checkForDuplicateLabels(rule, attribute, eventHandler);
       }
     }
@@ -1643,9 +1640,9 @@ public final class RuleClass {
     Object converted;
     try {
       String what = "attribute '" + attrName + "' in '" + name + "' rule";
-      converted = BuildType.selectableConvert(attr.getType(), attrVal, what, rule.getLabel());
+      converted = attr.getType().selectableConvert(attrVal, what, rule.getLabel());
 
-      if ((converted instanceof SelectorList<?>) && !attr.isConfigurable()) {
+      if ((converted instanceof Type.SelectorList<?>) && !attr.isConfigurable()) {
         rule.reportError(rule.getLabel() + ": attribute \"" + attr.getName()
             + "\" is not configurable", eventHandler);
         return null;

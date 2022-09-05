@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,11 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Label;
+
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
@@ -30,15 +29,15 @@ import java.util.List;
  */
 @Immutable @ThreadSafe
 public class ConstantRuleVisibility implements RuleVisibility, Serializable {
-  @AutoCodec
-  static final Label LEGACY_PUBLIC_LABEL; // same as "public"; used for automated depot cleanup
+  static final Label LEGACY_PUBLIC_LABEL;  // same as "public"; used for automated depot cleanup
+  private static final Label PUBLIC_LABEL;
+  private static final Label PRIVATE_LABEL;
 
-  @AutoCodec @AutoCodec.VisibleForSerialization static final Label PUBLIC_LABEL;
-  @AutoCodec @AutoCodec.VisibleForSerialization static final Label PRIVATE_LABEL;
+  public static final ConstantRuleVisibility PUBLIC =
+      new ConstantRuleVisibility(true);
 
-  @AutoCodec public static final ConstantRuleVisibility PUBLIC = new ConstantRuleVisibility(true);
-
-  @AutoCodec public static final ConstantRuleVisibility PRIVATE = new ConstantRuleVisibility(false);
+  public static final ConstantRuleVisibility PRIVATE =
+      new ConstantRuleVisibility(false);
 
   static {
     try {
@@ -77,20 +76,11 @@ public class ConstantRuleVisibility implements RuleVisibility, Serializable {
    * @return The resulting visibility object, or null if the list of labels
    * could not be parsed.
    */
-  public static ConstantRuleVisibility tryParse(List<Label> labels) throws EvalException {
-    if (labels.size() == 1) {
-      return tryParse(labels.get(0));
+  public static ConstantRuleVisibility tryParse(List<Label> labels) {
+    if (labels.size() != 1) {
+      return null;
     }
-    ConstantRuleVisibility visibility;
-    for (Label label : labels) {
-      visibility = tryParse(label);
-      if (visibility != null) {
-        throw new EvalException(null,
-            "Public or private visibility labels (e.g. //visibility:public or" +
-            " //visibility:private) cannot be used in combination with other labels");
-      }
-    }
-    return null;
+    return tryParse(labels.get(0));
   }
 
   public static ConstantRuleVisibility tryParse(Label label) {

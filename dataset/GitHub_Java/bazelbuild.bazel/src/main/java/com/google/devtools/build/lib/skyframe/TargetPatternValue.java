@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,10 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets.Builder;
@@ -26,8 +26,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
-import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
@@ -137,13 +136,9 @@ public final class TargetPatternValue implements SkyValue {
         builder.add(new TargetPatternSkyKeyException(e, absoluteValueOfPattern));
         continue;
       }
-      TargetPatternKey targetPatternKey =
-          new TargetPatternKey(
-              targetPattern,
-              positive ? policy : FilteringPolicies.NO_FILTER, /*isNegative=*/
-              !positive,
-              offset,
-              ImmutableSet.<PathFragment>of());
+      TargetPatternKey targetPatternKey = new TargetPatternKey(targetPattern,
+          positive ? policy : FilteringPolicies.NO_FILTER, /*isNegative=*/!positive, offset,
+          ImmutableSet.<String>of());
       SkyKey skyKey = new SkyKey(SkyFunctions.TARGET_PATTERN, targetPatternKey);
       builder.add(new TargetPatternSkyKeyValue(skyKey));
     }
@@ -166,14 +161,10 @@ public final class TargetPatternValue implements SkyValue {
     private final boolean isNegative;
 
     private final String offset;
-    private final ImmutableSet<PathFragment> excludedSubdirectories;
+    private final ImmutableSet<String> excludedSubdirectories;
 
-    public TargetPatternKey(
-        TargetPattern parsedPattern,
-        FilteringPolicy policy,
-        boolean isNegative,
-        String offset,
-        ImmutableSet<PathFragment> excludedSubdirectories) {
+    public TargetPatternKey(TargetPattern parsedPattern, FilteringPolicy policy,
+        boolean isNegative, String offset, ImmutableSet<String> excludedSubdirectories) {
       this.parsedPattern = Preconditions.checkNotNull(parsedPattern);
       this.policy = Preconditions.checkNotNull(policy);
       this.isNegative = isNegative;
@@ -201,7 +192,7 @@ public final class TargetPatternValue implements SkyValue {
       return offset;
     }
 
-    public ImmutableSet<PathFragment> getExcludedSubdirectories() {
+    public ImmutableSet<String> getExcludedSubdirectories() {
       return excludedSubdirectories;
     }
 

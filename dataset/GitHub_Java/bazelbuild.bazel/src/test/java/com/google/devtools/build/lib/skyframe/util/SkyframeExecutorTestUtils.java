@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,14 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe.util;
 
-import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Target;
@@ -28,13 +25,17 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
 import com.google.devtools.build.lib.skyframe.PackageValue;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
+import com.google.devtools.build.lib.skyframe.TargetMarkerValue;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.util.Collection;
 import java.util.List;
+
 import javax.annotation.Nullable;
 
 /**
@@ -54,11 +55,11 @@ public class SkyframeExecutorTestUtils {
   }
 
   /**
-   * Returns an existing error info, or {@code null} if the given key is not currently in the graph.
+   * Returns an existing error info, or {@code null} if the given key is not currently in the
+   * graph.
    */
   @Nullable
-  public static ErrorInfo getExistingError(SkyframeExecutor skyframeExecutor, SkyKey key)
-      throws InterruptedException {
+  public static ErrorInfo getExistingError(SkyframeExecutor skyframeExecutor, SkyKey key) {
     return skyframeExecutor.getEvaluatorForTesting().getExistingErrorForTesting(key);
   }
 
@@ -104,23 +105,6 @@ public class SkyframeExecutorTestUtils {
   }
 
   /**
-   * Returns all configured targets currently in the graph with the given label.
-   *
-   * <p>Unlike {@link #getExistingConfiguredTarget(SkyframeExecutor, Label, BuildConfiguration)},
-   * this doesn't make the caller request a specific configuration.
-   */
-  public static Iterable<ConfiguredTarget> getExistingConfiguredTargets(
-      SkyframeExecutor skyframeExecutor, final Label label) {
-    return Iterables.filter(getAllExistingConfiguredTargets(skyframeExecutor),
-        new Predicate<ConfiguredTarget>() {
-          @Override
-          public boolean apply(ConfiguredTarget input) {
-            return input.getTarget().getLabel().equals(label);
-          }
-        });
-  }
-
-  /**
    * Returns all configured targets currently in the graph.
    */
   public static Iterable<ConfiguredTarget> getAllExistingConfiguredTargets(
@@ -162,12 +146,11 @@ public class SkyframeExecutorTestUtils {
    * Returns the error info for an existing target value, or {@code null} if there is not an
    * appropriate target value key in the graph.
    *
-   * <p>This helper is provided so legacy tests don't need to know about details of skyframe keys.
+   * This helper is provided so legacy tests don't need to know about details of skyframe keys.
    */
   @Nullable
-  public static ErrorInfo getExistingFailedPackage(SkyframeExecutor skyframeExecutor, Label label)
-      throws InterruptedException {
-    SkyKey key = PackageValue.key(label.getPackageIdentifier());
+  public static ErrorInfo getExistingFailedTarget(SkyframeExecutor skyframeExecutor, Label label) {
+    SkyKey key = TargetMarkerValue.key(label);
     return getExistingError(skyframeExecutor, key);
   }
 }

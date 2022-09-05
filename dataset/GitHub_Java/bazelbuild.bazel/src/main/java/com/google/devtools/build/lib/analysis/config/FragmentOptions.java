@@ -17,9 +17,9 @@ package com.google.devtools.build.lib.analysis.config;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsBase;
 
@@ -112,7 +112,7 @@ public abstract class FragmentOptions extends OptionsBase implements Cloneable, 
   }
 
   private static Label parseOptionalLabel(String value) {
-    if (value != null) {
+    if ((value != null) && value.startsWith("//")) {
       try {
         return Label.parseAbsolute(value);
       } catch (LabelSyntaxException e) {

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,55 +54,64 @@ public class PackageIdentifierTest {
     assertThat(mainA.getRepository()).isEqualTo(PackageIdentifier.MAIN_REPOSITORY_NAME);
   }
 
-  public void assertNotValid(String name, String expectedMessage) {
-    try {
-      RepositoryName.create(name);
-      fail();
-    } catch (LabelSyntaxException expected) {
-      assertThat(expected.getMessage()).contains(expectedMessage);
-    }
-  }
-
   @Test
   public void testValidateRepositoryName() throws Exception {
+    // OK:
     assertEquals("@foo", RepositoryName.create("@foo").toString());
     assertThat(RepositoryName.create("").toString()).isEmpty();
     assertEquals("@foo/bar", RepositoryName.create("@foo/bar").toString());
     assertEquals("@foo.bar", RepositoryName.create("@foo.bar").toString());
-    assertEquals("@..foo", RepositoryName.create("@..foo").toString());
-    assertEquals("@foo..", RepositoryName.create("@foo..").toString());
-    assertEquals("@.foo", RepositoryName.create("@.foo").toString());
 
-    assertNotValid("@/", "workspace names are not allowed to start with '@/'");
-    assertNotValid("@.", "workspace names are not allowed to be '@.'");
-    assertNotValid("@./", "workspace names are not allowed to start with '@./'");
-    assertNotValid("@../", "workspace names are not allowed to start with '@..'");
-    assertNotValid("@x/./x", "workspace names are not allowed to contain '/./'");
-    assertNotValid("@x/../x", "workspace names are not allowed to contain '/../'");
-    assertNotValid("@abc/", "workspace names are not allowed to end with '/'");
-    assertNotValid("@/abc", "workspace names are not allowed to start with '@/'");
-    assertNotValid("@a//////b", "workspace names are not allowed to contain '//'");
-    assertNotValid("@foo@",
-        "workspace names may contain only A-Z, a-z, 0-9, '-', '_', '.', and '/'");
-    assertNotValid("@foo\0",
-        "workspace names may contain only A-Z, a-z, 0-9, '-', '_', '.', and '/'");
-    assertNotValid("x", "workspace names must start with '@'");
+    try {
+      RepositoryName.create("@abc/");
+      fail();
+    } catch (LabelSyntaxException expected) {
+      assertThat(expected.getMessage()).contains(
+          "workspace names cannot start nor end with '/'");
+    }
+    try {
+      RepositoryName.create("@/abc");
+      fail();
+    } catch (LabelSyntaxException expected) {
+      assertThat(expected.getMessage()).contains(
+          "workspace names cannot start nor end with '/'");
+    }
+    try {
+      RepositoryName.create("@a//////b");
+      fail();
+    } catch (LabelSyntaxException expected) {
+      assertThat(expected.getMessage()).contains(
+          "workspace names cannot contain multiple '/'s in a row");
+    }
+    try {
+      RepositoryName.create("@foo@");
+      fail();
+    } catch (LabelSyntaxException expected) {
+      assertThat(expected.getMessage()).contains(
+          "workspace names may contain only A-Z, a-z, 0-9, '-', '_', '.', and '/'");
+    }
+    try {
+      RepositoryName.create("x");
+      fail();
+    } catch (LabelSyntaxException expected) {
+      assertThat(expected.getMessage()).contains("workspace name must start with '@'");
+    }
   }
 
   @Test
   public void testToString() throws Exception {
-    PackageIdentifier local = PackageIdentifier.create("", new PathFragment("bar/baz"));
+    PackageIdentifier local = new PackageIdentifier("", new PathFragment("bar/baz"));
     assertEquals("bar/baz", local.toString());
-    PackageIdentifier external = PackageIdentifier.create("@foo", new PathFragment("bar/baz"));
+    PackageIdentifier external = new PackageIdentifier("@foo", new PathFragment("bar/baz"));
     assertEquals("@foo//bar/baz", external.toString());
   }
 
   @Test
   public void testCompareTo() throws Exception {
-    PackageIdentifier foo1 = PackageIdentifier.create("@foo", new PathFragment("bar/baz"));
-    PackageIdentifier foo2 = PackageIdentifier.create("@foo", new PathFragment("bar/baz"));
-    PackageIdentifier foo3 = PackageIdentifier.create("@foo", new PathFragment("bar/bz"));
-    PackageIdentifier bar = PackageIdentifier.create("@bar", new PathFragment("bar/baz"));
+    PackageIdentifier foo1 = new PackageIdentifier("@foo", new PathFragment("bar/baz"));
+    PackageIdentifier foo2 = new PackageIdentifier("@foo", new PathFragment("bar/baz"));
+    PackageIdentifier foo3 = new PackageIdentifier("@foo", new PathFragment("bar/bz"));
+    PackageIdentifier bar = new PackageIdentifier("@bar", new PathFragment("bar/baz"));
     assertEquals(0, foo1.compareTo(foo2));
     assertThat(foo1.compareTo(foo3)).isLessThan(0);
     assertThat(foo1.compareTo(bar)).isGreaterThan(0);
@@ -111,12 +120,22 @@ public class PackageIdentifierTest {
   @Test
   public void testInvalidPackageName() throws Exception {
     // This shouldn't throw an exception, package names aren't validated.
-    PackageIdentifier.create("@foo", new PathFragment("bar.baz"));
+    new PackageIdentifier("@foo", new PathFragment("bar.baz"));
+  }
+
+  @Test
+  public void testInvalidRepositoryName() throws Exception {
+    try {
+      new PackageIdentifier("foo", new PathFragment("bar/baz"));
+      fail("'foo' is not a legal repository name");
+    } catch (LabelSyntaxException expected) {
+      assertThat(expected.getMessage()).contains("workspace name must start with '@'");
+    }
   }
 
   @Test
   public void testSerialization() throws Exception {
-    PackageIdentifier inId = PackageIdentifier.create("@foo", new PathFragment("bar/baz"));
+    PackageIdentifier inId = new PackageIdentifier("@foo", new PathFragment("bar/baz"));
     ByteArrayOutputStream data = new ByteArrayOutputStream();
     ObjectOutputStream out = new ObjectOutputStream(data);
     out.writeObject(inId);
@@ -128,8 +147,8 @@ public class PackageIdentifierTest {
   @Test
   public void testPackageFragmentEquality() throws Exception {
     // Make sure package fragments are canonicalized.
-    PackageIdentifier p1 = PackageIdentifier.create("@whatever", new PathFragment("foo/bar"));
-    PackageIdentifier p2 = PackageIdentifier.create("@whatever", new PathFragment("foo/bar"));
+    PackageIdentifier p1 = new PackageIdentifier("@whatever", new PathFragment("foo/bar"));
+    PackageIdentifier p2 = new PackageIdentifier("@whatever", new PathFragment("foo/bar"));
     assertSame(p2.getPackageFragment(), p1.getPackageFragment());
   }
 }

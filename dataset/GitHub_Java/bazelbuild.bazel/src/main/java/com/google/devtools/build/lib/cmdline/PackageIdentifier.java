@@ -48,45 +48,7 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
   /**
    * A human-readable name for the repository.
    */
-  public static final class RepositoryName implements Serializable {
-    /** Helper for serializing {@link RepositoryName}. */
-    private static final class SerializationProxy implements Serializable {
-      private RepositoryName repositoryName;
-
-      private SerializationProxy(RepositoryName repositoryName) {
-        this.repositoryName = repositoryName;
-      }
-
-      private void writeObject(ObjectOutputStream out) throws IOException {
-        out.writeObject(repositoryName.toString());
-      }
-
-      private void readObject(ObjectInputStream in)
-          throws IOException, ClassNotFoundException {
-        try {
-          repositoryName = RepositoryName.create((String) in.readObject());
-        } catch (LabelSyntaxException e) {
-          throw new IOException("Error serializing repository name: " + e.getMessage());
-        }
-      }
-
-      @SuppressWarnings("unused")
-      private void readObjectNoData() throws ObjectStreamException {
-      }
-
-      private Object readResolve() {
-        return repositoryName;
-      }
-    }
-
-    private void readObject(ObjectInputStream in) throws IOException {
-      throw new IOException("Serialization is allowed only by proxy");
-    }
-
-    private Object writeReplace() {
-      return new SerializationProxy(this);
-    }
-
+  public static final class RepositoryName {
     private static final LoadingCache<String, RepositoryName> repositoryNameCache =
         CacheBuilder.newBuilder()
           .weakValues()
@@ -123,90 +85,35 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
       this.name = name;
     }
 
-    private static class Lexer {
-      private static final char EOF = '\0';
-
-      private final String name;
-      private int pos;
-
-      public Lexer(String name) {
-        this.name = name;
-        this.pos = 0;
-      }
-
-      public String lex() {
-        if (name.isEmpty()) {
-          return null;
-        }
-
-        if (name.charAt(pos) != '@') {
-          return "workspace names must start with '@'";
-        }
-
-        // @// is valid.
-        if (name.length() == 1) {
-          return null;
-        }
-
-        pos++;
-        // Disallow strings starting with "/",  "./",  or "../"
-        // Disallow strings identical to        ".",   or ".."
-        if (name.charAt(pos) == '/') {
-          return "workspace names are not allowed to start with '@/'";
-        } else if (name.charAt(pos) == '.') {
-          char next = peek(1);
-          char nextNext = peek(2);
-          // Forbid '@.' and '@..' as complete labels and '@./' and '@../' as label starts.
-          if (next == EOF) {
-            return "workspace names are not allowed to be '@.'";
-          } else if (next == '/') {
-            return "workspace names are not allowed to start with '@./'";
-          } else if (next == '.' && (nextNext == '/' || nextNext == EOF)) {
-            return "workspace names are not allowed to start with '@..'";
-          }
-        }
-
-        // This lexes the first letter a second time, to make sure it fulfills the general
-        // workspace name criteria (as well as the more strict criteria for the beginning of a
-        // workspace name).
-        // Disallow strings containing    "//", "/./", or "/../"
-        // Disallow strings ending in     "/",  "/.",   or "/.."
-        // name = @( <alphanum> | [/._-] )*
-        for (; pos < name.length(); pos++) {
-          char c = name.charAt(pos);
-          if (c == '/') {
-            char next = peek(1);
-            if (next == '/') {
-              return "workspace names are not allowed to contain '//'";
-            } else if (next == EOF) {
-              return "workspace names are not allowed to end with '/'";
-            } else if (next == '.' && (peek(2) == '/' || peek(2) == EOF)) {
-              return "workspace names are not allowed to contain '/./'";
-            } else if (next == '.' && peek(2) == '.' && (peek(3) == '/' || peek(3) == EOF)) {
-              return "workspace names are not allowed to contain '/../'";
-            }
-          } else if ((c < 'a' || c > 'z') && c != '_' && c != '-' && c != '/' && c != '.'
-              && (c < '0' || c > '9') && (c < 'A' || c > 'Z')) {
-            return "workspace names may contain only A-Z, a-z, 0-9, '-', '_', '.', and '/'";
-          }
-        }
-
-        return null;
-      }
-
-      private char peek(int num) {
-        if (pos + num >= name.length()) {
-          return EOF;
-        }
-        return name.charAt(pos + num);
-      }
-    }
-
     /**
      * Performs validity checking.  Returns null on success, an error message otherwise.
      */
     private static String validate(String name) {
-      return new Lexer(name).lex();
+      if (name.isEmpty()) {
+        return null;
+      }
+
+      if (!name.startsWith("@")) {
+        return "workspace name must start with '@'";
+      }
+
+      // Check for any character outside of [/0-9A-Za-z_.-]. Try to evaluate the
+      // conditional quickly (by looking in decreasing order of character class
+      // likelihood).
+      if (name.startsWith("@/") || name.endsWith("/")) {
+        return "workspace names cannot start nor end with '/'";
+      } else if (name.contains("//")) {
+        return "workspace names cannot contain multiple '/'s in a row";
+      }
+
+      for (int i = name.length() - 1; i >= 1; --i) {
+        char c = name.charAt(i);
+        if ((c < 'a' || c > 'z') && c != '_' && c != '-' && c != '/' && c != '.'
+            && (c < '0' || c > '9') && (c < 'A' || c > 'Z')) {
+          return "workspace names may contain only A-Z, a-z, 0-9, '-', '_', '.', and '/'";
+        }
+      }
+      return null;
     }
 
     /**
@@ -273,6 +180,42 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
     }
   }
 
+  /**
+   * Helper for serializing PackageIdentifiers.
+   *
+   * <p>PackageIdentifier's field should be final, but then it couldn't be deserialized. This
+   * allows the fields to be deserialized and copied into a new PackageIdentifier.</p>
+   */
+  private static final class SerializationProxy implements Serializable {
+    PackageIdentifier packageId;
+
+    public SerializationProxy(PackageIdentifier packageId) {
+      this.packageId = packageId;
+    }
+
+    private void writeObject(ObjectOutputStream out) throws IOException {
+      out.writeObject(packageId.repository.toString());
+      out.writeObject(packageId.pkgName);
+    }
+
+    private void readObject(ObjectInputStream in)
+        throws IOException, ClassNotFoundException {
+      try {
+        packageId = new PackageIdentifier((String) in.readObject(), (PathFragment) in.readObject());
+      } catch (LabelSyntaxException e) {
+        throw new IOException("Error serializing package identifier: " + e.getMessage());
+      }
+    }
+
+    @SuppressWarnings("unused")
+    private void readObjectNoData() throws ObjectStreamException {
+    }
+
+    private Object readResolve() {
+      return packageId;
+    }
+  }
+
   // Temporary factory for identifiers without explicit repositories.
   // TODO(bazel-team): remove all usages of this.
   public static PackageIdentifier createInDefaultRepo(String name) {
@@ -336,6 +279,18 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
     }
 
     return new PackageIdentifier(repo, new PathFragment(packageName));
+  }
+
+  private Object writeReplace() {
+    return new SerializationProxy(this);
+  }
+
+  private void readObject(ObjectInputStream in) throws IOException {
+    throw new IOException("Serialization is allowed only by proxy");
+  }
+
+  @SuppressWarnings("unused")
+  private void readObjectNoData() throws ObjectStreamException {
   }
 
   public RepositoryName getRepository() {

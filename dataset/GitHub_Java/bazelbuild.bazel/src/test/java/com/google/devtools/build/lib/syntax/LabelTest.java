@@ -13,13 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertContainsRegex;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.google.devtools.build.lib.syntax.Label.SyntaxException;
+import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -53,9 +53,14 @@ public class LabelTest {
       assertEquals("foo/bar", l.getPackageName());
       assertEquals("bar", l.getName());
     }
+    {
+      Label l = Label.parseAbsolute("//:bar");
+      assertEquals("", l.getPackageName());
+      assertEquals("bar", l.getName());
+    }
   }
 
-  private static String parseCommandLine(String label, String prefix) throws SyntaxException {
+  private static String parseCommandLine(String label, String prefix) throws LabelSyntaxException {
     return Label.parseCommandLineLabel(label, new PathFragment(prefix)).toString();
   }
 
@@ -86,7 +91,7 @@ public class LabelTest {
     try {
       parseCommandLine("//absolute:A+bad%syntax", "");
       fail();
-    } catch (SyntaxException e) {
+    } catch (LabelSyntaxException e) {
       // Expected exception
     }
   }
@@ -107,25 +112,25 @@ public class LabelTest {
     try {
       base.getRelative("/p1/p2:target");
       fail();
-    } catch (Label.SyntaxException e) {
+    } catch (LabelSyntaxException e) {
       /* ok */
     }
     try {
       base.getRelative("quux:");
       fail();
-    } catch (Label.SyntaxException e) {
+    } catch (LabelSyntaxException e) {
       /* ok */
     }
     try {
       base.getRelative(":");
       fail();
-    } catch (Label.SyntaxException e) {
+    } catch (LabelSyntaxException e) {
       /* ok */
     }
     try {
       base.getRelative("::");
       fail();
-    } catch (Label.SyntaxException e) {
+    } catch (LabelSyntaxException e) {
       /* ok */
     }
   }
@@ -144,10 +149,10 @@ public class LabelTest {
     Label l2 = Label.parseAbsolute("//foo/bar:baz");
     Label l3 = Label.parseAbsolute("//foo/bar:quux");
 
-    assertTrue(l1.equals(l1));
-    assertTrue(l2.equals(l1));
-    assertTrue(l1.equals(l2));
-    assertTrue(l2.equals(l1));
+    assertEquals(l1, l1);
+    assertEquals(l1, l2);
+    assertEquals(l2, l1);
+    assertEquals(l1, l2);
 
     assertFalse(l3.equals(l1));
     assertFalse(l1.equals(l3));
@@ -181,7 +186,7 @@ public class LabelTest {
     try {
       Label.parseAbsolute(label);
       fail("Label '" + label + "' did not contain a syntax error");
-    } catch (SyntaxException e) {
+    } catch (LabelSyntaxException e) {
       assertContainsRegex(Pattern.quote(expectedError), e.getMessage());
     }
   }
@@ -234,8 +239,6 @@ public class LabelTest {
                       "//foo/./baz:baz");
     assertSyntaxError(BAD_PACKAGE_CHARS,
                       "//./bar/baz:baz");
-    assertSyntaxError(BAD_PACKAGE_CHARS,
-                      "//.:foo");
     assertSyntaxError("target names may not contain '.' as a path segment",
                       "//foo:bar/./baz");
     assertSyntaxError("target names may not contain '.' as a path segment",
@@ -257,7 +260,6 @@ public class LabelTest {
   public void testSomeOtherBadLabels() throws Exception {
     assertSyntaxError("package names may not end with '/'",
                       "//foo/:bar");
-    assertSyntaxError("empty package name", "//:foo");
     assertSyntaxError("package names may not start with '/'", "///p:foo");
     assertSyntaxError("package names may not contain '//' path separators",
                       "//a//b:foo");
@@ -341,24 +343,23 @@ public class LabelTest {
 
   @Test
   public void testRepoLabel() throws Exception {
-    Label label = Label.parseRepositoryLabel("@foo//bar/baz:bat/boo");
+    Label label = Label.parseAbsolute("@foo//bar/baz:bat/boo");
     assertEquals("@foo//bar/baz:bat/boo", label.toString());
   }
 
   @Test
   public void testNoRepo() throws Exception {
-    Label label = Label.parseRepositoryLabel("//bar/baz:bat/boo");
+    Label label = Label.parseAbsolute("//bar/baz:bat/boo");
     assertEquals("//bar/baz:bat/boo", label.toString());
   }
 
   @Test
   public void testInvalidRepo() throws Exception {
     try {
-      Label.parseRepositoryLabel("foo//bar/baz:bat/boo");
+      Label.parseAbsolute("foo//bar/baz:bat/boo");
       fail();
-    } catch (SyntaxException e) {
-      assertEquals("invalid repository name 'foo': workspace name must start with '@'",
-          e.getMessage());
+    } catch (LabelSyntaxException e) {
+      assertThat(e).hasMessage("invalid repository name 'foo': workspace name must start with '@'");
     }
   }
 }

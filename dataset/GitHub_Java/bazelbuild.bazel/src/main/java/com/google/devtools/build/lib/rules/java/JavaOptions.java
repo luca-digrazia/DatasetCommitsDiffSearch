@@ -22,9 +22,9 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDe
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
 import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.common.options.Converters.StringSetConverter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
@@ -296,12 +296,6 @@ public class JavaOptions extends FragmentOptions {
       help = "Disables the Jvm configuration entirely.")
   public boolean disableJvm;
 
-  @Option(name = "allow_precompiled_jars_in_srcs",
-      defaultValue = "true",
-      category = "undocumented",
-      help = "Allows pre-compiled jars to be used in srcs of java rules.")
-  public boolean allowPrecompiledJarsInSrcs;
-
   @Override
   public FragmentOptions getHost(boolean fallback) {
     JavaOptions host = (JavaOptions) getDefault();
@@ -324,7 +318,6 @@ public class JavaOptions extends FragmentOptions {
 
     host.javaDeps = javaDeps;
     host.experimentalJavaClasspath = experimentalJavaClasspath;
-    host.allowPrecompiledJarsInSrcs = allowPrecompiledJarsInSrcs;
 
     return host;
   }

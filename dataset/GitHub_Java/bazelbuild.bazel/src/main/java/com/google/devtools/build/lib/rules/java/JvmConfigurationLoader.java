@@ -23,15 +23,14 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.List;
@@ -77,15 +76,11 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
       return null;
     }
 
-    if (!forceLegacy) {
-      try {
-        return createDefault(env, javaHome, cpu);
-      } catch (LabelSyntaxException e) {
-        // Try again with legacy
-      }
+    if (!forceLegacy && javaHome.startsWith("//")) {
+      return createDefault(env, javaHome, cpu);
+    } else {
+      return createLegacy(javaHome);
     }
-
-    return createLegacy(javaHome);
   }
 
   @Override
@@ -100,7 +95,7 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
 
   @Nullable
   private Jvm createDefault(ConfigurationEnvironment lookup, String javaHome, String cpu)
-      throws InvalidConfigurationException, LabelSyntaxException {
+      throws InvalidConfigurationException {
     try {
       Label label = Label.parseAbsolute(javaHome);
       label = RedirectChaser.followRedirects(lookup, label, "jdk");
@@ -114,11 +109,11 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
       if ((javaHomeTarget instanceof Rule) &&
           "filegroup".equals(((Rule) javaHomeTarget).getRuleClass())) {
         RawAttributeMapper javaHomeAttributes = RawAttributeMapper.of((Rule) javaHomeTarget);
-        if (javaHomeAttributes.isConfigurable("srcs", BuildType.LABEL_LIST)) {
+        if (javaHomeAttributes.isConfigurable("srcs", Type.LABEL_LIST)) {
           throw new InvalidConfigurationException("\"srcs\" in " + javaHome
               + " is configurable. JAVABASE targets don't support configurable attributes");
         }
-        List<Label> labels = javaHomeAttributes.get("srcs", BuildType.LABEL_LIST);
+        List<Label> labels = javaHomeAttributes.get("srcs", Type.LABEL_LIST);
         for (Label jvmLabel : labels) {
           if (jvmLabel.getName().endsWith("-" + cpu)) {
             jvmLabel = RedirectChaser.followRedirects(
@@ -161,6 +156,8 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
       throw new InvalidConfigurationException(e.getMessage(), e);
     } catch (NoSuchTargetException e) {
       throw new InvalidConfigurationException("No such target: " + e.getMessage(), e);
+    } catch (LabelSyntaxException e) {
+      throw new InvalidConfigurationException(e.getMessage(), e);
     }
   }
 

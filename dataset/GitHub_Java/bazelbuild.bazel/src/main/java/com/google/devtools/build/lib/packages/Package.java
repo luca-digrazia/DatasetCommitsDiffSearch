@@ -169,6 +169,12 @@ public class Package implements Serializable {
   private boolean containsErrors;
 
   /**
+   * True iff this package contains errors that were caused by temporary conditions (e.g. an I/O
+   * error). If this is true, {@link #containsErrors} is also true.
+   */
+  private boolean containsTemporaryErrors;
+
+  /**
    * The set of labels subincluded by this package.
    */
   private Set<Label> subincludes;
@@ -348,6 +354,7 @@ public class Package implements Serializable {
     }
     this.buildFile = builder.buildFile;
     this.containsErrors = builder.containsErrors;
+    this.containsTemporaryErrors = builder.containsTemporaryErrors;
     this.subincludes = builder.subincludes.keySet();
     this.skylarkFileDependencies = builder.skylarkFileDependencies;
     this.defaultLicense = builder.defaultLicense;
@@ -464,6 +471,14 @@ public class Package implements Serializable {
    */
   public boolean containsErrors() {
     return containsErrors;
+  }
+
+  /**
+   * True iff this package contains errors that were caused by temporary conditions (e.g. an I/O
+   * error). If this is true, {@link #containsErrors()} also returns true.
+   */
+  public boolean containsTemporaryErrors() {
+    return containsTemporaryErrors;
   }
 
   public List<Event> getEvents() {
@@ -767,6 +782,7 @@ public class Package implements Serializable {
     private List<String> features = new ArrayList<>();
     private List<Event> events = Lists.newArrayList();
     private boolean containsErrors = false;
+    private boolean containsTemporaryErrors = false;
 
     private License defaultLicense = License.NO_LICENSE;
     private Set<License.DistributionType> defaultDistributionSet = License.DEFAULT_DISTRIB;
@@ -838,10 +854,6 @@ public class Package implements Serializable {
 
     Path getFilename() {
       return filename;
-    }
-
-    public List<Event> getEvents() {
-      return events;
     }
 
     /**
@@ -941,6 +953,12 @@ public class Package implements Serializable {
 
     public boolean containsErrors() {
       return containsErrors;
+    }
+
+    Builder setContainsTemporaryErrors() {
+      setContainsErrors();
+      containsTemporaryErrors = true;
+      return this;
     }
 
     public Builder addEvents(Iterable<Event> events) {

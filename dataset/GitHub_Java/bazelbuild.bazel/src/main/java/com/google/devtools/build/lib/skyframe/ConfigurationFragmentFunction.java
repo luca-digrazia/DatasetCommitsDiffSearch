@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,14 +22,13 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PackageProviderForConfigurations;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.ConfigurationFragmentValue.ConfigurationFragmentKey;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
@@ -44,13 +43,10 @@ import java.io.IOException;
 public class ConfigurationFragmentFunction implements SkyFunction {
 
   private final Supplier<ImmutableList<ConfigurationFragmentFactory>> configurationFragments;
-  private final RuleClassProvider ruleClassProvider;
 
   public ConfigurationFragmentFunction(
-      Supplier<ImmutableList<ConfigurationFragmentFactory>> configurationFragments,
-      RuleClassProvider ruleClassProvider) {
+      Supplier<ImmutableList<ConfigurationFragmentFactory>> configurationFragments) {
     this.configurationFragments = configurationFragments;
-    this.ruleClassProvider = ruleClassProvider;
   }
 
   @Override
@@ -61,9 +57,9 @@ public class ConfigurationFragmentFunction implements SkyFunction {
     BuildOptions buildOptions = configurationFragmentKey.getBuildOptions();
     ConfigurationFragmentFactory factory = getFactory(configurationFragmentKey.getFragmentType());
     try {
-      PackageProviderForConfigurations packageProvider = 
-          new SkyframePackageLoaderWithValueEnvironment(env, ruleClassProvider);
-      ConfigurationEnvironment confEnv = new ConfigurationBuilderEnvironment(packageProvider);
+      PackageProviderForConfigurations loadedPackageProvider = 
+          new SkyframePackageLoaderWithValueEnvironment(env);
+      ConfigurationEnvironment confEnv = new ConfigurationBuilderEnvironment(loadedPackageProvider);
       Fragment fragment = factory.create(confEnv, buildOptions);
       
       if (env.valuesMissing()) {
@@ -99,22 +95,23 @@ public class ConfigurationFragmentFunction implements SkyFunction {
    * A {@link ConfigurationEnvironment} implementation that can create dependencies on files.
    */
   private final class ConfigurationBuilderEnvironment implements ConfigurationEnvironment {
-    private final PackageProviderForConfigurations packageProvider;
+    private final PackageProviderForConfigurations loadedPackageProvider;
 
-    ConfigurationBuilderEnvironment(PackageProviderForConfigurations packageProvider) {
-      this.packageProvider = packageProvider;
+    ConfigurationBuilderEnvironment(
+        PackageProviderForConfigurations loadedPackageProvider) {
+      this.loadedPackageProvider = loadedPackageProvider;
     }
 
     @Override
     public Target getTarget(Label label) throws NoSuchPackageException, NoSuchTargetException {
-      return packageProvider.getTarget(label);
+      return loadedPackageProvider.getLoadedTarget(label);
     }
 
     @Override
     public Path getPath(Package pkg, String fileName) {
       Path result = pkg.getPackageDirectory().getRelative(fileName);
       try {
-        packageProvider.addDependency(pkg, fileName);
+        loadedPackageProvider.addDependency(pkg, fileName);
       } catch (IOException | LabelSyntaxException e) {
         return null;
       }
@@ -124,12 +121,12 @@ public class ConfigurationFragmentFunction implements SkyFunction {
     @Override
     public <T extends Fragment> T getFragment(BuildOptions buildOptions, Class<T> fragmentType) 
         throws InvalidConfigurationException {
-      return packageProvider.getFragment(buildOptions, fragmentType);
+      return loadedPackageProvider.getFragment(buildOptions, fragmentType);
     }
 
     @Override
     public BlazeDirectories getBlazeDirectories() {
-      return packageProvider.getDirectories();
+      return loadedPackageProvider.getDirectories();
     }
   }
 

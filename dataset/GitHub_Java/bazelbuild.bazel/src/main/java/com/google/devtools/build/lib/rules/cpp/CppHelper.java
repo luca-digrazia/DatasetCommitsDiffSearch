@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,16 +30,15 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext.Builder;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.shell.ShellUtils;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.IncludeScanningUtil;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -67,9 +66,6 @@ public class CppHelper {
   private static final FileTypeSet CPP_FILETYPES = FileTypeSet.of(
       CppFileTypes.CPP_HEADER,
       CppFileTypes.CPP_SOURCE);
-
-  private static final ImmutableList<String> LINKOPTS_PREREQUISITE_LABEL_KINDS =
-      ImmutableList.of("deps", "srcs");
 
   private CppHelper() {
     // prevents construction
@@ -193,15 +189,13 @@ public class CppHelper {
       String labelName) {
     try {
       Label label = ruleContext.getLabel().getRelative(labelName);
-      for (String prereqKind : LINKOPTS_PREREQUISITE_LABEL_KINDS) {
-        for (FileProvider target : ruleContext
-            .getPrerequisites(prereqKind, Mode.TARGET, FileProvider.class)) {
-          if (target.getLabel().equals(label)) {
-            for (Artifact artifact : target.getFilesToBuild()) {
-              linkopts.add(artifact.getExecPathString());
-            }
-            return true;
+      for (FileProvider target : ruleContext
+          .getPrerequisites("deps", Mode.TARGET, FileProvider.class)) {
+        if (target.getLabel().equals(label)) {
+          for (Artifact artifact : target.getFilesToBuild()) {
+            linkopts.add(artifact.getExecPathString());
           }
+          return true;
         }
       }
     } catch (LabelSyntaxException e) {
@@ -357,7 +351,7 @@ public class CppHelper {
       scannableBuilder.addTransitive(dep.getTransitiveIncludeScannables());
     }
 
-    if (ruleContext.attributes().has("malloc", BuildType.LABEL)) {
+    if (ruleContext.attributes().has("malloc", Type.LABEL)) {
       TransitiveInfoCollection malloc = mallocForTarget(ruleContext);
       TransitiveLipoInfoProvider provider = malloc.getProvider(TransitiveLipoInfoProvider.class);
       if (provider != null) {

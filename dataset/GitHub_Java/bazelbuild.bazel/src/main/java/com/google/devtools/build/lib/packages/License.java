@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,13 +20,13 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableTable;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.syntax.Label;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -289,11 +289,6 @@ public final class License {
     return exceptions;
   }
 
-  @SuppressWarnings("ReferenceEquality")
-  public boolean isSpecified() {
-    return this != License.NO_LICENSE;
-  }
-
   /**
    * A simple toString implementation which generates a canonical form of the
    * license. (The order of license types is guaranteed to be canonical by
@@ -315,9 +310,10 @@ public final class License {
    */
   @Override
   public boolean equals(Object o) {
-    return o == this || (o instanceof License
-        && ((License) o).licenseTypes.equals(this.licenseTypes)
-        && ((License) o).exceptions.equals(this.exceptions));
+    return o == this ||
+        o instanceof License &&
+        ((License) o).licenseTypes.equals(this.licenseTypes) &&
+        ((License) o).exceptions.equals(this.exceptions);
   }
 
   /**

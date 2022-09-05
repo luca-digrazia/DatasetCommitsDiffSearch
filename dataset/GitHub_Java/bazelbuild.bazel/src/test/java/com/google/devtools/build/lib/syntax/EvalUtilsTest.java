@@ -1,4 +1,4 @@
-// Copyright 2006 The Bazel Authors. All Rights Reserved.
+// Copyright 2006-2015 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,9 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+
+import com.google.common.collect.Lists;
+import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -48,14 +51,14 @@ public class EvalUtilsTest {
     return new LinkedHashMap<>();
   }
 
-  @Test
-  public void testEmptyStringToIterable() throws Exception {
-    assertThat(EvalUtils.toIterable("", null)).isEmpty();
-  }
-
-  @Test
-  public void testStringToIterable() throws Exception {
-    assertThat(EvalUtils.toIterable("abc", null)).hasSize(3);
+  private static FilesetEntry makeFilesetEntry() {
+    try {
+      return new FilesetEntry(Label.parseAbsolute("//foo:bar"),
+                              Lists.<Label>newArrayList(), Lists.newArrayList("xyz"), "",
+                              FilesetEntry.SymlinkBehavior.COPY, ".");
+    } catch (LabelSyntaxException e) {
+      throw new RuntimeException("Bad label: ", e);
+    }
   }
 
   @Test
@@ -65,6 +68,7 @@ public class EvalUtilsTest {
     assertEquals("Tuple", EvalUtils.getDataTypeName(makeTuple(1, 2, 3)));
     assertEquals("List",  EvalUtils.getDataTypeName(makeList(1, 2, 3)));
     assertEquals("dict",  EvalUtils.getDataTypeName(makeDict()));
+    assertEquals("FilesetEntry",  EvalUtils.getDataTypeName(makeFilesetEntry()));
     assertEquals("NoneType", EvalUtils.getDataTypeName(Runtime.NONE));
   }
 
@@ -75,6 +79,7 @@ public class EvalUtilsTest {
     assertTrue(EvalUtils.isImmutable(makeTuple(1, 2, 3)));
     assertFalse(EvalUtils.isImmutable(makeList(1, 2, 3)));
     assertFalse(EvalUtils.isImmutable(makeDict()));
+    assertFalse(EvalUtils.isImmutable(makeFilesetEntry()));
   }
 
   @Test

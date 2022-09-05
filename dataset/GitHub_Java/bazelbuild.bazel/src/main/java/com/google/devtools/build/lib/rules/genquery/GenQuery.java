@@ -228,8 +228,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     ImmutableMap.Builder<PackageIdentifier, Package> packageMapBuilder = ImmutableMap.builder();
     for (PackageIdentifier pkgId : packageNames.build()) {
       PackageValue pkg = (PackageValue) env.getValue(PackageValue.key(pkgId));
-      Preconditions.checkNotNull(pkg, "package %s not preloaded", pkgId);
-      Preconditions.checkState(!pkg.getPackage().containsErrors(), pkgId);
+      Preconditions.checkState(pkg != null, "package %s not preloaded", pkgId);
       packageMapBuilder.put(pkg.getPackage().getPackageIdentifier(), pkg.getPackage());
     }
     return Pair.of(packageMapBuilder.build(), validTargets.build().toSet());
@@ -385,7 +384,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
         for (Map.Entry<SkyKey, ValueOrException<NoSuchPackageException>> entry :
           env.getValuesOrThrow(packageKeys, NoSuchPackageException.class).entrySet()) {
           PackageIdentifier pkgName = (PackageIdentifier) entry.getKey().argument();
-          Package pkg;
+          Package pkg = null;
           try {
             PackageValue packageValue = (PackageValue) entry.getValue().get();
             if (packageValue == null) {
@@ -394,7 +393,11 @@ public class GenQuery implements RuleConfiguredTargetFactory {
             }
             pkg = packageValue.getPackage();
           } catch (NoSuchPackageException nspe) {
-            continue;
+            if (nspe.getPackage() != null) {
+              pkg = nspe.getPackage();
+            } else {
+              continue;
+            }
           }
           Preconditions.checkNotNull(pkg, pkgName);
           packages.put(pkgName, pkg);

@@ -19,11 +19,11 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SkylarkCallable;
 import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.common.options.TriState;
@@ -66,7 +66,6 @@ public final class JavaConfiguration extends Fragment {
   private final TriState bundleTranslations;
   private final ImmutableList<Label> translationTargets;
   private final String javaCpu;
-  private final boolean allowPrecompiledJarsInSrcs;
 
   private Label javaToolchain;
 
@@ -92,7 +91,6 @@ public final class JavaConfiguration extends Fragment {
     this.bundleTranslations = javaOptions.bundleTranslations;
     this.javaCpu = javaCpu;
     this.javaToolchain = javaToolchain;
-    this.allowPrecompiledJarsInSrcs = javaOptions.allowPrecompiledJarsInSrcs;
 
     ImmutableList.Builder<Label> translationsBuilder = ImmutableList.builder();
     for (String s : javaOptions.translationTargets) {
@@ -243,10 +241,5 @@ public final class JavaConfiguration extends Fragment {
    */
   public Label getToolchainLabel() {
     return javaToolchain;
-  }
-
-  /** Returns whether pre-compiled jar files should be allowed in srcs. */
-  public boolean allowPrecompiledJarsInSrcs() {
-    return allowPrecompiledJarsInSrcs;
   }
 }

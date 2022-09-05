@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,23 +15,15 @@
 package com.google.devtools.build.lib.cmdline;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.cmdline.LabelValidator.PackageAndTarget;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import junit.framework.TestCase;
 
 /**
  * Tests for {@link LabelValidator}.
  */
-@RunWith(JUnit4.class)
-public class LabelValidatorTest {
+public class LabelValidatorTest extends TestCase {
 
   private static final String BAD_PACKAGE_CHARS =
       "package names may contain only A-Z, a-z, 0-9, '/', '-' and '_'";
@@ -44,7 +36,6 @@ public class LabelValidatorTest {
     return new PackageAndTarget("bar", "bar");
   }
 
-  @Test
   public void testValidatePackageName() throws Exception {
     // OK:
     assertNull(LabelValidator.validatePackageName("foo"));
@@ -72,7 +63,6 @@ public class LabelValidatorTest {
                  LabelValidator.validatePackageName("bazfoo)"));
   }
 
-  @Test
   public void testValidateTargetName() throws Exception {
 
     assertNull(LabelValidator.validateTargetName("foo"));
@@ -102,7 +92,6 @@ public class LabelValidatorTest {
                  LabelValidator.validateTargetName("bazfoo)"));
   }
 
-  @Test
   public void testValidateAbsoluteLabel() throws Exception {
     PackageAndTarget emptyPackage = new PackageAndTarget("", "bar");
     assertEquals(emptyPackage, LabelValidator.validateAbsoluteLabel("//:bar"));
@@ -120,7 +109,6 @@ public class LabelValidatorTest {
     }
   }
 
-  @Test
   public void testPackageAndTargetHashCode_distinctButEqualObjects() {
     PackageAndTarget fooTarget1 = newFooTarget();
     PackageAndTarget fooTarget2 = newFooTarget();
@@ -128,7 +116,6 @@ public class LabelValidatorTest {
     assertEquals("Should have same hash code", fooTarget2.hashCode(), fooTarget1.hashCode());
   }
 
-  @Test
   public void testPackageAndTargetEquals_distinctButEqualObjects() {
     PackageAndTarget fooTarget1 = newFooTarget();
     PackageAndTarget fooTarget2 = newFooTarget();
@@ -136,12 +123,10 @@ public class LabelValidatorTest {
     assertEquals("Should be equal", fooTarget2, fooTarget1);
   }
 
-  @Test
   public void testPackageAndTargetEquals_unequalObjects() {
     assertFalse("should be unequal", newFooTarget().equals(newBarTarget()));
   }
 
-  @Test
   public void testPackageAndTargetToString() {
     assertEquals("//foo:foo", newFooTarget().toString());
     assertEquals("//bar:bar", newBarTarget().toString());

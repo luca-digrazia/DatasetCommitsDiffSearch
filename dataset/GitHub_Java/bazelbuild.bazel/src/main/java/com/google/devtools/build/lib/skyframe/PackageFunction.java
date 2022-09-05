@@ -800,22 +800,9 @@ public class PackageFunction implements SkyFunction {
             packageId, packageLocator);
         Preprocessor.Result preprocessingResult = preprocessCache.getIfPresent(packageId);
         if (preprocessingResult == null) {
-          try {
-            preprocessingResult =
-                replacementSource == null
-                    ? packageFactory.preprocess(packageId, inputSource, globber)
-                    : Preprocessor.Result.noPreprocessing(replacementSource);
-          } catch (IOException e) {
-            env
-                .getListener()
-                .handle(
-                    Event.error(
-                        Location.fromFile(buildFilePath),
-                        "preprocessing failed: " + e.getMessage()));
-            throw new PackageFunctionException(
-                new BuildFileContainsErrorsException(packageId, "preprocessing failed", e),
-                Transience.TRANSIENT);
-          }
+          preprocessingResult = replacementSource == null
+              ? packageFactory.preprocess(packageId, buildFilePath, inputSource, globber)
+              : Preprocessor.Result.noPreprocessing(replacementSource);
           preprocessCache.put(packageId, preprocessingResult);
         }
 

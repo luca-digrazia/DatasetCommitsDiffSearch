@@ -145,7 +145,12 @@ public class J2ObjcAspect implements ConfiguredAspectFactory {
           depsHeaderMappings, depsClassMappings, depsDependencyMappings);
     }
 
-    srcsBuilder.addTransitiveJ2ObjcSrcs(ruleContext);
+    for (J2ObjcSrcsProvider provider :
+        ruleContext.getPrerequisites("exports", Mode.TARGET, J2ObjcSrcsProvider.class)) {
+      srcsBuilder.addTransitive(provider);
+    }
+
+    srcsBuilder.addTransitiveFromDeps(ruleContext);
 
     return builder
         .addProvider(J2ObjcSrcsProvider.class, srcsBuilder.build())

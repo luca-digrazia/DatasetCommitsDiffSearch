@@ -18,8 +18,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
+import com.google.devtools.build.lib.syntax.Label;
 
 import java.util.Locale;
 import java.util.Map;
@@ -158,10 +158,14 @@ public final class DefaultsPackage {
   }
 
   public static Label parseOptionalLabel(String value) {
-    try {
-      return Label.parseAbsolute(value);
-    } catch (LabelSyntaxException e) {
-      // We ignore this exception here - it will cause an error message at a later time.
+    if (value.startsWith("//")) {
+      try {
+        return Label.parseAbsolute(value);
+      } catch (LabelSyntaxException e) {
+        // We ignore this exception here - it will cause an error message at a later time.
+        return null;
+      }
+    } else {
       return null;
     }
   }

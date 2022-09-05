@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
+import com.google.devtools.build.lib.packages.ExternalPackage;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
-import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.vfs.Path;
@@ -51,15 +51,10 @@ public class PackageLookupFunction implements SkyFunction {
   public SkyValue compute(SkyKey skyKey, Environment env) throws PackageLookupFunctionException {
     PathPackageLocator pkgLocator = PrecomputedValue.PATH_PACKAGE_LOCATOR.get(env);
     PackageIdentifier packageKey = (PackageIdentifier) skyKey.argument();
-    if (packageKey.getRepository().isDefault()
-        && packageKey.getPackageFragment().equals(PackageFunction.DEFAULTS_PACKAGE_NAME)) {
-      return PackageLookupValue.success(pkgLocator.getPathEntries().get(0));
-    }
-
     if (!packageKey.getRepository().equals(PackageIdentifier.MAIN_REPOSITORY_NAME)
         && !packageKey.getRepository().isDefault()) {
       return computeExternalPackageLookupValue(skyKey, env, packageKey);
-    } else if (packageKey.equals(Package.EXTERNAL_PACKAGE_IDENTIFIER)) {
+    } else if (packageKey.equals(ExternalPackage.PACKAGE_IDENTIFIER)) {
       return computeWorkspaceLookupValue(env, packageKey);
     }
 

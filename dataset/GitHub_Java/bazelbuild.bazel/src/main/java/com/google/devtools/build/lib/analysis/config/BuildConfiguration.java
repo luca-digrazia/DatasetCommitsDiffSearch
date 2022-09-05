@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.analysis.AspectWithParameters;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.DependencyResolver;
-import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection.Transitions;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -270,13 +269,6 @@ public final class BuildConfiguration {
      * @param env the skyframe environment
      */
     public void declareSkyframeDependencies(Environment env) {
-    }
-
-    /**
-     * Return set of features enabled by this configuration.
-     */
-    public ImmutableSet<String> configurationEnabledFeatures(RuleContext ruleContext) {
-      return ImmutableSet.of();
     }
   }
 
@@ -1021,12 +1013,6 @@ public final class BuildConfiguration {
    */
   private final Map<String, OptionDetails> transitiveOptionsMap;
 
-  /**
-   * Returns map of all the fragments for this configuration.
-   */
-  public ImmutableMap<Class<? extends Fragment>, Fragment> getAllFragments() {
-    return fragments;
-  }
 
   /**
    * Validates the options for this BuildConfiguration. Issues warnings for the

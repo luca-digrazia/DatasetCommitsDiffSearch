@@ -221,6 +221,7 @@ public class RuleFactory {
     builder.putAll(args);
     builder.put("generator_name", (name == null) ? args.get("name") : name);
     builder.put("generator_function", function.getName());
+    builder.put("generator_location", Location.printPathAndLine(generator.getLocation()));
     if (generator.getLocation() != null) {
       location = generator.getLocation();
     }

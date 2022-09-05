@@ -68,7 +68,16 @@ public class RecursivePackageProviderBackedTargetPatternResolver
    */
   private Package getPackage(PackageIdentifier pkgIdentifier)
       throws NoSuchPackageException, InterruptedException {
-    return recursivePackageProvider.getPackage(eventHandler, pkgIdentifier);
+    Package pkg;
+    try {
+      pkg = recursivePackageProvider.getPackage(eventHandler, pkgIdentifier);
+    } catch (NoSuchPackageException e) {
+      pkg = e.getPackage();
+      if (pkg == null) {
+        throw e;
+      }
+    }
+    return pkg;
   }
 
   @Override

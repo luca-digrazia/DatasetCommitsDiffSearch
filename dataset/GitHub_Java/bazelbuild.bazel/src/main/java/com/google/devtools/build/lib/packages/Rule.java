@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -37,7 +36,7 @@ import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.GlobList;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.BinaryPredicate;
 
 import java.util.Collection;
@@ -77,7 +76,7 @@ public final class Rule implements Target {
     @Override
     public boolean apply(Rule rule, Attribute attribute) {
       // isHostConfiguration() is only defined for labels and label lists.
-      if (attribute.getType() != BuildType.LABEL && attribute.getType() != BuildType.LABEL_LIST) {
+      if (attribute.getType() != Type.LABEL && attribute.getType() != Type.LABEL_LIST) {
         return true;
       }
 
@@ -102,8 +101,8 @@ public final class Rule implements Target {
       new BinaryPredicate<Rule, Attribute>() {
     @Override
     public boolean apply(Rule rule, Attribute attribute) {
-      return attribute.getType() != BuildType.NODEP_LABEL
-          && attribute.getType() != BuildType.NODEP_LABEL_LIST;
+      return attribute.getType() != Type.NODEP_LABEL
+          && attribute.getType() != Type.NODEP_LABEL_LIST;
     }
   };
 
@@ -157,13 +156,12 @@ public final class Rule implements Target {
   private List<OutputFile> outputFiles;
   private ListMultimap<String, OutputFile> outputFileMap;
 
-  Rule(Package pkg, Label label, RuleClass ruleClass, FuncallExpression ast, Location location,
-      AttributeContainer attributeContainer) {
+  Rule(Package pkg, Label label, RuleClass ruleClass, FuncallExpression ast, Location location) {
     this.pkg = Preconditions.checkNotNull(pkg);
     this.label = label;
     this.ruleClass = Preconditions.checkNotNull(ruleClass);
     this.location = Preconditions.checkNotNull(location);
-    this.attributes = attributeContainer;
+    this.attributes = new AttributeContainer(ruleClass);
     this.attributeMap = new RawAttributeMapper(pkg, ruleClass, label, attributes);
     this.containsErrors = false;
     this.ast = ast;
@@ -186,6 +184,10 @@ public final class Rule implements Target {
     attributes.setAttributeLocation(attrIndex, location);
   }
 
+  void setAttributeLocation(Attribute attribute, Location location) {
+    attributes.setAttributeLocation(attribute, location);
+  }
+
   void setContainsErrors() {
     this.containsErrors = true;
   }
@@ -199,12 +201,12 @@ public final class Rule implements Target {
 
   @Override
   public Label getLabel() {
-    return label;
+    return attributeMap.getLabel();
   }
 
   @Override
   public String getName() {
-    return label.getName();
+    return attributeMap.getName();
   }
 
   @Override
@@ -500,13 +502,13 @@ public final class Rule implements Target {
     for (Attribute attribute : ruleClass.getAttributes()) {
       String name = attribute.getName();
       Type<?> type = attribute.getType();
-      if (type == BuildType.OUTPUT) {
-        Label outputLabel = nonConfigurableAttributes.get(name, BuildType.OUTPUT);
+      if (type == Type.OUTPUT) {
+        Label outputLabel = nonConfigurableAttributes.get(name, Type.OUTPUT);
         if (outputLabel != null) {
           addLabelOutput(attribute, outputLabel, eventHandler);
         }
-      } else if (type == BuildType.OUTPUT_LIST) {
-        for (Label label : nonConfigurableAttributes.get(name, BuildType.OUTPUT_LIST)) {
+      } else if (type == Type.OUTPUT_LIST) {
+        for (Label label : nonConfigurableAttributes.get(name, Type.OUTPUT_LIST)) {
           addLabelOutput(attribute, label, eventHandler);
         }
       }
@@ -569,6 +571,11 @@ public final class Rule implements Target {
     eventHandler.handle(Event.warn(location, message));
   }
 
+  @Override
+  public int hashCode() {
+    return label.hashCode();
+  }
+
   /**
    * Returns a string of the form "cc_binary rule //foo:foo"
    *
@@ -606,9 +613,9 @@ public final class Rule implements Target {
   @Override
   @SuppressWarnings("unchecked")
   public Set<DistributionType> getDistributions() {
-    if (isAttrDefined("distribs", BuildType.DISTRIBUTIONS)
+    if (isAttrDefined("distribs", Type.DISTRIBUTIONS)
         && isAttributeValueExplicitlySpecified("distribs")) {
-      return NonconfigurableAttributeMapper.of(this).get("distribs", BuildType.DISTRIBUTIONS);
+      return NonconfigurableAttributeMapper.of(this).get("distribs", Type.DISTRIBUTIONS);
     } else {
       return getPackage().getDefaultDistribs();
     }
@@ -616,9 +623,9 @@ public final class Rule implements Target {
 
   @Override
   public License getLicense() {
-    if (isAttrDefined("licenses", BuildType.LICENSE)
+    if (isAttrDefined("licenses", Type.LICENSE)
         && isAttributeValueExplicitlySpecified("licenses")) {
-      return NonconfigurableAttributeMapper.of(this).get("licenses", BuildType.LICENSE);
+      return NonconfigurableAttributeMapper.of(this).get("licenses", Type.LICENSE);
     } else {
       return getPackage().getDefaultLicense();
     }
@@ -629,9 +636,9 @@ public final class Rule implements Target {
    * null if it is not specified.
    */
   public License getToolOutputLicense(AttributeMap attributes) {
-    if (isAttrDefined("output_licenses", BuildType.LICENSE)
+    if (isAttrDefined("output_licenses", Type.LICENSE)
         && attributes.isAttributeValueExplicitlySpecified("output_licenses")) {
-      return attributes.get("output_licenses", BuildType.LICENSE);
+      return attributes.get("output_licenses", Type.LICENSE);
     } else {
       return null;
     }
