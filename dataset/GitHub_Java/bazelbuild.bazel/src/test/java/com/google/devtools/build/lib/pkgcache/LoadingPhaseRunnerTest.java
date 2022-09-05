@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
-import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.PackageFactory;
@@ -628,7 +627,6 @@ public class LoadingPhaseRunnerTest {
           analysisMock.getDefaultsPackageContent(),
           UUID.randomUUID(),
           ImmutableMap.<String, String>of(),
-          ImmutableMap.<String, String>of(),
           new TimestampGranularityMonitor(clock));
       loadingPhaseRunner =
           skyframeExecutor.getLoadingPhaseRunner(pkgFactory.getRuleClassNames(), useNewImpl);
@@ -672,7 +670,8 @@ public class LoadingPhaseRunnerTest {
         eventBus.register(listener);
         result =
             loadingPhaseRunner.execute(
-                new Reporter(eventBus, storedErrors),
+                storedErrors,
+                eventBus,
                 ImmutableList.copyOf(patterns),
                 PathFragment.EMPTY_FRAGMENT,
                 options,

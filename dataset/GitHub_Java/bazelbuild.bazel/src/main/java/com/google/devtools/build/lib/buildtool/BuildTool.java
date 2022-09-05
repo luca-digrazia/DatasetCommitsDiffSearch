@@ -137,6 +137,8 @@ public final class BuildTool {
     env.setupPackageCache(request, DefaultsPackage.getDefaultsPackageContent(buildOptions));
 
     ExecutionTool executionTool = null;
+    LoadingResult loadingResult = null;
+    BuildConfigurationCollection configurations = null;
     boolean catastrophe = false;
     try {
       env.getEventBus().post(new BuildStartingEvent(env, request));
@@ -165,13 +167,13 @@ public final class BuildTool {
       env.throwPendingException();
 
       // Target pattern evaluation.
-      LoadingResult loadingResult = evaluateTargetPatterns(request, validator);
+      loadingResult = evaluateTargetPatterns(request, validator);
 
       // Exit if there are any pending exceptions from modules.
       env.throwPendingException();
 
       // Configuration creation.
-      BuildConfigurationCollection configurations =
+      configurations =
           env.getSkyframeExecutor()
               .createConfigurations(
                   env.getReporter(),
