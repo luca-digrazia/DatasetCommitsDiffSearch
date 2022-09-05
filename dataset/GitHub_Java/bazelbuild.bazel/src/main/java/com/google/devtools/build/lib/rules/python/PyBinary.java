@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -54,13 +53,10 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
 
   static RuleConfiguredTargetBuilder init(
       RuleContext ruleContext, PythonSemantics semantics, PyCommon common) {
+    List<Artifact> srcs = common.validateSrcs();
     CcLinkParamsStore ccLinkParamsStore = initializeCcLinkParamStore(ruleContext);
 
-    List<Artifact> srcs = common.validateSrcs();
-    List<Artifact> allOutputs = new ArrayList<>(srcs);
-    allOutputs.addAll(semantics.precompiledPythonFiles(ruleContext, srcs, common));
-
-    common.initBinary(allOutputs);
+    common.initBinary(srcs);
     semantics.validate(ruleContext, common);
     if (ruleContext.hasErrors()) {
       return null;
@@ -131,3 +127,4 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
     };
   }
 }
+
