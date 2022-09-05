@@ -76,9 +76,11 @@ import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
+import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
@@ -107,6 +109,7 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+import com.google.devtools.build.skyframe.WalkableGraph;
 import com.google.devtools.build.skyframe.WalkableGraph.WalkableGraphFactory;
 
 import java.io.IOException;
@@ -1171,23 +1174,23 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   /**
    * For internal use in queries: performs a graph update to make sure the transitive closure of
-   * the specified target {@code patterns} is present in the graph, and returns the {@link
-   * EvaluationResult}.
+   * the specified target {@code patterns} is present in the graph, and returns a traversable view
+   * of the graph.
    *
    * <p>The graph update is unconditionally done in keep-going mode, so that the query is guaranteed
    * a complete graph to work on.
    */
   @Override
-  public EvaluationResult<SkyValue> prepareAndGet(Collection<String> patterns,
-      int numThreads, EventHandler eventHandler) throws InterruptedException {
+  public WalkableGraph prepareAndGet(Collection<String> patterns, int numThreads,
+      EventHandler eventHandler) throws InterruptedException {
     SkyframeTargetPatternEvaluator patternEvaluator =
         (SkyframeTargetPatternEvaluator) packageManager.getTargetPatternEvaluator();
     String offset = patternEvaluator.getOffset();
-    SkyKey skyKey = PrepareDepsOfPatternsValue.key(ImmutableList.copyOf(patterns), offset);
+    FilteringPolicy policy = TargetPatternEvaluator.DEFAULT_FILTERING_POLICY;
+    SkyKey skyKey = PrepareDepsOfPatternsValue.key(ImmutableList.copyOf(patterns), policy, offset);
     EvaluationResult<SkyValue> evaluationResult =
         buildDriver.evaluate(ImmutableList.of(skyKey), true, numThreads, eventHandler);
-    Preconditions.checkNotNull(evaluationResult.getWalkableGraph(), patterns);
-    return evaluationResult;
+    return Preconditions.checkNotNull(evaluationResult.getWalkableGraph(), patterns);
   }
 
   /**

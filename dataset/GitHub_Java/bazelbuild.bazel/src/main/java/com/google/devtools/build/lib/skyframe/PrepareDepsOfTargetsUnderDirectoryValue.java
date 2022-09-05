@@ -30,7 +30,7 @@ import java.util.Objects;
 
 /**
  * The value computed by {@link PrepareDepsOfTargetsUnderDirectoryFunction}. Contains a mapping for
- * all its non-excluded directories to whether there are packages beneath them.
+ * all its non-excluded directories to the count of packages beneath them.
  *
  * <p>This value is used by {@link GraphBackedRecursivePackageProvider#getPackagesUnderDirectory}
  * to help it traverse the graph and find the set of packages under a directory, and recursively by
@@ -41,7 +41,7 @@ import java.util.Objects;
  * part because of its side-effects (i.e. loading transitive dependencies of targets), this value
  * interacts safely with change pruning, despite the fact that this value is a lossy representation
  * of the packages beneath a directory (i.e. it doesn't care <b>which</b> packages are under a
- * directory, just whether there are any). When the targets in a package change, the
+ * directory, just the count of them). When the targets in a package change, the
  * {@link PackageValue} that {@link PrepareDepsOfTargetsUnderDirectoryFunction} depends on will be
  * invalidated, and the PrepareDeps function for that package's directory will be reevaluated,
  * loading any new transitive dependencies. Change pruning may prevent the reevaluation of
@@ -49,16 +49,15 @@ import java.util.Objects;
  */
 public final class PrepareDepsOfTargetsUnderDirectoryValue implements SkyValue {
   public static final PrepareDepsOfTargetsUnderDirectoryValue EMPTY =
-      new PrepareDepsOfTargetsUnderDirectoryValue(false, ImmutableMap.<RootedPath, Boolean>of());
+      new PrepareDepsOfTargetsUnderDirectoryValue(false, ImmutableMap.<RootedPath, Integer>of());
 
   private final boolean isDirectoryPackage;
-  private final ImmutableMap<RootedPath, Boolean> subdirectoryTransitivelyContainsPackages;
+  private final ImmutableMap<RootedPath, Integer> subdirectoryPackageCount;
 
   public PrepareDepsOfTargetsUnderDirectoryValue(boolean isDirectoryPackage,
-      ImmutableMap<RootedPath, Boolean> subdirectoryTransitivelyContainsPackages) {
+      ImmutableMap<RootedPath, Integer> subdirectoryPackageCount) {
     this.isDirectoryPackage = isDirectoryPackage;
-    this.subdirectoryTransitivelyContainsPackages = Preconditions.checkNotNull(
-        subdirectoryTransitivelyContainsPackages);
+    this.subdirectoryPackageCount = Preconditions.checkNotNull(subdirectoryPackageCount);
   }
 
   /** Whether the directory is a package (i.e. contains a BUILD file). */
@@ -67,11 +66,11 @@ public final class PrepareDepsOfTargetsUnderDirectoryValue implements SkyValue {
   }
 
   /**
-   * Returns a map from non-excluded immediate subdirectories of this directory to whether there
-   * are non-excluded packages under them.
+   * Returns a map from non-excluded immediate subdirectories of this directory to the number of
+   * non-excluded packages under them.
    */
-  public ImmutableMap<RootedPath, Boolean> getSubdirectoryTransitivelyContainsPackages() {
-    return subdirectoryTransitivelyContainsPackages;
+  public ImmutableMap<RootedPath, Integer> getSubdirectoryPackageCount() {
+    return subdirectoryPackageCount;
   }
 
   @Override
@@ -84,13 +83,12 @@ public final class PrepareDepsOfTargetsUnderDirectoryValue implements SkyValue {
     }
     PrepareDepsOfTargetsUnderDirectoryValue that = (PrepareDepsOfTargetsUnderDirectoryValue) o;
     return isDirectoryPackage == that.isDirectoryPackage
-        && Objects.equals(subdirectoryTransitivelyContainsPackages,
-        that.subdirectoryTransitivelyContainsPackages);
+        && Objects.equals(subdirectoryPackageCount, that.subdirectoryPackageCount);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(isDirectoryPackage, subdirectoryTransitivelyContainsPackages);
+    return Objects.hash(isDirectoryPackage, subdirectoryPackageCount);
   }
 
   /** Create a prepare deps of targets under directory request. */
