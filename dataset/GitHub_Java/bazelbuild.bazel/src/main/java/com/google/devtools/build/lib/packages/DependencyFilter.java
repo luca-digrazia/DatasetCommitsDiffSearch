@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
-import com.google.devtools.build.lib.packages.DependencyFilter.AttributeInfoProvider;
 import com.google.devtools.build.lib.util.BinaryPredicate;
 
 /**
@@ -22,14 +21,13 @@ import com.google.devtools.build.lib.util.BinaryPredicate;
  * <code>blaze query</code>.
  * Used to implement  <code>--[no]implicit_deps</code>, <code>--[no]host_deps</code> etc.
  */
-public abstract class DependencyFilter
-    implements BinaryPredicate<AttributeInfoProvider, Attribute> {
+public abstract class DependencyFilter implements BinaryPredicate<Rule, Attribute> {
 
   /** Dependency predicate that includes all dependencies */
   public static final DependencyFilter ALL_DEPS =
       new DependencyFilter() {
         @Override
-        public boolean apply(AttributeInfoProvider x, Attribute y) {
+        public boolean apply(Rule x, Attribute y) {
           return true;
         }
       };
@@ -37,7 +35,7 @@ public abstract class DependencyFilter
   public static final DependencyFilter NO_HOST_DEPS =
       new DependencyFilter() {
     @Override
-    public boolean apply(AttributeInfoProvider infoProvider, Attribute attribute) {
+    public boolean apply(Rule rule, Attribute attribute) {
       // isHostConfiguration() is only defined for labels and label lists.
       if (attribute.getType() != BuildType.LABEL && attribute.getType() != BuildType.LABEL_LIST) {
         return true;
@@ -50,8 +48,8 @@ public abstract class DependencyFilter
   public static final DependencyFilter NO_IMPLICIT_DEPS =
       new DependencyFilter() {
     @Override
-    public boolean apply(AttributeInfoProvider infoProvider, Attribute attribute) {
-      return infoProvider.isAttributeValueExplicitlySpecified(attribute);
+    public boolean apply(Rule rule, Attribute attribute) {
+      return rule.isAttributeValueExplicitlySpecified(attribute);
     }
   };
   /**
@@ -61,7 +59,7 @@ public abstract class DependencyFilter
   public static final DependencyFilter NO_NODEP_ATTRIBUTES =
       new DependencyFilter() {
     @Override
-    public boolean apply(AttributeInfoProvider infoProvider, Attribute attribute) {
+    public boolean apply(Rule rule, Attribute attribute) {
       return attribute.getType() != BuildType.NODEP_LABEL
           && attribute.getType() != BuildType.NODEP_LABEL_LIST;
     }
@@ -72,7 +70,7 @@ public abstract class DependencyFilter
   public static final DependencyFilter DIRECT_COMPILE_TIME_INPUT =
       new DependencyFilter() {
     @Override
-    public boolean apply(AttributeInfoProvider infoProvider, Attribute attribute) {
+    public boolean apply(Rule rule, Attribute attribute) {
       return attribute.isDirectCompileTimeInput();
     }
   };
@@ -81,7 +79,7 @@ public abstract class DependencyFilter
    * Returns true if a given attribute should be processed.
    */
   @Override
-  public abstract boolean apply(AttributeInfoProvider infoProvider, Attribute attribute);
+  public abstract boolean apply(Rule rule, Attribute attribute);
 
   /**
    * Returns a predicate that computes the logical and of the two given predicates.
@@ -90,21 +88,9 @@ public abstract class DependencyFilter
       final DependencyFilter a, final DependencyFilter b) {
     return new DependencyFilter() {
       @Override
-      public boolean apply(AttributeInfoProvider infoProvider, Attribute attribute) {
-        return a.apply(infoProvider, attribute) && b.apply(infoProvider, attribute);
+      public boolean apply(Rule rule, Attribute attribute) {
+        return a.apply(rule, attribute) && b.apply(rule, attribute);
       }
     };
-  }
-
-  /**
-   * Interface to provide information about attributes to dependency filters.
-   */
-  public interface AttributeInfoProvider {
-    /**
-     * Returns true iff the value of the specified attribute is explicitly set in
-     * the BUILD file (as opposed to its default value). This also returns true if
-     * the value from the BUILD file is the same as the default value.
-     */
-    boolean isAttributeValueExplicitlySpecified(Attribute attribute);
   }
 }

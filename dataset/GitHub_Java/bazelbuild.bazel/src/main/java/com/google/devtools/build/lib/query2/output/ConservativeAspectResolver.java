@@ -34,8 +34,7 @@ import java.util.Set;
  */
 public class ConservativeAspectResolver implements AspectResolver {
   @Override
-  public ImmutableMultimap<Attribute, Label> computeAspectDependencies(Target target,
-      DependencyFilter dependencyFilter)
+  public ImmutableMultimap<Attribute, Label> computeAspectDependencies(Target target)
       throws InterruptedException {
     if (!(target instanceof Rule)) {
       return ImmutableMultimap.of();
@@ -46,7 +45,7 @@ public class ConservativeAspectResolver implements AspectResolver {
     for (Attribute attribute : rule.getAttributes()) {
       for (Aspect aspect : attribute.getAspects(rule)) {
         AspectDefinition.addAllAttributesOfAspect(
-            rule, result, aspect, dependencyFilter);
+            rule, result, aspect.getDefinition(), DependencyFilter.ALL_DEPS);
       }
     }
 
