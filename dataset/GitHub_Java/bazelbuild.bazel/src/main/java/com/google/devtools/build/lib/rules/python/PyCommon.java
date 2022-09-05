@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.rules.python;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionOwner;
@@ -31,7 +30,6 @@ import com.google.devtools.build.lib.analysis.PseudoAction;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.SkylarkProviders;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.Util;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -46,11 +44,6 @@ import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.LocalMetadataCollector;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
-import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
-import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -67,10 +60,6 @@ import java.util.UUID;
  * A helper class for Python rules.
  */
 public final class PyCommon {
-
-  public static final String PYTHON_SKYLARK_PROVIDER_NAME = "py";
-  public static final String TRANSITIVE_PYTHON_SRCS = "transitive_sources";
-  public static final String IS_USING_SHARED_LIBRARY = "uses_shared_libraries";
 
   private static final LocalMetadataCollector METADATA_COLLECTOR = new LocalMetadataCollector() {
     @Override
@@ -136,15 +125,13 @@ public final class PyCommon {
 
   public void addCommonTransitiveInfoProviders(RuleConfiguredTargetBuilder builder,
       PythonSemantics semantics, NestedSet<Artifact> filesToBuild) {
-
-    SkylarkClassObject sourcesProvider =
-        new SkylarkClassObject(ImmutableMap.<String, Object>of(
-            TRANSITIVE_PYTHON_SRCS, SkylarkNestedSet.of(Artifact.class, transitivePythonSources),
-            IS_USING_SHARED_LIBRARY, usesSharedLibraries()), "No such attribute '%s'");
+    PythonSourcesProvider sourcesProvider =
+        new PythonSourcesProvider(transitivePythonSources, usesSharedLibraries());
     builder
         .add(InstrumentedFilesProvider.class, InstrumentedFilesCollector.collect(ruleContext,
             semantics.getCoverageInstrumentationSpec(), METADATA_COLLECTOR, filesToBuild))
-        .addSkylarkTransitiveInfo(PYTHON_SKYLARK_PROVIDER_NAME, sourcesProvider)
+        .add(PythonSourcesProvider.class, sourcesProvider)
+        .addSkylarkTransitiveInfo(PythonSourcesProvider.SKYLARK_NAME, sourcesProvider)
         // Python targets are not really compilable. The best we can do is make sure that all
         // generated source files are ready.
         .addOutputGroup(OutputGroupProvider.FILES_TO_COMPILE, transitivePythonSources)
@@ -273,44 +260,12 @@ public final class PyCommon {
     return ruleContext.getPrerequisites("deps", Mode.TARGET);
   }
 
-  private NestedSet<Artifact> getTransitivePythonSourcesFromSkylarkProvider(
-          TransitiveInfoCollection dep) {
-    SkylarkClassObject pythonSkylarkProvider = null;
-    SkylarkProviders skylarkProviders = dep.getProvider(SkylarkProviders.class);
-    try {
-      if (skylarkProviders != null) {
-        pythonSkylarkProvider = skylarkProviders.getValue(PYTHON_SKYLARK_PROVIDER_NAME,
-                SkylarkClassObject.class);
-      }
-
-      if (pythonSkylarkProvider != null) {
-        Object sourceFiles = pythonSkylarkProvider.getValue(TRANSITIVE_PYTHON_SRCS);
-        String errorType;
-        if (sourceFiles == null) {
-          errorType = "null";
-        } else {
-          errorType = EvalUtils.getDataTypeNameFromClass(sourceFiles.getClass());
-        }
-        String errorMsg = "Illegal Argument: attribute '%s' in provider '%s' is "
-                + "of unexpected type. Should be a set, but got a '%s'";
-        NestedSet<Artifact> pythonSourceFiles = SkylarkType.cast(
-                sourceFiles, SkylarkNestedSet.class, Artifact.class, null,
-                errorMsg, TRANSITIVE_PYTHON_SRCS, PYTHON_SKYLARK_PROVIDER_NAME, errorType)
-                .getSet(Artifact.class);
-        return pythonSourceFiles;
-      }
-    } catch (EvalException e) {
-      ruleContext.ruleError(e.getMessage());
-    }
-    return null;
-  }
-
   private void collectTransitivePythonSourcesFrom(
       Iterable<? extends TransitiveInfoCollection> deps, NestedSetBuilder<Artifact> builder) {
     for (TransitiveInfoCollection dep : deps) {
-      NestedSet<Artifact> pythonSourceFiles = getTransitivePythonSourcesFromSkylarkProvider(dep);
-      if (pythonSourceFiles != null) {
-        builder.addTransitive(pythonSourceFiles);
+      if (dep.getProvider(PythonSourcesProvider.class) != null) {
+        PythonSourcesProvider provider = dep.getProvider(PythonSourcesProvider.class);
+        builder.addTransitive(provider.getTransitivePythonSources());
       } else {
         // TODO(bazel-team): We also collect .py source files from deps (e.g. for proto_library
         // rules). Rules should implement PythonSourcesProvider instead.
@@ -321,29 +276,12 @@ public final class PyCommon {
   }
 
   private NestedSet<Artifact> collectTransitivePythonSources() {
-    NestedSetBuilder<Artifact> builder = NestedSetBuilder.compileOrder();
+    NestedSetBuilder<Artifact> builder =
+        NestedSetBuilder.compileOrder();
     collectTransitivePythonSourcesFrom(getTargetDeps(), builder);
-    addSourceFiles(builder,
-        ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET)
-            .filter(PyRuleClasses.PYTHON_SOURCE).list());
+    addSourceFiles(builder, ruleContext
+        .getPrerequisiteArtifacts("srcs", Mode.TARGET).filter(PyRuleClasses.PYTHON_SOURCE).list());
     return builder.build();
-  }
-
-  public NestedSet<PathFragment> collectImports(
-      RuleContext ruleContext, PythonSemantics semantics) {
-    NestedSetBuilder<PathFragment> builder = NestedSetBuilder.compileOrder();
-    builder.addAll(semantics.getImports(ruleContext));
-    collectTransitivePythonImports(builder);
-    return builder.build();
-  }
-
-  private void collectTransitivePythonImports(NestedSetBuilder<PathFragment> builder) {
-    for (TransitiveInfoCollection dep : getTargetDeps()) {
-      if (dep.getProvider(PythonImportsProvider.class) != null) {
-        PythonImportsProvider provider = dep.getProvider(PythonImportsProvider.class);
-        builder.addTransitive(provider.getTransitivePythonImports());
-      }
-    }
   }
 
   /**
@@ -426,14 +364,9 @@ public final class PyCommon {
   }
 
   public boolean usesSharedLibraries() {
-    try {
-      return checkForSharedLibraries(Iterables.concat(
-              ruleContext.getPrerequisites("deps", Mode.TARGET),
-              ruleContext.getPrerequisites("data", Mode.DATA)));
-    } catch (EvalException e) {
-      ruleContext.ruleError(e.getMessage());
-      return false;
-    }
+    return checkForSharedLibraries(Iterables.concat(
+        ruleContext.getPrerequisites("deps", Mode.TARGET),
+        ruleContext.getPrerequisites("data", Mode.DATA)));
   }
 
   protected static final ResourceSet PY_COMPILE_RESOURCE_SET =
@@ -503,18 +436,11 @@ public final class PyCommon {
   /**
    * Returns true if this target has an .so file in its transitive dependency closure.
    */
-  public static boolean checkForSharedLibraries(Iterable<TransitiveInfoCollection> deps)
-          throws EvalException{
+  public static boolean checkForSharedLibraries(Iterable<TransitiveInfoCollection> deps) {
     for (TransitiveInfoCollection dep : deps) {
-      SkylarkProviders providers = dep.getProvider(SkylarkProviders.class);
-      SkylarkClassObject provider = null;
-      if (providers != null) {
-        provider = providers.getValue(PYTHON_SKYLARK_PROVIDER_NAME,
-                SkylarkClassObject.class);
-      }
+      PythonSourcesProvider provider = dep.getProvider(PythonSourcesProvider.class);
       if (provider != null) {
-        Boolean isUsingSharedLibrary = provider.getValue(IS_USING_SHARED_LIBRARY, Boolean.class);
-        if (Boolean.TRUE.equals(isUsingSharedLibrary)) {
+        if (provider.usesSharedLibraries()) {
           return true;
         }
       } else if (FileType.contains(
