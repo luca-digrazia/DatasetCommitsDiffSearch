@@ -499,7 +499,7 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
   }
 
   @Override
-  public boolean willExecuteRemotely(boolean remotable) {
+  public boolean isRemotable(String mnemonic, boolean remotable) {
     return false;
   }
 
