@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.skyframe;
 import static com.google.devtools.build.lib.skyframe.SkyFunctions.DIRECTORY_LISTING_STATE;
 import static com.google.devtools.build.lib.skyframe.SkyFunctions.FILE_STATE;
 
-import com.google.common.base.Preconditions;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
@@ -34,40 +34,44 @@ class DirtinessCheckerUtils {
   private DirtinessCheckerUtils() {}
 
   static class FileDirtinessChecker extends SkyValueDirtinessChecker {
-    @Override
-    public boolean applies(SkyKey skyKey) {
+    private boolean applies(SkyKey skyKey) {
       return skyKey.functionName().equals(FILE_STATE);
     }
 
     @Override
     @Nullable
-    public SkyValue createNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
+    public Optional<SkyValue> maybeCreateNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
+      if (!applies(key)) {
+        return null;
+      }
       RootedPath rootedPath = (RootedPath) key.argument();
       try {
-        return FileStateValue.create(rootedPath, tsgm);
+        return Optional.<SkyValue>of(FileStateValue.create(rootedPath, tsgm));
       } catch (InconsistentFilesystemException | IOException e) {
         // TODO(bazel-team): An IOException indicates a failure to get a file digest or a symlink
         // target, not a missing file. Such a failure really shouldn't happen, so failing early
         // may be better here.
-        return null;
+        return Optional.<SkyValue>absent();
       }
     }
   }
 
   static class DirectoryDirtinessChecker extends SkyValueDirtinessChecker {
-    @Override
-    public boolean applies(SkyKey skyKey) {
+    private boolean applies(SkyKey skyKey) {
       return skyKey.functionName().equals(DIRECTORY_LISTING_STATE);
     }
 
     @Override
     @Nullable
-    public SkyValue createNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
+    public Optional<SkyValue> maybeCreateNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
+      if (!applies(key)) {
+        return null;
+      }
       RootedPath rootedPath = (RootedPath) key.argument();
       try {
-        return DirectoryListingStateValue.create(rootedPath);
+        return Optional.<SkyValue>of(DirectoryListingStateValue.create(rootedPath));
       } catch (IOException e) {
-        return null;
+        return Optional.<SkyValue>absent();
       }
     }
   }
@@ -78,15 +82,14 @@ class DirtinessCheckerUtils {
     private final UnionDirtinessChecker checker =
         new UnionDirtinessChecker(ImmutableList.of(fdc, ddc));
 
-    @Override
-    public boolean applies(SkyKey skyKey) {
+    protected boolean applies(SkyKey skyKey) {
       return fdc.applies(skyKey) || ddc.applies(skyKey);
     }
 
     @Override
     @Nullable
-    public SkyValue createNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
-      return checker.createNewValue(key, tsgm);
+    public Optional<SkyValue> maybeCreateNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
+      return checker.maybeCreateNewValue(key, tsgm);
     }
   }
 
@@ -98,9 +101,12 @@ class DirtinessCheckerUtils {
     }
 
     @Override
-    public boolean applies(SkyKey key) {
-      return super.applies(key)
-          && missingDiffPaths.contains(((RootedPath) key.argument()).getRoot());
+    @Nullable
+    public DirtyResult maybeCheck(SkyKey key, @Nullable SkyValue oldValue,
+        TimestampGranularityMonitor tsgm) {
+      return applies(key) && missingDiffPaths.contains(((RootedPath) key.argument()).getRoot())
+        ? super.maybeCheck(key, oldValue, tsgm)
+        : null;
     }
   }
 
@@ -112,32 +118,29 @@ class DirtinessCheckerUtils {
       this.dirtinessCheckers = dirtinessCheckers;
     }
 
+    @Override
     @Nullable
-    private SkyValueDirtinessChecker getChecker(SkyKey key) {
+    public Optional<SkyValue> maybeCreateNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
       for (SkyValueDirtinessChecker dirtinessChecker : dirtinessCheckers) {
-        if (dirtinessChecker.applies(key)) {
-          return dirtinessChecker;
+        Optional<SkyValue> newValueMaybe = dirtinessChecker.maybeCreateNewValue(key, tsgm);
+        if (newValueMaybe != null) {
+          return newValueMaybe;
         }
       }
       return null;
     }
 
     @Override
-    public boolean applies(SkyKey key) {
-      return getChecker(key) != null;
-    }
-
-    @Override
     @Nullable
-    public SkyValue createNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
-      return Preconditions.checkNotNull(getChecker(key), key).createNewValue(key, tsgm);
-    }
-
-    @Override
-    @Nullable
-    public DirtyResult check(SkyKey key, @Nullable SkyValue oldValue,
+    public DirtyResult maybeCheck(SkyKey key, @Nullable SkyValue oldValue,
         TimestampGranularityMonitor tsgm) {
-      return Preconditions.checkNotNull(getChecker(key), key).check(key, oldValue, tsgm);
+      for (SkyValueDirtinessChecker dirtinessChecker : dirtinessCheckers) {
+        DirtyResult dirtyResult = dirtinessChecker.maybeCheck(key, oldValue, tsgm);
+        if (dirtyResult != null) {
+          return dirtyResult;
+        }
+      }
+      return null;
     }
   }
 }

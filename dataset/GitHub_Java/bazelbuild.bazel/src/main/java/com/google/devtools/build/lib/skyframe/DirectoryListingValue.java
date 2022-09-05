@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,18 +36,14 @@ import java.util.Objects;
  */
 @Immutable
 @ThreadSafe
-public abstract class DirectoryListingValue implements SkyValue {
+abstract class DirectoryListingValue implements SkyValue {
 
   /**
    * Returns the directory entries for this directory, in a stable order.
    *
    * <p>Symlinks are not expanded.
    */
-  public Dirents getDirents() {
-    return getDirectoryListingStateValue().getDirents();
-  }
-
-  public abstract DirectoryListingStateValue getDirectoryListingStateValue();
+  public abstract Dirents getDirents();
 
   /**
    * Returns a {@link SkyKey} for getting the directory entries of the given directory. The
@@ -67,19 +63,18 @@ public abstract class DirectoryListingValue implements SkyValue {
             realDirectoryListingStateValue);
   }
 
-  /** Normal {@link DirectoryListingValue}. */
   @ThreadSafe
-  public static final class RegularDirectoryListingValue extends DirectoryListingValue {
+  private static final class RegularDirectoryListingValue extends DirectoryListingValue {
 
     private final DirectoryListingStateValue directoryListingStateValue;
 
-    public RegularDirectoryListingValue(DirectoryListingStateValue directoryListingStateValue) {
+    private RegularDirectoryListingValue(DirectoryListingStateValue directoryListingStateValue) {
       this.directoryListingStateValue = directoryListingStateValue;
     }
 
     @Override
-    public DirectoryListingStateValue getDirectoryListingStateValue() {
-      return directoryListingStateValue;
+    public Dirents getDirents() {
+      return directoryListingStateValue.getDirents();
     }
 
     @Override
@@ -100,26 +95,21 @@ public abstract class DirectoryListingValue implements SkyValue {
     }
   }
 
-  /** A {@link DirectoryListingValue} with a different root. */
   @ThreadSafe
-  public static final class DifferentRealPathDirectoryListingValue extends DirectoryListingValue {
+  private static final class DifferentRealPathDirectoryListingValue extends DirectoryListingValue {
 
     private final RootedPath realDirRootedPath;
     private final DirectoryListingStateValue directoryListingStateValue;
 
-    public DifferentRealPathDirectoryListingValue(RootedPath realDirRootedPath,
+    private DifferentRealPathDirectoryListingValue(RootedPath realDirRootedPath,
         DirectoryListingStateValue directoryListingStateValue) {
       this.realDirRootedPath = realDirRootedPath;
       this.directoryListingStateValue = directoryListingStateValue;
     }
 
-    public RootedPath getRealDirRootedPath() {
-      return realDirRootedPath;
-    }
-
     @Override
-    public DirectoryListingStateValue getDirectoryListingStateValue() {
-      return directoryListingStateValue;
+    public Dirents getDirents() {
+      return directoryListingStateValue.getDirents();
     }
 
     @Override
