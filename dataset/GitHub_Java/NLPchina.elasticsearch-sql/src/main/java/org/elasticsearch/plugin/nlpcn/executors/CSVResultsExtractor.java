@@ -1,21 +1,20 @@
 package org.elasticsearch.plugin.nlpcn.executors;
 
 import com.google.common.base.Joiner;
-import com.google.common.collect.Maps;
-import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.common.document.DocumentField;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.Aggregations;
-import org.elasticsearch.search.aggregations.InternalAggregations;
 import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation;
 import org.elasticsearch.search.aggregations.bucket.SingleBucketAggregation;
-import org.elasticsearch.search.aggregations.metrics.*;
-import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
+import org.elasticsearch.search.aggregations.metrics.NumericMetricsAggregation;
+import org.elasticsearch.search.aggregations.metrics.geobounds.GeoBounds;
+import org.elasticsearch.search.aggregations.metrics.percentiles.Percentiles;
+import org.elasticsearch.search.aggregations.metrics.stats.Stats;
+import org.elasticsearch.search.aggregations.metrics.stats.extended.ExtendedStats;
+import org.elasticsearch.search.aggregations.metrics.tophits.TopHits;
 import org.nlpcn.es4sql.Util;
-import org.nlpcn.es4sql.query.DefaultQueryAction;
-import org.nlpcn.es4sql.query.QueryAction;
 
 import java.util.*;
 
@@ -25,37 +24,20 @@ import java.util.*;
 public class CSVResultsExtractor {
     private final boolean includeType;
     private final boolean includeScore;
-    private final boolean includeId;
-    private final boolean includeScrollId;
-    private boolean includeIndex;
+    private final boolean indcludeId;
     private int currentLineIndex;
-    private QueryAction queryAction;
-
-    public CSVResultsExtractor(boolean includeScore, boolean includeType, boolean includeId, boolean includeScrollId, QueryAction queryAction) {
+    public CSVResultsExtractor(boolean includeScore, boolean includeType, boolean includeId) {
         this.includeScore = includeScore;
         this.includeType = includeType;
-        this.includeId = includeId;
-        this.includeScrollId = includeScrollId;
+        this.indcludeId = includeId;
         this.currentLineIndex = 0;
-        this.queryAction = queryAction;
     }
-
-    public CSVResultsExtractor(boolean includeIndex, boolean includeScore, boolean includeType, boolean includeId, boolean includeScrollId, QueryAction queryAction) {
-        this.includeIndex = includeIndex;
-        this.includeScore = includeScore;
-        this.includeType = includeType;
-        this.includeId = includeId;
-        this.includeScrollId = includeScrollId;
-        this.currentLineIndex = 0;
-        this.queryAction = queryAction;
-    }
-
 
     public CSVResult extractResults(Object queryResult, boolean flat, String separator) throws CsvExtractorException {
         if(queryResult instanceof SearchHits){
             SearchHit[] hits = ((SearchHits) queryResult).getHits();
             List<Map<String,Object>> docsAsMap = new ArrayList<>();
-            List<String> headers = createHeadersAndFillDocsMap(flat, hits, null, docsAsMap);
+            List<String> headers = createHeadersAndFillDocsMap(flat, hits, docsAsMap);
             List<String> csvLines = createCSVLinesFromDocs(flat, separator, docsAsMap, headers);
             return new CSVResult(headers,csvLines);
         }
@@ -76,13 +58,6 @@ public class CSVResultsExtractor {
 
             return new CSVResult(headers,csvLines);
 
-        }
-        if (queryResult instanceof SearchResponse) {
-            SearchHit[] hits = ((SearchResponse) queryResult).getHits().getHits();
-            List<Map<String, Object>> docsAsMap = new ArrayList<>();
-            List<String> headers = createHeadersAndFillDocsMap(flat, hits, ((SearchResponse) queryResult).getScrollId(), docsAsMap);
-            List<String> csvLines = createCSVLinesFromDocs(flat, separator, docsAsMap, headers);
-            return new CSVResult(headers, csvLines);
         }
         return null;
     }
@@ -208,22 +183,18 @@ public class CSVResultsExtractor {
                 }
             }
             else if( aggregation instanceof Percentiles){
-                List<String> percentileHeaders = new ArrayList<>(7);
+                String[] percentileHeaders = new String[]{"1.0", "5.0", "25.0", "50.0", "75.0", "95.0", "99.0"};
+                mergeHeadersWithPrefix(header, name, percentileHeaders);
                 Percentiles percentiles = (Percentiles) aggregation;
-                for (Percentile p : percentiles) {
-                    percentileHeaders.add(String.valueOf(p.getPercent()));
-                    line.add(percentiles.percentileAsString(p.getPercent()));
-                }
-                mergeHeadersWithPrefix(header, name, percentileHeaders.toArray(new String[0]));
-            } else if (aggregation instanceof InternalTDigestPercentileRanks) {//added by xzb 增加PercentileRanks函数支持
-                InternalTDigestPercentileRanks percentileRanks = (InternalTDigestPercentileRanks) aggregation;
-                List<String> percentileHeaders = new ArrayList<>(7);
-                for (Percentile rank : percentileRanks) {
-                    percentileHeaders.add(String.valueOf(rank.getValue()));
-                    line.add(String.valueOf(rank.getPercent()));
-                }
-                mergeHeadersWithPrefix(header, name, percentileHeaders.toArray(new String[0]));
-            } else {
+                line.add(percentiles.percentileAsString(1.0));
+                line.add(percentiles.percentileAsString(5.0));
+                line.add(percentiles.percentileAsString(25.0));
+                line.add(percentiles.percentileAsString(50.0));
+                line.add(percentiles.percentileAsString(75));
+                line.add(percentiles.percentileAsString(95.0));
+                line.add(percentiles.percentileAsString(99.0));
+            }
+            else {
                 throw new CsvExtractorException("unknown NumericMetricsAggregation.MultiValue:" + aggregation.getClass());
             }
 
@@ -278,75 +249,37 @@ public class CSVResultsExtractor {
         return csvLines;
     }
 
-    private List<String> createHeadersAndFillDocsMap(boolean flat, SearchHit[] hits, String scrollId, List<Map<String, Object>> docsAsMap) {
-        Set<String> csvHeaders = new LinkedHashSet<>();
-        Map<String, String> highlightMap = Maps.newHashMap();
-        for (SearchHit hit : hits) {
-            //获取高亮内容
-            hit.getHighlightFields().entrySet().stream().forEach(entry -> {
-                String key = entry.getKey();
-                String frag = entry.getValue().getFragments()[0].toString();
-                highlightMap.put(key, frag);
-            });
-
+    private List<String> createHeadersAndFillDocsMap(boolean flat, SearchHit[] hits, List<Map<String, Object>> docsAsMap) {
+        Set<String> csvHeaders = new HashSet<>();
+        for(SearchHit hit : hits){
             Map<String, Object> doc = hit.getSourceAsMap();
-            Map<String, Object> _doc = doc;
-            //替换掉将原始结果中字段的值替换为高亮后的内容
-            for (Map.Entry<String, Object> entry : doc.entrySet()) {
-                if(highlightMap.containsKey(entry.getKey())) {
-                    _doc.put(entry.getKey(), highlightMap.get(entry.getKey()));
-                }
-            }
-            //经过转换后，原始的value被替换为高亮后的value
-            //doc = _doc;
-
             Map<String, DocumentField> fields = hit.getFields();
-            for (DocumentField searchHitField : fields.values()) {
-                doc.put(searchHitField.getName(), searchHitField.getValue());
+            for(DocumentField searchHitField : fields.values()){
+                doc.put(searchHitField.getName(),searchHitField.getValue());
             }
             mergeHeaders(csvHeaders, doc, flat);
-            if (this.includeIndex) {
-                doc.put("_index", hit.getIndex());
-            }
-            if (this.includeId) {
+            if(this.indcludeId){
                 doc.put("_id", hit.getId());
             }
-            if (this.includeScore) {
+            if(this.includeScore){
                 doc.put("_score", hit.getScore());
             }
-            if (this.includeType) {
-                doc.put("_type", hit.getType());
-            }
-            if (this.includeScrollId) {
-                doc.put("_scroll_id", scrollId);
+            if(this.includeType){
+                doc.put("_type",hit.getType());
             }
             docsAsMap.add(doc);
         }
-        if (this.includeIndex) {
-            csvHeaders.add("_index");
+        ArrayList<String> headersList = new ArrayList<>(csvHeaders);
+        if (this.indcludeId){
+            headersList.add("_id");
         }
-        if (this.includeId) {
-            csvHeaders.add("_id");
+        if (this.includeScore){
+            headersList.add("_score");
         }
-        if (this.includeScore) {
-            csvHeaders.add("_score");
+        if (this.includeType){
+            headersList.add("_type");
         }
-        if (this.includeType) {
-            csvHeaders.add("_type");
-        }
-        if (this.includeScrollId) {
-            csvHeaders.add("_scroll_id");
-        }
-        List<String> headers = new ArrayList<>(csvHeaders);
-        if (this.queryAction instanceof DefaultQueryAction) {
-            List<String> fieldNames = ((DefaultQueryAction) this.queryAction).getFieldNames();
-            headers.sort((o1, o2) -> {
-                int i1 = fieldNames.indexOf(o1);
-                int i2 = fieldNames.indexOf(o2);
-                return Integer.compare(i1 < 0 ? Integer.MAX_VALUE : i1, i2 < 0 ? Integer.MAX_VALUE : i2);
-            });
-        }
-        return headers;
+        return headersList;
     }
 
     private String findFieldValue(String header, Map<String, Object> doc, boolean flat, String separator) {
