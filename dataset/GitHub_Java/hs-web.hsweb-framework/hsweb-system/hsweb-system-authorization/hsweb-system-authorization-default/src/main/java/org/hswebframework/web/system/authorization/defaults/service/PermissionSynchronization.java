@@ -1,6 +1,5 @@
 package org.hswebframework.web.system.authorization.defaults.service;
 
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.extern.slf4j.Slf4j;
 import org.hswebframework.ezorm.rdb.mapping.ReactiveRepository;
 import org.hswebframework.ezorm.rdb.mapping.annotation.Comment;
@@ -35,9 +34,9 @@ public class PermissionSynchronization implements CommandLineRunner {
     @Autowired
     private ReactiveRepository<PermissionEntity, String> permissionRepository;
 
-    private final MergedAuthorizeDefinition definition = new MergedAuthorizeDefinition();
+    private MergedAuthorizeDefinition definition = new MergedAuthorizeDefinition();
 
-    private final Map<String, List<OptionalField>> entityFieldsMapping = new HashMap<>();
+    private Map<String, List<OptionalField>> entityFieldsMapping = new HashMap<>();
 
     @EventListener
     public void handleResourceParseEvent(AuthorizeDefinitionInitializedEvent event) {
@@ -51,18 +50,18 @@ public class PermissionSynchronization implements CommandLineRunner {
                 return;
             }
             if (authorizeDefinition instanceof AopAuthorizeDefinition) {
-                Class<?> target = ((AopAuthorizeDefinition) authorizeDefinition).getTargetClass();
+                Class target = ((AopAuthorizeDefinition) authorizeDefinition).getTargetClass();
                 if (ReactiveQueryController.class.isAssignableFrom(target)
                         || ReactiveServiceQueryController.class.isAssignableFrom(target)) {
-                    Class<?> entity = ClassUtils.getGenericType(target);
+                    Class entity = ClassUtils.getGenericType(target);
                     if (Entity.class.isAssignableFrom(entity)) {
                         Set<OptionalField> fields = new HashSet<>();
                         ReflectionUtils.doWithFields(entity, field -> {
                             if (null != field.getAnnotation(Column.class) && !"id".equals(field.getName())) {
                                 OptionalField optionalField = new OptionalField();
                                 optionalField.setName(field.getName());
-                                Optional.ofNullable(field.getAnnotation(Schema.class))
-                                        .map(Schema::description)
+                                Optional.ofNullable(field.getAnnotation(Comment.class))
+                                        .map(Comment::value)
                                         .ifPresent(optionalField::setDescribe);
                                 fields.add(optionalField);
                             }
