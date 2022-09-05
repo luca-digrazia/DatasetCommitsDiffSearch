@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.bazel.repository;
 
-import com.google.devtools.build.lib.bazel.repository.downloader.ProxyHelper;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
@@ -40,7 +39,6 @@ import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.NetRCCredentialsProvider;
 
 import java.io.IOException;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -92,9 +90,7 @@ public class GitCloner {
     return false;
   }
 
-  public static SkyValue clone(
-      Rule rule, Path outputDirectory, EventHandler eventHandler,
-      Map<String, String> clientEnvironment)
+  public static SkyValue clone(Rule rule, Path outputDirectory, EventHandler eventHandler)
       throws RepositoryFunctionException {
     AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
     if ((mapper.has("commit", Type.STRING) == mapper.has("tag", Type.STRING))
@@ -121,7 +117,7 @@ public class GitCloner {
     // Setup proxy if remote is http or https
     if (descriptor.remote != null && descriptor.remote.startsWith("http")) {
       try {
-        ProxyHelper.createProxyIfNeeded(descriptor.remote, clientEnvironment);
+        ProxyHelper.createProxyIfNeeded(descriptor.remote);
       } catch (IOException ie) {
         throw new RepositoryFunctionException(ie, Transience.TRANSIENT);
       }
@@ -181,7 +177,7 @@ public class GitCloner {
       Throwable throwable = e;
       while (throwable.getCause() != null) {
         throwable = throwable.getCause();
-        errmsg.append(" caused by " + throwable.getMessage());
+        errmsg.append(" caused by " + e.getMessage());
       }
       throw new RepositoryFunctionException(
           new IOException("Error cloning repository: " + errmsg), Transience.PERSISTENT);

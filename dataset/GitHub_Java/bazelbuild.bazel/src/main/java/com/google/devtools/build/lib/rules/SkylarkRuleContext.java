@@ -473,13 +473,21 @@ public final class SkylarkRuleContext {
   }
 
   @SkylarkCallable(name = "fragments", structField = true,
-      doc = "Allows access to configuration fragments in target configuration.")
+      doc = "Allows access to configuration fragments in target configuration. "
+          + "Possible fields are <code>apple</code>, <code>cpp</code>, "
+          + "<code>java</code> and <code>jvm</code>. "
+          + "However, rules have to declare their required fragments in order to access them "
+          + "(see <a href=\"../rules.html#fragments\">here</a>).")
   public FragmentCollection getFragments() {
     return fragments;
   }
 
   @SkylarkCallable(name = "host_fragments", structField = true,
-      doc = "Allows access to configuration fragments in host configuration.")
+      doc = "Allows access to configuration fragments in host configuration. "
+          + "Possible fields are <code>apple</code>, <code>cpp</code>, "
+          + "<code>java</code> and <code>jvm</code>. "
+          + "However, rules have to declare their required fragments in order to access them "
+          + "(see <a href=\"../rules.html#fragments\">here</a>).")
   public FragmentCollection getHostFragments() {
     return hostFragments;
   }
@@ -560,13 +568,23 @@ public final class SkylarkRuleContext {
     }
   }
 
+  private boolean isForAspect() {
+    return ruleAttributesCollection != null;
+  }
+
   @SkylarkCallable(
     doc =
         "Creates a file object with the given filename, in the current package. "
             + DOC_NEW_FILE_TAIL
   )
   public Artifact newFile(String filename) {
-    return newFile(ruleContext.getBinOrGenfilesDirectory(), filename);
+    return newFile(newFileRoot(), filename);
+  }
+
+  private Root newFileRoot() {
+    return isForAspect()
+        ? getConfiguration().getBinDirectory()
+        : ruleContext.getBinOrGenfilesDirectory();
   }
 
   // Kept for compatibility with old code.
@@ -581,8 +599,7 @@ public final class SkylarkRuleContext {
   public Artifact newFile(Artifact baseArtifact, String newBaseName) {
     PathFragment original = baseArtifact.getRootRelativePath();
     PathFragment fragment = original.replaceName(newBaseName);
-    Root root = ruleContext.getBinOrGenfilesDirectory();
-    return ruleContext.getDerivedArtifact(fragment, root);
+    return ruleContext.getDerivedArtifact(fragment, newFileRoot());
   }
 
   // Kept for compatibility with old code.
