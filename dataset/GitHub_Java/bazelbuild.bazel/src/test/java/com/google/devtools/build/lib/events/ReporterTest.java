@@ -50,10 +50,10 @@ public class ReporterTest extends EventTestTemplate {
     reporter.setOutputFilter(OutputFilter.RegexOutputFilter.forRegex("naughty"));
     EventCollector collector = new EventCollector();
     reporter.addHandler(collector);
-    Event interesting = Event.warn(null, "show-me").withTag("naughty");
+    Event interesting = new Event(EventKind.WARNING, null, "show-me", "naughty");
 
     reporter.handle(interesting);
-    reporter.handle(Event.warn(null, "ignore-me").withTag("good"));
+    reporter.handle(new Event(EventKind.WARNING, null, "ignore-me", "good"));
 
     assertEquals(ImmutableList.copyOf(collector), ImmutableList.of(interesting));
   }
