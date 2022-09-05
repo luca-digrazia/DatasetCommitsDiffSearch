@@ -19,12 +19,10 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
-import com.google.devtools.build.lib.packages.ErrorDeterminingRepositoryException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -34,7 +32,6 @@ import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
 
@@ -52,22 +49,18 @@ public class PackageLookupFunction implements SkyFunction {
 
   private final AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages;
   private final CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy;
-  private final List<BuildFileName> buildFilesByPriority;
 
   public PackageLookupFunction(
       AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages,
-      CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy,
-      List<BuildFileName> buildFilesByPriority) {
+      CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy) {
     this.deletedPackages = deletedPackages;
     this.crossRepositoryLabelViolationStrategy = crossRepositoryLabelViolationStrategy;
-    this.buildFilesByPriority = buildFilesByPriority;
   }
 
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws PackageLookupFunctionException, InterruptedException {
     PathPackageLocator pkgLocator = PrecomputedValue.PATH_PACKAGE_LOCATOR.get(env);
-
     PackageIdentifier packageKey = (PackageIdentifier) skyKey.argument();
     if (PackageFunction.isDefaultsPackage(packageKey)) {
       return PackageLookupValue.success(pkgLocator.getPathEntries().get(0), BuildFileName.BUILD);
@@ -103,39 +96,13 @@ public class PackageLookupFunction implements SkyFunction {
       }
     }
 
-    return findPackageByBuildFile(env, pkgLocator, packageKey);
+    return getPackageLookupValue(env, pkgLocator.getPathEntries(), packageKey, BuildFileName.BUILD);
   }
 
   @Nullable
   @Override
   public String extractTag(SkyKey skyKey) {
     return null;
-  }
-
-  @Nullable
-  private PackageLookupValue findPackageByBuildFile(
-      Environment env, PathPackageLocator pkgLocator, PackageIdentifier packageKey)
-      throws PackageLookupFunctionException, InterruptedException {
-    // TODO(bazel-team): The following is O(n^2) on the number of elements on the package path due
-    // to having restart the SkyFunction after every new dependency. However, if we try to batch
-    // the missing value keys, more dependencies than necessary will be declared. This wart can be
-    // fixed once we have nicer continuation support [skyframe-loading]
-    for (Path packagePathEntry : pkgLocator.getPathEntries()) {
-
-      // This checks for the build file names in the correct precedence order.
-      for (BuildFileName buildFileName : buildFilesByPriority) {
-        PackageLookupValue result =
-            getPackageLookupValue(env, packagePathEntry, packageKey, buildFileName);
-        if (result == null) {
-          return null;
-        }
-        if (result != PackageLookupValue.NO_BUILD_FILE_VALUE) {
-          return result;
-        }
-      }
-    }
-
-    return PackageLookupValue.NO_BUILD_FILE_VALUE;
   }
 
   @Nullable
@@ -173,84 +140,27 @@ public class PackageLookupFunction implements SkyFunction {
       PackageIdentifier packageIdentifier,
       BuildFileName buildFileName)
       throws PackageLookupFunctionException, InterruptedException {
-
     // TODO(bazel-team): The following is O(n^2) on the number of elements on the package path due
     // to having restart the SkyFunction after every new dependency. However, if we try to batch
     // the missing value keys, more dependencies than necessary will be declared. This wart can be
     // fixed once we have nicer continuation support [skyframe-loading]
     for (Path packagePathEntry : packagePathEntries) {
-      PackageLookupValue result =
-          getPackageLookupValue(env, packagePathEntry, packageIdentifier, buildFileName);
-      if (result == null) {
+      PathFragment buildFileFragment = buildFileName.getBuildFileFragment(packageIdentifier);
+      RootedPath buildFileRootedPath = RootedPath.toRootedPath(packagePathEntry,
+          buildFileFragment);
+
+      if (crossRepositoryLabelViolationStrategy != CrossRepositoryLabelViolationStrategy.IGNORE) {
+        // TODO(jcater): Check for cross repository package label violations.
+      }
+
+      FileValue fileValue = getFileValue(buildFileRootedPath, env, packageIdentifier);
+      if (fileValue == null) {
         return null;
       }
-      if (result != PackageLookupValue.NO_BUILD_FILE_VALUE) {
-        return result;
+      if (fileValue.isFile()) {
+        return PackageLookupValue.success(buildFileRootedPath.getRoot(), buildFileName);
       }
     }
-    return PackageLookupValue.NO_BUILD_FILE_VALUE;
-  }
-
-  private PackageLookupValue getPackageLookupValue(
-      Environment env,
-      Path packagePathEntry,
-      PackageIdentifier packageIdentifier,
-      BuildFileName buildFileName)
-      throws InterruptedException, PackageLookupFunctionException {
-    PathFragment buildFileFragment = buildFileName.getBuildFileFragment(packageIdentifier);
-    RootedPath buildFileRootedPath = RootedPath.toRootedPath(packagePathEntry, buildFileFragment);
-
-    if (crossRepositoryLabelViolationStrategy == CrossRepositoryLabelViolationStrategy.ERROR) {
-      // Is this path part of a local repository?
-      RootedPath currentPath =
-          RootedPath.toRootedPath(packagePathEntry, buildFileFragment.getParentDirectory());
-      SkyKey repositoryLookupKey = LocalRepositoryLookupValue.key(currentPath);
-
-      // TODO(jcater): Consider parallelizing these lookups.
-      LocalRepositoryLookupValue localRepository;
-      try {
-        localRepository =
-            (LocalRepositoryLookupValue)
-                env.getValueOrThrow(repositoryLookupKey, ErrorDeterminingRepositoryException.class);
-        if (localRepository == null) {
-          return null;
-        }
-      } catch (ErrorDeterminingRepositoryException e) {
-        // If the directory selected isn't part of a repository, that's an error.
-        // TODO(katre): Improve the error message given here.
-        throw new PackageLookupFunctionException(
-            new BuildFileNotFoundException(
-                packageIdentifier,
-                "Unable to determine the local repository for directory "
-                    + currentPath.asPath().getPathString()),
-            Transience.PERSISTENT);
-      }
-
-      if (localRepository.exists()
-          && !localRepository.getRepository().equals(packageIdentifier.getRepository())) {
-        // There is a repository mismatch, this is an error.
-        // TODO(jcater): Work out the correct package name for this error message.
-        return PackageLookupValue.invalidPackageName(
-            "Package crosses into repository " + localRepository.getRepository().getName());
-      }
-
-      // There's no local repository, keep going.
-    } else {
-      // Future-proof against adding future values to CrossRepositoryLabelViolationStrategy.
-      Preconditions.checkState(
-          crossRepositoryLabelViolationStrategy == CrossRepositoryLabelViolationStrategy.IGNORE,
-          crossRepositoryLabelViolationStrategy);
-    }
-
-    // Check for the existence of the build file.
-    FileValue fileValue = getFileValue(buildFileRootedPath, env, packageIdentifier);
-    if (fileValue == null) {
-      return null;
-    }
-    if (fileValue.isFile()) {
-      return PackageLookupValue.success(buildFileRootedPath.getRoot(), buildFileName);
-    }
-
     return PackageLookupValue.NO_BUILD_FILE_VALUE;
   }
 
@@ -291,7 +201,7 @@ public class PackageLookupFunction implements SkyFunction {
    * <p>To do this, it looks up the "external" package and finds a path mapping for the repository
    * name.
    */
-  private PackageLookupValue computeExternalPackageLookupValue(
+  private static PackageLookupValue computeExternalPackageLookupValue(
       SkyKey skyKey, Environment env, PackageIdentifier packageIdentifier)
       throws PackageLookupFunctionException, InterruptedException {
     PackageIdentifier id = (PackageIdentifier) skyKey.argument();
@@ -307,21 +217,17 @@ public class PackageLookupFunction implements SkyFunction {
       throw new PackageLookupFunctionException(new BuildFileNotFoundException(id, e.getMessage()),
           Transience.PERSISTENT);
     }
+    BuildFileName buildFileName = BuildFileName.BUILD;
+    PathFragment buildFileFragment = id.getPackageFragment().getChild(buildFileName.getFilename());
+    RootedPath buildFileRootedPath = RootedPath.toRootedPath(repositoryValue.getPath(),
+        buildFileFragment);
+    FileValue fileValue = getFileValue(buildFileRootedPath, env, packageIdentifier);
+    if (fileValue == null) {
+      return null;
+    }
 
-    // This checks for the build file names in the correct precedence order.
-    for (BuildFileName buildFileName : buildFilesByPriority) {
-      PathFragment buildFileFragment =
-          id.getPackageFragment().getChild(buildFileName.getFilename());
-      RootedPath buildFileRootedPath =
-          RootedPath.toRootedPath(repositoryValue.getPath(), buildFileFragment);
-      FileValue fileValue = getFileValue(buildFileRootedPath, env, packageIdentifier);
-      if (fileValue == null) {
-        return null;
-      }
-
-      if (fileValue.isFile()) {
-        return PackageLookupValue.success(repositoryValue.getPath(), buildFileName);
-      }
+    if (fileValue.isFile()) {
+      return PackageLookupValue.success(repositoryValue.getPath(), buildFileName);
     }
 
     return PackageLookupValue.NO_BUILD_FILE_VALUE;
