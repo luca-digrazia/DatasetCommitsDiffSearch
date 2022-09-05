@@ -3,35 +3,29 @@ package com.yammer.metrics.spring;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.springframework.aop.Pointcut;
 import org.springframework.aop.support.annotation.AnnotationMatchingPointcut;
-import org.springframework.core.PriorityOrdered;
 
 import com.yammer.metrics.annotation.Timed;
 import com.yammer.metrics.core.MetricsRegistry;
 
-public class TimedAnnotationBeanPostProcessor extends AbstractProxyingBeanPostProcessor implements PriorityOrdered {
-	
-	private static final long serialVersionUID = -1589475386869891203L;
+public class TimedAnnotationBeanPostProcessor extends AbstractProxyingBeanPostProcessor {
 
-	private final Pointcut pointcut = new AnnotationMatchingPointcut(null, Timed.class);
-	private final MetricsRegistry metrics;
+    private static final long serialVersionUID = -1589475386869891203L;
 
-	public TimedAnnotationBeanPostProcessor(final MetricsRegistry metrics) {
-		this.metrics = metrics;
-	}
+    private final Pointcut pointcut = new AnnotationMatchingPointcut(null, Timed.class);
+    private final MetricsRegistry metrics;
 
-	@Override
-	public Pointcut getPointcut() {
-		return pointcut;
-	}
+    public TimedAnnotationBeanPostProcessor(final MetricsRegistry metrics) {
+        this.metrics = metrics;
+    }
 
-	@Override
-	public MethodInterceptor getMethodInterceptor(Class<?> targetClass) {
-		return new TimedMethodInterceptor(metrics, targetClass);
-	}
+    @Override
+    public Pointcut getPointcut() {
+        return pointcut;
+    }
 
-	@Override
-	public int getOrder() {
-		return HIGHEST_PRECEDENCE;
-	}
+    @Override
+    public MethodInterceptor getMethodInterceptor(Class<?> targetClass) {
+        return new TimedMethodInterceptor(metrics, targetClass);
+    }
 
 }
