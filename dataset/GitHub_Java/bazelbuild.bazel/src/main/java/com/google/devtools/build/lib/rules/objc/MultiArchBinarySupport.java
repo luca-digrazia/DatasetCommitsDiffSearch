@@ -102,7 +102,7 @@ public class MultiArchBinarySupport {
       CompilationArtifacts compilationArtifacts =
           CompilationSupport.compilationArtifacts(
               ruleContext, ObjcRuleClasses.intermediateArtifacts(ruleContext, childConfig));
-      CompilationSupport.createForConfig(ruleContext, childConfig)
+      new LegacyCompilationSupport(ruleContext, childConfig)
           .registerCompileAndArchiveActions(compilationArtifacts, objcProvider)
           .registerLinkActions(
               objcProvider,

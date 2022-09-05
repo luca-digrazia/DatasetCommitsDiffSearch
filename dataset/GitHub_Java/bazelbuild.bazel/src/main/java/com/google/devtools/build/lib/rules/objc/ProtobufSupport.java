@@ -168,7 +168,10 @@ final class ProtobufSupport {
             .addAdditionalHdrs(
                 getGeneratedProtoOutputs(inputsToOutputsMap.values(), HEADER_SUFFIX));
 
-    CompilationSupport.createForAttributes(ruleContext, new CompilationAttributes.Builder().build())
+    new LegacyCompilationSupport(
+            ruleContext,
+            intermediateArtifacts,
+            new CompilationAttributes.Builder().build())
         .registerGenerateModuleMapAction(moduleMapCompilationArtifacts.build());
   }
 

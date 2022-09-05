@@ -47,37 +47,9 @@ import java.util.Set;
  */
 public class AppleBinary implements RuleConfiguredTargetFactory {
 
-  /**
-   * Type of linked binary that apple_binary may create.
-   */
+  // TODO(b/33077308): Expand into DYLIB when apple_dynamic_library is removed.
   enum BinaryType {
-
-    /**
-     * Binaries that can be loaded by other binaries at runtime, and which can't be
-     * directly executed by the operating system. When linking, a bundle_loader binary may be passed
-     * which signals the linker on where to look for unimplemented symbols, basically declaring that
-     * the bundle should be loaded by that binary. Bundle binaries are usually found in Plugins, and
-     * one common use case is tests. Tests are bundled into an .xctest bundle which contains the
-     * test binary along with required resources. The test bundle is then loaded and run during
-     * test execution.
-     */
-    BUNDLE,
-
-    /**
-     * Binaries that can be run directly by the operating system. They implement the main method
-     * that is the entry point to the program. In Apple apps, they are usually distributed in .app
-     * bundles, which are directories that contain the executable along with required resources to
-     * run.
-     */
-    EXECUTABLE,
-
-    /**
-     * Binaries meant to be loaded at load time (when the operating system is loading the binary
-     * into memory), which cannot be unloaded. They are usually distributed in frameworks,
-     * which are .framework bundles that contain the dylib as well as well as required resources to
-     * run.
-     */
-    DYLIB;
+    EXECUTABLE, BUNDLE;
 
     @Override
     public String toString() {
@@ -173,10 +145,11 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     if (getBinaryType(ruleContext) == BinaryType.EXECUTABLE) {
       targetBuilder.addProvider(BundleLoaderProvider.class, new BundleLoaderProvider(objcProvider));
     }
+
     return targetBuilder.build();
   }
 
-  private static ExtraLinkArgs getExtraLinkArgs(RuleContext ruleContext) throws RuleErrorException {
+  private ExtraLinkArgs getExtraLinkArgs(RuleContext ruleContext) throws RuleErrorException {
     BinaryType binaryType = getBinaryType(ruleContext);
 
     ImmutableList.Builder<String> extraLinkArgs = new ImmutableList.Builder<>();
@@ -191,7 +164,8 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     }
 
     switch(binaryType) {
-      case BUNDLE:
+      case EXECUTABLE: break;
+      case BUNDLE: {
         extraLinkArgs.add("-bundle");
         if (didProvideBundleLoader) {
           Artifact bundleLoader =
@@ -199,17 +173,13 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
           extraLinkArgs.add("-bundle_loader " + bundleLoader.getExecPathString());
         }
         break;
-      case DYLIB:
-        extraLinkArgs.add("-dynamiclib");
-        break;
-      case EXECUTABLE:
-        break;
+      }
     }
 
     return new ExtraLinkArgs(extraLinkArgs.build());
   }
 
-  private static Iterable<Artifact> getExtraLinkInputs(RuleContext ruleContext) {
+  private Iterable<Artifact> getExtraLinkInputs(RuleContext ruleContext) {
     return Optional.fromNullable(
             ruleContext.getPrerequisiteArtifact(AppleBinaryRule.BUNDLE_LOADER_ATTR, TARGET))
         .asSet();
