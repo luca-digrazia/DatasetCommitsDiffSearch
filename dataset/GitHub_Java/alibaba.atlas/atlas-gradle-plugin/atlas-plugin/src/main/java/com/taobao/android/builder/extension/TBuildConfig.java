@@ -226,65 +226,8 @@ public class TBuildConfig {
     @Config(message = "Remote bundle list, artifactId", advance = false, order = 1, group = "atlas")
     private Set<String> outOfApkBundles = Sets.newHashSet();
 
-    public Set<String> getBundleToMdex() {
-        return bundleToMdex;
-    }
-
-    public void setBundleToMdex(Set<String> bundleToMdex) {
-        this.bundleToMdex = bundleToMdex;
-    }
-
-    private Set<String>bundleToMdex = Sets.newHashSet();
-
-
-    public Boolean getAllBundlesToMdex() {
-        return allBundlesToMdex;
-    }
-
-    public void setAllBundlesToMdex(Boolean allBundlesToMdex) {
-        this.allBundlesToMdex = allBundlesToMdex;
-    }
-
-    private Boolean allBundlesToMdex = false;
-
-    public Boolean getMergeBundlesDex() {
-        return mergeBundlesDex;
-    }
-
-    public void setMergeBundlesDex(Boolean mergeBundlesDex) {
-        this.mergeBundlesDex = mergeBundlesDex;
-    }
-
-    private Boolean mergeBundlesDex = false;
-
-
-    public String getAppCoordinate() {
-        return appCoordinate;
-    }
-
-    public void setAppCoordinate(String appCoordinate) {
-        this.appCoordinate = appCoordinate;
-    }
-
-    @Config(message = "appCoordinate groupId:artifactId", advance = false, order = 1, group = "atlas")
-    private String appCoordinate = "";
-
-    public String getGroup() {
-        return group;
-    }
-
-    public void setGroup(String group) {
-        this.group = group;
-    }
-
-    @Config(message = "group", advance = false, order = 1, group = "atlas")
-
-    private String group = "";
-
-
     @Config(title = "Self-initiated bundle list", message = "The value is packageName", order = 1, advance = false, group = "atlas")
     private List<String> autoStartBundles = new ArrayList<String>();
-
 
     @Config(title = "Pre-launch list",
         message = "To implement the PreLaunch class, multiple classes are used , No separate", order = 1, advance = false, group = "atlas")
@@ -357,16 +300,6 @@ public class TBuildConfig {
     @Deprecated
     private Set<String> insideOfApkBundles = Sets.newHashSet();
 
-    public Set<String> getOutOfApkNativeSos() {
-        return outOfApkNativeSos;
-    }
-
-    public void setOutOfApkNativeSos(Set<String> outOfApkNativeSos) {
-        this.outOfApkNativeSos = outOfApkNativeSos;
-    }
-
-    private Set<String>outOfApkNativeSos = Sets.newHashSet();
-
     private boolean incremental = false;
 
     @Config(message = "Whether to use fast proguard", order = 16, advance = true, group = "atlas")
@@ -388,12 +321,18 @@ public class TBuildConfig {
 
     private int proguardParallelCount = 8;
 
-    @Config(message = "put awb so in assets, not  lib/armeabi dir", order = 19, advance = true, group = "atlas")
-    private Set<String> keepInAssetsSoNames = new HashSet<>();
-
     @Config(message = "put awb so in lib/armeabi , not assets dir", order = 19, advance = true, group = "atlas")
     private Set<String> keepInLibSoNames = new HashSet<>();
 
+    public Set<String> getKeepInAssetsSoNames() {
+        return keepInAssetsSoNames;
+    }
+
+    public void setKeepInAssetsSoNames(Set<String> keepInAssetsSoNames) {
+        this.keepInAssetsSoNames = keepInAssetsSoNames;
+    }
+
+    private Set<String>keepInAssetsSoNames = new HashSet<>();
 
     public Set<String> getRemoveSoFiles() {
         return removeSoFiles;
@@ -646,14 +585,6 @@ public class TBuildConfig {
 
     public void setDexNetworkCacheEnabled(boolean dexNetworkCacheEnabled) {
         this.dexNetworkCacheEnabled = dexNetworkCacheEnabled;
-    }
-
-    public Set<String> getKeepInAssetsSoNames() {
-        return keepInAssetsSoNames;
-    }
-
-    public void setKeepInAssetsSoNames(Set<String> keepInAssetsSoNames) {
-        this.keepInAssetsSoNames = keepInAssetsSoNames;
     }
 
     public Set<String> getKeepInLibSoNames() {
