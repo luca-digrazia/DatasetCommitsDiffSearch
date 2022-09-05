@@ -106,15 +106,6 @@ public class SkylarkRepositoryContext {
   }
 
   @SkylarkCallable(
-      name = "name",
-      structField = true,
-      doc = "The name of the external repository created by this rule."
-  )
-  public String getName() {
-    return rule.getName();
-  }
-
-  @SkylarkCallable(
     name = "attr",
     structField = true,
     doc =
@@ -193,21 +184,12 @@ public class SkylarkRepositoryContext {
   public void createFile(Object path) throws RepositoryFunctionException, EvalException {
     createFile(path, "");
   }
-  @SkylarkCallable(
-      name = "file",
-      documented = false
-  )
-  public void createFile(Object path, String content)
-      throws RepositoryFunctionException, EvalException {
-    createFile(path, content, true);
-  }
 
   @SkylarkCallable(
     name = "file",
-    doc = "Generate a file in the output directory with the provided content. An optional third "
-        + "argument set the executable bit to on or off (default to True)."
+    doc = "Generate a file in the output directory with the provided content"
   )
-  public void createFile(Object path, String content, Boolean executable)
+  public void createFile(Object path, String content)
       throws RepositoryFunctionException, EvalException {
     SkylarkPath p = getPath("file()", path);
     try {
@@ -216,36 +198,21 @@ public class SkylarkRepositoryContext {
       try (OutputStream stream = p.path.getOutputStream()) {
         stream.write(content.getBytes(StandardCharsets.UTF_8));
       }
-      if (executable) {
-        p.path.setExecutable(true);
-      }
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
   }
 
   @SkylarkCallable(
-      name = "template",
-      documented = false
+    name = "template",
+    doc =
+        "Generate a new file using a <code>template</code>. Every occurrence in "
+            + "<code>template</code> of a key of <code>substitutions</code> will be replaced by "
+            + "the corresponding value. The result is written in <code>path</code>."
   )
   public void createFileFromTemplate(
       Object path, Object template, Map<String, String> substitutions)
       throws RepositoryFunctionException, EvalException {
-    createFileFromTemplate(path, template, substitutions, true);
-  }
-
-  @SkylarkCallable(
-      name = "template",
-      doc =
-          "Generate a new file using a <code>template</code>. Every occurrence in "
-              + "<code>template</code> of a key of <code>substitutions</code> will be replaced by "
-              + "the corresponding value. The result is written in <code>path</code>. An optional"
-              + "<code>executable</code> argument (default to true) can be set to turn on or off"
-              + "the executable bit."
-  )
-  public void createFileFromTemplate(
-        Object path, Object template, Map<String, String> substitutions, Boolean executable)
-    throws RepositoryFunctionException, EvalException {
     SkylarkPath p = getPath("template()", path);
     SkylarkPath t = getPath("template()", template);
     try {
@@ -258,9 +225,6 @@ public class SkylarkRepositoryContext {
       }
       try (OutputStream stream = p.path.getOutputStream()) {
         stream.write(tpl.getBytes(StandardCharsets.UTF_8));
-      }
-      if (executable) {
-        p.path.setExecutable(true);
       }
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
@@ -316,7 +280,7 @@ public class SkylarkRepositoryContext {
           Location.BUILTIN,
           "Program argument of which() may not contains a / or a \\ ('" + program + "' given)");
     }
-    for (String p : getPathEnvironment()) {
+    for (String p : pathEnv) {
       PathFragment fragment = new PathFragment(p);
       if (fragment.isAbsolute()) {
         // We ignore relative path as they don't mean much here (relative to where? the workspace
@@ -335,23 +299,20 @@ public class SkylarkRepositoryContext {
     return Runtime.NONE;
   }
 
-  // This is just for test to overwrite the path environment
-  private static ImmutableList<String> pathEnv = null;
+  // This is non final so that test can overwrite it.
+  private static ImmutableList<String> pathEnv = getPathEnvironment();
 
   @VisibleForTesting
   static void setPathEnvironment(String... pathEnv) {
     SkylarkRepositoryContext.pathEnv = ImmutableList.<String>copyOf(pathEnv);
   }
 
-  private ImmutableList<String> getPathEnvironment() {
-    if (pathEnv != null) {
-      return pathEnv;
-    }
-    String pathEnviron = osObject.getEnviron().get("PATH");
-    if (pathEnviron == null) {
+  private static ImmutableList<String> getPathEnvironment() {
+    String pathEnv = System.getenv("PATH");
+    if (pathEnv == null) {
       return ImmutableList.of();
     }
-    return ImmutableList.copyOf(pathEnviron.split(File.pathSeparator));
+    return ImmutableList.copyOf(pathEnv.split(File.pathSeparator));
   }
 
   @Override
