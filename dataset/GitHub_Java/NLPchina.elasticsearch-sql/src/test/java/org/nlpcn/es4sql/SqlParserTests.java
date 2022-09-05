@@ -759,28 +759,7 @@ public class SqlParserTests {
 
     }
 
-    @Test
-    public void fieldsAsNumbersOnWhere() throws SqlParseException {
-        String query = "select * from x where ['3'] > 2";
-        Select select = parser.parseSelect((SQLQueryExpr) queryToExpr(query));
-        LinkedList<Where> wheres = select.getWhere().getWheres();
-        Assert.assertEquals(1, wheres.size());
-        Where where = wheres.get(0);
-        Assert.assertEquals(Condition.class,where.getClass());
-        Condition condition = (Condition) where;
-        Assert.assertEquals("3", condition.getName());
-    }
 
-
-    @Test
-    public void complexNestedAndOtherQuery() throws SqlParseException {
-        String query = "select * from x where nested('path',path.x=3) and y=3";
-        Select select = parser.parseSelect((SQLQueryExpr) queryToExpr(query));
-        LinkedList<Where> wheres = select.getWhere().getWheres();
-        Assert.assertEquals(2, wheres.size());
-        Assert.assertEquals("AND path NESTED_COMPLEX AND ( AND path.x EQ 3 ) ",wheres.get(0).toString());
-        Assert.assertEquals("AND y EQ 3",wheres.get(1).toString());
-    }
 
     private SQLExpr queryToExpr(String query) {
         return new ElasticSqlExprParser(query).expr();
