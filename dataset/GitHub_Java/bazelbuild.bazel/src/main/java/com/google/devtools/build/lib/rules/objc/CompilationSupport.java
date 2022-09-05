@@ -41,7 +41,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.NON_ARC_S
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.STRIP;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SWIFT;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.intermediateArtifacts;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -57,7 +56,6 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile;
-import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -68,22 +66,16 @@ import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
 import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.CompilationAttributes;
 import com.google.devtools.build.lib.rules.objc.XcodeProvider.Builder;
-import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
-import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.InstrumentationSpec;
-import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.LocalMetadataCollector;
-import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.shell.ShellUtils;
-import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -113,21 +105,6 @@ public final class CompilationSupport {
   @VisibleForTesting
   static final ImmutableList<String> CLANG_COVERAGE_FLAGS =
       ImmutableList.of("-fprofile-arcs", "-ftest-coverage");
-
-  /**
-   * Files which can be instrumented along with the attributes in which they may occur and the
-   * attributes along which they are propagated from dependencies (via
-   * {@link InstrumentedFilesProvider}).
-   */
-  private static final InstrumentationSpec INSTRUMENTATION_SPEC =
-      new InstrumentationSpec(
-              FileTypeSet.of(
-                  ObjcRuleClasses.NON_CPP_SOURCES,
-                  ObjcRuleClasses.CPP_SOURCES,
-                  ObjcRuleClasses.SWIFT_SOURCES,
-                  HEADERS))
-          .withSourceAttributes("srcs", "non_arc_srcs", "hdrs")
-          .withDependencyAttributes("deps", "data", "binary", "xctest_app");
 
   private static final String FRAMEWORK_SUFFIX = ".framework";
 
@@ -214,7 +191,7 @@ public final class CompilationSupport {
       if (ObjcRuleClasses.objcConfiguration(ruleContext).moduleMapsEnabled()) {
         moduleMap = Optional.of(intermediateArtifacts.moduleMap());
       } else {
-        moduleMap = Optional.absent();
+        moduleMap = Optional.<CppModuleMap>absent();
       }
       registerCompileAndArchiveActions(
           common.getCompilationArtifacts().get(),
@@ -566,32 +543,6 @@ public final class CompilationSupport {
   }
 
   /**
-   * Returns a provider that collects this target's instrumented sources as well as those of its
-   * dependencies.
-   *
-   * @param common common information about this rule and its dependencies
-   * @return an instrumented files provider
-   */
-  public InstrumentedFilesProvider getInstrumentedFilesProvider(ObjcCommon common) {
-    ImmutableList.Builder<Artifact> oFiles = ImmutableList.builder();
-
-    if (common.getCompilationArtifacts().isPresent()) {
-      CompilationArtifacts artifacts = common.getCompilationArtifacts().get();
-      IntermediateArtifacts intermediateArtifacts = intermediateArtifacts(ruleContext);
-      for (Artifact artifact : Iterables.concat(artifacts.getSrcs(), artifacts.getNonArcSrcs())) {
-        oFiles.add(intermediateArtifacts.objFile(artifact));
-      }
-    }
-
-    return InstrumentedFilesCollector.collect(
-        ruleContext,
-        INSTRUMENTATION_SPEC,
-        new ObjcCoverageMetadataCollector(),
-        oFiles.build(),
-        !TargetUtils.isTestRule(ruleContext.getTarget()));
-  }
-
-  /**
    * Registers any actions necessary to link this rule and its dependencies.
    *
    * <p>Dsym bundle and breakpad files are generated if
@@ -628,11 +579,11 @@ public final class CompilationSupport {
    * Registers an action that will generate a clang module map for this target, using the hdrs
    * attribute of this rule.
    */
-  CompilationSupport registerGenerateModuleMapAction(
+  public CompilationSupport registerGenerateModuleMapAction(
       Optional<CompilationArtifacts> compilationArtifacts) {
     if (ObjcRuleClasses.objcConfiguration(ruleContext).moduleMapsEnabled()) {
       Iterable<Artifact> publicHeaders = attributes.hdrs();
-      Iterable<Artifact> privateHeaders = ImmutableList.of();
+      Iterable<Artifact> privateHeaders = ImmutableList.<Artifact>of();
       if (compilationArtifacts.isPresent()) {
         CompilationArtifacts artifacts = compilationArtifacts.get();
         publicHeaders = Iterables.concat(publicHeaders, artifacts.getAdditionalHdrs());
@@ -771,11 +722,11 @@ public final class CompilationSupport {
         .add(IosSdkCommands.DEFAULT_LINKER_FLAGS)
         .addBeforeEach("-framework", frameworkNames(objcProvider))
         .addBeforeEach("-weak_framework", SdkFramework.names(objcProvider.get(WEAK_SDK_FRAMEWORK)))
-        .addFormatEach("-l%s", libraryNames(objcProvider))
         .addExecPath("-o", linkedBinary)
         .addExecPaths(objcProvider.get(LIBRARY))
         .addExecPaths(objcProvider.get(IMPORTED_LIBRARY))
         .addExecPaths(ccLibraries)
+        .add(dylibPaths(objcProvider))
         .addBeforeEach("-force_load", Artifact.toExecPaths(objcProvider.get(FORCE_LOAD_LIBRARY)))
         .add(extraLinkArgs)
         .build();
@@ -834,15 +785,12 @@ public final class CompilationSupport {
     }
   }
 
-  private Iterable<String> libraryNames(ObjcProvider objcProvider) {
+  private Iterable<String> dylibPaths(ObjcProvider objcProvider) {
+    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     ImmutableList.Builder<String> args = new ImmutableList.Builder<>();
     for (String dylib : objcProvider.get(SDK_DYLIB)) {
-      if (dylib.startsWith("lib")) {
-        // remove lib prefix if it exists which is standard
-        // for libraries (libxml.dylib -> -lxml).
-        dylib = dylib.substring(3);
-      }
-      args.add(dylib);
+      args.add(String.format(
+          "%s/usr/lib/%s.dylib", IosSdkCommands.sdkDir(objcConfiguration), dylib));
     }
     return args.build();
   }
@@ -913,7 +861,7 @@ public final class CompilationSupport {
         if (ObjcRuleClasses.objcConfiguration(ruleContext).moduleMapsEnabled()) {
           moduleMap = Optional.of(ObjcRuleClasses.intermediateArtifacts(ruleContext).moduleMap());
         } else {
-          moduleMap = Optional.absent();
+          moduleMap = Optional.<CppModuleMap>absent();
         }
         registerCompileAndArchiveActions(
             compilationArtifact,
@@ -1048,7 +996,7 @@ public final class CompilationSupport {
     }
 
     // Check for overlap between srcs and hdrs.
-    if (ruleContext.attributes().has("srcs", BuildType.LABEL_LIST)) {
+    if (ruleContext.attributes().has("srcs", Type.LABEL_LIST)) {
       Set<Artifact> hdrsSet = new HashSet<>(attributes.hdrs());
       Set<Artifact> srcsSet =
           new HashSet<>(ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET).list());
@@ -1084,20 +1032,20 @@ public final class CompilationSupport {
             .replaceName(linkedBinary.getFilename())
             .relativeTo(dsymOutputDir);
 
-    StringBuilder unzipDsymCommand =
-        new StringBuilder()
-            .append(
-                String.format(
-                    "unzip -p %s %s > %s",
-                    dsymBundle.getExecPathString(),
-                    dsymPlistZipEntry,
-                    dsymPlist.getExecPathString()))
-            .append(
-                String.format(
-                    " && unzip -p %s %s > %s",
-                    dsymBundle.getExecPathString(),
-                    debugSymbolFileZipEntry,
-                    debugSymbolFile.getExecPathString()));
+    StringBuilder unzipDsymCommand = new StringBuilder();
+    unzipDsymCommand
+        .append(
+            String.format(
+                "unzip -p %s %s > %s",
+                dsymBundle.getExecPathString(),
+                dsymPlistZipEntry,
+                dsymPlist.getExecPathString()))
+        .append(
+            String.format(
+                " && unzip -p %s %s > %s",
+                dsymBundle.getExecPathString(),
+                debugSymbolFileZipEntry,
+                debugSymbolFile.getExecPathString()));
 
     ruleContext.registerAction(
         new SpawnAction.Builder()
@@ -1140,25 +1088,5 @@ public final class CompilationSupport {
    */
   private String getModuleName() {
     return ruleContext.getLabel().getName();
-  }
-
-  /**
-   * Collector that, given a list of output artifacts, finds and registers coverage notes metadata
-   * for any compilation action.
-   */
-  private static class ObjcCoverageMetadataCollector extends LocalMetadataCollector {
-
-    @Override
-    public void collectMetadataArtifacts(
-        Iterable<Artifact> artifacts,
-        AnalysisEnvironment analysisEnvironment,
-        NestedSetBuilder<Artifact> metadataFilesBuilder) {
-      for (Artifact artifact : artifacts) {
-        Action action = analysisEnvironment.getLocalGeneratingAction(artifact);
-        if (action.getMnemonic().equals("ObjcCompile")) {
-          addOutputs(metadataFilesBuilder, action, ObjcRuleClasses.COVERAGE_NOTES);
-        }
-      }
-    }
   }
 }
