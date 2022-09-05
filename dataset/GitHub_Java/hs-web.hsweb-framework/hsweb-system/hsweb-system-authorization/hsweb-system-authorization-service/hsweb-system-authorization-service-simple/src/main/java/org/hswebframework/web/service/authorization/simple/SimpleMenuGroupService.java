@@ -69,16 +69,20 @@ public class SimpleMenuGroupService
         return menuGroupDao;
     }
 
-    @Cacheable(key = "'group-id-list:'+#groupId==null?0:#groupId.hashCode()")
+    @Override
+    @Cacheable(key = "'group-id-list:'+(#groupId==null?0:#groupId.hashCode())")
     public List<MenuEntity> getMenuByGroupId(List<String> groupId) {
         List<MenuGroupBindEntity> bindEntities = menuGroupBindService.selectByPk(groupId);
-        if (bindEntities == null || bindEntities.isEmpty()) return new LinkedList<>();
+        if (bindEntities == null || bindEntities.isEmpty()) {
+            return new LinkedList<>();
+        }
         return menuService.selectByPk(bindEntities.stream()
                 .map(MenuGroupBindEntity::getMenuId)
                 .distinct()
                 .collect(Collectors.toList()));
     }
 
+    @Override
     @CacheEvict(allEntries = true)
     public String insert(MenuGroupEntity entity) {
         entity.setStatus((byte) 1);
@@ -132,7 +136,7 @@ public class SimpleMenuGroupService
     public void enable(String id) {
         tryValidateProperty(StringUtils.hasLength(id), MenuGroupEntity.id, "{id_is_null}");
         createUpdate()
-                .set(MenuGroupEntity.state, 1)
+                .set(MenuGroupEntity.status, 1)
                 .where(MenuGroupEntity.id, id)
                 .exec();
     }
@@ -143,7 +147,7 @@ public class SimpleMenuGroupService
         tryValidateProperty(StringUtils.hasLength(id), MenuGroupEntity.id, "{id_is_null}");
         DefaultDSLUpdateService
                 .createUpdate(getDao())
-                .set(MenuGroupEntity.state, 0)
+                .set(MenuGroupEntity.status, 0)
                 .where(MenuGroupEntity.id, id)
                 .exec();
     }
