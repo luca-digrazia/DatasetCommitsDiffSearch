@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.rules.cpp.CppBuildInfo;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
-import com.google.devtools.build.lib.rules.cpp.CppLinkActionBuilder;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
@@ -147,8 +146,8 @@ public abstract class NativeDepsHelper {
                 ruleContext.getFeatures()),
             configuration.getBinDirectory())
         : nativeDeps;
-    CppLinkActionBuilder builder =
-        new CppLinkActionBuilder(ruleContext, sharedLibrary, configuration, toolchain);
+    CppLinkAction.Builder builder = new CppLinkAction.Builder(
+        ruleContext, sharedLibrary, configuration, toolchain);
     if (useDynamicRuntime) {
       builder.setRuntimeInputs(
           toolchain.getDynamicRuntimeLinkMiddleman(), toolchain.getDynamicRuntimeLinkInputs());

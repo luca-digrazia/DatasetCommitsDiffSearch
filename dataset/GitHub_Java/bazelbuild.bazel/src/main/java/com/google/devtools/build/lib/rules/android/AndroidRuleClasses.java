@@ -169,7 +169,6 @@ public final class AndroidRuleClasses {
       "//tools/android:incremental_split_stub_application";
   public static final String DEFAULT_AAR_GENERATOR = "//tools/android:aar_generator";
   public static final String DEFAULT_MANIFEST_MERGER = "//tools/android:manifest_merger";
-  public static final String DEFAULT_RCLASS_GENERATOR = "//tools/android:rclass_generator";
   public static final String DEFAULT_RESOURCES_PROCESSOR = "//tools/android:resources_processor";
   public static final String DEFAULT_RESOURCE_SHRINKER = "//tools/android:resource_shrinker";
   public static final String DEFAULT_SDK = "//tools/android:sdk";
@@ -404,8 +403,6 @@ public final class AndroidRuleClasses {
               env.getToolsLabel(DEFAULT_AAR_GENERATOR)))
           .add(attr("$android_manifest_merger", LABEL).cfg(HOST).exec().value(
               env.getToolsLabel(DEFAULT_MANIFEST_MERGER)))
-          .add(attr("$android_rclass_generator", LABEL).cfg(HOST).exec().value(
-              env.getToolsLabel(DEFAULT_RCLASS_GENERATOR)))
           .add(attr("$android_resources_processor", LABEL).cfg(HOST).exec().value(
               env.getToolsLabel(DEFAULT_RESOURCES_PROCESSOR)))
           .add(attr("$android_resource_shrinker", LABEL).cfg(HOST).exec().value(
