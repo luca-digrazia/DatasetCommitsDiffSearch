@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
+import com.google.devtools.build.lib.actions.Action.MiddlemanType;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Pair;
@@ -175,8 +175,8 @@ public final class MiddlemanFactory {
       PathFragment packageDirectory, String purpose, Iterable<Artifact> inputs, Root middlemanDir) {
     String escapedPackageDirectory = Actions.escapedPath(packageDirectory.getPathString());
     PathFragment stampName =
-        PathFragment.create("_middlemen/" + (purpose.startsWith(escapedPackageDirectory)
-                             ? purpose : (escapedPackageDirectory + purpose)));
+        new PathFragment("_middlemen/" + (purpose.startsWith(escapedPackageDirectory)
+                                 ? purpose : (escapedPackageDirectory + purpose)));
     Artifact stampFile = artifactFactory.getDerivedArtifact(stampName, middlemanDir,
         actionRegistry.getOwner());
     MiddlemanAction.create(
@@ -186,7 +186,7 @@ public final class MiddlemanFactory {
 
   private Artifact getStampFileArtifact(String middlemanName, String purpose, Root middlemanDir) {
     String escapedFilename = Actions.escapedPath(middlemanName);
-    PathFragment stampName = PathFragment.create("_middlemen/" + escapedFilename + "-" + purpose);
+    PathFragment stampName = new PathFragment("_middlemen/" + escapedFilename + "-" + purpose);
     Artifact stampFile = artifactFactory.getDerivedArtifact(stampName, middlemanDir,
         actionRegistry.getOwner());
     return stampFile;

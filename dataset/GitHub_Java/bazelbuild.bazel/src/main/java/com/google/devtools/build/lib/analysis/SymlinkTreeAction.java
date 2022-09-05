@@ -111,6 +111,11 @@ public class SymlinkTreeAction extends AbstractAction {
   }
 
   @Override
+  public String describeStrategy(Executor executor) {
+    return "local"; // Symlink tree is always generated locally.
+  }
+
+  @Override
   public void execute(
       ActionExecutionContext actionExecutionContext)
           throws ActionExecutionException, InterruptedException {

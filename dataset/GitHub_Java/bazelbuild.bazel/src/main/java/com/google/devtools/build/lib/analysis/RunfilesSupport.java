@@ -292,17 +292,9 @@ public class RunfilesSupport {
     BuildConfiguration config = context.getConfiguration();
     Artifact outputManifest = context.getDerivedArtifact(
         outputManifestPath, config.getBinDirectory());
-    context
-        .getAnalysisEnvironment()
-        .registerAction(
-            new SymlinkTreeAction(
-                context.getActionOwner(),
-                inputManifest,
-                artifactsMiddleman,
-                outputManifest,
-                /*filesetTree=*/ false,
-                config.getShExecutable(),
-                config.getLocalShellEnvironment()));
+    context.getAnalysisEnvironment().registerAction(new SymlinkTreeAction(
+        context.getActionOwner(), inputManifest, artifactsMiddleman, outputManifest,
+        /*filesetTree=*/false));
     return outputManifest;
   }
 
