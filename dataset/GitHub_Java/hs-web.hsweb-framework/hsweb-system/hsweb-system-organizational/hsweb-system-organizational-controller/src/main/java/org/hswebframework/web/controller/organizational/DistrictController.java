@@ -37,14 +37,14 @@ public class DistrictController implements SimpleGenericEntityController<Distric
         return districtService;
     }
 
-    @GetMapping("/code/{code}")
+    @PatchMapping("/code/{code}")
     @Authorize(action = Permission.ACTION_QUERY)
     @AccessLogger("根据行政区划代码获取")
     public ResponseMessage<DistrictEntity> getByCode(@PathVariable String code) {
         return ResponseMessage.ok(districtService.selectByCode(code));
     }
 
-    @GetMapping("/all")
+    @PatchMapping("/all")
     @Authorize(action = Permission.ACTION_QUERY)
     @AccessLogger("获取全部行政区划")
     public ResponseMessage<List<DistrictEntity>> all() {
