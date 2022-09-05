@@ -33,8 +33,8 @@ import org.hswebframework.web.authorization.Role;
 import org.hswebframework.web.authorization.annotation.Authorize;
 import org.hswebframework.web.authorization.annotation.Logical;
 import org.hswebframework.web.boost.aop.context.MethodInterceptorHolder;
-import org.hswebframework.utils.ClassUtils;
-import org.hswebframework.utils.StringUtils;
+import org.hswebframwork.utils.ClassUtils;
+import org.hswebframwork.utils.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,8 +80,8 @@ public class SimpleAuthorizeMethodInterceptor extends AuthorizingAnnotationMetho
             }
             authorizeConfig.put(authorize);
 
-            Authentication authentication = Authentication.current()
-                    .orElseThrow(() -> new UnauthenticatedException(authorizeConfig.message));
+            Authentication authentication = AuthenticationHolder.get();
+            if (null == authentication) throw new UnauthenticatedException(authorizeConfig.message);
             boolean access = true;
             Logical logical = authorizeConfig.logical == Logical.DEFAULT ? Logical.OR : authorizeConfig.logical;
             boolean logicalIsOr = logical == Logical.OR;
@@ -100,7 +100,7 @@ public class SimpleAuthorizeMethodInterceptor extends AuthorizingAnnotationMetho
                                     .filter(authorizeConfig.action::contains)
                                     .collect(Collectors.toList());
                             //如果 控制逻辑是or,则只要过滤结果数量不为0.否则过滤结果数量必须和配置的数量相同
-                            return logicalIsOr ? actions.size() > 0 : permission.getActions().containsAll(actions);
+                            return logicalIsOr ? actions.size() > 0 : actions.size() == permission.getActions().size();
                         }).collect(Collectors.toList());
                 access = logicalIsOr ? permissions.size() > 0 : permissions.size() == authorizeConfig.permission.size();
             }
