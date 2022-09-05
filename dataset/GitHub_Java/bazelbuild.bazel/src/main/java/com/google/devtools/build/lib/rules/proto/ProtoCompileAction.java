@@ -125,22 +125,6 @@ public final class ProtoCompileAction {
       this.outputs = outputs;
     }
 
-    /** Static class to avoid keeping a reference to this builder after build() is called. */
-    private static class LazyLangPluginFlag extends LazyString {
-      private final String langPrefix;
-      private final Supplier<String> langPluginParameter1;
-
-      LazyLangPluginFlag(String langPrefix, Supplier<String> langPluginParameter1) {
-        this.langPrefix = langPrefix;
-        this.langPluginParameter1 = langPluginParameter1;
-      }
-
-      @Override
-      public String toString() {
-        return String.format("--%s_out=%s", langPrefix, langPluginParameter1.get());
-      }
-    }
-
     public Optional<ProtoCompileAction> build() {
       checkState(langPluginParameter == null || langPluginParameterSupplier == null,
           "Only one of {langPluginParameter, langPluginParameterSupplier} should be set.");
@@ -164,13 +148,20 @@ public final class ProtoCompileAction {
         if (ruleContext.hasErrors()) {
           return absent();
         }
+        LazyString lazyLangPlugingFlag =
+            new LazyString() {
+              @Override
+              public String toString() {
+                return String.format("--%s_out=%s", langPrefix, langPluginParameter1.get());
+              }
+            };
         prefixArguments =
             ImmutableList.of(
                 String.format(
                     "--plugin=protoc-gen-%s=%s",
                     langPrefix,
                     langPluginTarget.getExecutable().getExecPathString()),
-                new LazyLangPluginFlag(langPrefix, langPluginParameter1));
+                lazyLangPlugingFlag);
       } else {
         prefixArguments =
             (langParameter != null) ? ImmutableList.of(langParameter) : ImmutableList.<String>of();
@@ -261,31 +252,6 @@ public final class ProtoCompileAction {
     return builder;
   }
 
-  /**
-   * Static inner class since these objects live into the execution phase and so they must not
-   * keep alive references to the surrounding analysis-phase objects.
-   */
-  private static class ProtoCommandLineArgv extends CustomMultiArgv {
-    private final Iterable<Artifact> transitiveImports;
-
-    ProtoCommandLineArgv(Iterable<Artifact> transitiveImports) {
-      this.transitiveImports = transitiveImports;
-    }
-
-    @Override
-    public Iterable<String> argv() {
-      ImmutableList.Builder<String> builder = ImmutableList.builder();
-      for (Artifact artifact : transitiveImports) {
-        builder.add(
-            "-I"
-                + artifact.getRootRelativePath().getPathString()
-                + "="
-                + artifact.getExecPathString());
-      }
-      return builder.build();
-    }
-  }
-
   /* Commandline generator for protoc invocations. */
   public CustomCommandLine.Builder protoCompileCommandLine() {
     CustomCommandLine.Builder arguments = CustomCommandLine.builder();
@@ -295,7 +261,21 @@ public final class ProtoCompileAction {
     arguments.add(ruleContext.getFragment(ProtoConfiguration.class).protocOpts());
 
     // Add include maps
-    arguments.add(new ProtoCommandLineArgv(supportData.getTransitiveImports()));
+    arguments.add(
+        new CustomMultiArgv() {
+          @Override
+          public Iterable<String> argv() {
+            ImmutableList.Builder<String> builder = ImmutableList.builder();
+            for (Artifact artifact : supportData.getTransitiveImports()) {
+              builder.add(
+                  "-I"
+                      + artifact.getRootRelativePath().getPathString()
+                      + "="
+                      + artifact.getExecPathString());
+            }
+            return builder.build();
+          }
+        });
 
     for (Artifact src : supportData.getDirectProtoSources()) {
       arguments.addPath(src.getRootRelativePath());
