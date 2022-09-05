@@ -35,8 +35,6 @@ import org.hswebframework.web.workflow.service.config.ProcessConfigurationServic
 import org.hswebframework.web.workflow.service.BpmProcessService;
 import org.hswebframework.web.workflow.service.BpmTaskService;
 import org.hswebframework.web.workflow.service.request.CompleteTaskRequest;
-import org.hswebframework.web.workflow.service.request.JumpTaskRequest;
-import org.hswebframework.web.workflow.service.request.RejectTaskRequest;
 import org.hswebframework.web.workflow.service.request.StartProcessRequest;
 import org.hswebframework.web.workflow.util.QueryUtils;
 import org.hswebframework.web.workflow.web.response.CandidateDetail;
@@ -251,6 +249,7 @@ public class FlowableProcessController {
                                                             Authentication authentication) {
         Query.empty(query)
                 .nest()
+                //只能看到自己待办理
                 .when(type != null, q -> type.applyQueryTerm(q, authentication.getUser().getId()))
                 .end();
         return ResponseMessage.ok(workFlowFormService.selectProcessForm(processDefineId, query));
@@ -311,42 +310,6 @@ public class FlowableProcessController {
                 .completeUserId(authentication.getUser().getId())
                 .completeUserName(authentication.getUser().getName())
                 .formData(formData)
-                .build());
-        return ResponseMessage.ok();
-    }
-
-    @PutMapping("/reject/{taskId}")
-    @Authorize(merge = false)
-    @ApiOperation("驳回")
-    public ResponseMessage<Void> reject(@PathVariable String taskId,
-                                        @RequestBody Map<String, Object> data,
-                                        Authentication authentication) {
-        // 驳回
-        bpmTaskService.reject(RejectTaskRequest.builder()
-                .taskId(taskId)
-                .rejectUserId(authentication.getUser().getId())
-                .rejectUserName(authentication.getUser().getName())
-                .data(data)
-                .build());
-        return ResponseMessage.ok();
-    }
-
-    @PutMapping("/jump/{taskId}/{activityId}")
-    @Authorize(merge = false)
-    @ApiOperation("流程跳转")
-    public ResponseMessage<Void> jump(@PathVariable String taskId,
-                                      @PathVariable String activityId,
-                                      @RequestBody Map<String, Object> data,
-                                      Authentication authentication) {
-        // 流程跳转
-        bpmTaskService.jumpTask(JumpTaskRequest
-                .builder()
-                .taskId(taskId)
-                .targetActivityId(activityId)
-                .recordLog(true)
-                .jumpUserId(authentication.getUser().getId())
-                .jumpUserName(authentication.getUser().getUsername())
-                .data(data)
                 .build());
         return ResponseMessage.ok();
     }
