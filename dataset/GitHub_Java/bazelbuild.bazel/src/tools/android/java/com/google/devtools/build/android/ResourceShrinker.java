@@ -72,6 +72,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -874,7 +875,7 @@ public class ResourceShrinker {
   }
 
   private void parseResourceTxtFile(Path rTxt, Set<String> resourcePackages) throws IOException {
-    BufferedReader reader = java.nio.file.Files.newBufferedReader(rTxt, UTF_8);
+    BufferedReader reader = java.nio.file.Files.newBufferedReader(rTxt, Charset.defaultCharset());
     String line;
     while ((line = reader.readLine()) != null) {
       String[] tokens = line.split(" ");
