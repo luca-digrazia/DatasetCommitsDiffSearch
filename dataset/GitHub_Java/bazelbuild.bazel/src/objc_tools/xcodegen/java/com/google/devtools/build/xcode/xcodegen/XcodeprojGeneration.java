@@ -21,6 +21,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -66,7 +67,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -84,7 +84,6 @@ public class XcodeprojGeneration {
   public static final String FILE_TYPE_WRAPPER_APPLICATION = "wrapper.application";
   public static final String FILE_TYPE_WRAPPER_BUNDLE = "wrapper.cfbundle";
   public static final String FILE_TYPE_APP_EXTENSION = "wrapper.app-extension";
-  public static final String FILE_TYPE_FRAMEWORK = "wrapper.frawework";
   private static final String DEFAULT_OPTIONS_NAME = "Debug";
   private static final Escaper QUOTE_ESCAPER = Escapers.builder().addEscape('"', "\\\"").build();
 
@@ -129,15 +128,13 @@ public class XcodeprojGeneration {
       ProductType.APPLICATION,
       ProductType.BUNDLE,
       ProductType.UNIT_TEST,
-      ProductType.APP_EXTENSION,
-      ProductType.FRAMEWORK);
+      ProductType.APP_EXTENSION);
 
   private static final EnumSet<ProductType> PRODUCT_TYPES_THAT_HAVE_A_BINARY = EnumSet.of(
       ProductType.APPLICATION,
       ProductType.BUNDLE,
       ProductType.UNIT_TEST,
-      ProductType.APP_EXTENSION,
-      ProductType.FRAMEWORK);
+      ProductType.APP_EXTENSION);
 
   /**
    * Detects the product type of the given target based on multiple fields in {@code targetControl}.
@@ -169,7 +166,7 @@ public class XcodeprojGeneration {
       // Unlike other product types, a full application may have dozens of static libraries,
       // so rather than just use the target name, we use the full label to generate the product
       // name.
-      return targetControl.getLabel();
+      return labelToXcodeTargetName(targetControl.getLabel());
     } else {
       return targetControl.getName();
     }
@@ -204,11 +201,6 @@ public class XcodeprojGeneration {
         return FileReference.of(
             String.format("%s.appex", productName), SourceTree.BUILT_PRODUCTS_DIR)
                 .withExplicitFileType(FILE_TYPE_APP_EXTENSION);
-      case FRAMEWORK:
-        return FileReference.of(
-            String.format("%s.framwork", productName), SourceTree.BUILT_PRODUCTS_DIR)
-                .withExplicitFileType(FILE_TYPE_FRAMEWORK);
-
       default:
         throw new IllegalArgumentException("unknown: " + type);
     }
@@ -281,6 +273,14 @@ public class XcodeprojGeneration {
       }
       nativeTarget.getDependencies().add(dependencyInfo.targetDependency);
     }
+  }
+
+  // TODO(bazel-team): Make this a no-op once the released version of Bazel sends the label to
+  // xcodegen pre-processed.
+  private static String labelToXcodeTargetName(String label) {
+    String pathFromWorkspaceRoot =  label.replace("//", "").replace(':', '/');
+    List<String> components = Splitter.on('/').splitToList(pathFromWorkspaceRoot);
+    return Joiner.on('_').join(Lists.reverse(components));
   }
 
   private static NSDictionary nonArcCompileSettings() {
@@ -414,7 +414,7 @@ public class XcodeprojGeneration {
     }
 
     Map<String, TargetInfo> targetInfoByLabel = new HashMap<>();
-    List<String> usedTargetNames = new ArrayList<>();
+
     PBXFileReferences fileReferences = new PBXFileReferences();
     LibraryObjects libraryObjects = new LibraryObjects(fileReferences);
     PBXBuildFiles pbxBuildFiles = new PBXBuildFiles(fileReferences);
@@ -497,21 +497,8 @@ public class XcodeprojGeneration {
         targetBuildConfigMap.put(name, value);
       }
 
-      // Note that HFS+ (the Mac filesystem) is usually case insensitive, so we cast all target
-      // names to lower case before checking for duplication because otherwise users may end up
-      // having duplicated intermediate build directories that can interfere with the build.
-      String targetName = targetControl.getName();
-      String targetNameInLowerCase = targetName.toLowerCase();
-      if (usedTargetNames.contains(targetNameInLowerCase)) {
-        // Use the label in the odd case where we have two targets with the same name.
-        targetName = targetControl.getLabel();
-        targetNameInLowerCase = targetName.toLowerCase();
-      }
-      checkState(!usedTargetNames.contains(targetNameInLowerCase),
-          "Name (case-insensitive) already exists for target with label/name %s/%s in list: %s",
-          targetControl.getLabel(), targetControl.getName(), usedTargetNames);
-      usedTargetNames.add(targetNameInLowerCase);
-      PBXNativeTarget target = new PBXNativeTarget(targetName, productType);
+      PBXNativeTarget target = new PBXNativeTarget(
+          labelToXcodeTargetName(targetControl.getLabel()), productType);
       try {
         target
             .getBuildConfigurationList()
