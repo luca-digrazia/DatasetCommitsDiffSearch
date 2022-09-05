@@ -28,8 +28,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -55,18 +53,17 @@ public final class ObjcProvider implements TransitiveInfoProvider {
   /**
    * The name skylark dependents can use to export a native objc provider to depending native
    * rules.
-   *
+   * 
    * <p>This constant must be different from OBJC_SKYLARK_PROVIDER_NAME to prevent skylark rules
-   * from automatically exporting the ObjcProvider provided to them by dependents.  This can
+   * from automatically exporting the ObjcProvider provided to them by dependants.  This can
    * lead to duplicate symbol linker errors.
    */
   public static final String OBJC_SKYLARK_PROVIDER_TO_EXPORT_NAME = "objc_export";
-
+  
   /**
    * Represents one of the things this provider can provide transitively. Things are provided as
    * {@link NestedSet}s of type E.
    */
-  @SkylarkModule(name = "Key", doc = "An ObjcProvider key.")
   public static class Key<E> {
     private final Order order;
     private final String skylarkKeyName;
@@ -81,7 +78,6 @@ public final class ObjcProvider implements TransitiveInfoProvider {
     /**
      * Returns the name of the collection represented by this key in the Skylark provider.
      */
-    @SkylarkCallable(name = "name", structField = true)
     public String getSkylarkKeyName() {
       return skylarkKeyName;
     }
@@ -315,7 +311,7 @@ public final class ObjcProvider implements TransitiveInfoProvider {
     /**
      * Indicates that C++ (or Objective-C++) is used in any source file. This affects how the linker
      * is invoked.
-     */
+    */
     USES_CPP,
 
     /**
@@ -328,28 +324,35 @@ public final class ObjcProvider implements TransitiveInfoProvider {
      * Indicates that the resulting bundle will have embedded frameworks. This affects linking step.
      */
     USES_FRAMEWORKS,
-
+    
     /**
      * Indicates that watch os 1 extension is present in the bundle.
      */
-    HAS_WATCH1_EXTENSION,
+    HAS_WATCH1_EXTENSION
   }
+
+  /**
+   * All keys in ObjcProvider that will be passed in the corresponding Skylark provider.
+   */
+  // Only keys for Artifact or primitive types can be in the Skylark provider, as other types
+  // are not supported as Skylark types.
+  private static final ImmutableList<Key<?>> KEYS_FOR_SKYLARK =
+    ImmutableList.<Key<?>>of(LIBRARY, IMPORTED_LIBRARY, LINKED_BINARY, FORCE_LOAD_LIBRARY,
+        FORCE_LOAD_FOR_XCODEGEN, HEADER, SOURCE, DEFINE, ASSET_CATALOG, GENERAL_RESOURCE_FILE,
+        SDK_DYLIB, XCDATAMODEL, MODULE_MAP, MERGE_ZIP, FRAMEWORK_FILE, DEBUG_SYMBOLS,
+        DEBUG_SYMBOLS_PLIST, BREAKPAD_FILE, STORYBOARD, XIB, STRINGS, LINKOPT, J2OBJC_LIBRARY,
+        ROOT_MERGE_ZIP);
 
   private final ImmutableMap<Key<?>, NestedSet<?>> items;
 
-  // Items which should not be propagated to dependents.
+  // Items which should be passed to direct dependers, but not transitive dependers.
   private final ImmutableMap<Key<?>, NestedSet<?>> nonPropagatedItems;
-
-  // Items which should be passed to strictly direct dependers, but not transitive dependers.
-  private final ImmutableMap<Key<?>, NestedSet<?>> strictDependencyItems;
 
   private ObjcProvider(
       ImmutableMap<Key<?>, NestedSet<?>> items,
-      ImmutableMap<Key<?>, NestedSet<?>> nonPropagatedItems,
-      ImmutableMap<Key<?>, NestedSet<?>> strictDependencyItems) {
+      ImmutableMap<Key<?>, NestedSet<?>> nonPropagatedItems) {
     this.items = Preconditions.checkNotNull(items);
     this.nonPropagatedItems = Preconditions.checkNotNull(nonPropagatedItems);
-    this.strictDependencyItems = Preconditions.checkNotNull(strictDependencyItems);
   }
 
   /**
@@ -359,9 +362,6 @@ public final class ObjcProvider implements TransitiveInfoProvider {
   public <E> NestedSet<E> get(Key<E> key) {
     Preconditions.checkNotNull(key);
     NestedSetBuilder<E> builder = new NestedSetBuilder<>(key.order);
-    if (strictDependencyItems.containsKey(key)) {
-      builder.addTransitive((NestedSet<E>) strictDependencyItems.get(key));
-    }
     if (nonPropagatedItems.containsKey(key)) {
       builder.addTransitive((NestedSet<E>) nonPropagatedItems.get(key));
     }
@@ -392,12 +392,12 @@ public final class ObjcProvider implements TransitiveInfoProvider {
    */
   public SkylarkClassObject toSkylarkProvider() {
     ImmutableMap.Builder<String, Object> providerBuilder = ImmutableMap.<String, Object>builder();
-    for (Key<?> key : SkylarkKeyStore.KEYS_FOR_SKYLARK) {
+    for (Key<?> key : KEYS_FOR_SKYLARK) {
       providerBuilder.put(key.getSkylarkKeyName(), new SkylarkNestedSet(key.getType(), get(key)));
     }
     return new SkylarkClassObject(providerBuilder.build(), "No such attribute '%s'");
   }
-
+ 
   /**
    * Returns an {@code ObjcProvider} from a given skylark provider.  For each candidate key
    * in the ObjcProvider, will check the given skylark provider to see if that key is represented
@@ -405,7 +405,7 @@ public final class ObjcProvider implements TransitiveInfoProvider {
    */
   public static ObjcProvider fromSkylarkProvider(SkylarkClassObject skylarkProvider) {
     Builder builder = new Builder();
-    for (Key<?> key : SkylarkKeyStore.KEYS_FOR_SKYLARK) {
+    for (Key<?> key : KEYS_FOR_SKYLARK) {
       SkylarkNestedSet skylarkSet =
           (SkylarkNestedSet) skylarkProvider.getValue(key.getSkylarkKeyName());
       if (skylarkSet != null) {
@@ -414,7 +414,7 @@ public final class ObjcProvider implements TransitiveInfoProvider {
     }
     return builder.build();
   }
-
+  
   /**
    * A builder for this context with an API that is optimized for collecting information from
    * several transitive dependencies.
@@ -422,7 +422,6 @@ public final class ObjcProvider implements TransitiveInfoProvider {
   public static final class Builder {
     private final Map<Key<?>, NestedSetBuilder<?>> items = new HashMap<>();
     private final Map<Key<?>, NestedSetBuilder<?>> nonPropagatedItems = new HashMap<>();
-    private final Map<Key<?>, NestedSetBuilder<?>> strictDependencyItems = new HashMap<>();
 
     private static void maybeAddEmptyBuilder(Map<Key<?>, NestedSetBuilder<?>> set, Key<?> key) {
       if (!set.containsKey(key)) {
@@ -444,6 +443,35 @@ public final class ObjcProvider implements TransitiveInfoProvider {
     }
 
     /**
+     * Adds elements in items, and propagate them to any (transitive) dependers on this
+     * ObjcProvider.
+     */
+    public <E> Builder addTransitiveAndPropagate(Key<E> key, NestedSet<E> items) {
+      uncheckedAddTransitive(key, items, this.items);
+      return this;
+    }
+
+    /**
+     * Add all elements from provider, and propagate them to any (transitive) dependers on this
+     * ObjcProvider.
+     */
+    public Builder addTransitiveAndPropagate(ObjcProvider provider) {
+      for (Map.Entry<Key<?>, NestedSet<?>> typeEntry : provider.items.entrySet()) {
+        uncheckedAddTransitive(typeEntry.getKey(), typeEntry.getValue(), this.items);
+      }
+      return this;
+    }
+
+    /**
+     * Add all elements from a single key of the given provider, and propagate them to any
+     * (transitive) dependers on this ObjcProvider.
+     */
+    public <E> Builder addTransitiveAndPropagate(Key<E> key, ObjcProvider provider) {
+      addTransitiveAndPropagate(key, provider.get(key));
+      return this;
+    }
+
+    /**
      * Add all elements from providers, and propagate them to any (transitive) dependers on this
      * ObjcProvider.
      */
@@ -455,92 +483,16 @@ public final class ObjcProvider implements TransitiveInfoProvider {
     }
 
     /**
-     * Add all keys and values from provider, and propagate them to any (transitive) dependers on
-     * this ObjcProvider.
-     */
-    public Builder addTransitiveAndPropagate(ObjcProvider provider) {
-      for (Map.Entry<Key<?>, NestedSet<?>> typeEntry : provider.items.entrySet()) {
-        uncheckedAddTransitive(typeEntry.getKey(), typeEntry.getValue(), this.items);
-      }
-      for (Map.Entry<Key<?>, NestedSet<?>> typeEntry : provider.strictDependencyItems.entrySet()) {
-        uncheckedAddTransitive(typeEntry.getKey(), typeEntry.getValue(), this.nonPropagatedItems);
-      }
-      return this;
-    }
-
-    /**
-     * Add all elements from a single key of the given provider, and propagate them to any
-     * (transitive) dependers on this ObjcProvider.
-     */
-    public Builder addTransitiveAndPropagate(Key key, ObjcProvider provider) {
-      if (provider.items.containsKey(key)) {
-        uncheckedAddTransitive(key, provider.items.get(key), this.items);
-      }
-      if (provider.strictDependencyItems.containsKey(key)) {
-        uncheckedAddTransitive(
-            key, provider.strictDependencyItems.get(key), this.nonPropagatedItems);
-      }
-      return this;
-    }
-
-    /**
-     * Adds elements in items, and propagate them to any (transitive) dependers on this
-     * ObjcProvider.
-     */
-    public <E> Builder addTransitiveAndPropagate(Key<E> key, NestedSet<E> items) {
-      uncheckedAddTransitive(key, items, this.items);
-      return this;
-    }
-
-    /**
      * Add elements from providers, but don't propagate them to any dependers on this ObjcProvider.
      * These elements will be exposed to {@link #get(Key)} calls, but not to any ObjcProviders
      * which add this provider to themselves.
      */
     public Builder addTransitiveWithoutPropagating(Iterable<ObjcProvider> providers) {
       for (ObjcProvider provider : providers) {
-        addTransitiveWithoutPropagating(provider);
+        for (Map.Entry<Key<?>, NestedSet<?>> typeEntry : provider.items.entrySet()) {
+          uncheckedAddTransitive(typeEntry.getKey(), typeEntry.getValue(), this.nonPropagatedItems);
+        }
       }
-      return this;
-    }
-
-    /**
-     * Add all keys and values from provider, without propagating them to any (transitive) dependers
-     * on this ObjcProvider. These elements will be exposed to {@link #get(Key)} calls, but not to
-     * any ObjcProviders which add this provider to themselves.
-     */
-    public Builder addTransitiveWithoutPropagating(ObjcProvider provider) {
-      for (Map.Entry<Key<?>, NestedSet<?>> typeEntry : provider.items.entrySet()) {
-        uncheckedAddTransitive(typeEntry.getKey(), typeEntry.getValue(), this.nonPropagatedItems);
-      }
-      for (Map.Entry<Key<?>, NestedSet<?>> typeEntry : provider.strictDependencyItems.entrySet()) {
-        uncheckedAddTransitive(typeEntry.getKey(), typeEntry.getValue(), this.nonPropagatedItems);
-      }
-      return this;
-    }
-
-    /**
-     * Add a single key from provider, without propagating them to any (transitive) dependers
-     * on this ObjcProvider. These elements will be exposed to {@link #get(Key)} calls, but not to
-     * any ObjcProviders which add this provider to themselves.
-     */
-    public Builder addTransitiveWithoutPropagating(Key key, ObjcProvider provider) {
-      if (provider.items.containsKey(key)) {
-        uncheckedAddTransitive(key, provider.items.get(key), this.nonPropagatedItems);
-      }
-      if (provider.strictDependencyItems.containsKey(key)) {
-        uncheckedAddTransitive(
-            key, provider.strictDependencyItems.get(key), this.nonPropagatedItems);
-      }
-      return this;
-    }
-
-    /**
-     * Adds elements in items, without propagating them to any (transitive) dependers on this
-     * ObjcProvider.
-     */
-    public <E> Builder addTransitiveWithoutPropagating(Key<E> key, NestedSet<E> items) {
-      uncheckedAddTransitive(key, items, this.nonPropagatedItems);
       return this;
     }
 
@@ -560,22 +512,6 @@ public final class ObjcProvider implements TransitiveInfoProvider {
       return this;
     }
 
-    /**
-     * Add element toAdd, and propagate it only to direct dependents of this provider.
-     */
-    public <E> Builder addForDirectDependents(Key<E> key, E toAdd) {
-      uncheckedAddAll(key, ImmutableList.of(toAdd), this.strictDependencyItems);
-      return this;
-    }
-
-    /**
-     * Add elements in toAdd, and propagate them only to direct dependents of this provider.
-     */
-    public <E> Builder addAllForDirectDependents(Key<E> key, Iterable<? extends E> toAdd) {
-      uncheckedAddAll(key, toAdd, this.strictDependencyItems);
-      return this;
-    }
-
     public ObjcProvider build() {
       ImmutableMap.Builder<Key<?>, NestedSet<?>> propagated = new ImmutableMap.Builder<>();
       for (Map.Entry<Key<?>, NestedSetBuilder<?>> typeEntry : items.entrySet()) {
@@ -585,11 +521,7 @@ public final class ObjcProvider implements TransitiveInfoProvider {
       for (Map.Entry<Key<?>, NestedSetBuilder<?>> typeEntry : nonPropagatedItems.entrySet()) {
         nonPropagated.put(typeEntry.getKey(), typeEntry.getValue().build());
       }
-      ImmutableMap.Builder<Key<?>, NestedSet<?>> strictDependency = new ImmutableMap.Builder<>();
-      for (Map.Entry<Key<?>, NestedSetBuilder<?>> typeEntry : strictDependencyItems.entrySet()) {
-        strictDependency.put(typeEntry.getKey(), typeEntry.getValue().build());
-      }
-      return new ObjcProvider(propagated.build(), nonPropagated.build(), strictDependency.build());
+      return new ObjcProvider(propagated.build(), nonPropagated.build());
     }
   }
 }

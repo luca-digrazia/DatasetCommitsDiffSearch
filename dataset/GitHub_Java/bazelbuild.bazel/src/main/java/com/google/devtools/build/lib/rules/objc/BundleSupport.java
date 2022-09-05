@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.Platform;
-import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.objc.XcodeProvider.Builder;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -138,8 +137,8 @@ final class BundleSupport {
     Platform platform = null;
     for (String architecture : appleConfiguration.getIosMultiCpus()) {
       if (platform == null) {
-        platform = Platform.forTarget(PlatformType.IOS, architecture);
-      } else if (platform != Platform.forTarget(PlatformType.IOS, architecture)) {
+        platform = Platform.forIosArch(architecture);
+      } else if (platform != Platform.forIosArch(architecture)) {
         ruleContext.ruleError(
             String.format("In builds which require bundling, --ios_multi_cpus does not currently "
                 + "allow values for both simulator and device builds. Flag was %s",
