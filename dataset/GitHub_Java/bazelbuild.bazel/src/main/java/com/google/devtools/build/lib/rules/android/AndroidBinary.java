@@ -248,13 +248,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     }
 
     JavaTargetAttributes resourceClasses = androidCommon.init(
-        javaSemantics,
-        androidSemantics,
-        resourceApk,
-        AndroidIdlProvider.EMPTY,
-        ruleContext.getConfiguration().isCodeCoverageEnabled(),
-        true /* collectJavaCompilationArgs */,
-        AndroidRuleClasses.ANDROID_BINARY_GEN_JAR);
+        javaSemantics, androidSemantics, resourceApk, AndroidIdlProvider.EMPTY,
+        ruleContext.getConfiguration().isCodeCoverageEnabled(), true);
     if (resourceClasses == null) {
       return null;
     }
@@ -383,20 +378,15 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     if (ruleContext.hasErrors()) {
       return null;
     }
-
-    ApkActionBuilder incrementalActionBuilder = new ApkActionBuilder(ruleContext, androidSemantics)
+    ruleContext.registerAction(new ApkActionBuilder(ruleContext, androidSemantics)
         .classesDex(stubDex)
         .resourceApk(incrementalResourceApk.getArtifact())
         .javaResourceZip(dexingOutput.javaResourceJar)
+        .nativeLibs(nativeLibs)
         .sign(true)
         .javaResourceFile(stubData)
-        .message("Generating incremental apk");
-
-    if (!ruleContext.getFragment(AndroidConfiguration.class).useIncrementalNativeLibs()) {
-      incrementalActionBuilder.nativeLibs(nativeLibs);
-    }
-
-    ruleContext.registerAction(incrementalActionBuilder.build(incrementalApk));
+        .message("Generating incremental apk")
+        .build(incrementalApk));
 
     Artifact argsArtifact =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.MOBILE_INSTALL_ARGS);
@@ -404,15 +394,13 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         new WriteAdbArgsAction(ruleContext.getActionOwner(), argsArtifact));
 
     createInstallAction(ruleContext, false, fullDeployMarker, argsArtifact,
-        incrementalDexManifest, incrementalResourceApk.getArtifact(), incrementalApk, nativeLibs,
-        stubData);
+        incrementalDexManifest, incrementalResourceApk.getArtifact(), incrementalApk, stubData);
 
     createInstallAction(ruleContext, true, incrementalDeployMarker,
         argsArtifact,
         incrementalDexManifest,
         incrementalResourceApk.getArtifact(),
         incrementalApk,
-        nativeLibs,
         stubData);
 
     NestedSetBuilder<Artifact> splitApkSetBuilder = NestedSetBuilder.stableOrder();
@@ -553,8 +541,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
   private static void createInstallAction(RuleContext ruleContext,
       boolean incremental, Artifact marker, Artifact argsArtifact,
-      Artifact dexmanifest, Artifact resourceApk, Artifact apk, NativeLibs nativeLibs,
-      Artifact stubDataFile) {
+      Artifact dexmanifest, Artifact resourceApk, Artifact apk, Artifact stubDataFile) {
     FilesToRunProvider adb = AndroidSdkProvider.fromRuleContext(ruleContext).getAdb();
     SpawnAction.Builder builder = new SpawnAction.Builder()
         .setExecutable(ruleContext.getExecutablePrerequisite("$incremental_install", Mode.HOST))
@@ -583,17 +570,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       builder
           .addArgument("--apk")
           .addInputArgument(apk);
-    }
-
-    if (ruleContext.getFragment(AndroidConfiguration.class).useIncrementalNativeLibs()) {
-      for (Map.Entry<String, Iterable<Artifact>> arch : nativeLibs.getMap().entrySet()) {
-        for (Artifact lib : arch.getValue()) {
-          builder
-              .addArgument("--native_lib")
-              .addArgument(arch.getKey() + ":" + lib.getExecPathString())
-              .addInput(lib);
-        }
-      }
     }
 
     ruleContext.registerAction(builder.build(ruleContext));
