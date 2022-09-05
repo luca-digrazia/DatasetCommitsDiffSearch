@@ -291,9 +291,9 @@ public class SkylarkRuleImplementationFunctions {
           // input file that is in HOST configuration to the action as a precaution.
           addRequiredIndirectRunfiles(ctx, builder);
 
-          String mnemonic = mnemonicUnchecked == Runtime.NONE
-              ? "Generating" : (String) mnemonicUnchecked;
-          builder.setMnemonic(mnemonic);
+          if (mnemonicUnchecked != Runtime.NONE) {
+            builder.setMnemonic((String) mnemonicUnchecked);
+          }
           if (envUnchecked != Runtime.NONE) {
             builder.setEnvironment(
                 ImmutableMap.copyOf(
