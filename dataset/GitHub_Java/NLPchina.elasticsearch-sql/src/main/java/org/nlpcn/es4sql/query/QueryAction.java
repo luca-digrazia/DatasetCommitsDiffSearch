@@ -1,5 +1,6 @@
 package org.nlpcn.es4sql.query;
 
+import org.elasticsearch.action.ActionRequestBuilder;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.client.Client;
@@ -49,9 +50,11 @@ public abstract class QueryAction {
 
     protected void updateRequestWithHighlight(Select select, SearchRequestBuilder request) {
 
+        //? here Map<String,Object> HEIGHLIGHT('field',JSON) ?
+
         for(Hint hint : select.getHints()){
             if(hint.getType() == HintType.HIGHLIGHT){
-                HighlightBuilder.Field highlightField = parseHighlightField(hint.getParams());
+                HighlightBuilder.Field highlightField = parseHeiglightField(hint.getParams());
                 if(highlightField != null){
                     request.addHighlightedField(highlightField);
                 }
@@ -59,7 +62,7 @@ public abstract class QueryAction {
         }
     }
 
-    protected HighlightBuilder.Field parseHighlightField(Object[] params)
+    protected HighlightBuilder.Field parseHeiglightField(Object[] params)
     {
         if(params == null || params.length == 0 || params.length > 2){
             //todo: exception.
@@ -68,12 +71,13 @@ public abstract class QueryAction {
         if(params.length == 1){
             return field;
         }
-        Map<String,Object> highlightParams = (Map<String,Object>) params[1];
+        Map<String,Object> heighlightParams = (Map<String,Object>) params[1];
 
-        for (Map.Entry<String,Object> param : highlightParams.entrySet()){
+        for (Map.Entry<String,Object> param : heighlightParams.entrySet()){
             switch (param.getKey()){
                 case "boundary_chars":
-                    field.boundaryChars(fromArrayListToCharArray((ArrayList) param.getValue()));
+                    //todo: array.
+                    field.boundaryChars((char[]) param.getValue());
                     break;
                 case "boundary_max_scan":
                     field.boundaryMaxScan((Integer) param.getValue());
@@ -94,7 +98,7 @@ public abstract class QueryAction {
                     field.highlightFilter((Boolean) param.getValue());
                     break;
                 case "matched_fields":
-                    field.matchedFields((String[]) ((ArrayList)param.getValue()).toArray(new String[((ArrayList) param.getValue()).size()]));
+                    field.matchedFields((String[]) param.getValue());
                     break;
                 case "no_match_size":
                     field.noMatchSize((Integer) param.getValue());
@@ -109,10 +113,10 @@ public abstract class QueryAction {
                     field.phraseLimit((Integer) param.getValue());
                     break;
                 case "post_tags":
-                    field.postTags((String[]) ((ArrayList)param.getValue()).toArray(new String[((ArrayList) param.getValue()).size()]));
+                    field.postTags((String[]) param.getValue());
                     break;
                 case "pre_tags":
-                    field.preTags((String[]) ((ArrayList)param.getValue()).toArray(new String[((ArrayList) param.getValue()).size()]));
+                    field.preTags((String[]) param.getValue());
                     break;
                 case "require_field_match":
                     field.requireFieldMatch((Boolean) param.getValue());
@@ -121,16 +125,6 @@ public abstract class QueryAction {
             }
         }
         return field;
-    }
-
-    private char[] fromArrayListToCharArray(ArrayList arrayList){
-        char[] chars = new char[arrayList.size()];
-        int i=0;
-        for(Object item : arrayList){
-            chars[i] = item.toString().charAt(0);
-            i++;
-        }
-        return chars;
     }
 
 

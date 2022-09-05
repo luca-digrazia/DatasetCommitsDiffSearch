@@ -58,6 +58,7 @@ public class SqlParser {
         return select;
     }
 
+
     public Delete parseDelete(SQLDeleteStatement deleteStatement) throws SqlParseException {
 		Delete delete = new Delete();
 
@@ -78,6 +79,7 @@ public class SqlParser {
 		return myWhere;
 	}
 
+
 	private boolean isCond(SQLBinaryOpExpr expr) {
         SQLExpr leftSide = expr.getLeft();
         if(leftSide instanceof SQLMethodInvokeExpr){
@@ -87,7 +89,7 @@ public class SqlParser {
 	}
 
     private boolean isAllowedMethodOnConditionLeft(SQLMethodInvokeExpr method, SQLBinaryOperator operator) {
-        return  (method.getMethodName().toLowerCase().equals("nested") || method.getMethodName().toLowerCase().equals("children")) && !operator.isLogical();
+        return  method.getMethodName().toLowerCase().equals("nested") && !operator.isLogical();
     }
 
     public void parseWhere(SQLExpr expr, Where where) throws SqlParseException {
@@ -127,20 +129,13 @@ public class SqlParser {
         if (expr instanceof SQLBinaryOpExpr) {
             SQLBinaryOpExpr soExpr = (SQLBinaryOpExpr) expr;
             boolean methodAsOpear = false;
-
-            boolean isNested = false;
-            boolean isChildren = false;
-
+            boolean nestedFieldCondition = false;
+            String nestedPath = null ;
             NestedType nestedType = new NestedType();
             if(nestedType.tryFillFromExpr(soExpr.getLeft())){
                 soExpr.setLeft(new SQLIdentifierExpr(nestedType.field));
-                isNested = true;
-            }
-
-            ChildrenType childrenType = new ChildrenType();
-            if(childrenType.tryFillFromExpr(soExpr.getLeft())){
-                soExpr.setLeft(new SQLIdentifierExpr(childrenType.field));
-                isChildren = true;
+                nestedFieldCondition = true;
+                nestedPath = nestedType.path ;
             }
 
             if(soExpr.getRight() instanceof SQLMethodInvokeExpr){
@@ -149,94 +144,33 @@ public class SqlParser {
 
                 if(Condition.OPEAR.methodNameToOpear.containsKey(methodName)){
                     Object[] methodParametersValue = getMethodValuesWithSubQueries(method);
-
-                    Condition condition = null; 
-
-                    if(isNested)
-                    	condition = new Condition(CONN.valueOf(opear) ,soExpr.getLeft().toString(), Condition.OPEAR.methodNameToOpear.get(methodName),methodParametersValue, nestedType);
-                    else if(isChildren)
-                    	condition = new Condition(CONN.valueOf(opear) ,soExpr.getLeft().toString(), Condition.OPEAR.methodNameToOpear.get(methodName),methodParametersValue, childrenType);
-                    else
-                    	condition = new Condition(CONN.valueOf(opear) ,soExpr.getLeft().toString(), Condition.OPEAR.methodNameToOpear.get(methodName),methodParametersValue, null);
-
+                    Condition condition = new Condition(CONN.valueOf(opear) ,soExpr.getLeft().toString(), Condition.OPEAR.methodNameToOpear.get(methodName),methodParametersValue,nestedFieldCondition,nestedPath);
                     where.addWhere(condition);
                     methodAsOpear = true;
                 }
             }
-
             if(!methodAsOpear){
-                Condition condition = null;
-
-                if(isNested)
-                	condition = new Condition(CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getOperator().name, parseValue(soExpr.getRight()), nestedType);
-                else if(isChildren)
-                	condition = new Condition(CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getOperator().name, parseValue(soExpr.getRight()), childrenType);
-                else
-                	condition = new Condition(CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getOperator().name, parseValue(soExpr.getRight()), null);
-
+                Condition condition = new Condition(CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getOperator().name, parseValue(soExpr.getRight()),nestedFieldCondition,nestedPath);
                 where.addWhere(condition);
             }
         } else if (expr instanceof SQLInListExpr) {
             SQLInListExpr siExpr = (SQLInListExpr) expr;
-            String leftSide = siExpr.getExpr().toString();
-
-            boolean isNested = false;
-            boolean isChildren = false;
-
             NestedType nestedType = new NestedType();
+            String leftSide = siExpr.getExpr().toString();
             if(nestedType.tryFillFromExpr(siExpr.getExpr())){
                 leftSide = nestedType.field;
-
-                isNested = false;
             }
-
-            ChildrenType childrenType = new ChildrenType();
-            if(childrenType.tryFillFromExpr(siExpr.getExpr())){
-                leftSide = childrenType.field;
-
-                isChildren = true;
-            }
-
-            Condition condition = null; 
-
-            if(isNested)
-            	condition = new Condition(CONN.valueOf(opear), leftSide, siExpr.isNot() ? "NOT IN" : "IN", parseValue(siExpr.getTargetList()), nestedType);
-            else if(isChildren)
-            	condition = new Condition(CONN.valueOf(opear), leftSide, siExpr.isNot() ? "NOT IN" : "IN", parseValue(siExpr.getTargetList()), childrenType);
-            else
-            	condition = new Condition(CONN.valueOf(opear), leftSide, siExpr.isNot() ? "NOT IN" : "IN", parseValue(siExpr.getTargetList()), null);
-
+            Condition condition = new Condition(CONN.valueOf(opear), leftSide, siExpr.isNot() ? "NOT IN" : "IN", parseValue(siExpr.getTargetList()),nestedType.field!=null,nestedType.path);
             where.addWhere(condition);
         } else if (expr instanceof SQLBetweenExpr) {
             SQLBetweenExpr between = ((SQLBetweenExpr) expr);
             String leftSide = between.getTestExpr().toString();
-
-            boolean isNested = false;
-            boolean isChildren = false;
-
             NestedType nestedType = new NestedType();
             if(nestedType.tryFillFromExpr(between.getTestExpr())){
                 leftSide = nestedType.field;
-                
-                isNested = true;
             }
-
-            ChildrenType childrenType = new ChildrenType();
-            if(childrenType.tryFillFromExpr(between.getTestExpr())){
-                leftSide = childrenType.field;
-                
-                isChildren = true;
-            }
-
-            Condition condition = null; 
-            		
-            if(isNested)
-            	condition = new Condition(CONN.valueOf(opear), leftSide, between.isNot() ? "NOT BETWEEN" : "BETWEEN", new Object[]{parseValue(between.beginExpr), parseValue(between.endExpr)}, nestedType);
-            else if(isChildren)
-            	condition = new Condition(CONN.valueOf(opear), leftSide, between.isNot() ? "NOT BETWEEN" : "BETWEEN", new Object[]{parseValue(between.beginExpr), parseValue(between.endExpr)}, childrenType);
-            else
-            	condition = new Condition(CONN.valueOf(opear), leftSide, between.isNot() ? "NOT BETWEEN" : "BETWEEN", new Object[]{parseValue(between.beginExpr), parseValue(between.endExpr)}, null);
-
+            Condition condition = new Condition(CONN.valueOf(opear), leftSide, between.isNot() ? "NOT BETWEEN" : "BETWEEN", new Object[]{parseValue(between.beginExpr),
+                    parseValue(between.endExpr)},nestedType.field!=null,nestedType.path);
             where.addWhere(condition);
         }
         else if (expr instanceof SQLMethodInvokeExpr) {
@@ -246,59 +180,27 @@ public class SqlParser {
 
             String methodName = methodExpr.getMethodName();
             if(SpatialParamsFactory.isAllowedMethod(methodName)){
-                String fieldName = methodParameters.get(0).toString();
-                
-                boolean isNested = false;
-                boolean isChildren = false;
 
+                String fieldName = methodParameters.get(0).toString();
                 NestedType nestedType = new NestedType();
                 if (nestedType.tryFillFromExpr(methodParameters.get(0))) {
                     fieldName = nestedType.field;
-                    
-                    isNested = true;
-                }
-
-                ChildrenType childrenType = new ChildrenType();
-                if (childrenType.tryFillFromExpr(methodParameters.get(0))) {
-                    fieldName = childrenType.field;
-                    
-                    isChildren = true;
                 }
 
                 Object spatialParamsObject = SpatialParamsFactory.generateSpatialParamsObject(methodName, methodParameters);
 
-                Condition condition = null;
-
-                if(isNested)
-                	condition = new Condition(CONN.valueOf(opear), fieldName, methodName, spatialParamsObject, nestedType);
-                else if(isChildren)
-                	condition = new Condition(CONN.valueOf(opear), fieldName, methodName, spatialParamsObject, childrenType);
-                else
-                	condition = new Condition(CONN.valueOf(opear), fieldName, methodName, spatialParamsObject, null);
-
+                Condition condition = new Condition(CONN.valueOf(opear), fieldName, methodName, spatialParamsObject, nestedType.field != null, nestedType.path);
                 where.addWhere(condition);
             }
+
             else if (methodName.toLowerCase().equals("nested")){
-            	NestedType nestedType = new NestedType();
-
-            	if(!nestedType.tryFillFromExpr(expr)){
-                    throw new SqlParseException("could not fill nested from expr:" + expr);
+                NestedType nestedType = new NestedType();
+                if(!nestedType.tryFillFromExpr(expr)){
+                    throw new SqlParseException("could not fill nested from expr:"+expr);
                 }
-
-            	Condition condition = new Condition(CONN.valueOf(opear), nestedType.path, methodName.toUpperCase(), nestedType.where);
-
-            	where.addWhere(condition);
-            }
-            else if (methodName.toLowerCase().equals("children")){
-            	ChildrenType childrenType = new ChildrenType();
-
-                if(!childrenType.tryFillFromExpr(expr)){
-                    throw new SqlParseException("could not fill nested from expr:" + expr);
-                }
-
-                Condition condition = new Condition(CONN.valueOf(opear), childrenType.childType, methodName.toUpperCase(), childrenType.where);
-
+                Condition condition = new Condition(CONN.valueOf(opear),nestedType.path,methodName.toUpperCase(),nestedType.where);
                 where.addWhere(condition);
+
             }
             else if (methodName.toLowerCase().equals("script")){
                 ScriptFilter scriptFilter = new ScriptFilter();
@@ -313,47 +215,23 @@ public class SqlParser {
             }
         } else if (expr instanceof SQLInSubQueryExpr){
             SQLInSubQueryExpr sqlIn = (SQLInSubQueryExpr) expr;
-            
             Select innerSelect = parseSelect((MySqlSelectQueryBlock) sqlIn.getSubQuery().getQuery());
-            
             if(innerSelect.getFields() == null || innerSelect.getFields().size()!=1)
                 throw new SqlParseException("should only have one return field in subQuery");
-            
             SubQueryExpression subQueryExpression = new SubQueryExpression(innerSelect);
-
             String leftSide = sqlIn.getExpr().toString();
-
-            boolean isNested = false;
-            boolean isChildren = false;
-
             NestedType nestedType = new NestedType();
             if(nestedType.tryFillFromExpr(sqlIn.getExpr())){
                 leftSide = nestedType.field;
-                
-                isNested = true;
             }
-            
-            ChildrenType childrenType = new ChildrenType();
-            if(childrenType.tryFillFromExpr(sqlIn.getExpr())){
-                leftSide = childrenType.field;
-                
-                isChildren = true;
-            }
-
-            Condition condition = null; 
-
-            if(isNested)
-            	condition = new Condition(CONN.valueOf(opear), leftSide, sqlIn.isNot() ? "NOT IN" : "IN", subQueryExpression, nestedType);
-            else if(isChildren)
-            	condition = new Condition(CONN.valueOf(opear), leftSide, sqlIn.isNot() ? "NOT IN" : "IN", subQueryExpression, childrenType);
-            else
-            	condition = new Condition(CONN.valueOf(opear), leftSide, sqlIn.isNot() ? "NOT IN" : "IN", subQueryExpression, null);
-
+            Condition condition = new Condition(CONN.valueOf(opear), leftSide, sqlIn.isNot() ? "NOT IN" : "IN",subQueryExpression,nestedType.field!=null,nestedType.path);
             where.addWhere(condition);
         } else {
 			throw new SqlParseException("err find condition " + expr.getClass());
 		}
 	}
+
+
 
     private Object[] getMethodValuesWithSubQueries(SQLMethodInvokeExpr method) throws SqlParseException {
         List<Object> values = new ArrayList<>();
@@ -764,7 +642,7 @@ public class SqlParser {
 			} else {
 				negateWhere(sub);
 			}
-            sub.setConn(sub.getConn().negative());
+			sub.setConn(sub.getConn().negative());
 		}
 	}
 
