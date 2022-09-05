@@ -170,7 +170,7 @@ public class ResourceShrinker {
 
   public void shrink(Path destinationDir) throws IOException,
       ParserConfigurationException, SAXException {
-    parseResourceTxtFile(rTxt);
+    gatherResourceValues(rTxt);
     recordMapping(proguardMapping);
     recordUsages(classesJar);
     recordManifestUsages(mergedManifest);
@@ -894,7 +894,11 @@ public class ResourceShrinker {
     }
   }
 
-  private void parseResourceTxtFile(Path file) throws IOException {
+  private void gatherResourceValues(Path file) throws IOException {
+    parseResourceClass(file);
+  }
+
+  private void parseResourceClass(Path file) throws IOException {
     BufferedReader reader = java.nio.file.Files.newBufferedReader(file, Charset.defaultCharset());
     String line;
     while ((line = reader.readLine()) != null) {
