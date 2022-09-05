@@ -1,7 +1,6 @@
 package com.prolificinteractive.materialcalendarview;
 
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
 import android.support.v4.view.PagerAdapter;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,7 +14,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import org.threeten.bp.LocalDate;
 
 /**
  * Pager adapter backing the calendar view
@@ -27,7 +25,7 @@ abstract class CalendarPagerAdapter<V extends CalendarPagerView> extends PagerAd
     protected final MaterialCalendarView mcv;
     private final CalendarDay today;
 
-    @NonNull private TitleFormatter titleFormatter = TitleFormatter.DEFAULT;
+    private TitleFormatter titleFormatter = null;
     private Integer color = null;
     private Integer dateTextAppearance = null;
     private Integer weekDayTextAppearance = null;
@@ -79,7 +77,7 @@ abstract class CalendarPagerAdapter<V extends CalendarPagerView> extends PagerAd
 
     @Override
     public CharSequence getPageTitle(int position) {
-        return titleFormatter.format(getItem(position));
+        return titleFormatter == null ? "" : titleFormatter.format(getItem(position));
     }
 
     public CalendarPagerAdapter<?> migrateStateAndReturn(CalendarPagerAdapter<?> newAdapter) {
@@ -198,8 +196,8 @@ abstract class CalendarPagerAdapter<V extends CalendarPagerView> extends PagerAd
         return view == object;
     }
 
-    public void setTitleFormatter(@Nullable TitleFormatter titleFormatter) {
-        this.titleFormatter = titleFormatter == null ? TitleFormatter.DEFAULT : titleFormatter;
+    public void setTitleFormatter(@NonNull TitleFormatter titleFormatter) {
+        this.titleFormatter = titleFormatter;
     }
 
     public void setSelectionColor(int color) {
@@ -295,13 +293,6 @@ abstract class CalendarPagerAdapter<V extends CalendarPagerView> extends PagerAd
         invalidateSelectedDates();
     }
 
-    /**
-     * Select or un-select a day.
-     *
-     * @param day Day to select or un-select
-     * @param selected Whether to select or un-select the day from the list.
-     * @see CalendarPagerAdapter#selectRange(CalendarDay, CalendarDay)
-     */
     public void setDateSelected(CalendarDay day, boolean selected) {
         if (selected) {
             if (!selectedDates.contains(day)) {
@@ -314,31 +305,6 @@ abstract class CalendarPagerAdapter<V extends CalendarPagerView> extends PagerAd
                 invalidateSelectedDates();
             }
         }
-    }
-
-    /**
-     * Clear the previous selection, select the range of days from first to last, and finally
-     * invalidate. First day should be before last day, otherwise the selection won't happen.
-     *
-     * @param first The first day of the range.
-     * @param last The last day in the range.
-     * @see CalendarPagerAdapter#setDateSelected(CalendarDay, boolean)
-     */
-    public void selectRange(final CalendarDay first, final CalendarDay last) {
-        selectedDates.clear();
-
-        // Copy to start from the first day and increment
-        LocalDate temp = LocalDate.of(first.getYear(), first.getMonth(), first.getDay());
-
-        // for comparison
-        final LocalDate end = last.getDate();
-
-        while (temp.isBefore(end) || temp.equals(end)) {
-            selectedDates.add(CalendarDay.from(temp));
-            temp = temp.plusDays(1);
-        }
-
-        invalidateSelectedDates();
     }
 
     private void invalidateSelectedDates() {
