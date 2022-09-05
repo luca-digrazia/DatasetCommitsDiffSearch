@@ -97,8 +97,8 @@ public final class SkyframeBuildView {
   // This hack allows us to see when a configured target has been invalidated, and thus when the set
   // of artifact conflicts needs to be recomputed (whenever a configured target has been invalidated
   // or newly evaluated).
-  private final EvaluationProgressReceiver progressReceiver =
-      new ConfiguredTargetValueProgressReceiver();
+  private final EvaluationProgressReceiver invalidationReceiver =
+      new ConfiguredTargetValueInvalidationReceiver();
   private final Set<SkyKey> evaluatedConfiguredTargets = Sets.newConcurrentHashSet();
   // Used to see if checks of graph consistency need to be done after analysis.
   private volatile boolean someConfiguredTargetEvaluated = false;
@@ -517,10 +517,7 @@ public final class SkyframeBuildView {
     // trims a host configuration to the same scope as a target configuration. Since their options
     // are different, the host instance may actually be able to produce the fragment. So it's
     // wrong and potentially dangerous to unilaterally exclude it.
-    Set<Class<? extends BuildConfiguration.Fragment>> fragmentClasses =
-        config.trimConfigurations()
-            ? config.fragmentClasses()
-            : ((ConfiguredRuleClassProvider) ruleClassProvider).getAllFragments();
+    Set<Class<? extends BuildConfiguration.Fragment>> fragmentClasses = config.fragmentClasses();
     BuildConfiguration hostConfig = hostConfigurationCache.get(fragmentClasses);
     if (hostConfig != null) {
       return hostConfig;
@@ -548,8 +545,8 @@ public final class SkyframeBuildView {
    * Hack to invalidate actions in legacy action graph when their values are invalidated in
    * skyframe.
    */
-  EvaluationProgressReceiver getProgressReceiver() {
-    return progressReceiver;
+  EvaluationProgressReceiver getInvalidationReceiver() {
+    return invalidationReceiver;
   }
 
   /** Clear the invalidated configured targets detected during loading and analysis phases. */
@@ -592,7 +589,7 @@ public final class SkyframeBuildView {
     this.enableAnalysis = enable;
   }
 
-  private class ConfiguredTargetValueProgressReceiver implements EvaluationProgressReceiver {
+  private class ConfiguredTargetValueInvalidationReceiver implements EvaluationProgressReceiver {
     @Override
     public void invalidated(SkyKey skyKey, InvalidationState state) {
       if (skyKey.functionName().equals(SkyFunctions.CONFIGURED_TARGET)) {

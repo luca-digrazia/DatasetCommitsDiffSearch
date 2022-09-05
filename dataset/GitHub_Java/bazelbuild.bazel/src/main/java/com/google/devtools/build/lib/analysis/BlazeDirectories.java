@@ -68,7 +68,6 @@ public final class BlazeDirectories {
       String productName) {
     this.serverDirectories = serverDirectories;
     this.workspace = workspace;
-    this.productName = productName;
     Path outputBase = serverDirectories.getOutputBase();
     Path execRootBase = deepExecRoot ? outputBase.getChild("execroot") : outputBase;
     boolean useDefaultExecRootName = this.workspace == null || this.workspace.isRootDirectory();
@@ -80,8 +79,9 @@ public final class BlazeDirectories {
       this.execRoot = execRootBase.getChild(workspace.getBaseName());
     }
     String relativeOutputPath = getRelativeOutputPath(productName);
-    this.outputPath = execRoot.getRelative(getRelativeOutputPath());
+    this.outputPath = execRoot.getRelative(relativeOutputPath);
     this.localOutputPath = outputBase.getRelative(relativeOutputPath);
+    this.productName = productName;
   }
 
   @VisibleForTesting
@@ -137,37 +137,19 @@ public final class BlazeDirectories {
   }
 
   /**
-   * Returns the execution root for the main package. This is created before the workspace file
-   * has been read, so it has an incorrect path.  Use {@link #getExecRoot(String)} instead.
+   * Returns the execution root. This is the directory underneath which Blaze builds the source
+   * symlink forest, to represent the merged view of different workspaces specified
+   * with --package_path.
    */
-  @Deprecated
   public Path getExecRoot() {
     return execRoot;
   }
 
   /**
-   * Returns the execution root for a particular repository. This is the directory underneath which
-   * Blaze builds the source symlink forest, to represent the merged view of different workspaces
-   * specified with --package_path.
-   */
-  public Path getExecRoot(String workspaceName) {
-    return execRoot.getParentDirectory().getRelative(workspaceName);
-  }
-
-  /**
-   * Returns the output path for the main repository using the workspace's directory name. Use
-   * {@link #getOutputPath(String)}, instead.
-   */
-  @Deprecated
-  public Path getOutputPath() {
-    return outputPath;
-  }
-
-  /**
    * Returns the output path used by this Blaze instance.
    */
-  public Path getOutputPath(String workspaceName) {
-    return getExecRoot(workspaceName).getRelative(getRelativeOutputPath());
+  public Path getOutputPath() {
+    return outputPath;
   }
 
   /**
@@ -198,8 +180,8 @@ public final class BlazeDirectories {
    * Returns the configuration-independent root where the build-data should be placed, given the
    * {@link BlazeDirectories} of this server instance. Nothing else should be placed here.
    */
-  public Root getBuildDataDirectory(String workspaceName) {
-    return Root.asDerivedRoot(getExecRoot(workspaceName), getOutputPath(workspaceName));
+  public Root getBuildDataDirectory() {
+    return Root.asDerivedRoot(getExecRoot(), getOutputPath());
   }
 
  /**

@@ -28,7 +28,6 @@ import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -50,8 +49,6 @@ import javax.annotation.Nullable;
  */
 @RunWith(JUnit4.class)
 public class ArtifactFactoryTest {
-
-  private static final RepositoryName MAIN = RepositoryName.MAIN;
 
   private Scratch scratch = new Scratch();
 
@@ -123,31 +120,31 @@ public class ArtifactFactoryTest {
   @Test
   public void testResolveArtifact_noDerived_simpleSource() throws Exception {
     assertSame(artifactFactory.getSourceArtifact(fooRelative, clientRoot),
-        artifactFactory.resolveSourceArtifact(fooRelative, MAIN));
+        artifactFactory.resolveSourceArtifact(fooRelative));
     assertSame(artifactFactory.getSourceArtifact(barRelative, clientRoRoot),
-        artifactFactory.resolveSourceArtifact(barRelative, MAIN));
+        artifactFactory.resolveSourceArtifact(barRelative));
   }
 
   @Test
   public void testResolveArtifact_inExternalRepo() throws Exception {
     assertSame(
         artifactFactory.getSourceArtifact(alienRelative, alienRoot),
-        artifactFactory.resolveSourceArtifact(alienRelative, MAIN));
+        artifactFactory.resolveSourceArtifact(alienRelative));
   }
 
   @Test
   public void testResolveArtifact_noDerived_derivedRoot() throws Exception {
     assertNull(artifactFactory.resolveSourceArtifact(
-            outRoot.getPath().getRelative(fooRelative).relativeTo(execRoot), MAIN));
+            outRoot.getPath().getRelative(fooRelative).relativeTo(execRoot)));
     assertNull(artifactFactory.resolveSourceArtifact(
-            outRoot.getPath().getRelative(barRelative).relativeTo(execRoot), MAIN));
+            outRoot.getPath().getRelative(barRelative).relativeTo(execRoot)));
   }
 
   @Test
   public void testResolveArtifact_noDerived_simpleSource_other() throws Exception {
-    Artifact actual = artifactFactory.resolveSourceArtifact(fooRelative, MAIN);
+    Artifact actual = artifactFactory.resolveSourceArtifact(fooRelative);
     assertSame(artifactFactory.getSourceArtifact(fooRelative, clientRoot), actual);
-    actual = artifactFactory.resolveSourceArtifact(barRelative, MAIN);
+    actual = artifactFactory.resolveSourceArtifact(barRelative);
     assertSame(artifactFactory.getSourceArtifact(barRelative, clientRoRoot), actual);
   }
 
@@ -161,9 +158,9 @@ public class ArtifactFactoryTest {
     PathFragment outsideWorkspace = new PathFragment("../foo");
     PathFragment insideWorkspace =
         new PathFragment("../" + clientRoot.getPath().getBaseName() + "/foo");
-    assertNull(artifactFactory.resolveSourceArtifact(outsideWorkspace, MAIN));
+    assertNull(artifactFactory.resolveSourceArtifact(outsideWorkspace));
     assertNull("Up-level-containing paths that descend into the right workspace aren't allowed",
-            artifactFactory.resolveSourceArtifact(insideWorkspace, MAIN));
+            artifactFactory.resolveSourceArtifact(insideWorkspace));
     MockPackageRootResolver packageRootResolver = new MockPackageRootResolver();
     packageRootResolver.setPackageRoots(packageRoots);
     Map<PathFragment, Artifact> result = new HashMap<>();
