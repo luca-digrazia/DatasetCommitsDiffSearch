@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 @Setter
 public class ResourcesDefinition {
 
-    private Set<ResourceDefinition> resources = new HashSet<>();
+    private List<ResourceDefinition> resources = new ArrayList<>();
 
     private Logical logical = Logical.DEFAULT;
 
@@ -25,18 +25,14 @@ public class ResourcesDefinition {
         ResourceDefinition definition = getResource(resource.getId()).orElse(null);
         if (definition != null) {
             if (merge) {
-                resource.getActions()
-                        .stream()
-                        .map(ResourceActionDefinition::copy)
-                        .forEach(definition::addAction);
+                resource.getActions().forEach(definition::addAction);
             } else {
                 resources.remove(definition);
             }
         }
-        resources.add(resource.copy());
+        resources.add(resource);
 
     }
-
 
     public Optional<ResourceDefinition> getResource(String id) {
         return resources
@@ -60,10 +56,6 @@ public class ResourcesDefinition {
         return getResource(permission.getId())
                 .filter(resource -> resource.hasAction(permission.getActions()))
                 .isPresent();
-    }
-
-    public boolean isEmpty(){
-        return resources.isEmpty();
     }
 
     public boolean hasPermission(Collection<Permission> permissions) {

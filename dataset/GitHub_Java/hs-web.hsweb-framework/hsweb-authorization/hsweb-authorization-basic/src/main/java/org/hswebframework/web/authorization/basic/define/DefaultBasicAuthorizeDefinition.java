@@ -58,7 +58,7 @@ public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
         definition.setTargetClass(targetClass);
         definition.setTargetMethod(method);
 
-        Set<Annotation> methodAnnotation = AnnotatedElementUtils.findAllMergedAnnotations(method, types);
+        Set<Annotation> annotations = AnnotatedElementUtils.findAllMergedAnnotations(method, types);
 
         Set<Annotation> classAnnotation = AnnotatedElementUtils.findAllMergedAnnotations(targetClass, types);
 
@@ -66,7 +66,7 @@ public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
                 .stream()
                 .collect(Collectors.toMap(Annotation::annotationType, Function.identity()));
 
-        Map<Class, Annotation> mapping = methodAnnotation
+        Map<Class, Annotation> mapping = annotations
                 .stream()
                 .collect(Collectors.toMap(Annotation::annotationType, Function.identity()));
 
@@ -79,7 +79,7 @@ public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
             }
         }
 
-        for (Annotation annotation : methodAnnotation) {
+        for (Annotation annotation : annotations) {
             if (annotation instanceof Authorize) {
                 definition.putAnnotation(((Authorize) annotation));
             }
@@ -91,7 +91,7 @@ public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
             }
         }
 
-        for (Annotation annotation : methodAnnotation) {
+        for (Annotation annotation : annotations) {
 
             if (annotation instanceof ResourceAction) {
                 Optional.ofNullable(mapping.getOrDefault(Resource.class, classAnnotationMap.get(Resource.class)))
@@ -107,23 +107,19 @@ public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
                                     .ifPresent(dat -> definition.putAnnotation(action, dat));
                         });
             }
-            Optional<ResourceActionDefinition> actionDefinition = Optional.ofNullable(mapping.getOrDefault(Resource.class, classAnnotationMap.get(Resource.class)))
-                    .map(Resource.class::cast)
-                    .flatMap(res -> definition.getResources().getResource(res.id()))
-                    .flatMap(res -> Optional.ofNullable(mapping.get(ResourceAction.class))
-                            .map(ResourceAction.class::cast)
-                            .flatMap(ra -> res.getAction(ra.id())));
-
-            if (annotation instanceof DataAccessType) {
-                actionDefinition.ifPresent(ra -> definition.putAnnotation(ra, (DataAccessType) annotation));
-            }
-
             if (annotation instanceof DataAccess) {
-                actionDefinition.ifPresent(ra -> {
+                Optional.ofNullable(mapping.getOrDefault(Resource.class, classAnnotationMap.get(Resource.class)))
+                        .map(Resource.class::cast)
+                        .flatMap(res -> definition.getResources().getResource(res.id()))
+                        .flatMap(res -> Optional.ofNullable(mapping.get(ResourceAction.class))
+                                .map(ResourceAction.class::cast)
+                                .flatMap(ra -> res.getAction(ra.id())))
+                        .ifPresent(ra -> {
                             definition.putAnnotation(ra, (DataAccess) annotation);
                             Optional.ofNullable(mapping.get(DataAccessType.class))
                                     .map(DataAccessType.class::cast)
                                     .ifPresent(dat -> definition.putAnnotation(ra, dat));
+
                         });
             }
 
