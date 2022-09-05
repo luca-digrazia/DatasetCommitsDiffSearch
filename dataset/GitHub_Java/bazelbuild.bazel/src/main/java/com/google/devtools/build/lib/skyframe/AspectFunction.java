@@ -26,9 +26,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -107,7 +105,6 @@ public final class AspectFunction implements SkyFunction {
       throws AspectFunctionException, InterruptedException {
     SkyframeBuildView view = buildViewProvider.getSkyframeBuildView();
     NestedSetBuilder<Package> transitivePackages = NestedSetBuilder.stableOrder();
-    NestedSetBuilder<Label> transitiveRootCauses = NestedSetBuilder.stableOrder();
     AspectKey key = (AspectKey) skyKey.argument();
     ConfiguredAspectFactory aspectFactory;
     if (key.getAspectClass() instanceof NativeAspectClass<?>) {
@@ -155,15 +152,9 @@ public final class AspectFunction implements SkyFunction {
           "aspects must be attached to rules"));
     }
 
-    final ConfiguredTargetValue configuredTargetValue;
-    try {
-      configuredTargetValue =
-          (ConfiguredTargetValue) env.getValueOrThrow(
-              ConfiguredTargetValue.key(key.getLabel(), key.getConfiguration()),
-              ConfiguredValueCreationException.class);
-    } catch (ConfiguredValueCreationException e) {
-      throw new AspectFunctionException(new AspectCreationException(e.getRootCauses()));
-    }
+    final ConfiguredTargetValue configuredTargetValue =
+        (ConfiguredTargetValue)
+            env.getValue(ConfiguredTargetValue.key(key.getLabel(), key.getConfiguration()));
     if (configuredTargetValue == null) {
       // TODO(bazel-team): remove this check when top-level targets also use dynamic configurations.
       // Right now the key configuration may be dynamic while the original target's configuration
@@ -184,7 +175,7 @@ public final class AspectFunction implements SkyFunction {
     try {
       // Get the configuration targets that trigger this rule's configurable attributes.
       Set<ConfigMatchingProvider> configConditions = ConfiguredTargetFunction.getConfigConditions(
-          target, env, resolver, ctgValue, transitivePackages, transitiveRootCauses);
+          target, env, resolver, ctgValue, transitivePackages);
       if (configConditions == null) {
         // Those targets haven't yet been resolved.
         return null;
@@ -199,15 +190,7 @@ public final class AspectFunction implements SkyFunction {
               configConditions,
               ruleClassProvider,
               view.getHostConfiguration(ctgValue.getConfiguration()),
-              transitivePackages,
-              transitiveRootCauses);
-      if (depValueMap == null) {
-        return null;
-      }
-      if (!transitiveRootCauses.isEmpty()) {
-        throw new AspectFunctionException(
-            new AspectCreationException("Loading failed", transitiveRootCauses.build()));
-      }
+              transitivePackages);
 
       return createAspect(
           env,
@@ -299,9 +282,6 @@ public final class AspectFunction implements SkyFunction {
    * An exception indicating that there was a problem creating an aspect.
    */
   public static final class AspectCreationException extends Exception {
-    /** Targets in the transitive closure that failed to load. May be empty. */
-    private final NestedSet<Label> loadingRootCauses;
-
     /**
      * The target for which analysis failed, if any. We can't represent aspects with labels, so if
      * the aspect analysis fails, this will be {@code null}.
@@ -310,26 +290,11 @@ public final class AspectFunction implements SkyFunction {
 
     public AspectCreationException(String message, Label analysisRootCause) {
       super(message);
-      this.loadingRootCauses = NestedSetBuilder.<Label>emptySet(Order.STABLE_ORDER);
       this.analysisRootCause = analysisRootCause;
     }
 
-    public AspectCreationException(String message, NestedSet<Label> loadingRootCauses) {
-      super(message);
-      this.loadingRootCauses = loadingRootCauses;
-      this.analysisRootCause = null;
-    }
-
-    public AspectCreationException(NestedSet<Label> loadingRootCauses) {
-      this("Loading failed", loadingRootCauses);
-    }
-
     public AspectCreationException(String message) {
-      this(message, (Label) null);
-    }
-
-    public NestedSet<Label> getRootCauses() {
-      return loadingRootCauses;
+      this(message, null);
     }
 
     @Nullable public Label getAnalysisRootCause() {
