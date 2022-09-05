@@ -179,10 +179,7 @@ public final class BazelGenRuleRule implements RuleDefinition {
         </p>
         <p>Declaring data dependencies for the generated executable is not supported.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("executable", BOOLEAN).value(false).nonconfigurable(
-            "Used in computed default for $is_executable, which is itself non-configurable (and "
-            + " thus expects its dependencies to be non-configurable), because $is_executable"
-            + " is called from RunCommand.isExecutable, which has no configuration context"))
+        .add(attr("executable", BOOLEAN).value(false))
 
         // TODO(bazel-team): stamping doesn't seem to work. Fix it or remove attribute.
         .add(attr("stamp", BOOLEAN).value(false))
