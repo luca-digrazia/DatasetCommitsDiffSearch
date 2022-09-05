@@ -117,11 +117,16 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
       return this;
     }
 
-    public Builder addProviders(
-        Map<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> providers) {
-      for (Map.Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> provider :
-          providers.entrySet()) {
-        addProvider(provider.getKey(), provider.getValue());
+    /**
+     * Adds a provider to the aspect. Shortcut for addProvider(value.getClass(), value).
+     */
+    public Builder addProvider(TransitiveInfoProvider value) {
+      return addProvider(value.getClass(), value);
+    }
+
+    public Builder addProviders(Iterable<? extends TransitiveInfoProvider> providers) {
+      for (TransitiveInfoProvider provider : providers) {
+        addProvider(provider);
       }
       return this;
     }
@@ -165,7 +170,7 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
         providers.put(SkylarkProviders.class, new SkylarkProviders(skylarkProvidersMap));
       }
 
-      addProvider(ExtraActionArtifactsProvider.class, createExtraActionProvider(ruleContext));
+      addProvider(createExtraActionProvider(ruleContext));
 
       return new ConfiguredAspect(name, ImmutableMap.copyOf(providers));
     }
