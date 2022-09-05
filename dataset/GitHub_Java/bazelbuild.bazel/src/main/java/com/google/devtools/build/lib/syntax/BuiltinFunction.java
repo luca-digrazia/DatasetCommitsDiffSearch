@@ -122,10 +122,9 @@ public class BuiltinFunction extends BaseFunction {
   public Object call(Object[] args,
       FuncallExpression ast, Environment env)
       throws EvalException, InterruptedException {
+    Preconditions.checkNotNull(ast);
     Preconditions.checkNotNull(env);
-
-    // ast is null when called from Java (as there's no Skylark call site).
-    Location loc = ast == null ? Location.BUILTIN : ast.getLocation();
+    Location loc = ast.getLocation();
 
     // Add extra arguments, if needed
     if (extraArgs != null) {
