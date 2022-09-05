@@ -18,8 +18,6 @@
 
 package org.hswebframework.web.example.oauth2;
 
-import org.hswebframework.web.authorization.basic.configuration.EnableAopAuthorize;
-import org.hswebframework.web.authorization.basic.web.SessionIdUserTokenParser;
 import org.hswebframework.web.authorization.oauth2.client.OAuth2RequestService;
 import org.hswebframework.web.authorization.oauth2.client.OAuth2ServerConfig;
 import org.hswebframework.web.authorization.oauth2.client.simple.OAuth2ServerConfigRepository;
@@ -46,7 +44,6 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 @Configuration
 @EnableCaching
 @EnableAspectJAutoProxy
-@EnableAopAuthorize
 public class OAuth2ClientApplication implements CommandLineRunner {
 
     public static void main(String[] args) {

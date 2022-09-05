@@ -17,29 +17,54 @@
  */
 package org.hswebframework.web.authorization.oauth2.client;
 
+import com.alibaba.fastjson.annotation.JSONField;
+import lombok.*;
+
+import java.io.Serializable;
+
 /**
  * 默认的服务实现
  *
  * @author zhouhao
  */
-public class AccessTokenInfo {
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class AccessTokenInfo implements Serializable {
+    private static final long serialVersionUID = -6261971233479574076L;
+    private String id;
     //授权码
-    private String  accessToken;
+    @JSONField(name = "access_token")
+    private String accessToken;
     //更新码
-    private String  refreshToken;
+    @JSONField(name = "refresh_token")
+    private String refreshToken;
     //有效期
+    @JSONField(name = "expires_in")
     private Integer expiresIn;
     //授权范围
-    private String  scope;
+    private String scope;
 
     private Long createTime;
 
     private Long updateTime;
 
+    @JSONField(name = "token_type")
     private String tokenType;
 
+    private String grantType;
+
+    private String serverId;
+
     public boolean isExpire() {
-        return updateTime != null && System.currentTimeMillis() - updateTime > expiresIn * 1000;
+        if (expiresIn == null) {
+            return true;
+        }
+        long time = updateTime==null?createTime:updateTime;
+
+        return System.currentTimeMillis() - time > expiresIn * 1000;
     }
 
     public String getTokenType() {
@@ -50,75 +75,4 @@ public class AccessTokenInfo {
         this.tokenType = tokenType;
     }
 
-    /**
-     * @return 授权码
-     */
-    public String getAccessToken() {
-        return this.accessToken;
-    }
-
-    /**
-     * 设置 授权码
-     */
-    public void setAccessToken(String accessToken) {
-        this.accessToken = accessToken;
-    }
-
-    /**
-     * @return 更新码
-     */
-    public String getRefreshToken() {
-        return this.refreshToken;
-    }
-
-    /**
-     * 设置 更新码
-     */
-    public void setRefreshToken(String refreshToken) {
-        this.refreshToken = refreshToken;
-    }
-
-    /**
-     * @return 有效期
-     */
-    public Integer getExpiresIn() {
-        return this.expiresIn;
-    }
-
-    /**
-     * 设置 有效期
-     */
-    public void setExpiresIn(Integer expiresIn) {
-        this.expiresIn = expiresIn;
-    }
-
-    /**
-     * @return 授权范围
-     */
-    public String getScope() {
-        return this.scope;
-    }
-
-    /**
-     * 设置 授权范围
-     */
-    public void setScope(String scope) {
-        this.scope = scope;
-    }
-
-    public Long getCreateTime() {
-        return createTime;
-    }
-
-    public void setCreateTime(Long createTime) {
-        this.createTime = createTime;
-    }
-
-    public Long getUpdateTime() {
-        return updateTime;
-    }
-
-    public void setUpdateTime(Long updateTime) {
-        this.updateTime = updateTime;
-    }
 }
