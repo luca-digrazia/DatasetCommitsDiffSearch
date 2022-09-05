@@ -30,7 +30,6 @@ public class ConsoleReporter extends AbstractPollingReporter {
      * @param timeZone        the time zone in which dates should be presented
      * @param rateUnit        the unit in which rates should be presented
      * @param durationUnit    the unit in which durations should be presented
-     * @param filter          the metric filter to match
      */
     public ConsoleReporter(MetricRegistry registry,
                            PrintStream output,
@@ -38,9 +37,8 @@ public class ConsoleReporter extends AbstractPollingReporter {
                            Clock clock,
                            TimeZone timeZone,
                            TimeUnit rateUnit,
-                           TimeUnit durationUnit,
-                           MetricFilter filter) {
-        super(registry, "console-reporter", filter);
+                           TimeUnit durationUnit) {
+        super(registry, "console-reporter");
         this.output = output;
         this.locale = locale;
         this.clock = clock;

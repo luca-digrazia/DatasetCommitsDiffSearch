@@ -37,8 +37,7 @@ public class CsvReporterTest {
                                         Locale.US,
                                         TimeUnit.SECONDS,
                                         TimeUnit.MILLISECONDS,
-                                        clock,
-                                        MetricFilter.ALL);
+                                        clock);
     }
 
     @Test
