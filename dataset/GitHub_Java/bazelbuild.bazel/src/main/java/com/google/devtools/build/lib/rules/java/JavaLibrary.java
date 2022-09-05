@@ -185,10 +185,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> proguardSpecs = new ProguardLibrary(ruleContext).collectProguardSpecs();
 
     CcLinkParamsProvider ccLinkParamsProvider = new CcLinkParamsProvider(ccLinkParamsStore);
-    JavaProvider javaProvider = JavaProvider.Builder.create()
-        .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
-        .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
-        .build();
+    JavaProvider javaProvider = new JavaProvider(compilationArgsProvider);
     builder
         .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, skylarkApiProvider.build())
         .add(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)

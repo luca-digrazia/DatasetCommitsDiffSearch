@@ -40,8 +40,9 @@ import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
+import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceType;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.MultidexMode;
-import com.google.devtools.build.lib.rules.android.ResourceContainer.ResourceType;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
@@ -820,7 +821,7 @@ public class AndroidCommon {
 
   public static PathFragment getAssetDir(RuleContext ruleContext) {
     return new PathFragment(ruleContext.attributes().get(
-        ResourceType.ASSETS.getAttribute() + "_dir",
+        AndroidResourcesProvider.ResourceType.ASSETS.getAttribute() + "_dir",
         Type.STRING));
   }
 
