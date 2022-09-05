@@ -51,8 +51,7 @@ import com.google.devtools.build.lib.packages.Attribute.ValidityPredicate;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.Package.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
-import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
+import com.google.devtools.build.lib.packages.util.PackageLoadingTestCaseForJunit4;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.Path;
 
@@ -76,7 +75,7 @@ import java.util.Set;
  * Tests for {@link RuleClass}.
  */
 @RunWith(JUnit4.class)
-public class RuleClassTest extends PackageLoadingTestCase {
+public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
   private static final RuleClass.ConfiguredTargetFactory<Object, Object>
       DUMMY_CONFIGURED_TARGET_FACTORY = new RuleClass.ConfiguredTargetFactory<Object, Object>() {
         @Override
@@ -686,14 +685,8 @@ public class RuleClassTest extends PackageLoadingTestCase {
     } catch (LabelSyntaxException e) {
       throw new IllegalArgumentException("Rule has illegal label");
     }
-    return ruleClass.createRule(
-        pkgBuilder,
-        ruleLabel,
-        new BuildLangTypedAttributeValuesMap(attributeValues),
-        reporter,
-        /*ast=*/ null,
-        location,
-        new AttributeContainer(ruleClass));
+    return ruleClass.createRuleWithLabel(pkgBuilder, ruleLabel, attributeValues,
+         reporter, null, location);
   }
 
   @Test

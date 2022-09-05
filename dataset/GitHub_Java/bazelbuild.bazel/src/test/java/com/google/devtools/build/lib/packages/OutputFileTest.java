@@ -18,7 +18,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
+import com.google.devtools.build.lib.packages.util.PackageLoadingTestCaseForJunit4;
+import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.vfs.Path;
 
 import org.junit.Before;
@@ -27,12 +28,16 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
-public class OutputFileTest extends PackageLoadingTestCase {
+public class OutputFileTest extends PackageLoadingTestCaseForJunit4 {
+
+  private PackageFactory packageFactory;
   private Package pkg;
   private Rule rule;
 
   @Before
   public final void createRule() throws Exception {
+    packageFactory = new PackageFactory(TestRuleClassProvider.getRuleClassProvider());
+
     Path buildfile =
         scratch.file(
             "pkg/BUILD",
@@ -42,7 +47,7 @@ public class OutputFileTest extends PackageLoadingTestCase {
             "        outs=['x', 'subdir/y'])");
     this.pkg =
         packageFactory.createPackageForTesting(
-            PackageIdentifier.createInMainRepo("pkg"), buildfile, getPackageManager(), reporter);
+            PackageIdentifier.createInDefaultRepo("pkg"), buildfile, getPackageManager(), reporter);
     assertNoEvents();
 
     this.rule = (Rule) pkg.getTarget("foo");
@@ -115,7 +120,7 @@ public class OutputFileTest extends PackageLoadingTestCase {
 
     reporter.removeHandler(failFastHandler);
     packageFactory.createPackageForTesting(
-        PackageIdentifier.createInMainRepo("two_outs"),
+        PackageIdentifier.createInDefaultRepo("two_outs"),
         buildfile,
         getPackageManager(),
         reporter);
@@ -139,7 +144,7 @@ public class OutputFileTest extends PackageLoadingTestCase {
 
     reporter.removeHandler(failFastHandler);
     packageFactory.createPackageForTesting(
-        PackageIdentifier.createInMainRepo("out_is_rule"),
+        PackageIdentifier.createInDefaultRepo("out_is_rule"),
         buildfile,
         getPackageManager(),
         reporter);
@@ -157,7 +162,7 @@ public class OutputFileTest extends PackageLoadingTestCase {
 
     reporter.removeHandler(failFastHandler);
     packageFactory.createPackageForTesting(
-        PackageIdentifier.createInMainRepo("two_outs"),
+        PackageIdentifier.createInDefaultRepo("two_outs"),
         buildfile,
         getPackageManager(),
         reporter);
@@ -177,7 +182,7 @@ public class OutputFileTest extends PackageLoadingTestCase {
 
     reporter.removeHandler(failFastHandler);
     packageFactory.createPackageForTesting(
-        PackageIdentifier.createInMainRepo("bad_out_name"),
+        PackageIdentifier.createInDefaultRepo("bad_out_name"),
         buildfile,
         getPackageManager(),
         reporter);
@@ -195,7 +200,7 @@ public class OutputFileTest extends PackageLoadingTestCase {
 
     reporter.removeHandler(failFastHandler);
     packageFactory.createPackageForTesting(
-        PackageIdentifier.createInMainRepo("cross_package_out"),
+        PackageIdentifier.createInDefaultRepo("cross_package_out"),
         buildfile,
         getPackageManager(),
         reporter);
@@ -213,7 +218,7 @@ public class OutputFileTest extends PackageLoadingTestCase {
 
     reporter.removeHandler(failFastHandler);
     packageFactory.createPackageForTesting(
-        PackageIdentifier.createInMainRepo("output_called_build"), buildfile,
+        PackageIdentifier.createInDefaultRepo("output_called_build"), buildfile,
         getPackageManager(), reporter);
     assertContainsEvent("generated file 'BUILD' in rule 'a' conflicts with existing source file");
   }

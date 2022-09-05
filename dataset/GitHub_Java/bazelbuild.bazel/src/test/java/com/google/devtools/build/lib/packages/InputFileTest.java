@@ -13,16 +13,16 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 
-import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.packages.util.PackageFactoryApparatus;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.RootedPath;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -41,12 +41,6 @@ public class InputFileTest {
   private EventCollectionApparatus events = new EventCollectionApparatus();
   private Scratch scratch = new Scratch("/workspace");
   private PackageFactoryApparatus packages = new PackageFactoryApparatus(events.reporter());
-  private Root root;
-
-  @Before
-  public void setUp() throws Exception {
-    root = Root.fromPath(scratch.dir(""));
-  }
 
   @Before
   public final void writeFiles() throws Exception  {
@@ -57,7 +51,7 @@ public class InputFileTest {
             "        cmd = '', ",
             "        outs = [], ",
             "        srcs = ['x', 'subdir/y'])");
-    pkg = packages.createPackage("pkg", RootedPath.toRootedPath(root, buildfile));
+    pkg = packages.createPackage("pkg", buildfile);
     events.assertNoWarningsOrErrors();
 
     this.pathX = scratch.file("pkg/x", "blah");
@@ -65,20 +59,20 @@ public class InputFileTest {
   }
 
   private static void checkPathMatches(InputFile input, Path expectedPath) {
-    assertThat(input.getPath()).isEqualTo(expectedPath);
+    assertEquals(expectedPath, input.getPath());
   }
 
   private static void checkName(InputFile input, String expectedName) {
-    assertThat(input.getName()).isEqualTo(expectedName);
+    assertEquals(expectedName, input.getName());
   }
 
   private static void checkLabel(InputFile input, String expectedLabelString) {
-    assertThat(input.getLabel().toString()).isEqualTo(expectedLabelString);
+    assertEquals(expectedLabelString, input.getLabel().toString());
   }
 
   @Test
   public void testGetAssociatedRule() throws Exception {
-    assertWithMessage(null).that(pkg.getTarget("x").getAssociatedRule()).isNull();
+    assertNull(null, pkg.getTarget("x").getAssociatedRule());
   }
 
   @Test
@@ -87,7 +81,7 @@ public class InputFileTest {
     checkPathMatches(inputFileX, pathX);
     checkName(inputFileX, "x");
     checkLabel(inputFileX, "//pkg:x");
-    assertThat(inputFileX.getTargetKind()).isEqualTo("source file");
+    assertEquals("source file", inputFileX.getTargetKind());
   }
 
   @Test
@@ -101,12 +95,11 @@ public class InputFileTest {
   @Test
   public void testEquivalenceRelation() throws NoSuchTargetException {
     InputFile inputFileX = (InputFile) pkg.getTarget("x");
-    assertThat(inputFileX).isSameAs(pkg.getTarget("x"));
+    assertSame(pkg.getTarget("x"), inputFileX);
     InputFile inputFileY = (InputFile) pkg.getTarget("subdir/y");
-    assertThat(inputFileY).isSameAs(pkg.getTarget("subdir/y"));
-    new EqualsTester()
-        .addEqualityGroup(inputFileX)
-        .addEqualityGroup(inputFileY)
-        .testEquals();
+    assertSame(pkg.getTarget("subdir/y"), inputFileY);
+    assertEquals(inputFileX, inputFileX);
+    assertFalse(inputFileX.equals(inputFileY));
+    assertFalse(inputFileY.equals(inputFileX));
   }
 }

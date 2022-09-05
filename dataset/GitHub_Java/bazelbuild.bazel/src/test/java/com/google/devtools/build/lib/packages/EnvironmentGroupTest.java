@@ -21,7 +21,8 @@ import static org.junit.Assert.assertTrue;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
+import com.google.devtools.build.lib.packages.util.PackageLoadingTestCaseForJunit4;
+import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.vfs.Path;
 
 import org.junit.Before;
@@ -34,7 +35,7 @@ import org.junit.runners.JUnit4;
  * {@link PackageFactoryTest}.
  */
 @RunWith(JUnit4.class)
-public class EnvironmentGroupTest extends PackageLoadingTestCase {
+public class EnvironmentGroupTest extends PackageLoadingTestCaseForJunit4 {
 
   private Package pkg;
   private EnvironmentGroup group;
@@ -53,9 +54,10 @@ public class EnvironmentGroupTest extends PackageLoadingTestCase {
             "    environments = [':foo', ':bar', ':baz'],",
             "    defaults = [':foo'],",
             ")");
+    PackageFactory pkgFactory = new PackageFactory(TestRuleClassProvider.getRuleClassProvider());
     pkg =
-        packageFactory.createPackageForTesting(
-            PackageIdentifier.createInMainRepo("pkg"), buildfile, getPackageManager(), reporter);
+        pkgFactory.createPackageForTesting(
+            PackageIdentifier.createInDefaultRepo("pkg"), buildfile, getPackageManager(), reporter);
 
     group = (EnvironmentGroup) pkg.getTarget("group");
   }
