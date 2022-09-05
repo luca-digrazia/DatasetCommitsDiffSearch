@@ -105,7 +105,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -185,8 +184,15 @@ public class ExecutionTool {
     List<ActionContextConsumer> actionContextConsumers = new ArrayList<>();
     actionContextProviders = new ArrayList<>();
     for (BlazeModule module : runtime.getBlazeModules()) {
-      Iterables.addAll(actionContextProviders, module.getActionContextProviders());
-      Iterables.addAll(actionContextConsumers, module.getActionContextConsumers());
+      ActionContextProvider provider = module.getActionContextProvider();
+      if (provider != null) {
+        actionContextProviders.add(provider);
+      }
+
+      ActionContextConsumer consumer = module.getActionContextConsumer();
+      if (consumer != null) {
+        actionContextConsumers.add(consumer);
+      }
     }
 
     actionContextProviders.add(new FilesetActionContextImpl.Provider(
@@ -291,14 +297,14 @@ public class ExecutionTool {
    * Performs the execution phase (phase 3) of the build, in which the Builder
    * is applied to the action graph to bring the targets up to date. (This
    * function will return prior to execution-proper if --nobuild was specified.)
-   * @param buildId UUID of the build id
+   *
    * @param analysisResult the analysis phase output
    * @param buildResult the mutable build result
    * @param skyframeExecutor the skyframe executor (if any)
    * @param packageRoots package roots collected from loading phase and BuildConfigutaionCollection
    * creation
    */
-  void executeBuild(UUID buildId, AnalysisResult analysisResult,
+  void executeBuild(AnalysisResult analysisResult,
       BuildResult buildResult, @Nullable SkyframeExecutor skyframeExecutor,
       BuildConfigurationCollection configurations,
       ImmutableMap<PathFragment, Path> packageRoots)
@@ -330,7 +336,7 @@ public class ExecutionTool {
 
     OutputService outputService = runtime.getOutputService();
     if (outputService != null) {
-      outputService.startBuild(buildId);
+      outputService.startBuild();
     } else {
       startLocalOutputBuild(); // TODO(bazel-team): this could be just another OutputService
     }
@@ -411,6 +417,8 @@ public class ExecutionTool {
           skyframeExecutor.getOutputDirtyFilesAndClear(),
           skyframeExecutor.getModifiedFilesDuringPreviousBuildAndClear()));
 
+      // Disable system load polling (noop if it was not enabled).
+      ResourceManager.instance().setAutoSensing(false);
       executor.executionPhaseEnding();
       for (ActionContextProvider actionContextProvider : actionContextProviders) {
         actionContextProvider.executionPhaseEnding();
@@ -755,6 +763,11 @@ public class ExecutionTool {
     } else {
       resources = LocalHostCapacity.getLocalHostCapacity();
       resourceMgr.setRamUtilizationPercentage(options.ramUtilizationPercentage);
+      if (options.useResourceAutoSense) {
+        getReporter().handle(
+            Event.warn("Not using resource autosense due to known responsiveness issues"));
+      }
+      ResourceManager.instance().setAutoSensing(/*autosense=*/false);
     }
 
     resourceMgr.setAvailableResources(ResourceSet.create(
