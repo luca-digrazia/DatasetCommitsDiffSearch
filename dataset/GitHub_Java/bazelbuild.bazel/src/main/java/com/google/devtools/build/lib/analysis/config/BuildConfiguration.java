@@ -405,8 +405,6 @@ public final class BuildConfiguration {
                 return "piii";
               case X86_64:
                 return "k8";
-              case ARM:
-                return "arm";
             }
         }
         return "unknown";
@@ -1494,8 +1492,8 @@ public final class BuildConfiguration {
   @SkylarkCallable(name = "host_path_separator", structField = true,
       doc = "Returns the separator for PATH environment variable, which is ':' on Unix.")
   public String getHostPathSeparator() {
-    // TODO(bazel-team): Maybe do this in the constructor instead? This isn't serialization-safe.
-    return OS.getCurrent() == OS.WINDOWS ? ";" : ":";
+    // TODO(bazel-team): This needs to change when we support Windows.
+    return ":";
   }
 
   /**
@@ -1651,6 +1649,8 @@ public final class BuildConfiguration {
   /**
    * Returns a configuration fragment instances of the given class.
    */
+  @SkylarkCallable(name = "fragment", documented = false,
+      doc = "Returns a configuration fragment using the key.")
   public <T extends Fragment> T getFragment(Class<T> clazz) {
     return clazz.cast(fragments.get(clazz));
   }

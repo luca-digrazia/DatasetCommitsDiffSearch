@@ -160,10 +160,8 @@ public class SkylarkRuleClassFunctions {
           .build();
 
   /**
-   * Translates Skylark attribute names to native names.
-   *
-   * <p> In native code, private values start with "$".In Skylark, private values start with "_",
-   * because of the grammar.
+   * In native code, private values start with $.
+   * In Skylark, private values start with _, because of the grammar.
    */
   private static String attributeToNative(String oldName, Location loc, boolean isLateBound)
       throws EvalException {
@@ -193,7 +191,7 @@ public class SkylarkRuleClassFunctions {
       mandatoryPositionals = {
         @Param(name = "implementation", type = BaseFunction.class,
             doc = "the function implementing this rule, must have exactly one parameter: "
-            + "<a href=\"ctx.html\">ctx</a>. The function is called during the analysis phase "
+            + "<a href=\"#modules.ctx\">ctx</a>. The function is called during the analysis phase "
             + "for each instance of the rule. It can access the attributes provided by the user. "
             + "It must create actions to generate all the declared outputs.")
       },
@@ -204,7 +202,7 @@ public class SkylarkRuleClassFunctions {
             + "and there must be an action that generates <code>ctx.outputs.executable</code>."),
         @Param(name = "attrs", type = Map.class, noneable = true, defaultValue = "None", doc =
             "dictionary to declare all the attributes of the rule. It maps from an attribute name "
-            + "to an attribute object (see <a href=\"attr.html\">attr</a> module). "
+            + "to an attribute object (see <a href=\"#modules.attr\">attr</a> module). "
             + "Attributes starting with <code>_</code> are private, and can be used to add "
             + "an implicit dependency on a label. The attribute <code>name</code> is implicitly "
             + "added and must not be specified. Attributes <code>visibility</code>, "
@@ -230,76 +228,68 @@ public class SkylarkRuleClassFunctions {
            doc = "List of names of configuration fragments that the rule requires.")},
       useAst = true, useEnvironment = true)
   private static final BuiltinFunction rule = new BuiltinFunction("rule") {
-    @SuppressWarnings({"rawtypes", "unchecked"}) // castMap produces
-    // an Attribute.Builder instead of a Attribute.Builder<?> but it's OK.
-    public BaseFunction invoke(BaseFunction implementation, Boolean test, Object attrs,
-        Object implicitOutputs, Boolean executable, Boolean outputToGenfiles, SkylarkList fragments,
-        FuncallExpression ast, Environment funcallEnv) throws EvalException, ConversionException {
-      Preconditions.checkState(funcallEnv instanceof SkylarkEnvironment);
-      RuleClassType type = test ? RuleClassType.TEST : RuleClassType.NORMAL;
+      @SuppressWarnings({"rawtypes", "unchecked"}) // castMap produces
+      // an Attribute.Builder instead of a Attribute.Builder<?> but it's OK.
+      public BaseFunction invoke(BaseFunction implementation, Boolean test, Object attrs,
+          Object implicitOutputs, Boolean executable, Boolean outputToGenfiles,
+          SkylarkList fragments, FuncallExpression ast, Environment funcallEnv)
+          throws EvalException, ConversionException {
 
-      // We'll set the name later, pass the empty string for now.
-      RuleClass.Builder builder =
-          test ? new RuleClass.Builder("", type, true, testBaseRule)
-               : new RuleClass.Builder("", type, true, baseRule);
+        Preconditions.checkState(funcallEnv instanceof SkylarkEnvironment);
+        RuleClassType type = test ? RuleClassType.TEST : RuleClassType.NORMAL;
 
-      if (attrs != Environment.NONE) {
-        for (Map.Entry<String, Attribute.Builder> attr :
-            castMap(attrs, String.class, Attribute.Builder.class, "attrs").entrySet()) {
-          Attribute.Builder<?> attrBuilder = (Attribute.Builder<?>) attr.getValue();
-          String attrName =
-              attributeToNative(attr.getKey(), ast.getLocation(), attrBuilder.hasLateBoundValue());
-          addAttribute(builder, attrBuilder.build(attrName));
+        // We'll set the name later, pass the empty string for now.
+        RuleClass.Builder builder = test
+            ? new RuleClass.Builder("", type, true, testBaseRule)
+            : new RuleClass.Builder("", type, true, baseRule);
+
+        if (attrs != Environment.NONE) {
+          for (Map.Entry<String, Attribute.Builder> attr : castMap(
+              attrs, String.class, Attribute.Builder.class, "attrs").entrySet()) {
+            Attribute.Builder<?> attrBuilder = (Attribute.Builder<?>) attr.getValue();
+            String attrName = attributeToNative(attr.getKey(), ast.getLocation(),
+                attrBuilder.hasLateBoundValue());
+            builder.addOrOverrideAttribute(attrBuilder.build(attrName));
+          }
         }
-      }
-      if (executable || test) {
-        addAttribute(
-            builder,
-            attr("$is_executable", BOOLEAN)
-                .value(true)
-                .nonconfigurable("Called from RunCommand.isExecutable, which takes a Target")
-                .build());
-        builder.setOutputsDefaultExecutable();
-      }
-
-      if (implicitOutputs != Environment.NONE) {
-        if (implicitOutputs instanceof BaseFunction) {
-          BaseFunction func = (BaseFunction) implicitOutputs;
-          final SkylarkCallbackFunction callback =
-              new SkylarkCallbackFunction(func, ast, (SkylarkEnvironment) funcallEnv);
-          builder.setImplicitOutputsFunction(
-              new SkylarkImplicitOutputsFunctionWithCallback(callback, ast.getLocation()));
-        } else {
-          builder.setImplicitOutputsFunction(
-              new SkylarkImplicitOutputsFunctionWithMap(ImmutableMap.copyOf(castMap(implicitOutputs,
-                  String.class, String.class, "implicit outputs of the rule class"))));
+        if (executable || test) {
+          builder.addOrOverrideAttribute(
+              attr("$is_executable", BOOLEAN).value(true)
+              .nonconfigurable("Called from RunCommand.isExecutable, which takes a Target")
+              .build());
+          builder.setOutputsDefaultExecutable();
         }
-      }
 
-      if (outputToGenfiles) {
-        builder.setOutputToGenfiles();
-      }
+        if (implicitOutputs != Environment.NONE) {
+          if (implicitOutputs instanceof BaseFunction) {
+            BaseFunction func = (BaseFunction) implicitOutputs;
+            final SkylarkCallbackFunction callback =
+                new SkylarkCallbackFunction(func, ast, (SkylarkEnvironment) funcallEnv);
+            builder.setImplicitOutputsFunction(
+                new SkylarkImplicitOutputsFunctionWithCallback(callback, ast.getLocation()));
+          } else {
+            builder.setImplicitOutputsFunction(new SkylarkImplicitOutputsFunctionWithMap(
+                ImmutableMap.copyOf(castMap(implicitOutputs, String.class, String.class,
+                        "implicit outputs of the rule class"))));
+            }
+        }
 
-      if (!fragments.isEmpty()) {
-        builder.requiresConfigurationFragments(
-            new SkylarkModuleNameResolver(),
-            Iterables.toArray(castList(fragments, String.class), String.class));
-      }
+        if (outputToGenfiles) {
+          builder.setOutputToGenfiles();
+        }
 
-      builder.setConfiguredTargetFunction(implementation);
-      builder.setRuleDefinitionEnvironment(
-          ((SkylarkEnvironment) funcallEnv).getGlobalEnvironment());
-      return new RuleFunction(builder, type);
-    }
-    
-    private void addAttribute(RuleClass.Builder builder, Attribute attribute) throws EvalException {
-      try {
-        builder.addOrOverrideAttribute(attribute);
-      } catch (IllegalArgumentException ex) {
-        throw new EvalException(location, ex);
-      }
-    }
-  };
+        if (!fragments.isEmpty()) {
+          builder.requiresConfigurationFragments(
+              new SkylarkModuleNameResolver(),
+              Iterables.toArray(castList(fragments, String.class), String.class));
+        }
+
+        builder.setConfiguredTargetFunction(implementation);
+        builder.setRuleDefinitionEnvironment(
+            ((SkylarkEnvironment) funcallEnv).getGlobalEnvironment());
+        return new RuleFunction(builder, type);
+        }
+      };
 
   // This class is needed for testing
   static final class RuleFunction extends BaseFunction {
