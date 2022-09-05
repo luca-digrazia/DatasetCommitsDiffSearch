@@ -20,9 +20,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.android.xml.StyleableXmlResourceValue;
 
-import com.android.SdkConstants;
 import com.android.ide.common.res2.MergingException;
-import com.android.resources.FolderTypeRelationship;
 import com.android.resources.ResourceFolderType;
 
 import java.io.IOException;
@@ -33,7 +31,6 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -66,7 +63,6 @@ public class ParsedAndroidData {
     private final Map<DataKey, DataAsset> assets;
     private final Set<MergeConflict> conflicts;
     private final List<Exception> errors = new ArrayList<>();
-    private boolean parseIds;
 
     public Builder(
         Map<DataKey, DataResource> overwritingResources,
@@ -85,11 +81,6 @@ public class ParsedAndroidData {
       final Map<DataKey, DataAsset> assets = new LinkedHashMap<>();
       final Set<MergeConflict> conflicts = new LinkedHashSet<>();
       return new Builder(overwritingResources, combiningResources, assets, conflicts);
-    }
-
-    Builder enableIdParsing() {
-      this.parseIds = true;
-      return this;
     }
 
     private void checkForErrors() throws MergingException {
@@ -130,8 +121,7 @@ public class ParsedAndroidData {
       return new ResourceFileVisitor(
           new OverwritableConsumer<>(overwritingResources, conflicts),
           new CombiningConsumer(combiningResources),
-          errors,
-          parseIds);
+          errors);
     }
 
     AssetFileVisitor assetVisitorFor(Path path) {
@@ -258,28 +248,14 @@ public class ParsedAndroidData {
     private ResourceFolderType folderType;
     private FullyQualifiedName.Factory fqnFactory;
     private final XMLInputFactory xmlInputFactory = XMLInputFactory.newFactory();
-    private final boolean parseIds;
-
-    /**
-     * Resource folders with XML files that may contain "@+id".
-     * See android_ide_common's {@link FolderTypeRelationship}.
-     */
-    private static final EnumSet<ResourceFolderType> ID_PROVIDING_RESOURCE_TYPES = EnumSet.of(
-        ResourceFolderType.DRAWABLE,
-        ResourceFolderType.LAYOUT,
-        ResourceFolderType.MENU,
-        ResourceFolderType.TRANSITION,
-        ResourceFolderType.XML);
 
     ResourceFileVisitor(
         KeyValueConsumer<DataKey, DataResource> overwritingConsumer,
         KeyValueConsumer<DataKey, DataResource> combiningResources,
-        List<Exception> errors,
-        boolean parseIds) {
+        List<Exception> errors) {
       this.overwritingConsumer = overwritingConsumer;
       this.combiningResources = combiningResources;
       this.errors = errors;
-      this.parseIds = parseIds;
     }
 
     private static String deriveRawFullyQualifiedName(Path path) {
@@ -327,14 +303,7 @@ public class ParsedAndroidData {
           } else if (folderType != null) {
             String rawFqn = deriveRawFullyQualifiedName(path);
             FullyQualifiedName key = fqnFactory.parse(rawFqn);
-            if (parseIds
-                && ID_PROVIDING_RESOURCE_TYPES.contains(folderType)
-                && path.getFileName().toString().endsWith(SdkConstants.DOT_XML)) {
-              DataValueFileWithIds.parse(
-                  xmlInputFactory, path, key, fqnFactory, overwritingConsumer, combiningResources);
-            } else {
-              overwritingConsumer.consume(key, DataValueFile.of(path));
-            }
+            overwritingConsumer.consume(key, DataValueFile.of(path));
           }
         }
       } catch (IllegalArgumentException | XMLStreamException e) {
@@ -389,21 +358,6 @@ public class ParsedAndroidData {
     for (DependencyAndroidData data : dependencyAndroidDataList) {
       data.walk(pathWalker);
     }
-    return pathWalker.createParsedAndroidData();
-  }
-
-  /**
-   * Parses resource symbols including "@+id/resourceName" (optional for now).
-   *
-   * @see ParsedAndroidData#from(UnvalidatedAndroidData)
-   */
-  @VisibleForTesting
-  static ParsedAndroidData parseWithIds(UnvalidatedAndroidData primary)
-      throws IOException, MergingException {
-    Builder builder = Builder.newBuilder().enableIdParsing();
-    final ParsedAndroidDataBuildingPathWalker pathWalker =
-        ParsedAndroidDataBuildingPathWalker.create(builder);
-    primary.walk(pathWalker);
     return pathWalker.createParsedAndroidData();
   }
 

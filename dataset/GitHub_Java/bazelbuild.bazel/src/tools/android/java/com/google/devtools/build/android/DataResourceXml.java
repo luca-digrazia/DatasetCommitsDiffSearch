@@ -105,13 +105,8 @@ public class DataResourceXml implements DataResource {
             // Of simple resources, only IDs are combining.
             KeyValueConsumer<DataKey, DataResource> consumer =
                 resourceType == ID ? combiningConsumer : overwritingConsumer;
-            String elementName = XmlResourceValues.getElementName(start);
-            if (elementName == null) {
-              throw new XMLStreamException(
-                  String.format("resource name is required for %s", resourceType),
-                  start.getLocation());
-            }
-            FullyQualifiedName key = fqnFactory.create(resourceType, elementName);
+            FullyQualifiedName key =
+                fqnFactory.create(resourceType, XmlResourceValues.getElementName(start));
             consumer.consume(
                 key, DataResourceXml.of(path, parseXmlElements(resourceType, eventReader, start)));
           }
