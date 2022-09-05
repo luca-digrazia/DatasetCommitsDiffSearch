@@ -22,12 +22,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-//@Intercepts({ @Signature(type = Executor.class, method = "query", args = { MappedStatement.class, Object.class,
-//        RowBounds.class, ResultHandler.class }) })
-//@Component
-//@ConfigurationProperties(
-//        prefix = "spring.datasource"
-//)
+@Intercepts({@Signature(type = Executor.class, method = "query", args = {MappedStatement.class, Object.class,
+        RowBounds.class, ResultHandler.class})})
+@Component
+@ConfigurationProperties(
+        prefix = "spring.datasource"
+)
 public class PagerInterceptor implements Interceptor {
     protected Logger logger = LoggerFactory.getLogger(this.getClass());
     protected Map<String, PagerHelper> pagerHelperBase = new HashMap<>();
@@ -53,13 +53,13 @@ public class PagerInterceptor implements Interceptor {
             if (obj instanceof QueryParam) {
                 QueryParam param = (QueryParam) obj;
                 PagerHelper helper = pagerHelperBase.get(dialect);
-                if (helper != null) {
+                if (helper != null && !sql.contains("count(0)")) {
                     String newSql = helper.doPaging(param, sql);
                     metaStatementHandler.setValue("delegate.boundSql.sql", newSql);
                 }
             }
         }
-        return Plugin.wrap(target,this);
+        return Plugin.wrap(target, this);
     }
 
     @Override
@@ -78,11 +78,12 @@ public class PagerInterceptor implements Interceptor {
         String url = properties.getDriverClassName();
         if (url.contains("mysql")) {
             return "mysql";
-        }
-        if (url.contains("oracle")) {
+        } else if (url.contains("oracle")) {
             return "oracle";
-        }
-        logger.error("mybaits pager dialect not found!");
+        } else if (url.contains("h2")) {
+            return "h2";
+        } else
+            logger.error("mybatis pager dialect not found!");
         return "undefine";
     }
 }
