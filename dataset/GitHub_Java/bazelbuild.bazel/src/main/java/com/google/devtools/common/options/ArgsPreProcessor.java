@@ -16,7 +16,6 @@ package com.google.devtools.common.options;
 import java.util.List;
 
 /** Defines a preprocessing service for the "args" string list that is executed before parsing. */
-@FunctionalInterface
 interface ArgsPreProcessor {
   List<String> preProcess(List<String> args) throws OptionsParsingException;
 }
