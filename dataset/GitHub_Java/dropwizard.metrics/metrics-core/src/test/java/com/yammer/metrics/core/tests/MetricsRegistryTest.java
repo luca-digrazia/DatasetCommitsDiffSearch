@@ -4,7 +4,6 @@ import com.yammer.metrics.core.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.InOrder;
 
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -12,7 +11,9 @@ import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 public class MetricsRegistryTest {
     private MetricsRegistry registry;
@@ -95,16 +96,6 @@ public class MetricsRegistryTest {
 
     @Test
     public void metricsCanBeRemoved() throws Exception {
-        final MetricsRegistryListener listener = mock(MetricsRegistryListener.class);
-        registry.addListener(listener);
 
-        final MetricName name = new MetricName(MetricsRegistryTest.class, "counter1");
-
-        final Counter counter1 = registry.newCounter(MetricsRegistryTest.class, "counter1");
-        registry.removeMetric(MetricsRegistryTest.class, "counter1");
-
-        final InOrder inOrder = inOrder(listener);
-        inOrder.verify(listener).onMetricAdded(name, counter1);
-        inOrder.verify(listener).onMetricRemoved(name);
     }
 }
