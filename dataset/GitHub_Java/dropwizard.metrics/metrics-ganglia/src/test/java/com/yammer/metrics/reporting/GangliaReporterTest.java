@@ -1,13 +1,8 @@
 package com.yammer.metrics.reporting;
 
-import com.yammer.metrics.core.Clock;
-import com.yammer.metrics.core.MetricName;
-import com.yammer.metrics.core.MetricsRegistry;
-import com.yammer.metrics.core.VirtualMachineMetrics;
-import com.yammer.metrics.reporting.tests.AbstractPollingReporterTest;
-import com.yammer.metrics.util.MetricPredicate;
-import org.apache.commons.io.IOUtils;
-import org.junit.Test;
+import static junit.framework.Assert.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -15,9 +10,14 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.SocketException;
 
-import static junit.framework.Assert.assertEquals;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import org.apache.commons.io.IOUtils;
+import org.junit.Test;
+
+import com.yammer.metrics.core.Clock;
+import com.yammer.metrics.core.MetricName;
+import com.yammer.metrics.core.MetricsRegistry;
+import com.yammer.metrics.reporting.tests.AbstractPollingReporterTest;
+import com.yammer.metrics.util.MetricPredicate;
 
 public class GangliaReporterTest extends AbstractPollingReporterTest {
     private GangliaMessage testMessage;
@@ -58,15 +58,14 @@ public class GangliaReporterTest extends AbstractPollingReporterTest {
             }
         };
 
-        final GangliaMessageBuilder messageBuilder = mock(GangliaMessageBuilder.class);
+        GangliaMessageBuilder messageBuilder = mock(GangliaMessageBuilder.class);
         when(messageBuilder.newMessage()).thenReturn(this.testMessage);
 
         final GangliaReporter reporter = new GangliaReporter(registry,
                                                              "group-prefix",
                                                              MetricPredicate.ALL,
                                                              false,
-                                                             messageBuilder,
-                                                             VirtualMachineMetrics.INSTANCE) {
+                                                             messageBuilder) {
             @Override
             String getHostLabel() {
                 return "localhost";
@@ -83,9 +82,9 @@ public class GangliaReporterTest extends AbstractPollingReporterTest {
 
     @Test
     public void testSanitizeName_noBadCharacters() throws IOException {
-        final MetricName metricName = new MetricName("thisIs", "AClean", "MetricName");
-        final GangliaReporter gangliaReporter = new GangliaReporter("localhost", 5555);
-        final String cleanMetricName = gangliaReporter.sanitizeName(metricName);
+        MetricName metricName = new MetricName("thisIs", "AClean", "MetricName");
+        GangliaReporter gangliaReporter = new GangliaReporter("localhost", 5555);
+        String cleanMetricName = gangliaReporter.sanitizeName(metricName);
         assertEquals("clean metric name was changed unexpectedly",
                      "thisIs.AClean.MetricName",
                      cleanMetricName);
@@ -93,10 +92,10 @@ public class GangliaReporterTest extends AbstractPollingReporterTest {
 
     @Test
     public void testSanitizeName_badCharacters() throws IOException {
-        final MetricName metricName = new MetricName("thisIs", "AC>&!>lean", "Metric Name");
-        final String expectedMetricName = "thisIs.AC____lean.Metric_Name";
-        final GangliaReporter gangliaReporter = new GangliaReporter("localhost", 5555);
-        final String cleanMetricName = gangliaReporter.sanitizeName(metricName);
+        MetricName metricName = new MetricName("thisIs", "AC>&!>lean", "Metric Name");
+        String expectedMetricName = "thisIs.AC____lean.Metric_Name";
+        GangliaReporter gangliaReporter = new GangliaReporter("localhost", 5555);
+        String cleanMetricName = gangliaReporter.sanitizeName(metricName);
         assertEquals("clean metric name did not match expected value",
                      expectedMetricName,
                      cleanMetricName);
@@ -104,10 +103,10 @@ public class GangliaReporterTest extends AbstractPollingReporterTest {
 
     @Test
     public void testCompressPackageName() throws IOException {
-        final MetricName metricName = new MetricName("some.long.package.name.thisIs", "AC>&!>lean", "Metric Name");
-        final String expectedMetricName = "s.l.p.n.t.AC____lean.Metric_Name";
-        final GangliaReporter gangliaReporter = new GangliaReporter("localhost", 5555, true);
-        final String cleanMetricName = gangliaReporter.sanitizeName(metricName);
+        MetricName metricName = new MetricName("some.long.package.name.thisIs", "AC>&!>lean", "Metric Name");
+        String expectedMetricName = "s.l.p.n.t.AC____lean.Metric_Name";
+        GangliaReporter gangliaReporter = new GangliaReporter("localhost", 5555, true);
+        String cleanMetricName = gangliaReporter.sanitizeName(metricName);
         assertEquals("clean metric name did not match expected value",
                      expectedMetricName,
                      cleanMetricName);
