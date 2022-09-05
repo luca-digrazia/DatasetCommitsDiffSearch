@@ -84,7 +84,7 @@ public final class JavaConfiguration extends Fragment {
      */
     OPTIMIZE_MINIFY;
 
-    private final String proguardDirectives;
+    private String proguardDirectives;
 
     private JavaOptimizationMode(String... donts) {
       StringBuilder proguardDirectives = new StringBuilder();
