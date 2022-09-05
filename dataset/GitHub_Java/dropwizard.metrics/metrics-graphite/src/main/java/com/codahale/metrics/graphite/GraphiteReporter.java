@@ -10,7 +10,6 @@ import java.math.BigInteger;
 import java.util.Locale;
 import java.util.Map;
 import java.util.SortedMap;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -41,8 +40,6 @@ public class GraphiteReporter extends ScheduledReporter {
         private TimeUnit rateUnit;
         private TimeUnit durationUnit;
         private MetricFilter filter;
-        private ScheduledExecutorService executor;
-        private boolean shutdownExecutorOnStop;
 
         private Builder(MetricRegistry registry) {
             this.registry = registry;
@@ -51,34 +48,6 @@ public class GraphiteReporter extends ScheduledReporter {
             this.rateUnit = TimeUnit.SECONDS;
             this.durationUnit = TimeUnit.MILLISECONDS;
             this.filter = MetricFilter.ALL;
-            this.executor = null;
-            this.shutdownExecutorOnStop = true;
-        }
-
-        /**
-         * Specifies whether or not, the executor (used for reporting) will be stopped with same time with reporter.
-         * Default value is true.
-         * Setting this parameter to false, has the sense in combining with providing external managed executor via {@link #scheduleOn(ScheduledExecutorService)}.
-         *
-         * @param shutdownExecutorOnStop if true, then executor will be stopped in same time with this reporter
-         * @return {@code this}
-         */
-        public Builder shutdownExecutorOnStop(boolean shutdownExecutorOnStop) {
-            this.shutdownExecutorOnStop = shutdownExecutorOnStop;
-            return this;
-        }
-
-        /**
-         * Specifies the executor to use while scheduling reporting of metrics.
-         * Default value is null.
-         * Null value leads to executor will be auto created on start.
-         *
-         * @param executor the executor to use while scheduling reporting of metrics.
-         * @return {@code this}
-         */
-        public Builder scheduleOn(ScheduledExecutorService executor) {
-            this.executor = executor;
-            return this;
         }
 
         /**
@@ -163,9 +132,7 @@ public class GraphiteReporter extends ScheduledReporter {
                                         prefix,
                                         rateUnit,
                                         durationUnit,
-                                        filter,
-                                        executor,
-                                        shutdownExecutorOnStop);
+                                        filter);
         }
     }
 
@@ -181,10 +148,8 @@ public class GraphiteReporter extends ScheduledReporter {
                              String prefix,
                              TimeUnit rateUnit,
                              TimeUnit durationUnit,
-                             MetricFilter filter,
-                             ScheduledExecutorService executor,
-                             boolean shutdownExecutorOnStop) {
-        super(registry, "graphite-reporter", filter, rateUnit, durationUnit, executor, shutdownExecutorOnStop);
+                             MetricFilter filter) {
+        super(registry, "graphite-reporter", filter, rateUnit, durationUnit);
         this.graphite = graphite;
         this.clock = clock;
         this.prefix = prefix;
