@@ -297,12 +297,12 @@ public final class ReleaseBundlingSupport {
       throws InterruptedException {
     bundleSupport.registerActions(objcProvider);
 
-    Artifact combinedArchBinary = prepareCombinedArchitecturesArtifact();
+    registerCombineArchitecturesAction();
     registerCopyDsymFilesAction(dsymOutputType);
     registerCopyDsymPlistAction(dsymOutputType);
     registerCopyLinkmapFilesAction();
-    registerSwiftStdlibActionsIfNecessary(combinedArchBinary);
-    registerSwiftSupportActionsIfNecessary(combinedArchBinary);
+    registerSwiftStdlibActionsIfNecessary();
+    registerSwiftSupportActionsIfNecessary();
 
     registerEmbedLabelPlistAction();
     registerEnvironmentPlistAction();
@@ -806,17 +806,17 @@ public final class ReleaseBundlingSupport {
     return bundling.build();
   }
 
-  private Artifact prepareCombinedArchitecturesArtifact() {
-    Artifact dependentMultiArchBinary = attributes.dependentMultiArchBinary();
-    if (dependentMultiArchBinary != null) {
-      return dependentMultiArchBinary;
+  private void registerCombineArchitecturesAction() {
+    // Skip combining binaries when building for watch as there is only one stub binary and it
+    // it should not be corrupted when combining.
+    if (bundleSupport.isBuildingForWatch()) {
+      return;
     }
 
     Artifact resultingLinkedBinary = intermediateArtifacts.combinedArchitectureBinary();
 
     new LipoSupport(ruleContext).registerCombineArchitecturesAction(linkedBinaries(),
         resultingLinkedBinary, platform);
-    return resultingLinkedBinary;
   }
 
   private NestedSet<Artifact> linkedBinaries() {
@@ -1050,7 +1050,7 @@ public final class ReleaseBundlingSupport {
   }
 
   /** Registers an action to copy Swift standard library dylibs into app bundle. */
-  private void registerSwiftStdlibActionsIfNecessary(Artifact combinedArchBinary) {
+  private void registerSwiftStdlibActionsIfNecessary() {
     if (!objcProvider.is(USES_SWIFT)) {
       return;
     }
@@ -1061,7 +1061,7 @@ public final class ReleaseBundlingSupport {
             .add("Frameworks")
             .add("--platform")
             .add(platform.getLowerCaseNameInPlist())
-            .addExecPath("--scan-executable", combinedArchBinary);
+            .addExecPath("--scan-executable", intermediateArtifacts.combinedArchitectureBinary());
 
     ruleContext.registerAction(
         ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext, platform)
@@ -1069,12 +1069,12 @@ public final class ReleaseBundlingSupport {
             .setExecutable(attributes.swiftStdlibToolWrapper())
             .setCommandLine(commandLine.build())
             .addOutput(intermediateArtifacts.swiftFrameworksFileZip())
-            .addInput(combinedArchBinary)
+            .addInput(intermediateArtifacts.combinedArchitectureBinary())
             .build(ruleContext));
   }
 
   /** Registers an action to copy Swift standard library dylibs into SwiftSupport root directory. */
-  private void registerSwiftSupportActionsIfNecessary(Artifact combinedArchBinary) {
+  private void registerSwiftSupportActionsIfNecessary() {
     if (!objcProvider.is(USES_SWIFT)) {
       return;
     }
@@ -1085,7 +1085,7 @@ public final class ReleaseBundlingSupport {
             .add("SwiftSupport/" + platform.getLowerCaseNameInPlist())
             .add("--platform")
             .add(platform.getLowerCaseNameInPlist())
-            .addExecPath("--scan-executable", combinedArchBinary);
+            .addExecPath("--scan-executable", intermediateArtifacts.combinedArchitectureBinary());
 
     ruleContext.registerAction(
         ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext, platform)
@@ -1093,7 +1093,7 @@ public final class ReleaseBundlingSupport {
             .setExecutable(attributes.swiftStdlibToolWrapper())
             .setCommandLine(commandLine.build())
             .addOutput(intermediateArtifacts.swiftSupportZip())
-            .addInput(combinedArchBinary)
+            .addInput(intermediateArtifacts.combinedArchitectureBinary())
             .build(ruleContext));
   }
 
@@ -1181,24 +1181,6 @@ public final class ReleaseBundlingSupport {
         return null;
       }
       return ruleContext.getExecutablePrerequisite("ipa_post_processor", Mode.TARGET);
-    }
-
-    /**
-     * Returns the multi-arch binary provided by the label under the "binary" attribute of the
-     * current rule, or null if there is no such binary available.
-     */
-    @Nullable Artifact dependentMultiArchBinary() {
-      if (ruleContext.attributes().getAttributeDefinition("binary") == null) {
-        return null;
-      }
-
-      for (ObjcProvider provider
-          : ruleContext.getPrerequisites("binary", Mode.DONT_CHECK, ObjcProvider.class)) {
-        if (!provider.get(ObjcProvider.MULTI_ARCH_LINKED_BINARIES).isEmpty()) {
-          return Iterables.getOnlyElement(provider.get(ObjcProvider.MULTI_ARCH_LINKED_BINARIES));
-        }
-      }
-      return null;
     }
 
     NestedSet<? extends Artifact> dependentLinkedBinaries() {
