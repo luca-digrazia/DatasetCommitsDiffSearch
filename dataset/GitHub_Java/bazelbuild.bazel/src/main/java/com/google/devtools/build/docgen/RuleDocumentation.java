@@ -57,29 +57,28 @@ public class RuleDocumentation implements Comparable<RuleDocumentation> {
   private final Set<RuleDocumentationAttribute> attributes = new TreeSet<>();
   private final ConfiguredRuleClassProvider ruleClassProvider;
 
-  private RuleLinkExpander linkExpander;
-
   /**
    * Creates a RuleDocumentation from the rule's name, type, family and raw html documentation
    * (meaning without expanding the variables in the doc).
    */
   RuleDocumentation(String ruleName, String ruleType, String ruleFamily,
       String htmlDocumentation, int startLineCount, String fileName, ImmutableSet<String> flags,
-      ConfiguredRuleClassProvider ruleClassProvider) throws BuildEncyclopediaDocException {
+      ConfiguredRuleClassProvider ruleClassProvider)
+          throws BuildEncyclopediaDocException {
     Preconditions.checkNotNull(ruleName);
-    this.ruleName = ruleName;
-    try {
-      this.ruleType = RuleType.valueOf(ruleType);
-    } catch (IllegalArgumentException e) {
-      throw new BuildEncyclopediaDocException(
-          fileName, startLineCount, "Invalid rule type " + ruleType);
-    }
-    this.ruleFamily = ruleFamily;
-    this.htmlDocumentation = htmlDocumentation;
-    this.startLineCount = startLineCount;
-    this.fileName = fileName;
-    this.flags = flags;
-    this.ruleClassProvider = ruleClassProvider;
+      this.ruleName = ruleName;
+      try {
+        this.ruleType = RuleType.valueOf(ruleType);
+      } catch (IllegalArgumentException e) {
+        throw new BuildEncyclopediaDocException(
+            fileName, startLineCount, "Invalid rule type " + ruleType);
+      }
+      this.ruleFamily = ruleFamily;
+      this.htmlDocumentation = htmlDocumentation;
+      this.startLineCount = startLineCount;
+      this.fileName = fileName;
+      this.flags = flags;
+      this.ruleClassProvider = ruleClassProvider;
   }
 
   /**
@@ -166,34 +165,15 @@ public class RuleDocumentation implements Comparable<RuleDocumentation> {
   }
 
   /**
-   * Sets the {@link RuleLinkExpander} to be used to expand links in the HTML documentation for
-   * both this RuleDocumentation and all {@link RuleDocumentationAttribute}s associated with this
-   * rule.
-   */
-  public void setRuleLinkExpander(RuleLinkExpander linkExpander) {
-    this.linkExpander = linkExpander;
-    for (RuleDocumentationAttribute attribute : attributes) {
-      attribute.setRuleLinkExpander(linkExpander);
-    }
-  }
-
-  /**
    * Returns the html documentation in the exact format it should be written into the Build
    * Encyclopedia (expanding variables).
    */
-  public String getHtmlDocumentation() throws BuildEncyclopediaDocException {
+  public String getHtmlDocumentation() {
     String expandedDoc = htmlDocumentation;
     // Substituting variables
     for (Entry<String, String> docVariable : docVariables.entrySet()) {
       expandedDoc = expandedDoc.replace("${" + docVariable.getKey() + "}",
           expandBuiltInVariables(docVariable.getKey(), docVariable.getValue()));
-    }
-    if (linkExpander != null) {
-      try {
-        expandedDoc = linkExpander.expand(expandedDoc);
-      } catch (IllegalArgumentException e) {
-        throw new BuildEncyclopediaDocException(fileName, startLineCount, e.getMessage());
-      }
     }
     return expandedDoc;
   }
@@ -209,18 +189,10 @@ public class RuleDocumentation implements Comparable<RuleDocumentation> {
    * Returns a string containing any extra documentation for the name attribute for this
    * rule.
    */
-  public String getNameExtraHtmlDoc() throws BuildEncyclopediaDocException {
-    String expandedDoc = docVariables.containsKey(DocgenConsts.VAR_NAME)
+  public String getNameExtraHtmlDoc() {
+    return docVariables.containsKey(DocgenConsts.VAR_NAME)
         ? docVariables.get(DocgenConsts.VAR_NAME)
         : "";
-    if (linkExpander != null) {
-      try {
-        expandedDoc = linkExpander.expand(expandedDoc);
-      } catch (IllegalArgumentException e) {
-        throw new BuildEncyclopediaDocException(fileName, startLineCount, e.getMessage());
-      }
-    }
-    return expandedDoc;
   }
 
   /**
