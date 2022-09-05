@@ -34,7 +34,8 @@ public class WebSocketTest extends WebSocketConfigurationSupport {
      * 5.如果看到后台日志显示：handleMessage,id:0 msg={"cmd":"test"}，则代表成功了
      * @throws Exception
      */
-    public static void main(String[] args) {
+    @Test
+    public void testWebSocket() throws Exception {
         SpringApplication.run(WebSocketTest.class);
     }
 }
