@@ -40,19 +40,12 @@ public abstract class EnumDicInTermTypeMapper implements TermTypeMapper {
         if (type.isArray()) {
             Class componentType = type.getComponentType();
             if (support(column)) {
-                if(componentType.getEnumConstants().length<64){
-                    EnumDict[] newValue = param2list(value)
-                            .stream().map(v -> EnumDict.find(componentType, v).orElse(null))
-                            .filter(Objects::nonNull)
-                            .toArray(EnumDict[]::new);
-                    long bit = EnumDict.toBit(newValue);
-                    term.setValue(bit);
-                }else{
-                    //枚举数量大于等于64,无法使用位运算
-                    // TODO: 2018/4/25 尝试查询字典中间表
-                    buildNotSupport(wherePrefix,term,column,tableAlias);
-                }
-
+                EnumDict[] newValue = param2list(value)
+                        .stream().map(v -> EnumDict.find(componentType, v).orElse(null))
+                        .filter(Objects::nonNull)
+                        .toArray(EnumDict[]::new);
+                long bit = EnumDict.toBit(newValue);
+                term.setValue(bit);
             } else {
                 return buildNotSupport(wherePrefix, term, column, tableAlias);
             }

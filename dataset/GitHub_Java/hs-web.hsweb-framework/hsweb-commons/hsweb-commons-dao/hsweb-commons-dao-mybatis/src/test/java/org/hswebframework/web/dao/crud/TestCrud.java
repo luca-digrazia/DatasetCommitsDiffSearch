@@ -1,6 +1,5 @@
 package org.hswebframework.web.dao.crud;
 
-import org.apache.ibatis.session.SqlSessionFactory;
 import org.hswebframework.ezorm.core.param.QueryParam;
 import org.hswebframework.ezorm.rdb.executor.SqlExecutor;
 import org.hswebframework.web.commons.entity.param.QueryParamEntity;
@@ -9,7 +8,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.AbstractTransactionalJUnit4SpringContextTests;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -29,14 +27,6 @@ public class TestCrud extends AbstractTransactionalJUnit4SpringContextTests {
     private SqlExecutor sqlExecutor;
 
 
-    @Autowired
-    @Qualifier("sqlSessionFactory2")
-    SqlSessionFactory sqlSessionFactory2;
-
-    @Autowired
-    @Qualifier("sqlSessionFactory")
-    SqlSessionFactory sqlSessionFactory;
-
     @Before
     public void init() throws SQLException {
         sqlExecutor.exec("\n" +
@@ -46,11 +36,6 @@ public class TestCrud extends AbstractTransactionalJUnit4SpringContextTests {
                 "  create_time DATETIME,\n" +
                 "  data_type SMALLINT,\n" +
                 "  data_types BIGINT\n" +
-                ")");
-        sqlExecutor.exec("\n" +
-                "create table h_nest_table(\n" +
-                "  id BIGINT AUTO_INCREMENT PRIMARY KEY,\n" +
-                "  name VARCHAR(32)\n" +
                 ")");
     }
 
@@ -66,11 +51,9 @@ public class TestCrud extends AbstractTransactionalJUnit4SpringContextTests {
 
         QueryParamEntity query = new QueryParamEntity();
         //any in
-        query.where("dataTypes", Arrays.asList(DataType.TYPE3, DataType.TYPE1));
-        query.includes("nest.name", "*");
-        List<TestEntity> entities = testDao.queryNest(query);
+        query.where("dataTypes",  Arrays.asList(DataType.TYPE3, DataType.TYPE1));
 
-//        testDao.query(entity);
+        List<TestEntity> entities = testDao.query(query);
 
         System.out.println(entities);
     }
