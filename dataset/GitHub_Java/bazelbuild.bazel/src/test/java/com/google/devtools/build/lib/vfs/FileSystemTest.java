@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import static org.junit.Assert.fail;
 
 import com.google.common.base.Preconditions;
 import com.google.common.io.BaseEncoding;
+import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.Fingerprint;
 
@@ -554,7 +555,7 @@ public abstract class FileSystemTest {
       newPath.createDirectory();
       fail();
     } catch (FileNotFoundException e) {
-      assertThat(e.getMessage()).endsWith(" (No such file or directory)");
+      MoreAsserts.assertEndsWith(" (No such file or directory)", e.getMessage());
     }
   }
 
@@ -577,7 +578,7 @@ public abstract class FileSystemTest {
       FileSystemUtils.createEmptyFile(newPath);
       fail();
     } catch (FileNotFoundException e) {
-      assertThat(e.getMessage()).endsWith(" (No such file or directory)");
+      MoreAsserts.assertEndsWith(" (No such file or directory)", e.getMessage());
     }
   }
 
@@ -602,7 +603,7 @@ public abstract class FileSystemTest {
       FileSystemUtils.createEmptyFile(wrongPath);
       fail();
     } catch (IOException e) {
-      assertThat(e.getMessage()).endsWith(" (Not a directory)");
+      MoreAsserts.assertEndsWith(" (Not a directory)", e.getMessage());
     }
   }
 
@@ -615,7 +616,7 @@ public abstract class FileSystemTest {
       wrongPath.createDirectory();
       fail();
     } catch (IOException e) {
-      assertThat(e.getMessage()).endsWith(" (Not a directory)");
+      MoreAsserts.assertEndsWith(" (Not a directory)", e.getMessage());
     }
   }
 
@@ -991,7 +992,7 @@ public abstract class FileSystemTest {
       xEmptyDirectory.renameTo(xNonEmptyDirectory);
       fail();
     } catch (IOException e) {
-      assertThat(e.getMessage()).endsWith(" (Directory not empty)");
+      MoreAsserts.assertEndsWith(" (Directory not empty)", e.getMessage());
     }
   }
 
@@ -1064,7 +1065,7 @@ public abstract class FileSystemTest {
       nonExistingPath.renameTo(targetPath);
       fail();
     } catch (FileNotFoundException e) {
-      assertThat(e.getMessage()).endsWith(" (No such file or directory)");
+      MoreAsserts.assertEndsWith(" (No such file or directory)", e.getMessage());
     }
   }
 
@@ -1188,7 +1189,7 @@ public abstract class FileSystemTest {
       xNonEmptyDirectoryFoo.isWritable(); // i.e. stat
       fail();
     } catch (IOException e) {
-      assertThat(e.getMessage()).endsWith(" (Permission denied)");
+      MoreAsserts.assertEndsWith(" (Permission denied)", e.getMessage());
     }
   }
 
@@ -1250,7 +1251,7 @@ public abstract class FileSystemTest {
       xFile.renameTo(xNonEmptyDirectoryBar);
       fail("No exception thrown.");
     } catch (IOException e) {
-      assertThat(e.getMessage()).endsWith(" (Permission denied)");
+      MoreAsserts.assertEndsWith(" (Permission denied)", e.getMessage());
     }
   }
 
@@ -1262,7 +1263,7 @@ public abstract class FileSystemTest {
       xNonEmptyDirectoryFoo.renameTo(xNothing);
       fail("No exception thrown.");
     } catch (IOException e) {
-      assertThat(e.getMessage()).endsWith(" (Permission denied)");
+      MoreAsserts.assertEndsWith(" (Permission denied)", e.getMessage());
     }
   }
 
