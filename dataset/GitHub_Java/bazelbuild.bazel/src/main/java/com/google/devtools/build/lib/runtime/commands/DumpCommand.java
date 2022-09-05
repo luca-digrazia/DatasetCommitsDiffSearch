@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeCommandUtils;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.common.options.EnumConverter;
@@ -56,7 +55,7 @@ public class DumpCommand implements BlazeCommand {
 
   /**
    * NB! Any changes to this class must be kept in sync with anyOutput variable
-   * value in the {@link DumpCommand#exec(CommandEnvironment,OptionsProvider)} method below.
+   * value in the {@link DumpCommand#exec(BlazeRuntime,OptionsProvider)} method below.
    */
   public static class DumpOptions extends OptionsBase {
 
@@ -117,11 +116,10 @@ public class DumpCommand implements BlazeCommand {
   }
 
   @Override
-  public void editOptions(CommandEnvironment env, OptionsParser optionsParser) {}
+  public void editOptions(BlazeRuntime runtime, OptionsParser optionsParser) {}
 
   @Override
-  public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
-    BlazeRuntime runtime = env.getRuntime();
+  public ExitCode exec(BlazeRuntime runtime, OptionsProvider options) {
     DumpOptions dumpOptions = options.getOptions(DumpOptions.class);
 
     boolean anyOutput = dumpOptions.dumpPackages || dumpOptions.dumpVfs
@@ -133,14 +131,14 @@ public class DumpCommand implements BlazeCommand {
       Collection<Class<? extends OptionsBase>> optionList = new ArrayList<>();
       optionList.add(DumpOptions.class);
 
-      env.getReporter().getOutErr().printErrLn(BlazeCommandUtils.expandHelpTopic(
+      runtime.getReporter().getOutErr().printErrLn(BlazeCommandUtils.expandHelpTopic(
           getClass().getAnnotation(Command.class).name(),
           getClass().getAnnotation(Command.class).help(),
           getClass(),
           optionList, categories, OptionsParser.HelpVerbosity.LONG));
       return ExitCode.ANALYSIS_FAILURE;
     }
-    PrintStream out = new PrintStream(env.getReporter().getOutErr().getOutputStream());
+    PrintStream out = new PrintStream(runtime.getReporter().getOutErr().getOutputStream());
     try {
       out.println("Warning: this information is intended for consumption by developers");
       out.println("only, and may change at any time.  Script against it at your own risk!");
@@ -160,7 +158,7 @@ public class DumpCommand implements BlazeCommand {
 
       if (dumpOptions.dumpArtifacts) {
         success = false;
-        env.getReporter().handle(Event.error("Cannot dump artifacts in Skyframe full mode. "
+        runtime.getReporter().handle(Event.error("Cannot dump artifacts in Skyframe full mode. "
             + "Use --skyframe instead"));
       }
 
