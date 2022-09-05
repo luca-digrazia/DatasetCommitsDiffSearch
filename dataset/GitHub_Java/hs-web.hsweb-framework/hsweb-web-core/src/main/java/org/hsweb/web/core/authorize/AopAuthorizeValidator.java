@@ -7,13 +7,11 @@ import org.hsweb.web.core.authorize.validator.SimpleAuthorizeValidator;
 import org.hsweb.web.bean.po.user.User;
 import org.hsweb.web.core.exception.AuthorizeException;
 import org.hsweb.web.core.session.HttpSessionManager;
-import org.hsweb.web.core.utils.AopUtils;
 import org.hsweb.web.core.utils.WebUtil;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.hsweb.commons.ClassUtils;
-import org.hsweb.commons.StringUtils;
+import org.webbuilder.utils.common.ClassUtils;
+import org.webbuilder.utils.common.StringUtils;
 
-import javax.servlet.http.HttpSession;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -29,7 +27,7 @@ public class AopAuthorizeValidator extends SimpleAuthorizeValidator {
     protected ConcurrentMap<String, AuthorizeValidatorConfig> configCache = new ConcurrentHashMap<>();
 
     protected AuthorizeValidatorConfig getConfig(ProceedingJoinPoint pjp) {
-        String cacheKey = StringUtils.concat(pjp.getTarget().getClass().getName(), ".", AopUtils.getMethodName(pjp));
+        String cacheKey = StringUtils.concat(pjp.getTarget().getClass().getName(), ".", getMethodName(pjp));
         AuthorizeValidatorConfig config = configCache.get(cacheKey);
         if (config == null) {
             config = this.createConfig();
@@ -64,9 +62,7 @@ public class AopAuthorizeValidator extends SimpleAuthorizeValidator {
     public boolean validate(ProceedingJoinPoint pjp) {
         AuthorizeValidatorConfig config = getConfig(pjp);
         if (config == null) return true;
-        HttpSession session = WebUtil.getHttpServletRequest().getSession(false);
-        if (session == null) throw new AuthorizeException("未登录", 401);
-        User user = httpSessionManager.getUserBySessionId(session.getId());
+        User user = httpSessionManager.getUserBySessionId(WebUtil.getHttpServletRequest().getSession().getId());
         if (user == null) throw new AuthorizeException("未登录", 401);
         if (config.isEmpty()) return true;
         Map<String, Object> param = new LinkedHashMap<>();
@@ -80,4 +76,15 @@ public class AopAuthorizeValidator extends SimpleAuthorizeValidator {
         return validate(user, param, config);
     }
 
+    protected String getMethodName(ProceedingJoinPoint pjp) {
+        StringBuilder methodName = new StringBuilder(pjp.getSignature().getName()).append("(");
+        MethodSignature signature = (MethodSignature) pjp.getSignature();
+        String[] names = signature.getParameterNames();
+        Class[] args = signature.getParameterTypes();
+        for (int i = 0, len = args.length; i < len; i++) {
+            if (i != 0) methodName.append(",");
+            methodName.append(args[i].getSimpleName()).append(" ").append(names[i]);
+        }
+        return methodName.append(")").toString();
+    }
 }
