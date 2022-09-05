@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * @see <a href="http://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average">EMA</a>
  */
-public class MeterMetric implements Metered, Stoppable {
+public class MeterMetric implements Metered {
     private static final long INTERVAL = 5; // seconds
 
     /**
@@ -139,8 +139,7 @@ public class MeterMetric implements Metered, Stoppable {
         return ratePerNs * (double) rateUnit.toNanos(1);
     }
 
-    @Override
-    public void stop() {
+    void stop() {
         future.cancel(false);
     }
 }
