@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -107,7 +107,8 @@ public class GenRule implements RuleConfiguredTargetFactory {
       message = "Executing genrule";
     }
 
-    ImmutableMap<String, String> env = ruleContext.getConfiguration().getLocalShellEnvironment();
+    ImmutableMap<String, String> env =
+            ruleContext.getConfiguration().getDefaultShellEnvironment();
 
     Map<String, String> executionInfo = Maps.newLinkedHashMap();
     executionInfo.putAll(TargetUtils.getExecutionInfo(ruleContext.getRule()));
@@ -129,17 +130,10 @@ public class GenRule implements RuleConfiguredTargetFactory {
       inputs.add(ruleContext.getAnalysisEnvironment().getVolatileWorkspaceStatusArtifact());
     }
 
-    ruleContext.registerAction(
-        new GenRuleAction(
-            ruleContext.getActionOwner(),
-            commandHelper.getResolvedTools(),
-            inputs.build(),
-            filesToBuild,
-            argv,
-            env,
-            ImmutableMap.copyOf(executionInfo),
-            commandHelper.getRemoteRunfileManifestMap(),
-            message + ' ' + ruleContext.getLabel()));
+    ruleContext.registerAction(new GenRuleAction(
+        ruleContext.getActionOwner(), inputs.build(), filesToBuild, argv, env,
+        ImmutableMap.copyOf(executionInfo), commandHelper.getRemoteRunfileManifestMap(),
+        message + ' ' + ruleContext.getLabel()));
 
     RunfilesProvider runfilesProvider = withData(
         // No runfiles provided if not a data dependency.
