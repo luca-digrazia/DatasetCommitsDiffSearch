@@ -74,7 +74,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.protobuf.ByteString;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
@@ -460,16 +459,11 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
    * if the action is up to date, and non-null if it needs to be executed, in which case that token
    * should be provided to the ActionCacheChecker after execution.
    */
-  Token checkActionCache(
-      Action action,
-      MetadataHandler metadataHandler,
-      long actionStartTime,
-      Iterable<Artifact> resolvedCacheArtifacts,
-      Map<String, String> clientEnv) {
+  Token checkActionCache(Action action, MetadataHandler metadataHandler,
+      long actionStartTime, Iterable<Artifact> resolvedCacheArtifacts) {
     profiler.startTask(ProfilerTask.ACTION_CHECK, action);
-    Token token =
-        actionCacheChecker.getTokenIfNeedToExecute(
-            action, resolvedCacheArtifacts, clientEnv, explain ? reporter : null, metadataHandler);
+    Token token = actionCacheChecker.getTokenIfNeedToExecute(
+        action, resolvedCacheArtifacts, explain ? reporter : null, metadataHandler);
     profiler.completeTask(ProfilerTask.ACTION_CHECK);
     if (token == null) {
       boolean eventPosted = false;
@@ -493,8 +487,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     return token;
   }
 
-  void afterExecution(
-      Action action, MetadataHandler metadataHandler, Token token, Map<String, String> clientEnv) {
+  void afterExecution(Action action, MetadataHandler metadataHandler, Token token) {
     if (!actionReallyExecuted(action)) {
       // If an action shared with this one executed, then we need not update the action cache, since
       // the other action will do it. Moreover, this action is not aware of metadata acquired
@@ -502,7 +495,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
       return;
     }
     try {
-      actionCacheChecker.afterExecution(action, token, metadataHandler, clientEnv);
+      actionCacheChecker.afterExecution(action, token, metadataHandler);
     } catch (IOException e) {
       // Skyframe has already done all the filesystem access needed for outputs and swallows
       // IOExceptions for inputs. So an IOException is impossible here.
@@ -718,7 +711,8 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
         handle = resourceManager.acquireResources(action, estimate);
       }
       boolean outputDumped = executeActionTask(action, context);
-      completeAction(action, context.getMetadataHandler(), context.getFileOutErr(), outputDumped);
+      completeAction(action, context.getMetadataHandler(),
+          context.getFileOutErr(), outputDumped);
     } finally {
       if (handle != null) {
         handle.close();
@@ -797,8 +791,8 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     return false;
   }
 
-  private void completeAction(Action action, MetadataHandler metadataHandler, FileOutErr fileOutErr,
-      boolean outputAlreadyDumped) throws ActionExecutionException {
+  private void completeAction(Action action, MetadataHandler metadataHandler,
+      FileOutErr fileOutErr, boolean outputAlreadyDumped) throws ActionExecutionException {
     try {
       Preconditions.checkState(action.inputsKnown(),
           "Action %s successfully executed, but inputs still not known", action);
@@ -806,7 +800,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
       profiler.startTask(ProfilerTask.ACTION_COMPLETE, action);
       try {
         if (!checkOutputs(action, metadataHandler)) {
-          reportError("not all outputs were created or valid", null, action,
+          reportError("not all outputs were created", null, action,
               outputAlreadyDumped ? null : fileOutErr);
         }
         // Prevent accidental stomping on files.
@@ -922,19 +916,6 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     }
   }
 
-  private void reportOutputTreeArtifactErrors(Action action, Artifact output, Reporter reporter,
-      IOException e) {
-    String errorMessage;
-    if (e instanceof FileNotFoundException) {
-      errorMessage = String.format("TreeArtifact %s was not created", output.prettyPrint());
-    } else {
-      errorMessage = String.format(
-          "Error while validating output TreeArtifact %s : %s", output, e.getMessage());
-    }
-
-    reporter.handle(Event.error(action.getOwner().getLocation(), errorMessage));
-  }
-
   /**
    * Validates that all action outputs were created or intentionally omitted.
    *
@@ -946,18 +927,9 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
       // artifactExists has the side effect of potentially adding the artifact to the cache,
       // therefore we only call it if we know the artifact is indeed not omitted to avoid any
       // unintended side effects.
-      if (!(metadataHandler.artifactOmitted(output))) {
-        try {
-          metadataHandler.getMetadata(output);
-        } catch (IOException e) {
-          success = false;
-          if (output.isTreeArtifact()) {
-            reportOutputTreeArtifactErrors(action, output, reporter, e);
-          } else {
-            // Are all exceptions caught due to missing files?
-            reportMissingOutputFile(action, output, reporter, output.getPath().isSymbolicLink());
-          }
-        }
+      if (!(metadataHandler.artifactOmitted(output) || metadataHandler.artifactExists(output))) {
+        reportMissingOutputFile(action, output, reporter, output.getPath().isSymbolicLink());
+        success = false;
       }
     }
     return success;

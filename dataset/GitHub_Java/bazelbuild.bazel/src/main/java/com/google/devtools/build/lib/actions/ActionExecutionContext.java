@@ -15,30 +15,19 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.Executor.ActionContext;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.events.EventKind;
-import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.FileOutErr;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
-import com.google.devtools.common.options.OptionsClassProvider;
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
  * A class that groups services in the scope of the action. Like the FileOutErr object.
  */
-public class ActionExecutionContext implements Closeable {
+public class ActionExecutionContext {
 
   private final Executor executor;
   private final ActionInputFileCache actionInputFileCache;
@@ -119,78 +108,8 @@ public class ActionExecutionContext implements Closeable {
     return metadataHandler;
   }
 
-  public Path getExecRoot() {
-    return executor.getExecRoot();
-  }
-
-  /**
-   * Returns whether failures should have verbose error messages.
-   */
-  public boolean getVerboseFailures() {
-    return executor.getVerboseFailures();
-  }
-
-  /**
-   * Returns the command line options of the Blaze command being executed.
-   */
-  public OptionsClassProvider getOptions() {
-    return executor.getOptions();
-  }
-
-  public Clock getClock() {
-    return executor.getClock();
-  }
-
-  public EventBus getEventBus() {
-    return executor.getEventBus();
-  }
-
-  public EventHandler getEventHandler() {
-    return executor.getEventHandler();
-  }
-
-  /**
-   * Looks up and returns an action context implementation of the given interface type.
-   */
-  public <T extends ActionContext> T getContext(Class<? extends T> type) {
-    return executor.getContext(type);
-  }
-
-  /**
-   * Returns the action context implementation for spawn actions with a given mnemonic.
-   */
-  public SpawnActionContext getSpawnActionContext(String mnemonic) {
-    return executor.getSpawnActionContext(mnemonic);
-  }
-
-  /**
-   * Whether this Executor reports subcommands. If not, reportSubcommand has no effect.
-   * This is provided so the caller of reportSubcommand can avoid wastefully constructing the
-   * subcommand string.
-   */
-  public boolean reportsSubcommands() {
-    return executor.reportsSubcommands();
-  }
-
-  /**
-   * Report a subcommand event to this Executor's Reporter and, if action
-   * logging is enabled, post it on its EventBus.
-   */
-  public void reportSubcommand(Spawn spawn) {
-    String reason;
-    ActionOwner owner = spawn.getResourceOwner().getOwner();
-    if (owner == null) {
-      reason = spawn.getResourceOwner().prettyPrint();
-    } else {
-      reason = Label.print(owner.getLabel())
-          + " [" + spawn.getResourceOwner().prettyPrint() + "]";
-    }
-    String message = Spawns.asShellCommand(spawn, getExecRoot());
-    getEventHandler().handle(Event.of(EventKind.SUBCOMMAND, null, "# " + reason + "\n" + message));
-  }
-
-  public ImmutableMap<String, String> getClientEnv() {
-    return clientEnv;
+  public Executor getExecutor() {
+    return executor;
   }
 
   public ArtifactExpander getArtifactExpander() {
@@ -210,11 +129,6 @@ public class ActionExecutionContext implements Closeable {
    */
   public Environment getEnvironmentForDiscoveringInputs() {
     return Preconditions.checkNotNull(env);
-  }
-
-  @Override
-  public void close() throws IOException {
-    fileOutErr.close();
   }
 
   /**

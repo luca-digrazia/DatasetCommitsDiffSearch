@@ -15,13 +15,15 @@ package com.google.devtools.build.lib.analysis.actions;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_ACTION_OWNER;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.Root;
@@ -96,7 +98,7 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
 
   @Test
   public void testDestinationArtifactIsOutput() {
-    assertThat(create().getOutputs()).containsExactly(outputArtifact);
+    assertEquals(ImmutableSet.of(outputArtifact), create().getOutputs());
   }
 
   @Test
@@ -105,7 +107,7 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
     create().execute(createContext(executor));
     String content = new String(FileSystemUtils.readContentAsLatin1(output));
     String expected = Joiner.on('\n').join("key=foo", "value=bar");
-    assertThat(content).isEqualTo(expected);
+    assertEquals(expected, content);
   }
 
   @Test
@@ -118,7 +120,7 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
     TemplateExpansionAction b = new TemplateExpansionAction(NULL_ACTION_OWNER,
          outputArtifact2, Template.forString(TEMPLATE),
          ImmutableList.of(Substitution.of("%key%", "foo")), false);
-    assertThat(b.computeKey()).isEqualTo(a.computeKey());
+    assertEquals(a.computeKey(), b.computeKey());
   }
 
   @Test
@@ -131,7 +133,7 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
     TemplateExpansionAction b = new TemplateExpansionAction(NULL_ACTION_OWNER,
          outputArtifact2, Template.forString(TEMPLATE),
          ImmutableList.of(Substitution.of("%key%", "foo2")), false);
-    assertThat(a.computeKey().equals(b.computeKey())).isFalse();
+    assertFalse(a.computeKey().equals(b.computeKey()));
   }
 
   @Test
@@ -144,7 +146,7 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
     TemplateExpansionAction b = new TemplateExpansionAction(NULL_ACTION_OWNER,
          outputArtifact2, Template.forString(TEMPLATE),
          ImmutableList.of(Substitution.of("%key%", "foo")), true);
-    assertThat(a.computeKey().equals(b.computeKey())).isFalse();
+    assertFalse(a.computeKey().equals(b.computeKey()));
   }
 
   @Test
@@ -157,7 +159,7 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
     TemplateExpansionAction b = new TemplateExpansionAction(NULL_ACTION_OWNER,
          outputArtifact2, Template.forString(TEMPLATE + " "),
          ImmutableList.of(Substitution.of("%key%", "foo")), false);
-    assertThat(a.computeKey().equals(b.computeKey())).isFalse();
+    assertFalse(a.computeKey().equals(b.computeKey()));
   }
 
   private TemplateExpansionAction createWithArtifact() {
@@ -171,8 +173,8 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
   }
 
   private ActionExecutionContext createContext(Executor executor) {
-    return new ActionExecutionContext(executor, null, ActionInputPrefetcher.NONE, null,
-        new FileOutErr(), ImmutableMap.<String, String>of(), null);
+    return new ActionExecutionContext(executor, null, null, new FileOutErr(),
+        ImmutableMap.<String, String>of(), null);
   }
 
   private void executeTemplateExpansion(String expected) throws Exception {
@@ -189,12 +191,12 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
 
   @Test
   public void testArtifactTemplateHasInput() {
-    assertThat(createWithArtifact().getInputs()).containsExactly(inputArtifact);
+    assertEquals(ImmutableList.of(inputArtifact), createWithArtifact().getInputs());
   }
 
   @Test
   public void testArtifactTemplateHasOutput() {
-    assertThat(createWithArtifact().getOutputs()).containsExactly(outputArtifact);
+    assertEquals(ImmutableSet.of(outputArtifact), createWithArtifact().getOutputs());
   }
 
   @Test

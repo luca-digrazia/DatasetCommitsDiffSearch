@@ -18,7 +18,7 @@ import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionMetadata;
+import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Spawn;
@@ -27,20 +27,17 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
 import com.google.devtools.build.lib.shell.BadExitStatusException;
 import com.google.devtools.build.lib.testutil.TestSpec;
-import com.google.devtools.build.lib.util.CommandFailureUtils;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.Path;
-
+import java.util.Arrays;
+import java.util.Map;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.util.Arrays;
-import java.util.Map;
-
 /**
- * Tests for {@code LinuxSandboxedStrategy} that must run locally, because they need to actually
- * run the namespace-sandbox binary.
+ * Tests for {@code LinuxSandboxedStrategy} that must run locally, because they need to actually run
+ * the linux-sandbox binary.
  */
 @TestSpec(localOnly = true, supportedOs = OS.LINUX)
 @RunWith(JUnit4.class)
@@ -48,7 +45,7 @@ public class LocalLinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestC
   protected Spawn createSpawn(String... arguments) {
     Map<String, String> environment = ImmutableMap.<String, String>of();
     Map<String, String> executionInfo = ImmutableMap.<String, String>of();
-    ActionMetadata action = new ActionsTestUtil.NullAction();
+    ActionExecutionMetadata action = new ActionsTestUtil.NullAction();
     ResourceSet localResources = ResourceSet.ZERO;
     return new BaseSpawn(
         Arrays.asList(arguments), environment, executionInfo, action, localResources);
@@ -61,6 +58,7 @@ public class LocalLinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestC
         new SingleBuildFileCache(execRoot.getPathString(), execRoot.getFileSystem()),
         null,
         outErr,
+        ImmutableMap.of(),
         null);
   }
 
@@ -80,13 +78,6 @@ public class LocalLinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestC
       fail();
     } catch (UserExecException e) {
       assertThat(err()).isEqualTo("ERROR\n");
-      assertThat(e.getMessage())
-          .startsWith(
-              CommandFailureUtils.describeCommandFailure(
-                  true,
-                  spawn.getArguments(),
-                  spawn.getEnvironment(),
-                  blazeDirs.getExecRoot().toString()));
       assertThat(e.getCause()).isInstanceOf(BadExitStatusException.class);
     }
   }
