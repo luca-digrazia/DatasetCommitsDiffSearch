@@ -394,6 +394,14 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     ImmutableList<Artifact> proguardSpecs = ProguardHelper.collectTransitiveProguardSpecs(
         ruleContext, ImmutableList.of(resourceApk.getResourceProguardConfig()));
 
+    if (shrinkResources) {
+      resourceApk = shrinkResources(
+          ruleContext,
+          androidCommon,
+          resourceApk,
+          binaryJar,
+          proguardSpecs);
+    }
     ProguardOutput proguardOutput =
         applyProguard(
             ruleContext,
@@ -403,15 +411,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             filesBuilder,
             proguardSpecs,
             proguardMapping);
-
-    if (shrinkResources) {
-      resourceApk = shrinkResources(
-          ruleContext,
-          resourceApk,
-          proguardSpecs,
-          proguardOutput);
-    }
-
     Artifact jarToDex = proguardOutput.getOutputJar();
     DexingOutput dexingOutput =
         shouldDexWithJack(ruleContext)
@@ -950,13 +949,54 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
   private static ResourceApk shrinkResources(
       RuleContext ruleContext,
+      AndroidCommon androidCommon,
       ResourceApk resourceApk,
-      ImmutableList<Artifact> proguardSpecs,
-      ProguardOutput proguardOutput) throws InterruptedException {
+      Artifact deployJar,
+      ImmutableList<Artifact> proguardSpecs) throws InterruptedException {
 
     if (ruleContext.getFragment(AndroidConfiguration.class).useAndroidResourceShrinking()
         && LocalResourceContainer.definesAndroidResources(ruleContext.attributes())
         && !proguardSpecs.isEmpty()) {
+
+      // TODO(apell): Once ProGuard is split into multiple runs, use the Artifact from the shrinking
+      // pass here instead.
+      Artifact shrunkJar = ruleContext.getImplicitOutputArtifact(
+          AndroidRuleClasses.ANDROID_BINARY_SHRUNK_JAR);
+      AndroidSdkProvider sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
+
+      Iterable<Artifact> libraryJars = NestedSetBuilder.<Artifact>naiveLinkOrder()
+          .add(sdk.getAndroidJar())
+          .addTransitive(androidCommon.getTransitiveNeverLinkLibraries())
+          .build();
+      Builder builder = new SpawnAction.Builder()
+          .addInput(deployJar)
+          .addInputs(libraryJars)
+          .addInputs(proguardSpecs)
+          .setExecutable(sdk.getProguard())
+          .setProgressMessage("Finding Resource References With Proguard")
+          .setMnemonic("ProguardResourceMapping")
+          .addArgument("-injars")
+          .addArgument(deployJar.getExecPathString());
+
+      for (Artifact libraryJar : libraryJars) {
+        builder.addArgument("-libraryjars")
+            .addArgument(libraryJar.getExecPathString());
+      }
+
+      for (Artifact proguardSpec : proguardSpecs) {
+        builder.addArgument("@" + proguardSpec.getExecPathString());
+      }
+
+      builder.addArgument("-ignorewarnings")
+          .addArgument("-dontnote")
+          .addArgument("-forceprocessing")
+          .addArgument("-dontoptimize")
+          .addArgument("-dontobfuscate")
+          .addArgument("-dontpreverify")
+          .addArgument("-outjars")
+          .addOutputArgument(shrunkJar);
+
+      ruleContext.registerAction(builder.build(ruleContext));
 
       Artifact apk = new ResourceShrinkerActionBuilder(ruleContext)
           .setResourceApkOut(ruleContext.getImplicitOutputArtifact(
@@ -967,8 +1007,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               AndroidRuleClasses.ANDROID_RESOURCE_SHRINKER_LOG))
           .withResourceFiles(ruleContext.getImplicitOutputArtifact(
               AndroidRuleClasses.ANDROID_RESOURCES_ZIP))
-          .withShrunkJar(proguardOutput.getOutputJar())
-          .withProguardMapping(proguardOutput.getMapping())
+          .withShrunkJar(shrunkJar)
           .withPrimary(resourceApk.getPrimaryResource())
           .withDependencies(resourceApk.getResourceDependencies())
           .setConfigurationFilters(
