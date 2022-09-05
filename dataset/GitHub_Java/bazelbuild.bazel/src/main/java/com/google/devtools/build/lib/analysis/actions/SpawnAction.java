@@ -18,6 +18,7 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.CharMatcher;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -47,7 +48,6 @@ import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.protobuf.GeneratedMessage.GeneratedExtension;
@@ -83,9 +83,6 @@ public class SpawnAction extends AbstractAction {
 
   private static final String GUID = "ebd6fce3-093e-45ee-adb6-bf513b602f0d";
 
-  private static final String VERBOSE_FAILURES_KEY = "BAZEL_VERBOSE_FAILURES";
-  private static final String SUBCOMMANDS_KEY = "BAZEL_SUBCOMMANDS";
-
   private final CommandLine argv;
 
   private final boolean executeUnconditionally;
@@ -95,12 +92,10 @@ public class SpawnAction extends AbstractAction {
   private final ImmutableMap<PathFragment, Artifact> inputManifests;
 
   private final ResourceSet resourceSet;
-  private ImmutableMap<String, String> environment;
+  private final ImmutableMap<String, String> environment;
   private final ImmutableMap<String, String> executionInfo;
 
   private final ExtraActionInfoSupplier<?> extraActionInfoSupplier;
-
-  private final boolean verboseFailuresAndSubcommandsInEnv;
 
   /**
    * Constructs a SpawnAction using direct initialization arguments.
@@ -108,7 +103,6 @@ public class SpawnAction extends AbstractAction {
    * All collections provided must not be subsequently modified.
    *
    * @param owner the owner of the Action.
-   * @param tools the set of files comprising the tool that does the work (e.g. compiler).
    * @param inputs the set of all files potentially read by this action; must
    *        not be subsequently modified.
    * @param outputs the set of all files written by this action; must not be
@@ -122,31 +116,17 @@ public class SpawnAction extends AbstractAction {
    * @param progressMessage the message printed during the progression of the build
    * @param mnemonic the mnemonic that is reported in the master log.
    */
-  public SpawnAction(
-      ActionOwner owner,
-      Iterable<Artifact> tools,
-      Iterable<Artifact> inputs,
-      Iterable<Artifact> outputs,
+  public SpawnAction(ActionOwner owner,
+      Iterable<Artifact> inputs, Iterable<Artifact> outputs,
       ResourceSet resourceSet,
       CommandLine argv,
       Map<String, String> environment,
       String progressMessage,
       String mnemonic) {
-    this(
-        owner,
-        tools,
-        inputs,
-        outputs,
-        resourceSet,
-        argv,
-        ImmutableMap.copyOf(environment),
-        ImmutableMap.<String, String>of(),
-        progressMessage,
-        ImmutableMap.<PathFragment, Artifact>of(),
-        mnemonic,
-        false,
-        null,
-        false);
+    this(owner, inputs, outputs,
+        resourceSet, argv, ImmutableMap.copyOf(environment),
+        ImmutableMap.<String, String>of(), progressMessage,
+        ImmutableMap.<PathFragment, Artifact>of(), mnemonic, false, null);
   }
 
   /**
@@ -155,31 +135,25 @@ public class SpawnAction extends AbstractAction {
    * <p>All collections provided must not be subsequently modified.
    *
    * @param owner the owner of the Action.
-   * @param tools the set of files comprising the tool that does the work (e.g. compiler). This is
-   *        a subset of "inputs" and is only used by the WorkerSpawnStrategy.
-   * @param inputs the set of all files potentially read by this action; must not be subsequently
-   *        modified.
-   * @param outputs the set of all files written by this action; must not be subsequently modified.
+   * @param inputs the set of all files potentially read by this action; must
+   *        not be subsequently modified.
+   * @param outputs the set of all files written by this action; must not be
+   *        subsequently modified.
    * @param resourceSet the resources consumed by executing this Action
    * @param environment the map of environment variables.
    * @param executionInfo out-of-band information for scheduling the spawn.
-   * @param argv the argv array (including argv[0]) of arguments to pass. This is merely a list of
-   *        options to the executable, and is uninterpreted by the build tool for the purposes of
-   *        dependency checking; typically it may include the names of input and output files, but
-   *        this is not necessary.
+   * @param argv the argv array (including argv[0]) of arguments to pass. This
+   *        is merely a list of options to the executable, and is uninterpreted
+   *        by the build tool for the purposes of dependency checking; typically
+   *        it may include the names of input and output files, but this is not
+   *        necessary.
    * @param progressMessage the message printed during the progression of the build
    * @param inputManifests entries in inputs that are symlink manifest files.
    *        These are passed to remote execution in the environment rather than as inputs.
    * @param mnemonic the mnemonic that is reported in the master log.
-   * @param verboseFailuresAndSubcommandsInEnv if the presense of "--verbose_failures" and/or
-   *        "--subcommands" in the execution should be propogated to the environment of the
-   *        action.
    */
-  public SpawnAction(
-      ActionOwner owner,
-      Iterable<Artifact> tools,
-      Iterable<Artifact> inputs,
-      Iterable<Artifact> outputs,
+  public SpawnAction(ActionOwner owner,
+      Iterable<Artifact> inputs, Iterable<Artifact> outputs,
       ResourceSet resourceSet,
       CommandLine argv,
       ImmutableMap<String, String> environment,
@@ -188,9 +162,8 @@ public class SpawnAction extends AbstractAction {
       ImmutableMap<PathFragment, Artifact> inputManifests,
       String mnemonic,
       boolean executeUnconditionally,
-      ExtraActionInfoSupplier<?> extraActionInfoSupplier,
-      boolean verboseFailuresAndSubcommandsInEnv) {
-    super(owner, tools, inputs, outputs);
+      ExtraActionInfoSupplier<?> extraActionInfoSupplier) {
+    super(owner, inputs, outputs);
     this.resourceSet = resourceSet;
     this.executionInfo = executionInfo;
     this.environment = environment;
@@ -200,7 +173,6 @@ public class SpawnAction extends AbstractAction {
     this.mnemonic = mnemonic;
     this.executeUnconditionally = executeUnconditionally;
     this.extraActionInfoSupplier = extraActionInfoSupplier;
-    this.verboseFailuresAndSubcommandsInEnv = verboseFailuresAndSubcommandsInEnv;
   }
 
   /**
@@ -257,22 +229,6 @@ public class SpawnAction extends AbstractAction {
   public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     Executor executor = actionExecutionContext.getExecutor();
-
-    // Reconstruct environment to communicate if verbose_failures and/or subcommands is set.
-    if (verboseFailuresAndSubcommandsInEnv) {
-      ImmutableMap.Builder<String, String> environmentBuilder =
-          new ImmutableMap.Builder<String, String>().putAll(environment);
-
-      if (executor.getVerboseFailures()) {
-        environmentBuilder.put(VERBOSE_FAILURES_KEY, "true");
-      }
-      if (executor.reportsSubcommands()) {
-        environmentBuilder.put(SUBCOMMANDS_KEY, "true");
-      }
-
-      this.environment = environmentBuilder.build();
-    }
-
     try {
       internalExecute(actionExecutionContext);
     } catch (ExecException e) {
@@ -320,9 +276,6 @@ public class SpawnAction extends AbstractAction {
     f.addString(GUID);
     f.addStrings(argv.arguments());
     f.addString(getMnemonic());
-    // We don't need the toolManifests here, because they are a subset of the inputManifests by
-    // definition and the output of an action shouldn't change whether something is considered a
-    // tool or not.
     f.addInt(inputManifests.size());
     for (Map.Entry<PathFragment, Artifact> input : inputManifests.entrySet()) {
       f.addString(input.getKey().getPathString() + "/");
@@ -383,11 +336,6 @@ public class SpawnAction extends AbstractAction {
 
   /**
    * Returns the environment in which to run this action.
-   *
-   * <p>Note that if setVerboseFailuresAndSubcommandsInEnv() is called on the builder, and either
-   * verbose_failures or subcommands is specified in the execution context, corresponding variables
-   * will be added to the environment.  These variables will not be known until execution time,
-   * however, and so are not returned by getEnvironment().
    */
   public Map<String, String> getEnvironment() {
     return environment;
@@ -465,6 +413,7 @@ public class SpawnAction extends AbstractAction {
       inputs.removeAll(filesets);
       inputs.removeAll(inputManifests.values());
       return inputs;
+      // Also expand middleman artifacts.
     }
   }
 
@@ -473,11 +422,9 @@ public class SpawnAction extends AbstractAction {
    */
   public static class Builder {
 
-    private final NestedSetBuilder<Artifact> toolsBuilder = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<Artifact> inputsBuilder =
         NestedSetBuilder.stableOrder();
     private final List<Artifact> outputs = new ArrayList<>();
-    private final Map<PathFragment, Artifact> toolManifests = new LinkedHashMap<>();
     private final Map<PathFragment, Artifact> inputManifests = new LinkedHashMap<>();
     private ResourceSet resourceSet = AbstractAction.DEFAULT_RESOURCE_SET;
     private ImmutableMap<String, String> environment = ImmutableMap.of();
@@ -496,8 +443,6 @@ public class SpawnAction extends AbstractAction {
     private String mnemonic = "Unknown";
     private ExtraActionInfoSupplier<?> extraActionInfoSupplier = null;
 
-    private boolean verboseFailuresAndSubcommandsInEnv = false;
-
     /**
      * Creates a SpawnAction builder.
      */
@@ -507,10 +452,8 @@ public class SpawnAction extends AbstractAction {
      * Creates a builder that is a copy of another builder.
      */
     public Builder(Builder other) {
-      this.toolsBuilder.addTransitive(other.toolsBuilder.build());
       this.inputsBuilder.addTransitive(other.inputsBuilder.build());
       this.outputs.addAll(other.outputs);
-      this.toolManifests.putAll(other.toolManifests);
       this.inputManifests.putAll(other.inputManifests);
       this.resourceSet = other.resourceSet;
       this.environment = other.environment;
@@ -526,7 +469,6 @@ public class SpawnAction extends AbstractAction {
       this.progressMessage = other.progressMessage;
       this.paramFileInfo = other.paramFileInfo;
       this.mnemonic = other.mnemonic;
-      this.verboseFailuresAndSubcommandsInEnv = other.verboseFailuresAndSubcommandsInEnv;
     }
 
     /**
@@ -579,54 +521,25 @@ public class SpawnAction extends AbstractAction {
       if (paramsFile != null) {
         actualCommandLine = ParamFileHelper.createWithParamsFile(argv, arguments, commandLine,
             isShellCommand, owner, actions, paramFileInfo, paramsFile);
-        inputsBuilder.add(paramsFile);
       } else {
         actualCommandLine = ParamFileHelper.createWithoutParamsFile(argv, arguments, commandLine,
             isShellCommand);
       }
 
-      NestedSet<Artifact> tools = toolsBuilder.build();
+      Iterable<Artifact> actualInputs = collectActualInputs(paramsFile);
 
-      // Tools are by definition a subset of the inputs, so make sure they're present there, too.
-      NestedSet<Artifact> inputsAndTools =
-          NestedSetBuilder.<Artifact>stableOrder()
-              .addTransitive(inputsBuilder.build())
-              .addTransitive(tools)
-              .build();
-
-      LinkedHashMap<PathFragment, Artifact> inputAndToolManifests =
-          new LinkedHashMap<>(inputManifests);
-      inputAndToolManifests.putAll(toolManifests);
-
-      actions.add(
-          0,
-          new SpawnAction(
-              owner,
-              tools,
-              inputsAndTools,
-              ImmutableList.copyOf(outputs),
-              resourceSet,
-              actualCommandLine,
-              environment,
-              executionInfo,
-              progressMessage,
-              ImmutableMap.copyOf(inputAndToolManifests),
-              mnemonic,
-              executeUnconditionally,
-              extraActionInfoSupplier,
-              verboseFailuresAndSubcommandsInEnv));
+      actions.add(0, new SpawnAction(owner, actualInputs, ImmutableList.copyOf(outputs),
+          resourceSet, actualCommandLine, environment, executionInfo, progressMessage,
+          ImmutableMap.copyOf(inputManifests), mnemonic, executeUnconditionally,
+          extraActionInfoSupplier));
       return actions.toArray(new Action[actions.size()]);
     }
 
-    /**
-     * Adds an artifact that is necessary for executing the spawn itself (e.g. a compiler), in
-     * contrast to an artifact that is necessary for the spawn to do its work (e.g. source code).
-     *
-     * <p>The artifact is implicitly added to the inputs of the action as well.
-     */
-    public Builder addTool(Artifact tool) {
-      toolsBuilder.add(tool);
-      return this;
+    private Iterable<Artifact> collectActualInputs(Artifact parameterFile) {
+      if (parameterFile != null) {
+        inputsBuilder.add(parameterFile);
+      }
+      return inputsBuilder.build();
     }
 
     /**
@@ -634,14 +547,6 @@ public class SpawnAction extends AbstractAction {
      */
     public Builder addInput(Artifact artifact) {
       inputsBuilder.add(artifact);
-      return this;
-    }
-
-    /**
-     * Adds tools to this action.
-     */
-    public Builder addTools(Iterable<Artifact> artifacts) {
-      toolsBuilder.addAll(artifacts);
       return this;
     }
 
@@ -658,11 +563,6 @@ public class SpawnAction extends AbstractAction {
      */
     public Builder addTransitiveInputs(NestedSet<Artifact> artifacts) {
       inputsBuilder.addTransitive(artifacts);
-      return this;
-    }
-
-    private Builder addToolManifest(Artifact artifact, PathFragment remote) {
-      toolManifests.put(remote, artifact);
       return this;
     }
 
@@ -714,17 +614,6 @@ public class SpawnAction extends AbstractAction {
     }
 
     /**
-     * Sets the environment variable "BAZEL_VERBOSE_FAILURES" to "true" if --verbose_failures is
-     * set in the execution context. Sets the environment variable "BAZEL_SUBCOMMANDS" to "true"
-     * if --subcommands is set in the execution context.
-     *
-     */
-    public Builder setVerboseFailuresAndSubcommandsInEnv() {
-      this.verboseFailuresAndSubcommandsInEnv = true;
-      return this;
-    }
-
-    /**
      * Makes the action always execute, even if none of its inputs have changed.
      *
      * <p>Only use this when absolutely necessary, since this is a performance hit and we'd like to
@@ -762,13 +651,13 @@ public class SpawnAction extends AbstractAction {
      * {@link #setShellCommand(String)}.
      */
     public Builder setExecutable(Artifact executable) {
-      addTool(executable);
       return setExecutable(executable.getExecPath());
     }
 
     /**
-     * Sets the executable as a configured target. Automatically adds the files to run to the tools
-     * and inputs and uses the executable of the target as the executable.
+     * Sets the executable as a configured target. Automatically adds the files
+     * to run to the inputs and uses the executable of the target as the
+     * executable.
      *
      * <p>Calling this method overrides any previous values set via calls to
      * {@link #setExecutable(Artifact)}, {@link #setJavaExecutable}, or
@@ -781,11 +670,13 @@ public class SpawnAction extends AbstractAction {
     }
 
     /**
-     * Sets the executable as a configured target. Automatically adds the files to run to the tools
-     * and inputs and uses the executable of the target as the executable.
+     * Sets the executable as a configured target. Automatically adds the files
+     * to run to the inputs and uses the executable of the target as the
+     * executable.
      *
-     * <p>Calling this method overrides any previous values set via calls to {@link #setExecutable},
-     * {@link #setJavaExecutable}, or {@link #setShellCommand(String)}.
+     * <p>Calling this method overrides any previous values set via calls to
+     * {@link #setExecutable}, {@link #setJavaExecutable}, or
+     * {@link #setShellCommand(String)}.
      */
     public Builder setExecutable(FilesToRunProvider executableProvider) {
       Preconditions.checkArgument(executableProvider.getExecutable() != null,
@@ -801,7 +692,7 @@ public class SpawnAction extends AbstractAction {
       executableArgs.add("-Xverify:none");
       executableArgs.addAll(jvmArgs);
       Collections.addAll(executableArgs, launchArgs);
-      toolsBuilder.add(deployJar);
+      inputsBuilder.add(deployJar);
       this.isShellCommand = false;
       return this;
     }
@@ -868,15 +759,12 @@ public class SpawnAction extends AbstractAction {
     }
 
     /**
-     * Adds an executable and its runfiles, which is necessary for executing the spawn itself (e.g.
-     * a compiler), in contrast to artifacts that are necessary for the spawn to do its work (e.g.
-     * source code).
+     * Adds an executable and its runfiles, so it can be called from a shell command.
      */
     public Builder addTool(FilesToRunProvider tool) {
-      addTools(tool.getFilesToRun());
+      addInputs(tool.getFilesToRun());
       if (tool.getRunfilesManifest() != null) {
-        addToolManifest(
-            tool.getRunfilesManifest(),
+        addInputManifest(tool.getRunfilesManifest(),
             BaseSpawn.runfilesForFragment(tool.getExecutable().getExecPath()));
       }
       return this;

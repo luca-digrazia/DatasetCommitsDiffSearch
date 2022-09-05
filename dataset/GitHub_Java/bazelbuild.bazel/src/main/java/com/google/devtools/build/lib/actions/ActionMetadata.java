@@ -61,6 +61,19 @@ public interface ActionMetadata {
   String prettyPrint();
 
   /**
+   * Returns a string that can be used to describe the execution strategy.
+   * For example, "local".
+   *
+   * May return null if the action chooses to update its strategy
+   * locality "manually", via ActionLocalityMessage.
+   *
+   * @param executor the application-specific value passed to the
+   *   executor parameter of the top-level call to
+   *   Builder.buildArtifacts().
+   */
+  String describeStrategy(Executor executor);
+
+  /**
    * Returns true iff the getInputs set is known to be complete.
    *
    * <p>For most Actions, this always returns true, but in some cases (e.g. C++ compilation), inputs
@@ -80,19 +93,6 @@ public interface ActionMetadata {
    */
   @ThreadSafe
   boolean discoversInputs();
-
-  /**
-   * Returns the tool Artifacts that this Action depends upon. May be empty. This is a subset of
-   * getInputs().
-   *
-   * <p>This may be used by spawn strategies to determine whether an external tool has not changed
-   * since the last time it was used and could thus be reused, or whether it has to be restarted.
-   *
-   * <p>See {@link AbstractAction#getTools()} for an explanation of why it's important that this
-   * set contains exactly the right set of artifacts in order for the build to stay correct and the
-   * worker strategy to work.
-   */
-  Iterable<Artifact> getTools();
 
   /**
    * Returns the input Artifacts that this Action depends upon. May be empty.

@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.packages;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
@@ -23,7 +24,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeAspectClass.NativeAspectFactory;
 import com.google.devtools.build.lib.util.BinaryPredicate;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -32,7 +32,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The definition of an aspect (see {@link Aspect} for moreinformation.)
+ * The definition of an aspect (see {@link com.google.devtools.build.lib.analysis.Aspect} for more
+ * information.)
  *
  * <p>Contains enough information to build up the configured target graph except for the actual way
  * to build the Skyframe node (that is the territory of
@@ -112,6 +113,9 @@ public final class AspectDefinition {
 
   /**
    * Returns the attribute -&gt; set of required aspects map.
+   *
+   * <p>Note that the map actually contains {@link AspectFactory}
+   * instances, except that we cannot reference that class here.
    */
   public ImmutableMultimap<String, AspectClass> getAttributeAspects() {
     return attributeAspects;
@@ -141,7 +145,7 @@ public final class AspectDefinition {
     }
 
     LinkedHashMultimap<Attribute, Label> result = LinkedHashMultimap.create();
-    for (Aspect candidateClass : attribute.getAspects(from)) {
+    for (AspectWithParameters candidateClass : attribute.getAspectsWithParameters(from)) {
       // Check if target satisfies condition for this aspect (has to provide all required
       // TransitiveInfoProviders)
       if (!advertisedProviders.containsAll(
@@ -250,17 +254,6 @@ public final class AspectDefinition {
      */
     public <TYPE> Builder add(Attribute.Builder<TYPE> attr) {
       Attribute attribute = attr.build();
-      return add(attribute);
-    }
-
-    /**
-     * Adds an attribute to the aspect.
-     *
-     * <p>Since aspects do not appear in BUILD files, the attribute must be either implicit
-     * (not available in the BUILD file, starting with '$') or late-bound (determined after the
-     * configuration is available, starting with ':')
-     */
-    public Builder add(Attribute attribute) {
       Preconditions.checkState(attribute.isImplicit() || attribute.isLateBound());
       Preconditions.checkState(!attributes.containsKey(attribute.getName()),
           "An attribute with the name '%s' already exists.", attribute.getName());
