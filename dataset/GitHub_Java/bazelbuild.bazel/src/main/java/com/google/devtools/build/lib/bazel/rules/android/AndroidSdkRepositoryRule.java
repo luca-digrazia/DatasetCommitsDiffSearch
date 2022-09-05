@@ -14,8 +14,8 @@
 package com.google.devtools.build.lib.bazel.rules.android;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.syntax.Type.INTEGER;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.INTEGER;
+import static com.google.devtools.build.lib.packages.Type.STRING;
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
@@ -34,21 +34,18 @@ import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
- * Definition of the {@code android_sdk_repository} rule.
+ * Definition of the {@code android_sdk} repository rule.
  */
 public class AndroidSdkRepositoryRule implements RuleDefinition {
   public static final String NAME = "android_sdk_repository";
 
-  private static final Function<? super Rule, Map<String, Label>> BINDINGS_FUNCTION =
+  public static final Function<? super Rule, Map<String, Label>> BINDINGS_FUNCTION =
       new Function< Rule, Map<String, Label>>() {
         @Nullable
         @Override
         public Map<String, Label> apply(Rule rule) {
-          String prefix = "@" + rule.getName() + "//:";
           return ImmutableMap.of(
-              "android/sdk", Label.parseAbsoluteUnchecked(prefix + "sdk"),
-              "android/appcompat_v4", Label.parseAbsoluteUnchecked(prefix + "appcompat_v4"),
-              "android/appcompat_v7", Label.parseAbsoluteUnchecked(prefix + "appcompat_v7"));
+              "android/sdk", Label.parseAbsoluteUnchecked("@" + rule.getName() + "//:sdk"));
         }
       };
 
