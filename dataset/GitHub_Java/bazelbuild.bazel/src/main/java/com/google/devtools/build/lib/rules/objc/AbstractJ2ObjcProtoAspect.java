@@ -83,7 +83,7 @@ public abstract class AbstractJ2ObjcProtoAspect extends NativeAspectClass
   @Override
   public AspectDefinition getDefinition(AspectParameters aspectParameters) {
     AspectDefinition.Builder builder = new AspectDefinition.Builder(this)
-        .requireProviders(ProtoSourcesProvider.class)
+        .requireProvider(ProtoSourcesProvider.class)
         .requiresConfigurationFragments(
             AppleConfiguration.class,
             J2ObjcConfiguration.class,

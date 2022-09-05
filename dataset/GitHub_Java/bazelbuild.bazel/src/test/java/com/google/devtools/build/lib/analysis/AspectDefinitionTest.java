@@ -18,7 +18,6 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
@@ -151,34 +150,13 @@ public class AspectDefinitionTest {
   @Test
   public void testRequireProvider_AddsToSetOfRequiredProvidersAndNames() throws Exception {
     AspectDefinition requiresProviders = new AspectDefinition.Builder(TEST_ASPECT_CLASS)
-        .requireProviders(String.class, Integer.class)
+        .requireProvider(String.class)
+        .requireProvider(Integer.class)
         .build();
-    assertThat(requiresProviders.getRequiredProviders()).hasSize(1);
-    assertThat(requiresProviders.getRequiredProviders().get(0))
+    assertThat(requiresProviders.getRequiredProviders())
         .containsExactly(String.class, Integer.class);
-    assertThat(requiresProviders.getRequiredProviderNames()).hasSize(1);
-    assertThat(requiresProviders.getRequiredProviderNames().get(0))
+    assertThat(requiresProviders.getRequiredProviderNames())
         .containsExactly("java.lang.String", "java.lang.Integer");
-  }
-
- @Test
-  public void testRequireProvider_AddsTwoSetsOfRequiredProvidersAndNames() throws Exception {
-    AspectDefinition requiresProviders = new AspectDefinition.Builder(TEST_ASPECT_CLASS)
-        .requireProviderSets(
-            ImmutableList.of(
-                ImmutableSet.<Class<?>>of(String.class, Integer.class),
-                ImmutableSet.<Class<?>>of(Boolean.class)))
-        .build();
-    assertThat(requiresProviders.getRequiredProviders()).hasSize(2);
-    assertThat(requiresProviders.getRequiredProviders().get(0))
-        .containsExactly(String.class, Integer.class);
-    assertThat(requiresProviders.getRequiredProviders().get(1))
-        .containsExactly(Boolean.class);
-    assertThat(requiresProviders.getRequiredProviderNames()).hasSize(2);
-    assertThat(requiresProviders.getRequiredProviderNames().get(0))
-        .containsExactly("java.lang.String", "java.lang.Integer");
-    assertThat(requiresProviders.getRequiredProviderNames().get(1))
-        .containsExactly("java.lang.Boolean");
   }
 
   @Test

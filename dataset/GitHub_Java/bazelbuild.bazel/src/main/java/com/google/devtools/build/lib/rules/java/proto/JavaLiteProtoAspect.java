@@ -66,29 +66,22 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
 
   public static final String PROTO_TOOLCHAIN_ATTR = ":aspect_proto_toolchain_for_javalite";
 
-  public static Attribute.LateBoundLabel<BuildConfiguration> getProtoToolchainLabel(
-      String defaultValue) {
-    return new Attribute.LateBoundLabel<BuildConfiguration>(
-        defaultValue, ProtoConfiguration.class) {
-      @Override
-      public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
-        return configuration.getFragment(ProtoConfiguration.class).protoToolchainForJavaLite();
-      }
-    };
-  }
+  public static final Attribute.LateBoundLabel<BuildConfiguration> PROTO_TOOLCHAIN_LABEL =
+      new Attribute.LateBoundLabel<BuildConfiguration>(
+          "//tools/proto/toolchains:javalite", ProtoConfiguration.class) {
+        @Override
+        public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
+          return configuration.getFragment(ProtoConfiguration.class).protoToolchainForJavaLite();
+        }
+      };
 
   private final JavaSemantics javaSemantics;
 
   @Nullable private final String jacocoLabel;
-  private final String defaultProtoToolchainLabel;
 
-  public JavaLiteProtoAspect(
-      JavaSemantics javaSemantics,
-      @Nullable String jacocoLabel,
-      String defaultProtoToolchainLabel) {
+  public JavaLiteProtoAspect(JavaSemantics javaSemantics, @Nullable String jacocoLabel) {
     this.javaSemantics = javaSemantics;
     this.jacocoLabel = jacocoLabel;
-    this.defaultProtoToolchainLabel = defaultProtoToolchainLabel;
   }
 
   @Override
@@ -113,13 +106,13 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
         new AspectDefinition.Builder(this)
             .attributeAspect("deps", this)
             .requiresConfigurationFragments(JavaConfiguration.class, ProtoConfiguration.class)
-            .requireProviders(ProtoSourcesProvider.class)
+            .requireProvider(ProtoSourcesProvider.class)
             .add(
                 attr(PROTO_TOOLCHAIN_ATTR, LABEL)
                     .mandatoryNativeProviders(
                         ImmutableList.<Class<? extends TransitiveInfoProvider>>of(
                             ProtoLangToolchainProvider.class))
-                    .value(getProtoToolchainLabel(defaultProtoToolchainLabel)))
+                    .value(PROTO_TOOLCHAIN_LABEL))
             .add(attr(":host_jdk", LABEL).cfg(HOST).value(JavaSemantics.HOST_JDK))
             .add(
                 attr(":java_toolchain", LABEL)

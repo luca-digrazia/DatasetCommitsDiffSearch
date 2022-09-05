@@ -127,9 +127,6 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
           ? NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)
           : getProvider(FileProvider.class).getFilesToBuild());
     }
-    if (actual instanceof ClassObject) {
-      return ((ClassObject) actual).getValue(name);
-    }
     return actual == null ? null : actual.get(name);
   }
 

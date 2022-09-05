@@ -83,7 +83,7 @@ public class AndroidNeverlinkAspect extends NativeAspectClass implements Configu
     }
 
     return builder
-        .requireProviders(JavaCompilationArgsProvider.class)
+        .requireProvider(JavaCompilationArgsProvider.class)
         .requiresConfigurationFragments()
         .build();
   }

@@ -61,7 +61,7 @@ public final class JackAspect extends NativeAspectClass implements ConfiguredAsp
     }
 
     return new AspectDefinition.Builder(this)
-        .requireProviders(JavaSourceInfoProvider.class)
+        .requireProvider(JavaSourceInfoProvider.class)
         .add(attr(":android_sdk", LABEL)
               .allowedRuleClasses("android_sdk")
               .value(new AndroidSdkLabel(androidSdk)))

@@ -85,18 +85,6 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
     return aspects;
   }
 
-  @Override
-  public Object getValue(String name) {
-    if (ASPECTS_FIELD.equals(name)) {
-      ImmutableList.Builder<String> builder = ImmutableList.builder();
-      for (AspectDescriptor aspect : aspects) {
-        builder.add(aspect.getDescription());
-      }
-      return builder.build();
-    }
-    return super.getValue(name);
-  }
-
   /** Creates an instance based on a configured target and a set of aspects. */
   public static ConfiguredTarget of(ConfiguredTarget base, Iterable<ConfiguredAspect> aspects)
       throws DuplicateException {
@@ -135,7 +123,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
       aspectProviders.add(mergedExtraActionProviders);
     }
 
-    ImmutableList.Builder<AspectDescriptor> aspectDescriptors = ImmutableList.builder();
+    ImmutableList.Builder<AspectDescriptor> aspectRepresentations = ImmutableList.builder();
 
     for (ConfiguredAspect aspect : aspects) {
       for (Map.Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> entry :
@@ -152,10 +140,11 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
         }
 
         aspectProviders.add(entry.getValue());
+        aspectRepresentations.add(aspect.getDescriptor());
       }
-      aspectDescriptors.add(aspect.getDescriptor());
+
     }
-    return new MergedConfiguredTarget(base, aspectDescriptors.build(), aspectProviders.build());
+    return new MergedConfiguredTarget(base, aspectRepresentations.build(), aspectProviders.build());
   }
 
   private static <T extends TransitiveInfoProvider> List<T> getAllProviders(
