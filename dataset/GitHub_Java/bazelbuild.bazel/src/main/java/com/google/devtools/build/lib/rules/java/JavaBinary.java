@@ -337,12 +337,10 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
 
     return builder
         .setFilesToBuild(filesToBuild)
-        .add(
-            JavaRuleOutputJarsProvider.class,
-            JavaRuleOutputJarsProvider.builder()
-                .addOutputJar(classJar, null /* iJar */, srcJar)
-                .setJdeps(outputDepsProto)
-                .build())
+        .add(JavaRuleOutputJarsProvider.class, JavaRuleOutputJarsProvider.builder()
+            .addOutputJar(classJar, null /* iJar */, srcJar)
+            .setJdeps(outputDepsProto)
+            .build())
         .add(RunfilesProvider.class, runfilesProvider)
         .setRunfilesSupport(runfilesSupport, executable)
         .add(
@@ -352,8 +350,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
             JavaSourceInfoProvider.class,
             JavaSourceInfoProvider.fromJavaTargetAttributes(attributes, semantics))
         .add(
-            JavaSourceJarsProvider.class,
-            JavaSourceJarsProvider.create(transitiveSourceJars, srcJars))
+            JavaSourceJarsProvider.class, new JavaSourceJarsProvider(transitiveSourceJars, srcJars))
         .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars)
         .build();
   }
