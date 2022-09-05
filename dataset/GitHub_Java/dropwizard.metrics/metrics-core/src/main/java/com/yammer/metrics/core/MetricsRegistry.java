@@ -282,7 +282,17 @@ public class MetricsRegistry {
     public MeterMetric newMeter(MetricName metricName,
                                 String eventType,
                                 TimeUnit unit) {
-        return getOrAdd(metricName, MeterMetric.newMeter(newMeterTickThreadPool(), eventType, unit));
+        final Metric existingMetric = metrics.get(metricName);
+        if (existingMetric == null) {
+            final MeterMetric metric = MeterMetric.newMeter(newMeterTickThreadPool(), eventType, unit);
+            final Metric justAddedMetric = metrics.putIfAbsent(metricName, metric);
+            if (justAddedMetric == null) {
+                notifyMetricAdded(metricName, metric);
+                return metric;
+            }
+            return (MeterMetric) justAddedMetric;
+        }
+        return (MeterMetric) existingMetric;
     }
 
     /**
@@ -361,7 +371,17 @@ public class MetricsRegistry {
     public TimerMetric newTimer(MetricName metricName,
                                 TimeUnit durationUnit,
                                 TimeUnit rateUnit) {
-        return getOrAdd(metricName, new TimerMetric(newMeterTickThreadPool(), durationUnit, rateUnit));
+        final Metric existingMetric = metrics.get(metricName);
+        if (existingMetric == null) {
+            final TimerMetric metric = new TimerMetric(newMeterTickThreadPool(), durationUnit, rateUnit);
+            final Metric justAddedMetric = metrics.putIfAbsent(metricName, metric);
+            if (justAddedMetric == null) {
+                notifyMetricAdded(metricName, metric);
+                return metric;
+            }
+            return (TimerMetric) justAddedMetric;
+        }
+        return (TimerMetric) existingMetric;
     }
     
     /**
@@ -452,11 +472,6 @@ public class MetricsRegistry {
                 notifyMetricAdded(name, metric);
                 return metric;
             }
-
-            if (metric instanceof Stoppable) {
-                ((Stoppable) metric).stop();
-            }
-
             return (T) justAddedMetric;
         }
         return (T) existingMetric;
