@@ -12,6 +12,7 @@ import org.hswebframework.ezorm.rdb.mapping.MappingFeatureType;
 import org.hswebframework.ezorm.rdb.mapping.jpa.JpaEntityTableMetadataParser;
 import org.hswebframework.ezorm.rdb.mapping.parser.EntityTableMetadataParser;
 import org.hswebframework.ezorm.rdb.metadata.RDBDatabaseMetadata;
+import org.hswebframework.ezorm.rdb.metadata.RDBSchemaMetadata;
 import org.hswebframework.ezorm.rdb.operator.DatabaseOperator;
 import org.hswebframework.ezorm.rdb.operator.DefaultDatabaseOperator;
 import org.hswebframework.web.api.crud.entity.EntityFactory;
@@ -33,6 +34,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,6 +49,7 @@ public class EasyormConfiguration {
     static {
 
     }
+
     @Bean
     @ConditionalOnMissingBean
     public EntityFactory entityFactory() {
@@ -67,9 +70,9 @@ public class EasyormConfiguration {
             public EntityColumnMapping getMapping(Class entity) {
 
                 return resolver.resolve(entityFactory.getInstanceType(entity, true))
-                        .getFeature(MappingFeatureType.columnPropertyMapping.createFeatureId(entity))
-                        .map(EntityColumnMapping.class::cast)
-                        .orElse(null);
+                               .getFeature(MappingFeatureType.columnPropertyMapping.createFeatureId(entity))
+                               .map(EntityColumnMapping.class::cast)
+                               .orElse(null);
             }
         };
     }
@@ -104,7 +107,12 @@ public class EasyormConfiguration {
         RDBDatabaseMetadata metadata = properties.createDatabaseMetadata();
         syncSqlExecutor.ifPresent(metadata::addFeature);
         reactiveSqlExecutor.ifPresent(metadata::addFeature);
-
+        if (properties.isAutoDdl()) {
+            for (RDBSchemaMetadata schema : metadata.getSchemas()) {
+                schema.loadAllTableReactive()
+                      .block(Duration.ofSeconds(30));
+            }
+        }
         return metadata;
     }
 
@@ -135,7 +143,7 @@ public class EasyormConfiguration {
     }
 
     @Bean
-    public EntityEventListener entityEventListener(){
+    public EntityEventListener entityEventListener() {
         return new EntityEventListener();
     }
 

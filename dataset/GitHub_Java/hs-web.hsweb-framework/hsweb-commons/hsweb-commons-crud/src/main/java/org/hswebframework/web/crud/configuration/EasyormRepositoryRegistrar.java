@@ -28,6 +28,7 @@ import org.springframework.core.type.classreading.SimpleMetadataReaderFactory;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -38,6 +39,14 @@ public class EasyormRepositoryRegistrar implements ImportBeanDefinitionRegistrar
 
     private final MetadataReaderFactory metadataReaderFactory = new SimpleMetadataReaderFactory();
 
+    @SneakyThrows
+    private Stream<Resource> doGetResources(String packageStr) {
+        String path = ResourcePatternResolver
+                .CLASSPATH_ALL_URL_PREFIX
+                .concat(packageStr.replace(".", "/")).concat("/**/*.class");
+        return Arrays.stream(resourcePatternResolver.getResources(path));
+    }
+
     @Override
     @SneakyThrows
     @SuppressWarnings("all")
@@ -47,33 +56,36 @@ public class EasyormRepositoryRegistrar implements ImportBeanDefinitionRegistrar
         if (attr == null) {
             return;
         }
-        boolean reactivePrecent = org.springframework.util.ClassUtils.isPresent("io.r2dbc.spi.ConnectionFactory", this.getClass().getClassLoader());
+        boolean reactivePrecent = org.springframework.util.ClassUtils.isPresent("io.r2dbc.spi.ConnectionFactory", this
+                .getClass()
+                .getClassLoader());
         String[] arr = (String[]) attr.get("value");
-        String path = Arrays.stream(arr)
-                .map(str -> ResourcePatternResolver
-                        .CLASSPATH_ALL_URL_PREFIX
-                        .concat(str.replace(".", "/")).concat("/**/*.class"))
-                .collect(Collectors.joining());
+        Set<Resource> resources = Arrays
+                .stream(arr)
+                .flatMap(this::doGetResources)
+                .collect(Collectors.toSet());
 
         Class<Annotation>[] anno = (Class[]) attr.get("annotation");
 
         Set<EntityInfo> entityInfos = new HashSet<>();
 
-        for (Resource resource : resourcePatternResolver.getResources(path)) {
+        for (Resource resource : resources) {
             MetadataReader reader = metadataReaderFactory.getMetadataReader(resource);
             String className = reader.getClassMetadata().getClassName();
-            Class entityType = Class.forName(className);
+            Class<?> entityType = org.springframework.util.ClassUtils.forName(className, null);
             if (Arrays.stream(anno)
-                    .noneMatch(ann -> AnnotationUtils.findAnnotation(entityType, ann) != null)) {
+                      .noneMatch(ann -> AnnotationUtils.findAnnotation(entityType, ann) != null)) {
                 continue;
             }
 
             ImplementFor implementFor = AnnotationUtils.findAnnotation(entityType, ImplementFor.class);
             Reactive reactive = AnnotationUtils.findAnnotation(entityType, Reactive.class);
-            Class genericType = Optional.ofNullable(implementFor)
+            Class genericType = Optional
+                    .ofNullable(implementFor)
                     .map(ImplementFor::value)
                     .orElseGet(() -> {
-                        return Stream.of(entityType.getInterfaces())
+                        return Stream
+                                .of(entityType.getInterfaces())
                                 .filter(e -> GenericEntity.class.isAssignableFrom(e))
                                 .findFirst()
                                 .orElse(entityType);
@@ -97,7 +109,8 @@ public class EasyormRepositoryRegistrar implements ImportBeanDefinitionRegistrar
                 idType = implementFor.idType();
             }
 
-            EntityInfo entityInfo = new EntityInfo(genericType, entityType, idType, reactivePrecent && (reactive == null || reactive.enable()));
+            EntityInfo entityInfo = new EntityInfo(genericType, entityType, idType, reactivePrecent && (reactive == null || reactive
+                    .enable()));
             if (!entityInfos.contains(entityInfo) || implementFor != null) {
                 entityInfos.add(entityInfo);
             }
@@ -110,7 +123,7 @@ public class EasyormRepositoryRegistrar implements ImportBeanDefinitionRegistrar
             Class realType = entityInfo.getRealType();
             if (entityInfo.isReactive()) {
                 reactive = true;
-                log.debug("register ReactiveRepository<{},{}>", entityType.getName(), idType.getSimpleName());
+                log.trace("register ReactiveRepository<{},{}>", entityType.getName(), idType.getSimpleName());
 
                 ResolvableType repositoryType = ResolvableType.forClassWithGenerics(DefaultReactiveRepository.class, entityType, idType);
 
@@ -121,7 +134,7 @@ public class EasyormRepositoryRegistrar implements ImportBeanDefinitionRegistrar
                 definition.getPropertyValues().add("entityType", realType);
                 registry.registerBeanDefinition(realType.getSimpleName().concat("ReactiveRepository"), definition);
             } else {
-                log.debug("register SyncRepository<{},{}>", entityType.getName(), idType.getSimpleName());
+                log.trace("register SyncRepository<{},{}>", entityType.getName(), idType.getSimpleName());
                 ResolvableType repositoryType = ResolvableType.forClassWithGenerics(DefaultSyncRepository.class, entityType, idType);
                 RootBeanDefinition definition = new RootBeanDefinition();
                 definition.setTargetType(repositoryType);
@@ -133,23 +146,27 @@ public class EasyormRepositoryRegistrar implements ImportBeanDefinitionRegistrar
 
         }
 
+        RootBeanDefinition definition = new RootBeanDefinition();
+        definition.setTargetType(AutoDDLProcessor.class);
+        definition.setBeanClass(AutoDDLProcessor.class);
+        definition.setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE);
+        definition.getPropertyValues().add("entities", entityInfos);
+        definition.getPropertyValues().add("reactive", reactive);
+        definition.setRole(BeanDefinition.ROLE_INFRASTRUCTURE);
+        definition.setSynthetic(true);
+        registry.registerBeanDefinition(AutoDDLProcessor.class.getName() + "_" + count.incrementAndGet(), definition);
 
-        try {
-            BeanDefinition definition = registry.getBeanDefinition(AutoDDLProcessor.class.getName());
-            Set<EntityInfo> infos = (Set) definition.getPropertyValues().get("entities");
-            infos.addAll(entityInfos);
-        } catch (NoSuchBeanDefinitionException e) {
-            RootBeanDefinition definition = new RootBeanDefinition();
-            definition.setTargetType(AutoDDLProcessor.class);
-            definition.setBeanClass(AutoDDLProcessor.class);
-            definition.setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE);
-            definition.getPropertyValues().add("entities", entityInfos);
-            definition.getPropertyValues().add("reactive", reactive);
-            registry.registerBeanDefinition(AutoDDLProcessor.class.getName(), definition);
-        }
+//        try {
+//            BeanDefinition definition = registry.getBeanDefinition(AutoDDLProcessor.class.getName());
+//            Set<EntityInfo> infos = (Set) definition.getPropertyValues().get("entities");
+//            infos.addAll(entityInfos);
+//        } catch (NoSuchBeanDefinitionException e) {
+//
+//        }
 
 
     }
 
+    static AtomicInteger count = new AtomicInteger();
 
 }
