@@ -394,27 +394,11 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
     public void onMetricAdded(MetricName name, Metric metric) {
         if (metric != null) {
             try {
-                dispatcher.dispatch(metric, name, this, new Context(name, createObjectName(name)));
+                dispatcher.dispatch(metric, name, this, new Context(name, new ObjectName(name.getMBeanName())));
             } catch (Exception e) {
-                LOGGER.warn("Error processing " + name, e);
+                LOGGER.warn("Error processing {}", name, e);
             }
         }
-    }
-
-    private ObjectName createObjectName(MetricName name) throws MalformedObjectNameException {
-        final StringBuilder nameBuilder = new StringBuilder();
-        nameBuilder.append(name.getDomain());
-        nameBuilder.append(":type=");
-        nameBuilder.append(name.getType());
-        if (name.hasScope()) {
-            nameBuilder.append(",scope=");
-            nameBuilder.append(name.getScope());
-        }
-        if (!name.getName().isEmpty()) {
-            nameBuilder.append(",name=");
-            nameBuilder.append(name);
-        }
-        return new ObjectName(nameBuilder.toString());
     }
 
     @Override
@@ -490,9 +474,9 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
             // This is often thrown when the process is shutting down. An application with lots of
             // metrics will often begin unregistering metrics *after* JMX itself has cleared,
             // resulting in a huge dump of exceptions as the process is exiting.
-            LOGGER.trace("Error unregistering " + name, e);
+            LOGGER.trace("Error unregistering {}", name, e);
         } catch (MBeanRegistrationException e) {
-            LOGGER.debug("Error unregistering " + name, e);
+            LOGGER.debug("Error unregistering {}", name, e);
         }
     }
 }

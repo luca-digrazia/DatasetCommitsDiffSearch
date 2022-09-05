@@ -1,31 +1,29 @@
 package com.yammer.metrics.reporting;
 
 import com.yammer.metrics.Metrics;
-import com.yammer.metrics.core.MetricsRegistry;
 import com.yammer.metrics.core.*;
-import com.yammer.metrics.util.Utils;
+import com.yammer.metrics.stats.Snapshot;
+import com.yammer.metrics.core.MetricPredicate;
 
 import java.io.PrintStream;
 import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Map;
+import java.util.Locale;
 import java.util.Map.Entry;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.SortedMap;
+import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
 /**
- * A simple reporters which prints out application metrics to a
- * {@link PrintStream} periodically.
+ * A simple reporters which prints out application metrics to a {@link PrintStream} periodically.
  */
-public class ConsoleReporter implements Runnable {
-    private final ScheduledExecutorService tickThread;
-    private final MetricsRegistry metricsRegistry;
-    private final PrintStream out;
+public class ConsoleReporter extends AbstractPollingReporter implements
+                                                             MetricProcessor<PrintStream> {
+    private static final int CONSOLE_WIDTH = 80;
 
     /**
-     * Enables the console reporter for the default metrics registry, and causes it to
-     * print to STDOUT with the specified period.
+     * Enables the console reporter for the default metrics registry, and causes it to print to
+     * STDOUT with the specified period.
      *
      * @param period the period between successive outputs
      * @param unit   the time unit of {@code period}
@@ -35,82 +33,114 @@ public class ConsoleReporter implements Runnable {
     }
 
     /**
-     * Enables the console reporter for the given metrics registry, and causes
-     * it to print to STDOUT with the specified period.
+     * Enables the console reporter for the given metrics registry, and causes it to print to STDOUT
+     * with the specified period and unrestricted output.
      *
      * @param metricsRegistry the metrics registry
      * @param period          the period between successive outputs
      * @param unit            the time unit of {@code period}
      */
     public static void enable(MetricsRegistry metricsRegistry, long period, TimeUnit unit) {
-        final ConsoleReporter reporter = new ConsoleReporter(metricsRegistry, System.out);
+        final ConsoleReporter reporter = new ConsoleReporter(metricsRegistry,
+                                                             System.out,
+                                                             MetricPredicate.ALL);
         reporter.start(period, unit);
     }
 
+    private final PrintStream out;
+    private final MetricPredicate predicate;
+    private final Clock clock;
+    private final TimeZone timeZone;
+    private final Locale locale;
+
     /**
-     * Creates a new {@link ConsoleReporter} for the default metrics registry.
+     * Creates a new {@link ConsoleReporter} for the default metrics registry, with unrestricted
+     * output.
      *
-     * @param out the {@link java.io.PrintStream} to which output will be written
+     * @param out the {@link PrintStream} to which output will be written
      */
     public ConsoleReporter(PrintStream out) {
-        this(Metrics.defaultRegistry(), out);
+        this(Metrics.defaultRegistry(), out, MetricPredicate.ALL);
     }
 
     /**
      * Creates a new {@link ConsoleReporter} for a given metrics registry.
      *
      * @param metricsRegistry the metrics registry
-     * @param out             the {@link java.io.PrintStream} to which output will be written
+     * @param out             the {@link PrintStream} to which output will be written
+     * @param predicate       the {@link MetricPredicate} used to determine whether a metric will be
+     *                        output
      */
-    public ConsoleReporter(MetricsRegistry metricsRegistry, PrintStream out) {
-        this.metricsRegistry = metricsRegistry;
-        this.tickThread = metricsRegistry.threadPools().newScheduledThreadPool(1, "console-reporter");
-        this.out = out;
+    public ConsoleReporter(MetricsRegistry metricsRegistry, PrintStream out, MetricPredicate predicate) {
+        this(metricsRegistry, out, predicate, Clock.defaultClock(), TimeZone.getDefault());
     }
 
     /**
-     * Starts printing output to the specified {@link PrintStream}.
+     * Creates a new {@link ConsoleReporter} for a given metrics registry.
      *
-     * @param period the period between successive displays
-     * @param unit the time unit of {@code period}
+     * @param metricsRegistry the metrics registry
+     * @param out             the {@link PrintStream} to which output will be written
+     * @param predicate       the {@link MetricPredicate} used to determine whether a metric will be
+     *                        output
+     * @param clock           the {@link Clock} used to print time
+     * @param timeZone        the {@link TimeZone} used to print time
      */
-    public void start(long period, TimeUnit unit) {
-        tickThread.scheduleAtFixedRate(this, period, period, unit);
+    public ConsoleReporter(MetricsRegistry metricsRegistry,
+                           PrintStream out,
+                           MetricPredicate predicate,
+                           Clock clock,
+                           TimeZone timeZone) {
+        this(metricsRegistry, out, predicate, clock, timeZone, Locale.getDefault());
+    }
+
+    /**
+     * Creates a new {@link ConsoleReporter} for a given metrics registry.
+     *
+     * @param metricsRegistry the metrics registry
+     * @param out             the {@link PrintStream} to which output will be written
+     * @param predicate       the {@link MetricPredicate} used to determine whether a metric will be
+     *                        output
+     * @param clock           the {@link com.yammer.metrics.core.Clock} used to print time
+     * @param timeZone        the {@link TimeZone} used to print time
+     * @param locale          the {@link Locale} used to print values
+     */
+    public ConsoleReporter(MetricsRegistry metricsRegistry,
+                           PrintStream out,
+                           MetricPredicate predicate,
+                           Clock clock,
+                           TimeZone timeZone, Locale locale) {
+        super(metricsRegistry, "console-reporter");
+        this.out = out;
+        this.predicate = predicate;
+        this.clock = clock;
+        this.timeZone = timeZone;
+        this.locale = locale;
     }
 
     @Override
     public void run() {
         try {
-            final DateFormat format = SimpleDateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM);
-            final String dateTime = format.format(new Date());
+            final DateFormat format = DateFormat.getDateTimeInstance(DateFormat.SHORT,
+                                                                     DateFormat.MEDIUM,
+                                                                     locale);
+            final MetricDispatcher dispatcher = new MetricDispatcher();
+            format.setTimeZone(timeZone);
+            final String dateTime = format.format(new Date(clock.getTime()));
             out.print(dateTime);
             out.print(' ');
-            for (int i = 0; i < (80 - dateTime.length() - 1); i++) {
+            for (int i = 0; i < (CONSOLE_WIDTH - dateTime.length() - 1); i++) {
                 out.print('=');
             }
             out.println();
-
-            for (Entry<String, Map<String, Metric>> entry : Utils.sortMetrics(metricsRegistry.allMetrics()).entrySet()) {
+            for (Entry<String, SortedMap<MetricName, Metric>> entry : getMetricsRegistry().getGroupedMetrics(
+                    predicate).entrySet()) {
                 out.print(entry.getKey());
                 out.println(':');
-
-                for (Entry<String, Metric> subEntry : entry.getValue().entrySet()) {
+                for (Entry<MetricName, Metric> subEntry : entry.getValue().entrySet()) {
                     out.print("  ");
-                    out.print(subEntry.getKey());
+                    out.print(subEntry.getKey().getName());
                     out.println(':');
-
-                    final Metric metric = subEntry.getValue();
-                    if (metric instanceof GaugeMetric<?>) {
-                        printGauge((GaugeMetric<?>) metric);
-                    } else if (metric instanceof CounterMetric) {
-                        printCounter((CounterMetric) metric);
-                    } else if (metric instanceof HistogramMetric) {
-                        printHistogram((HistogramMetric) metric);
-                    } else if (metric instanceof MeterMetric) {
-                        printMetered((MeterMetric) metric);
-                    } else if (metric instanceof TimerMetric) {
-                        printTimer((TimerMetric) metric);
-                    }
+                    dispatcher.dispatch(subEntry.getValue(), subEntry.getKey(), this, out);
                     out.println();
                 }
                 out.println();
@@ -122,55 +152,68 @@ public class ConsoleReporter implements Runnable {
         }
     }
 
-    private void printGauge(GaugeMetric<?> gauge) {
-        out.print("    value = ");
-        out.println(gauge.value());
+    @Override
+    public void processGauge(MetricName name, Gauge<?> gauge, PrintStream stream) {
+        stream.printf(locale, "    value = %s\n", gauge.getValue());
     }
 
-    private void printCounter(CounterMetric counter) {
-        out.print("    count = ");
-        out.println(counter.count());
+    @Override
+    public void processCounter(MetricName name, Counter counter, PrintStream stream) {
+        stream.printf(locale, "    count = %d\n", counter.getCount());
     }
 
-    private void printMetered(Metered meter) {
-        final String unit = abbrev(meter.rateUnit());
-        out.printf("             count = %d\n", meter.count());
-        out.printf("         mean rate = %2.2f %s/%s\n", meter.meanRate(), meter.eventType(), unit);
-        out.printf("     1-minute rate = %2.2f %s/%s\n", meter.oneMinuteRate(), meter.eventType(), unit);
-        out.printf("     5-minute rate = %2.2f %s/%s\n", meter.fiveMinuteRate(), meter.eventType(), unit);
-        out.printf("    15-minute rate = %2.2f %s/%s\n", meter.fifteenMinuteRate(), meter.eventType(), unit);
+    @Override
+    public void processMeter(MetricName name, Metered meter, PrintStream stream) {
+        final String unit = abbrev(meter.getRateUnit());
+        stream.printf(locale, "             count = %d\n", meter.getCount());
+        stream.printf(locale, "         mean rate = %2.2f %s/%s\n",
+                      meter.getMeanRate(),
+                      meter.getEventType(),
+                      unit);
+        stream.printf(locale, "     1-minute rate = %2.2f %s/%s\n",
+                      meter.getOneMinuteRate(),
+                      meter.getEventType(),
+                      unit);
+        stream.printf(locale, "     5-minute rate = %2.2f %s/%s\n",
+                      meter.getFiveMinuteRate(),
+                      meter.getEventType(),
+                      unit);
+        stream.printf(locale, "    15-minute rate = %2.2f %s/%s\n",
+                      meter.getFifteenMinuteRate(),
+                      meter.getEventType(),
+                      unit);
     }
 
-    private void printHistogram(HistogramMetric histogram) {
-        final double[] percentiles = histogram.percentiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
-        out.printf("               min = %2.2f\n", histogram.min());
-        out.printf("               max = %2.2f\n", histogram.max());
-        out.printf("              mean = %2.2f\n", histogram.mean());
-        out.printf("            stddev = %2.2f\n", histogram.stdDev());
-        out.printf("            median = %2.2f\n", percentiles[0]);
-        out.printf("              75%% <= %2.2f\n", percentiles[1]);
-        out.printf("              95%% <= %2.2f\n", percentiles[2]);
-        out.printf("              98%% <= %2.2f\n", percentiles[3]);
-        out.printf("              99%% <= %2.2f\n", percentiles[4]);
-        out.printf("            99.9%% <= %2.2f\n", percentiles[5]);
+    @Override
+    public void processHistogram(MetricName name, Histogram histogram, PrintStream stream) {
+        final Snapshot snapshot = histogram.getSnapshot();
+        stream.printf(locale, "               min = %2.2f\n", histogram.getMin());
+        stream.printf(locale, "               max = %2.2f\n", histogram.getMax());
+        stream.printf(locale, "              mean = %2.2f\n", histogram.getMean());
+        stream.printf(locale, "            stddev = %2.2f\n", histogram.getStdDev());
+        stream.printf(locale, "            median = %2.2f\n", snapshot.getMedian());
+        stream.printf(locale, "              75%% <= %2.2f\n", snapshot.get75thPercentile());
+        stream.printf(locale, "              95%% <= %2.2f\n", snapshot.get95thPercentile());
+        stream.printf(locale, "              98%% <= %2.2f\n", snapshot.get98thPercentile());
+        stream.printf(locale, "              99%% <= %2.2f\n", snapshot.get99thPercentile());
+        stream.printf(locale, "            99.9%% <= %2.2f\n", snapshot.get999thPercentile());
     }
 
-    private void printTimer(TimerMetric timer) {
-        printMetered(timer);
-
-        final String durationUnit = abbrev(timer.durationUnit());
-
-        final double[] percentiles = timer.percentiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
-        out.printf("               min = %2.2f%s\n", timer.min(), durationUnit);
-        out.printf("               max = %2.2f%s\n", timer.max(), durationUnit);
-        out.printf("              mean = %2.2f%s\n", timer.mean(), durationUnit);
-        out.printf("            stddev = %2.2f%s\n", timer.stdDev(), durationUnit);
-        out.printf("            median = %2.2f%s\n", percentiles[0], durationUnit);
-        out.printf("              75%% <= %2.2f%s\n", percentiles[1], durationUnit);
-        out.printf("              95%% <= %2.2f%s\n", percentiles[2], durationUnit);
-        out.printf("              98%% <= %2.2f%s\n", percentiles[3], durationUnit);
-        out.printf("              99%% <= %2.2f%s\n", percentiles[4], durationUnit);
-        out.printf("            99.9%% <= %2.2f%s\n", percentiles[5], durationUnit);
+    @Override
+    public void processTimer(MetricName name, Timer timer, PrintStream stream) {
+        processMeter(name, timer, stream);
+        final String durationUnit = abbrev(timer.getDurationUnit());
+        final Snapshot snapshot = timer.getSnapshot();
+        stream.printf(locale, "               min = %2.2f%s\n", timer.getMin(), durationUnit);
+        stream.printf(locale, "               max = %2.2f%s\n", timer.getMax(), durationUnit);
+        stream.printf(locale, "              mean = %2.2f%s\n", timer.getMean(), durationUnit);
+        stream.printf(locale, "            stddev = %2.2f%s\n", timer.getStdDev(), durationUnit);
+        stream.printf(locale, "            median = %2.2f%s\n", snapshot.getMedian(), durationUnit);
+        stream.printf(locale, "              75%% <= %2.2f%s\n", snapshot.get75thPercentile(), durationUnit);
+        stream.printf(locale, "              95%% <= %2.2f%s\n", snapshot.get95thPercentile(), durationUnit);
+        stream.printf(locale, "              98%% <= %2.2f%s\n", snapshot.get98thPercentile(), durationUnit);
+        stream.printf(locale, "              99%% <= %2.2f%s\n", snapshot.get99thPercentile(), durationUnit);
+        stream.printf(locale, "            99.9%% <= %2.2f%s\n", snapshot.get999thPercentile(), durationUnit);
     }
 
     private String abbrev(TimeUnit unit) {
@@ -189,7 +232,8 @@ public class ConsoleReporter implements Runnable {
                 return "h";
             case DAYS:
                 return "d";
+            default:
+                throw new IllegalArgumentException("Unrecognized TimeUnit: " + unit);
         }
-        throw new IllegalArgumentException("Unrecognized TimeUnit: " + unit);
     }
 }

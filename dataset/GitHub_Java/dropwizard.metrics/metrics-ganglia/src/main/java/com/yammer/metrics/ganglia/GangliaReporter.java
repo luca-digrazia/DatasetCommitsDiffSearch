@@ -3,6 +3,7 @@ package com.yammer.metrics.ganglia;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.*;
 import com.yammer.metrics.reporting.AbstractPollingReporter;
+import com.yammer.metrics.reporting.MetricDispatcher;
 import com.yammer.metrics.stats.Snapshot;
 import com.yammer.metrics.core.MetricPredicate;
 import org.slf4j.Logger;
@@ -28,17 +29,16 @@ import java.util.concurrent.TimeUnit;
  * from Hadoop.
  */
 public class GangliaReporter extends AbstractPollingReporter implements MetricProcessor<String> {
-    /* for use as metricType parameter to sendMetricData() */
-    public static final String GANGLIA_INT_TYPE = "int32";
-    public static final String GANGLIA_DOUBLE_TYPE = "double";
-    public static final String GANGLIA_STRING_TYPE = "string";
-
     private static final Logger LOG = LoggerFactory.getLogger(GangliaReporter.class);
     private static final int GANGLIA_TMAX = 60;
     private static final int GANGLIA_DMAX = 0;
+    private static final String GANGLIA_INT_TYPE = "int32";
+    private static final String GANGLIA_DOUBLE_TYPE = "double";
+    private static final String GANGLIA_STRING_TYPE = "string";
     private final MetricPredicate predicate;
     private final VirtualMachineMetrics vm;
     private final Locale locale = Locale.US;
+    private final MetricDispatcher dispatcher = new MetricDispatcher();
     private String hostLabel;
     private String groupPrefix = "";
     private boolean compressPackageNames;
@@ -247,7 +247,7 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
         super(metricsRegistry, "ganglia-reporter");
         this.gangliaMessageBuilder = gangliaMessageBuilder;
         this.groupPrefix = groupPrefix + "_";
-        this.hostLabel = getDefaultHostLabel();
+        this.hostLabel = getHostLabel();
         this.predicate = predicate;
         this.compressPackageNames = compressPackageNames;
         this.vm = vm;
@@ -262,12 +262,13 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
     }
 
     private void printRegularMetrics() {
-        for (Map.Entry<String, SortedMap<MetricName, Metric>> entry : getMetricsRegistry().groupedMetrics(predicate).entrySet()) {
+        for (Map.Entry<String, SortedMap<MetricName, Metric>> entry : getMetricsRegistry().getGroupedMetrics(
+                predicate).entrySet()) {
             for (Map.Entry<MetricName, Metric> subEntry : entry.getValue().entrySet()) {
                 final Metric metric = subEntry.getValue();
                 if (metric != null) {
                     try {
-                        metric.processWith(this, subEntry.getKey(), null);
+                        dispatcher.dispatch(subEntry.getValue(), subEntry.getKey(), this, null);
                     } catch (Exception ignored) {
                         LOG.error("Error printing regular metrics:", ignored);
                     }
@@ -294,27 +295,12 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
     }
 
     private void sendMetricData(String metricType, String metricName, String metricValue, String groupName, String units) throws IOException {
-        sendMetricData(getHostLabel(), metricType, metricName, metricValue, groupName, units);
-    }
 
-    /**
-     * allow subclasses to send UDP metrics directly, unchecked.
-     * <b>note:</b> hostName <u>must</u> be in the format IP:HOST
-     * (ex: 127.0.0.0:my.host.name) or ganglia will drop the packet.
-     * no parameters are permitted to be null.
-     *
-     * @param hostName IP:HOST formatted string
-     * @param metricType "int32", "double", "float", etc
-     * @param metricName name of metric
-     * @param groupName correlates with ganglia cluster names.
-     * @param units unit of measure.  empty string is OK.
-     */
-    protected void sendMetricData(String hostName, String metricType, String metricName, String metricValue, String groupName, String units) throws IOException {
         this.gangliaMessageBuilder.newMessage()
                 .addInt(128)// metric_id = metadata_msg
-                .addString(hostName)// hostname
+                .addString(this.hostLabel)// hostname
                 .addString(metricName)// metric name
-                .addInt(hostName.equals(getHostLabel()) ? 0 : 1)// spoof = True/1
+                .addInt(0)// spoof = True
                 .addString(metricType)// metric type
                 .addString(metricName)// metric name
                 .addString(units)// units
@@ -328,9 +314,9 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
 
         this.gangliaMessageBuilder.newMessage()
                 .addInt(133)// we are sending a string value
-                .addString(hostName)// hostLabel
+                .addString(this.hostLabel)// hostLabel
                 .addString(metricName)// metric name
-                .addInt(hostName.equals(getHostLabel()) ? 0 : 1)// spoof = True/1
+                .addInt(0)// spoof = True
                 .addString("%s")// format field
                 .addString(metricValue) // metric value
                 .send();
@@ -338,7 +324,7 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
 
     @Override
     public void processGauge(MetricName name, Gauge<?> gauge, String x) throws IOException {
-        final Object value = gauge.value();
+        final Object value = gauge.getValue();
         final Class<?> klass = value.getClass();
 
         final String type;
@@ -352,7 +338,7 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
 
         sendToGanglia(sanitizeName(name),
                       type,
-                      String.format(locale, "%s", gauge.value()),
+                      String.format(locale, "%s", gauge.getValue()),
                       "gauge");
     }
 
@@ -360,21 +346,21 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
     public void processCounter(MetricName name, Counter counter, String x) throws IOException {
         sendToGanglia(sanitizeName(name),
                       GANGLIA_INT_TYPE,
-                      String.format(locale, "%d", counter.count()),
+                      String.format(locale, "%d", counter.getCount()),
                       "counter");
     }
 
     @Override
     public void processMeter(MetricName name, Metered meter, String x) throws IOException {
         final String sanitizedName = sanitizeName(name);
-        final String rateUnits = meter.rateUnit().name();
+        final String rateUnits = meter.getRateUnit().name();
         final String rateUnit = rateUnits.substring(0, rateUnits.length() - 1).toLowerCase(Locale.US);
-        final String unit = meter.eventType() + '/' + rateUnit;
-        printLongField(sanitizedName + ".count", meter.count(), "metered", meter.eventType());
-        printDoubleField(sanitizedName + ".meanRate", meter.meanRate(), "metered", unit);
-        printDoubleField(sanitizedName + ".1MinuteRate", meter.oneMinuteRate(), "metered", unit);
-        printDoubleField(sanitizedName + ".5MinuteRate", meter.fiveMinuteRate(), "metered", unit);
-        printDoubleField(sanitizedName + ".15MinuteRate", meter.fifteenMinuteRate(), "metered", unit);
+        final String unit = meter.getEventType() + '/' + rateUnit;
+        printLongField(sanitizedName + ".count", meter.getCount(), "metered", meter.getEventType());
+        printDoubleField(sanitizedName + ".meanRate", meter.getMeanRate(), "metered", unit);
+        printDoubleField(sanitizedName + ".1MinuteRate", meter.getOneMinuteRate(), "metered", unit);
+        printDoubleField(sanitizedName + ".5MinuteRate", meter.getFiveMinuteRate(), "metered", unit);
+        printDoubleField(sanitizedName + ".15MinuteRate", meter.getFifteenMinuteRate(), "metered", unit);
     }
 
     @Override
@@ -382,10 +368,10 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
         final String sanitizedName = sanitizeName(name);
         final Snapshot snapshot = histogram.getSnapshot();
         // TODO:  what units make sense for histograms?  should we add event type to the Histogram metric?
-        printDoubleField(sanitizedName + ".min", histogram.min(), "histo");
-        printDoubleField(sanitizedName + ".max", histogram.max(), "histo");
-        printDoubleField(sanitizedName + ".mean", histogram.mean(), "histo");
-        printDoubleField(sanitizedName + ".stddev", histogram.stdDev(), "histo");
+        printDoubleField(sanitizedName + ".min", histogram.getMin(), "histo");
+        printDoubleField(sanitizedName + ".max", histogram.getMax(), "histo");
+        printDoubleField(sanitizedName + ".mean", histogram.getMean(), "histo");
+        printDoubleField(sanitizedName + ".stddev", histogram.getStdDev(), "histo");
         printDoubleField(sanitizedName + ".median", snapshot.getMedian(), "histo");
         printDoubleField(sanitizedName + ".75percentile", snapshot.get75thPercentile(), "histo");
         printDoubleField(sanitizedName + ".95percentile", snapshot.get95thPercentile(), "histo");
@@ -399,11 +385,11 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
         processMeter(name, timer, x);
         final String sanitizedName = sanitizeName(name);
         final Snapshot snapshot = timer.getSnapshot();
-        final String durationUnit = timer.durationUnit().name();
-        printDoubleField(sanitizedName + ".min", timer.min(), "timer", durationUnit);
-        printDoubleField(sanitizedName + ".max", timer.max(), "timer", durationUnit);
-        printDoubleField(sanitizedName + ".mean", timer.mean(), "timer", durationUnit);
-        printDoubleField(sanitizedName + ".stddev", timer.stdDev(), "timer", durationUnit);
+        final String durationUnit = timer.getDurationUnit().name();
+        printDoubleField(sanitizedName + ".min", timer.getMin(), "timer", durationUnit);
+        printDoubleField(sanitizedName + ".max", timer.getMax(), "timer", durationUnit);
+        printDoubleField(sanitizedName + ".mean", timer.getMean(), "timer", durationUnit);
+        printDoubleField(sanitizedName + ".stddev", timer.getStdDev(), "timer", durationUnit);
         printDoubleField(sanitizedName + ".median", snapshot.getMedian(), "timer", durationUnit);
         printDoubleField(sanitizedName + ".75percentile", snapshot.get75thPercentile(), "timer", durationUnit);
         printDoubleField(sanitizedName + ".95percentile", snapshot.get95thPercentile(), "timer", durationUnit);
@@ -434,26 +420,26 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
     }
 
     private void printVmMetrics() {
-        printDoubleField("jvm.memory.heap_usage", vm.heapUsage(), "jvm");
-        printDoubleField("jvm.memory.non_heap_usage", vm.nonHeapUsage(), "jvm");
-        for (Map.Entry<String, Double> pool : vm.memoryPoolUsage().entrySet()) {
+        printDoubleField("jvm.memory.heap_usage", vm.getHeapUsage(), "jvm");
+        printDoubleField("jvm.memory.non_heap_usage", vm.getNonHeapUsage(), "jvm");
+        for (Map.Entry<String, Double> pool : vm.getMemoryPoolUsage().entrySet()) {
             printDoubleField("jvm.memory.memory_pool_usages." + pool.getKey(),
                              pool.getValue(),
                              "jvm");
         }
 
-        printDoubleField("jvm.daemon_thread_count", vm.daemonThreadCount(), "jvm");
-        printDoubleField("jvm.thread_count", vm.threadCount(), "jvm");
-        printDoubleField("jvm.uptime", vm.uptime(), "jvm");
-        printDoubleField("jvm.fd_usage", vm.fileDescriptorUsage(), "jvm");
+        printDoubleField("jvm.daemon_thread_count", vm.getDaemonThreadCount(), "jvm");
+        printDoubleField("jvm.thread_count", vm.getThreadCount(), "jvm");
+        printDoubleField("jvm.uptime", vm.getUptime(), "jvm");
+        printDoubleField("jvm.fd_usage", vm.getFileDescriptorUsage(), "jvm");
 
-        for (Map.Entry<Thread.State, Double> entry : vm.threadStatePercentages().entrySet()) {
+        for (Map.Entry<Thread.State, Double> entry : vm.getThreadStatePercentages().entrySet()) {
             printDoubleField("jvm.thread-states." + entry.getKey().toString().toLowerCase(),
                              entry.getValue(),
                              "jvm");
         }
 
-        for (Map.Entry<String, VirtualMachineMetrics.GarbageCollectorStats> entry : vm.garbageCollectors().entrySet()) {
+        for (Map.Entry<String, VirtualMachineMetrics.GarbageCollectorStats> entry : vm.getGarbageCollectors().entrySet()) {
             printLongField("jvm.gc." + entry.getKey() + ".time",
                            entry.getValue().getTime(TimeUnit.MILLISECONDS),
                            "jvm");
@@ -461,7 +447,7 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
         }
     }
 
-    String getDefaultHostLabel() {
+    String getHostLabel() {
         try {
             final InetAddress addr = InetAddress.getLocalHost();
             return addr.getHostAddress() + ":" + addr.getHostName();
@@ -469,11 +455,6 @@ public class GangliaReporter extends AbstractPollingReporter implements MetricPr
             LOG.error("Unable to get local gangliaHost name: ", e);
             return "unknown";
         }
-    }
-
-    /* subclass to override in metric packets */
-    protected String getHostLabel() {
-        return hostLabel;
     }
 
     protected String sanitizeName(MetricName name) {

@@ -1,11 +1,7 @@
 package com.yammer.metrics.core;
 
-import com.yammer.metrics.Metrics;
 import com.yammer.metrics.stats.EWMA;
-import com.yammer.metrics.util.Utils;
 
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -15,37 +11,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * @see <a href="http://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average">EMA</a>
  */
-public class Meter implements Metered, Stoppable {
-    private static final long INTERVAL = 5; // seconds
-    private final Clock clock;
-
-    /**
-     * Creates a new {@link Meter}.
-     *
-     * @param eventType the plural name of the event the meter is measuring (e.g., {@code
-     *                  "requests"})
-     * @param rateUnit  the rate unit of the new meter
-     * @return a new {@link Meter}
-     * @deprecated use the other {@code newMeter} method or create a new meter via the {@link
-     *             MetricsRegistry} or {@link Metrics}
-     */
-    @SuppressWarnings({"deprecation"})
-    public static Meter newMeter(String eventType, TimeUnit rateUnit) {
-        return newMeter(Utils.newScheduledThreadPool(2, "meter-tick"), eventType, rateUnit);
-    }
-
-    /**
-     * Creates a new {@link Meter}.
-     *
-     * @param tickThread background thread for updating the rates
-     * @param eventType  the plural name of the event the meter is measuring (e.g., {@code
-     *                   "requests"})
-     * @param rateUnit   the rate unit of the new meter
-     * @return a new {@link Meter}
-     */
-    public static Meter newMeter(ScheduledExecutorService tickThread, String eventType, TimeUnit rateUnit) {
-        return new Meter(tickThread, eventType, rateUnit, Clock.DEFAULT);
-    }
+public class Meter implements Metered {
+    private static final long TICK_INTERVAL = TimeUnit.SECONDS.toNanos(5);
 
     private final EWMA m1Rate = EWMA.oneMinuteEWMA();
     private final EWMA m5Rate = EWMA.fiveMinuteEWMA();
@@ -53,30 +20,34 @@ public class Meter implements Metered, Stoppable {
 
     private final AtomicLong count = new AtomicLong();
     private final long startTime;
+    private final AtomicLong lastTick;
     private final TimeUnit rateUnit;
     private final String eventType;
-    private final ScheduledFuture<?> future;
+    private final Clock clock;
 
-    public Meter(ScheduledExecutorService tickThread, String eventType, TimeUnit rateUnit, Clock clock) {
+    /**
+     * Creates a new {@link Meter}.
+     *
+     * @param eventType  the plural name of the event the meter is measuring (e.g., {@code
+     *                   "requests"})
+     * @param rateUnit   the rate unit of the new meter
+     * @param clock      the clock to use for the meter ticks
+     */
+    Meter(String eventType, TimeUnit rateUnit, Clock clock) {
         this.rateUnit = rateUnit;
         this.eventType = eventType;
-        this.future = tickThread.scheduleAtFixedRate(new Runnable() {
-            @Override
-            public void run() {
-                tick();
-            }
-        }, INTERVAL, INTERVAL, TimeUnit.SECONDS);
         this.clock = clock;
-        this.startTime = this.clock.tick();
+        this.startTime = this.clock.getTick();
+        this.lastTick = new AtomicLong(startTime);
     }
 
     @Override
-    public TimeUnit rateUnit() {
+    public TimeUnit getRateUnit() {
         return rateUnit;
     }
 
     @Override
-    public String eventType() {
+    public String getEventType() {
         return eventType;
     }
 
@@ -102,53 +73,59 @@ public class Meter implements Metered, Stoppable {
      * @param n the number of events
      */
     public void mark(long n) {
+        tickIfNecessary();
         count.addAndGet(n);
         m1Rate.update(n);
         m5Rate.update(n);
         m15Rate.update(n);
     }
 
-    @Override
-    public long count() {
-        return count.get();
-    }
-
-    @Override
-    public double fifteenMinuteRate() {
-        return m15Rate.rate(rateUnit);
-    }
-
-    @Override
-    public double fiveMinuteRate() {
-        return m5Rate.rate(rateUnit);
-    }
-
-    @Override
-    public double meanRate() {
-        if (count() == 0) {
-            return 0.0;
-        } else {
-            final long elapsed = (clock.tick() - startTime);
-            return convertNsRate(count() / (double) elapsed);
+    private void tickIfNecessary() {
+        final long oldTick = lastTick.get();
+        final long newTick = clock.getTick();
+        final long age = newTick - oldTick;
+        if (age > TICK_INTERVAL && lastTick.compareAndSet(oldTick, newTick)) {
+            final long requiredTicks = age / TICK_INTERVAL;
+            for (long i = 0; i < requiredTicks; i++) {
+                tick();
+            }
         }
     }
 
     @Override
-    public double oneMinuteRate() {
-        return m1Rate.rate(rateUnit);
+    public long getCount() {
+        return count.get();
+    }
+
+    @Override
+    public double getFifteenMinuteRate() {
+        tickIfNecessary();
+        return m15Rate.getRate(rateUnit);
+    }
+
+    @Override
+    public double getFiveMinuteRate() {
+        tickIfNecessary();
+        return m5Rate.getRate(rateUnit);
+    }
+
+    @Override
+    public double getMeanRate() {
+        if (getCount() == 0) {
+            return 0.0;
+        } else {
+            final long elapsed = (clock.getTick() - startTime);
+            return convertNsRate(getCount() / (double) elapsed);
+        }
+    }
+
+    @Override
+    public double getOneMinuteRate() {
+        tickIfNecessary();
+        return m1Rate.getRate(rateUnit);
     }
 
     private double convertNsRate(double ratePerNs) {
         return ratePerNs * (double) rateUnit.toNanos(1);
-    }
-
-    @Override
-    public void stop() {
-        future.cancel(false);
-    }
-
-    @Override
-    public <T> void processWith(MetricsProcessor<T> processor, MetricName name, T context) throws Exception {
-        processor.processMeter(name, this, context);
     }
 }

@@ -1,22 +1,16 @@
 package com.yammer.metrics.core;
 
-import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Histogram.SampleType;
+import com.yammer.metrics.stats.Snapshot;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
  * A timer metric which aggregates timing durations and provides duration statistics, plus
  * throughput statistics via {@link Meter}.
  */
-public class Timer implements Metered, Stoppable, Percentiled, Summarized {
-
+public class Timer implements Metered, Sampling, Summarizable {
     private final TimeUnit durationUnit, rateUnit;
     private final Meter meter;
     private final Histogram histogram = new Histogram(SampleType.BIASED);
@@ -27,55 +21,12 @@ public class Timer implements Metered, Stoppable, Percentiled, Summarized {
      *
      * @param durationUnit the scale unit for this timer's duration metrics
      * @param rateUnit     the scale unit for this timer's rate metrics
-     * @deprecated either use the other constructor or create via the {@link MetricsRegistry} or
-     *             {@link Metrics}
-     */
-    @SuppressWarnings({"deprecation"})
-    public Timer(TimeUnit durationUnit, TimeUnit rateUnit) {
-        this(durationUnit, rateUnit, Clock.DEFAULT);
-    }
-
-    /**
-     * Creates a new {@link Timer} with the specified clock.
-     *
-     * @param durationUnit the scale unit for this timer's duration metrics
-     * @param rateUnit     the scale unit for this timer's rate metrics
-     * @param clock        the clock used to calculate duration
-     * @deprecated either use the other constructor or create via the {@link MetricsRegistry} or
-     *             {@link Metrics}
-     */
-    @SuppressWarnings({"deprecation"})
-    public Timer(TimeUnit durationUnit, TimeUnit rateUnit, Clock clock) {
-        this.durationUnit = durationUnit;
-        this.rateUnit = rateUnit;
-        this.meter = Meter.newMeter("calls", rateUnit);
-        this.clock = clock;
-        clear();
-    }
-
-    /**
-     * Creates a new {@link Timer}.
-     *
-     * @param tickThread   background thread for updating the rates
-     * @param durationUnit the scale unit for this timer's duration metrics
-     * @param rateUnit     the scale unit for this timer's rate metrics
-     */
-    public Timer(ScheduledExecutorService tickThread, TimeUnit durationUnit, TimeUnit rateUnit) {
-        this(tickThread, durationUnit, rateUnit, Clock.DEFAULT);
-    }
-
-    /**
-     * Creates a new {@link Timer}.
-     *
-     * @param tickThread   background thread for updating the rates
-     * @param durationUnit the scale unit for this timer's duration metrics
-     * @param rateUnit     the scale unit for this timer's rate metrics
      * @param clock        the clock used to calculate duration
      */
-    public Timer(ScheduledExecutorService tickThread, TimeUnit durationUnit, TimeUnit rateUnit, Clock clock) {
+    Timer(TimeUnit durationUnit, TimeUnit rateUnit, Clock clock) {
         this.durationUnit = durationUnit;
         this.rateUnit = rateUnit;
-        this.meter = Meter.newMeter(tickThread, "calls", rateUnit);
+        this.meter = new Meter("calls", rateUnit, clock);
         this.clock = clock;
         clear();
     }
@@ -85,12 +36,12 @@ public class Timer implements Metered, Stoppable, Percentiled, Summarized {
      *
      * @return the timer's duration scale unit
      */
-    public TimeUnit durationUnit() {
+    public TimeUnit getDurationUnit() {
         return durationUnit;
     }
 
     @Override
-    public TimeUnit rateUnit() {
+    public TimeUnit getRateUnit() {
         return rateUnit;
     }
 
@@ -121,11 +72,11 @@ public class Timer implements Metered, Stoppable, Percentiled, Summarized {
      * @throws Exception if {@code event} throws an {@link Exception}
      */
     public <T> T time(Callable<T> event) throws Exception {
-        final long startTime = clock.tick();
+        final long startTime = clock.getTick();
         try {
             return event.call();
         } finally {
-            update(clock.tick() - startTime);
+            update(clock.getTick() - startTime);
         }
     }
 
@@ -135,32 +86,32 @@ public class Timer implements Metered, Stoppable, Percentiled, Summarized {
      * @return a new {@link TimerContext}
      */
     public TimerContext time() {
-        return new TimerContext(this);
+        return new TimerContext(this, clock);
     }
 
     @Override
-    public long count() {
-        return histogram.count();
+    public long getCount() {
+        return histogram.getCount();
     }
 
     @Override
-    public double fifteenMinuteRate() {
-        return meter.fifteenMinuteRate();
+    public double getFifteenMinuteRate() {
+        return meter.getFifteenMinuteRate();
     }
 
     @Override
-    public double fiveMinuteRate() {
-        return meter.fiveMinuteRate();
+    public double getFiveMinuteRate() {
+        return meter.getFiveMinuteRate();
     }
 
     @Override
-    public double meanRate() {
-        return meter.meanRate();
+    public double getMeanRate() {
+        return meter.getMeanRate();
     }
 
     @Override
-    public double oneMinuteRate() {
-        return meter.oneMinuteRate();
+    public double getOneMinuteRate() {
+        return meter.getOneMinuteRate();
     }
 
     /**
@@ -169,8 +120,8 @@ public class Timer implements Metered, Stoppable, Percentiled, Summarized {
      * @return the longest recorded duration
      */
     @Override
-    public double max() {
-        return convertFromNS(histogram.max());
+    public double getMax() {
+        return convertFromNS(histogram.getMax());
     }
 
     /**
@@ -179,8 +130,8 @@ public class Timer implements Metered, Stoppable, Percentiled, Summarized {
      * @return the shortest recorded duration
      */
     @Override
-    public double min() {
-        return convertFromNS(histogram.min());
+    public double getMin() {
+        return convertFromNS(histogram.getMin());
     }
 
     /**
@@ -189,8 +140,8 @@ public class Timer implements Metered, Stoppable, Percentiled, Summarized {
      * @return the arithmetic mean of all recorded durations
      */
     @Override
-    public double mean() {
-        return convertFromNS(histogram.mean());
+    public double getMean() {
+        return convertFromNS(histogram.getMean());
     }
 
     /**
@@ -199,57 +150,33 @@ public class Timer implements Metered, Stoppable, Percentiled, Summarized {
      * @return the standard deviation of all recorded durations
      */
     @Override
-    public double stdDev() {
-        return convertFromNS(histogram.stdDev());
-    }
-
-    /* (non-Javadoc)
-     * @see com.yammer.metrics.core.Percentiled#percentile(double)
-     */
-    @Override
-    public double percentile(double percentile) {
-        return percentiles(percentile)[0];
-    }
-
-    /* (non-Javadoc)
-     * @see com.yammer.metrics.core.Percentiled#percentiles(double)
-     */
-    @Override
-    public Double[] percentiles(Double... percentiles) {
-        final Double[] scores = histogram.percentiles(percentiles);
-        for (int i = 0; i < scores.length; i++) {
-            scores[i] = convertFromNS(scores[i]);
-        }
-
-        return scores;
-    }
-
-    @Override
-    public String eventType() {
-        return meter.eventType();
+    public double getStdDev() {
+        return convertFromNS(histogram.getStdDev());
     }
 
     /**
-     * Returns a list of all recorded durations in the timer's sample.
+     * Returns the sum of all recorded durations.
      *
-     * @return a list of all recorded durations in the timer's sample
+     * @return the sum of all recorded durations
      */
-    public List<Double> values() {
-        final List<Double> values = new ArrayList<Double>();
-        for (Long value : histogram.values()) {
-            values.add(convertFromNS(value));
-        }
-        return values;
+    @Override
+    public double getSum() {
+        return convertFromNS(histogram.getSum());
     }
 
-    /**
-     * Writes the values of the timer's sample to the given file.
-     *
-     * @param output the file to which the values will be written
-     * @throws java.io.IOException if there is an error writing the values
-     */
-    public void dump(File output) throws IOException {
-        histogram.dump(output);
+    @Override
+    public Snapshot getSnapshot() {
+        final double[] values = histogram.getSnapshot().getValues();
+        final double[] converted = new double[values.length];
+        for (int i = 0; i < values.length; i++) {
+            converted[i] = convertFromNS(values[i]);
+        }
+        return new Snapshot(converted);
+    }
+
+    @Override
+    public String getEventType() {
+        return meter.getEventType();
     }
 
     private void update(long duration) {
@@ -261,15 +188,5 @@ public class Timer implements Metered, Stoppable, Percentiled, Summarized {
 
     private double convertFromNS(double ns) {
         return ns / TimeUnit.NANOSECONDS.convert(1, durationUnit);
-    }
-
-    @Override
-    public void stop() {
-        meter.stop();
-    }
-
-    @Override
-    public <T> void processWith(MetricsProcessor<T> processor, MetricName name, T context) throws Exception {
-        processor.processTimer(name, this, context);
     }
 }
