@@ -312,13 +312,13 @@ public class AggregationTest {
 	 */
 	@Test
 	public void countGroupByDateTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
-        SqlElasticSearchRequestBuilder result = (SqlElasticSearchRequestBuilder) MainTestSuite.getSearchDao().explain("select insert_time from online  group by date_histogram(field='insert_time','interval'='1.5h','format'='yyyy-MM') ").explain();
+        SqlElasticSearchRequestBuilder result = (SqlElasticSearchRequestBuilder) MainTestSuite.getSearchDao().explain("select insert_time from online  group by date_histogram(field='insert_time','interval'='1.5h','format'='yyyy-MM') ");
 		System.out.println(result);
 	}
 
     @Test
     public void countGroupByDateTestWithAlias() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
-        SqlElasticSearchRequestBuilder result = (SqlElasticSearchRequestBuilder) MainTestSuite.getSearchDao().explain("select insert_time from online  group by date_histogram(field='insert_time','interval'='1.5h','format'='yyyy-MM','alias'='myAlias') ").explain();
+        SqlElasticSearchRequestBuilder result = (SqlElasticSearchRequestBuilder) MainTestSuite.getSearchDao().explain("select insert_time from online  group by date_histogram(field='insert_time','interval'='1.5h','format'='yyyy-MM','alias'='myAlias') ");
         boolean containAlias = result.toString().replaceAll("\\s+","").contains("myAlias\":{\"date_histogram\":{\"field\":\"insert_time\",\"interval\":\"1.5h\",\"format\":\"yyyy-MM\"}}");
         Assert.assertTrue(containAlias);
     }
@@ -333,7 +333,7 @@ public class AggregationTest {
 	 */
 	@Test
 	public void countDateRangeTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
-        SqlElasticSearchRequestBuilder result = (SqlElasticSearchRequestBuilder) MainTestSuite.getSearchDao().explain("select online from online  group by date_range(field='insert_time','format'='yyyy-MM-dd' ,'2014-08-18','2014-08-17','now-8d','now-7d','now-6d','now') ").explain();
+        SqlElasticSearchRequestBuilder result = (SqlElasticSearchRequestBuilder) MainTestSuite.getSearchDao().explain("select online from online  group by date_range(field='insert_time','format'='yyyy-MM-dd' ,'2014-08-18','2014-08-17','now-8d','now-7d','now-6d','now') ");
 		System.out.println(result);
 	}
 
@@ -348,7 +348,7 @@ public class AggregationTest {
 	 */
 	@Test
 	public void topHitTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
-        SqlElasticSearchRequestBuilder result = (SqlElasticSearchRequestBuilder) MainTestSuite.getSearchDao().explain("select topHits('size'=3,age='desc') from bank  group by gender ").explain();
+        SqlElasticSearchRequestBuilder result = (SqlElasticSearchRequestBuilder) MainTestSuite.getSearchDao().explain("select topHits('size'=3,age='desc') from bank  group by gender ");
 		System.out.println(result);
 	}
 
@@ -360,32 +360,9 @@ public class AggregationTest {
 
     private SqlElasticSearchRequestBuilder getSearchRequestBuilder(String query) throws SqlParseException, SQLFeatureNotSupportedException {
         SearchDao searchDao = MainTestSuite.getSearchDao();
-        return (SqlElasticSearchRequestBuilder) searchDao.explain(query).explain();
+        return (SqlElasticSearchRequestBuilder) searchDao.explain(query);
     }
 
-    @Test
-    public void testFromSizeWithAggregations() throws Exception {
-        final String query1 = String.format("SELECT /*! DOCS_WITH_AGGREGATION(0,1) */" +
-                " account_number FROM %s/account GROUP BY gender", TEST_INDEX);
-        SearchResponse response1 = (SearchResponse) getSearchRequestBuilder(query1).get();
-
-        Assert.assertEquals(1, response1.getHits().getHits().length);
-        Terms gender1 = response1.getAggregations().get("gender");
-        Assert.assertEquals(2, gender1.getBuckets().size());
-        Object account1 = response1.getHits().getHits()[0].getSource().get("account_number");
-
-        final String query2 = String.format("SELECT /*! DOCS_WITH_AGGREGATION(1,1) */" +
-                " account_number FROM %s/account GROUP BY gender", TEST_INDEX);
-        SearchResponse response2 = (SearchResponse) getSearchRequestBuilder(query2).get();
-
-        Assert.assertEquals(1, response2.getHits().getHits().length);
-        Terms gender2 = response2.getAggregations().get("gender");
-        Assert.assertEquals(2, gender2.getBuckets().size());
-        Object account2 = response2.getHits().getHits()[0].getSource().get("account_number");
-
-        Assert.assertEquals(response1.getHits().getTotalHits(), response2.getHits().getTotalHits());
-        Assert.assertNotEquals(account1, account2);
-    }
 
     @Test
 	public void testSubAggregations() throws  Exception {
@@ -457,7 +434,7 @@ public class AggregationTest {
         InternalGeoHashGrid grid = result.get("geohash_grid(field=center,precision=5)");
         Collection<GeoHashGrid.Bucket> buckets = grid.getBuckets();
         for (GeoHashGrid.Bucket bucket : buckets) {
-            Assert.assertTrue(bucket.getKey().toString().equals("[4.9658203125, 104.9853515625]") || bucket.getKey().toString().equals("[0.4833984375, 100.458984375]") );
+            Assert.assertTrue(bucket.getKey().toString().equals("[4.98779296875, 105.00732421875]") || bucket.getKey().toString().equals("[0.50537109375, 100.48095703125]") );
             Assert.assertEquals(1,bucket.getDocCount());
         }
     }
