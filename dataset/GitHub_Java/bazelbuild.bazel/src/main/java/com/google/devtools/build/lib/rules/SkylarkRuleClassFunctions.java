@@ -68,7 +68,6 @@ import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Label;
-import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkCallbackFunction;
 import com.google.devtools.build.lib.syntax.SkylarkEnvironment;
 import com.google.devtools.build.lib.syntax.SkylarkList;
@@ -251,7 +250,7 @@ public class SkylarkRuleClassFunctions {
         // We'll set the name later, pass the empty string for now.
         RuleClass.Builder builder = new RuleClass.Builder("", type, true, parent);
 
-        if (attrs != Runtime.NONE) {
+        if (attrs != Environment.NONE) {
           for (Map.Entry<String, Attribute.Builder> attr : castMap(
               attrs, String.class, Attribute.Builder.class, "attrs").entrySet()) {
             Attribute.Builder<?> attrBuilder = (Attribute.Builder<?>) attr.getValue();
@@ -268,7 +267,7 @@ public class SkylarkRuleClassFunctions {
           builder.setOutputsDefaultExecutable();
         }
 
-        if (implicitOutputs != Runtime.NONE) {
+        if (implicitOutputs != Environment.NONE) {
           if (implicitOutputs instanceof BaseFunction) {
             BaseFunction func = (BaseFunction) implicitOutputs;
             final SkylarkCallbackFunction callback =
