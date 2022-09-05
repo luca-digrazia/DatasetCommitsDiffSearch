@@ -10,6 +10,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.taobao.atlas.runtime.RuntimeVariables;
 import android.taobao.atlas.runtime.newcomponent.AdditionalPackageManager;
+import android.taobao.atlas.runtime.newcomponent.service.ServiceBridge;
 
 import java.util.List;
 
@@ -20,15 +21,14 @@ import java.util.List;
 public class ReceiverBridge {
 
     private static DelegateReceiver receiver;
-    private static Handler sMainHandler;
+    private static Handler sMainHandler  = new Handler(Looper.getMainLooper());
 
-    public synchronized static void registerAdditional() {
-        if(receiver == null &&
-                RuntimeVariables.getProcessName(RuntimeVariables.androidApplication).equals(RuntimeVariables.androidApplication.getPackageName())){
+
+    public synchronized static void registerAdditionalReceiver() {
+        if(receiver == null){
             receiver = new DelegateReceiver();
             IntentFilter additionalFilter = AdditionalPackageManager.getInstance().getAdditionIntentFilter();
             RuntimeVariables.androidApplication.registerReceiver(receiver,additionalFilter);
-            sMainHandler = new Handler(Looper.getMainLooper());
         }
     }
 
@@ -60,7 +60,8 @@ public class ReceiverBridge {
                         // main process
                         postOnReceived(intent,info.activityInfo);
                     }else{
-//                        ServiceBridge.sdfsf
+                       // remote process
+                        ServiceBridge.notifyonReceived(intent,info.activityInfo);
                     }
                 }
             }
