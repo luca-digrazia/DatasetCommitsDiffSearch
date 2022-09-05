@@ -25,80 +25,74 @@ import org.apache.shiro.authc.SimpleAuthenticationInfo;
 import org.apache.shiro.authz.AuthorizationInfo;
 import org.apache.shiro.authz.SimpleAuthorizationInfo;
 import org.apache.shiro.authz.permission.WildcardPermission;
-import org.apache.shiro.cache.Cache;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
 import org.apache.shiro.subject.Subject;
-import org.hswebframework.web.authorization.Authorization;
+import org.hswebframework.web.authorization.Authentication;
+import org.hswebframework.web.authorization.AuthenticationHolder;
 import org.hswebframework.web.authorization.Role;
-import org.hswebframework.web.authorization.listener.UserAuthorizationListener;
+import org.hswebframework.web.authorization.listener.AuthorizationListener;
+import org.hswebframework.web.authorization.listener.event.AuthorizationSuccessEvent;
 
 import java.util.stream.Collectors;
 
 /**
  * @author zhouhao
  */
-public class ListenerAuthorizingRealm extends AuthorizingRealm implements UserAuthorizationListener {
+public class ListenerAuthorizingRealm extends AuthorizingRealm
+        implements AuthorizationListener<AuthorizationSuccessEvent> {
 
     public ListenerAuthorizingRealm() {
-        setAuthenticationTokenClass(CustomAuthenticationToken.class);
+        setAuthenticationTokenClass(SimpleAuthenticationToken.class);
     }
 
     @Override
     protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
-        String loginName = (String) super.getAvailablePrincipal(principals);
-        return this.<String, AuthorizationInfo>getCache(loginName)
-                .get(AuthorizationInfo.class.getName());
+        String loginUserId = (String) super.getAvailablePrincipal(principals);
+        return createAuthorizationInfo(AuthenticationHolder.get(loginUserId));
     }
 
     @Override
     protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) throws AuthenticationException {
-        if (token instanceof CustomAuthenticationToken) {
-            return this.<String, AuthenticationInfo>getCache((String) token.getPrincipal())
-                    .get(AuthenticationInfo.class.getName());
+        if (token instanceof SimpleAuthenticationToken) {
+            return createAuthenticationInfo(((SimpleAuthenticationToken) token).getAuthentication());
         }
         throw new AuthenticationException(new UnsupportedOperationException("{token_un_supported}"));
     }
 
-    private AuthenticationInfo createAuthenticationInfo(Authorization authorization) {
+    private AuthenticationInfo createAuthenticationInfo(Authentication authentication) {
         return new SimpleAuthenticationInfo(
-                authorization.getUser().getUsername(),
-                authorization.getUser().getId(),
-                authorization.getUser().getName());
+                authentication.getUser().getId(),
+                authentication.getUser().getUsername(),
+                ListenerAuthorizingRealm.class.getName());
+    }
+
+    public void loginOut(Authentication authentication) {
+        SecurityUtils.getSubject().logout();
+    }
+
+    protected AuthorizationInfo createAuthorizationInfo(Authentication authentication) {
+        SimpleAuthorizationInfo authorizationInfo = new SimpleAuthorizationInfo();
+        authorizationInfo.addRoles(authentication.getRoles().stream().map(Role::getId).collect(Collectors.toList()));
+        authorizationInfo.addObjectPermissions(
+                authentication.getPermissions()
+                        .stream()
+                        .map(permission -> {
+                            String builder = permission.getId() + permission.getActions().stream()
+                                    .reduce((a1, a2) -> a1.concat(",").concat(a2))
+                                    .orElse("");
+                            return new WildcardPermission(builder);
+                        }).collect(Collectors.toList()));
+
+        return authorizationInfo;
     }
 
     @Override
-    public void onAuthorizeSuccess(boolean isRemembered, Authorization authorization) {
-        SimpleAuthorizationInfo authorizationInfo = new SimpleAuthorizationInfo();
-        authorizationInfo.addRoles(authorization.getRoles().stream().map(Role::getId).collect(Collectors.toList()));
-        authorizationInfo.addObjectPermissions(
-                authorization.getPermissions()
-                        .stream()
-                        .map(permission -> {
-                            StringBuilder builder = new StringBuilder(permission.getId());
-                            builder.append(":*")
-                                    .append(permission.getActions().isEmpty() ? "" : ",")
-                                    .append(permission.getActions().stream()
-                                            .reduce((a1, a2) -> a1.concat(",").concat(a2)));
-                            return new WildcardPermission(builder.toString());
-                        }).collect(Collectors.toList()));
-
-        getCache(authorization.getUser().getUsername())
-                .put(AuthorizationInfo.class.getName(), authorizationInfo);
-
-        getCache(authorization.getUser().getUsername())
-                .put(AuthenticationInfo.class.getName(), createAuthenticationInfo(authorization));
-
+    public void on(AuthorizationSuccessEvent event) {
+        Authentication authentication = event.getAuthentication();
+        boolean remember = Boolean.valueOf((String) event.getParameter("remember").orElse("false"));
         Subject subject = SecurityUtils.getSubject();
-        subject.login(new CustomAuthenticationToken(authorization, isRemembered));
-        subject.getSession().setAttribute(Authorization.class.getName(), authorization);
+        subject.login(new SimpleAuthenticationToken(authentication, remember));
     }
 
-    protected <K, V> Cache<K, V> getCache(String name) {
-        return getCacheManager().getCache(getCacheName(name));
-    }
-
-    protected String getCacheName(String name) {
-        return "shiro.auth.info.".concat(name);
-    }
 }
