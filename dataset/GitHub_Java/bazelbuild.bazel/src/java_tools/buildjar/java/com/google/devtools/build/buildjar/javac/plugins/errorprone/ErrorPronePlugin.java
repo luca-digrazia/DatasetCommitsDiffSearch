@@ -1,4 +1,4 @@
-// Copyright 2011 The Bazel Authors. All Rights Reserved.
+// Copyright 2011 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +16,12 @@ package com.google.devtools.build.buildjar.javac.plugins.errorprone;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.buildjar.InvalidCommandLineException;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
 import com.google.errorprone.ErrorProneAnalyzer;
-import com.google.errorprone.ErrorProneError;
 import com.google.errorprone.ErrorProneOptions;
 import com.google.errorprone.InvalidCommandLineOptionException;
 import com.google.errorprone.bugpatterns.BugChecker;
@@ -53,22 +53,14 @@ import javax.tools.StandardLocation;
  */
 public final class ErrorPronePlugin extends BlazeJavaCompilerPlugin {
 
-  private final ScannerSupplier scannerSupplier;
+  private final Optional<ScannerSupplier> extraChecks;
 
-  /**
-   * Constructs an {@link ErrorPronePlugin} instance with the set of checks that are enabled as
-   * errors in open-source Error Prone.
-   */
-  public ErrorPronePlugin() {
-    this.scannerSupplier = BuiltInCheckerSuppliers.errorChecks();
+  public ErrorPronePlugin(ScannerSupplier extraChecks) {
+    this.extraChecks = Optional.of(extraChecks);
   }
-  
-  /**
-   * Constructs an {@link ErrorPronePlugin} with the set of checks that are enabled in {@code
-   * scannerSupplier}.
-   */
-  public ErrorPronePlugin(ScannerSupplier scannerSupplier) {
-    this.scannerSupplier = scannerSupplier;
+
+  public ErrorPronePlugin() {
+    this.extraChecks = Optional.absent();
   }
 
   private ErrorProneAnalyzer errorProneAnalyzer;
@@ -115,6 +107,15 @@ public final class ErrorPronePlugin extends BlazeJavaCompilerPlugin {
     return arguments;
   }
 
+  private ScannerSupplier defaultScannerSupplier() {
+    // open-source checks that are errors
+    ScannerSupplier result = BuiltInCheckerSuppliers.errorChecks();
+    if (extraChecks.isPresent()) {
+      result = result.plus(extraChecks.get());
+    }
+    return result;
+  }
+
   private static final Function<BugChecker, Class<? extends BugChecker>> GET_CLASS =
       new Function<BugChecker, Class<? extends BugChecker>>() {
         @Override
@@ -141,14 +142,14 @@ public final class ErrorPronePlugin extends BlazeJavaCompilerPlugin {
         ? fileManager.getClassLoader(StandardLocation.ANNOTATION_PROCESSOR_PATH)
         : fileManager.getClass().getClassLoader();
     Iterable<BugChecker> extraBugCheckers = ServiceLoader.load(BugChecker.class, loader);
-    ScannerSupplier result =
-        scannerSupplier.plus(
+    ScannerSupplier scannerSupplier =
+        defaultScannerSupplier().plus(
             ScannerSupplier.fromBugCheckerClasses(
                 Iterables.transform(extraBugCheckers, GET_CLASS)));
 
     if (epOptions != null) {
       try {
-        result = result.applyOverrides(epOptions);
+        scannerSupplier = scannerSupplier.applyOverrides(epOptions);
       } catch (InvalidCommandLineOptionException e) {
         throwError(Result.CMDERR, e.getMessage());
       }
@@ -156,7 +157,7 @@ public final class ErrorPronePlugin extends BlazeJavaCompilerPlugin {
       epOptions = ErrorProneOptions.empty();
     }
 
-    errorProneAnalyzer = ErrorProneAnalyzer.create(result.get()).init(context, epOptions);
+    errorProneAnalyzer = ErrorProneAnalyzer.create(scannerSupplier.get()).init(context, epOptions);
   }
 
   /**
@@ -165,14 +166,7 @@ public final class ErrorPronePlugin extends BlazeJavaCompilerPlugin {
   @Override
   public void postFlow(Env<AttrContext> env) {
     if (enabled) {
-      try {
-        errorProneAnalyzer.finished(new TaskEvent(Kind.ANALYZE, env.toplevel, env.enclClass.sym));
-      } catch (ErrorProneError e) {
-        e.logFatalError(log);
-        // let the exception propagate to javac's main, where it will cause the compilation to
-        // terminate with Result.ABNORMAL
-        throw e;
-      }
+      errorProneAnalyzer.finished(new TaskEvent(Kind.ANALYZE, env.toplevel, env.enclClass.sym));
     }
   }
 
