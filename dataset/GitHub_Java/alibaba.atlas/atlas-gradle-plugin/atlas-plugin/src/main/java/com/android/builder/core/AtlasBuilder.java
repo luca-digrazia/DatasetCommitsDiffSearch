@@ -781,7 +781,6 @@ public class AtlasBuilder extends AndroidBuilder {
             @NonNull List<ManifestMerger2.Invoker.Feature> optionalFeatures,
             @Nullable File reportFile) {
 
-        
         return super.mergeManifestsForApplication(
                 mainManifest,
                 manifestOverlays,

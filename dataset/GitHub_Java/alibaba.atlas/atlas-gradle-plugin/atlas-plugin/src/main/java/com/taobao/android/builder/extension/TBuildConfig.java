@@ -377,17 +377,6 @@ public class TBuildConfig {
     @Deprecated
     private Set<String> insideOfApkBundles = Sets.newHashSet();
 
-
-    public Set<String> getInjectExcludePkgs() {
-        return injectExcludePkgs;
-    }
-
-    public void setInjectExcludePkgs(Set<String> injectExcludePkgs) {
-        this.injectExcludePkgs = injectExcludePkgs;
-    }
-
-    private Set<String>injectExcludePkgs = new HashSet<>();
-
     public Set<String> getOutOfApkNativeSos() {
         return outOfApkNativeSos;
     }
@@ -399,17 +388,6 @@ public class TBuildConfig {
     private Set<String>outOfApkNativeSos = Sets.newHashSet();
 
     private boolean incremental = false;
-
-
-    public boolean isInjectSerialVersionUID() {
-        return injectSerialVersionUID;
-    }
-
-    public void setInjectSerialVersionUID(boolean injectSerialVersionUID) {
-        this.injectSerialVersionUID = injectSerialVersionUID;
-    }
-
-    private boolean injectSerialVersionUID = true;
 
     @Config(message = "Whether to use fast proguard", order = 16, advance = true, group = "atlas")
     private boolean fastProguard = false;
