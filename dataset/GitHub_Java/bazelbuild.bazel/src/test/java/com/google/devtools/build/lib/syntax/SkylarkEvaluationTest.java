@@ -978,7 +978,6 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   @Test
   public void testListConcatenation() throws Exception {}
 
-  @Override
   @Test
   public void testInFail() throws Exception {
     checkEvalError("in operator only works on strings if the left operand is also a string",
