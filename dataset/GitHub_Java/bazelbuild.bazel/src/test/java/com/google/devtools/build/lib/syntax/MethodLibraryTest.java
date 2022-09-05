@@ -443,11 +443,10 @@ public class MethodLibraryTest extends EvaluationTestCase {
 
   @Test
   public void testDir() throws Exception {
-    new SkylarkTest()
-        .testStatement(
-            "str(dir({}))",
-            "[\"$index\", \"clear\", \"get\", \"items\", \"keys\","
-                + " \"pop\", \"popitem\", \"setdefault\", \"update\", \"values\"]");
+    new SkylarkTest().testStatement(
+        "str(dir({}))",
+        "[\"$index\", \"clear\", \"get\", \"items\", \"keys\","
+        + " \"pop\", \"popitem\", \"setdefault\", \"values\"]");
   }
 
   @Test
@@ -1358,16 +1357,6 @@ public class MethodLibraryTest extends EvaluationTestCase {
             + "if d.popitem() != (3, 'baz'): fail('popitem 3')\n"
             + "if d != {}: fail('popitem 4')\n"
             + "d.popitem()");
-  }
-
-  @Test
-  public void testDictionaryUpdate() throws Exception {
-    new BothModesTest()
-        .setUp("foo = {'a': 2}")
-        .testEval("foo.update({'b': 4}); foo", "{'a': 2, 'b': 4}");
-    new BothModesTest()
-        .setUp("foo = {'a': 2}")
-        .testEval("foo.update({'a': 3, 'b': 4}); foo", "{'a': 3, 'b': 4}");
   }
 
   @Test

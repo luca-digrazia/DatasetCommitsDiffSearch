@@ -72,12 +72,13 @@ public class SkylarkSignatureProcessor {
                 /*mandatory=*/false, /*star=*/false, /*starStar=*/false,
                 /*defaultValue=*/getDefaultValue(param, defaultValuesIterator)));
       }
-      if (!annotation.extraPositionals().name().isEmpty()
+      if (annotation.extraPositionals().length > 0
           || annotation.optionalNamedOnly().length > 0
           || annotation.mandatoryNamedOnly().length > 0) {
         @Nullable Param starParam = null;
-        if (!annotation.extraPositionals().name().isEmpty()) {
-          starParam = annotation.extraPositionals();
+        if (annotation.extraPositionals().length > 0) {
+          Preconditions.checkArgument(annotation.extraPositionals().length == 1);
+          starParam = annotation.extraPositionals()[0];
         }
         paramList.add(getParameter(name, starParam, enforcedTypes, doc, documented,
                 /*mandatory=*/false, /*star=*/true, /*starStar=*/false, /*defaultValue=*/null));
@@ -91,9 +92,10 @@ public class SkylarkSignatureProcessor {
                 /*mandatory=*/false, /*star=*/false, /*starStar=*/false,
                 /*defaultValue=*/getDefaultValue(param, defaultValuesIterator)));
       }
-      if (!annotation.extraKeywords().name().isEmpty()) {
+      if (annotation.extraKeywords().length > 0) {
+        Preconditions.checkArgument(annotation.extraKeywords().length == 1);
         paramList.add(
-            getParameter(name, annotation.extraKeywords(), enforcedTypes, doc, documented,
+            getParameter(name, annotation.extraKeywords()[0], enforcedTypes, doc, documented,
                 /*mandatory=*/false, /*star=*/false, /*starStar=*/true, /*defaultValue=*/null));
       }
       FunctionSignature.WithValues<Object, SkylarkType> signature =
