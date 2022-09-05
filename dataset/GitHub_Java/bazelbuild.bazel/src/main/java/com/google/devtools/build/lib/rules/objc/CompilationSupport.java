@@ -20,7 +20,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FORCE_LOAD_L
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_CPP;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_FRAMEWORKS;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_SWIFT;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.HEADER;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
@@ -291,15 +290,9 @@ final class CompilationSupport {
       .addExecPath("-o", objFile)
       .addExecPath("-emit-module-path", intermediateArtifacts.swiftModuleFile(sourceFile));
 
-
-    ImmutableList.Builder<Artifact> inputHeaders = ImmutableList.builder();
-    inputHeaders.addAll(attributes.hdrs());
-
-    Optional<Artifact> bridgingHeader = attributes.bridgingHeader();
-    if (bridgingHeader.isPresent()) {
-      commandLine.addExecPath("-import-objc-header", bridgingHeader.get());
-      inputHeaders.add(bridgingHeader.get());
-    }
+    // Add all ObjC headers to the compiler, in case Swift code is calling into Objc
+    // TODO(bazel-team): This can be augmented by an explicit bridging header field in the rule.
+    commandLine.addBeforeEachExecPath("-import-objc-header", attributes.hdrs());
 
     ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
         .setMnemonic("SwiftCompile")
@@ -307,7 +300,7 @@ final class CompilationSupport {
         .setCommandLine(commandLine.build())
         .addInput(sourceFile)
         .addInputs(otherSwiftSources)
-        .addInputs(inputHeaders.build())
+        .addInputs(attributes.hdrs())
         .addOutput(objFile)
         .addOutput(intermediateArtifacts.swiftModuleFile(sourceFile))
         .build(ruleContext));
@@ -543,12 +536,8 @@ final class CompilationSupport {
     }
 
     if (objcProvider.is(USES_SWIFT)) {
-      commandLine.add("-L").add(IosSdkCommands.swiftLibDir(objcConfiguration));
-    }
-
-    if (objcProvider.is(USES_SWIFT) || objcProvider.is(USES_FRAMEWORKS)) {
-      // Enable loading bundled frameworks.
       commandLine
+          .add("-L").add(IosSdkCommands.swiftLibDir(objcConfiguration))
           .add("-Xlinker").add("-rpath")
           .add("-Xlinker").add("@executable_path/Frameworks");
     }
