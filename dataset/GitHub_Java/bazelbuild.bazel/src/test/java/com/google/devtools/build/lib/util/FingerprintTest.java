@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -39,13 +38,13 @@ public class FingerprintTest {
     Fingerprint f1Latin1 = new Fingerprint();
     for (String s : list1) {
       f1.addString(s);
-      f1Latin1.addString(s);
+      f1Latin1.addStringLatin1(s);
     }
     Fingerprint f2 = new Fingerprint();
     Fingerprint f2Latin1 = new Fingerprint();
     for (String s : list2) {
       f2.addString(s);
-      f2Latin1.addString(s);
+      f2Latin1.addStringLatin1(s);
     }
     assertThat(f1.hexDigestAndReset()).isNotEqualTo(f2.hexDigestAndReset());
     assertThat(f1Latin1.hexDigestAndReset()).isNotEqualTo(f2Latin1.hexDigestAndReset());
@@ -112,12 +111,12 @@ public class FingerprintTest {
 
   @Test
   public void addPath() throws Exception {
-    PathFragment pf = PathFragment.create("/etc/pwd");
+    PathFragment pf = new PathFragment("/etc/pwd");
     assertThat(new Fingerprint().addPath(pf).hexDigestAndReset())
-        .isEqualTo("63ab5c47c117635407a1af6377e216bc");
+        .isEqualTo("01cc3eeea3a2f58e447e824f9f62d3d1");
     Path p = new InMemoryFileSystem(BlazeClock.instance()).getPath(pf);
     assertThat(new Fingerprint().addPath(p).hexDigestAndReset())
-        .isEqualTo("63ab5c47c117635407a1af6377e216bc");
+        .isEqualTo("01cc3eeea3a2f58e447e824f9f62d3d1");
   }
 
   @Test
@@ -141,30 +140,5 @@ public class FingerprintTest {
     String f1 = new Fingerprint().addNullableString(null).hexDigestAndReset();
     assertThat(f1).isEqualTo(new Fingerprint().addNullableString(null).hexDigestAndReset());
     assertThat(f1).isNotEqualTo(new Fingerprint().addNullableString("").hexDigestAndReset());
-  }
-
-  @Test
-  public void testReusableAfterReset() throws Exception {
-    Fingerprint fp = new Fingerprint();
-    String f1 = convolutedFingerprintAndReset(fp);
-    String f2 = convolutedFingerprintAndReset(fp);
-    assertThat(f1).isEqualTo(f2);
-  }
-
-  private static String convolutedFingerprintAndReset(Fingerprint fingerprint) {
-    return fingerprint
-        .addBoolean(false)
-        .addBytes(new byte[10])
-        .addBytes(new byte[10], 0, 5)
-        .addInt(20)
-        .addLong(30)
-        .addNullableBoolean(null)
-        .addNullableInt(null)
-        .addNullableString(null)
-        .addPath(PathFragment.create("/foo/bar"))
-        .addPaths(ImmutableList.of(PathFragment.create("/foo/bar")))
-        .addString("baz")
-        .addUUID(UUID.fromString("12345678-1234-1234-1234-1234567890ab"))
-        .hexDigestAndReset();
   }
 }
