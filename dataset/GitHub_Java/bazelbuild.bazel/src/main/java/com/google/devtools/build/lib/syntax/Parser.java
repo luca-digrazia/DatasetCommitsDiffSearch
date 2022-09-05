@@ -1210,7 +1210,6 @@ class Parser {
     return ImmutableList.copyOf(arguments);
   }
 
-  // suite is typically what follows a colon (e.g. after def or for).
   // suite ::= simple_stmt
   //         | NEWLINE INDENT stmt+ OUTDENT
   private List<Statement> parseSuite() {
@@ -1228,7 +1227,9 @@ class Parser {
       }
       expect(TokenKind.OUTDENT);
     } else {
-      parseSimpleStatement(list);
+      Statement stmt = parseSmallStatement();
+      list.add(stmt);
+      expect(TokenKind.NEWLINE);
     }
     return list;
   }
