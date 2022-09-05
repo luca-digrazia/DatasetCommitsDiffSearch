@@ -4,7 +4,6 @@ import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.expr.SQLIntegerExpr;
 import com.alibaba.druid.sql.ast.expr.SQLPropertyExpr;
 import com.alibaba.druid.sql.ast.expr.SQLQueryExpr;
-import com.alibaba.druid.sql.ast.statement.SQLUnionOperator;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -18,7 +17,6 @@ import org.nlpcn.es4sql.parse.FieldMaker;
 import org.nlpcn.es4sql.parse.ScriptFilter;
 import org.nlpcn.es4sql.parse.SqlParser;
 import org.nlpcn.es4sql.query.maker.QueryMaker;
-import org.nlpcn.es4sql.query.multi.MultiQuerySelect;
 
 import java.io.IOException;
 import java.sql.SQLFeatureNotSupportedException;
@@ -447,7 +445,7 @@ public class SqlParserTests {
         MethodField scriptMethod = (MethodField) field;
         Assert.assertEquals("script", scriptMethod.getName().toLowerCase());
         Assert.assertEquals(2, scriptMethod.getParams().size());
-        Assert.assertTrue(scriptMethod.getParams().get(1).toString().contains("doc['field1'].value + 3"));
+        Assert.assertTrue(scriptMethod.getParams().get(1).toString().endsWith("doc['field1'].value + 3"));
     }
 
     @Test
@@ -462,7 +460,7 @@ public class SqlParserTests {
         MethodField scriptMethod = (MethodField) field;
         Assert.assertEquals("script", scriptMethod.getName().toLowerCase());
         Assert.assertEquals(2, scriptMethod.getParams().size());
-        Assert.assertTrue(scriptMethod.getParams().get(1).toString().contains("doc['field1'].value + doc['field2'].value"));
+        Assert.assertTrue(scriptMethod.getParams().get(1).toString().endsWith("doc['field1'].value + doc['field2'].value"));
     }
 
 
@@ -478,7 +476,7 @@ public class SqlParserTests {
         MethodField scriptMethod = (MethodField) field;
         Assert.assertEquals("script", scriptMethod.getName().toLowerCase());
         Assert.assertEquals(2, scriptMethod.getParams().size());
-        Assert.assertTrue(scriptMethod.getParams().get(1).toString().contains("1 + 2"));
+        Assert.assertTrue(scriptMethod.getParams().get(1).toString().endsWith("1 + 2"));
     }
 
 
@@ -986,197 +984,6 @@ public class SqlParserTests {
 
     }
 
-    @Test
-    public void castToIntTest() throws Exception {
-        String query = "select cast(age as int) from "+ TestsConstants.TEST_INDEX + "/account limit 10";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Field castField = select.getFields().get(0);
-        Assert.assertTrue(castField instanceof MethodField);
-
-        MethodField methodField = (MethodField) castField;
-        Assert.assertEquals("script",castField.getName());
-
-        String alias = (String) methodField.getParams().get(0).value;
-        String scriptCode = (String) methodField.getParams().get(1).value;
-        Assert.assertEquals("cast_age",alias);
-        Assert.assertTrue(scriptCode.contains("doc['age'].value"));
-        Assert.assertTrue(scriptCode.contains("Double.parseDouble(doc['age'].value.toString()).intValue()"));
-    }
-
-    @Test
-    public void castToLongTest() throws Exception {
-        String query = "select cast(insert_time as long) from "+ TestsConstants.TEST_INDEX + " limit 10";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Field castField = select.getFields().get(0);
-        Assert.assertTrue(castField instanceof MethodField);
-
-        MethodField methodField = (MethodField) castField;
-        Assert.assertEquals("script",castField.getName());
-
-        String alias = (String) methodField.getParams().get(0).value;
-        String scriptCode = (String) methodField.getParams().get(1).value;
-        Assert.assertEquals("cast_insert_time",alias);
-        Assert.assertTrue(scriptCode.contains("doc['insert_time'].value"));
-        Assert.assertTrue(scriptCode.contains("Double.parseDouble(doc['insert_time'].value.toString()).longValue()"));
-    }
-
-    @Test
-    public void castToFloatTest() throws Exception {
-        String query = "select cast(age as float) from "+ TestsConstants.TEST_INDEX + " limit 10";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Field castField = select.getFields().get(0);
-        Assert.assertTrue(castField instanceof MethodField);
-
-        MethodField methodField = (MethodField) castField;
-        Assert.assertEquals("script",castField.getName());
-
-        String alias = (String) methodField.getParams().get(0).value;
-        String scriptCode = (String) methodField.getParams().get(1).value;
-        Assert.assertEquals("cast_age",alias);
-        Assert.assertTrue(scriptCode.contains("doc['age'].value"));
-        Assert.assertTrue(scriptCode.contains("Double.parseDouble(doc['age'].value.toString()).floatValue()"));
-    }
-
-    @Test
-    public void castToDoubleTest() throws Exception {
-        String query = "select cast(age as double) from "+ TestsConstants.TEST_INDEX + "/account limit 10";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Field castField = select.getFields().get(0);
-        Assert.assertTrue(castField instanceof MethodField);
-
-        MethodField methodField = (MethodField) castField;
-        Assert.assertEquals("script",castField.getName());
-
-        String alias = (String) methodField.getParams().get(0).value;
-        String scriptCode = (String) methodField.getParams().get(1).value;
-        Assert.assertEquals("cast_age",alias);
-        Assert.assertTrue(scriptCode.contains("doc['age'].value"));
-        Assert.assertTrue(scriptCode.contains("Double.parseDouble(doc['age'].value.toString()).doubleValue()"));
-    }
-
-    @Test
-    public void castToStringTest() throws Exception {
-        String query = "select cast(age as string) from "+ TestsConstants.TEST_INDEX + "/account limit 10";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Field castField = select.getFields().get(0);
-        Assert.assertTrue(castField instanceof MethodField);
-
-        MethodField methodField = (MethodField) castField;
-        Assert.assertEquals("script",castField.getName());
-
-        String alias = (String) methodField.getParams().get(0).value;
-        String scriptCode = (String) methodField.getParams().get(1).value;
-        Assert.assertEquals("cast_age",alias);
-        Assert.assertTrue(scriptCode.contains("doc['age'].value.toString()"));
-    }
-
-    @Test
-    public void castToDateTimeTest() throws Exception {
-        String query = "select cast(age as datetime) from "+ TestsConstants.TEST_INDEX + "/account limit 10";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Field castField = select.getFields().get(0);
-        Assert.assertTrue(castField instanceof MethodField);
-
-        MethodField methodField = (MethodField) castField;
-        Assert.assertEquals("script",castField.getName());
-
-        String alias = (String) methodField.getParams().get(0).value;
-        String scriptCode = (String) methodField.getParams().get(1).value;
-        Assert.assertEquals("cast_age",alias);
-        Assert.assertTrue(scriptCode.contains("doc['age'].value"));
-        Assert.assertTrue(scriptCode.contains("new Date(Double.parseDouble(doc['age'].value.toString()).longValue())"));
-    }
-
-    @Test
-    public void castToDoubleThenDivideTest() throws Exception {
-        String query = "select cast(age as double)/2 from "+ TestsConstants.TEST_INDEX + "/account limit 10";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        Field castField = select.getFields().get(0);
-        Assert.assertTrue(castField instanceof MethodField);
-
-        MethodField methodField = (MethodField) castField;
-        Assert.assertEquals("script",castField.getName());
-
-        String alias = (String) methodField.getParams().get(0).value;
-        String scriptCode = (String) methodField.getParams().get(1).value;
-        Assert.assertTrue(scriptCode.contains("doc['age'].value"));
-        Assert.assertTrue(scriptCode.contains("Double.parseDouble(doc['age'].value.toString()).doubleValue()"));
-        Assert.assertTrue(scriptCode.contains("/ 2"));
-    }
-
-
-    @Test
-    public void multiSelectMinusOperationCheckIndices() throws SqlParseException {
-        String query = "select pk from firstIndex minus  select pk from secondIndex ";
-        MultiQuerySelect select = parser.parseMultiSelect((com.alibaba.druid.sql.ast.statement.SQLUnionQuery) ((SQLQueryExpr) queryToExpr(query)).getSubQuery().getQuery());
-        Assert.assertEquals("firstIndex",select.getFirstSelect().getFrom().get(0).getIndex());
-        Assert.assertEquals("secondIndex",select.getSecondSelect().getFrom().get(0).getIndex());
-        Assert.assertEquals(SQLUnionOperator.MINUS,select.getOperation());
-    }
-
-    @Test
-    public void multiSelectMinusWithAliasCheckAliases() throws SqlParseException {
-        String query = "select pk as myId from firstIndex minus  select myId from secondIndex ";
-        MultiQuerySelect select = parser.parseMultiSelect((com.alibaba.druid.sql.ast.statement.SQLUnionQuery) ((SQLQueryExpr) queryToExpr(query)).getSubQuery().getQuery());
-        Assert.assertEquals("myId",select.getFirstSelect().getFields().get(0).getAlias());
-        Assert.assertEquals("myId",select.getSecondSelect().getFields().get(0).getName());
-        Assert.assertEquals(SQLUnionOperator.MINUS,select.getOperation());
-    }
-    @Test
-    public void multiSelectMinusTestMinusHints() throws SqlParseException {
-        String query = "select /*! MINUS_SCROLL_FETCH_AND_RESULT_LIMITS(1000,50,100)*/ /*! MINUS_USE_TERMS_OPTIMIZATION(true)*/ pk from firstIndex minus  select pk from secondIndex ";
-        MultiQuerySelect select = parser.parseMultiSelect((com.alibaba.druid.sql.ast.statement.SQLUnionQuery) ((SQLQueryExpr) queryToExpr(query)).getSubQuery().getQuery());
-        List<Hint> hints = select.getFirstSelect().getHints();
-        Assert.assertEquals(2,hints.size());
-        for(Hint hint : hints) {
-            if (hint.getType() == HintType.MINUS_FETCH_AND_RESULT_LIMITS) {
-                Object[] params = hint.getParams();
-                Assert.assertEquals(1000,params[0]);
-                Assert.assertEquals(50,params[1]);
-                Assert.assertEquals(100,params[2]);
-            }
-            if(hint.getType() == HintType.MINUS_USE_TERMS_OPTIMIZATION){
-                Assert.assertEquals(true,hint.getParams()[0]);
-            }
-        }
-    }
-
-    @Test
-    public void multiSelectMinusScrollCheckDefaultsAllDefaults() throws SqlParseException {
-        String query = "select /*! MINUS_SCROLL_FETCH_AND_RESULT_LIMITS*/ pk from firstIndex minus  select pk from secondIndex ";
-        MultiQuerySelect select = parser.parseMultiSelect((com.alibaba.druid.sql.ast.statement.SQLUnionQuery) ((SQLQueryExpr) queryToExpr(query)).getSubQuery().getQuery());
-        List<Hint> hints = select.getFirstSelect().getHints();
-        Assert.assertEquals(1, hints.size());
-        Hint hint = hints.get(0);
-        Assert.assertEquals(HintType.MINUS_FETCH_AND_RESULT_LIMITS,hint.getType());
-        Object[] params = hint.getParams();
-        Assert.assertEquals(100000, params[0]);
-        Assert.assertEquals(100000, params[1]);
-        Assert.assertEquals(1000, params[2]);
-    }
-
-    @Test
-    public void multiSelectMinusScrollCheckDefaultsOneDefault() throws SqlParseException {
-        String query = "select /*! MINUS_SCROLL_FETCH_AND_RESULT_LIMITS(50,100)*/ pk from firstIndex minus  select pk from secondIndex ";
-        MultiQuerySelect select = parser.parseMultiSelect((com.alibaba.druid.sql.ast.statement.SQLUnionQuery) ((SQLQueryExpr) queryToExpr(query)).getSubQuery().getQuery());
-        List<Hint> hints = select.getFirstSelect().getHints();
-        Assert.assertEquals(1, hints.size());
-        Hint hint = hints.get(0);
-        Assert.assertEquals(HintType.MINUS_FETCH_AND_RESULT_LIMITS,hint.getType());
-        Object[] params = hint.getParams();
-        Assert.assertEquals(50, params[0]);
-        Assert.assertEquals(100, params[1]);
-        Assert.assertEquals(1000, params[2]);
-    }
-
-
 
     private SQLExpr queryToExpr(String query) {
         return new ElasticSqlExprParser(query).expr();
@@ -1201,5 +1008,6 @@ public class SqlParserTests {
         }
         return false;
     }
+
 
 }
