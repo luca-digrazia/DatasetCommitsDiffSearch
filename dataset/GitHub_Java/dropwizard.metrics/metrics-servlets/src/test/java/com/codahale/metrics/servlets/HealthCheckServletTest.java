@@ -8,8 +8,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -29,29 +27,17 @@ import com.codahale.metrics.health.HealthCheckFilter;
 import com.codahale.metrics.health.HealthCheckRegistry;
 
 public class HealthCheckServletTest extends AbstractServletTest {
-
-    private static final ZonedDateTime FIXED_TIME = ZonedDateTime.now();
-
-    private static final DateTimeFormatter DATE_TIME_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
-
-    private static final String EXPECTED_TIMESTAMP = DATE_TIME_FORMATTER.format(FIXED_TIME);
-
+    
     private static final Clock FIXED_CLOCK = new Clock() {
         @Override
         public long getTick() {
             return 0L;
         }
-
-        @Override
-        public long getTime() {
-            return FIXED_TIME.toInstant().toEpochMilli();
-        }
     };
-
+    
     private final HealthCheckRegistry registry = new HealthCheckRegistry();
     private final ExecutorService threadPool = Executors.newCachedThreadPool();
-
+    
     @Override
     protected void setUp(ServletTester tester) {
         tester.addServlet(HealthCheckServlet.class, "/healthchecks");
@@ -89,8 +75,8 @@ public class HealthCheckServletTest extends AbstractServletTest {
     public void returnsA200IfAllHealthChecksAreHealthy() throws Exception {
         registry.register("fun", new HealthCheck() {
             @Override
-            protected Result check() {
-                return healthyResultUsingFixedClockWithMessage("whee");
+            protected Result check() throws Exception {
+                return Result.healthy("whee");
             }
 
             @Override
@@ -104,9 +90,8 @@ public class HealthCheckServletTest extends AbstractServletTest {
         assertThat(response.getStatus())
                 .isEqualTo(200);
         assertThat(response.getContent())
-                .isEqualTo("{\"fun\":{\"healthy\":true,\"message\":\"whee\",\"duration\":0,\"timestamp\":\"" +
-                        EXPECTED_TIMESTAMP +
-                        "\"}}");
+                .startsWith("{\"fun\":{\"healthy\":true,\"message\":\"whee\",\"duration\":0,\"timestamp\":\"")
+                .endsWith("\"}}");
         assertThat(response.get(HttpHeader.CONTENT_TYPE))
                 .isEqualTo("application/json");
     }
@@ -115,8 +100,8 @@ public class HealthCheckServletTest extends AbstractServletTest {
     public void returnsASubsetOfHealthChecksIfFiltered() throws Exception {
         registry.register("fun", new HealthCheck() {
             @Override
-            protected Result check() {
-                return healthyResultUsingFixedClockWithMessage("whee");
+            protected Result check() throws Exception {
+                return Result.healthy("whee");
             }
 
             @Override
@@ -127,7 +112,7 @@ public class HealthCheckServletTest extends AbstractServletTest {
 
         registry.register("filtered", new HealthCheck() {
             @Override
-            protected Result check() {
+            protected Result check() throws Exception {
                 return Result.unhealthy("whee");
             }
 
@@ -142,9 +127,8 @@ public class HealthCheckServletTest extends AbstractServletTest {
         assertThat(response.getStatus())
                 .isEqualTo(200);
         assertThat(response.getContent())
-                .isEqualTo("{\"fun\":{\"healthy\":true,\"message\":\"whee\",\"duration\":0,\"timestamp\":\"" +
-                        EXPECTED_TIMESTAMP +
-                        "\"}}");
+                .startsWith("{\"fun\":{\"healthy\":true,\"message\":\"whee\",\"duration\":0,\"timestamp\":\"")
+                .endsWith("\"}}");
         assertThat(response.get(HttpHeader.CONTENT_TYPE))
                 .isEqualTo("application/json");
     }
@@ -153,8 +137,8 @@ public class HealthCheckServletTest extends AbstractServletTest {
     public void returnsA500IfAnyHealthChecksAreUnhealthy() throws Exception {
         registry.register("fun", new HealthCheck() {
             @Override
-            protected Result check() {
-                return healthyResultUsingFixedClockWithMessage("whee");
+            protected Result check() throws Exception {
+                return Result.healthy("whee");
             }
 
             @Override
@@ -165,8 +149,8 @@ public class HealthCheckServletTest extends AbstractServletTest {
 
         registry.register("notFun", new HealthCheck() {
             @Override
-            protected Result check() {
-                return Result.builder().usingClock(FIXED_CLOCK).unhealthy().withMessage("whee").build();
+            protected Result check() throws Exception {
+                return Result.unhealthy("whee");
             }
 
             @Override
@@ -181,8 +165,9 @@ public class HealthCheckServletTest extends AbstractServletTest {
                 .isEqualTo(500);
         assertThat(response.getContent())
                 .contains(
-                        "{\"fun\":{\"healthy\":true,\"message\":\"whee\",\"duration\":0,\"timestamp\":\"" + EXPECTED_TIMESTAMP + "\"}",
-                        ",\"notFun\":{\"healthy\":false,\"message\":\"whee\",\"duration\":0,\"timestamp\":\"" + EXPECTED_TIMESTAMP + "\"}}");
+                        "{\"fun\":{\"healthy\":true,\"message\":\"whee\",\"duration\":0,\"timestamp\":\"",
+                        "\"},\"notFun\":{\"healthy\":false,\"message\":\"whee\",\"duration\":0,\"timestamp\":\"")
+                .endsWith("\"}}");
         assertThat(response.get(HttpHeader.CONTENT_TYPE))
                 .isEqualTo("application/json");
     }
@@ -191,10 +176,9 @@ public class HealthCheckServletTest extends AbstractServletTest {
     public void optionallyPrettyPrintsTheJson() throws Exception {
         registry.register("fun", new HealthCheck() {
             @Override
-            protected Result check() {
-                return healthyResultUsingFixedClockWithMessage("foo bar 123");
+            protected Result check() throws Exception {
+                return Result.healthy("whee");
             }
-
             @Override
             protected Clock clock() {
                 return FIXED_CLOCK;
@@ -208,23 +192,15 @@ public class HealthCheckServletTest extends AbstractServletTest {
         assertThat(response.getStatus())
                 .isEqualTo(200);
         assertThat(response.getContent())
-                .isEqualTo(String.format("{%n" +
+                .startsWith(String.format("{%n" +
                         "  \"fun\" : {%n" +
                         "    \"healthy\" : true,%n" +
-                        "    \"message\" : \"foo bar 123\",%n" +
+                        "    \"message\" : \"whee\",%n" +
                         "    \"duration\" : 0,%n" +
-                        "    \"timestamp\" : \"" + EXPECTED_TIMESTAMP + "\"" +
-                        "%n  }%n}"));
+                        "    \"timestamp\" : \""))
+                .endsWith(String.format("\"%n  }%n}"));
         assertThat(response.get(HttpHeader.CONTENT_TYPE))
                 .isEqualTo("application/json");
-    }
-
-    private static HealthCheck.Result healthyResultUsingFixedClockWithMessage(String message) {
-        return HealthCheck.Result.builder()
-                .healthy()
-                .withMessage(message)
-                .usingClock(FIXED_CLOCK)
-                .build();
     }
 
     @Test
