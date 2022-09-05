@@ -14,22 +14,29 @@
 
 package com.google.devtools.build.lib.bazel.repository.downloader;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Optional;
 import com.google.common.io.ByteStreams;
-
+import com.google.common.net.MediaType;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.Proxy;
+import java.net.SocketTimeoutException;
 import java.net.URL;
+import java.net.URLConnection;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 /**
  * Represents a connection over HTTP.
  */
 class HttpConnection implements Closeable {
   private static final int MAX_REDIRECTS = 20;
+  private static final int TIMEOUT_MS = 60000;
   private final InputStream inputStream;
   private final int contentLength;
 
@@ -45,7 +52,7 @@ class HttpConnection implements Closeable {
   /**
    * @return The length of the response, or -1 if unknown.
    */
-  public int getContentLength() {
+  int getContentLength() {
     return contentLength;
   }
 
@@ -67,36 +74,82 @@ class HttpConnection implements Closeable {
     }
   }
 
-  public static HttpConnection createAndConnect(URL url) throws IOException {
-    int retries = MAX_REDIRECTS;
-    Proxy proxy = ProxyHelper.createProxyIfNeeded(url.toString());
-    do {
-      HttpURLConnection connection = (HttpURLConnection) url.openConnection(proxy);
-      try {
-        connection.connect();
-      } catch (IllegalArgumentException e) {
-        throw new IOException("Failed to connect to " + url + " : " + e.getMessage(), e);
+  /**
+   * Connects to the given URL.  Should not leave any connections open if anything goes wrong.
+   */
+  static HttpConnection createAndConnect(URL url, Map<String, String> clientEnv)
+      throws IOException {
+    Proxy proxy = ProxyHelper.createProxyIfNeeded(url.toString(), clientEnv);
+    for (int i = 0; i < MAX_REDIRECTS; ++i) {
+      URLConnection urlConnection = url.openConnection(proxy);
+      if (!(urlConnection instanceof HttpURLConnection)) {
+        return createFileConnection(urlConnection);
       }
 
-      int statusCode = connection.getResponseCode();
+      HttpURLConnection connection = (HttpURLConnection) urlConnection;
+      int statusCode;
+      try {
+        statusCode = createAndConnectViaHttp(connection);
+      } catch (IOException e) {
+        connection.disconnect();
+        throw e;
+      }
+
       switch (statusCode) {
         case HttpURLConnection.HTTP_OK:
-          return new HttpConnection(connection.getInputStream(), parseContentLength(connection));
+          try {
+            return new HttpConnection(connection.getInputStream(), parseContentLength(connection));
+          } catch (IOException e) {
+            connection.disconnect();
+            throw e;
+          }
         case HttpURLConnection.HTTP_MOVED_PERM:
         case HttpURLConnection.HTTP_MOVED_TEMP:
+          // Try again with the new URL. This is the only case that doesn't return/throw.
           url = tryGetLocation(statusCode, connection);
           connection.disconnect();
           break;
         case -1:
-          throw new IOException("An HTTP error occured");
+          throw new IOException("An HTTP error occurred");
         default:
-          throw new IOException(String.format("%s %s: %s",
-              connection.getResponseCode(),
-              connection.getResponseMessage(),
-              readBody(connection)));
+          throw new IOException(
+              String.format(
+                  "%s %s: %s",
+                  connection.getResponseCode(),
+                  connection.getResponseMessage(),
+                  readBody(connection)));
       }
-    } while (retries-- > 0);
+    }
     throw new IOException("Maximum redirects (" + MAX_REDIRECTS + ") exceeded");
+  }
+
+  // For file:// URLs.
+  private static HttpConnection createFileConnection(URLConnection connection)
+      throws IOException {
+    int contentLength = connection.getContentLength();
+    // check for empty file. -1 is a valid contentLength, meaning the size of unknown. It's a
+    // common return value for an FTP download request for example. Local files will always
+    // have a valid contentLength value.
+    if (contentLength == 0) {
+      throw new IOException("Attempted to download an empty file");
+    }
+
+    return new HttpConnection(connection.getInputStream(), contentLength);
+  }
+
+  private static int createAndConnectViaHttp(HttpURLConnection connection) throws IOException {
+    connection.setConnectTimeout(TIMEOUT_MS);
+    connection.setReadTimeout(TIMEOUT_MS);
+    try {
+      connection.connect();
+    } catch (SocketTimeoutException e) {
+      throw new IOException(
+          "Timed out connecting to " + connection.getURL() + " : " + e.getMessage(), e);
+    } catch (IllegalArgumentException | IOException e) {
+      throw new IOException(
+          "Failed to connect to " + connection.getURL() + " : " + e.getMessage(), e);
+    }
+    return connection.getResponseCode();
   }
 
   private static URL tryGetLocation(int statusCode, HttpURLConnection connection)
@@ -123,17 +176,61 @@ class HttpConnection implements Closeable {
     return newUrl;
   }
 
+  /**
+   * Attempts to detect the encoding the HTTP reponse is using.
+   *
+   * <p>This attempts to read the Content-Encoding header, then the Content-Type header,
+   * then just falls back to UTF-8.</p>
+   *
+   * @throws IOException If something goes wrong (the encoding isn't parsable or is, but isn't
+   * supported by the system).
+   */
+  @VisibleForTesting
+  static Charset getEncoding(HttpURLConnection connection) throws IOException {
+    String encoding = connection.getContentEncoding();
+    if (encoding != null) {
+      if (Charset.availableCharsets().containsKey(encoding)) {
+        try {
+          return Charset.forName(encoding);
+        } catch (IllegalArgumentException | UnsupportedOperationException e) {
+          throw new IOException(
+              "Got invalid encoding from " + connection.getURL() + ": " + encoding);
+        }
+      } else {
+        throw new IOException(
+            "Got unavailable encoding from " + connection.getURL() + ": " + encoding);
+      }
+    }
+    encoding = connection.getContentType();
+    if (encoding == null) {
+      return StandardCharsets.UTF_8;
+    }
+    try {
+      MediaType mediaType = MediaType.parse(encoding);
+      if (mediaType == null) {
+        return StandardCharsets.UTF_8;
+      }
+      Optional<Charset> charset = mediaType.charset();
+      if (charset.isPresent()) {
+        return charset.get();
+      }
+    } catch (IllegalArgumentException | IllegalStateException e) {
+      throw new IOException(
+          "Got invalid encoding from " + connection.getURL() + ": " + encoding);
+    }
+    return StandardCharsets.UTF_8;
+  }
+
   private static String readBody(HttpURLConnection connection) throws IOException {
     InputStream errorStream = connection.getErrorStream();
+    Charset encoding = getEncoding(connection);
     if (errorStream != null) {
-      // TODO(kchodorow): detect encoding.
-      return new String(ByteStreams.toByteArray(errorStream), StandardCharsets.UTF_8);
+      return new String(ByteStreams.toByteArray(errorStream), encoding);
     }
 
     InputStream responseStream = connection.getInputStream();
     if (responseStream != null) {
-      // TODO(kchodorow): detect encoding.
-      return new String(ByteStreams.toByteArray(responseStream), StandardCharsets.UTF_8);
+      return new String(ByteStreams.toByteArray(responseStream), encoding);
     }
 
     return null;

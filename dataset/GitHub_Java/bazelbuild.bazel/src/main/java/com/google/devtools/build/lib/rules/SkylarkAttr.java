@@ -14,12 +14,10 @@
 
 package com.google.devtools.build.lib.rules;
 
-import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.AllowedValueSet;
@@ -27,7 +25,6 @@ import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTemplate;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.SkylarkAspect;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -156,8 +153,8 @@ public final class SkylarkAttr {
   }
 
   private static Attribute.Builder<?> createAttribute(
-      Type<?> type, SkylarkDict<String, Object> arguments, FuncallExpression ast, Environment env,
-      Location loc) throws EvalException, ConversionException {
+      Type<?> type, SkylarkDict<String, Object> arguments, FuncallExpression ast, Environment env)
+      throws EvalException, ConversionException {
     // We use an empty name now so that we can set it later.
     // This trick makes sense only in the context of Skylark (builtin rules should not use it).
     Attribute.Builder<?> builder = Attribute.attr("", type);
@@ -201,11 +198,6 @@ public final class SkylarkAttr {
 
     if (containsNonNoneKey(arguments, EXECUTABLE_ARG) && (Boolean) arguments.get(EXECUTABLE_ARG)) {
       builder.setPropertyFlag("EXECUTABLE");
-      if (!containsNonNoneKey(arguments, CONFIGURATION_ARG)) {
-        String message = "Argument `cfg = \"host\"` or `cfg = \"data\"` is required if"
-            + " `executable = True` is provided for a label";
-        env.handleEvent(Event.warn(loc, message));
-      }
     }
 
     // TODO(laurentlb): Deprecated, remove in August 2016 (use allow_single_file).
@@ -260,7 +252,7 @@ public final class SkylarkAttr {
         }
       }
       if (isSingleListOfStr) {
-        builder.mandatoryProviders(getSkylarkProviderIdentifiers((SkylarkList<?>) obj));
+        builder.mandatoryProviders(((SkylarkList<?>) obj).getContents(String.class, PROVIDERS_ARG));
       } else {
         builder.mandatoryProvidersList(getProvidersList((SkylarkList) obj));
       }
@@ -270,9 +262,6 @@ public final class SkylarkAttr {
       Object trans = arguments.get(CONFIGURATION_ARG);
       if (trans instanceof ConfigurationTransition) {
         // TODO(laurentlb): Deprecated, to be removed in August 2016.
-        String message = "Variables HOST_CFG and DATA_CFG are deprecated in favor of strings"
-            + " \"host\" and \"data\" correspondingly";
-        env.handleEvent(Event.warn(loc, message));
         builder.cfg((ConfigurationTransition) trans);
       } else if (trans.equals("data")) {
         builder.cfg(ConfigurationTransition.DATA);
@@ -285,20 +274,8 @@ public final class SkylarkAttr {
     return builder;
   }
 
-  private static Iterable<SkylarkProviderIdentifier> getSkylarkProviderIdentifiers(
-      SkylarkList<?> obj) throws EvalException {
-    return Iterables.transform(obj.getContents(String.class, PROVIDERS_ARG),
-        new Function<String, SkylarkProviderIdentifier>() {
-          @Override
-          public SkylarkProviderIdentifier apply(String s) {
-            return SkylarkProviderIdentifier.forLegacy(s);
-          }
-        });
-  }
-
-  private static List<Iterable<SkylarkProviderIdentifier>> getProvidersList(
-      SkylarkList<?> skylarkList) throws EvalException {
-    List<Iterable<SkylarkProviderIdentifier>> providersList = new ArrayList<>();
+  private static List<List<String>> getProvidersList(SkylarkList skylarkList) throws EvalException {
+    List<List<String>> providersList = new ArrayList<>();
     String errorMsg = "Illegal argument: element in '%s' is of unexpected type. "
         + "Should be list of string, but got %s. "
         + "Notice: one single list of string as 'providers' is still supported.";
@@ -314,7 +291,7 @@ public final class SkylarkAttr {
                   + EvalUtils.getDataTypeNameFromClass(value.getClass())));
         }
       }
-      providersList.add(getSkylarkProviderIdentifiers((SkylarkList<?>) o));
+      providersList.add(((SkylarkList<?>) o).getContents(String.class, PROVIDERS_ARG));
     }
     return providersList;
   }
@@ -323,7 +300,7 @@ public final class SkylarkAttr {
       SkylarkDict<String, Object> kwargs, Type<?> type, FuncallExpression ast, Environment env)
       throws EvalException {
     try {
-      return new Descriptor(createAttribute(type, kwargs, ast, env, ast.getLocation()));
+      return new Descriptor(createAttribute(type, kwargs, ast, env));
     } catch (ConversionException e) {
       throw new EvalException(ast.getLocation(), e.getMessage());
     }
@@ -354,8 +331,7 @@ public final class SkylarkAttr {
         Preconditions.checkNotNull(maybeGetNonConfigurableReason(type), type);
     try {
       return new Descriptor(
-          createAttribute(type, kwargs, ast, env, ast.getLocation())
-              .nonconfigurable(whyNotConfigurableReason));
+          createAttribute(type, kwargs, ast, env).nonconfigurable(whyNotConfigurableReason));
     } catch (ConversionException e) {
       throw new EvalException(ast.getLocation(), e.getMessage());
     }
@@ -620,8 +596,7 @@ public final class SkylarkAttr {
                     CONFIGURATION_ARG,
                     cfg),
                 ast,
-                env,
-                ast.getLocation());
+                env);
             ImmutableList<SkylarkAspect> skylarkAspects =
                 ImmutableList.copyOf(aspects.getContents(SkylarkAspect.class, "aspects"));
             return new Descriptor(attribute, skylarkAspects);
@@ -900,7 +875,7 @@ public final class SkylarkAttr {
                   cfg);
           try {
             Attribute.Builder<?> attribute =
-                createAttribute(BuildType.LABEL_LIST, kwargs, ast, env, ast.getLocation());
+                createAttribute(BuildType.LABEL_LIST, kwargs, ast, env);
             ImmutableList<SkylarkAspect> skylarkAspects =
                 ImmutableList.copyOf(aspects.getContents(SkylarkAspect.class, "aspects"));
             return new Descriptor(attribute, skylarkAspects);
