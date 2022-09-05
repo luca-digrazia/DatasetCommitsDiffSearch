@@ -14,11 +14,8 @@
 
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.base.Strings;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.PackageLoading;
-import com.google.devtools.build.lib.util.DetailedExitCode;
+
 import javax.annotation.Nullable;
 
 /**
@@ -51,10 +48,9 @@ public class NoSuchTargetException extends NoSuchThingException {
         /*hasTarget=*/ true);
   }
 
-  private NoSuchTargetException(String message, @Nullable Label label, boolean hasTarget) {
+  public NoSuchTargetException(String message, @Nullable Label label, boolean hasTarget) {
     // TODO(bazel-team): Does the exception matter?
-    super(
-        message,
+    super(message,
         hasTarget ? new BuildFileContainsErrorsException(label.getPackageIdentifier()) : null);
     this.label = label;
     this.hasTarget = hasTarget;
@@ -68,22 +64,5 @@ public class NoSuchTargetException extends NoSuchThingException {
   /** Return whether parsing completed enough to construct the target. */
   public boolean hasTarget() {
     return hasTarget;
-  }
-
-  @Override
-  public DetailedExitCode getDetailedExitCode() {
-    DetailedExitCode uncheckedDetailedExitCode = getUncheckedDetailedExitCode();
-    return uncheckedDetailedExitCode != null
-        ? uncheckedDetailedExitCode
-        : defaultDetailedExitCode();
-  }
-
-  private DetailedExitCode defaultDetailedExitCode() {
-    return DetailedExitCode.of(
-        FailureDetail.newBuilder()
-            .setMessage(Strings.nullToEmpty(getMessage()))
-            .setPackageLoading(
-                PackageLoading.newBuilder().setCode(PackageLoading.Code.TARGET_MISSING).build())
-            .build());
   }
 }
