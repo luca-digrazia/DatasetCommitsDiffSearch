@@ -50,18 +50,7 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
       ImmutableList.of("objc-compile", "objc++-compile", "objc-archive", "objc-fully-link");
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext) 
-    throws InterruptedException, RuleErrorException {
-    return configureExperimentalObjcLibrary(ruleContext);
-  }
-  
-  /**
-   * Returns a configured target using the given context as an experimental_objc_library.
-   * 
-   * <p>Implemented outside of {@link RuleClass.ConfiguredTargetFactory#create} so as to allow
-   * experimental analysis of objc_library targets as experimental_objc_library.
-   */
-  public static ConfiguredTarget configureExperimentalObjcLibrary(RuleContext ruleContext)
+  public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
     validateAttributes(ruleContext);
 
@@ -125,11 +114,6 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
 
     XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
     compilationSupport.addXcodeSettings(xcodeProviderBuilder, common);
-    
-    new ResourceSupport(ruleContext)
-        .validateAttributes()
-        .addXcodeSettings(xcodeProviderBuilder);
-    
     new XcodeSupport(ruleContext)
         .addFilesToBuild(filesToBuild)
         .addXcodeSettings(xcodeProviderBuilder, common.getObjcProvider(), LIBRARY_STATIC)
@@ -147,7 +131,7 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
         .build();
   }
 
-  private static FeatureConfiguration getFeatureConfiguration(RuleContext ruleContext) {
+  private FeatureConfiguration getFeatureConfiguration(RuleContext ruleContext) {
     CcToolchainProvider toolchain =
         ruleContext
             .getPrerequisite(":cc_toolchain", Mode.TARGET)
@@ -175,7 +159,7 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
     return toolchain.getFeatures().getFeatureConfiguration(activatedCrosstoolSelectables.build());
   }
 
-  private static void registerArchiveAction(
+  private void registerArchiveAction(
       IntermediateArtifacts intermediateArtifacts,
       CompilationSupport compilationSupport,
       CompilationArtifacts compilationArtifacts,
@@ -189,7 +173,7 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
     helper.setLinkType(LinkTargetType.OBJC_ARCHIVE).addLinkActionInput(objList);
   }
 
-  private static void registerFullyLinkAction(
+  private void registerFullyLinkAction(
       RuleContext ruleContext,
       ObjcCommon common,
       VariablesExtension variablesExtension,
@@ -218,7 +202,7 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
   }
 
   /** Throws errors or warnings for bad attribute state. */
-  private static void validateAttributes(RuleContext ruleContext) {
+  private void validateAttributes(RuleContext ruleContext) {
     for (String copt : ObjcCommon.getNonCrosstoolCopts(ruleContext)) {
       if (copt.contains("-fmodules-cache-path")) {
         ruleContext.ruleWarning(CompilationSupport.MODULES_CACHE_PATH_WARNING);
@@ -229,7 +213,7 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
   /**
    * Constructs an {@link ObjcCommon} instance based on the attributes of the given rule context.
    */
-  private static ObjcCommon common(
+  private ObjcCommon common(
       RuleContext ruleContext,
       CompilationAttributes compilationAttributes,
       CompilationArtifacts compilationArtifacts) {
@@ -244,7 +228,7 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
         .build();
   }
  
-  private static ImmutableList<Artifact> getObjFiles(
+  private ImmutableList<Artifact> getObjFiles(
       CompilationArtifacts compilationArtifacts, IntermediateArtifacts intermediateArtifacts) {
     ImmutableList.Builder<Artifact> result = new ImmutableList.Builder<>();
     for (Artifact sourceFile : compilationArtifacts.getSrcs()) {

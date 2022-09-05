@@ -35,7 +35,6 @@ public class ExperimentalObjcLibraryRule implements RuleDefinition {
         .setImplicitOutputsFunction(
             ImplicitOutputsFunction.fromFunctions(
                 CompilationSupport.FULLY_LINKED_LIB, XcodeSupport.PBXPROJ))
-        .cfg(AppleCrosstoolTransition.APPLE_CROSSTOOL_TRANSITION)
         .build();
   }
 

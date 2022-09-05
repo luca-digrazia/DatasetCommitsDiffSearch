@@ -418,7 +418,7 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
   private final ImmutableMap<Key<?>, NestedSet<?>> strictDependencyItems;
 
   private static final SkylarkClassObjectConstructor OBJC_PROVIDER =
-      SkylarkClassObjectConstructor.createNative("objc_provider");
+      new SkylarkClassObjectConstructor("objc_provider");
 
   private ObjcProvider(
       ImmutableMap<Key<?>, NestedSet<?>> items,

@@ -411,7 +411,7 @@ public final class LinkCommandLine extends CommandLine {
 
       case DYNAMIC_LIBRARY:
         if (interfaceOutput != null) {
-          argv.add(configuration.getShellExecutable().getPathString());
+          argv.add(configuration.getShExecutable().getPathString());
           argv.add("-c");
           argv.add(
               "build_iface_so=\"$0\"; impl=\"$1\"; iface=\"$2\"; cmd=\"$3\"; shift 3; "
@@ -433,7 +433,8 @@ public final class LinkCommandLine extends CommandLine {
         // The static library link command follows this template:
         // ar <cmd> <output_archive> <input_files...>
         argv.add(cppConfiguration.getArExecutable().getPathString());
-        argv.addAll(cppConfiguration.getArFlags());
+        argv.addAll(
+            cppConfiguration.getArFlags(cppConfiguration.archiveType() == Link.ArchiveType.THIN));
         argv.add(output.getExecPathString());
         argv.addAll(featureConfiguration.getCommandLine(actionName, variables));
         argv.addAll(noWholeArchiveFlags);

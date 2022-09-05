@@ -123,18 +123,10 @@ public final class CompilationSupport {
   static final ImmutableList<String> LINKER_COVERAGE_FLAGS =
       ImmutableList.of("-ftest-coverage", "-fprofile-arcs");
 
-  @VisibleForTesting
-  static final ImmutableList<String> LINKER_LLVM_COVERAGE_FLAGS =
-      ImmutableList.of("-fprofile-instr-generate");
-
   // Flags for clang 6.1(xcode 6.4)
   @VisibleForTesting
-  static final ImmutableList<String> CLANG_GCOV_COVERAGE_FLAGS =
+  static final ImmutableList<String> CLANG_COVERAGE_FLAGS =
       ImmutableList.of("-fprofile-arcs", "-ftest-coverage");
-
-  @VisibleForTesting
-  static final ImmutableList<String> CLANG_LLVM_COVERAGE_FLAGS =
-      ImmutableList.of("-fprofile-instr-generate", "-fcoverage-mapping");
 
   // These are added by Xcode when building, because the simulator is built on OSX
   // frameworks so we aim compile to match the OSX objc runtime.
@@ -556,11 +548,7 @@ public final class CompilationSupport {
 
     List<String> coverageFlags = ImmutableList.of();
     if (collectCodeCoverage) {
-      if (buildConfiguration.isLLVMCoverageMapFormatEnabled()) {
-        coverageFlags = CLANG_LLVM_COVERAGE_FLAGS;
-      } else {
-        coverageFlags = CLANG_GCOV_COVERAGE_FLAGS;
-      }
+      coverageFlags = CLANG_COVERAGE_FLAGS;
     }
 
     commandLine
@@ -670,7 +658,7 @@ public final class CompilationSupport {
         hasSwiftSources);
 
     Optional<Artifact> gcnoFile = Optional.absent();
-    if (runCodeCoverage && !buildConfiguration.isLLVMCoverageMapFormatEnabled()) {
+    if (runCodeCoverage) {
       gcnoFile = Optional.of(intermediateArtifacts.gcnoFile(sourceFile));
     }
 
@@ -1400,11 +1388,7 @@ public final class CompilationSupport {
         .add(objcProvider.get(ObjcProvider.LINKOPT));
 
     if (buildConfiguration.isCodeCoverageEnabled()) {
-      if (buildConfiguration.isLLVMCoverageMapFormatEnabled()) {
-        commandLine.add(LINKER_LLVM_COVERAGE_FLAGS);
-      } else {
-        commandLine.add(LINKER_COVERAGE_FLAGS);
-      }
+      commandLine.add(LINKER_COVERAGE_FLAGS);
     }
 
     if (objcProvider.is(USES_SWIFT)) {

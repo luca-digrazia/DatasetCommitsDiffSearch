@@ -60,6 +60,10 @@ public abstract class Link {
       CppFileTypes.VERSIONED_SHARED_LIBRARY,
       CppFileTypes.INTERFACE_SHARED_LIBRARY);
 
+  /**
+   * These need special handling when --thin_archive is true. {@link CppLinkAction} checks that
+   * these files are never added as non-libraries.
+   */
   public static final FileTypeSet ARCHIVE_LIBRARY_FILETYPES = FileTypeSet.of(
       CppFileTypes.ARCHIVE,
       CppFileTypes.PIC_ARCHIVE,
@@ -103,14 +107,6 @@ public abstract class Link {
     STATIC,
     DYNAMIC
   }
-  
-  /**
-   * Whether a particular link target is executable.
-   */
-  public enum Executable {
-    EXECUTABLE,
-    NOT_EXECUTABLE
-  }
 
   /**
    * Types of ELF files that can be created by the linker (.a, .so, .lo,
@@ -123,8 +119,7 @@ public abstract class Link {
         Staticness.STATIC,
         "c++-link-static-library",
         Picness.NOPIC,
-        ArtifactCategory.STATIC_LIBRARY,
-        Executable.NOT_EXECUTABLE),
+        ArtifactCategory.STATIC_LIBRARY),
     
     /** An objc static archive. */
     OBJC_ARCHIVE(
@@ -132,35 +127,19 @@ public abstract class Link {
         Staticness.STATIC, 
         "objc-archive", 
         Picness.NOPIC,
-        ArtifactCategory.STATIC_LIBRARY,
-        Executable.NOT_EXECUTABLE),
+        ArtifactCategory.STATIC_LIBRARY),
     
     /** An objc fully linked static archive. */
     OBJC_FULLY_LINKED_ARCHIVE(
-        ".a",
-        Staticness.STATIC,
-        "objc-fully-link",
-        Picness.NOPIC,
-        ArtifactCategory.STATIC_LIBRARY,
-        Executable.NOT_EXECUTABLE),
+        ".a", Staticness.STATIC, "objc-fully-link", Picness.NOPIC, ArtifactCategory.STATIC_LIBRARY),
 
-    /** An objc executable. */
-    OBJC_EXECUTABLE(
-        "",
-        Staticness.STATIC,
-        "objc-executable",
-        Picness.NOPIC,
-        ArtifactCategory.EXECUTABLE,
-        Executable.EXECUTABLE),
-    
     /** A static archive with .pic.o object files (compiled with -fPIC). */
     PIC_STATIC_LIBRARY(
         ".pic.a",
         Staticness.STATIC,
         "c++-link-pic-static-library",
         Picness.PIC,
-        ArtifactCategory.STATIC_LIBRARY,
-        Executable.NOT_EXECUTABLE),
+        ArtifactCategory.STATIC_LIBRARY),
 
     /** An interface dynamic library. */
     INTERFACE_DYNAMIC_LIBRARY(
@@ -168,8 +147,7 @@ public abstract class Link {
         Staticness.DYNAMIC,
         "c++-link-interface-dynamic-library",
         Picness.NOPIC,  // Actually PIC but it's not indicated in the file name
-        ArtifactCategory.INTERFACE_LIBRARY,
-        Executable.NOT_EXECUTABLE),
+        ArtifactCategory.INTERFACE_LIBRARY),
 
     /** A dynamic library. */
     DYNAMIC_LIBRARY(
@@ -177,8 +155,7 @@ public abstract class Link {
         Staticness.DYNAMIC,
         "c++-link-dynamic-library",
         Picness.NOPIC,  // Actually PIC but it's not indicated in the file name
-        ArtifactCategory.DYNAMIC_LIBRARY,
-        Executable.NOT_EXECUTABLE),
+        ArtifactCategory.DYNAMIC_LIBRARY),
 
     /** A static archive without removal of unused object files. */
     ALWAYS_LINK_STATIC_LIBRARY(
@@ -186,8 +163,7 @@ public abstract class Link {
         Staticness.STATIC,
         "c++-link-alwayslink-static-library",
         Picness.NOPIC,
-        ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY,
-        Executable.NOT_EXECUTABLE),
+        ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY),
 
     /** A PIC static archive without removal of unused object files. */
     ALWAYS_LINK_PIC_STATIC_LIBRARY(
@@ -195,8 +171,7 @@ public abstract class Link {
         Staticness.STATIC,
         "c++-link-alwayslink-pic-static-library",
         Picness.PIC,
-        ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY,
-        Executable.NOT_EXECUTABLE),
+        ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY),
 
     /** An executable binary. */
     EXECUTABLE(
@@ -204,29 +179,25 @@ public abstract class Link {
         Staticness.DYNAMIC,
         "c++-link-executable",
         Picness.NOPIC,  // Picness is not indicate in the file name
-        ArtifactCategory.EXECUTABLE,
-        Executable.EXECUTABLE);
+        ArtifactCategory.EXECUTABLE);
 
     private final String extension;
     private final Staticness staticness;
     private final String actionName;
     private final ArtifactCategory linkerOutput;
     private final Picness picness;
-    private final Executable executable;
 
     LinkTargetType(
         String extension,
         Staticness staticness,
         String actionName,
         Picness picness,
-        ArtifactCategory linkerOutput,
-        Executable executable) {
+        ArtifactCategory linkerOutput) {
       this.extension = extension;
       this.staticness = staticness;
       this.actionName = actionName;
       this.linkerOutput = linkerOutput;
       this.picness = picness;
-      this.executable = executable;
     }
 
     /**
@@ -256,11 +227,6 @@ public abstract class Link {
     public String getActionName() {
       return actionName;
     }
-    
-    /** Returns true iff this link type is executable */
-    public boolean isExecutable() {
-      return (executable == Executable.EXECUTABLE);
-    }
   }
 
   /**
@@ -273,11 +239,12 @@ public abstract class Link {
   }
 
   /**
-   * How to pass archives to the linker on the command line.
+   * Types of archive.
    */
   public enum ArchiveType {
-    REGULAR,        // Put the archive itself on the linker command line.
-    START_END_LIB   // Put the object files enclosed by --start-lib / --end-lib on the command line
+    FAT,            // Regular archive that includes its members.
+    THIN,           // Thin archive that just points to its members.
+    START_END_LIB   // A --start-lib ... --end-lib group in the command line.
   }
 
   static boolean useStartEndLib(LinkerInput linkerInput, ArchiveType archiveType) {
@@ -364,7 +331,7 @@ public abstract class Link {
         // start_end_lib archive (aka static library). Also check if the library contains object
         // files - otherwise getObjectFiles returns null, which would lead to an NPE in
         // simpleLinkerInputs.
-        boolean needMembersForLink = archiveType != ArchiveType.REGULAR
+        boolean needMembersForLink = archiveType != ArchiveType.FAT
             && (inputLibrary.getArtifactCategory() == ArtifactCategory.STATIC_LIBRARY
                 || inputLibrary.getArtifactCategory() == ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY)
             && inputLibrary.containsObjectFiles();
