@@ -197,13 +197,11 @@ public class AarGeneratorAction {
       Path classes) throws IOException {
     try (final ZipOutputStream zipOut = new ZipOutputStream(new FileOutputStream(aar.toFile()))) {
       ZipEntry manifestEntry = new ZipEntry("AndroidManifest.xml");
-      manifestEntry.setTime(EPOCH);
       zipOut.putNextEntry(manifestEntry);
       zipOut.write(Files.readAllBytes(manifest));
       zipOut.closeEntry();
 
       ZipEntry classJar = new ZipEntry("classes.jar");
-      classJar.setTime(EPOCH);
       zipOut.putNextEntry(classJar);
       zipOut.write(Files.readAllBytes(classes));
       zipOut.closeEntry();
@@ -212,7 +210,6 @@ public class AarGeneratorAction {
           new ZipDirectoryWriter(zipOut, data.getResourceDir(), "res"));
 
       ZipEntry r = new ZipEntry("R.txt");
-      r.setTime(EPOCH);
       zipOut.putNextEntry(r);
       zipOut.write(Files.readAllBytes(rtxt));
       zipOut.closeEntry();
@@ -239,7 +236,6 @@ public class AarGeneratorAction {
     @Override
     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
       ZipEntry entry = new ZipEntry(new File(dirName, root.relativize(file).toString()).toString());
-      entry.setTime(EPOCH);
       zipOut.putNextEntry(entry);
       zipOut.write(Files.readAllBytes(file));
       zipOut.closeEntry();
@@ -251,7 +247,6 @@ public class AarGeneratorAction {
         throws IOException {
       ZipEntry entry = new ZipEntry(new File(dirName, root.relativize(dir).toString())
           .toString() + "/");
-      entry.setTime(EPOCH);
       zipOut.putNextEntry(entry);
       zipOut.closeEntry();
       return FileVisitResult.CONTINUE;

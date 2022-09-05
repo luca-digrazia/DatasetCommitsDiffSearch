@@ -13,13 +13,15 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
+
+import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.hash.Hashing;
-import com.google.devtools.build.android.AndroidResourceProcessor.AaptConfigOptions;
-import com.google.devtools.build.android.AndroidResourceProcessor.FlagAaptOptions;
 import com.google.devtools.build.android.Converters.DependencyAndroidDataListConverter;
+import com.google.devtools.build.android.Converters.ExistingPathConverter;
+import com.google.devtools.build.android.Converters.FullRevisionConverter;
 import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.build.android.Converters.UnvalidatedAndroidDataConverter;
 import com.google.devtools.build.android.Converters.VariantConfigurationTypeConverter;
@@ -30,27 +32,23 @@ import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.TriState;
 
 import com.android.builder.core.VariantConfiguration;
+import com.android.builder.model.AaptOptions;
 import com.android.ide.common.internal.AaptCruncher;
 import com.android.ide.common.internal.CommandLineRunner;
 import com.android.ide.common.internal.LoggedErrorException;
 import com.android.ide.common.res2.MergingException;
+import com.android.sdklib.repository.FullRevision;
 import com.android.utils.StdLogger;
 
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
-import java.util.zip.CRC32;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 
 /**
@@ -83,6 +81,50 @@ public class AndroidResourceProcessingAction {
 
   /** Flag specifications for this action. */
   public static final class Options extends OptionsBase {
+
+    @Option(name = "buildToolsVersion",
+        defaultValue = "null",
+        converter = FullRevisionConverter.class,
+        category = "config",
+        help = "Version of the build tools (e.g. aapt) being used, e.g. 23.0.2")
+    public FullRevision buildToolsVersion;
+
+    @Option(name = "aapt",
+        defaultValue = "null",
+        converter = ExistingPathConverter.class,
+        category = "tool",
+        help = "Aapt tool location for resource packaging.")
+    public Path aapt;
+
+    @Option(name = "annotationJar",
+        defaultValue = "null",
+        converter = ExistingPathConverter.class,
+        category = "tool",
+        help = "Annotation Jar for builder invocations.")
+    public Path annotationJar;
+
+    @Option(name = "adb",
+        defaultValue = "null",
+        converter = ExistingPathConverter.class,
+        category = "tool",
+        help = "Path to adb for builder functions.")
+    //TODO(bazel-team): Determine if this is completely necessary for running AndroidBuilder.
+    public Path adb;
+
+    @Option(name = "zipAlign",
+        defaultValue = "null",
+        converter = ExistingPathConverter.class,
+        category = "tool",
+        help = "Path to zipAlign for building apks.")
+    public Path zipAlign;
+
+    @Option(name = "androidJar",
+        defaultValue = "null",
+        converter = ExistingPathConverter.class,
+        category = "tool",
+        help = "Path to the android jar for resource packaging and building apks.")
+    public Path androidJar;
+
     @Option(name = "primaryData",
         defaultValue = "null",
         converter = UnvalidatedAndroidDataConverter.class,
@@ -133,13 +175,6 @@ public class AndroidResourceProcessingAction {
         help = "Path to the write the archive.")
     public Path packagePath;
 
-    @Option(name = "resourcesOutput",
-        defaultValue = "null",
-        converter = PathConverter.class,
-        category = "output",
-        help = "Path to the write merged resources archive.")
-    public Path resourcesOutput;
-
     @Option(name = "proguardOutput",
         defaultValue = "null",
         converter = PathConverter.class,
@@ -176,6 +211,36 @@ public class AndroidResourceProcessingAction {
         help = "A list densities to filter the resource drawables by.")
     public List<String> densities;
 
+    @Option(name = "debug",
+        defaultValue = "false",
+        category = "config",
+        help = "Indicates if it is a debug build.")
+    public boolean debug;
+
+    @Option(name = "resourceConfigs",
+        defaultValue = "",
+        converter = CommaSeparatedOptionListConverter.class,
+        category = "config",
+        help = "A list of resource config filters to pass to aapt.")
+    public List<String> resourceConfigs;
+
+    @Option(name = "useAaptCruncher",
+        defaultValue = "auto",
+        category = "config",
+        help = "Use the legacy aapt cruncher, defaults to true for non-LIBRARY packageTypes. "
+            + " LIBRARY packages do not benefit from the additional processing as the resources"
+            + " will need to be reprocessed during the generation of the final apk. See"
+            + " https://code.google.com/p/android/issues/detail?id=67525 for a discussion of the"
+            + " different png crunching methods.")
+    public TriState useAaptCruncher;
+
+    @Option(name = "uncompressedExtensions",
+        defaultValue = "",
+        converter = CommaSeparatedOptionListConverter.class,
+        category = "config",
+        help = "A list of file extensions not to compress.")
+    public List<String> uncompressedExtensions;
+
     @Option(name = "packageForR",
         defaultValue = "null",
         category = "config",
@@ -199,19 +264,22 @@ public class AndroidResourceProcessingAction {
         category = "config",
         help = "Version code to stamp into the packaged manifest.")
     public int versionCode;
+
+    @Option(name = "assetsToIgnore",
+        defaultValue = "",
+        converter = CommaSeparatedOptionListConverter.class,
+        category = "config",
+        help = "A list of assets extensions to ignore.")
+    public List<String> assetsToIgnore;
   }
 
-  private static AaptConfigOptions aaptConfigOptions;
   private static Options options;
 
   public static void main(String[] args) {
     final Stopwatch timer = Stopwatch.createStarted();
-    OptionsParser optionsParser = OptionsParser.newOptionsParser(
-        Options.class, AaptConfigOptions.class);
+    OptionsParser optionsParser = OptionsParser.newOptionsParser(Options.class);
     optionsParser.parseAndExitUponError(args);
-    aaptConfigOptions = optionsParser.getOptions(AaptConfigOptions.class);
     options = optionsParser.getOptions(Options.class);
-
     FileSystem fileSystem = FileSystems.getDefault();
     Path working = fileSystem.getPath("").toAbsolutePath();
     final AndroidResourceProcessor resourceProcessor = new AndroidResourceProcessor(STD_LOGGER);
@@ -256,7 +324,7 @@ public class AndroidResourceProcessingAction {
           mergedResources,
           mergedAssets,
           modifiers,
-          useAaptCruncher() ?  new AaptCruncher(aaptConfigOptions.aapt.toString(),
+          useAaptCruncher() ?  new AaptCruncher(options.aapt.toString(),
               new CommandLineRunner(STD_LOGGER)) : null,
           true);
 
@@ -267,7 +335,7 @@ public class AndroidResourceProcessingAction {
           new DensitySpecificManifestProcessor(options.densities, densityManifest));
 
       LOGGER.fine(String.format("Density filtering finished at %sms",
-          timer.elapsed(TimeUnit.MILLISECONDS)));
+              timer.elapsed(TimeUnit.MILLISECONDS)));
 
       final MergedAndroidData processedManifestData = resourceProcessor.processManifest(
           options.packageType,
@@ -279,22 +347,19 @@ public class AndroidResourceProcessingAction {
           processedManifest);
 
       resourceProcessor.processResources(
-          aaptConfigOptions.aapt,
-          aaptConfigOptions.androidJar,
-          aaptConfigOptions.buildToolsVersion,
+          options.aapt,
+          options.androidJar,
+          options.buildToolsVersion,
           options.packageType,
-          aaptConfigOptions.debug,
+          options.debug,
           options.packageForR,
-          new FlagAaptOptions(aaptConfigOptions),
-          aaptConfigOptions.resourceConfigs,
+          new FlagAaptOptions(),
+          options.resourceConfigs,
           processedManifestData,
           data,
           generatedSources,
           options.packagePath,
-          options.proguardOutput,
-          options.resourcesOutput != null
-              ? filteredData.getResourceDir().resolve("values").resolve("public.xml")
-              : null);
+          options.proguardOutput);
       LOGGER.fine(String.format("appt finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       if (options.manifestOutput != null) {
@@ -311,9 +376,6 @@ public class AndroidResourceProcessingAction {
       if (options.symbolsTxtOut != null) {
         resourceProcessor.copyRToOutput(generatedSources, options.symbolsTxtOut,
             VariantConfiguration.Type.LIBRARY == options.packageType);
-      }
-      if (options.resourcesOutput != null) {
-        createResourcesZip(processedManifestData, options.resourcesOutput);
       }
       LOGGER.fine(String.format("Packaging finished at %sms",
           timer.elapsed(TimeUnit.MILLISECONDS)));
@@ -333,54 +395,39 @@ public class AndroidResourceProcessingAction {
 
   private static boolean useAaptCruncher() {
     // If the value was set, use that.
-    if (aaptConfigOptions.useAaptCruncher != TriState.AUTO) {
-      return aaptConfigOptions.useAaptCruncher == TriState.YES;
+    if (options.useAaptCruncher != TriState.AUTO) {
+      return options.useAaptCruncher == TriState.YES;
     }
     // By default png cruncher shouldn't be invoked on a library -- the work is just thrown away.
     return options.packageType != VariantConfiguration.Type.LIBRARY;
   }
 
-  private static void createResourcesZip(MergedAndroidData data, Path output) throws IOException {
-    try (ZipOutputStream zout = new ZipOutputStream(new FileOutputStream(output.toFile()))) {
-      Path resourcesRoot = data.getResourceDir();
-      Path assetsRoot = data.getAssetDir();
-      Files.walkFileTree(resourcesRoot, new ZipBuilderVisitor(zout, resourcesRoot, "res"));
-      if (Files.exists(assetsRoot)) {
-        Files.walkFileTree(assetsRoot, new ZipBuilderVisitor(zout, assetsRoot, "assets"));
-      }
-    }
-  }
-
-  private static final class ZipBuilderVisitor extends SimpleFileVisitor<Path> {
-    // The earliest date representable in a zip file, 1-1-1980.
-    private static final long ZIP_EPOCH = 315561600000L;
-    private final ZipOutputStream zip;
-    private final Path root;
-    private final String directory;
-
-    private ZipBuilderVisitor(ZipOutputStream zip, Path root, String directory) {
-      this.zip = zip;
-      this.root = root;
-      this.directory = directory;
+  private static final class FlagAaptOptions implements AaptOptions {
+    @Override
+    public boolean getUseAaptPngCruncher() {
+      return options.useAaptCruncher != TriState.NO;
     }
 
     @Override
-    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-      byte[] content = Files.readAllBytes(file);
+    public Collection<String> getNoCompress() {
+      if (!options.uncompressedExtensions.isEmpty()) {
+        return options.uncompressedExtensions;
+      }
+      return ImmutableList.of();
+    }
 
-      CRC32 crc32 = new CRC32();
-      crc32.update(content);
+    @Override
+    public String getIgnoreAssets() {
+      if (!options.assetsToIgnore.isEmpty()) {
+        return Joiner.on(":").join(options.assetsToIgnore);
+      }
+      return null;
+    }
 
-      ZipEntry entry = new ZipEntry(directory + "/" + root.relativize(file));
-      entry.setMethod(ZipEntry.STORED);
-      entry.setTime(ZIP_EPOCH);
-      entry.setSize(content.length);
-      entry.setCrc(crc32.getValue());
-
-      zip.putNextEntry(entry);
-      zip.write(content);
-      zip.closeEntry();
-      return FileVisitResult.CONTINUE;
+    @Override
+    public boolean getFailOnMissingConfigEntry() {
+      return false;
     }
   }
 }
+
