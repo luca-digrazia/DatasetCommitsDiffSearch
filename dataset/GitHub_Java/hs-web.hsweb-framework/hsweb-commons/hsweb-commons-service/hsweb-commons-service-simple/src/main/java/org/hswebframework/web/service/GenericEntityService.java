@@ -61,7 +61,7 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
 
     @PostConstruct
     public void init() {
-        if (logicPrimaryKeyValidator instanceof DefaultLogicPrimaryKeyValidator) {
+        if (null != logicPrimaryKeyValidator && logicPrimaryKeyValidator instanceof DefaultLogicPrimaryKeyValidator) {
             DefaultLogicPrimaryKeyValidator.registerQuerySuppiler(getEntityInstanceType(), bean -> this.createQuery().not("id", bean.getId()));
         }
     }
