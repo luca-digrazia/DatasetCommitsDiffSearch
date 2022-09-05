@@ -1,7 +1,6 @@
 package com.yammer.metrics.reporting;
 
 import com.yammer.metrics.Metrics;
-import com.yammer.metrics.MetricsRegistry;
 import com.yammer.metrics.core.*;
 import com.yammer.metrics.util.Utils;
 
@@ -17,8 +16,7 @@ import java.util.concurrent.TimeUnit;
  * @author coda
  */
 public class JmxReporter implements Runnable {
-    private final ScheduledExecutorService tickThread;
-    private final MetricsRegistry metricsRegistry;
+    private static final ScheduledExecutorService TICK_THREAD = Utils.newScheduledThreadPool(1, "jmx-reporter");
     private final Map<MetricName, MetricMBean> beans;
     private final MBeanServer server;
 
@@ -295,33 +293,27 @@ public class JmxReporter implements Runnable {
     public static final JmxReporter INSTANCE = new JmxReporter();
 
     /*package*/ JmxReporter() {
-        this(Metrics.defaultRegistry());
-    }
-
-    public JmxReporter(MetricsRegistry metricsRegistry) {
-        this.tickThread = Utils.newScheduledThreadPool(1, "jmx-reporter" + System.identityHashCode(this));
-        this.metricsRegistry = metricsRegistry;
-        this.beans = new HashMap<MetricName, MetricMBean>(metricsRegistry.allMetrics().size());
+        this.beans = new HashMap<MetricName, MetricMBean>(Metrics.allMetrics().size());
         this.server = ManagementFactory.getPlatformMBeanServer();
     }
 
     public void start() {
-        tickThread.scheduleAtFixedRate(this, 0, 1, TimeUnit.MINUTES);
+        TICK_THREAD.scheduleAtFixedRate(this, 0, 1, TimeUnit.MINUTES);
         // then schedule the tick thread every 100ms for the next second so
         // as to pick up the initialization of most metrics (in the first 1s of
         // the application lifecycle) w/o incurring a high penalty later on
         for (int i = 1; i <= 9; i++) {
-            tickThread.schedule(this, i * 100, TimeUnit.MILLISECONDS);
+            TICK_THREAD.schedule(this, i * 100, TimeUnit.MILLISECONDS);
         }
     }
 
     @Override
     public void run() {
-        final Set<MetricName> newMetrics = new HashSet<MetricName>(metricsRegistry.allMetrics().keySet());
+        final Set<MetricName> newMetrics = new HashSet<MetricName>(Metrics.allMetrics().keySet());
         newMetrics.removeAll(beans.keySet());
 
         for (MetricName name : newMetrics) {
-            final Metric metric = metricsRegistry.allMetrics().get(name);
+            final Metric metric = Metrics.allMetrics().get(name);
             if (metric != null) {
                 try {
                     final String simpleName = name.getKlass().getSimpleName().replaceAll("\\$$", "");
