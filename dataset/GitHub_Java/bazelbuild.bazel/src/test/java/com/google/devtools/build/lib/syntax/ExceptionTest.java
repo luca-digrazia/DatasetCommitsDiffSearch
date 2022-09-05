@@ -26,12 +26,11 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class ExceptionTest {
-  private static final ASTNode DUMMY_NODE = new Identifier("DUMMY");
 
   @Test
   public void testEmptyMessage() throws Exception {
     EvalExceptionWithStackTrace ex =
-        new EvalExceptionWithStackTrace(new NullPointerException(), DUMMY_NODE);
+        new EvalExceptionWithStackTrace(new NullPointerException(), Location.BUILTIN);
     assertThat(ex.getMessage())
         .contains("Null Pointer: ExceptionTest.testEmptyMessage() in ExceptionTest.java:");
   }
@@ -46,7 +45,7 @@ public class ExceptionTest {
   }
 
   private void runExceptionTest(Exception toThrow, Exception expectedCause) {
-    EvalExceptionWithStackTrace ex = new EvalExceptionWithStackTrace(toThrow, DUMMY_NODE);
+    EvalExceptionWithStackTrace ex = new EvalExceptionWithStackTrace(toThrow, Location.BUILTIN);
     assertThat(ex.getCause()).isEqualTo(expectedCause);
   }
 }

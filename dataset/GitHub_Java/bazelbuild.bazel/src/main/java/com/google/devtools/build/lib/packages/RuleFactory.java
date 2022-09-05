@@ -79,7 +79,7 @@ public class RuleFactory {
       FuncallExpression ast,
       Location location,
       ImmutableList<StackTraceElement> stackTrace)
-      throws InvalidRuleException {
+      throws InvalidRuleException, NameConflictException {
     Preconditions.checkNotNull(ruleClass);
     String ruleClassName = ruleClass.getName();
     Object nameObject = attributeValues.get("name");
@@ -127,7 +127,7 @@ public class RuleFactory {
       EventHandler eventHandler,
       FuncallExpression ast,
       Location location)
-      throws InvalidRuleException {
+      throws InvalidRuleException, NameConflictException {
     return createRule(pkgBuilder, ruleClass, attributeValues, eventHandler, ast, location,
         ImmutableList.<StackTraceElement>of());
   }

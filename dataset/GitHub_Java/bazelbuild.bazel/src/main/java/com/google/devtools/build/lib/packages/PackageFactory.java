@@ -1055,8 +1055,7 @@ public final class PackageFactory {
     Preprocessor.Result preprocessingResult =
         preprocess(packageId, buildFile, inputSource, globber, localReporter);
     ExternalPackage externalPkg =
-        new ExternalPackage.Builder(
-            buildFile.getRelative("WORKSPACE"), ruleClassProvider.getRunfilesPrefix()).build();
+        new ExternalPackage.Builder(buildFile.getRelative("WORKSPACE")).build();
 
     Package result =
         createPackageFromPreprocessingResult(
@@ -1262,8 +1261,7 @@ public final class PackageFactory {
     Environment pkgEnv = new Environment(globalEnv, eventHandler);
     pkgEnv.setLoadingPhase();
 
-    Package.LegacyBuilder pkgBuilder = new Package.LegacyBuilder(
-        packageId, ruleClassProvider.getRunfilesPrefix());
+    Package.LegacyBuilder pkgBuilder = new Package.LegacyBuilder(packageId);
 
     pkgBuilder.setGlobber(globber)
         .setFilename(buildFilePath)
@@ -1333,8 +1331,7 @@ public final class PackageFactory {
     Environment pkgEnv = new Environment();
     pkgEnv.setLoadingPhase();
 
-    Package.LegacyBuilder pkgBuilder = new Package.LegacyBuilder(packageId,
-        ruleClassProvider.getRunfilesPrefix());
+    Package.LegacyBuilder pkgBuilder = new Package.LegacyBuilder(packageId);
 
     pkgBuilder.setFilename(buildFilePath)
         .setMakeEnv(pkgMakeEnv)

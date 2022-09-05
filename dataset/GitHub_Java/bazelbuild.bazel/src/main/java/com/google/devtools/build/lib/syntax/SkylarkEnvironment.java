@@ -15,16 +15,15 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.util.Fingerprint;
 
-import java.util.ArrayList;
+import java.io.Serializable;
+import java.util.Deque;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.LinkedList;
 import java.util.Map.Entry;
 import java.util.Set;
 
@@ -33,7 +32,7 @@ import javax.annotation.Nullable;
 /**
  * The environment for Skylark.
  */
-public class SkylarkEnvironment extends Environment {
+public class SkylarkEnvironment extends Environment implements Serializable {
 
   /**
    * This set contains the variable names of all the successful lookups from the global
@@ -42,8 +41,6 @@ public class SkylarkEnvironment extends Environment {
    * Exception needs to be thrown.
    */
   private final Set<String> readGlobalVariables = new HashSet<>();
-
-  private ImmutableList<String> stackTrace;
 
   @Nullable private String fileContentHashCode;
 
@@ -54,18 +51,21 @@ public class SkylarkEnvironment extends Environment {
   public static SkylarkEnvironment createEnvironmentForFunctionCalling(
       Environment callerEnv, SkylarkEnvironment definitionEnv,
       UserDefinedFunction function) throws EvalException {
-    if (callerEnv.getStackTrace().contains(function.getName())) {
-      throw new EvalException(function.getLocation(), "Recursion was detected when calling '"
-          + function.getName() + "' from '" + Iterables.getLast(callerEnv.getStackTrace()) + "'");
+    if (callerEnv.stackTraceContains(function)) {
+      throw new EvalException(
+          function.getLocation(),
+          "Recursion was detected when calling '" + function.getName() + "' from '"
+          + Iterables.getLast(callerEnv.getStackTrace()).getName() + "'");
     }
-    ImmutableList<String> stackTrace = new ImmutableList.Builder<String>()
-        .addAll(callerEnv.getStackTrace())
-        .add(function.getName())
-        .build();
     SkylarkEnvironment childEnv =
         // Always use the caller Environment's EventHandler. We cannot assume that the
         // definition Environment's EventHandler is still working properly.
-        new SkylarkEnvironment(definitionEnv, stackTrace, callerEnv.eventHandler);
+        new SkylarkEnvironment(
+            definitionEnv, callerEnv.getCopyOfStackTrace(), callerEnv.eventHandler);
+    if (callerEnv.isLoadingPhase()) {
+      childEnv.setLoadingPhase();
+    }
+
     try {
       for (String varname : callerEnv.propagatingVariables) {
         childEnv.updateAndPropagate(varname, callerEnv.lookup(varname));
@@ -74,15 +74,12 @@ public class SkylarkEnvironment extends Environment {
       // This should never happen.
       throw new IllegalStateException(e);
     }
-    childEnv.disabledVariables = callerEnv.disabledVariables;
-    childEnv.disabledNameSpaces = callerEnv.disabledNameSpaces;
     return childEnv;
   }
 
-  private SkylarkEnvironment(SkylarkEnvironment definitionEnv, ImmutableList<String> stackTrace,
-      EventHandler eventHandler) {
-    super(definitionEnv.getGlobalEnvironment());
-    this.stackTrace = stackTrace;
+  private SkylarkEnvironment(SkylarkEnvironment definitionEnv,
+      Deque<StackTraceElement> stackTrace, EventHandler eventHandler) {
+    super(definitionEnv.getGlobalEnvironment(), stackTrace);
     this.eventHandler = Preconditions.checkNotNull(eventHandler,
         "EventHandler cannot be null in an Environment which calls into Skylark");
   }
@@ -90,11 +87,15 @@ public class SkylarkEnvironment extends Environment {
   /**
    * Creates a global SkylarkEnvironment.
    */
-  public SkylarkEnvironment(EventHandler eventHandler, String astFileContentHashCode) {
-    super();
-    stackTrace = ImmutableList.of();
+  public SkylarkEnvironment(EventHandler eventHandler, String astFileContentHashCode,
+      Deque<StackTraceElement> stackTrace) {
+    super(stackTrace);
     this.eventHandler = eventHandler;
     this.fileContentHashCode = astFileContentHashCode;
+  }
+
+  public SkylarkEnvironment(EventHandler eventHandler, String astFileContentHashCode) {
+    this(eventHandler, astFileContentHashCode, new LinkedList<StackTraceElement>());
   }
 
   @VisibleForTesting
@@ -104,26 +105,18 @@ public class SkylarkEnvironment extends Environment {
 
   public SkylarkEnvironment(SkylarkEnvironment globalEnv) {
     super(globalEnv);
-    stackTrace = ImmutableList.of();
     this.eventHandler = globalEnv.eventHandler;
-  }
-
-  @Override
-  public ImmutableList<String> getStackTrace() {
-    return stackTrace;
   }
 
   /**
    * Clones this Skylark global environment.
    */
   public SkylarkEnvironment cloneEnv(EventHandler eventHandler) {
-    Preconditions.checkArgument(isGlobalEnvironment());
-    SkylarkEnvironment newEnv = new SkylarkEnvironment(eventHandler, this.fileContentHashCode);
+    Preconditions.checkArgument(isGlobal());
+    SkylarkEnvironment newEnv =
+        new SkylarkEnvironment(eventHandler, this.fileContentHashCode, getCopyOfStackTrace());
     for (Entry<String, Object> entry : env.entrySet()) {
       newEnv.env.put(entry.getKey(), entry.getValue());
-    }
-    for (Map.Entry<Class<?>, Map<String, Function>> functionMap : functions.entrySet()) {
-      newEnv.functions.put(functionMap.getKey(), functionMap.getValue());
     }
     return newEnv;
   }
@@ -140,7 +133,8 @@ public class SkylarkEnvironment extends Environment {
   /**
    * Returns true if this is a Skylark global environment.
    */
-  public boolean isGlobalEnvironment() {
+  @Override
+  public boolean isGlobal() {
     return parent == null;
   }
 
@@ -152,7 +146,7 @@ public class SkylarkEnvironment extends Environment {
   }
 
   @Override
-  public boolean isSkylarkEnabled() {
+  public boolean isSkylark() {
     return true;
   }
 
@@ -162,9 +156,6 @@ public class SkylarkEnvironment extends Environment {
    */
   @Override
   public Object lookup(String varname) throws NoSuchVariableException {
-    if (disabledVariables.contains(varname)) {
-      throw new NoSuchVariableException(varname);
-    }
     Object value = env.get(varname);
     if (value == null) {
       if (parent != null && parent.hasVariable(varname)) {
@@ -186,51 +177,12 @@ public class SkylarkEnvironment extends Environment {
   }
 
   /**
-   * Updates the value of variable "varname" in the environment, corresponding
-   * to an AssignmentStatement.
-   */
-  @Override
-  public void update(String varname, Object value) {
-    Preconditions.checkNotNull(value, "update(value == null)");
-    env.put(varname, value);
-  }
-
-  /**
    * Returns the class of the variable or null if the variable does not exist. This function
    * works only in the local Environment, it doesn't check the global Environment.
    */
   public Class<?> getVariableType(String varname) {
     Object variable = env.get(varname);
     return variable != null ? EvalUtils.getSkylarkType(variable.getClass()) : null;
-  }
-
-  /**
-   * Removes the functions and the modules (i.e. the symbol of the module from the top level
-   * Environment and the functions attached to it) from the Environment which should be present
-   * only during the loading phase.
-   */
-  public void disableOnlyLoadingPhaseObjects() {
-    List<String> objectsToRemove = new ArrayList<>();
-    List<Class<?>> modulesToRemove = new ArrayList<>();
-    for (Map.Entry<String, Object> entry : env.entrySet()) {
-      Object object = entry.getValue();
-      if (object instanceof SkylarkFunction) {
-        if (((SkylarkFunction) object).isOnlyLoadingPhase()) {
-          objectsToRemove.add(entry.getKey());
-        }
-      } else if (object.getClass().isAnnotationPresent(SkylarkModule.class)) {
-        if (object.getClass().getAnnotation(SkylarkModule.class).onlyLoadingPhase()) {
-          objectsToRemove.add(entry.getKey());
-          modulesToRemove.add(entry.getValue().getClass());
-        }
-      }
-    }
-    for (String symbol : objectsToRemove) {
-      disabledVariables.add(symbol);
-    }
-    for (Class<?> moduleClass : modulesToRemove) {
-      disabledNameSpaces.add(moduleClass);
-    }
   }
 
   public void handleEvent(Event event) {
