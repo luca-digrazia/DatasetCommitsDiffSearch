@@ -21,6 +21,8 @@ import static org.nlpcn.es4sql.TestsConstants.TEST_INDEX;
 
 
 public class QueryTest {
+	
+	private SearchDao searchDao = new SearchDao() ;
 
 	@Test
 	public void searchTypeTest() throws IOException, SqlParseException{
@@ -376,7 +378,7 @@ public class QueryTest {
 
 	private SearchHits query(String query) throws SqlParseException {
 		SearchDao searchDao = MainTestSuite.getSearchDao();
-		SearchRequestBuilder select = searchDao.explain(query);
+		SearchRequestBuilder select = searchDao.explan(query);
 		return select.get().getHits();
 	}
 }
