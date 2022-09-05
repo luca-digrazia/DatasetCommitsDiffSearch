@@ -60,7 +60,7 @@ public class RepositoryNameTest {
   @Test
   public void testRunfilesDir() throws Exception {
     assertThat(RepositoryName.create("@foo").getRunfilesPath())
-        .isEqualTo(PathFragment.create("../foo"));
+        .isEqualTo(new PathFragment("../foo"));
     assertThat(RepositoryName.create("@").getRunfilesPath())
         .isEqualTo(PathFragment.EMPTY_FRAGMENT);
     assertThat(RepositoryName.create("").getRunfilesPath())

@@ -227,13 +227,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             analysisMock.getProductName());
     skyframeExecutor.preparePackageLoading(
         new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
-        ConstantRuleVisibility.PUBLIC,
-        true,
-        7,
-        "",
-        UUID.randomUUID(),
-        ImmutableMap.<String, String>of(),
-        tsgm);
+        ConstantRuleVisibility.PUBLIC, true, 7, "",
+        UUID.randomUUID(), tsgm);
     useConfiguration();
     setUpSkyframe();
     // Also initializes ResourceManager.
@@ -315,15 +310,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   private void setUpSkyframe() {
     PathPackageLocator pkgLocator = PathPackageLocator.create(
         outputBase, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
-    skyframeExecutor.preparePackageLoading(
-        pkgLocator,
-        packageCacheOptions.defaultVisibility,
-        true,
-        7,
-        ruleClassProvider.getDefaultsPackageContent(optionsParser),
-        UUID.randomUUID(),
-        ImmutableMap.<String, String>of(),
-        tsgm);
+    skyframeExecutor.preparePackageLoading(pkgLocator,
+        packageCacheOptions.defaultVisibility, true,
+        7, ruleClassProvider.getDefaultsPackageContent(optionsParser),
+        UUID.randomUUID(), tsgm);
     skyframeExecutor.setDeletedPackages(ImmutableSet.copyOf(packageCacheOptions.getDeletedPackages()));
   }
 

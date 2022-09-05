@@ -55,7 +55,7 @@ public class BazelPythonSemantics implements PythonSemantics {
       FileTypeSet.of(BazelPyRuleClasses.PYTHON_SOURCE),
       "srcs", "deps", "data");
 
-  public static final PathFragment ZIP_RUNFILES_DIRECTORY_NAME = PathFragment.create("runfiles");
+  public static final PathFragment ZIP_RUNFILES_DIRECTORY_NAME = new PathFragment("runfiles");
 
   @Override
   public void validate(RuleContext ruleContext, PyCommon common) {
@@ -86,7 +86,7 @@ public class BazelPythonSemantics implements PythonSemantics {
     PathFragment packageFragment = ruleContext.getLabel().getPackageIdentifier().getRunfilesPath();
     // Python scripts start with x.runfiles/ as the module space, so everything must be manually
     // adjusted to be relative to the workspace name.
-    packageFragment = PathFragment.create(ruleContext.getWorkspaceName())
+    packageFragment = new PathFragment(ruleContext.getWorkspaceName())
         .getRelative(packageFragment);
     for (String importsAttr : ruleContext.attributes().get("imports", Type.STRING_LIST)) {
       importsAttr = ruleContext.expandMakeVariables("includes", importsAttr);
@@ -144,9 +144,7 @@ public class BazelPythonSemantics implements PythonSemantics {
                   Substitution.of("%python_binary%", pythonBinary),
                   Substitution.of("%imports%", Joiner.on(":").join(imports)),
                   Substitution.of("%workspace_name%", ruleContext.getWorkspaceName()),
-                  Substitution.of("%is_zipfile%", "False"),
-                  Substitution.of("%import_all%",
-                      config.getImportAllRepositories() ? "True" : "False")),
+                  Substitution.of("%is_zipfile%", "False")),
               true));
     } else {
       Artifact zipFile = getPythonZipArtifact(ruleContext, executable);
@@ -162,9 +160,7 @@ public class BazelPythonSemantics implements PythonSemantics {
                   Substitution.of("%python_binary%", pythonBinary),
                   Substitution.of("%imports%", Joiner.on(":").join(imports)),
                   Substitution.of("%workspace_name%", ruleContext.getWorkspaceName()),
-                  Substitution.of("%is_zipfile%", "True"),
-                  Substitution.of("%import_all%",
-                      config.getImportAllRepositories() ? "True" : "False")),
+                  Substitution.of("%is_zipfile%", "True")),
               true));
 
       ruleContext.registerAction(
@@ -201,7 +197,7 @@ public class BazelPythonSemantics implements PythonSemantics {
   }
 
   private static boolean isUnderWorkspace(PathFragment path) {
-    return !path.startsWith(PathFragment.create(Label.EXTERNAL_PATH_PREFIX));
+    return !path.startsWith(Label.EXTERNAL_PACKAGE_NAME);
   }
 
   private static String getZipRunfilesPath(PathFragment path, PathFragment workspaceName) {
@@ -220,7 +216,7 @@ public class BazelPythonSemantics implements PythonSemantics {
   }
 
   private static String getZipRunfilesPath(String path, PathFragment workspaceName) {
-    return getZipRunfilesPath(PathFragment.create(path), workspaceName);
+    return getZipRunfilesPath(new PathFragment(path), workspaceName);
   }
 
   private static void createPythonZipAction(
@@ -246,7 +242,7 @@ public class BazelPythonSemantics implements PythonSemantics {
 
     // Read each runfile from execute path, add them into zip file at the right runfiles path.
     // Filter the executable file, cause we are building it.
-    for (Artifact artifact : runfilesSupport.getRunfilesArtifactsWithoutMiddlemen()) {
+    for (Artifact artifact : runfilesSupport.getRunfiles().getArtifacts()) {
       if (!artifact.equals(executable)) {
         argv.add(
             getZipRunfilesPath(artifact.getRunfilesPath(), workspaceName)

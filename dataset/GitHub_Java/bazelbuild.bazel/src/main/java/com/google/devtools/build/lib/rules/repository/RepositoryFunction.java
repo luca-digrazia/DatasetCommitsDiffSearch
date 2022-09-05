@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
@@ -40,7 +41,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
-import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException;
@@ -197,14 +197,8 @@ public abstract class RepositoryFunction {
 
   protected static RepositoryDirectoryValue writeBuildFile(
       Path repositoryDirectory, String contents) throws RepositoryFunctionException {
-    Path buildFilePath = repositoryDirectory.getRelative("BUILD.bazel");
+    Path buildFilePath = repositoryDirectory.getRelative("BUILD");
     try {
-      // The repository could have an existing BUILD file that's either a regular file (for remote
-      // repositories) or a symlink (for local repositories). Either way, we want to remove it and
-      // write our own.
-      if (buildFilePath.exists(Symlinks.NOFOLLOW)) {
-        buildFilePath.delete();
-      }
       FileSystemUtils.writeContentAsLatin1(buildFilePath, contents);
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
@@ -214,15 +208,9 @@ public abstract class RepositoryFunction {
   }
 
   @VisibleForTesting
-  protected static PathFragment getTargetPath(Rule rule, Path workspace)
-      throws RepositoryFunctionException {
-    WorkspaceAttributeMapper mapper = WorkspaceAttributeMapper.of(rule);
-    String path;
-    try {
-      path = mapper.get("path", Type.STRING);
-    } catch (EvalException e) {
-      throw new RepositoryFunctionException(e, Transience.PERSISTENT);
-    }
+  protected static PathFragment getTargetPath(Rule rule, Path workspace) {
+    AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
+    String path = mapper.get("path", Type.STRING);
     PathFragment pathFragment = new PathFragment(path);
     return workspace.getRelative(pathFragment).asFragment();
   }
@@ -407,16 +395,10 @@ public abstract class RepositoryFunction {
     // new_local_repository needs a dependency on the directory that `path` points to, as the
     // external/repo-name DirStateValue has a logical dependency on that directory that is not
     // reflected in the SkyFrame tree, since it's not symlinked to it or anything.
-    // new_local_repository is responsible for verifying that the path exists and is a directory.
     if (repositoryRule.getRuleClass().equals(NewLocalRepositoryRule.NAME)
         && repositoryPath.segmentCount() == 1) {
-      PathFragment pathDir;
-      try {
-        pathDir = RepositoryFunction.getTargetPath(
-            repositoryRule, directories.getWorkspace());
-      } catch (RepositoryFunctionException e) {
-        throw new IOException(e.getMessage());
-      }
+      PathFragment pathDir = RepositoryFunction.getTargetPath(
+          repositoryRule, directories.getWorkspace());
       FileSystem fs = directories.getWorkspace().getFileSystem();
       SkyKey dirKey = DirectoryListingValue.key(
           RootedPath.toRootedPath(fs.getRootDirectory(), fs.getPath(pathDir)));
