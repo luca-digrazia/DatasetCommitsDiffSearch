@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import com.google.devtools.build.lib.util.Pair;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -44,11 +45,11 @@ import javax.annotation.Nullable;
  * <p>The transient state of an {@code InMemoryNodeEntry} is kept in a {@link BuildingState} object.
  * Many of the methods of {@code InMemoryNodeEntry} are just wrappers around the corresponding
  * {@link BuildingState} methods.
- *
+ * 
  * <p>This class is public only for the benefit of alternative graph implementations outside of the
  * package.
  */
-public class InMemoryNodeEntry implements NodeEntry {
+public class InMemoryNodeEntry implements NodeEntry, Serializable {
 
   /** Actual data stored in this entry when it is done. */
   private SkyValue value = null;
