@@ -225,11 +225,10 @@ import com.taobao.android.builder.dependency.parser.AtlasDepTreeParser;
 import com.taobao.android.builder.extension.AtlasExtension;
 import com.taobao.android.builder.extension.TBuildType;
 import com.taobao.android.builder.tasks.PrepareAPTask;
-import com.taobao.android.builder.tasks.PrepareAPTask.ExtractApConfigAction;
-import com.taobao.android.builder.tasks.incremental.ApDependencies;
+import com.taobao.android.builder.tasks.PrepareAPTask.ConfigAction2;
+import com.taobao.android.builder.tasks.incremental.CorrectAtlasDependenciesTask;
 import com.taobao.android.builder.tools.PluginTypeUtils;
 import org.gradle.api.Project;
-import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -247,8 +246,6 @@ public class AtlasDependencyManager extends DependencyManager {
     private final Project project;
 
     private final ExtraModelInfo extraModelInfo;
-
-    private ApDependencies apDependencies;
 
     public AtlasDependencyManager(@NonNull Project project, @NonNull ExtraModelInfo extraModelInfo,
                                   @NonNull SdkHandler sdkHandler) {
@@ -268,13 +265,9 @@ public class AtlasDependencyManager extends DependencyManager {
     @Override
     public Set<AndroidDependency> resolveDependencies(@NonNull VariantDependencies variantDeps,
                                                       @Nullable String testedProjectPath) {
-        ApDependencies apDependencies = resolveApDependencies(variantDeps);
-        if (apDependencies != null) {
-            this.apDependencies = apDependencies;
-        }
 
-        AtlasDependencyTree atlasDependencyTree = new AtlasDepTreeParser(project, extraModelInfo, this.apDependencies)
-            .parseDependencyTree(variantDeps);
+        AtlasDependencyTree atlasDependencyTree = new AtlasDepTreeParser(project, extraModelInfo).parseDependencyTree(
+            variantDeps);
 
         sLogger.info("[dependencyTree" + variantDeps.getName() + "] {}",
                      JSON.toJSONString(atlasDependencyTree.getDependencyJson(), true));
@@ -286,33 +279,39 @@ public class AtlasDependencyManager extends DependencyManager {
         }
 
         Set<AndroidDependency> libsToExplode = super.resolveDependencies(variantDeps, testedProjectPath);
+        resolveDependencies(variantDeps, atlasDependencyTree);
         //return libsToExplode;
         return new HashSet<>(0);
     }
 
-    private ApDependencies resolveApDependencies(@NonNull VariantDependencies variantDeps) {
+    private void resolveDependencies(@NonNull VariantDependencies variantDeps,
+                                     AtlasDependencyTree atlasDependencyTree) {
         AtlasExtension atlasExtension = project.getExtensions().getByType(AtlasExtension.class);
         if (!atlasExtension.getTBuildConfig().isIncremental()) {
-            return null;
+            return;
         }
 
         TBuildType tBuildType = (TBuildType)atlasExtension.getBuildTypes().findByName(variantDeps.getName());
         if (tBuildType == null) {
-            return null;
+            return;
         }
 
-        ExtractApConfigAction configAction = new ExtractApConfigAction(project, variantDeps.getName(), tBuildType);
-        PrepareAPTask prepareAPTask = project.getTasks().create(configAction.getName(), configAction.getType());
-        configAction.execute(prepareAPTask);
-        prepareAPTask.execute();
+        try {
+            ConfigAction2 configAction2 = new ConfigAction2(project, variantDeps.getName(), tBuildType);
+            PrepareAPTask prepareAPTask = project.getTasks().create(configAction2.getName(), configAction2.getType());
+            configAction2.execute(prepareAPTask);
+            prepareAPTask.execute();
 
-        return new ApDependencies(project, new File(prepareAPTask.getExplodedDir(), DEPENDENCIES_FILENAME));
-    }
+            File baseDependenciesFile = new File(prepareAPTask.getExplodedDir(), DEPENDENCIES_FILENAME);
+            if (baseDependenciesFile.exists()) {
+                CorrectAtlasDependenciesTask correctAtlasDependenciesTask = new CorrectAtlasDependenciesTask(project,
+                                                                                                             atlasDependencyTree,
 
-    @Override
-    protected boolean checkForExclusion(@NonNull VariantDependencies configDependencies,
-                                        ModuleVersionIdentifier moduleVersion) {
-        return super.checkForExclusion(configDependencies, moduleVersion) || (apDependencies != null && apDependencies
-            .hasSameResolvedDependency(moduleVersion));
+                                                                                                             baseDependenciesFile);
+                correctAtlasDependenciesTask.generate();
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
