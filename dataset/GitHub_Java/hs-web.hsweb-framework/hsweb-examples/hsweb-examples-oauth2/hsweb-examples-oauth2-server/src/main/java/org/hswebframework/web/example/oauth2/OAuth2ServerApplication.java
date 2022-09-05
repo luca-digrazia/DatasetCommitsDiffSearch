@@ -18,18 +18,17 @@
 
 package org.hswebframework.web.example.oauth2;
 
-import org.hsweb.ezorm.rdb.executor.AbstractJdbcSqlExecutor;
-import org.hsweb.ezorm.rdb.executor.SqlExecutor;
+import com.alibaba.fastjson.JSON;
 import org.hswebframework.web.authorization.Permission;
 import org.hswebframework.web.authorization.access.DataAccessConfig;
 import org.hswebframework.web.authorization.oauth2.server.entity.OAuth2ClientEntity;
+import org.hswebframework.web.authorization.simple.SimpleFieldFilterDataAccessConfig;
+import org.hswebframework.web.commons.entity.DataStatus;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
-import org.hswebframework.web.dao.datasource.DataSourceHolder;
-import org.hswebframework.web.dao.datasource.DatabaseType;
 import org.hswebframework.web.dao.oauth2.OAuth2ClientDao;
 import org.hswebframework.web.entity.authorization.*;
-import org.hswebframework.web.entity.authorization.bind.BindPermissionRoleEntity;
 import org.hswebframework.web.entity.authorization.bind.BindRoleUserEntity;
+import org.hswebframework.web.service.authorization.AuthorizationSettingService;
 import org.hswebframework.web.service.authorization.PermissionService;
 import org.hswebframework.web.service.authorization.RoleService;
 import org.hswebframework.web.service.authorization.UserService;
@@ -37,18 +36,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.cache.annotation.EnableCaching;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.datasource.DataSourceUtils;
 
-import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+
 
 /**
  * TODO 完成注释
@@ -76,6 +70,8 @@ public class OAuth2ServerApplication implements CommandLineRunner {
     @Autowired
     OAuth2ClientDao   oAuth2ClientDao;
 
+    @Autowired
+    AuthorizationSettingService authorizationSettingService;
 
     @Override
     public void run(String... strings) throws Exception {
@@ -96,6 +92,12 @@ public class OAuth2ServerApplication implements CommandLineRunner {
         DataAccessEntity updateAccessEntity = new DataAccessEntity();
         updateAccessEntity.setType(DataAccessConfig.DefaultType.OWN_CREATED);
         updateAccessEntity.setAction(Permission.ACTION_UPDATE);
+
+        DataAccessEntity denyFields = new DataAccessEntity();
+        denyFields.setType(DataAccessConfig.DefaultType.DENY_FIELDS);
+        denyFields.setAction(Permission.ACTION_UPDATE);
+        denyFields.setConfig(JSON.toJSONString(new SimpleFieldFilterDataAccessConfig("password")));
+
         //脚本方式自定义控制
 //        updateAccessEntity.setConfig(JSON.toJSONString(new SimpleScriptDataAccess("" +
 //                "println(id);" +
@@ -110,19 +112,31 @@ public class OAuth2ServerApplication implements CommandLineRunner {
         permission.setId("test");
         permission.setStatus((byte) 1);
         permission.setActions(ActionEntity.create(Permission.ACTION_QUERY, Permission.ACTION_UPDATE));
-        permission.setDataAccess(Arrays.asList(accessEntity, updateAccessEntity));
         permissionService.insert(permission);
 
-        BindPermissionRoleEntity<PermissionRoleEntity> roleEntity = entityFactory.newInstance(BindPermissionRoleEntity.class);
-        SimplePermissionRoleEntity permissionRoleEntity = new SimplePermissionRoleEntity();
-        permissionRoleEntity.setRoleId("admin");
-        permissionRoleEntity.setPermissionId("test");
-        permissionRoleEntity.setActions(Arrays.asList(Permission.ACTION_QUERY, Permission.ACTION_UPDATE));
-        permissionRoleEntity.setDataAccesses(permission.getDataAccess());
+        RoleEntity roleEntity = entityFactory.newInstance(RoleEntity.class);
         roleEntity.setId("admin");
         roleEntity.setName("test");
-        roleEntity.setPermissions(Arrays.asList(permissionRoleEntity));
         roleService.insert(roleEntity);
+
+          /*            权限设置        */
+        AuthorizationSettingEntity settingEntity = entityFactory.newInstance(AuthorizationSettingEntity.class);
+
+        settingEntity.setType("role"); //绑定到角色
+        settingEntity.setSettingFor(roleEntity.getId());
+
+        settingEntity.setDescribe("测试");
+        //权限配置详情
+        AuthorizationSettingDetailEntity detailEntity = entityFactory.newInstance(AuthorizationSettingDetailEntity.class);
+        detailEntity.setPermissionId(permission.getId());
+        detailEntity.setMerge(true);
+        detailEntity.setPriority(1L);
+        detailEntity.setActions(new HashSet<>(Arrays.asList(Permission.ACTION_QUERY, Permission.ACTION_UPDATE)));
+        detailEntity.setDataAccesses(Arrays.asList(accessEntity, updateAccessEntity));
+
+        settingEntity.setDetails(Arrays.asList(detailEntity));
+
+        authorizationSettingService.insert(settingEntity);
 
         BindRoleUserEntity userEntity = entityFactory.newInstance(BindRoleUserEntity.class);
         userEntity.setId("admin");
@@ -151,25 +165,8 @@ public class OAuth2ServerApplication implements CommandLineRunner {
         clientEntity.setRedirectUri("http://localhost:8808/oauth2/callback/hsweb");
         clientEntity.setCreateTime(System.currentTimeMillis());
         clientEntity.setSupportGrantTypes(new HashSet<>(Collections.singletonList("*")));
-        clientEntity.setEnabled(true);
+        clientEntity.setStatus(DataStatus.STATUS_ENABLED);
         oAuth2ClientDao.insert(clientEntity);
     }
 
-    @Bean
-    @ConditionalOnMissingBean(SqlExecutor.class)
-    public SqlExecutor sqlExecutor(DataSource dataSource) {
-        DataSourceHolder.install(dataSource, DatabaseType.h2);
-        return new AbstractJdbcSqlExecutor() {
-            @Override
-            public Connection getConnection() {
-                return DataSourceUtils.getConnection(dataSource);
-            }
-
-            @Override
-            public void releaseConnection(Connection connection) throws SQLException {
-                DataSourceUtils.releaseConnection(connection, dataSource);
-            }
-        };
-
-    }
 }
