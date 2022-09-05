@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import java.util.HashMap;
+import javax.annotation.Nullable;
 
 /**
  * Provider of Jar files transitively to be included into the runtime classpath of an Android app.
@@ -89,9 +90,13 @@ public class AndroidRuntimeJarProvider implements TransitiveInfoProvider {
     for (ImmutableMap<Artifact, Artifact> partialMapping : runtimeJars) {
       collapsed.putAll(partialMapping);
     }
-    return jar -> {
-      Artifact result = collapsed.get(jar);
-      return result != null ? result : jar; // return null iff input == null
+    return new Function<Artifact, Artifact>() {
+      @Override
+      @Nullable
+      public Artifact apply(@Nullable Artifact jar) {
+        Artifact result = collapsed.get(jar);
+        return result != null ? result : jar; // return null iff input == null
+      }
     };
   }
 }

@@ -258,13 +258,13 @@ public class DeployArchiveBuilder {
         outputJar, javaStartClass, deployManifestLines, buildInfoArtifacts, classpathResources,
         runtimeClasspath, includeBuildData, compression, launcher);
 
-    List<String> jvmArgs = ImmutableList.of(SINGLEJAR_MAX_MEMORY);
+    List<String> jvmArgs = ImmutableList.of("-client", SINGLEJAR_MAX_MEMORY);
     ResourceSet resourceSet =
         ResourceSet.createWithRamCpuIo(/*memoryMb = */200.0, /*cpuUsage = */.2, /*ioUsage=*/.2);
 
     // If singlejar's name ends with .jar, it is Java application, otherwise it is native.
-    // TODO(asmundak): once https://github.com/bazelbuild/bazel/issues/2241 is fixed (that is,
-    // the native singlejar is used on windows) remove support for the Java implementation
+    // TODO(asmundak): once b/28640279 is fixed (that is, the native singlejar is released),
+    // eliminate this check, allowing only native singlejar.
     Artifact singlejar = getSingleJar(ruleContext);
     if (singlejar.getFilename().endsWith(".jar")) {
       ruleContext.registerAction(
@@ -287,6 +287,7 @@ public class DeployArchiveBuilder {
       ruleContext.registerAction(
           new SpawnAction.Builder()
               .addInputs(inputs.build())
+              .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext))
               .addOutput(outputJar)
               .setResources(resourceSet)
               .setExecutable(singlejar)
