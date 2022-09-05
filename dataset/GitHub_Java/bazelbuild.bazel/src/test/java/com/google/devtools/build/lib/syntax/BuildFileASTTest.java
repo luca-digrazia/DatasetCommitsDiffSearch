@@ -14,13 +14,15 @@
 package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.testutil.Scratch;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 import org.junit.Test;
@@ -46,8 +48,7 @@ public class BuildFileASTTest extends EvaluationTestCase {
    */
   private BuildFileAST parseBuildFile(String... lines) throws IOException {
     Path file = scratch.file("/a/build/file/BUILD", lines);
-    byte[] bytes = FileSystemUtils.readWithKnownFileSize(file, file.getFileSize());
-    ParserInputSource inputSource = ParserInputSource.create(bytes, file.asFragment());
+    ParserInputSource inputSource = ParserInputSource.create(file, file.getFileSize());
     return BuildFileAST.parseBuildFile(inputSource, getEventHandler());
   }
 
@@ -58,14 +59,14 @@ public class BuildFileASTTest extends EvaluationTestCase {
         "",
         "x = [1,2,'foo',4] + [1,2, \"%s%d\" % ('foo', 1)]");
 
-    assertThat(buildfile.exec(env, getEventHandler())).isTrue();
+    assertTrue(buildfile.exec(env, getEventHandler()));
 
     // Test final environment is correctly modified:
     //
     // input1.BUILD contains:
     // x = [1,2,'foo',4] + [1,2, "%s%d" % ('foo', 1)]
-    assertThat(env.moduleLookup("x"))
-        .isEqualTo(SkylarkList.createImmutable(Tuple.of(1, 2, "foo", 4, 1, 2, "foo1")));
+    assertEquals(SkylarkList.createImmutable(Tuple.of(1, 2, "foo", 4, 1, 2, "foo1")),
+        env.lookup("x"));
   }
 
   @Test
@@ -77,9 +78,9 @@ public class BuildFileASTTest extends EvaluationTestCase {
         "",
         "z = x + y");
 
-    assertThat(buildfile.exec(env, getEventHandler())).isFalse();
+    assertFalse(buildfile.exec(env, getEventHandler()));
     Event e = assertContainsError("unsupported operand type(s) for +: 'int' and 'list'");
-    assertThat(e.getLocation().getStartLineAndColumn().getLine()).isEqualTo(4);
+    assertEquals(4, e.getLocation().getStartLineAndColumn().getLine());
   }
 
   @Test
@@ -96,9 +97,10 @@ public class BuildFileASTTest extends EvaluationTestCase {
       parseBuildFile("foo() bar() something = baz() bar()");
 
     Event event = assertContainsError("syntax error at \'bar\': expected newline");
-    assertThat(event.getLocation().getPath().toString()).isEqualTo("/a/build/file/BUILD");
-    assertThat(event.getLocation().getStartLineAndColumn().getLine()).isEqualTo(1);
-    assertThat(buildFileAST.containsErrors()).isTrue();
+    assertEquals("/a/build/file/BUILD",
+                 event.getLocation().getPath().toString());
+    assertEquals(1, event.getLocation().getStartLineAndColumn().getLine());
+    assertTrue(buildFileAST.containsErrors());
   }
 
   @Test
@@ -107,10 +109,11 @@ public class BuildFileASTTest extends EvaluationTestCase {
     BuildFileAST buildFileAST = parseBuildFile("a = 'foo' 'bar'");
     Event event = assertContainsError(
         "Implicit string concatenation is forbidden, use the + operator");
-    assertThat(event.getLocation().getPath().toString()).isEqualTo("/a/build/file/BUILD");
-    assertThat(event.getLocation().getStartLineAndColumn().getLine()).isEqualTo(1);
-    assertThat(event.getLocation().getStartLineAndColumn().getColumn()).isEqualTo(10);
-    assertThat(buildFileAST.containsErrors()).isTrue();
+    assertEquals("/a/build/file/BUILD",
+                 event.getLocation().getPath().toString());
+    assertEquals(1, event.getLocation().getStartLineAndColumn().getLine());
+    assertEquals(10, event.getLocation().getStartLineAndColumn().getColumn());
+    assertTrue(buildFileAST.containsErrors());
   }
 
   @Test
@@ -119,26 +122,27 @@ public class BuildFileASTTest extends EvaluationTestCase {
     BuildFileAST buildFileAST = parseBuildFile("a = 'foo'\n  'bar'");
 
     Event event = assertContainsError("indentation error");
-    assertThat(event.getLocation().getPath().toString()).isEqualTo("/a/build/file/BUILD");
-    assertThat(event.getLocation().getStartLineAndColumn().getLine()).isEqualTo(2);
-    assertThat(event.getLocation().getStartLineAndColumn().getColumn()).isEqualTo(2);
-    assertThat(buildFileAST.containsErrors()).isTrue();
+    assertEquals("/a/build/file/BUILD",
+                 event.getLocation().getPath().toString());
+    assertEquals(2, event.getLocation().getStartLineAndColumn().getLine());
+    assertEquals(2, event.getLocation().getStartLineAndColumn().getColumn());
+    assertTrue(buildFileAST.containsErrors());
   }
 
   @Test
   public void testWithSyntaxErrorsDoesNotPrintDollarError() throws Exception {
     setFailFast(false);
     BuildFileAST buildFile = parseBuildFile(
-        "abi = '$(ABI)-glibc-' + glibc_version + '-' + $(TARGET_CPU) + '-linux'",
+        "abi = cxx_abi + '-glibc-' + glibc_version + '-' + $(TARGET_CPU) + '-linux'",
         "libs = [abi + opt_level + '/lib/libcc.a']",
         "shlibs = [abi + opt_level + '/lib/libcc.so']",
         "+* shlibs", // syntax error at '+'
         "cc_library(name = 'cc',",
         "           srcs = libs,",
         "           includes = [ abi + opt_level + '/include' ])");
-    assertThat(buildFile.containsErrors()).isTrue();
+    assertTrue(buildFile.containsErrors());
     assertContainsError("syntax error at '+': expected expression");
-    assertThat(buildFile.exec(env, getEventHandler())).isFalse();
+    assertFalse(buildFile.exec(env, getEventHandler()));
     MoreAsserts.assertDoesNotContainEvent(getEventCollector(), "$error$");
     // This message should not be printed anymore.
     MoreAsserts.assertDoesNotContainEvent(getEventCollector(), "contains syntax error(s)");

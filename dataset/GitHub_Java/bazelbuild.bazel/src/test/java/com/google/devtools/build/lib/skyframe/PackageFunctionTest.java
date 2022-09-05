@@ -54,9 +54,7 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.common.options.Options;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -85,7 +83,6 @@ public class PackageFunctionTest extends BuildViewTestCase {
             packageCacheOptions,
             "",
             UUID.randomUUID(),
-            ImmutableMap.<String, String>of(),
             ImmutableMap.<String, String>of(),
             new TimestampGranularityMonitor(BlazeClock.instance()));
   }
@@ -386,6 +383,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
         .inOrder();
   }
 
+  @SuppressWarnings("unchecked") // Cast of srcs attribute to Iterable<Label>.
   @Test
   public void testGlobOrderStableWithLegacyAndSkyframeComponents() throws Exception {
     scratch.file("foo/BUILD", "sh_library(name = 'foo', srcs = glob(['*.txt']))");
@@ -393,7 +391,16 @@ public class PackageFunctionTest extends BuildViewTestCase {
     scratch.file("foo/a.config");
     preparePackageLoading(rootDirectory);
     SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//foo"));
-    assertSrcs(validPackage(skyKey), "foo", "//foo:b.txt");
+    PackageValue value = validPackage(skyKey);
+    assertThat(
+            (Iterable<Label>)
+                value
+                    .getPackage()
+                    .getTarget("foo")
+                    .getAssociatedRule()
+                    .getAttributeContainer()
+                    .getAttr("srcs"))
+        .containsExactly(Label.parseAbsoluteUnchecked("//foo:b.txt"));
     scratch.overwriteFile(
         "foo/BUILD", "sh_library(name = 'foo', srcs = glob(['*.txt', '*.config']))");
     getSkyframeExecutor()
@@ -401,7 +408,19 @@ public class PackageFunctionTest extends BuildViewTestCase {
             reporter,
             ModifiedFileSet.builder().modify(new PathFragment("foo/BUILD")).build(),
             rootDirectory);
-    assertSrcs(validPackage(skyKey), "foo", "//foo:a.config", "//foo:b.txt");
+    value = validPackage(skyKey);
+    assertThat(
+            (Iterable<Label>)
+                value
+                    .getPackage()
+                    .getTarget("foo")
+                    .getAssociatedRule()
+                    .getAttributeContainer()
+                    .getAttr("srcs"))
+        .containsExactly(
+            Label.parseAbsoluteUnchecked("//foo:a.config"),
+            Label.parseAbsoluteUnchecked("//foo:b.txt"))
+        .inOrder();
     scratch.overwriteFile(
         "foo/BUILD", "sh_library(name = 'foo', srcs = glob(['*.txt', '*.config'])) # comment");
     getSkyframeExecutor()
@@ -409,7 +428,19 @@ public class PackageFunctionTest extends BuildViewTestCase {
             reporter,
             ModifiedFileSet.builder().modify(new PathFragment("foo/BUILD")).build(),
             rootDirectory);
-    assertSrcs(validPackage(skyKey), "foo", "//foo:a.config", "//foo:b.txt");
+    value = validPackage(skyKey);
+    assertThat(
+            (Iterable<Label>)
+                value
+                    .getPackage()
+                    .getTarget("foo")
+                    .getAssociatedRule()
+                    .getAttributeContainer()
+                    .getAttr("srcs"))
+        .containsExactly(
+            Label.parseAbsoluteUnchecked("//foo:a.config"),
+            Label.parseAbsoluteUnchecked("//foo:b.txt"))
+        .inOrder();
     getSkyframeExecutor().resetEvaluator();
     PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
     packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
@@ -422,74 +453,22 @@ public class PackageFunctionTest extends BuildViewTestCase {
             "",
             UUID.randomUUID(),
             ImmutableMap.<String, String>of(),
-            ImmutableMap.<String, String>of(),
             tsgm);
-    assertSrcs(validPackage(skyKey), "foo", "//foo:a.config", "//foo:b.txt");
+    value = validPackage(skyKey);
+    assertThat(
+            (Iterable<Label>)
+                value
+                    .getPackage()
+                    .getTarget("foo")
+                    .getAssociatedRule()
+                    .getAttributeContainer()
+                    .getAttr("srcs"))
+        .containsExactly(
+            Label.parseAbsoluteUnchecked("//foo:a.config"),
+            Label.parseAbsoluteUnchecked("//foo:b.txt"))
+        .inOrder();
   }
 
-  /**
-   * Tests that a symlink to a file outside of the package root is handled consistently. If the
-   * default behavior of Bazel was changed from {@code
-   * ExternalFileAction#DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS} to {@code
-   * ExternalFileAction#ASSUME_NON_EXISTENT_AND_IMMUTABLE_FOR_EXTERNAL_PATHS} then foo/link.sh
-   * should no longer appear in the srcs of //foo:foo. However, either way the srcs should be the
-   * same independent of the evaluation being incremental or clean.
-   */
-  @Test
-  public void testGlobWithExternalSymlink() throws Exception {
-    scratch.file(
-        "foo/BUILD",
-        "sh_library(name = 'foo', srcs = glob(['*.sh']))",
-        "sh_library(name = 'bar', srcs = glob(['link.sh']))",
-        "sh_library(name = 'baz', srcs = glob(['subdir_link/*.txt']))");
-    scratch.file("foo/ordinary.sh");
-    Path externalTarget = scratch.file("../ops/target.txt");
-    FileSystemUtils.ensureSymbolicLink(scratch.resolve("foo/link.sh"), externalTarget);
-    FileSystemUtils.ensureSymbolicLink(
-        scratch.resolve("foo/subdir_link"), externalTarget.getParentDirectory());
-    preparePackageLoading(rootDirectory);
-    SkyKey fooKey = PackageValue.key(PackageIdentifier.parse("@//foo"));
-    PackageValue fooValue = validPackage(fooKey);
-    assertSrcs(fooValue, "foo", "//foo:link.sh", "//foo:ordinary.sh");
-    assertSrcs(fooValue, "bar", "//foo:link.sh");
-    assertSrcs(fooValue, "baz", "//foo:subdir_link/target.txt");
-    scratch.overwriteFile(
-        "foo/BUILD",
-        "sh_library(name = 'foo', srcs = glob(['*.sh'])) #comment",
-        "sh_library(name = 'bar', srcs = glob(['link.sh']))",
-        "sh_library(name = 'baz', srcs = glob(['subdir_link/*.txt']))");
-    getSkyframeExecutor()
-        .invalidateFilesUnderPathForTesting(
-            reporter,
-            ModifiedFileSet.builder().modify(new PathFragment("foo/BUILD")).build(),
-            rootDirectory);
-    PackageValue fooValue2 = validPackage(fooKey);
-    assertThat(fooValue2).isNotEqualTo(fooValue);
-    assertSrcs(fooValue2, "foo", "//foo:link.sh", "//foo:ordinary.sh");
-    assertSrcs(fooValue2, "bar", "//foo:link.sh");
-    assertSrcs(fooValue2, "baz", "//foo:subdir_link/target.txt");
-  }
-
-  private static void assertSrcs(PackageValue value, String targetName, String... expected)
-      throws NoSuchTargetException {
-    List<Label> expectedLabels = new ArrayList<>();
-    for (String item : expected) {
-      expectedLabels.add(Label.parseAbsoluteUnchecked(item));
-    }
-    assertThat(getSrcs(value, targetName)).containsExactlyElementsIn(expectedLabels).inOrder();
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Iterable<Label> getSrcs(PackageValue packageValue, String targetName)
-      throws NoSuchTargetException {
-    return (Iterable<Label>)
-        packageValue
-            .getPackage()
-            .getTarget(targetName)
-            .getAssociatedRule()
-            .getAttributeContainer()
-            .getAttr("srcs");
-  }
   @Test
   public void testOneNewElementInMultipleGlob() throws Exception {
     scratch.file(

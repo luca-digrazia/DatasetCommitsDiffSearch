@@ -606,8 +606,9 @@ public class Parser {
   private StringLiteral parseStringLiteral() {
     Preconditions.checkState(token.kind == TokenKind.STRING);
     int end = token.right;
+    char quoteChar = lexer.charAt(token.left);
     StringLiteral literal =
-        setLocation(new StringLiteral((String) token.value), token.left, end);
+        setLocation(new StringLiteral((String) token.value, quoteChar), token.left, end);
 
     nextToken();
     if (token.kind == TokenKind.STRING) {
@@ -956,7 +957,9 @@ public class Parser {
       if (expr instanceof StringLiteral && secondary instanceof StringLiteral) {
         StringLiteral left = (StringLiteral) expr;
         StringLiteral right = (StringLiteral) secondary;
-        return new StringLiteral(left.getValue() + right.getValue());
+        if (left.getQuoteChar() == right.getQuoteChar()) {
+          return new StringLiteral(left.getValue() + right.getValue(), left.getQuoteChar());
+        }
       }
     }
     return new BinaryOperatorExpression(operator, expr, secondary);
