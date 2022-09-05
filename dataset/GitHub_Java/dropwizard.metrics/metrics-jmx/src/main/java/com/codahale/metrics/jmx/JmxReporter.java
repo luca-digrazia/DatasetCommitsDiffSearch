@@ -13,7 +13,13 @@ import com.codahale.metrics.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.management.*;
+import javax.management.InstanceAlreadyExistsException;
+import javax.management.InstanceNotFoundException;
+import javax.management.JMException;
+import javax.management.MBeanRegistrationException;
+import javax.management.MBeanServer;
+import javax.management.ObjectInstance;
+import javax.management.ObjectName;
 import java.io.Closeable;
 import java.lang.management.ManagementFactory;
 import java.util.Collections;
@@ -64,7 +70,7 @@ public class JmxReporter implements Reporter, Closeable {
         /**
          * Register MBeans with the given {@link MBeanServer}.
          *
-         * @param mBeanServer     an {@link MBeanServer}
+         * @param mBeanServer an {@link MBeanServer}
          * @return {@code this}
          */
         public Builder registerWith(MBeanServer mBeanServer) {
@@ -84,13 +90,13 @@ public class JmxReporter implements Reporter, Closeable {
         }
 
         public Builder createsObjectNamesWith(ObjectNameFactory onFactory) {
-        	if(onFactory == null) {
-        		throw new IllegalArgumentException("null objectNameFactory");
-        	}
-        	this.objectNameFactory = onFactory;
-        	return this;
+            if (onFactory == null) {
+                throw new IllegalArgumentException("null objectNameFactory");
+            }
+            this.objectNameFactory = onFactory;
+            return this;
         }
-        
+
         /**
          * Convert durations to the given time unit.
          *
@@ -148,8 +154,8 @@ public class JmxReporter implements Reporter, Closeable {
          */
         public JmxReporter build() {
             final MetricTimeUnits timeUnits = new MetricTimeUnits(rateUnit, durationUnit, specificRateUnits, specificDurationUnits);
-            if (mBeanServer==null) {
-            	mBeanServer = ManagementFactory.getPlatformMBeanServer();
+            if (mBeanServer == null) {
+                mBeanServer = ManagementFactory.getPlatformMBeanServer();
             }
             return new JmxReporter(mBeanServer, domain, registry, filter, timeUnits, objectNameFactory);
         }
@@ -157,13 +163,10 @@ public class JmxReporter implements Reporter, Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(JmxReporter.class);
 
-    // CHECKSTYLE:OFF
     @SuppressWarnings("UnusedDeclaration")
     public interface MetricMBean {
         ObjectName objectName();
     }
-    // CHECKSTYLE:ON
-
 
     private abstract static class AbstractBean implements MetricMBean {
         private final ObjectName objectName;
@@ -178,12 +181,11 @@ public class JmxReporter implements Reporter, Closeable {
         }
     }
 
-    // CHECKSTYLE:OFF
     @SuppressWarnings("UnusedDeclaration")
     public interface JmxGaugeMBean extends MetricMBean {
         Object getValue();
+        Number getNumber();
     }
-    // CHECKSTYLE:ON
 
     private static class JmxGauge extends AbstractBean implements JmxGaugeMBean {
         private final Gauge<?> metric;
@@ -197,14 +199,18 @@ public class JmxReporter implements Reporter, Closeable {
         public Object getValue() {
             return metric.getValue();
         }
+
+        @Override
+        public Number getNumber() {
+            Object value = metric.getValue();
+            return value instanceof Number ? (Number) value : 0;
+        }
     }
 
-    // CHECKSTYLE:OFF
     @SuppressWarnings("UnusedDeclaration")
     public interface JmxCounterMBean extends MetricMBean {
         long getCount();
     }
-    // CHECKSTYLE:ON
 
     private static class JmxCounter extends AbstractBean implements JmxCounterMBean {
         private final Counter metric;
@@ -220,7 +226,6 @@ public class JmxReporter implements Reporter, Closeable {
         }
     }
 
-    // CHECKSTYLE:OFF
     @SuppressWarnings("UnusedDeclaration")
     public interface JmxHistogramMBean extends MetricMBean {
         long getCount();
@@ -249,7 +254,6 @@ public class JmxReporter implements Reporter, Closeable {
 
         long getSnapshotSize();
     }
-    // CHECKSTYLE:ON
 
     private static class JmxHistogram implements JmxHistogramMBean {
         private final ObjectName objectName;
@@ -331,7 +335,6 @@ public class JmxReporter implements Reporter, Closeable {
         }
     }
 
-    //CHECKSTYLE:OFF
     @SuppressWarnings("UnusedDeclaration")
     public interface JmxMeterMBean extends MetricMBean {
         long getCount();
@@ -346,7 +349,6 @@ public class JmxReporter implements Reporter, Closeable {
 
         String getRateUnit();
     }
-    //CHECKSTYLE:ON
 
     private static class JmxMeter extends AbstractBean implements JmxMeterMBean {
         private final Metered metric;
@@ -396,7 +398,6 @@ public class JmxReporter implements Reporter, Closeable {
         }
     }
 
-    // CHECKSTYLE:OFF
     @SuppressWarnings("UnusedDeclaration")
     public interface JmxTimerMBean extends JmxMeterMBean {
         double getMin();
@@ -420,9 +421,9 @@ public class JmxReporter implements Reporter, Closeable {
         double get999thPercentile();
 
         long[] values();
+
         String getDurationUnit();
     }
-    // CHECKSTYLE:ON
 
     static class JmxTimer extends JmxMeter implements JmxTimerMBean {
         private final Timer metric;
@@ -513,7 +514,7 @@ public class JmxReporter implements Reporter, Closeable {
             this.name = name;
             this.filter = filter;
             this.timeUnits = timeUnits;
-            this.registered = new ConcurrentHashMap<ObjectName, ObjectName>();
+            this.registered = new ConcurrentHashMap<>();
             this.objectNameFactory = objectNameFactory;
         }
 
@@ -703,11 +704,11 @@ public class JmxReporter implements Reporter, Closeable {
         }
 
         public TimeUnit durationFor(String name) {
-            return durationOverrides.containsKey(name) ? durationOverrides.get(name) : defaultDuration;
+            return durationOverrides.getOrDefault(name, defaultDuration);
         }
 
         public TimeUnit rateFor(String name) {
-            return rateOverrides.containsKey(name) ? rateOverrides.get(name) : defaultRate;
+            return rateOverrides.getOrDefault(name, defaultRate);
         }
     }
 
@@ -718,7 +719,7 @@ public class JmxReporter implements Reporter, Closeable {
                         String domain,
                         MetricRegistry registry,
                         MetricFilter filter,
-                        MetricTimeUnits timeUnits, 
+                        MetricTimeUnits timeUnits,
                         ObjectNameFactory objectNameFactory) {
         this.registry = registry;
         this.listener = new JmxListener(mBeanServer, domain, filter, timeUnits, objectNameFactory);
