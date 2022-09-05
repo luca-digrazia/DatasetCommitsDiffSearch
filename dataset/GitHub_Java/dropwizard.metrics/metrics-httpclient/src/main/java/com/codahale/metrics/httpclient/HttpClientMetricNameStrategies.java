@@ -14,26 +14,39 @@ import static com.codahale.metrics.MetricRegistry.name;
 public class HttpClientMetricNameStrategies {
 
     public static final HttpClientMetricNameStrategy METHOD_ONLY =
-            (name, request) -> name(HttpClient.class,
-                        name,
-                        methodNameString(request));
-
-    public static final HttpClientMetricNameStrategy HOST_AND_METHOD =
-            (name, request) -> name(HttpClient.class,
-                        name,
-                        requestURI(request).getHost(),
-                        methodNameString(request));
-
-    public static final HttpClientMetricNameStrategy QUERYLESS_URL_AND_METHOD =
-            (name, request) -> {
-                try {
-                    final URIBuilder url = new URIBuilder(requestURI(request));
+            new HttpClientMetricNameStrategy() {
+                @Override
+                public String getNameFor(String name, HttpRequest request) {
                     return name(HttpClient.class,
                                 name,
-                                url.removeQuery().build().toString(),
                                 methodNameString(request));
-                } catch (URISyntaxException e) {
-                    throw new IllegalArgumentException(e);
+                }
+            };
+
+    public static final HttpClientMetricNameStrategy HOST_AND_METHOD =
+            new HttpClientMetricNameStrategy() {
+                @Override
+                public String getNameFor(String name, HttpRequest request) {
+                    return name(HttpClient.class,
+                                name,
+                                requestURI(request).getHost(),
+                                methodNameString(request));
+                }
+            };
+
+    public static final HttpClientMetricNameStrategy QUERYLESS_URL_AND_METHOD =
+            new HttpClientMetricNameStrategy() {
+                @Override
+                public String getNameFor(String name, HttpRequest request) {
+                    try {
+                        final URIBuilder url = new URIBuilder(requestURI(request));
+                        return name(HttpClient.class,
+                                    name,
+                                    url.removeQuery().build().toString(),
+                                    methodNameString(request));
+                    } catch (URISyntaxException e) {
+                        throw new IllegalArgumentException(e);
+                    }
                 }
             };
 
