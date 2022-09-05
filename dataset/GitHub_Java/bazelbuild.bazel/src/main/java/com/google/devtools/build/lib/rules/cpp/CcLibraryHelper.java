@@ -885,25 +885,17 @@ public final class CcLibraryHelper {
     }
 
     CppModel model = initializeCppModel();
-    CppCompilationContext cppCompilationContext = null;
-    CppCompilationContext interfaceCompilationContext = null;
+    CppCompilationContext cppCompilationContext =
+        initializeCppCompilationContext(model, /*forInterface=*/ false);
+    model.setContext(cppCompilationContext);
+
     // If we actually have different interface deps, we need a separate compilation context
     // for the interface. Otherwise, we can just re-use the normal cppCompilationContext.
+    CppCompilationContext interfaceCompilationContext = cppCompilationContext;
     // As implemenationDeps is a superset of interfaceDeps, comparing the size proves equality.
     if (implementationDeps.size() != interfaceDeps.size()) {
-      interfaceCompilationContext =
-          initializeCppCompilationContext(
-              model, /*forInterface=*/ true, /*createModuleMapActions=*/ true);
-      cppCompilationContext =
-          initializeCppCompilationContext(
-              model, /*forInterface=*/ false, /*createModuleMapActions=*/ false);
-    } else {
-      cppCompilationContext =
-          initializeCppCompilationContext(
-              model, /*forInterface=*/ false, /*createModuleMapActions=*/ true);
-      interfaceCompilationContext = cppCompilationContext;
+      interfaceCompilationContext = initializeCppCompilationContext(model, /*forInterface=*/ true);
     }
-    model.setContext(cppCompilationContext);
     model.setInterfaceContext(interfaceCompilationContext);
 
     boolean compileHeaderModules = featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES);
@@ -1111,7 +1103,7 @@ public final class CcLibraryHelper {
    * Create context for cc compile action from generated inputs.
    */
   private CppCompilationContext initializeCppCompilationContext(
-      CppModel model, boolean forInterface, boolean createModuleMapActions) {
+      CppModel model, boolean forInterface) {
     CppCompilationContext.Builder contextBuilder =
         new CppCompilationContext.Builder(ruleContext, forInterface);
 
@@ -1139,7 +1131,9 @@ public final class CcLibraryHelper {
     contextBuilder.mergeDependentContexts(
         AnalysisUtils.getProviders(
             forInterface ? interfaceDeps : implementationDeps, CppCompilationContext.class));
-    contextBuilder.mergeDependentContexts(depContexts);
+    for (CppCompilationContext depContext : depContexts) {
+      contextBuilder.mergeDependentContext(depContext);
+    }
     CppHelper.mergeToolchainDependentContext(ruleContext, contextBuilder);
 
     // But defines come after those inherited from deps.
@@ -1179,40 +1173,31 @@ public final class CcLibraryHelper {
               ? CppHelper.createDefaultCppModuleMap(ruleContext)
               : injectedCppModuleMap;
       contextBuilder.setCppModuleMap(cppModuleMap);
-      boolean useModules = featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES);
-      contextBuilder.setUseHeaderModules(useModules);
-      if (useModules && featureConfiguration.isEnabled(CppRuleClasses.TRANSITIVE_MODULE_MAPS)) {
+      CppModuleMapAction action =
+          new CppModuleMapAction(
+              ruleContext.getActionOwner(),
+              cppModuleMap,
+              privateHeaders,
+              publicHeaders,
+              collectModuleMaps(),
+              additionalExportedHeaders,
+              featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES),
+              featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAP_HOME_CWD),
+              featureConfiguration.isEnabled(CppRuleClasses.GENERATE_SUBMODULES),
+              !featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAP_WITHOUT_EXTERN_MODULE));
+      ruleContext.registerAction(action);
+      if (model.getGeneratesPicHeaderModule()) {
+        contextBuilder.setPicHeaderModule(model.getPicHeaderModule(cppModuleMap.getArtifact()));
+      }
+      if (model.getGeneratesNoPicHeaderModule()) {
+        contextBuilder.setHeaderModule(model.getHeaderModule(cppModuleMap.getArtifact()));
+      }
+      contextBuilder.setUseHeaderModules(
+          featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES));
+      if (featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES)
+          && featureConfiguration.isEnabled(CppRuleClasses.TRANSITIVE_MODULE_MAPS)) {
         contextBuilder.setProvideTransitiveModuleMaps(true);
       }
-      if (createModuleMapActions) {
-        // TODO(djasper): The separation of interface and implementation dependencies doesn't work
-        // in conjunction with layering_check yet (and never has). In the long run to properly
-        // support layering_check together with interface/implementation dependencies, we need to
-        // write two modules to the module map, one with the headers and interface dependencies, the
-        // other with no headers, the implementation dependencies and an extra dependency on the
-        // first module. This division of two modules then needs to be properly used by the CppModel
-        // creating the CppCompileActions.
-        CppModuleMapAction action =
-            new CppModuleMapAction(
-                ruleContext.getActionOwner(),
-                cppModuleMap,
-                privateHeaders,
-                publicHeaders,
-                collectModuleMaps(),
-                additionalExportedHeaders,
-                featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES),
-                featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAP_HOME_CWD),
-                featureConfiguration.isEnabled(CppRuleClasses.GENERATE_SUBMODULES),
-                !featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAP_WITHOUT_EXTERN_MODULE));
-        ruleContext.registerAction(action);
-        if (model.getGeneratesPicHeaderModule()) {
-          contextBuilder.setPicHeaderModule(model.getPicHeaderModule(cppModuleMap.getArtifact()));
-        }
-        if (model.getGeneratesNoPicHeaderModule()) {
-          contextBuilder.setHeaderModule(model.getHeaderModule(cppModuleMap.getArtifact()));
-        }
-      }
-
     }
 
     semantics.setupCompilationContext(ruleContext, contextBuilder);
@@ -1223,8 +1208,7 @@ public final class CcLibraryHelper {
    * Creates context for cc compile action from generated inputs.
    */
   public CppCompilationContext initializeCppCompilationContext() {
-    return initializeCppCompilationContext(
-        initializeCppModel(), /*forInterface=*/ false, /*createModuleMapActions=*/ true);
+    return initializeCppCompilationContext(initializeCppModel(), /*forInterface=*/ false);
   }
 
   private Iterable<CppModuleMap> collectModuleMaps() {
