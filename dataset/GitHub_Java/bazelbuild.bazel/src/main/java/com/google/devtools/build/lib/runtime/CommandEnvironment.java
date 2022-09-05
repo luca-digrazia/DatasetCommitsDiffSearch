@@ -43,7 +43,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Encapsulates the state needed for a single command. The environment is dropped when the current
@@ -56,7 +55,7 @@ public final class CommandEnvironment {
   private final BlazeModule.ModuleEnvironment blazeModuleEnvironment;
   private final Map<String, String> clientEnv = new HashMap<>();
 
-  private AtomicReference<AbruptExitException> pendingException = new AtomicReference<>();
+  private AbruptExitException pendingException;
 
   private class BlazeModuleEnvironment implements BlazeModule.ModuleEnvironment {
     @Override
@@ -70,7 +69,8 @@ public final class CommandEnvironment {
 
     @Override
     public void exit(AbruptExitException exception) {
-      pendingException.compareAndSet(null, exception);
+      Preconditions.checkState(pendingException == null);
+      pendingException = exception;
     }
   }
 
@@ -175,9 +175,8 @@ public final class CommandEnvironment {
     eventBus.post(new CommandPrecompleteEvent(originalExit));
     // If Blaze did not suffer an infrastructure failure, check for errors in modules.
     ExitCode exitCode = originalExit;
-    AbruptExitException exception = pendingException.get();
-    if (!originalExit.isInfrastructureFailure() && exception != null) {
-      exitCode = exception.getExitCode();
+    if (!originalExit.isInfrastructureFailure() && pendingException != null) {
+      exitCode = pendingException.getExitCode();
     }
     return exitCode;
   }
@@ -190,9 +189,8 @@ public final class CommandEnvironment {
    * the exception this way.
    */
   public void throwPendingException() throws AbruptExitException {
-    AbruptExitException exception = pendingException.get();
-    if (exception != null) {
-      throw exception;
+    if (pendingException != null) {
+      throw pendingException;
     }
   }
 }

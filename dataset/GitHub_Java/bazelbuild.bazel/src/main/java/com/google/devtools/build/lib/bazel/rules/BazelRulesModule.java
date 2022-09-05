@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,6 @@ package com.google.devtools.build.lib.bazel.rules;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.Multimap;
 import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.ActionContextConsumer;
 import com.google.devtools.build.lib.actions.ActionContextProvider;
@@ -117,8 +115,8 @@ public class BazelRulesModule extends BlazeModule {
     }
 
     @Override
-    public Multimap<Class<? extends ActionContext>, String> getActionContexts() {
-      return ImmutableMultimap.<Class<? extends ActionContext>, String>builder()
+    public Map<Class<? extends ActionContext>, String> getActionContexts() {
+      return ImmutableMap.<Class<? extends ActionContext>, String>builder()
           .put(CppCompileActionContext.class, "")
           .put(CppLinkActionContext.class, "")
           .put(IncludeScanningContext.class, "")

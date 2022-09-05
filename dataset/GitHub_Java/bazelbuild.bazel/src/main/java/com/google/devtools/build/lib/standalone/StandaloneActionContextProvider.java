@@ -57,17 +57,17 @@ public class StandaloneActionContextProvider extends ActionContextProvider {
 
     @Override
     public ArtifactResolver getArtifactResolver() {
-      return env.getView().getArtifactFactory();
+      return runtime.getView().getArtifactFactory();
     }
   }
 
-  private final CommandEnvironment env;
   private final ImmutableList<ActionContext> strategies;
+  private final BlazeRuntime runtime;
 
   public StandaloneActionContextProvider(CommandEnvironment env, BuildRequest buildRequest) {
-    this.env = env;
-    BlazeRuntime runtime = env.getRuntime();
     boolean verboseFailures = buildRequest.getOptions(ExecutionOptions.class).verboseFailures;
+
+    this.runtime = env.getRuntime();
 
     TestActionContext testStrategy = new StandaloneTestStrategy(buildRequest,
         runtime.getStartupOptionsProvider(), runtime.getBinTools(), env.getClientEnv(),
@@ -94,4 +94,5 @@ public class StandaloneActionContextProvider extends ActionContextProvider {
   public Iterable<ActionContext> getActionContexts() {
     return strategies;
   }
+
 }
