@@ -2089,13 +2089,13 @@ public class MethodLibrary {
 
   static final List<BaseFunction> buildGlobalFunctions =
       ImmutableList.<BaseFunction>of(
-          all, any, bool, dict, enumerate, int_, len, list, max, min, minus, range, repr, reversed,
-          select, set, sorted, str, zip);
+          bool, dict, enumerate, int_, len, list, minus, range, repr, reversed, select, sorted, str,
+          zip);
 
   static final List<BaseFunction> skylarkGlobalFunctions =
       ImmutableList.<BaseFunction>builder()
           .addAll(buildGlobalFunctions)
-          .add(dir, fail, getattr, hasattr, print, struct, type)
+          .add(all, any, dir, fail, getattr, hasattr, max, min, print, set, struct, type)
           .build();
 
   /**
