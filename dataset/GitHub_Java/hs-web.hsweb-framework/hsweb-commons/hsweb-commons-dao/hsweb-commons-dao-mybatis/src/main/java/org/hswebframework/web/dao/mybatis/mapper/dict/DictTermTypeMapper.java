@@ -6,16 +6,14 @@ import org.hswebframework.ezorm.core.param.TermType;
 import org.hswebframework.ezorm.rdb.meta.RDBColumnMetaData;
 import org.hswebframework.ezorm.rdb.render.SqlAppender;
 import org.hswebframework.ezorm.rdb.render.dialect.Dialect;
-import org.hswebframework.ezorm.rdb.render.dialect.RenderPhase;
-import org.hswebframework.ezorm.rdb.render.dialect.function.SqlFunction;
 import org.hswebframework.ezorm.rdb.render.dialect.term.BoostTermTypeMapper;
-import org.hswebframework.web.dao.mybatis.mapper.AbstractSqlTermCustomer;
+import org.hswebframework.web.dao.mybatis.mapper.AbstractSqlTermCustomizer;
 import org.hswebframework.web.dao.mybatis.mapper.ChangedTermValue;
 import org.hswebframework.web.dict.EnumDict;
 
 import java.sql.JDBCType;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.hswebframework.web.dao.mybatis.mapper.dict.DictInTermTypeMapper.USE_DICT_MASK_FLAG;
@@ -24,7 +22,7 @@ import static org.hswebframework.web.dao.mybatis.mapper.dict.DictInTermTypeMappe
  * @author zhouhao
  * @since 3.0.0-RC
  */
-public class DictTermTypeMapper extends AbstractSqlTermCustomer {
+public class DictTermTypeMapper extends AbstractSqlTermCustomizer {
 
     private boolean not;
 
@@ -34,14 +32,20 @@ public class DictTermTypeMapper extends AbstractSqlTermCustomer {
     }
 
     private boolean support(RDBColumnMetaData column) {
+        if (column.getJdbcType() == JDBCType.VARCHAR) {
+            return false;
+        }
         Class type = column.getJavaType();
-        if (type.isArray()) {
+        if (type != null && type.isArray()) {
             type = type.getComponentType();
         }
-        return ((type.isEnum() && EnumDict.class.isAssignableFrom(type))
+        return ((type != null && type.isEnum()
+                && EnumDict.class.isAssignableFrom(type)
+                && column.getJavaType().isArray())
                 ||
                 (column.getProperty(USE_DICT_MASK_FLAG).isTrue() && column.getOptionConverter() != null));
     }
+
 
     @SuppressWarnings("all")
     private List<EnumDict> getAllOption(RDBColumnMetaData column) {
@@ -57,7 +61,7 @@ public class DictTermTypeMapper extends AbstractSqlTermCustomer {
 
         OptionConverter converter = column.getOptionConverter();
         if (converter == null) {
-            return Collections.emptyList();
+            return new ArrayList<>();
         }
 
         return (List) converter.getOptions();
@@ -85,7 +89,11 @@ public class DictTermTypeMapper extends AbstractSqlTermCustomer {
     }
 
     protected SqlAppender buildNotSupport(String wherePrefix, Term term, RDBColumnMetaData column, String tableAlias) {
-        createChangedTermValue(term);
+        ChangedTermValue termValue = createChangedTermValue(term);
+        // fix https://github.com/hs-web/hsweb-framework/issues/102
+        Object newValue = BoostTermTypeMapper.convertValue(column, termValue.getOld());
+        termValue.setValue(newValue);
+
         Dialect dialect = column.getTableMetaData().getDatabaseMetaData().getDialect();
         String columnName = dialect.buildColumnName(tableAlias, column.getName());
         SqlAppender appender = new SqlAppender();
