@@ -134,7 +134,6 @@ public class CppLinkActionBuilder {
   private final List<String> linkopts = new ArrayList<>();
   private LinkTargetType linkType = LinkTargetType.STATIC_LIBRARY;
   private LinkStaticness linkStaticness = LinkStaticness.FULLY_STATIC;
-  private String libraryIdentifier = null;
   private List<Artifact> ltoBitcodeFiles = new ArrayList<>();
 
   private boolean fake;
@@ -415,8 +414,6 @@ public class CppLinkActionBuilder {
 
   /** Builds the Action as configured and returns it. */
   public CppLinkAction build() {
-    Preconditions.checkState(
-        (libraryIdentifier == null) == (linkType == LinkTargetType.EXECUTABLE));
     if (interfaceOutput != null && (fake || linkType != LinkTargetType.DYNAMIC_LIBRARY)) {
       throw new RuntimeException(
           "Interface output can only be used " + "with non-fake DYNAMIC_LIBRARY targets");
@@ -459,13 +456,13 @@ public class CppLinkActionBuilder {
       }
     }
 
-    final LibraryToLink outputLibrary = LinkerInputs.newInputLibrary(
-        output, libraryIdentifier, filteredNonLibraryArtifacts, this.ltoBitcodeFiles);
+    final LibraryToLink outputLibrary =
+        LinkerInputs.newInputLibrary(output, filteredNonLibraryArtifacts, this.ltoBitcodeFiles);
     final LibraryToLink interfaceOutputLibrary =
         (interfaceOutput == null)
             ? null
-            : LinkerInputs.newInputLibrary(interfaceOutput, libraryIdentifier,
-                filteredNonLibraryArtifacts, this.ltoBitcodeFiles);
+            : LinkerInputs.newInputLibrary(
+                interfaceOutput, filteredNonLibraryArtifacts, this.ltoBitcodeFiles);
 
     final ImmutableMap<Artifact, Artifact> linkstampMap =
         mapLinkstampsToOutputs(linkstamps, ruleContext, configuration, output, linkArtifactFactory);
@@ -474,7 +471,7 @@ public class CppLinkActionBuilder {
     if (isLTOIndexing && allLTOArtifacts == null) {
       ltoOutputRootPrefix =
           FileSystemUtils.appendExtension(
-              output.getRootRelativePath(), ".lto");
+              outputLibrary.getArtifact().getRootRelativePath(), ".lto");
       allLTOArtifacts = createLTOArtifacts(ltoOutputRootPrefix, uniqueLibraries);
     }
 
@@ -488,7 +485,7 @@ public class CppLinkActionBuilder {
     } else {
       actionOutputs =
           constructOutputs(
-              output,
+              outputLibrary.getArtifact(),
               linkstampMap.values(),
               interfaceOutputLibrary == null ? null : interfaceOutputLibrary.getArtifact(),
               symbolCounts);
@@ -508,13 +505,13 @@ public class CppLinkActionBuilder {
                 needWholeArchive,
                 linkerInputs,
                 runtimeLinkerInputs,
-                output);
+                outputLibrary.getArtifact());
     variablesExtension.addVariables(buildVariablesBuilder);
     Variables buildVariables = buildVariablesBuilder.build();
 
     PathFragment paramRootPath =
         ParameterFile.derivePath(
-            output.getRootRelativePath(), (isLTOIndexing) ? "lto" : "2");
+            outputLibrary.getArtifact().getRootRelativePath(), (isLTOIndexing) ? "lto" : "2");
 
     @Nullable
     final Artifact paramFile =
@@ -566,7 +563,7 @@ public class CppLinkActionBuilder {
 
     if (!isLTOIndexing) {
       linkCommandLineBuilder
-          .setOutput(output)
+          .setOutput(outputLibrary.getArtifact())
           .setInterfaceOutput(interfaceOutput)
           .setBuildInfoHeaderArtifacts(buildInfoHeaderArtifacts)
           .setInterfaceSoBuilder(getInterfaceSoBuilder())
@@ -917,15 +914,6 @@ public class CppLinkActionBuilder {
    */
   public CppLinkActionBuilder setLinkStaticness(LinkStaticness linkStaticness) {
     this.linkStaticness = linkStaticness;
-    return this;
-  }
-
-  /**
-   * Sets the identifier of the library produced by the action. See
-   * {@link LinkerInputs.LibraryToLink#getLibraryIdentifier()}
-   */
-  public CppLinkActionBuilder setLibraryIdentifier(String libraryIdentifier) {
-    this.libraryIdentifier = libraryIdentifier;
     return this;
   }
 
