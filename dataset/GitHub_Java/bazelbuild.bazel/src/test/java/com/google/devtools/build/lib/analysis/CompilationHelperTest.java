@@ -56,7 +56,7 @@ public class CompilationHelperTest extends BuildViewTestCase {
         getRuleContext(rule, analysisEnvironment),
         ActionsTestUtil.NULL_ACTION_OWNER,
         "middleman",
-        rule.getProvider(FileProvider.class).getFilesToBuild(),
+        rule,
         withSolib,
         configuration);
   }
