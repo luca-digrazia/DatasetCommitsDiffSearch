@@ -546,9 +546,6 @@ public final class CcCommon {
     if (cppConfiguration.isLipoOptimizationOrInstrumentation()) {
       requestedFeatures.add(CppRuleClasses.LIPO);
     }
-    if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
-      requestedFeatures.add(CppRuleClasses.COVERAGE);
-    }
 
     FeatureConfiguration configuration =
         toolchain.getFeatures().getFeatureConfiguration(requestedFeatures.build());
