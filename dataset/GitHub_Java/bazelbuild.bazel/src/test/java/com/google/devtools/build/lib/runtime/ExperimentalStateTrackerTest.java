@@ -93,7 +93,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
   @Test
   public void testActionVisible() throws IOException {
     // If there is only one action running, it should be visible
-    // somewhere in the progress bar, and also the short version thereof.
+    // somewhere in the progress bar.
 
     String message = "Building foo";
     ManualClock clock = new ManualClock();
@@ -101,27 +101,18 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
 
     ExperimentalStateTracker stateTracker = new ExperimentalStateTracker(clock);
     stateTracker.actionStarted(new ActionStartedEvent(mockAction(message, "bar/foo"), 123456789));
-
     LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter();
     stateTracker.writeProgressBar(terminalWriter);
+
     String output = terminalWriter.getWritten();
     assertTrue(
         "Action message '" + message + "' should be present in output: " + output,
         output.contains(message));
-
-    terminalWriter = new LoggingTerminalWriter();
-    stateTracker.writeProgressBar(terminalWriter, /* shortVersion=*/ true);
-    output = terminalWriter.getWritten();
-    assertTrue(
-        "Action message '" + message + "' should be present in short output: " + output,
-        output.contains(message));
-
   }
 
   @Test
   public void testCompletedActionNotShown() throws IOException {
-    // Completed actions should not be reported in the progress bar, nor in the
-    // short progress bar.
+    // Completed actions should not be reported in the progress bar.
 
     String messageFast = "Running quick action";
     String messageSlow = "Running slow action";
@@ -137,6 +128,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
 
     LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter();
     stateTracker.writeProgressBar(terminalWriter);
+
     String output = terminalWriter.getWritten();
     assertFalse(
         "Completed action '" + messageFast + "' should not be present in output: " + output,
@@ -144,22 +136,11 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     assertTrue(
         "Only running action '" + messageSlow + "' should be present in output: " + output,
         output.contains(messageSlow));
-
-    terminalWriter = new LoggingTerminalWriter();
-    stateTracker.writeProgressBar(terminalWriter, /* shortVersion=*/ true);
-    output = terminalWriter.getWritten();
-    assertFalse(
-        "Completed action '" + messageFast + "' should not be present in short output: " + output,
-        output.contains(messageFast));
-    assertTrue(
-        "Only running action '" + messageSlow + "' should be present in short output: " + output,
-        output.contains(messageSlow));
   }
 
   @Test
   public void testOldestActionVisible() throws IOException {
-    // The earliest-started action is always visible somehow in the progress bar
-    // and its short version.
+    // The earliest-started action is always visible somehow in the progress bar.
 
     String messageOld = "Running the first-started action";
 
@@ -176,23 +157,16 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
 
     LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter();
     stateTracker.writeProgressBar(terminalWriter);
+
     String output = terminalWriter.getWritten();
     assertTrue(
         "Longest running action '" + messageOld + "' should be visible in output: " + output,
-        output.contains(messageOld));
-
-    terminalWriter = new LoggingTerminalWriter();
-    stateTracker.writeProgressBar(terminalWriter, /* shortVersion=*/ true);
-    output = terminalWriter.getWritten();
-    assertTrue(
-        "Longest running action '" + messageOld + "' should be visible in short output: " + output,
         output.contains(messageOld));
   }
 
   @Test
   public void testTimesShown() throws IOException {
     // For sufficiently long running actions, the time that has passed since their start is shown.
-    // In the short version of the progress bar, this should be true at least for the oldest action.
 
     ManualClock clock = new ManualClock();
     clock.advanceMillis(TimeUnit.SECONDS.toMillis(123));
@@ -209,17 +183,11 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter();
     stateTracker.writeProgressBar(terminalWriter);
     String output = terminalWriter.getWritten();
+
     assertTrue(
         "Runtime of first action should be visible in output: " + output, output.contains("27s"));
     assertTrue(
         "Runtime of second action should be visible in output: " + output, output.contains("20s"));
-
-    terminalWriter = new LoggingTerminalWriter();
-    stateTracker.writeProgressBar(terminalWriter, /* shortVersion=*/ true);
-    output = terminalWriter.getWritten();
-    assertTrue(
-        "Runtime of first action should be visible in short output: " + output,
-        output.contains("27s"));
   }
 
   @Test
