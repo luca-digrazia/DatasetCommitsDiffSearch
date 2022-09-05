@@ -115,7 +115,7 @@ public final class SkylarkRuleContext {
 
   private final ImmutableMap<Artifact, FilesToRunProvider> executableRunfilesMap;
 
-  private final ImmutableMap<String, String> makeVariables;
+  private final Map<String, String> makeVariables;
 
   /**
    * In native code, private values start with $.
@@ -393,7 +393,7 @@ public final class SkylarkRuleContext {
 
   @SkylarkCallable(structField = true,
       doc = "Dictionary (String to String) of configuration variables")
-  public ImmutableMap<String, String> var() {
+  public Map<String, String> var() {
     return makeVariables;
   }
 
