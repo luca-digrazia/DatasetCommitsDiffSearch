@@ -3,12 +3,8 @@ package org.nlpcn.es4sql.parse;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import com.alibaba.druid.sql.ast.expr.*;
-import com.alibaba.druid.sql.ast.statement.SQLJoinTableSource;
-import com.alibaba.druid.sql.ast.statement.SQLSelectQueryBlock;
-import com.alibaba.druid.sql.parser.SQLParseException;
 import com.google.common.collect.Lists;
 import org.elasticsearch.common.collect.Tuple;
 import org.nlpcn.es4sql.SQLFunctions;
@@ -19,7 +15,6 @@ import org.nlpcn.es4sql.domain.MethodField;
 import org.nlpcn.es4sql.domain.Where;
 import org.nlpcn.es4sql.exception.SqlParseException;
 import com.alibaba.druid.sql.ast.*;
-import org.nlpcn.es4sql.query.maker.AggMaker;
 
 /**
  * 一些具有参数的一般在 select 函数.或者group by 函数
@@ -34,7 +29,7 @@ public class FieldMaker {
             throw new SqlParseException("unknow field name : " + expr);
         } else if (expr instanceof SQLBinaryOpExpr) {
             //make a SCRIPT method field;
-            return makeField(makeBinaryMethodField((SQLBinaryOpExpr) expr, alias, true), alias, tableAlias);
+            return makeScriptMethodField((SQLBinaryOpExpr) expr, alias);
 
         } else if (expr instanceof SQLAllColumnExpr) {
         } else if (expr instanceof SQLMethodInvokeExpr) {
@@ -64,29 +59,6 @@ public class FieldMaker {
             throw new SqlParseException("unknown field name : " + expr);
         }
         return null;
-    }
-
-    private static Object getScriptValue(SQLExpr expr) throws SqlParseException {
-        return Util.getScriptValue(expr);
-    }
-
-    private static Field makeScriptMethodField(SQLBinaryOpExpr binaryExpr, String alias) throws SqlParseException {
-        List<SQLExpr> params = new ArrayList<>();
-
-        String scriptFieldAlias;
-        if (alias == null || alias.equals(""))
-            scriptFieldAlias = binaryExpr.toString();
-        else
-            scriptFieldAlias = alias;
-        params.add(new SQLCharExpr(scriptFieldAlias));
-
-        Object left = getScriptValue(binaryExpr.getLeft());
-        Object right = getScriptValue(binaryExpr.getRight());
-        String script = String.format("%s %s %s", left, binaryExpr.getOperator().getName(), right);
-
-        params.add(new SQLCharExpr(script));
-
-        return makeMethodField("script", params, null, null, false);
     }
 
 
@@ -132,77 +104,53 @@ public class FieldMaker {
     }
 
 
-    //binary method can nested
-    private static SQLMethodInvokeExpr makeBinaryMethodField(SQLBinaryOpExpr expr, String alias, boolean first) throws SqlParseException {
+    private static Field makeScriptMethodField(SQLBinaryOpExpr binaryExpr, String alias) throws SqlParseException {
         List<SQLExpr> params = new ArrayList<>();
 
         String scriptFieldAlias;
-        if (first && (alias == null || alias.equals(""))) {
-            scriptFieldAlias = "field_" + SQLFunctions.random();
-        } else {
+        if (alias == null || alias.equals(""))
+            scriptFieldAlias = binaryExpr.toString();
+        else
             scriptFieldAlias = alias;
-        }
         params.add(new SQLCharExpr(scriptFieldAlias));
 
-        switch (expr.getOperator()) {
-            case Add:
-                return convertBinaryOperatorToMethod("add", expr);
-            case Multiply:
-                return convertBinaryOperatorToMethod("multiply", expr);
+        Object left = getScriptValue(binaryExpr.getLeft());
+        Object right = getScriptValue(binaryExpr.getRight());
+        String script = String.format("%s %s %s", left, binaryExpr.getOperator().getName(), right);
 
-            case Divide:
-                return convertBinaryOperatorToMethod("divide", expr);
+        params.add(new SQLCharExpr(script));
 
-            case Modulus:
-                return convertBinaryOperatorToMethod("modulus", expr);
-
-            case Subtract:
-                return convertBinaryOperatorToMethod("subtract", expr);
-            default:
-                throw new SqlParseException(expr.getOperator().getName() + " is not support");
-        }
+        return makeMethodField("script", params, null, null, true);
     }
 
-    private static SQLMethodInvokeExpr convertBinaryOperatorToMethod(String operator, SQLBinaryOpExpr expr) {
-        SQLMethodInvokeExpr methodInvokeExpr = new SQLMethodInvokeExpr(operator, null);
-        methodInvokeExpr.addParameter(expr.getLeft());
-        methodInvokeExpr.addParameter(expr.getRight());
-        return methodInvokeExpr;
-    }
-
-    private static boolean isFromJoinTable(SQLExpr expr) {
-        SQLObject temp = expr;
-        AtomicInteger counter = new AtomicInteger(10);
-        while (!(expr.getParent() instanceof SQLSelectQueryBlock) && counter.get() > 0) {
-            counter.decrementAndGet();
-            temp = temp.getParent();
-            if (temp instanceof SQLSelectQueryBlock) {
-                if (((SQLSelectQueryBlock) temp).getFrom() instanceof SQLJoinTableSource) {
-                    return true;
-                }
-            }
+    private static Object getScriptValue(SQLExpr expr) throws SqlParseException {
+        if (expr instanceof SQLIdentifierExpr || expr instanceof SQLPropertyExpr || expr instanceof SQLVariantRefExpr) {
+            return "doc['" + expr.toString() + "'].value";
+        } else if (expr instanceof SQLValuableExpr) {
+            return ((SQLValuableExpr) expr).getValue();
         }
-        return false;
+        throw new SqlParseException("could not parse sqlBinaryOpExpr need to be identifier/valuable got" + expr.getClass().toString() + " with value:" + expr.toString());
     }
 
     private static Field handleIdentifier(SQLExpr expr, String alias, String tableAlias) throws SqlParseException {
         String name = expr.toString().replace("`", "");
-        String newFieldName = name;
-        if (tableAlias != null) {
-            String aliasPrefix = tableAlias + ".";
-            if (name.startsWith(aliasPrefix)) {
-                newFieldName = name.replaceFirst(aliasPrefix, "");
-            }
-        }
 
-        if (alias != null && alias != name && !isFromJoinTable(expr)) {
+        if (alias != null && alias != name) {
             List<SQLExpr> paramers = Lists.newArrayList();
             paramers.add(new SQLCharExpr(alias));
-            paramers.add(new SQLCharExpr("doc['" + newFieldName + "'].value"));
+            paramers.add(new SQLCharExpr("doc['" + name + "'].value"));
             return makeMethodField("script", paramers, null, alias, true);
         }
 
-        return new Field(newFieldName, alias);
+        if (tableAlias == null) return new Field(name, alias);
+        else if (tableAlias != null) {
+            String aliasPrefix = tableAlias + ".";
+            if (name.startsWith(aliasPrefix)) {
+                name = name.replaceFirst(aliasPrefix, "");
+                return new Field(name, alias);
+            }
+        }
+        return null;
     }
 
     private static MethodField makeMethodField(String name, List<SQLExpr> arguments, SQLAggregateOption option, String alias, boolean first) throws SqlParseException {
@@ -210,25 +158,16 @@ public class FieldMaker {
         String finalMethodName = name;
 
         for (SQLExpr object : arguments) {
-
             if (object instanceof SQLBinaryOpExpr) {
 
                 SQLBinaryOpExpr binaryOpExpr = (SQLBinaryOpExpr) object;
-
-                if (SQLFunctions.buildInFunctions.contains(binaryOpExpr.getOperator().toString().toLowerCase())) {
-                    SQLMethodInvokeExpr mExpr = makeBinaryMethodField(binaryOpExpr, alias, first);
-                    MethodField abc = makeMethodField(mExpr.getMethodName(), mExpr.getParameters(), null, null, false);
-                    paramers.add(new KVValue(abc.getParams().get(0).toString(), new SQLCharExpr(abc.getParams().get(1).toString())));
+                if (!binaryOpExpr.getOperator().getName().equals("=")) {
+                    paramers.add(new KVValue("script", makeScriptMethodField(binaryOpExpr, null)));
                 } else {
-                    if (!binaryOpExpr.getOperator().getName().equals("=")) {
-                        paramers.add(new KVValue("script", makeScriptMethodField(binaryOpExpr, null)));
-                    } else {
-                        SQLExpr right = binaryOpExpr.getRight();
-                        Object value = Util.expr2Object(right);
-                        paramers.add(new KVValue(binaryOpExpr.getLeft().toString(), value));
-                    }
+                    SQLExpr right = binaryOpExpr.getRight();
+                    Object value = Util.expr2Object(right);
+                    paramers.add(new KVValue(binaryOpExpr.getLeft().toString(), value));
                 }
-
             } else if (object instanceof SQLMethodInvokeExpr) {
                 SQLMethodInvokeExpr mExpr = (SQLMethodInvokeExpr) object;
                 String methodName = mExpr.getMethodName().toLowerCase();
@@ -254,24 +193,23 @@ public class FieldMaker {
                 } else if (SQLFunctions.buildInFunctions.contains(methodName)) {
                     //throw new SqlParseException("only support script/nested as inner functions");
                     MethodField abc = makeMethodField(methodName, mExpr.getParameters(), null, null, false);
-                    paramers.add(new KVValue(abc.getParams().get(0).toString(), new SQLCharExpr(abc.getParams().get(1).toString())));
+                    paramers.add(new KVValue(abc.getParams().get(0).toString(), abc.getParams().get(1)));
                 } else throw new SqlParseException("only support script/nested/children as inner functions");
             } else {
-                paramers.add(new KVValue(object));
+                paramers.add(new KVValue(Util.expr2Object(object)));
             }
 
         }
 
         //just check we can find the function
-        if (SQLFunctions.buildInFunctions.contains(finalMethodName)) {
+        if (SQLFunctions.function(finalMethodName, paramers, null) != null) {
             if (alias == null && first) {
-                alias = "field_" + SQLFunctions.random();//paramers.get(0).value.toString();
+                alias = paramers.get(0).value.toString();
             }
             Tuple<String, String> newFunctions = SQLFunctions.function(finalMethodName, paramers,
                     paramers.get(0).key);
             paramers.clear();
             if (!first) {
-                //variance
                 paramers.add(new KVValue(newFunctions.v1()));
             } else {
                 paramers.add(new KVValue(alias));
@@ -280,17 +218,6 @@ public class FieldMaker {
             paramers.add(new KVValue(newFunctions.v2()));
             finalMethodName = "script";
         }
-        if (first) {
-            List<KVValue> tempParamers = new LinkedList<>();
-            for (KVValue temp : paramers) {
-                if (temp.value instanceof SQLExpr)
-                    tempParamers.add(new KVValue(temp.key, Util.expr2Object((SQLExpr) temp.value)));
-                else tempParamers.add(new KVValue(temp.key, temp.value));
-            }
-            paramers.clear();
-            paramers.addAll(tempParamers);
-        }
-
         return new MethodField(finalMethodName, paramers, option == null ? null : option.name(), alias);
     }
 }
