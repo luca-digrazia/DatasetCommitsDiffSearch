@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AttributeMap.AcceptsLabelAttribute;
 import com.google.devtools.build.lib.packages.License.DistributionType;
+import com.google.devtools.build.lib.packages.PackageFactory.Globber;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Canonicalizer;
@@ -266,8 +267,7 @@ public class Package {
 
   private static Path getSourceRoot(Path buildFile, PathFragment packageFragment) {
     Path current = buildFile.getParentDirectory();
-    for (int i = 0, len = packageFragment.segmentCount();
-         i < len && !packageFragment.equals(PathFragment.EMPTY_FRAGMENT); i++) {
+    for (int i = 0, len = packageFragment.segmentCount(); i < len && current != null; i++) {
       current = current.getParentDirectory();
     }
     return current;
@@ -483,7 +483,7 @@ public class Package {
    * <p>Package-private to encourage callers to get their workspace name from a rule, not a
    * package.</p>
    */
-  public String getWorkspaceName() {
+  String getWorkspaceName() {
     return workspaceName;
   }
 
@@ -1331,7 +1331,7 @@ public class Package {
      * an InputFile target.
      */
     void createInputFileMaybe(Label label, Location location) {
-      if (label != null && label.getPackageIdentifier().equals(pkg.getPackageIdentifier())) {
+      if (label != null && label.getPackageFragment().equals(pkg.getNameFragment())) {
         if (!targets.containsKey(label.getName())) {
           addInputFile(label, location);
         }
