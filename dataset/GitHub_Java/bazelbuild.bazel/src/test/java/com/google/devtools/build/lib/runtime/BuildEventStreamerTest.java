@@ -24,9 +24,7 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithOrderConstraint;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
-import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.buildeventstream.ProgressEvent;
-import com.google.devtools.build.lib.buildtool.BuildResult;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -86,7 +84,7 @@ public class BuildEventStreamerTest {
     }
 
     @Override
-    public BuildEventStreamProtos.BuildEvent asStreamProto(PathConverter converter) {
+    public BuildEventStreamProtos.BuildEvent asStreamProto() {
       return GenericBuildEvent.protoChaining(this).build();
     }
 
@@ -111,8 +109,7 @@ public class BuildEventStreamerTest {
 
     BuildEvent startEvent =
         new GenericBuildEvent(
-            testId("Initial"), ImmutableSet.of(ProgressEvent.INITIAL_PROGRESS_UPDATE,
-            BuildEventId.buildFinished()));
+            testId("Initial"), ImmutableSet.of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
 
     streamer.buildEvent(startEvent);
 
@@ -120,12 +117,11 @@ public class BuildEventStreamerTest {
     assertThat(afterFirstEvent).hasSize(1);
     assertEquals(startEvent.getEventId(), afterFirstEvent.get(0).getEventId());
 
-    streamer.buildEvent(new BuildCompleteEvent(new BuildResult(0)));
+    streamer.buildComplete(new BuildCompleteEvent(null));
 
     List<BuildEvent> finalStream = transport.getEvents();
-    assertThat(finalStream).hasSize(3);
-    assertEquals(BuildEventId.buildFinished(), finalStream.get(1).getEventId());
-    assertEquals(ProgressEvent.INITIAL_PROGRESS_UPDATE, finalStream.get(2).getEventId());
+    assertThat(finalStream).hasSize(2);
+    assertEquals(ProgressEvent.INITIAL_PROGRESS_UPDATE, finalStream.get(1).getEventId());
   }
 
   @Test
@@ -211,8 +207,7 @@ public class BuildEventStreamerTest {
     BuildEvent startEvent =
         new GenericBuildEvent(
             testId("Initial"),
-            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE,
-                BuildEventId.buildFinished()));
+            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
     BuildEvent earlyEvent =
         new GenericBuildEvent(testId("unexpected"), ImmutableSet.<BuildEventId>of());
     BuildEvent lateReference =
@@ -221,7 +216,7 @@ public class BuildEventStreamerTest {
     streamer.buildEvent(startEvent);
     streamer.buildEvent(earlyEvent);
     streamer.buildEvent(lateReference);
-    streamer.buildEvent(new BuildCompleteEvent(new BuildResult(0)));
+    streamer.buildComplete(new BuildCompleteEvent(null));
 
     List<BuildEvent> eventsSeen = transport.getEvents();
     int earlyEventCount = 0;
@@ -278,48 +273,21 @@ public class BuildEventStreamerTest {
     BuildEvent startEvent =
         new GenericBuildEvent(
             testId("Initial"),
-            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE, expectedId,
-                BuildEventId.buildFinished()));
+            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE, expectedId));
     BuildEventId rootCauseId = testId("failure event");
     BuildEvent failedTarget =
         new GenericOrderEvent(expectedId, ImmutableSet.<BuildEventId>of(rootCauseId));
 
     streamer.buildEvent(startEvent);
     streamer.buildEvent(failedTarget);
-    streamer.buildEvent(new BuildCompleteEvent(new BuildResult(0)));
+    streamer.buildComplete(new BuildCompleteEvent(null));
 
     List<BuildEvent> allEventsSeen = transport.getEvents();
-    assertThat(allEventsSeen).hasSize(6);
+    assertThat(allEventsSeen).hasSize(5);
     assertEquals(startEvent.getEventId(), allEventsSeen.get(0).getEventId());
-    assertEquals(BuildEventId.buildFinished(), allEventsSeen.get(1).getEventId());
-    BuildEvent linkEvent = allEventsSeen.get(2);
+    BuildEvent linkEvent = allEventsSeen.get(1);
     assertEquals(ProgressEvent.INITIAL_PROGRESS_UPDATE, linkEvent.getEventId());
-    assertEquals(rootCauseId, allEventsSeen.get(3).getEventId());
-    assertEquals(failedTarget.getEventId(), allEventsSeen.get(4).getEventId());
-  }
-
-  @Test
-  public void testVeryFirstEventNeedsToWait() {
-    // Verify that we can handle an first event waiting for another event.
-    RecordingBuildEventTransport transport = new RecordingBuildEventTransport();
-    BuildEventStreamer streamer =
-        new BuildEventStreamer(ImmutableSet.<BuildEventTransport>of(transport));
-
-    BuildEventId initialId = testId("Initial");
-    BuildEventId waitId = testId("Waiting for initial event");
-    BuildEvent startEvent =
-        new GenericBuildEvent(
-            initialId,
-            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE, waitId));
-    BuildEvent waitingForStart =
-        new GenericOrderEvent(waitId, ImmutableSet.<BuildEventId>of(), ImmutableSet.of(initialId));
-
-    streamer.buildEvent(waitingForStart);
-    streamer.buildEvent(startEvent);
-
-    List<BuildEvent> allEventsSeen = transport.getEvents();
-    assertThat(allEventsSeen).hasSize(2);
-    assertEquals(startEvent.getEventId(), allEventsSeen.get(0).getEventId());
-    assertEquals(waitingForStart.getEventId(), allEventsSeen.get(1).getEventId());
+    assertEquals(rootCauseId, allEventsSeen.get(2).getEventId());
+    assertEquals(failedTarget.getEventId(), allEventsSeen.get(3).getEventId());
   }
 }
