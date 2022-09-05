@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyFunctionName;
@@ -61,7 +60,7 @@ public class LocalRepositoryFunction extends RepositoryFunction {
     Path repositoryPath = getExternalRepositoryDirectory().getRelative(rule.getName());
     try {
       FileSystemUtils.createDirectoryAndParents(repositoryPath.getParentDirectory());
-      if (repositoryPath.exists(Symlinks.NOFOLLOW)) {
+      if (repositoryPath.exists()) {
         repositoryPath.delete();
       }
       repositoryPath.createSymbolicLink(pathFragment);

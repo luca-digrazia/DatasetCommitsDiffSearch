@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -148,10 +148,9 @@ public class BlazeCommandDispatcher {
     return ExitCode.SUCCESS;
   }
 
-  private void parseArgsAndConfigs(OptionsParser optionsParser, Command commandAnnotation,
-      List<String> args, List<String> rcfileNotes, OutErr outErr)
+  private CommonCommandOptions checkOptions(OptionsParser optionsParser,
+      Command commandAnnotation, List<String> args, List<String> rcfileNotes, OutErr outErr)
           throws OptionsParsingException {
-
     Function<String, String> commandOptionSourceFunction = new Function<String, String>() {
       @Override
       public String apply(String input) {
@@ -188,6 +187,8 @@ public class BlazeCommandDispatcher {
       configsLoaded = commonOptions.configs;
       commonOptions = optionsParser.getOptions(CommonCommandOptions.class);
     }
+
+    return commonOptions;
   }
 
   /**
@@ -269,16 +270,13 @@ public class BlazeCommandDispatcher {
     }
 
     OptionsParser optionsParser;
+    CommonCommandOptions commonOptions;
     // Delay output of notes regarding the parsed rc file, so it's possible to disable this in the
     // rc file.
     List<String> rcfileNotes = new ArrayList<>();
     try {
       optionsParser = createOptionsParser(command);
-      parseArgsAndConfigs(optionsParser, commandAnnotation, args, rcfileNotes, outErr);
-
-      InvocationPolicyEnforcer optionsPolicyEnforcer =
-          InvocationPolicyEnforcer.create(getRuntime().getStartupOptionsProvider());
-      optionsPolicyEnforcer.enforce(optionsParser, commandName);
+      commonOptions = checkOptions(optionsParser, commandAnnotation, args, rcfileNotes, outErr);
     } catch (OptionsParsingException e) {
       for (String note : rcfileNotes) {
         outErr.printErrLn("INFO: " + note);
@@ -301,7 +299,6 @@ public class BlazeCommandDispatcher {
       }
     }
 
-    CommonCommandOptions commonOptions = optionsParser.getOptions(CommonCommandOptions.class);
     BlazeRuntime.setupLogging(commonOptions.verbosity);
 
     // Do this before an actual crash so we don't have to worry about
@@ -344,7 +341,8 @@ public class BlazeCommandDispatcher {
 
       try {
         // Notify the BlazeRuntime, so it can do some initial setup.
-        env.beforeCommand(commandAnnotation, optionsParser, commonOptions, execStartTimeNanos);
+        runtime.beforeCommand(commandAnnotation, env, optionsParser, commonOptions,
+            execStartTimeNanos);
         // Allow the command to edit options after parsing:
         command.editOptions(env, optionsParser);
       } catch (AbruptExitException e) {

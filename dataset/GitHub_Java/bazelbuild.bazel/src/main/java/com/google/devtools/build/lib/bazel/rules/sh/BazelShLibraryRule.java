@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,8 +67,7 @@ ${ATTRIBUTE_SIGNATURE}
 </p>
 
 <p>
-  You can use the <a href="general.html#filegroup"><code>filegroup</code></a> rule to aggregate data
-  files.
+  You can use the <a href="#filegroup"><code>filegroup</code></a> rule to aggregate data files.
 </p>
 
 <p>

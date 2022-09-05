@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,6 +67,8 @@ public final class BazelJavaPluginRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = java_plugin, TYPE = OTHER, FAMILY = Java) -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>
   <code>java_plugin</code> defines plugins for the Java compiler run by Bazel. At the moment, the
   only supported kind of plugins are annotation processors. A <code>java_library</code> or
@@ -77,6 +79,8 @@ public final class BazelJavaPluginRule implements RuleDefinition {
 </p>
 
 ${IMPLICIT_OUTPUTS}
+
+${ATTRIBUTE_DEFINITION}
 
 <p>
   Arguments are identical to <a href="#java_library"><code>java_library</code></a>, except for the

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.packages.BuildType.Selector;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Type;
 
 import java.util.ArrayList;
@@ -46,13 +46,19 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
    * unconditionally  available to computed defaults no matter what dependencies
    * they've declared.
    */
-  private final List<String> nonConfigurableAttributes;
+  private final List<String> nonconfigurableAttributes;
 
   private AggregatingAttributeMapper(Rule rule) {
     super(rule.getPackage(), rule.getRuleClassObject(), rule.getLabel(),
         rule.getAttributeContainer());
 
-    nonConfigurableAttributes = rule.getRuleClassObject().getNonConfigurableAttributes();
+    ImmutableList.Builder<String> nonconfigurableAttributesBuilder = ImmutableList.builder();
+    for (Attribute attr : rule.getAttributes()) {
+      if (!attr.isConfigurable()) {
+        nonconfigurableAttributesBuilder.add(attr.getName());
+      }
+    }
+    nonconfigurableAttributes = nonconfigurableAttributesBuilder.build();
   }
 
   public static AggregatingAttributeMapper of(Rule rule) {
@@ -368,7 +374,7 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
       @Override
       public <T> T get(String attributeName, Type<T> type) {
         owner.checkType(attributeName, type);
-        if (nonConfigurableAttributes.contains(attributeName)) {
+        if (nonconfigurableAttributes.contains(attributeName)) {
           return owner.get(attributeName, type);
         }
         if (!directMap.containsKey(attributeName)) {
@@ -387,7 +393,7 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
       @Override public Label getLabel() { return owner.getLabel(); }
       @Override public Iterable<String> getAttributeNames() {
         return ImmutableList.<String>builder()
-            .addAll(directMap.keySet()).addAll(nonConfigurableAttributes).build();
+            .addAll(directMap.keySet()).addAll(nonconfigurableAttributes).build();
       }
       @Override
       public void visitLabels(AcceptsLabelAttribute observer) { owner.visitLabels(observer); }

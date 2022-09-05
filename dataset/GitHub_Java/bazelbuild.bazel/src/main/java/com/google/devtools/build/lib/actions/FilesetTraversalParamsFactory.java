@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,20 +14,21 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.DirectTraversal;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.DirectTraversalRoot;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBoundaryMode;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.FilesetEntry.SymlinkBehavior;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
-import java.util.Objects;
+
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /** Factory of {@link FilesetTraversalParams}. */
@@ -157,21 +158,6 @@ public final class FilesetTraversalParamsFactory {
         fp.addStrings(excludes);
       }
     }
-
-    @Override
-    public String toString() {
-      return super.toString() + "[" + destDir + ", " + ownerLabel + ", " + excludes + "]";
-    }
-
-    protected boolean internalEquals(ParamsCommon that) {
-      return Objects.equals(this.ownerLabel, that.ownerLabel)
-          && Objects.equals(this.destDir, that.destDir)
-          && Objects.equals(this.excludes, that.excludes);
-    }
-
-    protected int internalHashCode() {
-      return Objects.hash(ownerLabel, destDir, excludes);
-    }
   }
 
   private static final class DirectTraversalImpl implements DirectTraversal {
@@ -265,23 +251,6 @@ public final class FilesetTraversalParamsFactory {
       commonFingerprint(fp);
       traversal.fingerprint(fp);
     }
-
-    @Override
-    public int hashCode() {
-      return 37 * super.internalHashCode() + Objects.hashCode(traversal);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-      if (!(obj instanceof DirectoryTraversalParams)) {
-        return false;
-      }
-      DirectoryTraversalParams that = (DirectoryTraversalParams) obj;
-      return Objects.equals(this.traversal, that.traversal) && internalEquals(that);
-    }
   }
 
   private static final class NestedTraversalParams extends ParamsCommon {
@@ -307,23 +276,6 @@ public final class FilesetTraversalParamsFactory {
     public void fingerprint(Fingerprint fp) {
       commonFingerprint(fp);
       nested.fingerprint(fp);
-    }
-
-    @Override
-    public int hashCode() {
-      return 37 * super.internalHashCode() + Objects.hashCode(nested);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-      if (!(obj instanceof NestedTraversalParams)) {
-        return false;
-      }
-      NestedTraversalParams that = (NestedTraversalParams) obj;
-      return Objects.equals(this.nested, that.nested) && internalEquals(that);
     }
   }
 

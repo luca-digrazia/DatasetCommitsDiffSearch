@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import static com.google.devtools.build.lib.packages.BuildType.OUTPUT_LIST;
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
 
-import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -36,8 +35,7 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
  * Rule definition for the genrule rule.
  */
 public final class BazelGenRuleRule implements RuleDefinition {
-  public static final String GENRULE_SETUP_LABEL =
-      Constants.TOOLS_REPOSITORY + "//tools/genrule:genrule-setup.sh";
+  public static final String GENRULE_SETUP_LABEL = "//tools/genrule:genrule-setup.sh";
 
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {

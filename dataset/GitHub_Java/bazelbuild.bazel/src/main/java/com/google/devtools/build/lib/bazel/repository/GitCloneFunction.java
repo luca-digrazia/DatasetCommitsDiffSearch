@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,7 +38,6 @@ import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
-import org.eclipse.jgit.transport.NetRCCredentialsProvider;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -118,7 +117,6 @@ public class GitCloneFunction implements SkyFunction {
       git =
           Git.cloneRepository()
               .setURI(descriptor.remote)
-              .setCredentialsProvider(new NetRCCredentialsProvider())
               .setDirectory(descriptor.directory.getPathFile())
               .setCloneSubmodules(false)
               .setNoCheckout(true)

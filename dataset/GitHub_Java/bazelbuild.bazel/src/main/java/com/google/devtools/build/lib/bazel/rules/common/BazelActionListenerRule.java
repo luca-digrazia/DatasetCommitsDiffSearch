@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ ${ATTRIBUTE_SIGNATURE}
 </p>
 
 <p>
-  By specifying the option <a href="../bazel-user-manual.html#flag--experimental_action_listener">
+  By specifying the option <a href="bazel-user-manual.html#flag--experimental_action_listener">
   <code>--experimental_action_listener=&lt;label&gt;</code></a>,
   the build will use the specified <code>action_listener</code> to insert
   <a href="#extra_action"><code>extra_action</code></a>s into the build graph.

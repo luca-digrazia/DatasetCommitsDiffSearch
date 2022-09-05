@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,8 +21,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
-import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetFactory;
 import com.google.devtools.build.lib.syntax.Type;
 
 /**
@@ -44,9 +42,7 @@ public class MavenServerRule implements RuleDefinition {
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("url", Type.STRING))
         /* <!-- #BLAZE_RULE(maven_server).ATTRIBUTE(settings_file) -->
-        A path to a settings.xml file.  Used for testing. If unspecified, this defaults to using
-        <code>$M2_HOME/conf/settings.xml</code> for the global settings and
-        <code>$HOME/.m2/settings.xml</code> for the user settings.
+        A path to a settings.xml file.
         ${SYNOPSIS}
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("settings_file", Type.STRING))
@@ -74,34 +70,5 @@ ${ATTRIBUTE_DEFINITION}
 
 <p>This is a combination of a &lt;repository&gt; definition from a pom.xml file and a
 &lt;server&lt; definition from a settings.xml file.</p>
-
-<h4>Using <code>maven_server</code></h4>
-
-<p><code>maven_jar</code> rules can specify the name of a <code>maven_server</code> in their
-<code>server</code> field. For example, suppose we have the following WORKSPACE file:</p>
-
-<pre>
-maven_jar(
-    name = "junit",
-    artifact = "junit:junit-dep:4.10",
-    server = "my-server",
-)
-
-maven_server(
-    name = "my-server",
-    url = "http://intranet.mycorp.net",
-)
-</pre>
-
-This specifies that junit should be downloaded from http://intranet.mycorp.net using the
-authentication information found in ~/.m2/settings.xml (specifically, the settings
-for the server with the id <code>my-server</code>).
-
-<h4>Specifying a default server</h4>
-
-<p>If you create a <code>maven_server</code> with the <code>name</code> "default" it will be
-used for any <code>maven_jar</code> that does not specify a <code>server</code> nor
-<code>repository</code>. If there is no <code>maven_server</code> named default, the
-default will be fetching from Maven Central with no authentication enabled.</p>
 
 <!-- #END_BLAZE_RULE -->*/

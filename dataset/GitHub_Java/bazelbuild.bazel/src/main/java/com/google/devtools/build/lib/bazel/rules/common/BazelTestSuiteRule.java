@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -112,11 +112,15 @@ public final class BazelTestSuiteRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = test_suite, TYPE = TEST, FAMILY = General)[GENERIC_RULE] -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>
 A <code>test_suite</code> defines a set of tests that are considered "useful" to humans.  This
 allows projects to define sets of tests, such as "tests you must run before checkin", "our
 project's stress tests" or "all small tests."
 </p>
+
+${ATTRIBUTE_DEFINITION}
 
 <h4 id="test_suite_examples">Examples</h4>
 

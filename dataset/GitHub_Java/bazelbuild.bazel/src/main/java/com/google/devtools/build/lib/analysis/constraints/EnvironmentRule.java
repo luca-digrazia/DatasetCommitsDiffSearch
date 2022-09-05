@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import com.google.devtools.build.lib.util.FileTypeSet;
 /**
  * Rule definition for environment rules (for Bazel's constraint enforcement system).
  */
-public class EnvironmentRule implements RuleDefinition {
+public final class EnvironmentRule implements RuleDefinition {
   public static final String RULE_NAME = "environment";
 
   public static final String FULFILLS_ATTRIBUTE = "fulfills";
@@ -42,6 +42,7 @@ public class EnvironmentRule implements RuleDefinition {
             .nonconfigurable("low-level attribute, used in TargetUtils without configurations"))
         /* <!-- #BLAZE_RULE(environment).ATTRIBUTE(fulfills) -->
         The set of environments this one is considered a valid "standin" for.
+        ${SYNOPSIS}
         <p>
           If rule A depends on rule B, A declares compatibility with environment <code>:foo</code>,
           and B declares compatibility with environment <code>:bar</code>, this is normally not

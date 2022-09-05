@@ -549,7 +549,7 @@ public final class BlazeRuntime {
   /**
    * Returns the build view.
    */
-  BuildView getView() {
+  public BuildView getView() {
     return view;
   }
 

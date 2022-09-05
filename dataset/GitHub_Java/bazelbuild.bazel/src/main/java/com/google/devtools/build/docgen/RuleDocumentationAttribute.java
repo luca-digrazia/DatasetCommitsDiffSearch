@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.TriState;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Type;
 
 import java.util.HashMap;
@@ -44,16 +44,16 @@ public class RuleDocumentationAttribute implements Comparable<RuleDocumentationA
       .put(Type.STRING, "String")
       .put(Type.STRING_LIST, "List of strings")
       .put(BuildType.TRISTATE, "Integer")
-      .put(BuildType.LABEL, "<a href=\"../build-ref.html#labels\">Label</a>")
-      .put(BuildType.LABEL_LIST, "List of <a href=\"../build-ref.html#labels\">labels</a>")
+      .put(BuildType.LABEL, "<a href=\"build-ref.html#labels\">Label</a>")
+      .put(BuildType.LABEL_LIST, "List of <a href=\"build-ref.html#labels\">labels</a>")
       .put(BuildType.LABEL_DICT_UNARY,
-          "Dictionary mapping strings to <a href=\"../build-ref.html#labels\">labels</a>")
+          "Dictionary mapping strings to <a href=\"build-ref.html#labels\">labels</a>")
       .put(BuildType.LABEL_LIST_DICT,
-          "Dictionary mapping strings to lists of <a href=\"../build-ref.html#labels\">labels</a>")
-      .put(BuildType.NODEP_LABEL, "<a href=\"../build-ref.html#name\">Name</a>")
-      .put(BuildType.NODEP_LABEL_LIST, "List of <a href=\"../build-ref.html#name\">names</a>")
-      .put(BuildType.OUTPUT, "<a href=\"../build-ref.html#filename\">Filename</a>")
-      .put(BuildType.OUTPUT_LIST, "List of <a href=\"../build-ref.html#filename\">filenames</a>")
+          "Dictionary mapping strings to lists of <a href=\"build-ref.html#labels\">labels</a>")
+      .put(BuildType.NODEP_LABEL, "<a href=\"build-ref.html#name\">Name</a>")
+      .put(BuildType.NODEP_LABEL_LIST, "List of <a href=\"build-ref.html#name\">names</a>")
+      .put(BuildType.OUTPUT, "<a href=\"build-ref.html#filename\">Filename</a>")
+      .put(BuildType.OUTPUT_LIST, "List of <a href=\"build-ref.html#filename\">filenames</a>")
       .build();
 
   private final Class<? extends RuleDefinition> definitionClass;
@@ -122,7 +122,11 @@ public class RuleDocumentationAttribute implements Comparable<RuleDocumentationA
    * Returns the raw html documentation of the rule attribute.
    */
   public String getHtmlDocumentation() {
-    return htmlDocumentation;
+    // Replace the instances of the SYNOPSIS variable in the rule attribute doc with the
+    // empty string since the variables are no longer used but are still present in the
+    // rule doc comments..
+    // TODO(dzc): Remove uses of ${SYNOPSIS} from Bazel doc comments.
+    return htmlDocumentation.replace("${" + DocgenConsts.VAR_SYNOPSIS + "}", "");
   }
 
   private String getDefaultValue() {

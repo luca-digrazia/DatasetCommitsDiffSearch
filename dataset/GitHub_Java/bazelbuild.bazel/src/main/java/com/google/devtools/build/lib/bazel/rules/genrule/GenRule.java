@@ -33,12 +33,12 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -49,6 +49,9 @@ import java.util.Map;
  * An implementation of genrule.
  */
 public class GenRule implements RuleConfiguredTargetFactory {
+
+  public static final String GENRULE_SETUP_CMD =
+      "source tools/genrule/genrule-setup.sh; ";
 
   private Artifact getExecutable(RuleContext ruleContext, NestedSet<Artifact> filesToBuild) {
     if (Iterables.size(filesToBuild) == 1) {
@@ -96,9 +99,7 @@ public class GenRule implements RuleConfiguredTargetFactory {
         ruleContext.attributes().get("heuristic_label_expansion", Type.BOOLEAN), false);
 
     // Adds the genrule environment setup script before the actual shell command
-    String command = String.format("source %s; %s",
-        ruleContext.getPrerequisiteArtifact("$genrule_setup", Mode.HOST).getExecPath(),
-        baseCommand);
+    String command = GENRULE_SETUP_CMD + baseCommand;
 
     command = resolveCommand(ruleContext, command, resolvedSrcs, filesToBuild);
 

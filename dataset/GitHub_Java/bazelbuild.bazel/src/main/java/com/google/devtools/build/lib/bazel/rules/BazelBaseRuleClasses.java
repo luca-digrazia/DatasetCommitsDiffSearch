@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,7 +44,8 @@ public class BazelBaseRuleClasses {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          .add(attr("args", STRING_LIST))
+          .add(attr("args", STRING_LIST)
+              .nonconfigurable("policy decision: should be consistent across configurations"))
           .add(attr("output_licenses", LICENSE))
           .add(attr("$is_executable", BOOLEAN).value(true)
               .nonconfigurable("Called from RunCommand.isExecutable, which takes a Target"))

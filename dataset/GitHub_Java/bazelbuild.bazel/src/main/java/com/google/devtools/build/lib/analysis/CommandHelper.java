@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SkylarkCallable;
 import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.syntax.Type;
@@ -36,8 +36,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-
-import javax.annotation.Nullable;
 
 /**
  * Provides shared functionality for parameterized command-line launching
@@ -171,38 +169,21 @@ public final class CommandHelper {
   }
 
   /**
-   * Resolves a command, and expands known locations for $(location)
-   * variables.
-   */
-  public String resolveCommandAndExpandLabels(
-      String command,
-      @Nullable String attribute,
-      Boolean supportLegacyExpansion,
-      Boolean allowDataInLabel) {
-    LocationExpander expander = new LocationExpander(ruleContext, labelMap, allowDataInLabel);
-    if (attribute != null) {
-      command = expander.expandAttribute(attribute, command);
-    } else {
-      command = expander.expand(command);
-    }
-    if (supportLegacyExpansion) {
-      command = expandLabels(command, labelMap);
-    }
-    return command;
-  }
-
-  /**
    * Resolves the 'cmd' attribute, and expands known locations for $(location)
    * variables.
    */
   @SkylarkCallable(doc = "Experimental.")
   public String resolveCommandAndExpandLabels(
       Boolean supportLegacyExpansion, Boolean allowDataInLabel) {
-    return resolveCommandAndExpandLabels(
-        ruleContext.attributes().get("cmd", Type.STRING),
-        "cmd",
-        supportLegacyExpansion,
-        allowDataInLabel);
+    String command = ruleContext.attributes().get("cmd", Type.STRING);
+    command =
+        new LocationExpander(ruleContext, labelMap, allowDataInLabel)
+            .expandAttribute("cmd", command);
+
+    if (supportLegacyExpansion) {
+      command = expandLabels(command, labelMap);
+    }
+    return command;
   }
 
   /**

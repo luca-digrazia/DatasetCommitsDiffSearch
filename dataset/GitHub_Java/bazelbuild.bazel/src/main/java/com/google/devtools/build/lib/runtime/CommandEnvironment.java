@@ -26,13 +26,14 @@ import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollectio
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.pkgcache.LoadedPackageProvider;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.vfs.Path;
@@ -66,7 +67,7 @@ public final class CommandEnvironment {
 
   private class BlazeModuleEnvironment implements BlazeModule.ModuleEnvironment {
     @Override
-    public Path getFileFromWorkspace(Label label)
+    public Path getFileFromDepot(Label label)
         throws NoSuchThingException, InterruptedException, IOException {
       Target target = getPackageManager().getTarget(reporter, label);
       return (runtime.getOutputService() != null)
@@ -169,11 +170,11 @@ public final class CommandEnvironment {
       throws InvalidConfigurationException, InterruptedException {
     BuildOptions buildOptions = runtime.createBuildOptions(optionsProvider);
     boolean keepGoing = optionsProvider.getOptions(BuildView.Options.class).keepGoing;
-    boolean loadingSuccessful =
+    LoadedPackageProvider loadedPackageProvider =
         runtime.getLoadingPhaseRunner().loadForConfigurations(reporter,
             ImmutableSet.copyOf(buildOptions.getAllLabels().values()),
             keepGoing);
-    if (!loadingSuccessful) {
+    if (loadedPackageProvider == null) {
       throw new InvalidConfigurationException("Configuration creation failed");
     }
     return getSkyframeExecutor().createConfigurations(runtime.getConfigurationFactory(),

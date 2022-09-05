@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentCollection.EnvironmentWithGroup;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -32,6 +31,7 @@ import com.google.devtools.build.lib.packages.EnvironmentGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Type;
 
 import java.util.Collection;
@@ -523,18 +523,16 @@ public class ConstraintSemantics {
       Type<?> attrType = attributes.getAttributeType(attr);
 
       // TODO(bazel-team): support a user-definable API for choosing which attributes are checked
-      if (!attrDef.checkConstraintsOverride()) {
-        if ((attrType != BuildType.LABEL && attrType != BuildType.LABEL_LIST)
-            || RuleClass.isConstraintAttribute(attr)
-            || attr.equals("visibility")
-            // Use the same implicit deps check that query uses. This facilitates running queries to
-            // determine exactly which rules need to be constraint-annotated for depot migrations.
-            || !Rule.NO_IMPLICIT_DEPS.apply(ruleContext.getRule(), attrDef)
-            // We can't identify host deps by calling BuildConfiguration.isHostConfiguration()
-            // because --nodistinct_host_configuration subverts that call.
-            || attrDef.getConfigurationTransition() == Attribute.ConfigurationTransition.HOST) {
-          continue;
-        }
+      if ((attrType != BuildType.LABEL && attrType != BuildType.LABEL_LIST)
+          || RuleClass.isConstraintAttribute(attr)
+          || attr.equals("visibility")
+          // Use the same implicit deps check that query uses. This facilitates running queries to
+          // determine exactly which rules need to be constraint-annotated for depot migrations.
+          || !Rule.NO_IMPLICIT_DEPS.apply(ruleContext.getRule(), attrDef)
+          // We can't identify host deps by calling BuildConfiguration.isHostConfiguration()
+          // because --nodistinct_host_configuration subverts that call.
+          || attrDef.getConfigurationTransition() == Attribute.ConfigurationTransition.HOST) {
+        continue;
       }
 
       for (TransitiveInfoCollection dep :

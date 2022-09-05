@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -508,12 +508,8 @@ public final class Runfiles {
       this.suffix = "";
     }
 
-    /**
-     * Creates a builder with the given suffix.
-     * @param workspace is the string specified in workspace() in the WORKSPACE file.
-     */
-    public Builder(String workspace) {
-      this.suffix = workspace;
+    public Builder(String suffix) {
+      this.suffix = suffix;
     }
 
     /**

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,10 +29,13 @@ import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Co
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Template;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.rules.java.DeployArchiveBuilder;
 import com.google.devtools.build.lib.rules.java.DeployArchiveBuilder.Compression;
+import com.google.devtools.build.lib.rules.java.DirectDependencyProvider;
+import com.google.devtools.build.lib.rules.java.DirectDependencyProvider.Dependency;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
@@ -229,7 +232,15 @@ public class BazelJavaSemantics implements JavaSemantics {
       JavaCompilationHelper helper,
       NestedSetBuilder<Artifact> filesBuilder,
       RuleConfiguredTargetBuilder ruleBuilder) {
-    if (isJavaBinaryOrJavaTest(ruleContext)) {
+    if (!isJavaBinaryOrJavaTest(ruleContext)) {
+      Artifact outputDepsProto = helper.getOutputDepsProtoArtifact();
+      if (outputDepsProto != null && helper.getStrictJavaDeps() != StrictDepsMode.OFF) {
+        ImmutableList<Dependency> strictDependencies =
+            javaCommon.computeStrictDepsFromJavaAttributes(helper.getAttributes());
+        ruleBuilder.add(DirectDependencyProvider.class,
+            new DirectDependencyProvider(strictDependencies));
+      }
+    } else {
       boolean createExec = ruleContext.attributes().get("create_executable", Type.BOOLEAN);
       ruleBuilder.add(JavaPrimaryClassProvider.class, 
           new JavaPrimaryClassProvider(createExec ? getMainClassInternal(ruleContext) : null));
@@ -249,6 +260,11 @@ public class BazelJavaSemantics implements JavaSemantics {
       Artifact executable, Artifact instrumentationMetadata,
       JavaCompilationArtifacts.Builder javaArtifactsBuilder, String mainClass) {
     return mainClass;
+  }
+
+  @Override
+  public boolean useStrictJavaDeps(BuildConfiguration configuration) {
+    return true;
   }
 
   @Override
@@ -295,7 +311,7 @@ public class BazelJavaSemantics implements JavaSemantics {
   }
 
   @Override
-  public PathFragment getDefaultJavaResourcePath(PathFragment path) {
+  public PathFragment getJavaResourcePath(PathFragment path) {
     // Look for src/.../resources to match Maven repository structure.
     for (int i = 0; i < path.segmentCount() - 2; ++i) {
       if (path.getSegment(i).equals("src") && path.getSegment(i + 2).equals("resources")) {

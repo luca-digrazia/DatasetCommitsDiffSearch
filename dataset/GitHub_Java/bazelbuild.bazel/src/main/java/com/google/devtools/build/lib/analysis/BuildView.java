@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -76,6 +75,7 @@ import com.google.devtools.build.lib.skyframe.SkyframeAnalysisResult;
 import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -312,6 +312,10 @@ public class BuildView {
     skyframeBuildView.setTopLevelHostConfiguration(configurations.getHostConfiguration());
   }
 
+  public BuildConfigurationCollection getConfigurationCollection() {
+    return configurations;
+  }
+
   /**
    * Clear the graphs of ConfiguredTargets and Artifacts.
    */
@@ -354,23 +358,20 @@ public class BuildView {
     return getConfiguredTarget(packageManager.getLoadedTarget(label), config);
   }
 
-  public Iterable<ConfiguredTarget> getDirectPrerequisites(ConfiguredTarget ct,
-      BuildConfigurationCollection configurations)
+  public Iterable<ConfiguredTarget> getDirectPrerequisites(ConfiguredTarget ct)
       throws InterruptedException {
-    return getDirectPrerequisites(ct, null, configurations);
+    return getDirectPrerequisites(ct, null);
   }
 
   public Iterable<ConfiguredTarget> getDirectPrerequisites(
-      ConfiguredTarget ct, @Nullable final LoadingCache<Label, Target> targetCache,
-      BuildConfigurationCollection configurations)
+      ConfiguredTarget ct, @Nullable final LoadingCache<Label, Target> targetCache)
       throws InterruptedException {
     return skyframeExecutor.getConfiguredTargets(ct.getConfiguration(),
-        getDirectPrerequisiteDependencies(ct, targetCache, configurations), false);
+        getDirectPrerequisiteDependencies(ct, targetCache), false);
   }
 
   public Iterable<Dependency> getDirectPrerequisiteDependencies(
-      ConfiguredTarget ct, @Nullable final LoadingCache<Label, Target> targetCache,
-      BuildConfigurationCollection configurations)
+      ConfiguredTarget ct, @Nullable final LoadingCache<Label, Target> targetCache)
       throws InterruptedException {
     if (!(ct.getTarget() instanceof Rule)) {
       return ImmutableList.of();
@@ -891,9 +892,9 @@ public class BuildView {
         null);
   }
 
-  private ListMultimap<Attribute, ConfiguredTarget> getPrerequisiteMapForTesting(
-      ConfiguredTarget target, BuildConfigurationCollection configurations)
-          throws InterruptedException {
+  @VisibleForTesting
+  ListMultimap<Attribute, ConfiguredTarget> getPrerequisiteMapForTesting(ConfiguredTarget target)
+      throws InterruptedException {
     DependencyResolver resolver = new DependencyResolver() {
       @Override
       protected void invalidVisibilityReferenceHook(TargetAndConfiguration node, Label label) {
@@ -991,8 +992,7 @@ public class BuildView {
    */
   @VisibleForTesting
   public RuleContext getRuleContextForTesting(
-      ConfiguredTarget target, StoredEventHandler eventHandler,
-      BuildConfigurationCollection configurations) throws InterruptedException {
+      ConfiguredTarget target, StoredEventHandler eventHandler) throws InterruptedException {
     BuildConfiguration config = target.getConfiguration();
     CachingAnalysisEnvironment analysisEnvironment =
         new CachingAnalysisEnvironment(artifactFactory,
@@ -1004,7 +1004,7 @@ public class BuildView {
         ruleClassProvider.getPrerequisiteValidator())
             .setVisibility(NestedSetBuilder.<PackageSpecification>create(
                 Order.STABLE_ORDER, PackageSpecification.EVERYTHING))
-            .setPrerequisites(getPrerequisiteMapForTesting(target, configurations))
+            .setPrerequisites(getPrerequisiteMapForTesting(target))
             .setConfigConditions(ImmutableSet.<ConfigMatchingProvider>of())
             .build();
   }
@@ -1014,15 +1014,15 @@ public class BuildView {
    * given configured target.
    */
   @VisibleForTesting
-  public RuleContext getRuleContextForTesting(ConfiguredTarget target, AnalysisEnvironment env,
-      BuildConfigurationCollection configurations) throws InterruptedException {
+  public RuleContext getRuleContextForTesting(ConfiguredTarget target, AnalysisEnvironment env)
+      throws InterruptedException {
     BuildConfiguration targetConfig = target.getConfiguration();
     return new RuleContext.Builder(
         env, (Rule) target.getTarget(), targetConfig, configurations.getHostConfiguration(),
         ruleClassProvider.getPrerequisiteValidator())
             .setVisibility(NestedSetBuilder.<PackageSpecification>create(
                 Order.STABLE_ORDER, PackageSpecification.EVERYTHING))
-            .setPrerequisites(getPrerequisiteMapForTesting(target, configurations))
+            .setPrerequisites(getPrerequisiteMapForTesting(target))
             .setConfigConditions(ImmutableSet.<ConfigMatchingProvider>of())
             .build();
   }
@@ -1034,11 +1034,10 @@ public class BuildView {
    */
   @VisibleForTesting
   public ConfiguredTarget getPrerequisiteConfiguredTargetForTesting(
-      ConfiguredTarget dependentTarget, ConfiguredTarget desiredTarget,
-      BuildConfigurationCollection configurations)
+      ConfiguredTarget dependentTarget, ConfiguredTarget desiredTarget)
       throws InterruptedException {
     Collection<ConfiguredTarget> configuredTargets =
-        getPrerequisiteMapForTesting(dependentTarget, configurations).values();
+        getPrerequisiteMapForTesting(dependentTarget).values();
     for (ConfiguredTarget ct : configuredTargets) {
       if (ct.getLabel().equals(desiredTarget.getLabel())) {
         return ct;

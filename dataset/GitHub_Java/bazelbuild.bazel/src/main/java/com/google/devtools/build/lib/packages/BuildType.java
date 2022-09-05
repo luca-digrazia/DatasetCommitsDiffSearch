@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,20 +15,20 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.License.LicenseParsingException;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SelectorValue;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.Type.DictType;
 import com.google.devtools.build.lib.syntax.Type.ListType;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -436,28 +436,34 @@ public final class BuildType {
    * objects of the attribute's native Type.
    */
   public static final class Selector<T> {
-    /** Value to use when none of an attribute's selection criteria match. */
-    @VisibleForTesting
-    public static final String DEFAULT_CONDITION_KEY = "//conditions:default";
-
-    private static final Label DEFAULT_CONDITION_LABEL =
-        Label.parseAbsoluteUnchecked(DEFAULT_CONDITION_KEY);
-
     private final Type<T> originalType;
     private final Map<Label, T> map;
+    private final Label defaultConditionLabel;
     private final boolean hasDefaultCondition;
+
+    /**
+     * Value to use when none of an attribute's selection criteria match.
+     */
+    @VisibleForTesting
+    public static final String DEFAULT_CONDITION_KEY = "//conditions:default";
 
     @VisibleForTesting
     Selector(Object x, String what, @Nullable Label context, Type<T> originalType)
         throws ConversionException {
       Preconditions.checkState(x instanceof Map<?, ?>);
 
+      try {
+        defaultConditionLabel = Label.parseAbsolute(DEFAULT_CONDITION_KEY);
+      } catch (LabelSyntaxException e) {
+        throw new IllegalStateException(DEFAULT_CONDITION_KEY + " is not a valid label");
+      }
+
       this.originalType = originalType;
       Map<Label, T> result = Maps.newLinkedHashMap();
       boolean foundDefaultCondition = false;
       for (Entry<?, ?> entry : ((Map<?, ?>) x).entrySet()) {
         Label key = LABEL.convert(entry.getKey(), what, context);
-        if (key.equals(DEFAULT_CONDITION_LABEL)) {
+        if (key.equals(defaultConditionLabel)) {
           foundDefaultCondition = true;
         }
         result.put(key, originalType.convert(entry.getValue(), what, context));
@@ -477,7 +483,7 @@ public final class BuildType {
      * Returns the value to use when none of the attribute's selection keys match.
      */
     public T getDefault() {
-      return map.get(DEFAULT_CONDITION_LABEL);
+      return map.get(defaultConditionLabel);
     }
 
     /**
@@ -500,7 +506,7 @@ public final class BuildType {
      * map to actual targets.
      */
     public static boolean isReservedLabel(Label label) {
-      return DEFAULT_CONDITION_LABEL.equals(label);
+      return label.toString().equals(DEFAULT_CONDITION_KEY);
     }
   }
 

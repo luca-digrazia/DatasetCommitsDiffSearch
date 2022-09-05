@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,14 +42,13 @@ public final class BazelExtraActionRule implements RuleDefinition {
         A list of <code>tool</code> dependencies for this rule.
         ${SYNOPSIS}
         <p>
-          See the definition of <a href="../build-ref.html#deps">dependencies</a> for more
-          information.
+          See the definition of <a href="build-ref.html#deps">dependencies</a> for more information.
         </p>
         <p>
           The build system ensures these prerequisites are built before running the
           <code>extra_action</code> command; they are built using the
-          <a href='../bazel-user-manual.html#configurations'><code>host</code>configuration</a>,
-          since they must run as a tool during the build itself. The path of an individual
+          <a href='bazel-user-manual.html#configurations'><code>host</code>configuration</a>, since
+          they must run as a tool during the build itself. The path of an individual
           <code>tools</code> target <code>//x:y</code> can be obtained using
           <code>$(location //x:y)</code>.
         </p>
@@ -78,8 +77,7 @@ public final class BazelExtraActionRule implements RuleDefinition {
          The command to run.
          ${SYNOPSIS}
          <p>
-           Like <a href="general.html#genrule.cmd">genrule cmd attribute</a> with the following
-           differences:
+           Like <a href="#genrule.cmd">genrule cmd attribute</a> with the following differences:
          </p>
          <ol>
            <li>

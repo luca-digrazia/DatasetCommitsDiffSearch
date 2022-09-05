@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,14 +21,13 @@ import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpls;
-import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.bazel.rules.workspace.WorkspaceBaseRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.WorkspaceConfiguredTargetFactory;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
-import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetFactory;
+import com.google.devtools.build.lib.syntax.Label;
 
 import java.util.Map;
 
@@ -45,13 +44,9 @@ public class AndroidNdkRepositoryRule implements RuleDefinition {
         @Nullable
         @Override
         public Map<String, Label> apply(Rule rule) {
-
-          String defaultToolchainName =
-              AndroidNdkRepositoryFunction.createToolchainName(StlImpls.DEFAULT_STL_NAME);
-
           return ImmutableMap.of(
               "android/crosstool",
-              Label.parseAbsoluteUnchecked("@" + rule.getName() + "//:" + defaultToolchainName));
+              Label.parseAbsoluteUnchecked("@" + rule.getName() + "//:toolchain"));
         }
       };
 

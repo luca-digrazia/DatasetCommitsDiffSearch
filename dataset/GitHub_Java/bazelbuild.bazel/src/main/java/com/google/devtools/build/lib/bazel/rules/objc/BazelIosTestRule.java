@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundLabelList;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.Rule;
@@ -37,6 +36,7 @@ import com.google.devtools.build.lib.rules.objc.ObjcConfiguration;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport;
 import com.google.devtools.build.lib.rules.objc.XcodeSupport;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.FileType;
 
 import java.util.List;
@@ -96,7 +96,7 @@ public final class BazelIosTestRule implements RuleDefinition {
                   return ImmutableList.of();
                 }
                 return ImmutableList.of(
-                    configuration.getFragment(ObjcConfiguration.class).getExperimentalGcovLabel());
+                    configuration.getFragment(ObjcConfiguration.class).getGcovLabel());
               }
             }))
         .build();

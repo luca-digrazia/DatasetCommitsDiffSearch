@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.bazel.rules.android;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -24,11 +23,11 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.bazel.rules.workspace.WorkspaceBaseRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.WorkspaceConfiguredTargetFactory;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
+import com.google.devtools.build.lib.syntax.Label;
 
 import java.util.Map;
 
@@ -52,8 +51,7 @@ public class AndroidRepositoryRules {
         "aar_generator",
         "shuffle_jars",
         "merge_dexzips",
-        "debug_keystore",
-        "IdlClass");
+        "debug_keystore");
 
     private static final Function<? super Rule, Map<String, Label>> BINDINGS_FUNCTION =
         new Function< Rule, Map<String, Label>>() {
@@ -62,8 +60,8 @@ public class AndroidRepositoryRules {
           public Map<String, Label> apply(Rule rule) {
             ImmutableMap.Builder<String, Label> result = ImmutableMap.builder();
             for (String tool : TOOLS) {
-              result.put("android/" + tool, Label.parseAbsoluteUnchecked(
-                  "@" + rule.getName() + "//tools/android:" + tool));
+              result.put("android/" + tool,
+                  Label.parseAbsoluteUnchecked("@" + rule.getName() + "//tools/android:" + tool));
             }
 
             return result.build();
@@ -128,13 +126,4 @@ public class AndroidRepositoryRules {
 
     }
   }
-
-  /**
-   * List of tools for {@link com.google.devtools.build.lib.analysis.mock.BazelAnalysisMock}.
-   */
-  @VisibleForTesting
-  public static ImmutableList<String> toolsForTesting() {
-    return TOOLS;
-  }
-
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -83,10 +83,14 @@ public final class BazelJavaImportRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = java_import, TYPE = LIBRARY, FAMILY = Java) -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>
   This rule allows the use of precompiled JAR files as libraries for
   <code><a href="#java_library">java_library</a></code> rules.
 </p>
+
+${ATTRIBUTE_DEFINITION}
 
 <h4 id="java_import_examples">Examples</h4>
 

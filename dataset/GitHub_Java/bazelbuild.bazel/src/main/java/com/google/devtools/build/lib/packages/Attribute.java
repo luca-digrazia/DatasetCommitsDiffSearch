@@ -24,10 +24,10 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SkylarkCallbackFunction;
 import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.syntax.Type;
@@ -204,11 +204,9 @@ public final class Attribute implements Comparable<Attribute> {
     NONCONFIGURABLE,
 
     /**
-     * Whether we should skip dependency validation checks done by
-     * {@link com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.PrerequisiteValidator}
-     * (for visibility, etc.).
+     * Whether we should skip constraints checks for licenses, visibility, etc.
      */
-    SKIP_PREREQ_VALIDATOR_CHECKS,
+    SKIP_CONSTRAINTS_CHECKS,
   }
 
   // TODO(bazel-team): modify this interface to extend Predicate and have an extra error
@@ -529,12 +527,10 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     /**
-     * Disables dependency checks done by
-     * {@link com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.PrerequisiteValidator}.
+     * Disables constraints and visibility checks.
      */
-    public Builder<TYPE> skipPrereqValidatorCheck() {
-      return setPropertyFlag(PropertyFlag.SKIP_PREREQ_VALIDATOR_CHECKS,
-          "skip_prereq_validator_checks");
+    public Builder<TYPE> skipConstraintsCheck() {
+      return setPropertyFlag(PropertyFlag.SKIP_CONSTRAINTS_CHECKS, "skip_constraints_checks");
     }
 
     /**
@@ -1255,8 +1251,8 @@ public final class Attribute implements Comparable<Attribute> {
     return getPropertyFlag(PropertyFlag.CHECK_ALLOWED_VALUES);
   }
 
-  public boolean performPrereqValidatorCheck() {
-    return !getPropertyFlag(PropertyFlag.SKIP_PREREQ_VALIDATOR_CHECKS);
+  public boolean performConstraintsCheck() {
+    return !getPropertyFlag(PropertyFlag.SKIP_CONSTRAINTS_CHECKS);
   }
 
   /**

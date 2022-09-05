@@ -53,6 +53,7 @@ public class BazelJavaRuleClasses {
   public static final ImplicitOutputsFunction JAVA_BINARY_IMPLICIT_OUTPUTS =
       fromFunctions(
           JavaSemantics.JAVA_BINARY_CLASS_JAR,
+          JavaSemantics.JAVA_BINARY_GEN_JAR,
           JavaSemantics.JAVA_BINARY_SOURCE_JAR,
           JavaSemantics.JAVA_BINARY_DEPLOY_JAR,
           JavaSemantics.JAVA_BINARY_DEPLOY_SOURCE_JAR);
@@ -60,6 +61,7 @@ public class BazelJavaRuleClasses {
   static final ImplicitOutputsFunction JAVA_LIBRARY_IMPLICIT_OUTPUTS =
       fromFunctions(
           JavaSemantics.JAVA_LIBRARY_CLASS_JAR,
+          JavaSemantics.JAVA_LIBRARY_GEN_JAR,
           JavaSemantics.JAVA_LIBRARY_SOURCE_JAR);
 
   /**
@@ -126,8 +128,6 @@ public class BazelJavaRuleClasses {
       "genproto",  // TODO(bazel-team): we should filter using providers instead (skylark rule).
       "java_import",
       "java_library",
-      // There is no Java protoc for Bazel--yet. This is here for the benefit of J2 protos.
-      "proto_library",
       "sh_binary",
       "sh_library");
 

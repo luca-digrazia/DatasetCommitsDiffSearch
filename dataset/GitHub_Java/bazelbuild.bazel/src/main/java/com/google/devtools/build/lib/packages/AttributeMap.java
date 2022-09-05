@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Type;
+
 import javax.annotation.Nullable;
 
 /**
@@ -39,18 +40,6 @@ public interface AttributeMap {
   Label getLabel();
 
   /**
-   * Returns true if an attribute with the given name exists.
-   */
-  boolean has(String attrName);
-
-  /**
-   * Returns true if an attribute with the given name exists with the given type.
-   *
-   * <p>Don't use this version unless you really care about the type.
-   */
-  <T> boolean has(String attrName, Type<T> type);
-
-  /**
    * Returns the value of the named rule attribute, which must be of the given type. This may
    * be null (for example, for an attribute with no default value that isn't explicitly set in
    * the rule - see {@link Type#getDefaultValue}).
@@ -63,9 +52,9 @@ public interface AttributeMap {
 
   /**
    * Returns true if the given attribute is configurable for this rule instance, false
-   * if it isn't configurable or doesn't exist.
+   * otherwise.
    */
-  boolean isConfigurable(String attributeName);
+  <T> boolean isConfigurable(String attributeName, Type<T> type);
 
   /**
    * Returns the names of all attributes covered by this map.
@@ -102,19 +91,19 @@ public interface AttributeMap {
     /**
      * Accept a (Label, Attribute) pair describing a dependency edge.
      *
-     * @param label the target node of the (Rule, Label) edge. The source node should already be
-     *     known.
+     * @param label the target node of the (Rule, Label) edge.
+     *     The source node should already be known.
      * @param attribute the attribute.
      */
-    void acceptLabelAttribute(Label label, Attribute attribute) throws InterruptedException;
+    void acceptLabelAttribute(Label label, Attribute attribute);
   }
 
   /**
-   * For all attributes that contain labels in their values (either by *being* a label or being a
-   * collection that includes labels), visits every label and notifies the specified observer at
-   * each visit.
+   * For all attributes that contain labels in their values (either by *being* a label or
+   * being a collection that includes labels), visits every label and notifies the
+   * specified observer at each visit.
    */
-  void visitLabels(AcceptsLabelAttribute observer) throws InterruptedException;
+  void visitLabels(AcceptsLabelAttribute observer);
 
   // TODO(bazel-team): These methods are here to support computed defaults that inherit
   // package-level default values. Instead, we should auto-inherit and remove the computed
@@ -127,4 +116,9 @@ public interface AttributeMap {
   String getPackageDefaultDeprecation();
 
   ImmutableList<String> getPackageDefaultCopts();
+
+  /**
+   * @return true if an attribute with the given name and type is present
+   */
+  boolean has(String attrName, Type<?> type);
 }

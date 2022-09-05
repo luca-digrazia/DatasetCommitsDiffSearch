@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.lib.analysis.config;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -28,7 +30,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -71,7 +72,8 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
         .add(RunfilesProvider.class, RunfilesProvider.EMPTY)
         .add(FileProvider.class, new FileProvider(ruleContext.getLabel(),
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)))
-        .add(FilesToRunProvider.class, FilesToRunProvider.EMPTY)
+        .add(FilesToRunProvider.class, new FilesToRunProvider(ruleContext.getLabel(),
+            ImmutableList.<Artifact>of(), null, null))
         .add(ConfigMatchingProvider.class, configMatcher)
         .build();
   }

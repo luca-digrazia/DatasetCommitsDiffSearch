@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,10 +23,10 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.OutputFile;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
@@ -114,7 +114,7 @@ public class LocationExpander {
     this.options = ImmutableSet.copyOf(options);
   }
 
-  private Map<Label, Collection<Artifact>> getLocationMap() {
+  public Map<Label, Collection<Artifact>> getLocationMap() {
     if (locationMap == null) {
       locationMap = buildLocationMap(ruleContext, labelMap, options.contains(Options.ALLOW_DATA));
     }
@@ -288,31 +288,30 @@ public class LocationExpander {
     }
 
     // Add all locations associated with dependencies and tools
-    List<TransitiveInfoCollection> depsDataAndTools = new ArrayList<>();
+    List<FilesToRunProvider> depsDataAndTools = new ArrayList<>();
     if (ruleContext.getRule().isAttrDefined("deps", BuildType.LABEL_LIST)) {
       Iterables.addAll(depsDataAndTools,
-          ruleContext.getPrerequisitesIf("deps", Mode.DONT_CHECK, FilesToRunProvider.class));
+          ruleContext.getPrerequisites("deps", Mode.DONT_CHECK, FilesToRunProvider.class));
     }
     if (allowDataAttributeEntriesInLabel
         && ruleContext.getRule().isAttrDefined("data", BuildType.LABEL_LIST)) {
       Iterables.addAll(depsDataAndTools,
-          ruleContext.getPrerequisitesIf("data", Mode.DATA, FilesToRunProvider.class));
+          ruleContext.getPrerequisites("data", Mode.DATA, FilesToRunProvider.class));
     }
     if (ruleContext.getRule().isAttrDefined("tools", BuildType.LABEL_LIST)) {
       Iterables.addAll(depsDataAndTools,
-          ruleContext.getPrerequisitesIf("tools", Mode.HOST, FilesToRunProvider.class));
+          ruleContext.getPrerequisites("tools", Mode.HOST, FilesToRunProvider.class));
     }
 
-    for (TransitiveInfoCollection dep : depsDataAndTools) {
+    for (FilesToRunProvider dep : depsDataAndTools) {
       Label label = dep.getLabel();
-      FilesToRunProvider filesToRun = dep.getProvider(FilesToRunProvider.class);
-      Artifact executableArtifact = filesToRun.getExecutable();
+      Artifact executableArtifact = dep.getExecutable();
 
       // If the label has an executable artifact add that to the multimaps.
       if (executableArtifact != null) {
         mapGet(locationMap, label).add(executableArtifact);
       } else {
-        mapGet(locationMap, label).addAll(filesToRun.getFilesToRun());
+        mapGet(locationMap, label).addAll(dep.getFilesToRun());
       }
     }
     return locationMap;

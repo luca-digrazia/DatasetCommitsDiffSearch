@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,10 +15,9 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -33,12 +32,8 @@ import javax.annotation.Nullable;
  */
 public abstract class AbstractAttributeMapper implements AttributeMap {
 
-  /**
-   * Package names that aren't made relative to the current repository because they mean special
-   * things to Bazel.
-   */
-  private static final ImmutableSet<PathFragment> ABSOLUTE_PACKAGE_NAMES = ImmutableSet.of(
-      new PathFragment("visibility"), Label.EXTERNAL_PACKAGE_NAME);
+  private static final PathFragment VISIBILITY = new PathFragment("visibility");
+  private static final PathFragment EXTERNAL = new PathFragment("external");
 
   private final Package pkg;
   private final RuleClass ruleClass;
@@ -173,7 +168,8 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
           // generally tools, which go to the main repository.
           absoluteLabel = label;
         } else if (label.getPackageIdentifier().getRepository().isDefault()
-            && ABSOLUTE_PACKAGE_NAMES.contains(label.getPackageIdentifier().getPackageFragment())) {
+            && (VISIBILITY.equals(label.getPackageIdentifier().getPackageFragment())
+                || EXTERNAL.equals(label.getPackageIdentifier().getPackageFragment()))) {
           // //visibility: and //external: labels must also be special-cased :(
           absoluteLabel = label;
         } else {

@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,9 +59,13 @@ public final class BazelPyTestRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = py_test, TYPE = TEST, FAMILY = Python) -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>
 A <code>py_test()</code> rule compiles a test.  A test is a binary wrapper
  around some test code.</p>
+
+${ATTRIBUTE_DEFINITION}
 
 <h4 id="py_test_examples">Examples</h4>
 
