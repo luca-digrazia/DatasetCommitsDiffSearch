@@ -4,9 +4,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 用户令牌信息
- *
- * @author zhouhao
  * @since 3.0
+ * @author zhouhao
  */
 public class SimpleUserToken implements UserToken {
 
@@ -14,13 +13,13 @@ public class SimpleUserToken implements UserToken {
 
     private String token;
 
-    private volatile TokenState state;
+    private TokenState state;
 
-    private AtomicLong requestTimesCounter = new AtomicLong(0);
+    private AtomicLong requestTimesCounter=new AtomicLong(0);
 
-    private volatile long lastRequestTime = System.currentTimeMillis();
+    private volatile long lastRequestTime=System.currentTimeMillis();
 
-    private volatile long firstRequestTime = System.currentTimeMillis();
+    private volatile long firstRequestTime=System.currentTimeMillis();
 
     private volatile long requestTimes;
 
@@ -87,8 +86,8 @@ public class SimpleUserToken implements UserToken {
         requestTimesCounter.set(requestTimes);
     }
 
-    void touch() {
+    void touch(){
         requestTimesCounter.addAndGet(1);
-        lastRequestTime = System.currentTimeMillis();
+        lastRequestTime=System.currentTimeMillis();
     }
 }
