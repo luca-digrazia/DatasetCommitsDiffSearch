@@ -199,7 +199,7 @@ public class BazelJavaSemantics implements JavaSemantics {
         buffer.append(delimiter);
       }
       buffer.append("${RUNPATH}");
-      buffer.append(artifact.getRootRelativePath().getPathString());
+      buffer.append(artifact.getRunfilesPath().getPathString());
     }
   }
 
@@ -433,10 +433,5 @@ public class BazelJavaSemantics implements JavaSemantics {
   @Override
   public String getJavaBuilderMainClass() {
     return JAVABUILDER_CLASS_NAME;
-  }
-
-  @Override
-  public Artifact getProtoMapping(RuleContext ruleContext) throws InterruptedException {
-    return null;
   }
 }
