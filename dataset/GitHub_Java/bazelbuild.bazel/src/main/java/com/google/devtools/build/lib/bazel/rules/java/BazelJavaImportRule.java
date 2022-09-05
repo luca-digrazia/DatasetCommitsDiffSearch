@@ -19,17 +19,20 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaRuleClasses.IjarBaseRule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.rules.java.JavaImportBaseRule;
-import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 
 /**
  * Rule definition for the java_import rule.
  */
+@BlazeRule(name = "java_import",
+             ancestors = { JavaImportBaseRule.class, IjarBaseRule.class },
+             factoryClass = BazelJavaImport.class)
 public final class BazelJavaImportRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -44,18 +47,8 @@ public final class BazelJavaImportRule implements RuleDefinition {
                 "java_library", "java_import", "cc_library", "cc_binary"))
             .allowedFileTypes()  // none allowed
             .validityPredicate(ANY_EDGE))
-        .advertiseProvider(JavaSourceInfoProvider.class)
         .build();
 
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("java_import")
-        .ancestors(JavaImportBaseRule.class, IjarBaseRule.class)
-        .factoryClass(BazelJavaImport.class)
-        .build();
   }
 }
 

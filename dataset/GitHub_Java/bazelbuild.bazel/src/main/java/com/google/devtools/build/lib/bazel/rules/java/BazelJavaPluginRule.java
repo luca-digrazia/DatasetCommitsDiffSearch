@@ -15,8 +15,9 @@
 package com.google.devtools.build.lib.bazel.rules.java;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.STRING;
 
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -26,6 +27,9 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 /**
  * Rule definition for the java_plugin rule.
  */
+@BlazeRule(name = "java_plugin",
+             ancestors = { BazelJavaLibraryRule.class },
+             factoryClass = BazelJavaPlugin.class)
 public final class BazelJavaPluginRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -52,15 +56,6 @@ public final class BazelJavaPluginRule implements RuleDefinition {
         .removeAttribute("runtime_deps")
         .removeAttribute("exports")
         .removeAttribute("exported_plugins")
-        .build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("java_plugin")
-        .ancestors(BazelJavaLibraryRule.class)
-        .factoryClass(BazelJavaPlugin.class)
         .build();
   }
 }
