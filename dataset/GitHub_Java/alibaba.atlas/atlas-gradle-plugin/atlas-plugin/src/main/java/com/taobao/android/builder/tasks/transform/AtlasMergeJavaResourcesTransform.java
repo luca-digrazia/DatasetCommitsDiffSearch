@@ -121,7 +121,6 @@ public class AtlasMergeJavaResourcesTransform extends MergeJavaResourcesTransfor
     }
 
     private void processAtlasNativeSo(String path) {
-        appVariantOutputContext.getVariantContext().getProject().getLogger().info("processAtlasNativeSo soFile path:" + path);
         Set<String> removedNativeSos = appVariantOutputContext.getVariantContext().getAtlasExtension().getTBuildConfig().getOutOfApkNativeSos();
         if (removedNativeSos.size() > 0) {
             if (removedNativeSos.contains(path)) {
@@ -178,7 +177,7 @@ public class AtlasMergeJavaResourcesTransform extends MergeJavaResourcesTransfor
                                         zipCache,
                                         cacheUpdates,
                                         full,
-                                        contentMap, null,appVariantOutputContext.getVariantContext().getVariantName()));
+                                        contentMap, null));
 
 
 
@@ -278,7 +277,7 @@ public class AtlasMergeJavaResourcesTransform extends MergeJavaResourcesTransfor
                     baseOutput =
                             IncrementalFileMergerOutputs.fromAlgorithmAndWriter(
                                     mergeTransformAlgorithm, MergeOutputWriters.toZip(outputLocation));
-                    AtlasBuildContext.atlasMainDexHelperMap.get(appVariantOutputContext.getVariantContext().getVariantName()).addMainJavaRes(outputLocation);
+                    AtlasBuildContext.atlasMainDexHelper.addMainJavaRes(outputLocation);
                 } else {
                     outputLocation =
                             outputProvider.getContentLocation(
@@ -381,7 +380,7 @@ public class AtlasMergeJavaResourcesTransform extends MergeJavaResourcesTransfor
                                             zipCache,
                                             cacheUpdates,
                                             full,
-                                            contentMap, awbTransform,appVariantOutputContext.getVariantContext().getVariantName()));
+                                            contentMap, awbTransform));
 
 
 
@@ -599,7 +598,7 @@ public class AtlasMergeJavaResourcesTransform extends MergeJavaResourcesTransfor
         }
 
 
-        paths.parallelStream().forEach(s ->  processAtlasNativeSo(s));
+        paths.parallelStream().forEach(s -> processAtlasNativeSo(s));
 
 
     }

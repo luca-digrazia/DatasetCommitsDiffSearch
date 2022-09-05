@@ -334,15 +334,15 @@ public class ApkInjectInfoCreator {
             basicBundleInfoMap.put(bundleInfo.getPkgName(), basicBundleInfo);
         }
 
-//        Collections.sort(basicBundleInfos, (o1, o2) -> {
-//            if (o1.getDependency().contains(o2.getPkgName())){
-//                return -1;
-//            }else {
-//                return 1;
-//            }
-//        });
+        Collections.sort(basicBundleInfos, (o1, o2) -> {
+            if (o1.getDependency().contains(o2.getPkgName())){
+                return -1;
+            }else {
+                return 1;
+            }
+        });
 
-       basicBundleInfos.forEach(basicBundleInfo -> checkDependency(basicBundleInfo,atlasDependencyTree.getAwbBundles()));
+//        basicBundleInfos.forEach(basicBundleInfo -> basicBundleInfo.setDependency(newDependency(basicBundleInfo.getDependency(),appVariantContext)));
 
                 injectParam.bundleInfo = JSON.toJSONString(basicBundleInfos);
 
@@ -367,19 +367,6 @@ public class ApkInjectInfoCreator {
             .getPreLaunch();
         mergeBundleInfos(appVariantContext, injectParam, basicBundleInfos, basicBundleInfoMap);
         return injectParam;
-    }
-
-    private void checkDependency(BasicBundleInfo basicBundleInfo, List<AwbBundle> awbBundles) {
-        if (basicBundleInfo.getIsMBundle()){
-           basicBundleInfo.getDependency().parallelStream().forEach(s -> awbBundles.stream().forEach(awbBundle -> {
-               if (awbBundle.getPackageName().equals(s)){
-                   if (!awbBundle.isMBundle){
-                       throw new IllegalArgumentException(basicBundleInfo.getPkgName()+" mbundle can not dependent local bundle or remote Bundle" +s);
-                   }
-               }
-           }));
-        }
-
     }
 
     private List<String> newDependency(List<String> dependency,AppVariantContext appVariantContext) {

@@ -114,8 +114,6 @@ public class AtlasMainDexMerger extends AtlasDexMerger {
             e.printStackTrace();
         }
 
-        variantOutputContext.setDexMergeFolder(outputDir);
-
         transformInputs.forEach((TransformInput transformInput) -> {
             File file = (File) ReflectUtils.getField(transformInput, "optionalRootLocation");
             if (file != null && file.exists()) {
@@ -160,7 +158,7 @@ public class AtlasMainDexMerger extends AtlasDexMerger {
                                             Arrays.asList(mergeDexs[0]),
                                             output,
                                             outputDir,
-                                            mainDexListFile == null ? null : mainDexListFile.getSingleFile()));
+                                            null));
                         } else {
                             mergeTasks.addAll(
                                     handleLegacyAndMonoDex(

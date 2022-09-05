@@ -380,7 +380,7 @@ public class BuildAtlasEnvTask extends BaseTask {
     private void fillAwbManifest(String name, String moudleName, AwbBundle awbBundle) {
 
     }
-B
+
     private void fillAwbAndroidRes(String name, String moudleName, AwbBundle awbBundle) {
         ResolvedArtifactResult id = null;
         if ((id = allAndroidRes.get(name)) == null) {
@@ -606,7 +606,7 @@ B
 
     private boolean isMBundle(AppVariantContext appVariantContext,AwbBundle awbBundle){
 
-        if (appVariantContext.getAtlasExtension().getTBuildConfig().getOutOfApkBundles().contains(awbBundle.getResolvedCoordinates().getArtifactId())){
+        if (appVariantContext.getAtlasExtension().getTBuildConfig().getOutOfApkBundles().contains(awbBundle.getPackageName())){
             return false;
         }
 

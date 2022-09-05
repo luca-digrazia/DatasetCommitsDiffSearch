@@ -32,7 +32,6 @@ import com.taobao.android.builder.dependency.AtlasDependencyTree;
 import com.taobao.android.builder.dependency.model.AwbBundle;
 import com.taobao.android.builder.tasks.transform.dex.AtlasDexMerger;
 import com.taobao.android.builder.tools.FileNameUtils;
-import com.taobao.android.builder.tools.JarUtils;
 import com.taobao.android.builder.tools.MD5Util;
 import com.taobao.android.builder.tools.cache.FileCacheCenter;
 import com.taobao.android.builder.tools.cache.FileCacheException;
@@ -41,10 +40,11 @@ import it.unimi.dsi.fastutil.Hash;
 import org.apache.commons.compress.compressors.FileNameUtil;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.io.IOUtils;
 import org.gradle.caching.configuration.BuildCache;
 
-import java.io.*;
+import java.io.File;
+import java.io.FilenameFilter;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -54,12 +54,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
-import java.util.jar.JarOutputStream;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.zip.ZipEntry;
 
 
 /**
@@ -74,8 +70,6 @@ public class DexByteCodeConverterHook extends DexByteCodeConverter {
     private Boolean mIsDexInProcess = null;
 
     private final TargetInfo mTargetInfo;
-
-    public static final int MAX_CLASSES = 3000;
 
     private AppVariantOutputContext variantOutputContext;
 
@@ -138,10 +132,7 @@ public class DexByteCodeConverterHook extends DexByteCodeConverter {
 //
 //    }
     @Override
-    public void convertByteCode(Collection<File> inputs, File outDexFolder, boolean multidex, final File mainDexList, DexOptions dexOptions, ProcessOutputHandler processOutputHandler, int minSdkVersion) throws IOException, InterruptedException, ProcessException {
-        logger.warning("outDexFolder:"+outDexFolder.getAbsolutePath());
-        FileUtils.forceMkdir(outDexFolder);
-//        outDexFolder.mkdirs();
+    public void convertByteCode(Collection<File> inputs, File outDexFolder, boolean multidex, File mainDexList, DexOptions dexOptions, ProcessOutputHandler processOutputHandler, int minSdkVersion) throws IOException, InterruptedException, ProcessException {
         AtlasDependencyTree atlasDependencyTree = AtlasBuildContext.androidDependencyTrees.get(
                 variantContext.getVariantName());
 
@@ -173,8 +164,8 @@ public class DexByteCodeConverterHook extends DexByteCodeConverter {
                                 List<File> inputFiles = new ArrayList<File>();
                                 inputFiles.addAll(awbTransform.getInputFiles());
                                 inputFiles.addAll(awbTransform.getInputLibraries());
-                                if (null != awbTransform.getInputDirs()) {
-                                    inputFiles.addAll(awbTransform.getInputDirs());
+                                if (null != awbTransform.getInputDir()) {
+                                    inputFiles.add(awbTransform.getInputDir());
                                 }
 
 
@@ -210,8 +201,8 @@ public class DexByteCodeConverterHook extends DexByteCodeConverter {
 
         File tempDexFolder = null;
 
-        inputFile.addAll(AtlasBuildContext.atlasMainDexHelperMap.get(variantContext.getVariantName()).getAllMainDexJars());
-        inputFile.addAll(AtlasBuildContext.atlasMainDexHelperMap.get(variantContext.getVariantName()).getInputDirs());
+        inputFile = AtlasBuildContext.atlasMainDexHelper.getAllMainDexJars();
+        inputFile.addAll(AtlasBuildContext.atlasMainDexHelper.getInputDirs());
 
         logger.warning("maindex inputFile size :" + inputFile.size());
 
@@ -236,16 +227,11 @@ public class DexByteCodeConverterHook extends DexByteCodeConverter {
                         .putBoolean("jumbomode", dexOptions.getJumboMode())
                         .putString("type", type);
 
-                inputFile = new ArrayList<>(inputFile);
                 Collections.sort((List<File>) inputFile);
                 FileCache.Inputs inputsKey = globalCacheBuilder.putString("md5", MD5Util.getFileMd5(inputFile)).build();
 
                 try {
-                    fileCache.createFile(outDexFolder, inputsKey, () -> {
-                        logger.warning("dex inputFile missCache: " + inputFile.toString());
-                        outDexFolder.mkdirs();
-                        DexByteCodeConverterHook.super.convertByteCode(inputFile, outDexFolder, multidex, mainDexList, dexOptions, processOutputHandler, minSdkVersion);
-                    });
+                    fileCache.createFile(outDexFolder, inputsKey, () -> DexByteCodeConverterHook.super.convertByteCode(inputFile, outDexFolder, multidex, mainDexList, dexOptions, processOutputHandler, minSdkVersion));
                 } catch (ExecutionException e) {
                     e.printStackTrace();
                     failures.add(e);
@@ -276,27 +262,14 @@ public class DexByteCodeConverterHook extends DexByteCodeConverter {
 
             File finalTempDexFolder = tempDexFolder;
             if (fileCache != null && globalCacheBuilder == null) {
-                if (mainDexList!= null) {
-                    globalCacheBuilder = new FileCache.Inputs.Builder(FileCache.Command.PREDEX_LIBRARY)
-                            .putBoolean("multidex", true)
-                            .putFile("multidexlist", mainDexList, FileCache.FileProperties.HASH)
-                            .putLong("minisdk", minSdkVersion)
-                            .putString("dexoptions", dexOptions.getAdditionalParameters().toString())
-                            .putBoolean("jumbomode", dexOptions.getJumboMode())
-                            .putString("type", type);
-                }else {
-                    globalCacheBuilder = new FileCache.Inputs.Builder(FileCache.Command.PREDEX_LIBRARY)
-                            .putBoolean("multidex", true)
-                            .putLong("minisdk", minSdkVersion)
-                            .putString("dexoptions", dexOptions.getAdditionalParameters().toString())
-                            .putBoolean("jumbomode", dexOptions.getJumboMode())
-                            .putString("type", type);
-                }
+                globalCacheBuilder = new FileCache.Inputs.Builder(FileCache.Command.PREDEX_LIBRARY)
+                        .putBoolean("multidex", true)
+                        .putFile("multidexlist", mainDexList, FileCache.FileProperties.HASH)
+                        .putLong("minisdk", minSdkVersion)
+                        .putString("dexoptions", dexOptions.getAdditionalParameters().toString())
+                        .putBoolean("jumbomode", dexOptions.getJumboMode())
+                        .putString("type", type);
 
-            }
-
-            if (inputFile.size() ==1 ){
-                splitFile();
             }
             inputFile.parallelStream().forEach(file -> {
                 File outPutFolder = new File(finalTempDexFolder, FilenameUtils.getBaseName(file.getName()));
@@ -365,7 +338,7 @@ public class DexByteCodeConverterHook extends DexByteCodeConverter {
             atlasDexArchiveMerger = new AtlasDexArchiveMerger(mainforkJoinPool);
             if (!variantContext.getAtlasExtension().getTBuildConfig().getMergeBundlesDex()) {
                 try {
-                    atlasDexArchiveMerger.mergeDexArchives(dexPaths, outDexFolder.toPath(), mainDexList ==null? null:mainDexList.toPath(), DexingType.LEGACY_MULTIDEX);
+                    atlasDexArchiveMerger.mergeDexArchives(dexPaths, outDexFolder.toPath(), mainDexList.toPath(), DexingType.LEGACY_MULTIDEX);
                 } catch (DexArchiveMergerException e) {
                     throw new ProcessException(e);
                 }
@@ -393,7 +366,7 @@ public class DexByteCodeConverterHook extends DexByteCodeConverter {
 
         if (variantContext.getAtlasExtension().getTBuildConfig().getMergeBundlesDex()) {
             try {
-                atlasDexArchiveMerger.mergeDexArchives(dexPaths, outDexFolder.toPath(), null, DexingType.LEGACY_MULTIDEX);
+                atlasDexArchiveMerger.mergeDexArchives(dexPaths, outDexFolder.toPath(), mainDexList.toPath(), DexingType.LEGACY_MULTIDEX);
             } catch (DexArchiveMergerException e) {
                 e.printStackTrace();
             } finally {
@@ -408,36 +381,14 @@ public class DexByteCodeConverterHook extends DexByteCodeConverter {
 
     }
 
-    private void splitFile() {
-        inputFile = new ArrayList<>(inputFile);
-        File file = inputFile.iterator().next();
-        inputFile.clear();
-        try {
-            JarUtils.splitMainJar((List<File>) inputFile,file,1,MAX_CLASSES);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-    }
-
-
-
-    private void generateEmptyMainDexList(File mainDexList) {
-        try {
-            mainDexList.createNewFile();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
     private FileCache.Inputs.Builder copyOf(FileCache.Inputs.Builder globalCacheBuilder) {
         FileCache.Inputs.Builder builder = new FileCache.Inputs.Builder(FileCache.Command.PREDEX_LIBRARY).putString("globalCacheBuilder", globalCacheBuilder.build().toString());
         return builder;
     }
 
     private void generateMainDexList(File mainDexListFile) {
-        Collection<File> inputs = AtlasBuildContext.atlasMainDexHelperMap.get(variantContext.getVariantName()).getAllMainDexJars();
-        inputs.addAll(AtlasBuildContext.atlasMainDexHelperMap.get(variantContext.getVariantName()).getInputDirs());
+        Collection<File> inputs = AtlasBuildContext.atlasMainDexHelper.getAllMainDexJars();
+        inputs.addAll(AtlasBuildContext.atlasMainDexHelper.getInputDirs());
         FastMultiDexer fastMultiDexer = (FastMultiDexer) AtlasBuildContext.androidBuilderMap.get(variantContext.getScope().getGlobalScope().getProject()).multiDexer;
         if (fastMultiDexer == null) {
             fastMultiDexer = new FastMultiDexer((AppVariantContext) variantContext);
@@ -449,7 +400,7 @@ public class DexByteCodeConverterHook extends DexByteCodeConverter {
             e.printStackTrace();
         }
         if (files != null && files.size() > 0) {
-            AtlasBuildContext.atlasMainDexHelperMap.get(variantContext.getVariantName()).addAllMainDexJars(files);
+            AtlasBuildContext.atlasMainDexHelper.addAllMainDexJars(files);
 
         }
     }
@@ -581,7 +532,7 @@ public class DexByteCodeConverterHook extends DexByteCodeConverter {
                             }).get()
             ;
         } catch (Exception e) {
-            throw new ProcessException(new ArrayList<>(builder.getInputs()).toString(),e);
+            throw new ProcessException(e);
         }
     }
 
