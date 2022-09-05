@@ -473,7 +473,7 @@ public class SkylarkRuleImplementationFunctions {
     public Runfiles invoke(SkylarkRuleContext ctx, SkylarkList files, Object transitiveFiles,
         Boolean collectData, Boolean collectDefault,
         Location loc) throws EvalException, ConversionException {
-      Runfiles.Builder builder = new Runfiles.Builder(ctx.getRuleContext().getWorkspaceName());
+      Runfiles.Builder builder = new Runfiles.Builder();
       if (EvalUtils.toBoolean(collectData)) {
         builder.addRunfiles(ctx.getRuleContext(), RunfilesProvider.DATA_RUNFILES);
       }
