@@ -17,7 +17,6 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
 import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.analysis.AnalysisPhaseCompleteEvent;
-import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.buildtool.ExecutionProgressReceiver;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
@@ -35,11 +34,8 @@ import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -50,8 +46,6 @@ class ExperimentalStateTracker {
   static final int SAMPLE_SIZE = 3;
   static final long SHOW_TIME_THRESHOLD_SECONDS = 3;
   static final String ELLIPSIS = "...";
-
-  static final int NANOS_PER_SECOND = 1000000000;
 
   private String status;
   private String additionalMessage;
@@ -68,13 +62,6 @@ class ExperimentalStateTracker {
   private final Map<String, Action> actions;
   private final Map<String, Long> actionNanoStartTimes;
 
-
-  // For each test, the list of actions (again identified by the path of the
-  // primary output) currently running for that test (identified by its label),
-  // in order they got started. A key is present in the map if and only if that
-  // was discovered as a test.
-  private final Map<Label, Set<String>> testActions;
-
   private int actionsCompleted;
   private int totalTests;
   private int completedTests;
@@ -90,7 +77,6 @@ class ExperimentalStateTracker {
     this.runningActions = new ArrayDeque<>();
     this.actions = new TreeMap<>();
     this.actionNanoStartTimes = new TreeMap<>();
-    this.testActions = new TreeMap<>();
     this.ok = true;
     this.clock = clock;
     this.targetWidth = targetWidth;
@@ -149,15 +135,6 @@ class ExperimentalStateTracker {
     runningActions.addLast(name);
     actions.put(name, action);
     actionNanoStartTimes.put(name, nanoStartTime);
-    if (action.getOwner() != null) {
-      Label owner = action.getOwner().getLabel();
-      if (owner != null) {
-        Set<String> testActionsForOwner = testActions.get(owner);
-        if (testActionsForOwner != null) {
-          testActionsForOwner.add(name);
-        }
-      }
-    }
   }
 
   synchronized void actionCompletion(ActionCompletionEvent event) {
@@ -167,16 +144,6 @@ class ExperimentalStateTracker {
     runningActions.remove(name);
     actions.remove(name);
     actionNanoStartTimes.remove(name);
-
-    if (action.getOwner() != null) {
-      Label owner = action.getOwner().getLabel();
-      if (owner != null) {
-        Set<String> testActionsForOwner = testActions.get(owner);
-        if (testActionsForOwner != null) {
-          testActionsForOwner.remove(name);
-        }
-      }
-    }
 
     // As callers to the experimental state tracker assume we will fully report the new state once
     // informed of an action completion, we need to make sure the progress receiver is aware of the
@@ -226,66 +193,12 @@ class ExperimentalStateTracker {
     return label.toString();
   }
 
-  // Describe a group of actions running for the same test.
-  private String describeTestGroup(
-      Label owner, long nanoTime, int desiredWidth, Set<String> allActions) {
-    String prefix = "Testing ";
-    String labelSep = " [";
-    String postfix = " (" + allActions.size() + " actions)]";
-    // Leave enough room for at least 3 samples of run times, each 4 characters
-    // (a digit, 's', comma, and space).
-    int labelWidth = desiredWidth - prefix.length() - labelSep.length() - postfix.length() - 12;
-    StringBuffer message =
-        new StringBuffer(prefix).append(shortenedLabelString(owner, labelWidth)).append(labelSep);
-
-    // Compute the remaining width for the sample times, but if the desired width is too small
-    // anyway, then show at least one sample.
-    int remainingWidth = desiredWidth - message.length() - postfix.length();
-    if (remainingWidth < 0) {
-      remainingWidth = 5;
-    }
-
-    String sep = "";
-    int count = 0;
-    for (String action : allActions) {
-      long nanoRuntime = nanoTime - actionNanoStartTimes.get(action);
-      long runtimeSeconds = nanoRuntime / NANOS_PER_SECOND;
-      String text = sep + runtimeSeconds + "s";
-      if (remainingWidth < text.length()) {
-        break;
-      }
-      message.append(text);
-      remainingWidth -= text.length();
-      count++;
-      sep = ", ";
-    }
-    if (count == allActions.size()) {
-      postfix = "]";
-    }
-    return message.append(postfix).toString();
-  }
-
-  // Describe an action by a string of the desired length; if describing that action includes
-  // describing other actions, add those to the to set of actions to skip in further samples of
-  // actions.
-  private String describeAction(String name, long nanoTime, int desiredWidth, Set<String> toSkip) {
+  private String describeAction(String name, long nanoTime, int desiredWidth) {
     Action action = actions.get(name);
-    if (action.getOwner() != null) {
-      Label owner = action.getOwner().getLabel();
-      if (owner != null) {
-        Set<String> allRelatedActions = testActions.get(owner);
-        if (allRelatedActions != null && allRelatedActions.size() > 1) {
-          if (toSkip != null) {
-            toSkip.addAll(allRelatedActions);
-          }
-          return describeTestGroup(owner, nanoTime, desiredWidth, allRelatedActions);
-        }
-      }
-    }
 
     String postfix = "";
     long nanoRuntime = nanoTime - actionNanoStartTimes.get(name);
-    long runtimeSeconds = nanoRuntime / NANOS_PER_SECOND;
+    long runtimeSeconds = nanoRuntime / 1000000000;
     if (runtimeSeconds > SHOW_TIME_THRESHOLD_SECONDS) {
       postfix = " " + runtimeSeconds + "s";
     }
@@ -301,30 +214,8 @@ class ExperimentalStateTracker {
     if (message.length() + postfix.length() <= desiredWidth) {
       return message + postfix;
     }
-
-    // We have to shorten the message to fit into the line.
-
     if (action.getOwner() != null) {
       if (action.getOwner().getLabel() != null) {
-        // First attempt is to shorten the package path string in the messge, if it occurs there
-        String pathString = action.getOwner().getLabel().getPackageFragment().toString();
-        int pathIndex = message.indexOf(pathString);
-        if (pathIndex >= 0) {
-          String start = message.substring(0, pathIndex);
-          String end = message.substring(pathIndex + pathString.length());
-          int pathTargetLength = desiredWidth - start.length() - end.length() - postfix.length();
-          // This attempt of shortening is reasonable if what is left from the label
-          // is significantly longer (twice as long) as the ellipsis symbols introduced.
-          if (pathTargetLength >= 3 * ELLIPSIS.length()) {
-            String shortPath = suffix(pathString, pathTargetLength - ELLIPSIS.length());
-            int slashPos = shortPath.indexOf('/');
-            if (slashPos >= 0) {
-              return start + ELLIPSIS + shortPath.substring(slashPos) + end + postfix;
-            }
-          }
-        }
-
-        // Second attempt: just take a shortened version of the label.
         String shortLabel =
             shortenedLabelString(action.getOwner().getLabel(), desiredWidth - postfix.length());
         if (shortLabel.length() + postfix.length() <= desiredWidth) {
@@ -332,44 +223,32 @@ class ExperimentalStateTracker {
         }
       }
     }
-    if (3 * ELLIPSIS.length() + postfix.length() <= desiredWidth) {
+    if (3 * ELLIPSIS.length() <= desiredWidth) {
       message = ELLIPSIS + suffix(message, desiredWidth - ELLIPSIS.length() - postfix.length());
     }
-
     return message + postfix;
   }
 
   private void sampleOldestActions(AnsiTerminalWriter terminalWriter) throws IOException {
     int count = 0;
-    int totalCount = 0;
     long nanoTime = clock.nanoTime();
     int actionCount = runningActions.size();
-    Set<String> toSkip = new TreeSet<>();
     for (String action : runningActions) {
-      totalCount++;
-      if (toSkip.contains(action)) {
-        continue;
-      }
       count++;
-      if (count > SAMPLE_SIZE) {
+      int width = (count >= SAMPLE_SIZE && count < actionCount) ? targetWidth - 8 : targetWidth - 4;
+      terminalWriter.newline().append("    " + describeAction(action, nanoTime, width));
+      if (count >= SAMPLE_SIZE) {
         break;
       }
-      int width = (count >= SAMPLE_SIZE && count < actionCount) ? targetWidth - 8 : targetWidth - 4;
-      terminalWriter.newline().append("    " + describeAction(action, nanoTime, width, toSkip));
     }
-    if (totalCount < actionCount) {
+    if (count < actionCount) {
       terminalWriter.append(" ...");
     }
   }
 
-  public synchronized void testFilteringComplete(TestFilteringCompleteEvent event) {
+  public void testFilteringComplete(TestFilteringCompleteEvent event) {
     if (event.getTestTargets() != null) {
       totalTests = event.getTestTargets().size();
-      for (ConfiguredTarget target : event.getTestTargets()) {
-        if (target.getLabel() != null) {
-          testActions.put(target.getLabel(), new LinkedHashSet<String>());
-        }
-      }
     }
   }
 
@@ -478,15 +357,14 @@ class ExperimentalStateTracker {
         maybeShowRecentTest(
             terminalWriter, shortVersion, targetWidth - terminalWriter.getPosition());
         String statusMessage =
-            describeAction(runningActions.peekFirst(), clock.nanoTime(), targetWidth - 4, null);
+            describeAction(runningActions.peekFirst(), clock.nanoTime(), targetWidth - 4);
         terminalWriter.normal().newline().append("    " + statusMessage);
       } else {
         String statusMessage =
             describeAction(
                 runningActions.peekFirst(),
                 clock.nanoTime(),
-                targetWidth - terminalWriter.getPosition() - 1,
-                null);
+                targetWidth - terminalWriter.getPosition() - 1);
         terminalWriter.normal().append(" " + statusMessage);
       }
     } else {
@@ -495,8 +373,7 @@ class ExperimentalStateTracker {
             describeAction(
                 runningActions.peekFirst(),
                 clock.nanoTime(),
-                targetWidth - terminalWriter.getPosition(),
-                null);
+                targetWidth - terminalWriter.getPosition());
         statusMessage += " ... (" + runningActions.size() + " actions)";
         terminalWriter.normal().append(" " + statusMessage);
       } else {
