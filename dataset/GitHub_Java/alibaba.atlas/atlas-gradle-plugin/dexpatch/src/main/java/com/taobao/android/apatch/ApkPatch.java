@@ -215,7 +215,6 @@ import com.taobao.android.apatch.utils.TypeGenUtil;
 import com.taobao.android.differ.dex.DexDiffer;
 import com.taobao.android.differ.dex.PatchException;
 import com.taobao.android.object.DexDiffInfo;
-import org.apache.commons.io.FileUtils;
 import org.jf.dexlib2.dexbacked.DexBackedAnnotation;
 import org.jf.dexlib2.dexbacked.DexBackedAnnotationElement;
 import org.jf.dexlib2.dexbacked.DexBackedClassDef;
@@ -286,15 +285,15 @@ public class ApkPatch extends com.taobao.android.apatch.Build {
     public File doPatch() throws PatchException {
         try {
             File aptchFolder = new File(out, name);
-            File smaliDir = new File(aptchFolder, "smali");
-            if (!smaliDir.exists()) {
-                smaliDir.mkdirs();
-            }
-            try {
-                FileUtils.cleanDirectory(smaliDir);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+//            File smaliDir = new File(aptchFolder, "smali");
+//            if (!smaliDir.exists()) {
+//                smaliDir.mkdirs();
+//            }
+//            try {
+//                FileUtils.cleanDirectory(smaliDir);
+//            } catch (IOException e) {
+//                throw new RuntimeException(e);
+//            }
 
             File dexFile = new File(aptchFolder, "diff.dex");
             if (dexFile.exists() && !dexFile.delete()) {
@@ -329,17 +328,21 @@ public class ApkPatch extends com.taobao.android.apatch.Build {
                 return null;
             }
 
-
-            File smaliDir2 = new File(aptchFolder, "smali2");
-            if (!smaliDir2.exists()) {
-                smaliDir2.mkdirs();
-            }
-            try {
-                FileUtils.cleanDirectory(smaliDir2);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            prepareClasses = buildPrepareClass(smaliDir2, newFiles, info);
+//            //是否修改dex
+//            if (APatchTool.debug) {
+//                PatchMethodTool.modifyMethod(dexFile.getAbsolutePath(), dexFile.getAbsolutePath(), true);
+//            }
+//
+//            File smaliDir2 = new File(aptchFolder, "smali2");
+//            if (!smaliDir2.exists()) {
+//                smaliDir2.mkdirs();
+//            }
+//            try {
+//                FileUtils.cleanDirectory(smaliDir2);
+//            } catch (IOException e) {
+//                throw new RuntimeException(e);
+//            }
+//            prepareClasses = buildPrepareClass(smaliDir2, newFiles, info);
             DexDiffInfo.release();
             build(outFile, dexFile);
             File file = release(aptchFolder, dexFile, outFile);
@@ -506,10 +509,10 @@ public class ApkPatch extends com.taobao.android.apatch.Build {
         main.putValue("To-File", newFiles.get(0).getName());
         main.putValue("Patch-Name", name);
         main.putValue(name + "-Patch-Classes", Formater.dotStringList(classes));
-        main.putValue(name + "-Prepare-Classes", Formater.dotStringList(prepareClasses));
-        main.putValue(name + "-Used-Methods", Formater.dotStringList(usedMethods));
-        main.putValue(name + "-Modified-Classes", Formater.dotStringList(modifiedClasses));
-        main.putValue(name + "-Used-Classes", Formater.dotStringList(usedClasses));
+//        main.putValue(name + "-Prepare-Classes", Formater.dotStringList(prepareClasses));
+//        main.putValue(name + "-Used-Methods", Formater.dotStringList(usedMethods));
+//        main.putValue(name + "-Modified-Classes", Formater.dotStringList(modifiedClasses));
+//        main.putValue(name + "-Used-Classes", Formater.dotStringList(usedClasses));
         main.putValue(name + "-add-classes", Formater.dotStringList(addClasses));
         return manifest;
     }
