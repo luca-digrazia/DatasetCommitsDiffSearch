@@ -4,8 +4,6 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import org.apache.commons.codec.digest.DigestUtils;
-import org.hswebframework.expands.script.engine.DynamicScriptEngine;
-import org.hswebframework.expands.script.engine.DynamicScriptEngineFactory;
 import org.hswebframework.ezorm.core.ObjectWrapperFactory;
 import org.hswebframework.ezorm.core.Trigger;
 import org.hswebframework.ezorm.core.ValidatorFactory;
@@ -14,38 +12,29 @@ import org.hswebframework.ezorm.rdb.RDBDatabase;
 import org.hswebframework.ezorm.rdb.meta.Correlation;
 import org.hswebframework.ezorm.rdb.meta.RDBColumnMetaData;
 import org.hswebframework.ezorm.rdb.meta.RDBTableMetaData;
-import org.hswebframework.ezorm.rdb.meta.converter.BlobValueConverter;
-import org.hswebframework.ezorm.rdb.meta.converter.ClobValueConverter;
-import org.hswebframework.ezorm.rdb.meta.converter.DateTimeConverter;
-import org.hswebframework.ezorm.rdb.meta.converter.DefaultValueConverter;
-import org.hswebframework.ezorm.rdb.meta.converter.JSONValueConverter;
-import org.hswebframework.ezorm.rdb.meta.converter.NumberValueConverter;
+import org.hswebframework.ezorm.rdb.meta.converter.*;
 import org.hswebframework.ezorm.rdb.render.dialect.Dialect;
 import org.hswebframework.ezorm.rdb.simple.trigger.ScriptTraggerSupport;
+import org.hswebframework.expands.script.engine.DynamicScriptEngine;
+import org.hswebframework.expands.script.engine.DynamicScriptEngineFactory;
 import org.hswebframework.web.BusinessException;
 import org.hswebframework.web.commons.entity.DataStatus;
 import org.hswebframework.web.dao.form.DynamicFormColumnDao;
 import org.hswebframework.web.dao.form.DynamicFormDao;
 import org.hswebframework.web.dict.EnumDict;
-import org.hswebframework.web.entity.form.DictConfig;
-import org.hswebframework.web.entity.form.DynamicFormColumnBindEntity;
-import org.hswebframework.web.entity.form.DynamicFormColumnEntity;
-import org.hswebframework.web.entity.form.DynamicFormDeployLogEntity;
-import org.hswebframework.web.entity.form.DynamicFormEntity;
+import org.hswebframework.web.entity.form.*;
 import org.hswebframework.web.id.IDGenerator;
 import org.hswebframework.web.service.DefaultDSLDeleteService;
 import org.hswebframework.web.service.DefaultDSLQueryService;
 import org.hswebframework.web.service.DefaultDSLUpdateService;
 import org.hswebframework.web.service.GenericEntityService;
-import org.hswebframework.web.service.form.DatabaseRepository;
-import org.hswebframework.web.service.form.DynamicFormDeployLogService;
-import org.hswebframework.web.service.form.DynamicFormService;
-import org.hswebframework.web.service.form.FormDeployService;
-import org.hswebframework.web.service.form.OptionalConvertBuilder;
+import org.hswebframework.web.service.form.*;
 import org.hswebframework.web.service.form.events.FormDeployEvent;
 import org.hswebframework.web.service.form.initialize.ColumnInitializeContext;
-import org.hswebframework.web.service.form.initialize.DynamicFormInitializeCustomizer;
+import org.hswebframework.web.service.form.initialize.DynamicFormInitializeCustomer;
 import org.hswebframework.web.service.form.initialize.TableInitializeContext;
+import org.hswebframework.web.service.form.simple.cluster.ClusterDatabase;
+import org.hswebframework.web.service.form.simple.convert.SmartValueConverter;
 import org.hswebframework.web.service.form.simple.dict.EnumDictValueConverter;
 import org.hswebframework.web.validator.group.CreateGroup;
 import org.hswebframework.web.validator.group.UpdateGroup;
@@ -59,12 +48,12 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.ClassUtils;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.sql.Array;
 import java.sql.JDBCType;
 import java.sql.SQLException;
 import java.util.*;
@@ -105,7 +94,7 @@ public class SimpleDynamicFormService extends GenericEntityService<DynamicFormEn
     private OptionalConvertBuilder optionalConvertBuilder;
 
     @Autowired(required = false)
-    private List<DynamicFormInitializeCustomizer> initializeCustomizers;
+    private List<DynamicFormInitializeCustomer> initializeCustomers;
 
     @Autowired
     private ValidatorFactory validatorFactory;
@@ -236,8 +225,8 @@ public class SimpleDynamicFormService extends GenericEntityService<DynamicFormEn
         dynamicFormDeployLogService.cancelDeployed(formId);
         //移除表结构定义
         RDBDatabase database = StringUtils.isEmpty(form.getDataSourceId())
-                ? databaseRepository.getDefaultDatabase(form.getDatabaseName())
-                : databaseRepository.getDatabase(form.getDataSourceId(),form.getDatabaseName());
+                ? databaseRepository.getDefaultDatabase()
+                : databaseRepository.getDatabase(form.getDataSourceId());
         database.removeTable(form.getDatabaseTableName());
         createUpdate().set(DynamicFormEntity.deployed, false).where(DynamicFormEntity.id, formId).exec();
         eventPublisher.publishEvent(new FormDeployEvent(formId));
@@ -441,9 +430,8 @@ public class SimpleDynamicFormService extends GenericEntityService<DynamicFormEn
 
     public void deploy(DynamicFormEntity form, List<DynamicFormColumnEntity> columns, boolean updateMeta) {
         RDBDatabase database = StringUtils.isEmpty(form.getDataSourceId())
-                ? databaseRepository.getDefaultDatabase(form.getDatabaseName())
-                : databaseRepository.getDatabase(form.getDataSourceId(),form.getDatabaseName());
-
+                ? databaseRepository.getDefaultDatabase()
+                : databaseRepository.getDatabase(form.getDataSourceId());
         initDatabase(database);
         RDBTableMetaData metaData = buildTable(database, form, columns);
         try {
@@ -530,7 +518,6 @@ public class SimpleDynamicFormService extends GenericEntityService<DynamicFormEn
 
         metaData.setAlias(form.getAlias());
         metaData.setCorrelations(buildCorrelations(form.getCorrelations()));
-        metaData.setDatabaseMetaData(database.getMeta());
         buildTrigger(form.getTriggers()).forEach(metaData::on);
 
         columns.forEach(column -> {
@@ -621,8 +608,8 @@ public class SimpleDynamicFormService extends GenericEntityService<DynamicFormEn
                 return table;
             }
         };
-        if (!CollectionUtils.isEmpty(initializeCustomizers)) {
-            initializeCustomizers.forEach(customizer -> customizer.customTableSetting(context));
+        if (!CollectionUtils.isEmpty(initializeCustomers)) {
+            initializeCustomers.forEach(customer -> customer.customTableSetting(context));
         }
     }
 
@@ -657,8 +644,8 @@ public class SimpleDynamicFormService extends GenericEntityService<DynamicFormEn
                 return table;
             }
         };
-        if (!CollectionUtils.isEmpty(initializeCustomizers)) {
-            initializeCustomizers.forEach(customer -> customer.customTableColumnSetting(context));
+        if (!CollectionUtils.isEmpty(initializeCustomers)) {
+            initializeCustomers.forEach(customer -> customer.customTableColumnSetting(context));
         }
     }
 
@@ -761,7 +748,7 @@ public class SimpleDynamicFormService extends GenericEntityService<DynamicFormEn
         Class clazz = classMapping.get(type);
         if (clazz == null) {
             try {
-                clazz = ClassUtils.forName(type, null);
+                clazz = Class.forName(type);
             } catch (ClassNotFoundException e) {
                 throw new RuntimeException(e);
             }
