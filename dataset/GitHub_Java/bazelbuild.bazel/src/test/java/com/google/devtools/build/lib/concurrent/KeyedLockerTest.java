@@ -165,7 +165,7 @@ public abstract class KeyedLockerTest {
     for (int i = 0; i < NUM_EXECUTOR_THREADS; i++) {
       executorService.submit(wrapper.wrap(runnable));
     }
-    boolean interrupted = ExecutorUtil.interruptibleShutdown(executorService);
+    boolean interrupted = ExecutorShutdownUtil.interruptibleShutdown(executorService);
     Throwables.propagateIfPossible(wrapper.getFirstThrownError());
     if (interrupted) {
       Thread.currentThread().interrupt();
@@ -203,14 +203,14 @@ public abstract class KeyedLockerTest {
         try {
           Preconditions.checkNotNull(unlockerRef.get()).close();
           fail();
-        } catch (IllegalMonitorStateException expected) {
+        } catch (IllegalUnlockException expected) {
           runnable2Executed.set(true);
         }
       }
     };
     executorService.submit(wrapper.wrap(runnable1));
     executorService.submit(wrapper.wrap(runnable2));
-    boolean interrupted = ExecutorUtil.interruptibleShutdown(executorService);
+    boolean interrupted = ExecutorShutdownUtil.interruptibleShutdown(executorService);
     Throwables.propagateIfPossible(wrapper.getFirstThrownError());
     if (interrupted || runnableInterrupted.get()) {
       Thread.currentThread().interrupt();
@@ -264,7 +264,7 @@ public abstract class KeyedLockerTest {
     for (int i = 0; i < NUM_EXECUTOR_THREADS; i++) {
       executorService.submit(wrapper.wrap(runnable));
     }
-    boolean interrupted = ExecutorUtil.interruptibleShutdown(executorService);
+    boolean interrupted = ExecutorShutdownUtil.interruptibleShutdown(executorService);
     Throwables.propagateIfPossible(wrapper.getFirstThrownError());
     if (interrupted || runnableInterrupted.get()) {
       Thread.currentThread().interrupt();
