@@ -47,20 +47,12 @@ public class ValidationEnvironment {
 
   // Whether this validation environment is not modified therefore clonable or not.
   private boolean clonable;
-
+  
   /**
    * Tracks the number of nested for loops that contain the statement that is currently being
    * validated
    */
   private int loopCount = 0;
-
-  /**
-   * Create a ValidationEnvironment for a given global Environment
-   */
-  public ValidationEnvironment(Environment env) {
-    this(env.getVariableNames());
-    Preconditions.checkArgument(env.isGlobal());
-  }
 
   public ValidationEnvironment(Set<String> builtinVariables) {
     parent = null;
@@ -143,7 +135,7 @@ public class ValidationEnvironment {
   /**
    * Starts a session with temporarily disabled readonly checking for variables between branches.
    * This is useful to validate control flows like if-else when we know that certain parts of the
-   * code cannot both be executed.
+   * code cannot both be executed. 
    */
   public void startTemporarilyDisableReadonlyCheckSession() {
     futureReadOnlyVariables.add(new HashSet<String>());
@@ -198,14 +190,14 @@ public class ValidationEnvironment {
   public boolean isInsideLoop() {
     return (loopCount > 0);
   }
-
+  
   /**
    * Signals that the block of a for loop was entered
    */
   public void enterLoop()   {
     ++loopCount;
   }
-
+  
   /**
    * Signals that the block of a for loop was left
    *

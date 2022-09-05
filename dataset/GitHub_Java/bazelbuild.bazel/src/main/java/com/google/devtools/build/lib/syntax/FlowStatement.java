@@ -36,7 +36,7 @@ public final class FlowStatement extends Statement {
   }
 
   @Override
-  void doExec(Environment env) throws EvalException {
+  void exec(Environment env) throws EvalException {
     throw ex;
   }
 
