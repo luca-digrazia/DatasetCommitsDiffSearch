@@ -1001,16 +1001,17 @@ public class Package {
     }
 
     /**
-     * Creates a new {@link Rule} {@code r} where {@code r.getPackage()} is the {@link Package}
-     * associated with this {@link Builder}.
+     * Returns a new Rule belonging to this package instance, and uses the given Label.
      *
-     * <p>The created {@link Rule} will have no attribute values, no output files, and therefore
-     * will be in an invalid state.
+     * <p>Useful for RuleClass instantiation, where the rule name is checked by trying to create a
+     * Label. This label can then be used again here.
      */
-    Rule createRule(
-        Label label,
-        RuleClass ruleClass,
-        Location location,
+    Rule newRuleWithLabel(Label label, RuleClass ruleClass, Location location) {
+      return newRuleWithLabelAndAttrContainer(label, ruleClass, location,
+          new AttributeContainer(ruleClass));
+    }
+
+    Rule newRuleWithLabelAndAttrContainer(Label label, RuleClass ruleClass, Location location,
         AttributeContainer attributeContainer) {
       return new Rule(pkg, label, ruleClass, location, attributeContainer);
     }
