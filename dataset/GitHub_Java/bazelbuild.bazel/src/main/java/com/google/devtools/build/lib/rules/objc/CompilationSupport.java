@@ -72,7 +72,6 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
@@ -497,7 +496,6 @@ public final class CompilationSupport {
         .add(CLANG);
     if (ObjcRuleClasses.CPP_SOURCES.matches(sourceFile.getExecPath())) {
       commandLine.add("-stdlib=libc++");
-      commandLine.add("-std=gnu++11");
     }
 
     if (compilationArtifacts.hasSwiftSources()) {
@@ -855,15 +853,6 @@ public final class CompilationSupport {
     return this;
   }
 
-  private NestedSet<Artifact> getGcovForObjectiveCIfNeeded() {
-    if (ruleContext.getConfiguration().isCodeCoverageEnabled()
-        && ruleContext.attributes().has(IosTest.OBJC_GCOV_ATTR, BuildType.LABEL)) {
-      return PrerequisiteArtifacts.nestedSet(ruleContext, IosTest.OBJC_GCOV_ATTR, Mode.HOST);
-    } else {
-      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-    }
-  }
-
   /**
    * Returns a provider that collects this target's instrumented sources as well as those of its
    * dependencies.
@@ -886,7 +875,6 @@ public final class CompilationSupport {
         INSTRUMENTATION_SPEC,
         new ObjcCoverageMetadataCollector(),
         oFiles.build(),
-        getGcovForObjectiveCIfNeeded(),
         !TargetUtils.isTestRule(ruleContext.getTarget()));
   }
 
@@ -1156,8 +1144,7 @@ public final class CompilationSupport {
     if (objcProvider.is(USES_CPP)) {
       commandLine
           .add(CLANG_PLUSPLUS)
-          .add("-stdlib=libc++")
-          .add("-std=gnu++11");
+          .add("-stdlib=libc++");
     } else {
       commandLine.add(CLANG);
     }
