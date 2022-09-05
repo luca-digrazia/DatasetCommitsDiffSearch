@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.runtime;
 import com.google.devtools.build.lib.runtime.commands.BuildCommand;
 import com.google.devtools.build.lib.runtime.commands.CanonicalizeCommand;
 import com.google.devtools.build.lib.runtime.commands.CleanCommand;
-import com.google.devtools.build.lib.runtime.commands.CoverageCommand;
 import com.google.devtools.build.lib.runtime.commands.DumpCommand;
 import com.google.devtools.build.lib.runtime.commands.HelpCommand;
 import com.google.devtools.build.lib.runtime.commands.InfoCommand;
@@ -39,7 +38,6 @@ public final class BuiltinCommandModule extends BlazeModule {
         new BuildCommand(),
         new CanonicalizeCommand(),
         new CleanCommand(),
-        new CoverageCommand(),
         new DumpCommand(),
         new HelpCommand(),
         new InfoCommand(),

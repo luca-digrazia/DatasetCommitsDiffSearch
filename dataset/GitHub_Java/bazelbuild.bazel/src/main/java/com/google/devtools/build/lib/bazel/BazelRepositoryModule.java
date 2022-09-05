@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.bazel;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
@@ -24,15 +23,11 @@ import com.google.devtools.build.lib.bazel.repository.GitRepositoryFunction;
 import com.google.devtools.build.lib.bazel.repository.HttpArchiveFunction;
 import com.google.devtools.build.lib.bazel.repository.HttpFileFunction;
 import com.google.devtools.build.lib.bazel.repository.HttpJarFunction;
-import com.google.devtools.build.lib.bazel.repository.MavenDownloader;
 import com.google.devtools.build.lib.bazel.repository.MavenJarFunction;
 import com.google.devtools.build.lib.bazel.repository.MavenServerFunction;
 import com.google.devtools.build.lib.bazel.repository.MavenServerRepositoryFunction;
 import com.google.devtools.build.lib.bazel.repository.NewGitRepositoryFunction;
 import com.google.devtools.build.lib.bazel.repository.NewHttpArchiveFunction;
-import com.google.devtools.build.lib.bazel.repository.RepositoryOptions;
-import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCache;
-import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
 import com.google.devtools.build.lib.bazel.repository.skylark.SkylarkRepositoryFunction;
 import com.google.devtools.build.lib.bazel.repository.skylark.SkylarkRepositoryModule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryFunction;
@@ -65,15 +60,13 @@ import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
-import com.google.devtools.build.lib.vfs.FileSystem;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsProvider;
 
 import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import javax.annotation.Nullable;
 
 /**
@@ -84,24 +77,20 @@ public class BazelRepositoryModule extends BlazeModule {
   // A map of repository handlers that can be looked up by rule class name.
   private final ImmutableMap<String, RepositoryFunction> repositoryHandlers;
   private final AtomicBoolean isFetch = new AtomicBoolean(false);
-  private final SkylarkRepositoryFunction skylarkRepositoryFunction;
+  private final SkylarkRepositoryFunction skylarkRepositoryFunction =
+      new SkylarkRepositoryFunction();
   private final RepositoryDelegatorFunction delegator;
-  private final RepositoryCache repositoryCache = new RepositoryCache();
-  private final HttpDownloader httpDownloader = new HttpDownloader(repositoryCache);
-  private final MavenDownloader mavenDownloader = new MavenDownloader(repositoryCache);
-  private FileSystem filesystem;
 
   public BazelRepositoryModule() {
-    this.skylarkRepositoryFunction = new SkylarkRepositoryFunction(httpDownloader);
     this.repositoryHandlers =
         ImmutableMap.<String, RepositoryFunction>builder()
             .put(LocalRepositoryRule.NAME, new LocalRepositoryFunction())
-            .put(HttpArchiveRule.NAME, new HttpArchiveFunction(httpDownloader))
+            .put(HttpArchiveRule.NAME, new HttpArchiveFunction())
             .put(GitRepositoryRule.NAME, new GitRepositoryFunction())
-            .put(HttpJarRule.NAME, new HttpJarFunction(httpDownloader))
-            .put(HttpFileRule.NAME, new HttpFileFunction(httpDownloader))
-            .put(MavenJarRule.NAME, new MavenJarFunction(mavenDownloader))
-            .put(NewHttpArchiveRule.NAME, new NewHttpArchiveFunction(httpDownloader))
+            .put(HttpJarRule.NAME, new HttpJarFunction())
+            .put(HttpFileRule.NAME, new HttpFileFunction())
+            .put(MavenJarRule.NAME, new MavenJarFunction())
+            .put(NewHttpArchiveRule.NAME, new NewHttpArchiveFunction())
             .put(NewGitRepositoryRule.NAME, new NewGitRepositoryFunction())
             .put(NewLocalRepositoryRule.NAME, new NewLocalRepositoryFunction())
             .put(AndroidSdkRepositoryRule.NAME, new AndroidSdkRepositoryFunction())
@@ -153,8 +142,6 @@ public class BazelRepositoryModule extends BlazeModule {
     builder.addSkyFunction(SkyFunctions.REPOSITORY, new RepositoryLoaderFunction());
     builder.addSkyFunction(SkyFunctions.REPOSITORY_DIRECTORY, delegator);
     builder.addSkyFunction(MavenServerFunction.NAME, new MavenServerFunction());
-
-    filesystem = directories.getFileSystem();
   }
 
   @Override
@@ -176,28 +163,11 @@ public class BazelRepositoryModule extends BlazeModule {
   public void handleOptions(OptionsProvider optionsProvider) {
     PackageCacheOptions pkgOptions = optionsProvider.getOptions(PackageCacheOptions.class);
     isFetch.set(pkgOptions != null && pkgOptions.fetch);
-
-    RepositoryOptions repoOptions = optionsProvider.getOptions(RepositoryOptions.class);
-    if (repoOptions != null) {
-      if (repoOptions.experimentalRepositoryCache != null) {
-        Path repositoryCachePath = filesystem.getPath(repoOptions.experimentalRepositoryCache);
-        repositoryCache.setRepositoryCachePath(repositoryCachePath);
-      } else {
-        repositoryCache.setRepositoryCachePath(null);
-      }
-    }
   }
 
   @Override
   public void beforeCommand(Command command, CommandEnvironment env) throws AbruptExitException {
     delegator.setClientEnvironment(env.getClientEnv());
     skylarkRepositoryFunction.setCommandEnvironment(env);
-  }
-
-  @Override
-  public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
-    return "fetch".equals(command.name()) || "build".equals(command.name())
-        ? ImmutableList.<Class<? extends OptionsBase>>of(RepositoryOptions.class)
-        : ImmutableList.<Class<? extends OptionsBase>>of();
   }
 }
