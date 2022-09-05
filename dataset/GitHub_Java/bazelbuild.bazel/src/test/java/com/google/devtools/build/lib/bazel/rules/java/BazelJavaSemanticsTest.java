@@ -14,20 +14,14 @@
 
 package com.google.devtools.build.lib.bazel.rules.java;
 
-import static org.junit.Assert.assertEquals;
-
 import com.google.devtools.build.lib.vfs.PathFragment;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import junit.framework.TestCase;
 
 /**
  * Unit tests for {@link BazelJavaSemantics}.
  */
-@RunWith(JUnit4.class)
-public class BazelJavaSemanticsTest {
-  @Test
+public class BazelJavaSemanticsTest extends TestCase {
   public void testFindingResources() {
     BazelJavaSemantics semantics = BazelJavaSemantics.INSTANCE;
     assertEquals(PathFragment.EMPTY_FRAGMENT,

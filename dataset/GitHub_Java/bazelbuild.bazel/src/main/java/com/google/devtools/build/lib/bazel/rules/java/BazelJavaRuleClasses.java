@@ -37,9 +37,7 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleClass.PackageNameConstraint;
 import com.google.devtools.build.lib.packages.TriState;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
-import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -67,9 +65,6 @@ public class BazelJavaRuleClasses {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          // Fail analysis if --disable_java is enabled.
-          .failIfMissingConfigurationFragment()
-          .requiresConfigurationFragments(JavaConfiguration.class, Jvm.class)
           .add(attr("$ijar", LABEL).cfg(HOST).exec().value(env.getLabel("//tools/defaults:ijar")))
           .setPreferredDependencyPredicate(JavaSemantics.JAVA_SOURCE)
           .build();
@@ -95,8 +90,6 @@ public class BazelJavaRuleClasses {
           .add(attr(":jvm", LABEL).cfg(HOST).value(JavaSemantics.JVM))
           .add(attr(":host_jdk", LABEL).cfg(HOST).value(JavaSemantics.HOST_JDK))
           .add(attr(":java_toolchain", LABEL).value(JavaSemantics.JAVA_TOOLCHAIN))
-          .add(attr("$javac_extdir", LABEL).cfg(HOST)
-              .value(env.getLabel(JavaSemantics.JAVAC_EXTDIR_LABEL)))
           .add(attr("$java_langtools", LABEL).cfg(HOST)
               .value(env.getLabel("//tools/defaults:java_langtools")))
           .add(attr("$javac_bootclasspath", LABEL).cfg(HOST)

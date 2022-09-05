@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.bazel.rules.java;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -238,7 +239,6 @@ public class BazelJavaSemantics implements JavaSemantics {
       List<String> jvmFlags,
       Artifact classJar,
       Artifact srcJar,
-      Artifact genJar,
       Artifact gensrcJar,
       ImmutableMap<Artifact, Artifact> compilationToRuntimeJarMap,
       JavaCompilationHelper helper,
@@ -320,6 +320,11 @@ public class BazelJavaSemantics implements JavaSemantics {
   public void commonDependencyProcessing(RuleContext ruleContext,
       JavaTargetAttributes.Builder attributes,
       Collection<? extends TransitiveInfoCollection> deps) {
+  }
+
+  @Override
+  public Collection<ActionInput> getExtraJavaCompileOutputs(PathFragment classDirectory) {
+    return ImmutableList.of();
   }
 
   @Override
