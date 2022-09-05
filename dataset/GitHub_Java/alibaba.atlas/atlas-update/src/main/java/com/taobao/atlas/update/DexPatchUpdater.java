@@ -32,7 +32,7 @@ import com.taobao.atlas.update.util.PatchMerger;
 
 public class DexPatchUpdater {
 
-    public static void installHotPatch(String updateVersion,List<UpdateInfo.Item> updateList, File patchFile,IDexpatchMonitor monitor) {
+    public static void installHotPatch(String updateVersion,List<UpdateInfo.Item> updateList, File patchFile,IDexpatchMonitor monitor) throws Exception{
         if (null == updateList || updateList.isEmpty()){
             return;
         }
@@ -50,6 +50,7 @@ public class DexPatchUpdater {
             AtlasHotPatchManager.getInstance().installHotFixPatch(updateVersion, updateBundles);
         } catch (IOException e) {
             e.printStackTrace();
+            throw e;
         } finally {
             IOUtil.quietClose(patchZip);
         }
@@ -65,7 +66,7 @@ public class DexPatchUpdater {
         }
     }
 
-    public static void installColdPatch(UpdateInfo updateInfo, File patchFile,IDexpatchMonitor monitor) {
+    public static void installColdPatch(UpdateInfo updateInfo, File patchFile,IDexpatchMonitor monitor) throws Exception{
         if (null == updateInfo.updateBundles || updateInfo.updateBundles.isEmpty()){
             return;
         }
@@ -95,6 +96,7 @@ public class DexPatchUpdater {
             patchInstaller.install();
         } catch (Exception e) {
             e.printStackTrace();
+            throw e;
         } finally {
             PatchCleaner.clearUpdatePath(updateInfo.workDir.getAbsolutePath());
         }
@@ -113,21 +115,7 @@ public class DexPatchUpdater {
         }
     }
 
-    public static List<Item> dividePatchInfo(List<Item> allItem, boolean hot) {
-        List<UpdateInfo.Item> list = new ArrayList<>();
-        if (null == allItem) {
-            return list;
-        }
-        int type = hot ? Item.PATCH_DEX_HOT : Item.PATCH_DEX_COLD;
-        for (UpdateInfo.Item item : allItem) {
-            if (item.patchType == type || item.patchType == Item.PATCH_DEX_C_AND_H) {
-                Item hotItem = Item.makeCopy(item);
-                hotItem.patchType = type;
-                list.add(hotItem);
-            }
-        }
-        return list;
-    }
+
 
     /**
      * @return hotPatch的数据
