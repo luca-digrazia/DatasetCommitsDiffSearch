@@ -356,7 +356,7 @@ public class SkylarkRepositoryContext {
   @SkylarkCallable(
     name = "os",
     structField = true,
-    doc = "A struct to access information from the system."
+    doc = "A struct to access information from the system "
   )
   public SkylarkOS getOS() {
     return osObject;
@@ -458,7 +458,6 @@ public class SkylarkRepositoryContext {
           @ParamType(type = String.class),
           @ParamType(type = SkylarkList.class, generic1 = String.class),
         },
-        named = true,
         doc = "List of mirror URLs referencing the same file."
       ),
       @Param(
@@ -468,8 +467,6 @@ public class SkylarkRepositoryContext {
           @ParamType(type = Label.class),
           @ParamType(type = SkylarkPath.class)
         },
-        defaultValue = "''",
-        named = true,
         doc = "path to the output file, relative to the repository directory."
       ),
       @Param(
@@ -530,7 +527,6 @@ public class SkylarkRepositoryContext {
           @ParamType(type = String.class),
           @ParamType(type = SkylarkList.class, generic1 = String.class),
         },
-        named = true,
         doc = "List of mirror URLs referencing the same file."
       ),
       @Param(
@@ -540,8 +536,6 @@ public class SkylarkRepositoryContext {
           @ParamType(type = Label.class),
           @ParamType(type = SkylarkPath.class)
         },
-        defaultValue = "''",
-        named = true,
         doc =
             "path to the directory where the archive will be unpacked,"
                 + " relative to the repository directory."
@@ -576,9 +570,9 @@ public class SkylarkRepositoryContext {
         named = true,
         doc =
             "a directory prefix to strip from the extracted files."
-                + "\nMany archives contain a top-level directory that contains all files in the"
+                + "\nMany archives contain a top-level directory that contains alfiles in"
                 + " archive. Instead of needing to specify this prefix over and over in the"
-                + " <code>build_file</code>, this field can be used to strip it from extracted"
+                + " <code>build_file</code>, this field can be used to strip it extracted"
                 + " files."
       ),
     }
