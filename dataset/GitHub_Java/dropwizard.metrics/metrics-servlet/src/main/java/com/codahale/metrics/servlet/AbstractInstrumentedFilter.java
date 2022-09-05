@@ -21,8 +21,6 @@ import static com.codahale.metrics.MetricRegistry.name;
  * codes being returned.
  */
 public abstract class AbstractInstrumentedFilter implements Filter {
-    static final String METRIC_PREFIX = "name-prefix";
-
     private final String otherMetricName;
     private final Map<Integer, String> meterNamesByStatusCode;
     private final String registryAttribute;
@@ -54,23 +52,19 @@ public abstract class AbstractInstrumentedFilter implements Filter {
     @Override
     public void init(FilterConfig filterConfig) throws ServletException {
         final MetricRegistry metricsRegistry = getMetricsFactory(filterConfig);
-
-        String metricName = filterConfig.getInitParameter(METRIC_PREFIX);
-        if(metricName == null || metricName.isEmpty()) {
-            metricName = getClass().getName();
-        }
+        final Class<?> identifyingClass = getClass();
 
         this.metersByStatusCode = new ConcurrentHashMap<Integer, Meter>(meterNamesByStatusCode
                 .size());
         for (Entry<Integer, String> entry : meterNamesByStatusCode.entrySet()) {
             metersByStatusCode.put(entry.getKey(),
-                    metricsRegistry.meter(name(metricName, entry.getValue())));
+                    metricsRegistry.meter(name(identifyingClass, entry.getValue())));
         }
-        this.otherMeter = metricsRegistry.meter(name(metricName,
+        this.otherMeter = metricsRegistry.meter(name(identifyingClass,
                                                      otherMetricName));
-        this.activeRequests = metricsRegistry.counter(name(metricName,
+        this.activeRequests = metricsRegistry.counter(name(identifyingClass,
                                                            "activeRequests"));
-        this.requestTimer = metricsRegistry.timer(name(metricName,
+        this.requestTimer = metricsRegistry.timer(name(identifyingClass,
                                                        "requests"));
 
     }
@@ -142,12 +136,6 @@ public abstract class AbstractInstrumentedFilter implements Filter {
         public void setStatus(int sc) {
             httpStatus = sc;
             super.setStatus(sc);
-        }
-
-        @Override
-        public void setStatus(int sc, String sm) {
-            httpStatus = sc;
-            super.setStatus(sc, sm);
         }
 
         public int getStatus() {
