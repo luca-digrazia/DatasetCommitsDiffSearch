@@ -16,6 +16,7 @@ package com.google.devtools.build.skyframe;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -71,10 +72,5 @@ public class RecordingDifferencer implements Differencer, Injectable {
   @Override
   public void inject(Map<SkyKey, ? extends SkyValue> values) {
     valuesToInject.putAll(values);
-  }
-
-  @Override
-  public void inject(SkyKey key, SkyValue value) {
-    valuesToInject.put(key, value);
   }
 }

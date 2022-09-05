@@ -30,10 +30,6 @@ public interface Differencer {
    * Represents a set of changed values.
    */
   interface Diff {
-    default boolean isEmpty() {
-      return changedKeysWithoutNewValues().isEmpty() && changedKeysWithNewValues().isEmpty();
-    }
-
     /**
      * Returns the value keys whose values have changed, but for which we don't have the new values.
      */

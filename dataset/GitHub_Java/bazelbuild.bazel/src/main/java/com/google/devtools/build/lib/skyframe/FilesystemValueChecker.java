@@ -17,7 +17,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -33,8 +32,6 @@ import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.BatchStat;
 import com.google.devtools.build.lib.vfs.FileStatusWithDigest;
-import com.google.devtools.build.lib.vfs.ModifiedFileSet;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.Differencer;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -155,12 +152,8 @@ public class FilesystemValueChecker {
    * the on-disk file value (were modified externally).
    */
   Collection<SkyKey> getDirtyActionValues(Map<SkyKey, SkyValue> valuesMap,
-      @Nullable final BatchStat batchStatter, ModifiedFileSet modifiedOutputFiles)
-          throws InterruptedException {
-    if (modifiedOutputFiles == ModifiedFileSet.NOTHING_MODIFIED) {
-      LOG.info("Not checking for dirty actions since nothing was modified");
-      return ImmutableList.of();
-    }
+      @Nullable final BatchStat batchStatter) throws InterruptedException {
+    // CPU-bound (usually) stat() calls, plus a fudge factor.
     LOG.info("Accumulating dirty actions");
     final int numOutputJobs = Runtime.getRuntime().availableProcessors() * 4;
     final Set<SkyKey> actionSkyKeys = new HashSet<>();
@@ -187,14 +180,10 @@ public class FilesystemValueChecker {
 
     modifiedOutputFilesCounter.set(0);
     modifiedOutputFilesIntraBuildCounter.set(0);
-    ImmutableSet<PathFragment> knownModifiedOutputFiles =
-            modifiedOutputFiles == ModifiedFileSet.EVERYTHING_MODIFIED
-                    ? null
-                    : modifiedOutputFiles.modifiedSourceFiles();
     for (List<Pair<SkyKey, ActionExecutionValue>> shard : outputShards) {
       Runnable job = (batchStatter == null)
-          ? outputStatJob(dirtyKeys, shard, knownModifiedOutputFiles)
-          : batchStatJob(dirtyKeys, shard, batchStatter, knownModifiedOutputFiles);
+          ? outputStatJob(dirtyKeys, shard)
+          : batchStatJob(dirtyKeys, shard, batchStatter);
       executor.submit(wrapper.wrap(job));
     }
 
@@ -208,8 +197,8 @@ public class FilesystemValueChecker {
   }
 
   private Runnable batchStatJob(final Collection<SkyKey> dirtyKeys,
-          final List<Pair<SkyKey, ActionExecutionValue>> shard,
-          final BatchStat batchStatter, final ImmutableSet<PathFragment> knownModifiedOutputFiles) {
+                                       final List<Pair<SkyKey, ActionExecutionValue>> shard,
+                                       final BatchStat batchStatter) {
     return new Runnable() {
       @Override
       public void run() {
@@ -220,9 +209,7 @@ public class FilesystemValueChecker {
             dirtyKeys.add(keyAndValue.getFirst());
           } else {
             for (Artifact artifact : actionValue.getAllOutputArtifactData().keySet()) {
-              if (shouldCheckArtifact(knownModifiedOutputFiles, artifact)) {
-                artifactToKeyAndValue.put(artifact, keyAndValue);
-              }
+              artifactToKeyAndValue.put(artifact, keyAndValue);
             }
           }
         }
@@ -235,7 +222,7 @@ public class FilesystemValueChecker {
         } catch (IOException e) {
           // Batch stat did not work. Log an exception and fall back on system calls.
           LoggingUtil.logToRemote(Level.WARNING, "Unable to process batch stat", e);
-          outputStatJob(dirtyKeys, shard, knownModifiedOutputFiles).run();
+          outputStatJob(dirtyKeys, shard).run();
           return;
         } catch (InterruptedException e) {
           // We handle interrupt in the main thread.
@@ -279,15 +266,13 @@ public class FilesystemValueChecker {
   }
 
   private Runnable outputStatJob(final Collection<SkyKey> dirtyKeys,
-          final List<Pair<SkyKey, ActionExecutionValue>> shard,
-          final ImmutableSet<PathFragment> knownModifiedOutputFiles) {
+                                 final List<Pair<SkyKey, ActionExecutionValue>> shard) {
     return new Runnable() {
       @Override
       public void run() {
         for (Pair<SkyKey, ActionExecutionValue> keyAndValue : shard) {
           ActionExecutionValue value = keyAndValue.getSecond();
-          if (value == null
-              || actionValueIsDirtyWithDirectSystemCalls(value, knownModifiedOutputFiles)) {
+          if (value == null || actionValueIsDirtyWithDirectSystemCalls(value)) {
             dirtyKeys.add(keyAndValue.getFirst());
           }
         }
@@ -307,37 +292,28 @@ public class FilesystemValueChecker {
     return modifiedOutputFilesIntraBuildCounter.get();
   }
 
-  private boolean actionValueIsDirtyWithDirectSystemCalls(ActionExecutionValue actionValue,
-      ImmutableSet<PathFragment> knownModifiedOutputFiles) {
+  private boolean actionValueIsDirtyWithDirectSystemCalls(ActionExecutionValue actionValue) {
     boolean isDirty = false;
     for (Map.Entry<Artifact, FileValue> entry :
         actionValue.getAllOutputArtifactData().entrySet()) {
       Artifact artifact = entry.getKey();
       FileValue lastKnownData = entry.getValue();
-      if (shouldCheckArtifact(knownModifiedOutputFiles, artifact)) {
-        try {
-          FileValue fileValue = ActionMetadataHandler.fileValueFromArtifact(artifact, null, tsgm);
-          if (!fileValue.equals(lastKnownData)) {
-            updateIntraBuildModifiedCounter(fileValue.exists()
-                ? fileValue.realRootedPath().asPath().getLastModifiedTime()
-                : -1, lastKnownData.isSymlink(), fileValue.isSymlink());
-            modifiedOutputFilesCounter.getAndIncrement();
-            isDirty = true;
-          }
-        } catch (IOException e) {
-          // This is an unexpected failure getting a digest or symlink target.
+      try {
+        FileValue fileValue = ActionMetadataHandler.fileValueFromArtifact(artifact, null, tsgm);
+        if (!fileValue.equals(lastKnownData)) {
+          updateIntraBuildModifiedCounter(fileValue.exists()
+              ? fileValue.realRootedPath().asPath().getLastModifiedTime()
+              : -1, lastKnownData.isSymlink(), fileValue.isSymlink());
           modifiedOutputFilesCounter.getAndIncrement();
           isDirty = true;
         }
+      } catch (IOException e) {
+        // This is an unexpected failure getting a digest or symlink target.
+        modifiedOutputFilesCounter.getAndIncrement();
+        isDirty = true;
       }
     }
     return isDirty;
-  }
-
-  private static boolean shouldCheckArtifact(ImmutableSet<PathFragment> knownModifiedOutputFiles,
-      Artifact artifact) {
-    return knownModifiedOutputFiles == null
-        || knownModifiedOutputFiles.contains(artifact.getExecPath());
   }
 
   private BatchDirtyResult getDirtyValues(ValueFetcher fetcher,
