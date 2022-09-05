@@ -13,13 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs;
 
-import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.util.Preconditions;
+
 import java.io.Serializable;
 import java.util.Objects;
 
 /** Directory entry representation returned by {@link Path#readdir}. */
-@AutoCodec
 public final class Dirent implements Serializable, Comparable<Dirent> {
   /** Type of the directory entry */
   public enum Type {

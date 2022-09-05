@@ -13,18 +13,15 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.Dirent.Type;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.vfs.Symlinks;
-import com.google.devtools.build.skyframe.AbstractSkyKey;
-import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
@@ -33,6 +30,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Objects;
+
 import javax.annotation.Nullable;
 
 /**
@@ -40,7 +38,6 @@ import javax.annotation.Nullable;
  *
  * <p>This class is an implementation detail of {@link DirectoryListingValue}.
  */
-@AutoCodec.VisibleForSerialization
 public final class DirectoryListingStateValue implements SkyValue {
 
   private final CompactSortedDirents compactSortedDirents;
@@ -49,7 +46,6 @@ public final class DirectoryListingStateValue implements SkyValue {
     this.compactSortedDirents = CompactSortedDirents.create(dirents);
   }
 
-  @AutoCodec.Instantiator
   public static DirectoryListingStateValue create(Collection<Dirent> dirents) {
     return new DirectoryListingStateValue(dirents);
   }
@@ -60,29 +56,8 @@ public final class DirectoryListingStateValue implements SkyValue {
   }
 
   @ThreadSafe
-  public static Key key(RootedPath rootedPath) {
-    return Key.create(rootedPath);
-  }
-
-  @AutoCodec.VisibleForSerialization
-  @AutoCodec
-  static class Key extends AbstractSkyKey<RootedPath> {
-    private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
-
-    private Key(RootedPath arg) {
-      super(arg);
-    }
-
-    @AutoCodec.VisibleForSerialization
-    @AutoCodec.Instantiator
-    static Key create(RootedPath arg) {
-      return interner.intern(new Key(arg));
-    }
-
-    @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.DIRECTORY_LISTING_STATE;
-    }
+  public static SkyKey key(RootedPath rootedPath) {
+    return SkyKey.create(SkyFunctions.DIRECTORY_LISTING_STATE, rootedPath);
   }
 
   /**

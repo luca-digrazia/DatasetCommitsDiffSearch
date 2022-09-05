@@ -15,8 +15,8 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -31,8 +31,10 @@ import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.util.Map;
 import java.util.regex.Pattern;
+
 import javax.annotation.Nullable;
 
 /**
@@ -52,8 +54,7 @@ public final class GlobFunction implements SkyFunction {
   }
 
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env)
-      throws GlobFunctionException, InterruptedException {
+  public SkyValue compute(SkyKey skyKey, Environment env) throws GlobFunctionException {
     GlobDescriptor glob = (GlobDescriptor) skyKey.argument();
 
     // Note that the glob's package is assumed to exist which implies that the package's BUILD file
@@ -143,10 +144,10 @@ public final class GlobFunction implements SkyFunction {
       //     lookups we may need to request in case the symlink's target is a directory.
       // (3) Process the necessary subdirectories.
       int direntsSize = listingValue.getDirents().size();
-      Map<SkyKey, Dirent> symlinkFileMap = Maps.newHashMapWithExpectedSize(direntsSize);
-      Map<SkyKey, Dirent> subdirMap = Maps.newHashMapWithExpectedSize(direntsSize);
+      Map<Dirent, SkyKey> symlinkFileMap = Maps.newHashMapWithExpectedSize(direntsSize);
+      Map<Dirent, SkyKey> firstPassSubdirMap = Maps.newHashMapWithExpectedSize(direntsSize);
       Map<Dirent, Object> sortedResultMap = Maps.newTreeMap();
-      // First pass: do normal files and collect SkyKeys to request for subdirectories and symlinks.
+      // First pass: do normal files and collect SkyKeys to request.
       for (Dirent dirent : listingValue.getDirents()) {
         Type direntType = dirent.getType();
         String fileName = dirent.getName();
@@ -160,69 +161,77 @@ public final class GlobFunction implements SkyFunction {
           // changes and "switches types" (say, from a file to a directory), this value will be
           // invalidated. We also need the target's type to properly process the symlink.
           symlinkFileMap.put(
+              dirent,
               FileValue.key(
                   RootedPath.toRootedPath(
-                      glob.getPackageRoot(), dirPathFragment.getRelative(fileName))),
-              dirent);
+                      glob.getPackageRoot(), dirPathFragment.getRelative(fileName))));
           continue;
         }
 
         if (direntType == Dirent.Type.DIRECTORY) {
           SkyKey keyToRequest = getSkyKeyForSubdir(fileName, glob, subdirPattern);
           if (keyToRequest != null) {
-            subdirMap.put(keyToRequest, dirent);
+            firstPassSubdirMap.put(dirent, keyToRequest);
           }
         } else if (globMatchesBareFile) {
           sortedResultMap.put(dirent, glob.getSubdir().getRelative(fileName));
         }
       }
 
-      Map<SkyKey, SkyValue> subdirAndSymlinksResult =
-          env.getValues(Sets.union(subdirMap.keySet(), symlinkFileMap.keySet()));
+      Map<SkyKey, SkyValue> firstPassAndSymlinksResult =
+          env.getValues(Iterables.concat(firstPassSubdirMap.values(), symlinkFileMap.values()));
       if (env.valuesMissing()) {
         return null;
       }
-      Map<SkyKey, Dirent> symlinkSubdirMap = Maps.newHashMapWithExpectedSize(symlinkFileMap.size());
-      // Second pass: process the symlinks and subdirectories from the first pass, and maybe
-      // collect further SkyKeys if fully resolved symlink targets are themselves directories.
-      // Also process any known directories.
-      for (Map.Entry<SkyKey, SkyValue> lookedUpKeyAndValue : subdirAndSymlinksResult.entrySet()) {
-        if (symlinkFileMap.containsKey(lookedUpKeyAndValue.getKey())) {
-          FileValue symlinkFileValue = (FileValue) lookedUpKeyAndValue.getValue();
-          if (!symlinkFileValue.isSymlink()) {
-            throw new GlobFunctionException(
-                new InconsistentFilesystemException(
-                    "readdir and stat disagree about whether "
-                        + ((RootedPath) lookedUpKeyAndValue.getKey().argument()).asPath()
-                        + " is a symlink."),
-                Transience.TRANSIENT);
+      // Second pass: do symlinks, and maybe collect further SkyKeys if targets are directories.
+      Map<Dirent, SkyKey> symlinkSubdirMap = Maps.newHashMapWithExpectedSize(symlinkFileMap.size());
+      for (Map.Entry<Dirent, SkyKey> direntAndKey : symlinkFileMap.entrySet()) {
+        Dirent dirent = direntAndKey.getKey();
+        String fileName = dirent.getName();
+        Preconditions.checkState(dirent.getType() == Dirent.Type.SYMLINK, direntAndKey);
+        FileValue symlinkFileValue =
+            Preconditions.checkNotNull(
+                (FileValue) firstPassAndSymlinksResult.get(direntAndKey.getValue()), direntAndKey);
+        if (!symlinkFileValue.isSymlink()) {
+          throw new GlobFunctionException(
+              new InconsistentFilesystemException(
+                  "readdir and stat disagree about whether "
+                      + ((RootedPath) direntAndKey.getValue().argument()).asPath()
+                      + " is a symlink."),
+              Transience.TRANSIENT);
+        }
+        if (!symlinkFileValue.exists()) {
+          continue;
+        }
+        if (symlinkFileValue.isDirectory()) {
+          SkyKey keyToRequest = getSkyKeyForSubdir(fileName, glob, subdirPattern);
+          if (keyToRequest != null) {
+            symlinkSubdirMap.put(dirent, keyToRequest);
           }
-          if (!symlinkFileValue.exists()) {
-            continue;
-          }
-          Dirent dirent = symlinkFileMap.get(lookedUpKeyAndValue.getKey());
-          String fileName = dirent.getName();
-          if (symlinkFileValue.isDirectory()) {
-            SkyKey keyToRequest = getSkyKeyForSubdir(fileName, glob, subdirPattern);
-            if (keyToRequest != null) {
-              symlinkSubdirMap.put(keyToRequest, dirent);
-            }
-          } else if (globMatchesBareFile) {
-            sortedResultMap.put(dirent, glob.getSubdir().getRelative(fileName));
-          }
-        } else {
-          processSubdir(lookedUpKeyAndValue, subdirMap, glob, sortedResultMap);
+        } else if (globMatchesBareFile) {
+          sortedResultMap.put(dirent, glob.getSubdir().getRelative(fileName));
         }
       }
 
-      Map<SkyKey, SkyValue> symlinkSubdirResult = env.getValues(symlinkSubdirMap.keySet());
+      Map<SkyKey, SkyValue> secondResult = env.getValues(symlinkSubdirMap.values());
       if (env.valuesMissing()) {
         return null;
       }
-      // Third pass: do needed subdirectories of symlinked directories discovered during the second
-      // pass.
-      for (Map.Entry<SkyKey, SkyValue> lookedUpKeyAndValue : symlinkSubdirResult.entrySet()) {
-        processSubdir(lookedUpKeyAndValue, symlinkSubdirMap, glob, sortedResultMap);
+      // Third pass: do needed subdirectories.
+      for (Map.Entry<Dirent, SkyKey> direntAndKey :
+          Iterables.concat(firstPassSubdirMap.entrySet(), symlinkSubdirMap.entrySet())) {
+        Dirent dirent = direntAndKey.getKey();
+        String fileName = dirent.getName();
+        SkyKey key = direntAndKey.getValue();
+        SkyValue valueRequested =
+            symlinkSubdirMap.containsKey(dirent)
+                ? secondResult.get(key)
+                : firstPassAndSymlinksResult.get(key);
+        Preconditions.checkNotNull(valueRequested, direntAndKey);
+        Object dirMatches = getSubdirMatchesFromSkyValue(fileName, glob, valueRequested);
+        if (dirMatches != null) {
+          sortedResultMap.put(dirent, dirMatches);
+        }
       }
       for (Map.Entry<Dirent, Object> fileMatches : sortedResultMap.entrySet()) {
         addToMatches(fileMatches.getValue(), matches);
@@ -263,19 +272,6 @@ public final class GlobFunction implements SkyFunction {
       return GlobValue.EMPTY;
     }
     return new GlobValue(matchesBuilt);
-  }
-
-  private static void processSubdir(
-      Map.Entry<SkyKey, SkyValue> keyAndValue,
-      Map<SkyKey, Dirent> subdirMap,
-      GlobDescriptor glob,
-      Map<Dirent, Object> sortedResultMap) {
-    Dirent dirent = Preconditions.checkNotNull(subdirMap.get(keyAndValue.getKey()), keyAndValue);
-    String fileName = dirent.getName();
-    Object dirMatches = getSubdirMatchesFromSkyValue(fileName, glob, keyAndValue.getValue());
-    if (dirMatches != null) {
-      sortedResultMap.put(dirent, dirMatches);
-    }
   }
 
   /** Returns true if the given pattern contains globs. */
