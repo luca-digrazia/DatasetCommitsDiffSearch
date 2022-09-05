@@ -59,13 +59,13 @@ import javax.annotation.Nullable;
         + "<code>{1, 2, 3, {4, 5}}</code> leads to <code>1 2 3 4 5</code>. "
         + "This ordering enforces that elements of the set always come before elements of "
         + "nested sets (parent-first), which may lead to situations where left-to-right "
-        + "order cannot be preserved (<a href=\"https://github.com/bazelbuild/bazel/blob/master/src/main/java/com/google/devtools/build/lib/collect/nestedset/LinkOrderExpander.java#L56\">Example</a>)."
+        + "order cannot be preserved (<a href=\"https://github.com/google/bazel/blob/master/src/main/java/com/google/devtools/build/lib/collect/nestedset/LinkOrderExpander.java#L56\">Example</a>)."
         + "</li>"
         + "<li><code>naive_link</code>: Defines \"naive\" left-to-right pre-ordering "
         + "(parent-first), i.e. <code>{1, 2, 3, {4, 5}}</code> leads to <code>1 2 3 4 5</code>. "
         + "Unlike <code>link</code> ordering, it will sacrifice the parent-first property in "
         + "order to uphold left-to-right order in cases where both properties cannot be "
-        + "guaranteed (<a href=\"https://github.com/bazelbuild/bazel/blob/master/src/main/java/com/google/devtools/build/lib/collect/nestedset/NaiveLinkOrderExpander.java#L26\">Example</a>)."
+        + "guaranteed (<a href=\"https://github.com/google/bazel/blob/master/src/main/java/com/google/devtools/build/lib/collect/nestedset/NaiveLinkOrderExpander.java#L26\">Example</a>)."
         + "</li></ul>"
         + "Except for <code>stable</code>, the above values are incompatible with each other. "
         + "Consequently, two sets can only be merged via the <code>+</code> operator or via "
@@ -74,7 +74,7 @@ import javax.annotation.Nullable;
         + "determined by the outer set, thus ignoring the <code>order</code> parameter of "
         + "nested sets.")
 @Immutable
-public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue {
+public final class SkylarkNestedSet implements Iterable<Object> {
 
   private final SkylarkType contentType;
   @Nullable private final List<Object> items;
@@ -185,7 +185,7 @@ public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue {
       throw new EvalException(
           loc, String.format("sets cannot contain items of type '%s'", itemType));
     }
-    if (!EvalUtils.isImmutable(itemType.getType())) {
+    if (!EvalUtils.isSkylarkImmutable(itemType.getType())) {
       throw new EvalException(
           loc, String.format("sets cannot contain items of type '%s' (mutable type)", itemType));
     }
@@ -246,21 +246,5 @@ public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue {
 
   public Order getOrder() {
     return set.getOrder();
-  }
-
-  @Override
-  public boolean isImmutable() {
-    return true;
-  }
-
-  @Override
-  public void write(Appendable buffer, char quotationMark) {
-    Printer.append(buffer, "set(");
-    Printer.printList(buffer, this, "[", ", ", "]", null, quotationMark);
-    Order order = getOrder();
-    if (order != Order.STABLE_ORDER) {
-      Printer.append(buffer, ", order = \"" + order.getName() + "\"");
-    }
-    Printer.append(buffer, ")");
   }
 }
