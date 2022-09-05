@@ -14,19 +14,17 @@
 
 package com.google.devtools.build.lib.analysis.config;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.LicensesProviderImpl;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -48,7 +46,8 @@ import java.util.Map;
 public class ConfigSetting implements RuleConfiguredTargetFactory {
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
+  public ConfiguredTarget create(RuleContext ruleContext)
+      throws InterruptedException, RuleErrorException {
     // Get the required flag=value settings for this rule.
     Map<String, String> settings = NonconfigurableAttributeMapper.of(ruleContext.getRule())
         .get(ConfigRuleClasses.ConfigSettingRule.SETTINGS_ATTRIBUTE, Type.STRING_DICT);
@@ -69,12 +68,11 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
     }
 
     return new RuleConfiguredTargetBuilder(ruleContext)
-        .add(RunfilesProvider.class, RunfilesProvider.EMPTY)
-        .add(FileProvider.class, new FileProvider(ruleContext.getLabel(),
-            NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)))
-        .add(FilesToRunProvider.class, new FilesToRunProvider(ruleContext.getLabel(),
-            ImmutableList.<Artifact>of(), null, null))
-        .add(ConfigMatchingProvider.class, configMatcher)
+        .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
+        .addProvider(FileProvider.class, FileProvider.EMPTY)
+        .addProvider(FilesToRunProvider.class, FilesToRunProvider.EMPTY)
+        .addProvider(LicensesProviderImpl.EMPTY)
+        .addProvider(ConfigMatchingProvider.class, configMatcher)
         .build();
   }
 
