@@ -33,7 +33,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -840,7 +839,12 @@ public class CcToolchainFeatures implements Serializable {
      * @return whether a currently enabled feature implies the given feature.
      */
     private boolean isImpliedByEnabledFeature(Feature feature) {
-      return !Collections.disjoint(impliedBy.get(feature), enabled);
+      for (Feature implies : impliedBy.get(feature)) {
+        if (enabled.contains(implies)) {
+          return true;
+        }
+      }
+      return false;
     }
         
     /**
