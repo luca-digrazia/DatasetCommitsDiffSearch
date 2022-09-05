@@ -17,9 +17,8 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableCollection;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.ClassObject;
 
 import javax.annotation.Nullable;
@@ -29,33 +28,31 @@ import javax.annotation.Nullable;
  */
 // Documentation can be found at ctx.fragments
 @Immutable
-@SkylarkModule(name = "fragments",
-    category = SkylarkModuleCategory.NONE,
-    doc = "Possible fields are "
+@SkylarkModule(name = "fragments", doc = "Possible fields are "
     + "<a href=\"apple.html\">apple</a>, <a href=\"cpp.html\">cpp</a>, "
     + "<a href=\"java.html\">java</a>, <a href=\"jvm.html\">jvm</a> and "
-    + "<a href=\"objc.html\">objc</a>, <a href=\"android.html\">android</a>. "
+    + "<a href=\"objc.html\">objc</a>. "
     + "Access a specific fragment by its field name ex:</p><code>ctx.fragments.apple</code></p>"
     + "Note that rules have to declare their required fragments in order to access them "
     + "(see <a href=\"../rules.md#fragments\">here</a>).")
 public class FragmentCollection implements ClassObject {
   private final RuleContext ruleContext;
-  private final Attribute.Transition transition;
+  private final ConfigurationTransition config;
 
-  public FragmentCollection(RuleContext ruleContext, Attribute.Transition transition) {
+  public FragmentCollection(RuleContext ruleContext, ConfigurationTransition config) {
     this.ruleContext = ruleContext;
-    this.transition = transition;
+    this.config = config;
   }
 
   @Override
   @Nullable
   public Object getValue(String name) {
-    return ruleContext.getSkylarkFragment(name, transition);
+    return ruleContext.getSkylarkFragment(name, config);
   }
 
   @Override
   public ImmutableCollection<String> getKeys() {
-    return ruleContext.getSkylarkFragmentNames(transition);
+    return ruleContext.getSkylarkFragmentNames(config);
   }
 
   @Override
@@ -64,19 +61,19 @@ public class FragmentCollection implements ClassObject {
     return String.format(
         "There is no configuration fragment named '%s' in %s configuration. "
         + "Available fragments: %s",
-        name, getConfigurationName(transition), printKeys());
+        name, getConfigurationName(config), printKeys());
   }
 
   private String printKeys() {
     return String.format("'%s'", Joiner.on("', '").join(getKeys()));
   }
 
-  public static String getConfigurationName(Attribute.Transition config) {
-    return config.isHostTransition() ? "host" : "target";
+  public static String getConfigurationName(ConfigurationTransition config) {
+    return (config == ConfigurationTransition.HOST) ? "host" : "target";
   }
 
   @Override
   public String toString() {
-    return getConfigurationName(transition) + ": [ " + printKeys() + "]";
+    return getConfigurationName(config) + ": [ " + printKeys() + "]";
   }
 }
