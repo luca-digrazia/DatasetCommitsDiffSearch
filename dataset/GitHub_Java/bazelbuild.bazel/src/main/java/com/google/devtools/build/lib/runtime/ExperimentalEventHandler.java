@@ -54,12 +54,10 @@ public class ExperimentalEventHandler implements EventHandler {
   private static Logger LOG = Logger.getLogger(ExperimentalEventHandler.class.getName());
   /** Latest refresh of the progress bar, if contents other than time changed */
   static final long MAXIMAL_UPDATE_DELAY_MILLIS = 200L;
-  /** Minimal rate limiting, if the progress bar cannot be updated in place */
-  static final long NO_CURSES_MINIMAL_PROGRESS_RATE_LIMIT = 2000L;
   /** Periodic update interval of a time-dependent progress bar if it can be updated in place */
   static final long SHORT_REFRESH_MILLIS = 1000L;
   /** Periodic update interval of a time-dependent progress bar if it cannot be updated in place */
-  static final long LONG_REFRESH_MILLIS = 20000L;
+  static final long LONG_REFRESH_MILLIS = 5000L;
 
   private static final DateTimeFormatter TIMESTAMP_FORMAT =
       DateTimeFormat.forPattern("(HH:mm:ss.SSS) ");
@@ -109,14 +107,7 @@ public class ExperimentalEventHandler implements EventHandler {
             : new ExperimentalStateTracker(clock);
     this.stateTracker.setSampleSize(options.experimentalUiActionsShown);
     this.numLinesProgressBar = 0;
-    if (this.cursorControl) {
-      this.minimalDelayMillis = Math.round(options.showProgressRateLimit * 1000);
-    } else {
-      this.minimalDelayMillis =
-          Math.max(
-              Math.round(options.showProgressRateLimit * 1000),
-              NO_CURSES_MINIMAL_PROGRESS_RATE_LIMIT);
-    }
+    this.minimalDelayMillis = Math.round(options.showProgressRateLimit * 1000);
     this.minimalUpdateInterval = Math.max(this.minimalDelayMillis, MAXIMAL_UPDATE_DELAY_MILLIS);
     this.stdoutBuffer = new byte[] {};
     this.stderrBuffer = new byte[] {};
@@ -229,7 +220,7 @@ public class ExperimentalEventHandler implements EventHandler {
             if (incompleteLine) {
               crlf();
             }
-            if (showProgress && !buildComplete && cursorControl) {
+            if (showProgress && !buildComplete) {
               addProgressBar();
             }
             terminal.flush();
