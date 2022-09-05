@@ -17,7 +17,6 @@ import static com.google.devtools.build.lib.analysis.config.BuildConfiguration.S
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
@@ -151,7 +150,6 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
     builder.addSourceJars(attributes.getSourceJars());
     builder.setJavacOpts(customJavacOpts);
     builder.setJavacJvmOpts(customJavacJvmOpts);
-    builder.setJavacExecutionInfo(getExecutionInfo());
     builder.setCompressJar(true);
     builder.setSourceGenDirectory(sourceGenDir(outputJar));
     builder.setTempDirectory(tempDir(outputJar));
@@ -164,13 +162,6 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
     builder.setRuleKind(attributes.getRuleKind());
     builder.setTargetLabel(attributes.getTargetLabel());
     getAnalysisEnvironment().registerAction(builder.build());
-  }
-
-  private ImmutableMap<String, String> getExecutionInfo() {
-    if (javaToolchain.getJavacSupportsWorkers()) {
-      return ImmutableMap.of("supports-workers", "1");
-    }
-    return ImmutableMap.of();
   }
 
   /** Returns the bootclasspath explicit set in attributes if present, or else the default. */

@@ -167,11 +167,10 @@ public class JavaOptions extends FragmentOptions {
   public boolean useSourceIjars;
 
   @Option(
-    name = "java_header_compilation",
+    name = "experimental_java_header_compilation",
     defaultValue = "false",
-    category = "semantics",
-    help = "Compile ijars directly from source.",
-    oldName = "experimental_java_header_compilation"
+    category = "undocumented",
+    help = "Experimental: compile ijars directly from source."
   )
   public boolean headerCompilation;
 

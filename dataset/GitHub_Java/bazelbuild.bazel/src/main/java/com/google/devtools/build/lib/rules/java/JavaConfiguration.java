@@ -30,7 +30,9 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.common.options.TriState;
+
 import java.util.List;
+
 import javax.annotation.Nullable;
 
 /** A java compiler configuration containing the flags required for compilation. */
@@ -41,14 +43,16 @@ import javax.annotation.Nullable;
   category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT
 )
 public final class JavaConfiguration extends Fragment {
-  /** Values for the --java_classpath option */
+  /**
+   * Values for the --experimental_java_classpath option
+   */
   public static enum JavaClasspathMode {
     /** Use full transitive classpaths, the default behavior. */
     OFF,
     /** JavaBuilder computes the reduced classpath before invoking javac. */
     JAVABUILDER,
     /** Blaze computes the reduced classpath before invoking JavaBuilder. */
-    EXPERIMENTAL_BLAZE
+    BLAZE
   }
 
   /**
@@ -129,8 +133,7 @@ public final class JavaConfiguration extends Fragment {
   private final boolean useHeaderCompilation;
   private final boolean optimizeHeaderCompilationAnnotationProcessing;
   private final boolean generateJavaDeps;
-  private final boolean strictDepsJavaProtos;
-  private final JavaClasspathMode javaClasspath;
+  private final JavaClasspathMode experimentalJavaClasspath;
   private final ImmutableList<String> javaWarns;
   private final ImmutableList<String> defaultJvmFlags;
   private final ImmutableList<String> checkedConstraints;
@@ -140,17 +143,15 @@ public final class JavaConfiguration extends Fragment {
   private final ImmutableList<Label> extraProguardSpecs;
   private final TriState bundleTranslations;
   private final ImmutableList<Label> translationTargets;
+  private final String javaCpu;
   private final JavaOptimizationMode javaOptimizationMode;
   private final Label javaToolchain;
 
   // TODO(dmarting): remove when we have rolled out the new behavior
   private final boolean legacyBazelJavaTest;
 
-  JavaConfiguration(
-      boolean generateJavaDeps,
-      List<String> defaultJvmFlags,
-      JavaOptions javaOptions,
-      Label javaToolchain)
+  JavaConfiguration(boolean generateJavaDeps,
+      List<String> defaultJvmFlags, JavaOptions javaOptions, Label javaToolchain, String javaCpu)
           throws InvalidConfigurationException {
     this.commandLineJavacFlags =
         ImmutableList.copyOf(JavaHelper.tokenizeJavaOptions(javaOptions.javacOpts));
@@ -160,7 +161,7 @@ public final class JavaConfiguration extends Fragment {
     this.optimizeHeaderCompilationAnnotationProcessing =
         javaOptions.optimizeHeaderCompilationAnnotationProcessing;
     this.generateJavaDeps = generateJavaDeps;
-    this.javaClasspath = javaOptions.javaClasspath;
+    this.experimentalJavaClasspath = javaOptions.experimentalJavaClasspath;
     this.javaWarns = ImmutableList.copyOf(javaOptions.javaWarns);
     this.defaultJvmFlags = ImmutableList.copyOf(defaultJvmFlags);
     this.checkedConstraints = ImmutableList.copyOf(javaOptions.checkedConstraints);
@@ -169,10 +170,10 @@ public final class JavaConfiguration extends Fragment {
     this.proguardBinary = javaOptions.proguard;
     this.extraProguardSpecs = ImmutableList.copyOf(javaOptions.extraProguardSpecs);
     this.bundleTranslations = javaOptions.bundleTranslations;
+    this.javaCpu = javaCpu;
     this.javaToolchain = javaToolchain;
     this.javaOptimizationMode = javaOptions.javaOptimizationMode;
     this.legacyBazelJavaTest = javaOptions.legacyBazelJavaTest;
-    this.strictDepsJavaProtos = javaOptions.strictDepsJavaProtos;
 
     ImmutableList.Builder<Label> translationsBuilder = ImmutableList.builder();
     for (String s : javaOptions.translationTargets) {
@@ -206,6 +207,7 @@ public final class JavaConfiguration extends Fragment {
   @Override
   public void addGlobalMakeVariables(Builder<String, String> globalMakeEnvBuilder) {
     globalMakeEnvBuilder.put("JAVA_TRANSLATIONS", buildTranslations() ? "1" : "0");
+    globalMakeEnvBuilder.put("JAVA_CPU", javaCpu);
   }
 
   /**
@@ -233,7 +235,7 @@ public final class JavaConfiguration extends Fragment {
   }
 
   public JavaClasspathMode getReduceJavaClasspath() {
-    return javaClasspath;
+    return experimentalJavaClasspath;
   }
 
   /**
@@ -335,9 +337,5 @@ public final class JavaConfiguration extends Fragment {
    */
   public boolean useLegacyBazelJavaTest() {
     return legacyBazelJavaTest;
-  }
-
-  public boolean strictDepsJavaProtos() {
-    return strictDepsJavaProtos;
   }
 }

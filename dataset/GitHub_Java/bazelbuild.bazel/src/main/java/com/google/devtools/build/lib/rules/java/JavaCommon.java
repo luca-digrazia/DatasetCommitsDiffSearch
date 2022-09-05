@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.Local
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -637,13 +636,8 @@ public class JavaCommon {
   private static InstrumentedFilesProvider getInstrumentationFilesProvider(RuleContext ruleContext,
       NestedSet<Artifact> filesToBuild, InstrumentationSpec instrumentationSpec) {
     return InstrumentedFilesCollector.collect(
-        ruleContext,
-        instrumentationSpec,
-        JAVA_METADATA_COLLECTOR,
-        filesToBuild,
-        NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
-        NestedSetBuilder.<Pair<String, String>>emptySet(Order.STABLE_ORDER),
-        /*withBaselineCoverage*/!TargetUtils.isTestRule(ruleContext.getTarget()));
+        ruleContext, instrumentationSpec, JAVA_METADATA_COLLECTOR,
+        filesToBuild, /*withBaselineCoverage*/!TargetUtils.isTestRule(ruleContext.getTarget()));
   }
 
   public void addGenJarsProvider(RuleConfiguredTargetBuilder builder,
