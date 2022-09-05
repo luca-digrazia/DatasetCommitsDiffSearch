@@ -41,10 +41,10 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.SkylarkModules;
-import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.common.options.OptionsClassProvider;
 
 import java.lang.reflect.Constructor;
@@ -82,8 +82,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    * Builder for {@link ConfiguredRuleClassProvider}.
    */
   public static class Builder implements RuleDefinitionEnvironment {
-    private final StringBuilder defaultWorkspaceFilePrefix = new StringBuilder();
-    private final StringBuilder defaultWorkspaceFileSuffix = new StringBuilder();
+    private final StringBuilder defaultWorkspaceFile = new StringBuilder();
     private Label preludeLabel;
     private String runfilesPrefix;
     private String toolsRepository;
@@ -104,17 +103,13 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private ConfigurationCollectionFactory configurationCollectionFactory;
     private Class<? extends BuildConfiguration.Fragment> universalFragment;
     private PrerequisiteValidator prerequisiteValidator;
-    private ImmutableMap<String, Object> skylarkAccessibleTopLevels = ImmutableMap.of();
+    private ImmutableMap<String, SkylarkType> skylarkAccessibleJavaClasses = ImmutableMap.of();
     private ImmutableList.Builder<Class<?>> skylarkModules =
         ImmutableList.<Class<?>>builder().addAll(SkylarkModules.MODULES);
     private final List<Class<? extends FragmentOptions>> buildOptions = Lists.newArrayList();
 
-    public void addWorkspaceFilePrefix(String contents) {
-      defaultWorkspaceFilePrefix.append(contents);
-    }
-
-    public void addWorkspaceFileSuffix(String contents) {
-      defaultWorkspaceFileSuffix.append(contents);
+    public void addWorkspaceFile(String contents) {
+      defaultWorkspaceFile.append(contents);
     }
 
     public Builder setPrelude(String preludeLabelString) {
@@ -192,8 +187,8 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       return this;
     }
 
-    public Builder setSkylarkAccessibleTopLevels(ImmutableMap<String, Object> objects) {
-      this.skylarkAccessibleTopLevels = objects;
+    public Builder setSkylarkAccessibleJavaClasses(ImmutableMap<String, SkylarkType> objects) {
+      this.skylarkAccessibleJavaClasses = objects;
       return this;
     }
 
@@ -268,15 +263,14 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
           ImmutableMap.copyOf(ruleClassMap),
           ImmutableMap.copyOf(ruleDefinitionMap),
           ImmutableMap.copyOf(aspectFactoryMap),
-          defaultWorkspaceFilePrefix.toString(),
-          defaultWorkspaceFileSuffix.toString(),
+          defaultWorkspaceFile.toString(),
           ImmutableList.copyOf(buildInfoFactories),
           ImmutableList.copyOf(configurationOptions),
           ImmutableList.copyOf(configurationFragments),
           configurationCollectionFactory,
           universalFragment,
           prerequisiteValidator,
-          skylarkAccessibleTopLevels,
+          skylarkAccessibleJavaClasses,
           skylarkModules.build(),
           buildOptions);
     }
@@ -309,15 +303,10 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   });
 
   /**
-   * Default content that should be added at the beginning of the WORKSPACE file.
+   * A list of relative paths to the WORKSPACE files needed to provide external dependencies for
+   * the rule classes.
    */
-  private final String defaultWorkspaceFilePrefix;
-
-  /**
-   * Default content that should be added at the end of the WORKSPACE file.
-   */
-  private final String defaultWorkspaceFileSuffix;
-
+  String defaultWorkspaceFile;
 
   /**
    * Label for the prelude file.
@@ -385,15 +374,14 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       ImmutableMap<String, RuleClass> ruleClassMap,
       ImmutableMap<String, Class<? extends RuleDefinition>> ruleDefinitionMap,
       ImmutableMap<String, Class<? extends NativeAspectFactory>> aspectFactoryMap,
-      String defaultWorkspaceFilePrefix,
-      String defaultWorkspaceFileSuffix,
+      String defaultWorkspaceFile,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       ImmutableList<Class<? extends FragmentOptions>> configurationOptions,
       ImmutableList<ConfigurationFragmentFactory> configurationFragments,
       ConfigurationCollectionFactory configurationCollectionFactory,
       Class<? extends BuildConfiguration.Fragment> universalFragment,
       PrerequisiteValidator prerequisiteValidator,
-      ImmutableMap<String, Object> skylarkAccessibleJavaClasses,
+      ImmutableMap<String, SkylarkType> skylarkAccessibleJavaClasses,
       ImmutableList<Class<?>> skylarkModules,
       List<Class<? extends FragmentOptions>> buildOptions) {
     this.preludeLabel = preludeLabel;
@@ -402,8 +390,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     this.ruleClassMap = ruleClassMap;
     this.ruleDefinitionMap = ruleDefinitionMap;
     this.aspectFactoryMap = aspectFactoryMap;
-    this.defaultWorkspaceFilePrefix = defaultWorkspaceFilePrefix;
-    this.defaultWorkspaceFileSuffix = defaultWorkspaceFileSuffix;
+    this.defaultWorkspaceFile = defaultWorkspaceFile;
     this.buildInfoFactories = buildInfoFactories;
     this.configurationOptions = configurationOptions;
     this.configurationFragments = configurationFragments;
@@ -489,8 +476,8 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   /**
    * Returns the defaults package for the default settings.
    */
-  public String getDefaultsPackageContent(InvocationPolicy invocationPolicy) {
-    return DefaultsPackage.getDefaultsPackageContent(configurationOptions, invocationPolicy);
+  public String getDefaultsPackageContent() {
+    return DefaultsPackage.getDefaultsPackageContent(configurationOptions);
   }
 
   /**
@@ -513,13 +500,13 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   }
 
   private Environment.Frame createGlobals(
-      ImmutableMap<String, Object> skylarkAccessibleToplLevels,
+      ImmutableMap<String, SkylarkType> skylarkAccessibleJavaClasses,
       ImmutableList<Class<?>> modules) {
     try (Mutability mutability = Mutability.create("ConfiguredRuleClassProvider globals")) {
       Environment env = createSkylarkRuleClassEnvironment(
           mutability, SkylarkModules.getGlobals(modules), null, null, null);
-      for (Map.Entry<String, Object> entry : skylarkAccessibleToplLevels.entrySet()) {
-        env.setup(entry.getKey(), entry.getValue());
+      for (Map.Entry<String, SkylarkType> entry : skylarkAccessibleJavaClasses.entrySet()) {
+        env.setup(entry.getKey(), entry.getValue().getType());
       }
       return env.getGlobals();
     }
@@ -531,7 +518,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       EventHandler eventHandler,
       String astFileContentHashCode,
       Map<String, Extension> importMap) {
-    return Environment.builder(mutability)
+    Environment env = Environment.builder(mutability)
         .setSkylark()
         .setGlobals(globals)
         .setEventHandler(eventHandler)
@@ -539,26 +526,22 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
         .setImportedExtensions(importMap)
         .setLoadingPhase()
         .build();
+    return env;
   }
 
   @Override
   public Environment createSkylarkRuleClassEnvironment(
-      Label extensionLabel, Mutability mutability,
+      Mutability mutability,
       EventHandler eventHandler,
       String astFileContentHashCode,
       Map<String, Extension> importMap) {
     return createSkylarkRuleClassEnvironment(
-        mutability, globals.setLabel(extensionLabel),
-        eventHandler, astFileContentHashCode, importMap);
+        mutability, globals, eventHandler, astFileContentHashCode, importMap);
   }
 
-  @Override
-  public String getDefaultWorkspacePrefix() {
-    return defaultWorkspaceFilePrefix;
-  }
 
   @Override
-  public String getDefaultWorkspaceSuffix() {
-    return defaultWorkspaceFileSuffix;
+  public String getDefaultWorkspaceFile() {
+    return defaultWorkspaceFile;
   }
 }

@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Environment.Frame;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Runtime;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,11 +56,10 @@ public final class SkylarkModules {
 
   private static Environment.Frame createGlobals(List<Class<?>> modules) {
     try (Mutability mutability = Mutability.create("SkylarkModules")) {
-      Environment env =
-          Environment.builder(mutability)
-              .setSkylark()
-              .setGlobals(Environment.DEFAULT_GLOBALS)
-              .build();
+      Environment env = Environment.builder(mutability)
+          .setSkylark()
+          .setGlobals(Environment.SKYLARK)
+          .build();
       for (Class<?> moduleClass : modules) {
         Runtime.registerModuleGlobals(env, moduleClass);
       }
