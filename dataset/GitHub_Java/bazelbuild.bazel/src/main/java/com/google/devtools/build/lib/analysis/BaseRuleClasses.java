@@ -81,8 +81,7 @@ public class BaseRuleClasses {
   static final LateBoundLabelList<BuildConfiguration> ACTION_LISTENER =
       new LateBoundLabelList<BuildConfiguration>() {
     @Override
-    public List<Label> resolve(Rule rule, AttributeMap attributes,
-        BuildConfiguration configuration) {
+    public List<Label> getDefault(Rule rule, BuildConfiguration configuration) {
       // action_listeners are special rules; they tell the build system to add extra_actions to
       // existing rules. As such they need an edge to every ConfiguredTarget with the limitation
       // that they only run on the target configuration and should not operate on action_listeners
@@ -94,8 +93,7 @@ public class BaseRuleClasses {
   private static final LateBoundLabelList<BuildConfiguration> COVERAGE_SUPPORT =
       new LateBoundLabelList<BuildConfiguration>(ImmutableList.of(COVERAGE_SUPPORT_LABEL)) {
         @Override
-        public List<Label> resolve(Rule rule, AttributeMap attributes,
-            BuildConfiguration configuration) {
+        public List<Label> getDefault(Rule rule, BuildConfiguration configuration) {
           return configuration.isCodeCoverageEnabled()
               ? ImmutableList.copyOf(configuration.getCoverageLabels())
               : ImmutableList.<Label>of();
@@ -105,8 +103,7 @@ public class BaseRuleClasses {
   private static final LateBoundLabelList<BuildConfiguration> GCOV =
       new LateBoundLabelList<BuildConfiguration>(ImmutableList.of(COVERAGE_SUPPORT_LABEL)) {
         @Override
-        public List<Label> resolve(Rule rule, AttributeMap attributes,
-            BuildConfiguration configuration) {
+        public List<Label> getDefault(Rule rule, BuildConfiguration configuration) {
           return configuration.isCodeCoverageEnabled()
               ? ImmutableList.copyOf(configuration.getGcovLabels())
               : ImmutableList.<Label>of();
@@ -116,8 +113,7 @@ public class BaseRuleClasses {
   private static final LateBoundLabelList<BuildConfiguration> COVERAGE_REPORT_GENERATOR =
       new LateBoundLabelList<BuildConfiguration>(ImmutableList.of(COVERAGE_SUPPORT_LABEL)) {
         @Override
-        public List<Label> resolve(Rule rule, AttributeMap attributes,
-            BuildConfiguration configuration) {
+        public List<Label> getDefault(Rule rule, BuildConfiguration configuration) {
           return configuration.isCodeCoverageEnabled()
               ? ImmutableList.copyOf(configuration.getCoverageReportGeneratorLabels())
               : ImmutableList.<Label>of();
@@ -130,8 +126,7 @@ public class BaseRuleClasses {
   private static final LateBoundLabel<BuildConfiguration> RUN_UNDER =
       new LateBoundLabel<BuildConfiguration>() {
         @Override
-        public Label resolve(Rule rule, AttributeMap attributes,
-            BuildConfiguration configuration) {
+        public Label getDefault(Rule rule, BuildConfiguration configuration) {
           RunUnder runUnder = configuration.getRunUnder();
           return runUnder == null ? null : runUnder.getLabel();
         }
@@ -211,12 +206,9 @@ public class BaseRuleClasses {
             .nonconfigurable("Used in core loading phase logic with no access to configs"))
         .add(attr("tags", STRING_LIST).orderIndependent().taggable()
             .nonconfigurable("low-level attribute, used in TargetUtils without configurations"))
-        .add(attr("generator_name", STRING).undocumented("internal")
-            .nonconfigurable("static structure of a rule"))
-        .add(attr("generator_function", STRING).undocumented("internal")
-            .nonconfigurable("static structure of a rule"))
-        .add(attr("generator_location", STRING).undocumented("internal")
-            .nonconfigurable("static structure of a rule"))
+        .add(attr("generator_name", STRING).undocumented("internal"))
+        .add(attr("generator_function", STRING).undocumented("internal"))
+        .add(attr("generator_location", STRING).undocumented("internal"))
         .add(attr("testonly", BOOLEAN).value(testonlyDefault)
             .nonconfigurable("policy decision: rules testability should be consistent"))
         .add(attr("features", STRING_LIST).orderIndependent())
@@ -224,11 +216,13 @@ public class BaseRuleClasses {
         .add(attr(RuleClass.COMPATIBLE_ENVIRONMENT_ATTR, LABEL_LIST)
             .allowedRuleClasses(EnvironmentRule.RULE_NAME)
             .cfg(Attribute.ConfigurationTransition.HOST)
-            .allowedFileTypes(FileTypeSet.NO_FILE))
+            .allowedFileTypes(FileTypeSet.NO_FILE)
+            .undocumented("not yet released"))
         .add(attr(RuleClass.RESTRICTED_ENVIRONMENT_ATTR, LABEL_LIST)
             .allowedRuleClasses(EnvironmentRule.RULE_NAME)
             .cfg(Attribute.ConfigurationTransition.HOST)
-            .allowedFileTypes(FileTypeSet.NO_FILE));
+            .allowedFileTypes(FileTypeSet.NO_FILE)
+            .undocumented("not yet released"));
   }
 
   /**

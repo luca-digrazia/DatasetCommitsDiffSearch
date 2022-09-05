@@ -20,9 +20,7 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.TRISTATE;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -30,7 +28,6 @@ import com.google.devtools.build.lib.bazel.rules.cpp.BazelCppRuleClasses;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TriState;
-import com.google.devtools.build.lib.rules.python.PyCommon;
 import com.google.devtools.build.lib.rules.python.PyRuleClasses;
 import com.google.devtools.build.lib.rules.python.PythonVersion;
 import com.google.devtools.build.lib.util.FileType;
@@ -40,6 +37,11 @@ import com.google.devtools.build.lib.util.FileType;
  */
 public final class BazelPyRuleClasses {
   public static final FileType PYTHON_SOURCE = FileType.of(".py");
+
+  public static final String[] ALLOWED_RULES_IN_DEPS = new String[] {
+      "py_binary",
+      "py_library",
+  };
 
   /**
    * Base class for Python rule definitions.
@@ -59,22 +61,8 @@ public final class BazelPyRuleClasses {
           <a href="c-cpp.html#cc_library"><code>cc_library</code></a> rules,
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .override(builder.copy("deps")
-              .mandatoryProviders(ImmutableList.of(PyCommon.PYTHON_SKYLARK_PROVIDER_NAME))
+              .allowedRuleClasses(ALLOWED_RULES_IN_DEPS)
               .allowedFileTypes())
-          /* <!-- #BLAZE_RULE($base_py).ATTRIBUTE(imports) -->
-          List of import directories to be added to the <code>PYTHONPATH</code>.
-          <p>
-          Subject to <a href="make-variables.html">"Make variable"</a> substitution. These import
-          directories will be added for this rule and all rules that depend on it (note: not the
-          rules this rule depends on. Each directory will be added to <code>PYTHONPATH</code> by
-          <a href="#py_binary"><code>py_binary</code></a> rules that depend on this rule.
-          </p>
-          <p>
-          Absolute paths (paths that start with <code>/</code>) and paths that references a path
-          above the execution root are not allowed and will result in an error.
-          </p>
-          <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-          .add(attr("imports", STRING_LIST).value(ImmutableList.<String>of()))
           /* <!-- #BLAZE_RULE($base_py).ATTRIBUTE(srcs_version) -->
           A string specifying the Python major version(s) that the <code>.py</code> source
           files listed in the <code>srcs</code> of this rule are compatible with.
