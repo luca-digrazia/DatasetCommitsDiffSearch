@@ -247,17 +247,6 @@ public final class FuncallExpression extends Expression {
     return numPositionalArgs;
   }
 
-  private String functionName() {
-    String name = func.getName();
-    if (name.equals("$slice")) {
-      return "operator [:]";
-    } else if (name.equals("$index")) {
-      return "operator []";
-    } else {
-      return "function '" + name + "'";
-    }
-  }
-
   @Override
   public String toString() {
     if (func.getName().equals("$slice")) {
@@ -527,8 +516,8 @@ public final class FuncallExpression extends Expression {
         }
       } else {
         throw new EvalException(getLocation(), String.format(
-            "%s is not defined on object of type '%s'",
-            functionName(), EvalUtils.getDataTypeName(objValue)));
+            "function '%s' is not defined on '%s'", func.getName(),
+            EvalUtils.getDataTypeName(objValue)));
       }
     } else { // func(...)
       Object funcValue = func.eval(env);

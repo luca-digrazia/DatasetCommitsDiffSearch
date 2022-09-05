@@ -14,6 +14,9 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.BUNDLE_FILE;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.NESTED_BUNDLE;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.ByteSource;
@@ -32,7 +35,6 @@ import java.util.Map;
  * proto and bytes on-the-fly rather than eagerly. This is to prevent a copy of the bundle files and
  * .xcdatamodels from being stored for each {@code objc_binary} (or any bundle) being built.
  */
-// TODO(bazel-team): Move the logic in this class to Bundling (as a .toControl method).
 final class BundleMergeControlBytes extends ByteSource {
   private final Bundling rootBundling;
   private final Artifact mergedIpa;
@@ -56,10 +58,12 @@ final class BundleMergeControlBytes extends ByteSource {
   }
 
   private Control control(String mergeZipPrefix, Bundling bundling) {
+    ObjcProvider objcProvider = bundling.getObjcProvider();
     mergeZipPrefix += bundling.getBundleDir() + "/";
 
     BundleMergeProtos.Control.Builder control = BundleMergeProtos.Control.newBuilder()
-        .addAllBundleFile(BundleableFile.toBundleFiles(bundling.getBundleFiles()))
+        .addAllBundleFile(BundleableFile.toBundleFiles(bundling.getExtraBundleFiles()))
+        .addAllBundleFile(BundleableFile.toBundleFiles(objcProvider.get(BUNDLE_FILE)))
         // TODO(bazel-team): This should really be bundling.getBundleInfoplistInputs since (most of)
         // those are editable, whereas this is usually the programatically merged plist. If we pass
         // the sources here though, any synthetic data (generated plists with blaze-derived values)
@@ -102,7 +106,7 @@ final class BundleMergeControlBytes extends ByteSource {
           .setExecutableName(bundling.getName());
     }
 
-    for (Bundling nestedBundling : bundling.getNestedBundlings()) {
+    for (Bundling nestedBundling : bundling.getObjcProvider().get(NESTED_BUNDLE)) {
       if (nestedBundling.getArchitecture().equals(bundling.getArchitecture())) {
         control.addNestedBundle(control(mergeZipPrefix, nestedBundling));
       }

@@ -198,8 +198,7 @@ final class BundleSupport {
         .addPath(zipOutput.getExecPath())
         .add(archiveRoot)
         .addPath(ObjcRuleClasses.IBTOOL)
-        .add("--minimum-deployment-target").add(bundling.getMinimumOsVersion())
-        .add("--module").add(ruleContext.getLabel().getName());
+        .add("--minimum-deployment-target").add(bundling.getMinimumOsVersion());
 
     for (TargetDeviceFamily targetDeviceFamily : attributes.families()) {
       commandLine.add("--target-device").add(targetDeviceFamily.name().toLowerCase(Locale.US));
@@ -249,7 +248,16 @@ final class BundleSupport {
       ruleContext.registerAction(
           ObjcRuleClasses.spawnJavaOnDarwinActionBuilder(attributes.ibtoolzipDeployJar())
               .setMnemonic("XibCompile")
-              .setCommandLine(ibActionsCommandLine(archiveRoot, zipOutput, original))
+              .setCommandLine(CustomCommandLine.builder()
+                  // The next three arguments are positional,
+                  // i.e. they don't have flags before them.
+                  .addPath(zipOutput.getExecPath())
+                  .add(archiveRoot)
+                  .addPath(ObjcRuleClasses.IBTOOL)
+
+                  .add("--minimum-deployment-target").add(bundling.getMinimumOsVersion())
+                  .addPath(original.getExecPath())
+                  .build())
               .addOutput(zipOutput)
               .addInput(original)
               .build(ruleContext));

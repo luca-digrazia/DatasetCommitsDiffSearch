@@ -717,24 +717,28 @@ public abstract class EvalUtils {
   /**
    * Build a map of kwarg arguments from a list, removing null-s or None-s.
    *
-   * @param init a series of key, value pairs (as consecutive arguments)
-   *   as in {@code optionMap(k1, v1, k2, v2, k3, v3, map)}
-   *   where each key is a String, each value is an arbitrary Objet.
+   * @param init a series of key, value pairs (as consecutive arguments), and optionally
+   *   a lone map at the end, as in {@code optionMap(k1, v1, k2, v2, k3, v3, map)}
+   *   where each key is a String, each value is an arbitrary Objet, and the map
+   *   must be a {@code Map<String, Object>}.
    * @return a {@code Map<String, Object>} that has all the specified entries,
    *   where key, value pairs appearing earlier have precedence,
    *   i.e. {@code k1, v1} may override {@code k3, v3}.
    *
-   * Ignore any entry where the value is null or None.
-   * Keys cannot be null.
+   * Ignore any entry the key or value of which is null or None.
    */
   @SuppressWarnings("unchecked")
   public static ImmutableMap<String, Object> optionMap(Object... init) {
     ImmutableMap.Builder<String, Object> b = new ImmutableMap.Builder<>();
-    Preconditions.checkState(init.length % 2 == 0);
-    for (int i = init.length - 2; i >= 0; i -= 2) {
-      String key = (String) Preconditions.checkNotNull(init[i]);
+    int l = init.length;
+    if (l % 2 == 1) { // If there's an odd number of argument, the last one is a Map.
+      l--;
+      b.putAll((Map<String, Object>) init[l]);
+    }
+    for (int i = l - 2; i >= 0; i -= 2) {
+      String key = (String) init[i];
       Object value = init[i + 1];
-      if (!isNullOrNone(value)) {
+      if (!(isNullOrNone(key) || isNullOrNone(value))) {
         b.put(key, value);
       }
     }
