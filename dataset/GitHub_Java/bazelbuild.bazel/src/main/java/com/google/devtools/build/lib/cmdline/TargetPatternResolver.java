@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.cmdline;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
-import com.google.devtools.build.lib.util.BatchCallback;
-import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
  * A callback interface that is used during the process of converting target patterns (such as
@@ -34,15 +32,15 @@ public interface TargetPatternResolver<T> {
   void warn(String msg);
 
   /**
-   * Returns a single target corresponding to the given label, or null. This method may only throw
-   * an exception if the current thread was interrupted.
+   * Returns a single target corresponding to the given name, or null. This method may only throw an
+   * exception if the current thread was interrupted.
    */
-  T getTargetOrNull(Label label) throws InterruptedException;
+  T getTargetOrNull(String targetName) throws InterruptedException;
 
   /**
-   * Returns a single target corresponding to the given label, or an empty or failed result.
+   * Returns a single target corresponding to the given name, or an empty or failed result.
    */
-  ResolvedTargets<T> getExplicitTarget(Label label)
+  ResolvedTargets<T> getExplicitTarget(String targetName)
       throws TargetParsingException, InterruptedException;
 
   /**
@@ -59,12 +57,11 @@ public interface TargetPatternResolver<T> {
       throws TargetParsingException, InterruptedException;
 
   /**
-   * Computes the set containing the targets found below the given {@code directory}, passing it in
-   * batches to {@code callback}. Conceptually, this method should look for all packages that start
-   * with the {@code directory} (as a proper prefix directory, i.e., "foo/ba" is not a proper prefix
-   * of "foo/bar/"), and then collect all targets in each such package (subject to
-   * {@code rulesOnly}) as if calling {@link #getTargetsInPackage}. The specified directory is not
-   * necessarily a valid package name.
+   * Returns the set containing the targets found below the given {@code directory}. Conceptually,
+   * this method should look for all packages that start with the {@code directory} (as a proper
+   * prefix directory, i.e., "foo/ba" is not a proper prefix of "foo/bar/"), and then collect all
+   * targets in each such package (subject to {@code rulesOnly}) as if calling {@link
+   * #getTargetsInPackage}. The specified directory is not necessarily a valid package name.
    *
    * <p>Note that the {@code directory} can be empty, which corresponds to the "//..." pattern.
    * Implementations may choose not to support this case and throw an {@link
@@ -79,21 +76,15 @@ public interface TargetPatternResolver<T> {
    * @param rulesOnly whether to return rules only
    * @param excludedSubdirectories a set of transitive subdirectories beneath {@code directory}
    *    to ignore
-   * @param callback the callback to receive the result, possibly in multiple batches.
    * @throws TargetParsingException under implementation-specific failure conditions
    */
-  <E extends Exception> void findTargetsBeneathDirectory(
-      RepositoryName repository,
-      String originalPattern,
-      String directory,
-      boolean rulesOnly,
-      ImmutableSet<PathFragment> excludedSubdirectories,
-      BatchCallback<T, E> callback)
-      throws TargetParsingException, E, InterruptedException;
+  ResolvedTargets<T> findTargetsBeneathDirectory(RepositoryName repository, String originalPattern,
+      String directory, boolean rulesOnly, ImmutableSet<String> excludedSubdirectories)
+      throws TargetParsingException, InterruptedException;
 
   /**
-   * Returns true, if and only if the given package identifier corresponds to a package, i.e., a
-   * file with the name {@code packageName/BUILD} exists in the appropriat repository.
+   * Returns true, if and only if the given name corresponds to a package, i.e., a file with the
+   * name {@code packageName/BUILD} exists.
    */
   boolean isPackage(PackageIdentifier packageIdentifier);
 
