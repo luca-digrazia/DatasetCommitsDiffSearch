@@ -3,7 +3,6 @@ package org.nlpcn.es4sql.parse;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.durid.sql.ast.expr.*;
 import org.durid.sql.ast.statement.*;
 import org.nlpcn.es4sql.domain.*;
 import org.nlpcn.es4sql.domain.Where.CONN;
@@ -11,6 +10,16 @@ import org.nlpcn.es4sql.exception.SqlParseException;
 import org.durid.sql.ast.SQLExpr;
 import org.durid.sql.ast.SQLOrderBy;
 import org.durid.sql.ast.SQLOrderingSpecification;
+import org.durid.sql.ast.expr.SQLBetweenExpr;
+import org.durid.sql.ast.expr.SQLBinaryOpExpr;
+import org.durid.sql.ast.expr.SQLCharExpr;
+import org.durid.sql.ast.expr.SQLIdentifierExpr;
+import org.durid.sql.ast.expr.SQLInListExpr;
+import org.durid.sql.ast.expr.SQLMethodInvokeExpr;
+import org.durid.sql.ast.expr.SQLNullExpr;
+import org.durid.sql.ast.expr.SQLNumericLiteralExpr;
+import org.durid.sql.ast.expr.SQLPropertyExpr;
+import org.durid.sql.ast.expr.SQLQueryExpr;
 import org.durid.sql.dialect.mysql.ast.statement.MySqlSelectQueryBlock;
 import org.durid.sql.dialect.mysql.ast.statement.MySqlSelectQueryBlock.Limit;
 
@@ -106,25 +115,20 @@ public class SqlParser {
 	}
 
 	private void explanCond(String opear, SQLExpr expr, Where where) throws SqlParseException {
-        if (expr instanceof SQLBinaryOpExpr) {
-            SQLBinaryOpExpr soExpr = (SQLBinaryOpExpr) expr;
-            Condition condition = new Condition(CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getOperator().name, parseValue(soExpr.getRight()));
-            where.addWhere(condition);
-        } else if (expr instanceof SQLInListExpr) {
-            SQLInListExpr siExpr = (SQLInListExpr) expr;
-            Condition condition = new Condition(CONN.valueOf(opear), siExpr.getExpr().toString(), siExpr.isNot() ? "NOT IN" : "IN", parseValue(siExpr.getTargetList()));
-            where.addWhere(condition);
-        } else if (expr instanceof SQLBetweenExpr) {
-            SQLBetweenExpr between = ((SQLBetweenExpr) expr);
-            Condition condition = new Condition(CONN.valueOf(opear), between.getTestExpr().toString(), between.isNot() ? "NOT BETWEEN" : "BETWEEN", new Object[]{parseValue(between.beginExpr),
-                    parseValue(between.endExpr)});
-            where.addWhere(condition);
-        } else if (expr instanceof SQLNotExpr){
-            String left = ((SQLBinaryOpExpr) ((SQLNotExpr) expr).getExpr()).getLeft().toString();
-            SQLExpr right = ((SQLBinaryOpExpr) ((SQLNotExpr) expr).getExpr()).getRight();
-            Condition condition = new Condition(CONN.valueOf(opear),left, Condition.OPEAR.N, parseValue(right));
-            where.addWhere(condition);
-        } else {
+		if (expr instanceof SQLBinaryOpExpr) {
+			SQLBinaryOpExpr soExpr = (SQLBinaryOpExpr) expr;
+			Condition condition = new Condition(CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getOperator().name, parseValue(soExpr.getRight()));
+			where.addWhere(condition);
+		} else if (expr instanceof SQLInListExpr) {
+			SQLInListExpr siExpr = (SQLInListExpr) expr;
+			Condition condition = new Condition(CONN.valueOf(opear), siExpr.getExpr().toString(), siExpr.isNot() ? "NOT IN" : "IN", parseValue(siExpr.getTargetList()));
+			where.addWhere(condition);
+		} else if (expr instanceof SQLBetweenExpr) {
+			SQLBetweenExpr between = ((SQLBetweenExpr) expr);
+			Condition condition = new Condition(CONN.valueOf(opear), between.getTestExpr().toString(), between.isNot() ? "NOT BETWEEN" : "BETWEEN", new Object[] { parseValue(between.beginExpr),
+					parseValue(between.endExpr) });
+			where.addWhere(condition);
+		} else {
 			throw new SqlParseException("err find condition " + expr.getClass());
 		}
 	}
@@ -168,41 +172,10 @@ public class SqlParser {
 			return;
 		}
 		List<SQLExpr> items = groupBy.getItems();
-
-		List<SQLExpr> standardGroupBys = new ArrayList<>();
 		for (SQLExpr sqlExpr : items) {
-			if ((!(sqlExpr instanceof SQLIdentifierExpr) || ((SQLIdentifierExpr) sqlExpr).isWrappedInParens()) && !standardGroupBys.isEmpty()) {
-				// flush the standard group bys
-				select.addGroupBy(convertExprsToFields(standardGroupBys));
-				standardGroupBys = new ArrayList<>();
-			}
-
-			if (sqlExpr instanceof SQLIdentifierExpr) {
-				SQLIdentifierExpr identifierExpr = (SQLIdentifierExpr) sqlExpr;
-				if (identifierExpr.isWrappedInParens()) {
-					// single item with parens (should be its own agg)
-					select.addGroupBy(FieldMaker.makeField(identifierExpr, null));
-				} else {
-					// single item without parens (should latch to before or after list)
-					standardGroupBys.add(identifierExpr);
-				}
-			} else if (sqlExpr instanceof SQLListExpr) {
-				// multiple items in their own list
-				SQLListExpr listExpr = (SQLListExpr) sqlExpr;
-				select.addGroupBy(convertExprsToFields(listExpr.getItems()));
-			}
+			select.addGroupBy(FieldMaker.makeField(sqlExpr, null));
 		}
 	}
-
-	private List<Field> convertExprsToFields(List<? extends SQLExpr> exprs) throws SqlParseException {
-		List<Field> fields = new ArrayList<>(exprs.size());
-		for (SQLExpr expr : exprs) {
-			fields.add(FieldMaker.makeField(expr, null));
-		}
-		return fields;
-	}
-
-
 
 	private void findOrderBy(MySqlSelectQueryBlock query, Select select) throws SqlParseException {
 		SQLOrderBy orderBy = query.getOrderBy();
@@ -220,7 +193,6 @@ public class SqlParser {
 			}
 			String type = sqlSelectOrderByItem.getType().toString();
 			for (String name : lists) {
-				name = name.replace("`", "");
 				select.addOrderBy(name, type);
 			}
 			lists.clear();
