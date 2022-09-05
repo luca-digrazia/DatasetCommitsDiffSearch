@@ -243,7 +243,6 @@ import android.taobao.atlas.hack.Hack;
 import android.taobao.atlas.runtime.newcomponent.activity.ActivityBridge;
 import android.taobao.atlas.util.FileUtils;
 import android.taobao.atlas.util.StringUtils;
-import android.taobao.atlas.util.log.impl.AtlasMonitor;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -252,9 +251,7 @@ import android.content.BroadcastReceiver;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 public class InstrumentationHook extends Instrumentation {
@@ -410,10 +407,7 @@ public class InstrumentationHook extends Instrumentation {
 			BundleImpl impl = (BundleImpl)Atlas.getInstance().getBundle(bundleName);
 			if(impl!=null&&impl.checkValidate()) {
 				return callback.execStartActivity();
-			}else if (Atlas.getInstance().getBundle(bundleName) == null && !AtlasBundleInfoManager.instance().getBundleInfo(bundleName).isInternal() && Framework.getInstalledBundle(bundleName,AtlasBundleInfoManager.instance().getBundleInfo(bundleName).unique_tag) == null) {
-				fallBackToClassNotFoundCallback(context,intent,bundleName);
-				return null;
-			} else {
+			}else {
 				if(ActivityTaskMgr.getInstance().peekTopActivity()!=null && Looper.getMainLooper().getThread().getId()==Thread.currentThread().getId()) {
 					final String component = componentName;
 					asyncStartActivity(context, bundleName, intent, requestCode, component,callback);
@@ -574,34 +568,34 @@ public class InstrumentationHook extends Instrumentation {
         }
 
         try {
-			// BundleListing.BundleInfo info = AtlasBundleInfoManager.instance().getBundleInfo(AtlasBundleInfoManager
-			// 	.instance().getBundleForComponet(className));
-			// if(info!=null){
-			// 	BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(info.getPkgName());
-			// 	if(impl==null || !impl.checkValidate()){
-			// 		Log.e("Instrumentation","bundleInvalid: "+info.getPkgName());
-			// 		throw new ClassNotFoundException("bundleInvalid");
-			// 	}
-			// }
-			activity = mBase.newActivity(cl, className, intent);
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-			Map<String, Object> detail = new HashMap<>();
-			detail.put("className", className);
-			AtlasMonitor.getInstance().report(AtlasMonitor.INSTRUMENTATION_HOOK_CLASS_NOT_FOUND_EXCEPTION, detail, e);
-
-			String launchActivityName = RuntimeVariables.getLauncherClassName();
+			BundleListing.BundleInfo info = AtlasBundleInfoManager.instance().getBundleInfo(AtlasBundleInfoManager
+				.instance().getBundleForComponet(className));
+			if(info!=null){
+				BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(info.getPkgName());
+				if(impl==null || !impl.checkValidate()){
+					Log.e("Instrumentation","bundleInvalid: "+info.getPkgName());
+					throw new ClassNotFoundException("bundleInvalid");
+				}
+			}
+            activity = mBase.newActivity(cl, className, intent);
+        } catch (ClassNotFoundException e) {
+        	String launchActivityName = "";
+			Intent launchIntentForPackage = RuntimeVariables.androidApplication.getPackageManager().getLaunchIntentForPackage(RuntimeVariables.androidApplication.getPackageName());
+			if (launchIntentForPackage != null) {
+				ComponentName componentName = launchIntentForPackage.resolveActivity(RuntimeVariables.androidApplication.getPackageManager());
+				launchActivityName = componentName.getClassName();
+			}
             if (TextUtils.isEmpty(launchActivityName)) {
                 throw e;
             }
-
             ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
             List<RunningTaskInfo> runningTaskInfos = manager.getRunningTasks(1);
             if (runningTaskInfos != null && runningTaskInfos.size() > 0) {
-                if (runningTaskInfos.get(0).numActivities > 0) {
+                if (runningTaskInfos.get(0).numActivities > 1) {
                 	if(Framework.getClassNotFoundCallback()!=null){
                 		if(intent.getComponent() ==null){
             			intent.setClassName(context,className);
+
             		}
                         try {
                             Framework.getClassNotFoundCallback().returnIntent(intent);
