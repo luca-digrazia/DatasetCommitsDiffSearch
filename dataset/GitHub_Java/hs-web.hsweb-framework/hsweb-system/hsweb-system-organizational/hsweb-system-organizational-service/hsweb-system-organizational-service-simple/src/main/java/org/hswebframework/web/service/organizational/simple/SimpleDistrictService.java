@@ -12,13 +12,11 @@ import org.hswebframework.web.service.DefaultDSLQueryService;
 import org.hswebframework.web.service.GenericEntityService;
 import org.hswebframework.web.id.IDGenerator;
 import org.hswebframework.web.service.organizational.DistrictService;
-import org.hswebframework.web.service.organizational.event.ClearPersonCacheEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
@@ -42,9 +40,6 @@ public class SimpleDistrictService extends AbstractTreeSortService<DistrictEntit
     @Autowired
     private OrganizationalDao organizationalDao;
 
-    @Autowired
-    private ApplicationEventPublisher publisher;
-
     @Override
     protected IDGenerator<String> getIDGenerator() {
         return IDGenerator.MD5;
@@ -64,7 +59,6 @@ public class SimpleDistrictService extends AbstractTreeSortService<DistrictEntit
     @Override
     @CacheEvict(allEntries = true)
     public int updateByPk(String id, DistrictEntity entity) {
-        publisher.publishEvent(new ClearPersonCacheEvent());
         return super.updateByPk(id, entity);
     }
 
@@ -88,7 +82,6 @@ public class SimpleDistrictService extends AbstractTreeSortService<DistrictEntit
                 .total() > 0) {
             throw new BusinessException("行政区域下存在机构信息,无法删除!");
         }
-        publisher.publishEvent(new ClearPersonCacheEvent());
         return super.deleteByPk(id);
     }
 
@@ -124,7 +117,6 @@ public class SimpleDistrictService extends AbstractTreeSortService<DistrictEntit
                 .set(DistrictEntity.status, DataStatus.STATUS_DISABLED)
                 .where(DistrictEntity.id, id)
                 .exec();
-        publisher.publishEvent(new ClearPersonCacheEvent());
     }
 
     @Override
@@ -135,6 +127,5 @@ public class SimpleDistrictService extends AbstractTreeSortService<DistrictEntit
                 .set(DistrictEntity.status, DataStatus.STATUS_ENABLED)
                 .where(DistrictEntity.id, id)
                 .exec();
-        publisher.publishEvent(new ClearPersonCacheEvent());
     }
 }
