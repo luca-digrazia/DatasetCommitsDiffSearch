@@ -19,7 +19,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.actions.cache.ActionCache.Entry;
-import com.google.devtools.build.lib.actions.cache.DigestUtils;
+import com.google.devtools.build.lib.actions.cache.Digest;
 import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.events.Event;
@@ -27,11 +27,13 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -108,7 +110,7 @@ public class ActionCacheChecker {
     for (Artifact artifact : artifacts) {
       mdMap.put(artifact.getExecPathString(), metadataHandler.getMetadataMaybe(artifact));
     }
-    return !DigestUtils.fromMetadata(mdMap).equals(entry.getFileDigest());
+    return !Digest.fromMetadata(mdMap).equals(entry.getFileDigest());
   }
 
   private void reportCommand(EventHandler handler, Action action) {
@@ -240,7 +242,7 @@ public class ActionCacheChecker {
 
   @Nullable
   public Iterable<Artifact> getCachedInputs(Action action, PackageRootResolver resolver)
-      throws PackageRootResolutionException, InterruptedException {
+      throws PackageRootResolutionException {
     ActionCache.Entry entry = getCacheEntry(action);
     if (entry == null || entry.isCorrupted()) {
       return ImmutableList.of();
