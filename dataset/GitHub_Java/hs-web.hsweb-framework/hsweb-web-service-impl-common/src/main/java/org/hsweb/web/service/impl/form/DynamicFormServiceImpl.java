@@ -323,7 +323,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
             var.put("headerMapper", headerMapper);
             var.put("excelData", excelData);
             var.put("dataList", dataList);
-            metaData.on("export.import.before", var);
+            metaData.on("export.excel", var);
         } else
             excelData.forEach(data -> {
                 Map<String, Object> newData = new HashMap<>();
@@ -347,7 +347,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
                     var.put("headerMapper", headerMapper);
                     var.put("excelData", excelData);
                     var.put("dataList", dataList);
-                    TriggerResult triggerResult = metaData.on("export.import.each", var);
+                    TriggerResult triggerResult = metaData.on("export.excel", var);
                     if (!triggerResult.isSuccess()) {
                         throw new TriggerException(triggerResult.getMessage());
                     }
