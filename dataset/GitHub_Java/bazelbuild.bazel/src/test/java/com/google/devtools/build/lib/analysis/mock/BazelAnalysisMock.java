@@ -23,15 +23,11 @@ import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.bazel.rules.BazelConfiguration;
 import com.google.devtools.build.lib.bazel.rules.BazelConfigurationCollection;
 import com.google.devtools.build.lib.bazel.rules.BazelRuleClassProvider;
-import com.google.devtools.build.lib.bazel.rules.python.BazelPythonConfiguration;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
-import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader;
-import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.JvmConfigurationLoader;
 import com.google.devtools.build.lib.rules.objc.ObjcConfigurationLoader;
-import com.google.devtools.build.lib.rules.python.PythonConfigurationLoader;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 
@@ -45,16 +41,7 @@ public class BazelAnalysisMock extends AnalysisMock {
 
   @Override
   public void setupMockClient(MockToolsConfig config) throws IOException {
-    config.overwrite("WORKSPACE",
-        "bind(",
-        "  name = 'objc_proto_lib',",
-        "  actual = '//objcproto:ProtocolBuffers_lib',",
-        ")",
-        "bind(",
-        "  name = 'objc_proto_cpp_lib',",
-        "  actual = '//objcproto:ProtocolBuffersCPP_lib',",
-        ")");
-
+    config.create("WORKSPACE");
     config.create("tools/defaults/BUILD");
     config.create("tools/jdk/BUILD",
         "package(default_visibility=['//visibility:public'])",
@@ -66,15 +53,11 @@ public class BazelAnalysisMock extends AnalysisMock {
         "filegroup(name='langtools', srcs=['jdk/lib/tools.jar'])",
         "filegroup(name='bootclasspath', srcs=['jdk/jre/lib/rt.jar'])",
         "filegroup(name='extdir', srcs=glob(['jdk/jre/lib/ext/*']))",
-        // "dummy" is needed so that RedirectChaser stops here
-        "filegroup(name='java', srcs = ['jdk/jre/bin/java', 'dummy'])",
+        "filegroup(name='java', srcs = ['jdk/jre/bin/java'])",
         "exports_files(['JavaBuilder_deploy.jar','SingleJar_deploy.jar',",
-        "               'JavaBuilderCanary_deploy.jar', 'ijar', 'GenClass_deploy.jar'])");
+        "               'JavaBuilderCanary_deploy.jar', 'ijar'])");
     config.create("tools/cpp/BUILD",
-        "filegroup(name = 'toolchain', ",
-        "    srcs = [':cc-compiler-local', ':cc-compiler-darwin', ':cc-compiler-piii',",
-        "            ':cc-compiler-armeabi-v7a', ':empty'],",
-        ")",
+        "filegroup(name = 'toolchain', srcs = [':cc-compiler-local', ':empty'])",
         "cc_toolchain(name = 'cc-compiler-k8', all_files = ':empty', compiler_files = ':empty',",
         "    cpu = 'local', dwp_files = ':empty', dynamic_runtime_libs = [':empty'], ",
         "    linker_files = ':empty',",
@@ -86,12 +69,6 @@ public class BazelAnalysisMock extends AnalysisMock {
         "    objcopy_files = ':empty', static_runtime_libs = [':empty'], strip_files = ':empty',",
         ")",
         "cc_toolchain(name = 'cc-compiler-darwin', all_files = ':empty', ",
-        "    compiler_files = ':empty',",
-        "    cpu = 'local', dwp_files = ':empty', dynamic_runtime_libs = [':empty'], ",
-        "    linker_files = ':empty',",
-        "    objcopy_files = ':empty', static_runtime_libs = [':empty'], strip_files = ':empty',",
-        ")",
-        "cc_toolchain(name = 'cc-compiler-armeabi-v7a', all_files = ':empty', ",
         "    compiler_files = ':empty',",
         "    cpu = 'local', dwp_files = ':empty', dynamic_runtime_libs = [':empty'], ",
         "    linker_files = ':empty',",
@@ -129,13 +106,9 @@ public class BazelAnalysisMock extends AnalysisMock {
     return new ConfigurationFactory(new BazelConfigurationCollection(),
         new BazelConfiguration.Loader(),
         new CppConfigurationLoader(Functions.<String>identity()),
-        new PythonConfigurationLoader(Functions.<String>identity()),
-        new BazelPythonConfiguration.Loader(),
         new JvmConfigurationLoader(false, BazelRuleClassProvider.JAVA_CPU_SUPPLIER),
         new JavaConfigurationLoader(),
-        new ObjcConfigurationLoader(),
-        new J2ObjcConfiguration.Loader(),
-        new AndroidConfiguration.Loader());
+        new ObjcConfigurationLoader());
   }
 
   @Override

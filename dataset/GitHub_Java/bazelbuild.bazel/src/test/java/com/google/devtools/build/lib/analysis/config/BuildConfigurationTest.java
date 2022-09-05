@@ -16,9 +16,9 @@ package com.google.devtools.build.lib.analysis.config;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.util.ConfigurationTestCase;
+import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
@@ -93,12 +93,11 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
       return;
     }
 
-    BuildConfigurationCollection configs = createCollection("--cpu=piii");
-    BuildConfiguration config = Iterables.getOnlyElement(configs.getTargetConfigurations());
+    BuildConfiguration config = create("--cpu=piii");
     assertEquals(Label.parseAbsoluteUnchecked("//third_party/crosstool/mock:cc-compiler-piii"),
         config.getFragment(CppConfiguration.class).getCcToolchainRuleLabel());
 
-    BuildConfiguration hostConfig = configs.getHostConfiguration();
+    BuildConfiguration hostConfig = config.getConfiguration(ConfigurationTransition.HOST);
     assertEquals(Label.parseAbsoluteUnchecked("//third_party/crosstool/mock:cc-compiler-k8"),
         hostConfig.getFragment(CppConfiguration.class).getCcToolchainRuleLabel());
   }

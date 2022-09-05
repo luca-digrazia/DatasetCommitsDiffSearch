@@ -46,7 +46,6 @@ public class JavaOptions extends FragmentOptions {
   static final String DEFAULT_LANGTOOLS_EXTDIR = "//tools/jdk:extdir";
   static final String DEFAULT_JAVABUILDER = "//tools/jdk:JavaBuilder_deploy.jar";
   static final String DEFAULT_SINGLEJAR = "//tools/jdk:SingleJar_deploy.jar";
-  static final String DEFAULT_GENCLASS = "//tools/jdk:GenClass_deploy.jar";
   static final String DEFAULT_JAVABASE = "//tools/jdk:jdk";
   static final String DEFAULT_IJAR = "//tools/jdk:ijar";
   static final String DEFAULT_TOOLCHAIN = "//tools/jdk:toolchain";
@@ -226,13 +225,6 @@ public class JavaOptions extends FragmentOptions {
       help = "Label of the filegroup that contains the SingleJar jar.")
   public Label singleJarTop;
 
-  @Option(name = "genclass_top",
-      defaultValue = DEFAULT_GENCLASS,
-      category = "version",
-      converter = LabelConverter.class,
-      help = "Label of the filegroup that contains the GenClass jar.")
-  public Label genClassTop;
-
   @Option(name = "ijar_top",
       defaultValue = DEFAULT_IJAR,
       category = "version",
@@ -290,12 +282,6 @@ public class JavaOptions extends FragmentOptions {
       help = "Check the listed constraint.")
   public List<String> checkedConstraints;
 
-  @Option(name = "experimental_disable_jvm",
-      defaultValue = "false",
-      category = "undocumented",
-      help = "Disables the Jvm configuration entirely.")
-  public boolean disableJvm;
-
   @Override
   public FragmentOptions getHost(boolean fallback) {
     JavaOptions host = (JavaOptions) getDefault();
@@ -309,7 +295,6 @@ public class JavaOptions extends FragmentOptions {
     host.javaBuilderTop = javaBuilderTop;
     host.javaToolchain = javaToolchain;
     host.singleJarTop = singleJarTop;
-    host.genClassTop = genClassTop;
     host.iJarTop = iJarTop;
 
     // Java builds often contain complicated code generators for which
@@ -331,7 +316,6 @@ public class JavaOptions extends FragmentOptions {
     }
     labelMap.put("javabuilder", javaBuilderTop);
     labelMap.put("singlejar", singleJarTop);
-    labelMap.put("genclass", genClassTop);
     labelMap.put("ijar", iJarTop);
     labelMap.put("java_toolchain", javaToolchain);
     labelMap.putAll("translation", getTranslationLabels());
@@ -349,7 +333,6 @@ public class JavaOptions extends FragmentOptions {
     result.put("JAVAC_EXTDIR", ImmutableSet.of(javacExtdir));
     result.put("JAVABUILDER", ImmutableSet.of(javaBuilderTop));
     result.put("SINGLEJAR", ImmutableSet.of(singleJarTop));
-    result.put("GENCLASS", ImmutableSet.of(genClassTop));
     result.put("IJAR", ImmutableSet.of(iJarTop));
     result.put("JAVA_TOOLCHAIN", ImmutableSet.of(javaToolchain));
 
