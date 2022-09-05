@@ -1532,6 +1532,14 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
+   * Returns whether we are sending transitive headers of cppmap files as mandatory compilation
+   * inputs.
+   */
+  public boolean sendTransitiveHeaderModuleSrcs() {
+    return cppOptions.sendTransitiveHeaderModuleSrcs;
+  }
+
+  /**
    * Returns whether we are processing headers in dependencies of built C++ targets.
    */
   public boolean processHeadersInDependencies() {
@@ -1907,10 +1915,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   @Override
   public boolean performsStaticLink() {
     return getLinkOptions().contains("-static");
-  }
-
-  public boolean alwaysAttachExtraActions() {
-    return true;
   }
 
   /**
