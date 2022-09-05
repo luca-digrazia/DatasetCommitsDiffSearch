@@ -154,7 +154,7 @@ public class PackageGroupTest {
   }
 
   private Package getPackage(String packageName) throws Exception {
-    PathFragment buildFileFragment = PathFragment.create(packageName).getRelative("BUILD");
+    PathFragment buildFileFragment = new PathFragment(packageName).getRelative("BUILD");
 
     Path buildFile = scratch.resolve(buildFileFragment.getPathString());
     return packages.createPackage(packageName, buildFile);

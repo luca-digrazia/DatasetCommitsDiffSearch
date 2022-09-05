@@ -269,6 +269,21 @@ public class BuildView {
    * Return value for {@link BuildView#update} and {@code BuildTool.prepareToBuild}.
    */
   public static final class AnalysisResult {
+
+    public static final AnalysisResult EMPTY =
+        new AnalysisResult(
+            ImmutableList.<ConfiguredTarget>of(),
+            ImmutableList.<AspectValue>of(),
+            null,
+            null,
+            null,
+            ImmutableList.<Artifact>of(),
+            ImmutableList.<ConfiguredTarget>of(),
+            ImmutableList.<ConfiguredTarget>of(),
+            null,
+            ImmutableMap.<PackageIdentifier, Path>of(),
+            "");
+
     private final ImmutableList<ConfiguredTarget> targetsToBuild;
     @Nullable private final ImmutableList<ConfiguredTarget> targetsToTest;
     @Nullable private final String error;
@@ -561,7 +576,13 @@ public class BuildView {
     // Tests. This must come last, so that the exclusive tests are scheduled after everything else.
     scheduleTestsIfRequested(parallelTests, exclusiveTests, topLevelOptions, allTargetsToTest);
 
-    String error = createErrorMessage(loadingResult, skyframeAnalysisResult);
+    String error = loadingResult.hasTargetPatternError()
+        ? "execution phase successful, but there were errors parsing the target pattern"
+        : loadingResult.hasLoadingError() || skyframeAnalysisResult.hasLoadingError()
+            ? "execution phase succeeded, but there were loading phase errors"
+            : skyframeAnalysisResult.hasAnalysisError()
+                ? "execution phase succeeded, but not all targets were analyzed"
+                : null;
 
     final WalkableGraph graph = skyframeAnalysisResult.getWalkableGraph();
     final ActionGraph actionGraph = new ActionGraph() {
@@ -589,19 +610,6 @@ public class BuildView {
         topLevelOptions,
         skyframeAnalysisResult.getPackageRoots(),
         loadingResult.getWorkspaceName());
-  }
-
-  @Nullable
-  public static String createErrorMessage(
-      LoadingResult loadingResult, @Nullable SkyframeAnalysisResult skyframeAnalysisResult) {
-    return loadingResult.hasTargetPatternError()
-        ? "command succeeded, but there were errors parsing the target pattern"
-        : loadingResult.hasLoadingError()
-                || (skyframeAnalysisResult != null && skyframeAnalysisResult.hasLoadingError())
-            ? "command succeeded, but there were loading phase errors"
-            : (skyframeAnalysisResult != null && skyframeAnalysisResult.hasAnalysisError())
-                ? "command succeeded, but not all targets were analyzed"
-                : null;
   }
 
   private static NestedSet<Artifact> getBaselineCoverageArtifacts(
