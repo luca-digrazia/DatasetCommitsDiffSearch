@@ -70,8 +70,7 @@ public final class ProjectFileSupport {
           env.getReporter(),
           runtime.getWorkspace(),
           env.getWorkingDirectory()).getPathEntries();
-      ProjectFile projectFile = projectFileProvider.getProjectFile(
-          env.getWorkingDirectory(), packagePath, projectFilePath);
+      ProjectFile projectFile = projectFileProvider.getProjectFile(packagePath, projectFilePath);
       env.getReporter().handle(Event.info("Using " + projectFile.getName()));
 
       try {

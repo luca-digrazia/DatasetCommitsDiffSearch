@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.profiler.statistics.MultiProfileStatistics;
 import com.google.devtools.build.lib.profiler.statistics.PhaseStatistics;
 import com.google.devtools.build.lib.profiler.statistics.PhaseSummaryStatistics;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
+import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -177,6 +178,7 @@ public final class ProfileCommand implements BlazeCommand {
 
   @Override
   public ExitCode exec(final CommandEnvironment env, OptionsProvider options) {
+    final BlazeRuntime runtime = env.getRuntime();
     ProfileOptions opts =
         options.getOptions(ProfileOptions.class);
 
@@ -192,7 +194,7 @@ public final class ProfileCommand implements BlazeCommand {
         MultiProfileStatistics statistics =
             new MultiProfileStatistics(
                 env.getWorkingDirectory(),
-                env.getWorkspaceName(),
+                runtime.getWorkspaceName(),
                 options.getResidue(),
                 getInfoListener(env),
                 opts.vfsStatsLimit > 0);
@@ -248,7 +250,7 @@ public final class ProfileCommand implements BlazeCommand {
               phaseStatistics.put(
                   phase,
                   new PhaseStatistics(
-                      phase, info, env.getWorkspaceName(), opts.vfsStatsLimit > 0));
+                      phase, info, runtime.getWorkspaceName(), opts.vfsStatsLimit > 0));
             }
 
             CriticalPathStatistics critPathStats = new CriticalPathStatistics(info);
