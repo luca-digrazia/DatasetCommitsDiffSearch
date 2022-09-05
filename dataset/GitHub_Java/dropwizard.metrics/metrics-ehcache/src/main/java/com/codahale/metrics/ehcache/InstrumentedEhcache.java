@@ -20,7 +20,7 @@ public class InstrumentedEhcache extends EhcacheDecoratorAdapter {
     /**
      * Instruments the given {@link Ehcache} instance with get and put timers
      * and a set of gauges for Ehcache's built-in statistics:
-     * <p>
+     * <p/>
      * <table>
      * <caption>Ehcache timered metrics</caption>
      * <tr>
@@ -106,12 +106,12 @@ public class InstrumentedEhcache extends EhcacheDecoratorAdapter {
      * "None", "Best Effort" or "Guaranteed".</td>
      * </tr>
      * </table>
-     * <p>
+     *
      * <b>N.B.: This enables Ehcache's sampling statistics with an accuracy
      * level of "none."</b>
      *
-     * @param cache    an {@link Ehcache} instance
-     * @param registry a {@link MetricRegistry}
+     * @param cache       an {@link Ehcache} instance
+     * @param registry    a {@link MetricRegistry}
      * @return an instrumented decorator for {@code cache}
      * @see StatisticsGateway
      */

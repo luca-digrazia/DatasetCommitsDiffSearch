@@ -171,13 +171,11 @@ public class ExponentiallyDecayingReservoirTest {
                 while (running.get()) {
                     // Wait for the test thread to update it's counter
                     // before updaing the reservoir.
-                    while (true) {
-                        int next = testUpdates.get();
-                        if (previous < next) {
-                            previous = next;
-                            break;
-                        }
-                    }
+                    int next;
+                    while (previous >= (next = testUpdates.get()))
+                        ; // spin lock
+
+                    previous = next;
 
                     // Update the reservoir.  This needs to occur at the
                     // same time as the test thread's update.
@@ -214,13 +212,11 @@ public class ExponentiallyDecayingReservoirTest {
                 reservoir.update(1000);
 
                 // Wait for the other thread to finish it's update.
-                while (true) {
-                    int next = threadUpdates.get();
-                    if (previous < next) {
-                        previous = next;
-                        break;
-                    }
-                }
+                int next;
+                while (previous >= (next = threadUpdates.get()))
+                    ; // spin lock
+
+                previous = next;
             }
 
             // Terminate the thread.

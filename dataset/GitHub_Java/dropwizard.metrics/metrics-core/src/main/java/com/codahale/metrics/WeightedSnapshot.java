@@ -186,10 +186,13 @@ public class WeightedSnapshot extends Snapshot {
      */
     @Override
     public void dump(OutputStream output) {
-        try (PrintWriter out = new PrintWriter(new OutputStreamWriter(output, UTF_8))) {
+        final PrintWriter out = new PrintWriter(new OutputStreamWriter(output, UTF_8));
+        try {
             for (long value : values) {
                 out.printf("%d%n", value);
             }
+        } finally {
+            out.close();
         }
     }
 }

@@ -6,22 +6,17 @@ import org.junit.Test;
 
 import java.util.concurrent.TimeUnit;
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class MetricsModuleTest {
     private final ObjectMapper mapper = new ObjectMapper().registerModule(
-            new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, false));
+            new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, false, MetricFilter.ALL));
 
     @Test
     public void serializesGauges() throws Exception {
-        final Gauge<Integer> gauge = new Gauge<Integer>() {
-            @Override
-            public Integer getValue() {
-                return 100;
-            }
-        };
+        final Gauge<Integer> gauge = () -> 100;
 
         assertThat(mapper.writeValueAsString(gauge))
                 .isEqualTo("{\"value\":100}");
@@ -29,11 +24,8 @@ public class MetricsModuleTest {
 
     @Test
     public void serializesGaugesThatThrowExceptions() throws Exception {
-        final Gauge<Integer> gauge = new Gauge<Integer>() {
-            @Override
-            public Integer getValue() {
-                throw new IllegalArgumentException("poops");
-            }
+        final Gauge<Integer> gauge = () -> {
+            throw new IllegalArgumentException("poops");
         };
 
         assertThat(mapper.writeValueAsString(gauge))
@@ -84,7 +76,7 @@ public class MetricsModuleTest {
                                    "\"stddev\":5.0}");
 
         final ObjectMapper fullMapper = new ObjectMapper().registerModule(
-                new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, true));
+                new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, true, MetricFilter.ALL));
 
         assertThat(fullMapper.writeValueAsString(histogram))
                 .isEqualTo("{" +
@@ -107,9 +99,9 @@ public class MetricsModuleTest {
         final Meter meter = mock(Meter.class);
         when(meter.getCount()).thenReturn(1L);
         when(meter.getMeanRate()).thenReturn(2.0);
-        when(meter.getOneMinuteRate()).thenReturn(3.0);
+        when(meter.getOneMinuteRate()).thenReturn(5.0);
         when(meter.getFiveMinuteRate()).thenReturn(4.0);
-        when(meter.getFifteenMinuteRate()).thenReturn(5.0);
+        when(meter.getFifteenMinuteRate()).thenReturn(3.0);
 
         assertThat(mapper.writeValueAsString(meter))
                 .isEqualTo("{" +
@@ -163,15 +155,15 @@ public class MetricsModuleTest {
                                    "\"p99\":900.0," +
                                    "\"p999\":1000.0," +
                                    "\"stddev\":400.0," +
-                                   "\"m15_rate\":3.0," +
-                                   "\"m1_rate\":5.0," +
+                                   "\"m15_rate\":5.0," +
+                                   "\"m1_rate\":3.0," +
                                    "\"m5_rate\":4.0," +
                                    "\"mean_rate\":2.0," +
                                    "\"duration_units\":\"milliseconds\"," +
                                    "\"rate_units\":\"calls/second\"}");
 
         final ObjectMapper fullMapper = new ObjectMapper().registerModule(
-                new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, true));
+                new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, true, MetricFilter.ALL));
 
         assertThat(fullMapper.writeValueAsString(timer))
                 .isEqualTo("{" +
@@ -187,8 +179,8 @@ public class MetricsModuleTest {
                                    "\"p999\":1000.0," +
                                    "\"values\":[1.0,2.0,3.0]," +
                                    "\"stddev\":400.0," +
-                                   "\"m15_rate\":3.0," +
-                                   "\"m1_rate\":5.0," +
+                                   "\"m15_rate\":5.0," +
+                                   "\"m1_rate\":3.0," +
                                    "\"m5_rate\":4.0," +
                                    "\"mean_rate\":2.0," +
                                    "\"duration_units\":\"milliseconds\"," +
@@ -201,7 +193,7 @@ public class MetricsModuleTest {
 
         assertThat(mapper.writeValueAsString(registry))
                 .isEqualTo("{" +
-                                   "\"version\":\"3.0.0\"," +
+                                   "\"version\":\"4.0.0\"," +
                                    "\"gauges\":{}," +
                                    "\"counters\":{}," +
                                    "\"histograms\":{}," +
