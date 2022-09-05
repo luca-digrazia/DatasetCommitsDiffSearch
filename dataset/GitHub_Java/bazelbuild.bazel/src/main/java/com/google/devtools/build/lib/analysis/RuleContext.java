@@ -29,7 +29,6 @@ import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimaps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionRegistry;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -380,7 +379,7 @@ public final class RuleContext extends TargetContext
   }
 
   @Override
-  public void registerAction(ActionAnalysisMetadata... action) {
+  public void registerAction(Action... action) {
     getAnalysisEnvironment().registerAction(action);
   }
 
@@ -696,7 +695,8 @@ public final class RuleContext extends TargetContext
     AnalysisUtils.checkProvider(classType);
     List<? extends TransitiveInfoCollection> transitiveInfoCollections =
         getPrerequisites(attributeName, mode);
-
+    
+    // Use an ImmutableListMultimap.Builder here to preserve ordering.
     ImmutableListMultimap.Builder<BuildConfiguration, C> result =
         ImmutableListMultimap.builder();
     for (TransitiveInfoCollection prerequisite : transitiveInfoCollections) {
@@ -704,24 +704,6 @@ public final class RuleContext extends TargetContext
       if (prerequisiteProvider != null) {
         result.put(prerequisite.getConfiguration(), prerequisiteProvider);
       }
-    }
-    return result.build();
-  }
-
-  /**
-   * For a given attribute, returns all {@link TransitiveInfoCollection}s provided by targets
-   * of that attribute. Each {@link TransitiveInfoCollection} is keyed by the
-   * {@link BuildConfiguration} under which the collection was created.
-   */
-  public ImmutableListMultimap<BuildConfiguration, TransitiveInfoCollection>
-      getPrerequisitesByConfiguration(String attributeName, Mode mode) {
-    List<? extends TransitiveInfoCollection> transitiveInfoCollections =
-        getPrerequisites(attributeName, mode);
-
-    ImmutableListMultimap.Builder<BuildConfiguration, TransitiveInfoCollection> result =
-        ImmutableListMultimap.builder();
-    for (TransitiveInfoCollection prerequisite : transitiveInfoCollections) {
-      result.put(prerequisite.getConfiguration(), prerequisite);
     }
     return result.build();
   }
