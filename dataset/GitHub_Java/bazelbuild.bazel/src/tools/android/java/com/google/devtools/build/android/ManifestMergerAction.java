@@ -116,13 +116,6 @@ public class ManifestMergerAction {
         category = "output",
         help = "Path for the merged manifest.")
     public Path manifestOutput;
-
-    @Option(name = "log",
-        defaultValue = "null",
-        category = "output",
-        converter = PathConverter.class,
-        help = "Path to where the merger log should be written.")
-    public Path log;
   }
 
   private static final String[] PERMISSION_TAGS =
@@ -181,8 +174,7 @@ public class ManifestMergerAction {
             mergeeManifests.build(),
             options.mergeType,
             options.manifestValues,
-            options.manifestOutput,
-            options.log);
+            options.manifestOutput);
       } else {
         // Only need to stamp custom package into the library level.
         mergedManifest = resourceProcessor.writeManifestPackage(

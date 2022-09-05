@@ -13,10 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.android.builder.core.VariantType;
+import com.android.builder.core.VariantConfiguration;
+import com.android.builder.core.VariantConfiguration.Type;
 import com.android.manifmerger.ManifestMerger2;
 import com.android.manifmerger.ManifestMerger2.MergeType;
-import com.android.repository.Revision;
+import com.android.sdklib.repository.FullRevision;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.common.options.Converter;
@@ -66,7 +67,7 @@ public final class Converters {
 
     @Override
     public String getTypeDescription() {
-      return "unvalidated android data in the format " + UnvalidatedAndroidData.EXPECTED_FORMAT;
+      return "unvalidated android data in the format " + UnvalidatedAndroidData.expectedFormat();
     }
   }
 
@@ -89,7 +90,7 @@ public final class Converters {
     @Override
     public String getTypeDescription() {
       return "unvalidated android directories in the format "
-          + UnvalidatedAndroidDirectories.EXPECTED_FORMAT;
+          + UnvalidatedAndroidDirectories.expectedFormat();
     }
   }
 
@@ -103,7 +104,7 @@ public final class Converters {
     @Override
     public List<DependencyAndroidData> convert(String input) throws OptionsParsingException {
       if (input.isEmpty()) {
-        return ImmutableList.of();
+        return ImmutableList.<DependencyAndroidData>of();
       }
       try {
         ImmutableList.Builder<DependencyAndroidData> builder = ImmutableList.builder();
@@ -120,58 +121,8 @@ public final class Converters {
     @Override
     public String getTypeDescription() {
       return "a list of dependency android data in the format "
-          + DependencyAndroidData.EXPECTED_FORMAT + "[,...]";
-    }
-  }
-
-  /**
-   * Converter for a {@link SerializedAndroidData}.
-   */
-  public static class SerializedAndroidDataConverter implements Converter<SerializedAndroidData> {
-
-    @Override
-    public SerializedAndroidData convert(String input) throws OptionsParsingException {
-      try {
-        return SerializedAndroidData.valueOf(input);
-      } catch (IllegalArgumentException e) {
-        throw new OptionsParsingException(
-            String.format("invalid SerializedAndroidData: %s", e.getMessage()), e);
-      }
-    }
-
-    @Override
-    public String getTypeDescription() {
-      return "preparsed android data in the format " + SerializedAndroidData.EXPECTED_FORMAT;
-    }
-  }
-
-  /**
-   * Converter for a list of {@link SerializedAndroidData}.
-   */
-  public static class SerializedAndroidDataListConverter
-      implements Converter<List<SerializedAndroidData>> {
-
-    @Override
-    public List<SerializedAndroidData> convert(String input) throws OptionsParsingException {
-      if (input.isEmpty()) {
-        return ImmutableList.of();
-      }
-      try {
-        ImmutableList.Builder<SerializedAndroidData> builder = ImmutableList.builder();
-        for (String entry : input.split("&")) {
-          builder.add(SerializedAndroidData.valueOf(entry));
-        }
-        return builder.build();
-      } catch (IllegalArgumentException e) {
-        throw new OptionsParsingException(
-            String.format("invalid SerializedAndroidData: %s", e.getMessage()), e);
-      }
-    }
-
-    @Override
-    public String getTypeDescription() {
-      return "a list of preparsed android data in the format "
-          + SerializedAndroidData.EXPECTED_FORMAT + "[&...]";
+          + "resources[#resources]:assets[#assets]:manifest:r.txt"
+          + "[,resources[#resources]:assets[#assets]:manifest:r.txt]";
     }
   }
 
@@ -208,15 +159,15 @@ public final class Converters {
   }
 
   /**
-   * Converter for {@link Revision}. Relies on {@code Revision#parseRevision(String)} to
+   * Converter for {@link FullRevision}. Relies on {@code FullRevision#parseRevision(String)} to
    * perform conversion and validation.
    */
-  public static class RevisionConverter implements Converter<Revision> {
+  public static class FullRevisionConverter implements Converter<FullRevision> {
 
     @Override
-    public Revision convert(String input) throws OptionsParsingException {
+    public FullRevision convert(String input) throws OptionsParsingException {
       try {
-        return Revision.parseRevision(input);
+        return FullRevision.parseRevision(input);
       } catch (NumberFormatException e) {
         throw new OptionsParsingException(e.getMessage());
       }
@@ -271,10 +222,11 @@ public final class Converters {
     }
   }
 
-  /** Converter for {@link VariantType}. */
-  public static class VariantTypeConverter extends EnumConverter<VariantType> {
-    public VariantTypeConverter() {
-      super(VariantType.class, "variant type");
+  /** Converter for {@link VariantConfiguration}.{@link Type}. */
+  public static class VariantConfigurationTypeConverter
+      extends EnumConverter<VariantConfiguration.Type> {
+    public VariantConfigurationTypeConverter() {
+      super(VariantConfiguration.Type.class, "variant configuration type");
     }
   }
 
@@ -329,15 +281,6 @@ public final class Converters {
     }
   }
 
-  // Commas that are not escaped by a backslash.
-  private static final String UNESCAPED_COMMA_REGEX = "(?<!\\\\)\\,";
-  // Colons that are not escaped by a backslash.
-  private static final String UNESCAPED_COLON_REGEX = "(?<!\\\\)\\:";
-
-  private static String unescapeInput(String input) {
-    return input.replace("\\:", ":").replace("\\,", ",");
-  }
-
   /**
    * A converter for dictionary arguments of the format key:value[,key:value]*. The keys and values
    * may contain colons and commas as long as they are escaped with a backslash.
@@ -358,8 +301,8 @@ public final class Converters {
       }
       Map<K, V> map = new LinkedHashMap<>();
       // Only split on comma and colon that are not escaped with a backslash
-      for (String entry : input.split(UNESCAPED_COMMA_REGEX)) {
-        String[] entryFields = entry.split(UNESCAPED_COLON_REGEX, -1);
+      for (String entry : input.split("(?<!\\\\)\\,")) {
+        String[] entryFields = entry.split("(?<!\\\\)\\:", -1);
         if (entryFields.length < 2) {
           throw new OptionsParsingException(String.format(
               "Dictionary entry [%s] does not contain both a key and a value.",
@@ -370,7 +313,7 @@ public final class Converters {
               entry));
         }
         // Unescape any comma or colon that is not a key or value separator.
-        String keyString = unescapeInput(entryFields[0]);
+        String keyString = entryFields[0].replace("\\:", ":").replace("\\,", ",");
         K key = keyConverter.convert(keyString);
         if (map.containsKey(key)) {
           throw new OptionsParsingException(String.format(
@@ -378,7 +321,7 @@ public final class Converters {
               keyString));
         }
         // Unescape any comma or colon that is not a key or value separator.
-        String valueString = unescapeInput(entryFields[1]);
+        String valueString = entryFields[1].replace("\\:", ":").replace("\\,", ",");
         V value = valueConverter.convert(valueString);
         map.put(key, value);
       }
@@ -408,6 +351,22 @@ public final class Converters {
     // The way {@link OptionsData} checks for generic types requires convert to have literal type
     // parameters and not argument type parameters.
     @Override public Map<String, String> convert(String input) throws OptionsParsingException {
+      return super.convert(input);
+    }
+  }
+
+  /**
+   * A converter for dictionary arguments of the format key:value[,key:value]*. The keys and values
+   * may contain colons and commas as long as they are escaped with a backslash. The key type is
+   * Path and the value type is String.
+   */
+  public static class PathStringDictionaryConverter extends DictionaryConverter<Path, String> {
+    public PathStringDictionaryConverter() {
+      super(new PathConverter(), IDENTITY_CONVERTER);
+    }
+    // The way {@link OptionsData} checks for generic types requires convert to have literal type
+    // parameters and not argument type parameters.
+    @Override public Map<Path, String> convert(String input) throws OptionsParsingException {
       return super.convert(input);
     }
   }
