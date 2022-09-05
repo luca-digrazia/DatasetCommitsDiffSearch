@@ -18,10 +18,12 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -37,6 +39,7 @@ import javax.annotation.Nullable;
  */
 public class EvaluationResult<T extends SkyValue> {
 
+  private final boolean hasError;
   @Nullable private final Exception catastrophe;
 
   private final Map<SkyKey, T> resultMap;
@@ -49,10 +52,14 @@ public class EvaluationResult<T extends SkyValue> {
   private EvaluationResult(
       Map<SkyKey, T> result,
       Map<SkyKey, ErrorInfo> errorMap,
+      boolean hasError,
       @Nullable Exception catastrophe,
       @Nullable WalkableGraph walkableGraph) {
+    Preconditions.checkState(errorMap.isEmpty() || hasError,
+        "result=%s, errorMap=%s", result, errorMap);
     this.resultMap = Preconditions.checkNotNull(result);
     this.errorMap = Preconditions.checkNotNull(errorMap);
+    this.hasError = hasError;
     this.catastrophe = catastrophe;
     this.walkableGraph = walkableGraph;
   }
@@ -66,11 +73,12 @@ public class EvaluationResult<T extends SkyValue> {
   }
 
   /**
-   * @return Whether or not the eval successfully evaluated all requested values. True iff
-   * {@link #getCatastrophe} or {@link #getError} returns non-null.
+   * @return Whether or not the eval successfully evaluated all requested values. Note that this
+   * may return true even if all values returned are available in get(). This happens if a top-level
+   * value depends transitively on some value that recovered from a {@link SkyFunctionException}.
    */
   public boolean hasError() {
-    return catastrophe != null || !errorMap.isEmpty();
+    return hasError;
   }
 
   /** @return catastrophic error encountered during evaluation, if any */
@@ -137,7 +145,7 @@ public class EvaluationResult<T extends SkyValue> {
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
-        .add("catastrophe", catastrophe)
+        .add("hasError", hasError)
         .add("errorMap", errorMap)
         .add("resultMap", resultMap)
         .toString();
@@ -155,6 +163,7 @@ public class EvaluationResult<T extends SkyValue> {
   public static class Builder<T extends SkyValue> {
     private final Map<SkyKey, T> result = new HashMap<>();
     private final Map<SkyKey, ErrorInfo> errors = new HashMap<>();
+    private boolean hasError = false;
     @Nullable private Exception catastrophe = null;
     private WalkableGraph walkableGraph = null;
 
@@ -183,17 +192,21 @@ public class EvaluationResult<T extends SkyValue> {
     public Builder<T> mergeFrom(EvaluationResult<T> otherResult) {
       result.putAll(otherResult.resultMap);
       errors.putAll(otherResult.errorMap);
+      hasError |= otherResult.hasError;
       catastrophe = otherResult.catastrophe;
       return this;
     }
 
     public EvaluationResult<T> build() {
-      return new EvaluationResult<>(result, errors, catastrophe, walkableGraph);
+      return new EvaluationResult<>(result, errors, hasError, catastrophe, walkableGraph);
     }
 
-    public Builder<T> setCatastrophe(Exception catastrophe) {
+    public void setHasError(boolean hasError) {
+      this.hasError = hasError;
+    }
+
+    public void setCatastrophe(Exception catastrophe) {
       this.catastrophe = catastrophe;
-      return this;
     }
   }
 }
