@@ -32,7 +32,7 @@ public class Slf4jReporter extends AbstractPollingReporter {
      * not filtering metrics.
      */
     public static class Builder {
-        private final MetricRegistry registry;
+        private MetricRegistry registry;
         private Logger logger;
         private Marker marker;
         private TimeUnit rateUnit;
