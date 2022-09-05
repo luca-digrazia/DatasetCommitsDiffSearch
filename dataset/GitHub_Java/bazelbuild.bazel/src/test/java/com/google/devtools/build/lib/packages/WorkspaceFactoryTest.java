@@ -15,10 +15,11 @@
 package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Package.Builder;
@@ -27,11 +28,13 @@ import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.vfs.Path;
-import java.io.IOException;
-import java.util.List;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.io.IOException;
+import java.util.List;
 
 /**
  * Tests for WorkspaceFactory.
@@ -51,7 +54,7 @@ public class WorkspaceFactoryTest {
   @Test
   public void testWorkspaceName() throws Exception {
     WorkspaceFactoryHelper helper = parse("workspace(name = 'my_ws')");
-    assertThat(helper.getPackage().getWorkspaceName()).isEqualTo("my_ws");
+    assertEquals("my_ws", helper.getPackage().getWorkspaceName());
   }
 
   @Test
@@ -82,31 +85,6 @@ public class WorkspaceFactoryTest {
         false, "workspace(name = 'foo')");
     assertThat(helper.getParserError()).contains(
         "workspace() function should be used only at the top of the WORKSPACE file");
-  }
-
-  @Test
-  public void testRegisterToolchains() throws Exception {
-    WorkspaceFactoryHelper helper = parse("register_toolchains('//toolchain:tc1')");
-    assertThat(helper.getPackage().getRegisteredToolchainLabels())
-        .containsExactly(Label.parseAbsolute("//toolchain:tc1"));
-  }
-
-  @Test
-  public void testRegisterToolchains_multipleLabels() throws Exception {
-    WorkspaceFactoryHelper helper =
-        parse("register_toolchains(", "  '//toolchain:tc1',", "  '//toolchain:tc2')");
-    assertThat(helper.getPackage().getRegisteredToolchainLabels())
-        .containsExactly(
-            Label.parseAbsolute("//toolchain:tc1"), Label.parseAbsolute("//toolchain:tc2"));
-  }
-
-  @Test
-  public void testRegisterToolchains_multipleCalls() throws Exception {
-    WorkspaceFactoryHelper helper =
-        parse("register_toolchains('//toolchain:tc1')", "register_toolchains('//toolchain:tc2')");
-    assertThat(helper.getPackage().getRegisteredToolchainLabels())
-        .containsExactly(
-            Label.parseAbsolute("//toolchain:tc1"), Label.parseAbsolute("//toolchain:tc2"));
   }
 
   private WorkspaceFactoryHelper parse(String... args) {
@@ -159,17 +137,17 @@ public class WorkspaceFactoryTest {
       this.exception = exception;
     }
 
-    public Package getPackage() throws InterruptedException {
+    public Package getPackage() {
       return builder.build();
     }
 
     public void assertLexingExceptionThrown() {
-      assertThat(exception).isNotNull();
-      assertThat(exception).hasMessageThat().contains("Failed to parse /workspace/WORKSPACE");
+      assertNotNull(exception);
+      assertThat(exception.getMessage()).contains("Failed to parse /workspace/WORKSPACE");
     }
 
     public String getLexerError() {
-      assertThat(events).hasSize(1);
+      assertEquals(1, events.size());
       return events.get(0).getMessage();
     }
 

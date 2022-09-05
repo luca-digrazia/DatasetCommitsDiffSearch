@@ -33,20 +33,20 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.WorkspaceFactory;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
-import com.google.devtools.build.lib.runtime.ServerBuilder;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.workspace.maven.DefaultModelResolver;
 import com.google.devtools.build.workspace.maven.Resolver;
 import com.google.devtools.build.workspace.maven.Resolver.InvalidArtifactCoordinateException;
 import com.google.devtools.build.workspace.maven.Rule;
-import java.io.IOException;
-import java.util.List;
+
 import org.apache.maven.model.building.ModelSource;
 import org.apache.maven.model.resolution.UnresolvableModelException;
+
+import java.io.IOException;
+import java.util.List;
 
 /**
  * Finds the transitive dependencies of a WORKSPACE file.
@@ -61,24 +61,22 @@ public class WorkspaceResolver {
   WorkspaceResolver(Resolver resolver, EventHandler handler) {
     this.resolver = resolver;
     this.handler = handler;
-    ServerBuilder serverBuilder = new ServerBuilder();
     ConfiguredRuleClassProvider.Builder ruleClassBuilder =
         new ConfiguredRuleClassProvider.Builder();
     List<BlazeModule> blazeModules = BlazeRuntime.createModules(BazelMain.BAZEL_MODULES);
+    ImmutableList.Builder<EnvironmentExtension> environmentExtensions = ImmutableList.builder();
     for (BlazeModule blazeModule : blazeModules) {
-      try {
-        blazeModule.serverInit(null, serverBuilder);
-      } catch (AbruptExitException e) {
-        throw new RuntimeException(e);
-      }
       blazeModule.initializeRuleClasses(ruleClassBuilder);
+      environmentExtensions.add(blazeModule.getPackageEnvironmentExtension());
     }
     this.ruleClassProvider = ruleClassBuilder.build();
-    this.environmentExtensions = serverBuilder.getEnvironmentExtensions();
+    this.environmentExtensions = environmentExtensions.build();
   }
 
-  /** Converts the WORKSPACE file content into an ExternalPackage. */
-  public Package parse(Path workspacePath) throws InterruptedException {
+  /**
+   * Converts the WORKSPACE file content into an ExternalPackage.
+   */
+  public Package parse(Path workspacePath) {
     Package.Builder builder = Package.newExternalPackageBuilder(
         Package.Builder.DefaultHelper.INSTANCE,
         workspacePath,

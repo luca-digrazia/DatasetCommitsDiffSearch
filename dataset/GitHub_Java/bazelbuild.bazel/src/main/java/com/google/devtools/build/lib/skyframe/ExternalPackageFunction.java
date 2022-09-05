@@ -14,41 +14,25 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.devtools.build.lib.packages.WorkspaceFileValue;
-import com.google.devtools.build.lib.repository.ExternalPackageHelper;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import javax.annotation.Nullable;
 
 /**
- * A SkyFunction for parsing the {@code //external} package.
+ * A SkyFunction for resolving //external:* bindings.
  *
  * <p>This function iterates through the WorkspaceFileValue-s to get the last WorkspaceFileValue
- * that will contain all the bind statements from the WORKSPACE file.
+ * that will contains all the bind statements from the workspace file.
  */
 public class ExternalPackageFunction implements SkyFunction {
-  @AutoCodec @AutoCodec.VisibleForSerialization
-  static final SkyKey KEY = () -> SkyFunctions.EXTERNAL_PACKAGE;
-
-  private final ExternalPackageHelper externalPackageHelper;
-
-  public ExternalPackageFunction(ExternalPackageHelper externalPackageHelper) {
-    this.externalPackageHelper = externalPackageHelper;
-  }
 
   @Nullable
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
-    RootedPath workspacePath = externalPackageHelper.findWorkspaceFile(env);
-    if (env.valuesMissing()) {
-      return null;
-    }
-
-    // This currently cannot be null due to a hack in ExternalPackageUtil.findWorkspaceFile()
-    // TODO(lberki): Remove that hack and handle the case when the WORKSPACE file is not found.
+  public SkyValue compute(SkyKey skyKey, Environment env) {
+    RootedPath workspacePath = (RootedPath) skyKey.argument();
     SkyKey key = WorkspaceFileValue.key(workspacePath);
     WorkspaceFileValue value = (WorkspaceFileValue) env.getValue(key);
     if (value == null) {
@@ -70,8 +54,10 @@ public class ExternalPackageFunction implements SkyFunction {
     return null;
   }
 
-  /** Returns the singleton {@link SkyKey} for the external package. */
-  public static SkyKey key() {
-    return KEY;
+  /**
+   * Returns a SkyKey to find the WORKSPACE file at the given path.
+   */
+  public static SkyKey key(RootedPath workspacePath) {
+    return SkyKey.create(SkyFunctions.EXTERNAL_PACKAGE, workspacePath);
   }
 }

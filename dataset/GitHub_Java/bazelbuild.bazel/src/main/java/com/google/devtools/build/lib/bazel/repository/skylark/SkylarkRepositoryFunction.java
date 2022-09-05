@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
-import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
@@ -56,12 +55,6 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
     }
   }
 
-  private final HttpDownloader httpDownloader;
-
-  public SkylarkRepositoryFunction(HttpDownloader httpDownloader) {
-    this.httpDownloader = httpDownloader;
-  }
-
   /**
    * Skylark repository context functions can throw the result of this function to notify the
    * SkylarkRepositoryFunction that a dependency was missing and the evaluation of the function must
@@ -96,8 +89,8 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
               .setSkylark()
               .setEventHandler(env.getListener())
               .build();
-      SkylarkRepositoryContext skylarkRepositoryContext = new SkylarkRepositoryContext(
-          rule, outputDirectory, env, getClientEnvironment(), httpDownloader);
+      SkylarkRepositoryContext skylarkRepositoryContext =
+          new SkylarkRepositoryContext(rule, outputDirectory, env, getClientEnvironment());
 
       // This has side-effect, we don't care about the output.
       // Also we do a lot of stuff in there, maybe blocking operations and we should certainly make
