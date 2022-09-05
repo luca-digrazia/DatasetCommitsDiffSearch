@@ -50,15 +50,15 @@ public interface QueryEnvironment<T> {
       this.integer = integer;
     }
 
-    public static Argument of(QueryExpression expression) {
+    static Argument of(QueryExpression expression) {
       return new Argument(ArgumentType.EXPRESSION, expression, null, 0);
     }
 
-    public static Argument of(String word) {
+    static Argument of(String word) {
       return new Argument(ArgumentType.WORD, null, word, 0);
     }
 
-    public static Argument of(int integer) {
+    static Argument of(int integer) {
       return new Argument(ArgumentType.INTEGER, null, null, integer);
     }
 

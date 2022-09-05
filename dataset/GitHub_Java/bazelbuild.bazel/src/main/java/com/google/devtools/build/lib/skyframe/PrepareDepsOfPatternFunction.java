@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.skyframe.EnvironmentBackedRecursivePackageP
 import com.google.devtools.build.lib.util.BatchCallback;
 import com.google.devtools.build.lib.util.BatchCallback.NullCallback;
 import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.util.ThreadSafeBatchCallback;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -46,6 +47,7 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
 
@@ -84,22 +86,15 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
     if (blacklist == null) {
       return null;
     }
-    // This SkyFunction is used to load the universe, so we want both the blacklisted directories
-    // from the global blacklist and the excluded directories from the TargetPatternKey itself to be
-    // embedded in the SkyKeys created and used by the DepsOfPatternPreparer. The
-    // DepsOfPatternPreparer ignores excludedSubdirectories and embeds blacklistedSubdirectories in
-    // the SkyKeys it creates and uses.
-    ImmutableSet<PathFragment> blacklistedSubdirectories =
+    ImmutableSet<PathFragment> subdirectoriesToExclude =
         patternKey.getAllSubdirectoriesToExclude(blacklist.getPatterns());
-    ImmutableSet<PathFragment> excludedSubdirectories = ImmutableSet.of();
 
     DepsOfPatternPreparer preparer = new DepsOfPatternPreparer(env, pkgPath.get());
 
     try {
       parsedPattern.eval(
           preparer,
-          blacklistedSubdirectories,
-          excludedSubdirectories,
+          subdirectoriesToExclude,
           NullCallback.<Void>instance(),
           RuntimeException.class);
     } catch (TargetParsingException e) {
@@ -136,7 +131,7 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
    * transitive dependencies. Its methods may throw {@link MissingDepException} if the package
    * values this depends on haven't been calculated and added to its environment.
    */
-  static class DepsOfPatternPreparer extends TargetPatternResolver<Void> {
+  static class DepsOfPatternPreparer implements TargetPatternResolver<Void> {
 
     private final EnvironmentBackedRecursivePackageProvider packageProvider;
     private final Environment env;
@@ -234,12 +229,9 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
         String originalPattern,
         String directory,
         boolean rulesOnly,
-        ImmutableSet<PathFragment> blacklistedSubdirectories,
         ImmutableSet<PathFragment> excludedSubdirectories,
-        BatchCallback<Void, E> callback,
-        Class<E> exceptionClass)
+        BatchCallback<Void, E> callback, Class<E> exceptionClass)
         throws TargetParsingException, E, InterruptedException {
-      Preconditions.checkArgument(excludedSubdirectories.isEmpty(), excludedSubdirectories);
       FilteringPolicy policy =
           rulesOnly ? FilteringPolicies.RULES_ONLY : FilteringPolicies.NO_FILTER;
       PathFragment pathFragment = TargetPatternResolverUtil.getPathFragment(directory);
@@ -253,11 +245,6 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
           throw new MissingDepException();
         }
 
-        if (!repositoryValue.repositoryExists()) {
-          // This shouldn't be possible; we're given a repository, so we assume that the caller has
-          // already checked for its existence.
-          throw new IllegalStateException(String.format("No such repository '%s'", repository));
-        }
         roots.add(repositoryValue.getPath());
       }
 
@@ -266,13 +253,34 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
         env.getValues(
             ImmutableList.of(
                 PrepareDepsOfTargetsUnderDirectoryValue.key(
-                    repository, rootedPath, blacklistedSubdirectories, policy),
+                    repository, rootedPath, excludedSubdirectories, policy),
                 CollectPackagesUnderDirectoryValue.key(
-                    repository, rootedPath, blacklistedSubdirectories)));
+                    repository, rootedPath, excludedSubdirectories)));
         if (env.valuesMissing()) {
           throw new MissingDepException();
         }
       }
+    }
+
+    @Override
+    public <E extends Exception> void findTargetsBeneathDirectoryPar(
+        RepositoryName repository,
+        String originalPattern,
+        String directory,
+        boolean rulesOnly,
+        ImmutableSet<PathFragment> excludedSubdirectories,
+        ThreadSafeBatchCallback<Void, E> callback,
+        Class<E> exceptionClass,
+        ForkJoinPool forkJoinPool)
+        throws TargetParsingException, E, InterruptedException {
+      findTargetsBeneathDirectory(
+          repository,
+          originalPattern,
+          directory,
+          rulesOnly,
+          excludedSubdirectories,
+          callback,
+          exceptionClass);
     }
   }
 }
