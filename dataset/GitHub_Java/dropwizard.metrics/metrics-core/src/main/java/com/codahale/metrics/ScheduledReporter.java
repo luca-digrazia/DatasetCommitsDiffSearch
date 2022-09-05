@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @see CsvReporter
  * @see Slf4jReporter
  */
-public abstract class ScheduledReporter implements Closeable, Reporter {
+public abstract class ScheduledReporter implements Closeable {
     /**
      * A simple named thread factory.
      */
@@ -67,9 +67,28 @@ public abstract class ScheduledReporter implements Closeable, Reporter {
                                 MetricFilter filter,
                                 TimeUnit rateUnit,
                                 TimeUnit durationUnit) {
+		this(registry, name, filter, rateUnit, durationUnit,
+                Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory(name + '-' + FACTORY_ID.incrementAndGet())));
+    }
+	
+    /**
+     * Creates a new {@link ScheduledReporter} instance.
+     *
+     * @param registry the {@link com.codahale.metrics.MetricRegistry} containing the metrics this
+     *                 reporter will report
+     * @param name     the reporter's name
+     * @param filter   the filter for which metrics to report
+     * @param executor the executor to use while scheduling reporting of metrics.
+     */
+    protected ScheduledReporter(MetricRegistry registry,
+                                String name,
+                                MetricFilter filter,
+                                TimeUnit rateUnit,
+                                TimeUnit durationUnit,
+                                ScheduledExecutorService executor) {
         this.registry = registry;
         this.filter = filter;
-        this.executor = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory(name + '-' + FACTORY_ID.incrementAndGet()));
+        this.executor = executor;
         this.rateFactor = rateUnit.toSeconds(1);
         this.rateUnit = calculateRateUnit(rateUnit);
         this.durationFactor = 1.0 / durationUnit.toNanos(1);
@@ -93,26 +112,14 @@ public abstract class ScheduledReporter implements Closeable, Reporter {
 
     /**
      * Stops the reporter and shuts down its thread of execution.
-     *
-     * Uses the shutdown pattern from http://docs.oracle.com/javase/7/docs/api/java/util/concurrent/ExecutorService.html
      */
     public void stop() {
-		executor.shutdown(); // Disable new tasks from being submitted
-		try {
-			// Wait a while for existing tasks to terminate
-			if (!executor.awaitTermination(1, TimeUnit.SECONDS)) {
-				executor.shutdownNow(); // Cancel currently executing tasks
-				// Wait a while for tasks to respond to being cancelled
-				if (!executor.awaitTermination(1, TimeUnit.SECONDS)) {
-					System.err.println(getClass().getSimpleName() + ": ScheduledExecutorService did not terminate");
-				}
-			}
-		} catch (InterruptedException ie) {
-			// (Re-)Cancel if current thread also interrupted
-			executor.shutdownNow();
-			// Preserve interrupt status
-			Thread.currentThread().interrupt();
-		}
+        executor.shutdown();
+        try {
+            executor.awaitTermination(1, TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {
+            // do nothing
+        }
     }
 
     /**
@@ -127,11 +134,13 @@ public abstract class ScheduledReporter implements Closeable, Reporter {
      * Report the current values of all metrics in the registry.
      */
     public void report() {
-        report(registry.getGauges(filter),
-               registry.getCounters(filter),
-               registry.getHistograms(filter),
-               registry.getMeters(filter),
-               registry.getTimers(filter));
+        synchronized (this) {
+            report(registry.getGauges(filter),
+                    registry.getCounters(filter),
+                    registry.getHistograms(filter),
+                    registry.getMeters(filter),
+                    registry.getTimers(filter));
+        }
     }
 
     /**
