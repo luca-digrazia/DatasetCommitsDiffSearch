@@ -13,6 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import com.android.repository.Revision;
+import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
@@ -21,12 +24,16 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
+import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.syntax.Type;
+import java.util.Collection;
 
 /**
  * Implementation of the {@code android_sdk} rule.
@@ -44,6 +51,18 @@ public class AndroidSdk implements RuleConfiguredTargetFactory {
 
     String buildToolsVersion = AggregatingAttributeMapper.of(ruleContext.getRule())
         .get("build_tools_version", Type.STRING);
+    Revision parsedBuildToolsVersion = null;
+    try {
+      parsedBuildToolsVersion =
+          Strings.isNullOrEmpty(buildToolsVersion)
+              ? null
+              : Revision.parseRevision(buildToolsVersion);
+    } catch (NumberFormatException nfe) {
+      ruleContext.attributeError("build_tools_version", "Invalid version: " + buildToolsVersion);
+    }
+    boolean aaptSupportsMainDexGeneration =
+        parsedBuildToolsVersion == null
+            || parsedBuildToolsVersion.compareTo(new Revision(24)) >= 0;
     FilesToRunProvider aidl = ruleContext.getExecutablePrerequisite("aidl", Mode.HOST);
     FilesToRunProvider aapt = ruleContext.getExecutablePrerequisite("aapt", Mode.HOST);
     FilesToRunProvider apkBuilder = ruleContext.getExecutablePrerequisite(
@@ -55,6 +74,8 @@ public class AndroidSdk implements RuleConfiguredTargetFactory {
     FilesToRunProvider mainDexListCreator = ruleContext.getExecutablePrerequisite(
         "main_dex_list_creator", Mode.HOST);
     FilesToRunProvider zipalign = ruleContext.getExecutablePrerequisite("zipalign", Mode.HOST);
+    FilesToRunProvider jack = ruleContext.getExecutablePrerequisite("jack", Mode.HOST);
+    FilesToRunProvider jill = ruleContext.getExecutablePrerequisite("jill", Mode.HOST);
     FilesToRunProvider resourceExtractor =
         ruleContext.getExecutablePrerequisite("resource_extractor", Mode.HOST);
     Artifact frameworkAidl = ruleContext.getPrerequisiteArtifact("framework_aidl", Mode.HOST);
@@ -62,6 +83,20 @@ public class AndroidSdk implements RuleConfiguredTargetFactory {
     Artifact androidJar = ruleContext.getPrerequisiteArtifact("android_jar", Mode.HOST);
     Artifact shrinkedAndroidJar =
         ruleContext.getPrerequisiteArtifact("shrinked_android_jar", Mode.HOST);
+    // Because all Jack actions using this android_sdk will need Jack versions of the Android and
+    // Java classpaths, pre-translate the jars for Android and Java targets here. (They will only
+    // be run if needed, as usual for Bazel.)
+    NestedSet<Artifact> androidBaseClasspathForJack =
+        convertClasspathJarsToJack(
+            ruleContext, jack, jill, resourceExtractor, ImmutableList.of(androidJar));
+    NestedSet<Artifact> javaBaseClasspathForJack =
+        convertClasspathJarsToJack(
+            ruleContext,
+            jack,
+            jill,
+            resourceExtractor,
+            JavaCompilationHelper.getBootClasspath(
+                JavaToolchainProvider.fromRuleContext(ruleContext)));
     Artifact annotationsJar = ruleContext.getPrerequisiteArtifact("annotations_jar", Mode.HOST);
     Artifact mainDexClasses = ruleContext.getPrerequisiteArtifact("main_dex_classes", Mode.HOST);
 
@@ -70,14 +105,17 @@ public class AndroidSdk implements RuleConfiguredTargetFactory {
     }
 
     return new RuleConfiguredTargetBuilder(ruleContext)
-        .addProvider(
+        .add(
             AndroidSdkProvider.class,
             AndroidSdkProvider.create(
                 buildToolsVersion,
+                aaptSupportsMainDexGeneration,
                 frameworkAidl,
                 aidlLib,
                 androidJar,
                 shrinkedAndroidJar,
+                androidBaseClasspathForJack,
+                javaBaseClasspathForJack,
                 annotationsJar,
                 mainDexClasses,
                 adb,
@@ -89,9 +127,34 @@ public class AndroidSdk implements RuleConfiguredTargetFactory {
                 apkSigner,
                 proguard,
                 zipalign,
+                jack,
+                jill,
                 resourceExtractor))
-        .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
+        .add(RunfilesProvider.class, RunfilesProvider.EMPTY)
         .setFilesToBuild(NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER))
         .build();
+  }
+
+  private NestedSet<Artifact> convertClasspathJarsToJack(
+      RuleContext ruleContext,
+      FilesToRunProvider jack,
+      FilesToRunProvider jill,
+      FilesToRunProvider resourceExtractor,
+      Collection<Artifact> jars) {
+    return new JackCompilationHelper.Builder()
+        // bazel infrastructure
+        .setRuleContext(ruleContext)
+        // configuration
+        .setTolerant()
+        // tools
+        .setJackBinary(jack)
+        .setJillBinary(jill)
+        .setResourceExtractorBinary(resourceExtractor)
+        .setJackBaseClasspath(NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER))
+        // sources
+        .addCompiledJars(jars)
+        .build()
+        .compileAsLibrary()
+        .getTransitiveJackClasspathLibraries();
   }
 }
