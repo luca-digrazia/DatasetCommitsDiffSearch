@@ -67,10 +67,8 @@ class NodeEntryVisitor {
       DirtyKeyTracker dirtyKeyTracker,
       EvaluationProgressReceiver progressReceiver,
       Function<SkyKey, Runnable> runnableMaker) {
-    this.quiescingExecutor = ForkJoinQuiescingExecutor.newBuilder()
-        .withOwnershipOf(forkJoinPool)
-        .setErrorClassifier(NODE_ENTRY_VISITOR_ERROR_CLASSIFIER)
-        .build();
+    quiescingExecutor =
+        new ForkJoinQuiescingExecutor(forkJoinPool, NODE_ENTRY_VISITOR_ERROR_CLASSIFIER);
     this.dirtyKeyTracker = dirtyKeyTracker;
     this.progressReceiver = progressReceiver;
     this.runnableMaker = runnableMaker;

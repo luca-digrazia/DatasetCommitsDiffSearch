@@ -13,8 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
+import static com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState;
+import static com.google.devtools.build.skyframe.NodeEntry.DependencyState;
 import static com.google.devtools.build.skyframe.ParallelEvaluator.isDoneForBuild;
 import static com.google.devtools.build.skyframe.ParallelEvaluator.maybeGetValueFromError;
+import static com.google.devtools.build.skyframe.QueryableGraph.Reason;
 
 import com.google.common.base.Function;
 import com.google.common.base.Predicates;
@@ -27,15 +30,12 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState;
-import com.google.devtools.build.skyframe.NodeEntry.DependencyState;
 import com.google.devtools.build.skyframe.ParallelEvaluatorContext.EnqueueParentBehavior;
-import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -191,7 +191,7 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
                 + skyKey
                 + ". Present values: "
                 + deps
-                + " requested from: "
+                + "requested from: "
                 + depKeys
                 + ", "
                 + entry);
@@ -262,7 +262,8 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
       }
       Preconditions.checkState(
           triState == DependencyState.DONE, "%s %s %s", skyKey, triState, errorInfo);
-      state.addTemporaryDirectDeps(GroupedListHelper.create(ErrorTransienceValue.KEY));
+      state.addTemporaryDirectDeps(
+          GroupedListHelper.create(ImmutableList.of(ErrorTransienceValue.KEY)));
       state.signalDep();
     }
 
@@ -466,7 +467,10 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
   }
 
   private void addDep(SkyKey key) {
-    newlyRequestedDeps.add(key);
+    if (!newlyRequestedDeps.contains(key)) {
+      // dep may have been requested already this evaluation. If not, add it.
+      newlyRequestedDeps.add(key);
+    }
   }
 
   /**
@@ -479,7 +483,7 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
   }
 
   @Override
-  public ExtendedEventHandler getListener() {
+  public EventHandler getListener() {
     checkActive();
     return eventHandler;
   }
@@ -561,25 +565,27 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
         "%s should be at most %s in the version partial ordering",
         valueVersion,
         evaluatorContext.getGraphVersion());
-
-    // Tell the receiver that this value was built. If valueVersion.equals(graphVersion), it was
-    // evaluated this run, and so was changed. Otherwise, it is less than graphVersion, by the
-    // Preconditions check above, and was not actually changed this run -- when it was written
-    // above, its version stayed below this update's version, so its value remains the same.
-    // We use a SkyValueSupplier here because it keeps a reference to the entry, allowing for
-    // the receiver to be confident that the entry is readily accessible in memory.
-    evaluatorContext
-        .getProgressReceiver()
-        .evaluated(
-            skyKey,
-            new SkyValueSupplier(primaryEntry),
-            valueVersion.equals(evaluatorContext.getGraphVersion())
-                ? EvaluationState.BUILT
-                : EvaluationState.CLEAN);
-
+    if (evaluatorContext.getProgressReceiver() != null) {
+      // Tell the receiver that this value was built. If valueVersion.equals(graphVersion), it
+      // was evaluated this run, and so was changed. Otherwise, it is less than graphVersion,
+      // by the Preconditions check above, and was not actually changed this run -- when it was
+      // written above, its version stayed below this update's version, so its value remains the
+      // same as before.
+      // We use a SkyValueSupplier here because it keeps a reference to the entry, allowing for
+      // the receiver to be confident that the entry is readily accessible in memory.
+      evaluatorContext
+          .getProgressReceiver()
+          .evaluated(
+              skyKey,
+              new SkyValueSupplier(primaryEntry),
+              valueVersion.equals(evaluatorContext.getGraphVersion())
+                  ? EvaluationState.BUILT
+                  : EvaluationState.CLEAN);
+    }
     evaluatorContext.signalValuesAndEnqueueIfReady(
         skyKey, reverseDeps, valueVersion, enqueueParents);
 
+    evaluatorContext.getVisitor().notifyDone(skyKey);
     evaluatorContext.getReplayingNestedSetEventVisitor().visit(events);
   }
 

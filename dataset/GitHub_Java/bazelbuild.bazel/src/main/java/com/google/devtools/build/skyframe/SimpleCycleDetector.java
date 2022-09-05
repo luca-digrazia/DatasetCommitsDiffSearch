@@ -78,7 +78,7 @@ class SimpleCycleDetector implements CycleDetector {
    * ArrayDeque does not permit null elements.
    */
   private static final SkyKey CHILDREN_FINISHED =
-      LegacySkyKey.create(SkyFunctionName.create("MARKER"), "MARKER");
+      SkyKey.create(SkyFunctionName.create("MARKER"), "MARKER");
 
   /** The max number of cycles we will report to the user for a given root, to avoid OOMing. */
   private static final int MAX_CYCLES = 20;
@@ -107,19 +107,19 @@ class SimpleCycleDetector implements CycleDetector {
 
     toVisit.push(root);
 
-    // The procedure for this check is as follows: we visit a node, push it onto the graph path,
+    // The procedure for this check is as follows: we visit a node, push it onto the graph stack,
     // push a marker value onto the toVisit stack, and then push all of its children onto the
     // toVisit stack. Thus, when the marker node comes to the top of the toVisit stack, we have
     // visited the downward transitive closure of the value. At that point, all of its children must
     // be finished, and so we can build the definitive error info for the node, popping it off the
-    // graph path.
+    // graph stack.
     while (!toVisit.isEmpty()) {
       SkyKey key = toVisit.pop();
 
       NodeEntry entry;
       if (key == CHILDREN_FINISHED) {
-        // We have reached the marker node - that means all children of a node have been visited.
-        // Since all nodes have errors, we must have found errors in the children at this point.
+        // A marker node means we are done with all children of a node. Since all nodes have
+        // errors, we must have found errors in the children when that happens.
         key = graphPath.remove(graphPath.size() - 1);
         entry =
             Preconditions.checkNotNull(
@@ -131,7 +131,8 @@ class SimpleCycleDetector implements CycleDetector {
         }
         if (!evaluatorContext.keepGoing()) {
           // in the --nokeep_going mode, we would have already returned if we'd found a cycle below
-          // this node. We haven't, so there are no cycles below this node; skip further evaluation
+          // this node. The fact that we haven't means that there were no cycles below this node
+          // -- it just hadn't finished evaluating. So skip it.
           continue;
         }
         Set<SkyKey> removedDeps = ImmutableSet.of();
@@ -160,7 +161,8 @@ class SimpleCycleDetector implements CycleDetector {
                 directDeps,
                 Sets.difference(entry.getAllRemainingDirtyDirectDeps(), removedDeps),
                 evaluatorContext);
-        env.setError(entry, ErrorInfo.fromChildErrors(key, errorDeps));
+        env.setError(
+            entry, ErrorInfo.fromChildErrors(key, errorDeps), /*isDirectlyTransient=*/ false);
         env.commit(entry, EnqueueParentBehavior.SIGNAL);
       } else {
         entry = evaluatorContext.getGraph().get(null, Reason.CYCLE_CHECKING, key);
@@ -219,7 +221,7 @@ class SimpleCycleDetector implements CycleDetector {
           CycleInfo cycleInfo = new CycleInfo(cycle);
           // Add in this cycle.
           allErrors.add(ErrorInfo.fromCycle(cycleInfo));
-          env.setError(entry, ErrorInfo.fromChildErrors(key, allErrors));
+          env.setError(entry, ErrorInfo.fromChildErrors(key, allErrors), /*isTransient=*/ false);
           env.commit(entry, EnqueueParentBehavior.SIGNAL);
           continue;
         } else {
