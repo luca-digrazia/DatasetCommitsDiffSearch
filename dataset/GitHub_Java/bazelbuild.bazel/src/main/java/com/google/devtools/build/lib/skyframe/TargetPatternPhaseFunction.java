@@ -159,12 +159,9 @@ final class TargetPatternPhaseFunction implements SkyFunction {
         expandedTargetsBuilder.add(target);
       }
     }
-    ResolvedTargets<Target> expandedTargets = expandedTargetsBuilder.build();
-    Set<Target> testSuiteTargets =
-        Sets.difference(targets.getTargets(), expandedTargets.getTargets());
-    return new TargetPatternPhaseValue(expandedTargets.getTargets(), testsToRun, preExpansionError,
-        expandedTargets.hasError(), filteredTargets, testFilteredTargets,
-        targets.getTargets(), ImmutableSet.copyOf(testSuiteTargets));
+    targets = expandedTargetsBuilder.build();
+    return new TargetPatternPhaseValue(targets.getTargets(), testsToRun, preExpansionError,
+        targets.hasError(), filteredTargets, testFilteredTargets);
   }
 
   /**
