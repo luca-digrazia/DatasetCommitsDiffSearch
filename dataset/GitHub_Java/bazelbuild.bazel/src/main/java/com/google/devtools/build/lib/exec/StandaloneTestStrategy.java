@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.rules.test.TestRunnerAction.ResolvedPaths;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import com.google.devtools.build.lib.view.test.TestStatus.TestCase;
 import com.google.devtools.build.lib.view.test.TestStatus.TestResultData;
@@ -76,7 +77,7 @@ public class StandaloneTestStrategy extends TestStrategy {
   public void exec(TestRunnerAction action, ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException {
     Path execRoot = actionExecutionContext.getExecutor().getExecRoot();
-    Path coverageDir = execRoot.getRelative(action.getCoverageDirectory());
+    Path coverageDir = execRoot.getRelative(getCoverageDirectory(action));
     Path runfilesDir =
         getLocalRunfilesDirectory(
             action,
@@ -257,8 +258,9 @@ public class StandaloneTestStrategy extends TestStrategy {
       env.put("RUNFILES_MANIFEST_ONLY", "1");
     }
 
-    if (action.isCoverageMode()) {
-      env.put("COVERAGE_DIR", action.getCoverageDirectory().toString());
+    PathFragment coverageDir = TestStrategy.getCoverageDirectory(action);
+    if (isCoverageMode(action)) {
+      env.put("COVERAGE_DIR", coverageDir.toString());
       env.put("COVERAGE_OUTPUT_FILE", action.getCoverageData().getExecPathString());
     }
 
@@ -324,7 +326,7 @@ public class StandaloneTestStrategy extends TestStrategy {
         builder.setTestCase(details);
       }
 
-      if (action.isCoverageMode()) {
+      if (isCoverageMode(action)) {
         builder.setHasCoverage(true);
       }
 
