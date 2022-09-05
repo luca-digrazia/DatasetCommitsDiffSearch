@@ -14,8 +14,10 @@
 
 package com.google.devtools.build.lib.cmdline;
 
-import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
 
 import com.google.devtools.build.lib.cmdline.LabelValidator.PackageAndTarget;
 import org.junit.Test;
@@ -39,176 +41,118 @@ public class LabelValidatorTest {
   @Test
   public void testValidatePackageName() throws Exception {
     // OK:
-    assertThat(LabelValidator.validatePackageName("foo")).isNull();
-    assertThat(LabelValidator.validatePackageName("Foo")).isNull();
-    assertThat(LabelValidator.validatePackageName("FOO")).isNull();
-    assertThat(LabelValidator.validatePackageName("foO")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo-bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("Foo-Bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("FOO-BAR")).isNull();
-    assertThat(LabelValidator.validatePackageName("bar.baz")).isNull();
-    assertThat(LabelValidator.validatePackageName("a/..b")).isNull();
-    assertThat(LabelValidator.validatePackageName("a/.b")).isNull();
-    assertThat(LabelValidator.validatePackageName("a/b.")).isNull();
-    assertThat(LabelValidator.validatePackageName("a/b..")).isNull();
-    assertThat(LabelValidator.validatePackageName("a$( )/b..")).isNull();
-
-    // These are in ascii code order.
-    assertThat(LabelValidator.validatePackageName("foo!bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo\"bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo#bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo$bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo%bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo&bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo'bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo(bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo)bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo*bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo+bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo,bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo-bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo.bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo+bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo;bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo<bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo=bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo>bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo?bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo@bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo[bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo]bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo^bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo_bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo`bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo{bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo|bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo}bar")).isNull();
-    assertThat(LabelValidator.validatePackageName("foo~bar")).isNull();
+    assertNull(LabelValidator.validatePackageName("foo"));
+    assertNull(LabelValidator.validatePackageName("Foo"));
+    assertNull(LabelValidator.validatePackageName("FOO"));
+    assertNull(LabelValidator.validatePackageName("foO"));
+    assertNull(LabelValidator.validatePackageName("foo-bar"));
+    assertNull(LabelValidator.validatePackageName("Foo-Bar"));
+    assertNull(LabelValidator.validatePackageName("FOO-BAR"));
+    assertNull(LabelValidator.validatePackageName("bar.baz"));
+    assertNull(LabelValidator.validatePackageName("a/..b"));
+    assertNull(LabelValidator.validatePackageName("a/.b"));
+    assertNull(LabelValidator.validatePackageName("a/b."));
+    assertNull(LabelValidator.validatePackageName("a/b.."));
 
     // Bad:
-    assertThat(LabelValidator.validatePackageName("/foo"))
-        .isEqualTo("package names may not start with '/'");
-    assertThat(LabelValidator.validatePackageName("foo/"))
-        .isEqualTo("package names may not end with '/'");
-    assertThat(LabelValidator.validatePackageName("foo:bar"))
-        .isEqualTo(LabelValidator.PACKAGE_NAME_ERROR);
+    assertEquals(
+        "package names may not start with '/'", LabelValidator.validatePackageName("/foo"));
+    assertEquals("package names may not end with '/'", LabelValidator.validatePackageName("foo/"));
+    assertEquals(LabelValidator.PACKAGE_NAME_ERROR, LabelValidator.validatePackageName("bar baz"));
+    assertEquals(LabelValidator.PACKAGE_NAME_ERROR, LabelValidator.validatePackageName("foo:bar"));
+    assertEquals(
+        LabelValidator.PACKAGE_NAME_ERROR, LabelValidator.validatePackageName("baz@12345"));
+    assertEquals(LabelValidator.PACKAGE_NAME_ERROR, LabelValidator.validatePackageName("baz(foo)"));
+    assertEquals(LabelValidator.PACKAGE_NAME_ERROR, LabelValidator.validatePackageName("bazfoo)"));
 
-    assertThat(LabelValidator.validatePackageName("bar/../baz"))
-        .isEqualTo(LabelValidator.PACKAGE_NAME_DOT_ERROR);
-    assertThat(LabelValidator.validatePackageName("bar/.."))
-        .isEqualTo(LabelValidator.PACKAGE_NAME_DOT_ERROR);
-    assertThat(LabelValidator.validatePackageName("../bar"))
-        .isEqualTo(LabelValidator.PACKAGE_NAME_DOT_ERROR);
-    assertThat(LabelValidator.validatePackageName("bar/..."))
-        .isEqualTo(LabelValidator.PACKAGE_NAME_DOT_ERROR);
+    assertEquals(
+        LabelValidator.PACKAGE_NAME_DOT_ERROR, LabelValidator.validatePackageName("bar/../baz"));
+    assertEquals(
+        LabelValidator.PACKAGE_NAME_DOT_ERROR, LabelValidator.validatePackageName("bar/.."));
+    assertEquals(
+        LabelValidator.PACKAGE_NAME_DOT_ERROR, LabelValidator.validatePackageName("../bar"));
+    assertEquals(
+        LabelValidator.PACKAGE_NAME_DOT_ERROR, LabelValidator.validatePackageName("bar/..."));
 
-    assertThat(LabelValidator.validatePackageName("bar/./baz"))
-        .isEqualTo(LabelValidator.PACKAGE_NAME_DOT_ERROR);
-    assertThat(LabelValidator.validatePackageName("bar/."))
-        .isEqualTo(LabelValidator.PACKAGE_NAME_DOT_ERROR);
-    assertThat(LabelValidator.validatePackageName("./bar"))
-        .isEqualTo(LabelValidator.PACKAGE_NAME_DOT_ERROR);
+    assertEquals(
+        LabelValidator.PACKAGE_NAME_DOT_ERROR, LabelValidator.validatePackageName("bar/./baz"));
+    assertEquals(
+        LabelValidator.PACKAGE_NAME_DOT_ERROR, LabelValidator.validatePackageName("bar/."));
+    assertEquals(
+        LabelValidator.PACKAGE_NAME_DOT_ERROR, LabelValidator.validatePackageName("./bar"));
   }
 
   @Test
   public void testValidateTargetName() throws Exception {
-    assertThat(LabelValidator.validateTargetName("foo")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo!bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo\"bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo#bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo$bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo%bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo&bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo'bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo(bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo)bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo*bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo+bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo,bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo-bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo.bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo+bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo;bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo<bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo=bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo>bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo?bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo[bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo]bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo^bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo_bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo`bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo{bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo|bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo}bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo~bar")).isNull();
 
-    assertThat(LabelValidator.validateTargetName("foo/bar")).isNull();
-    assertThat(LabelValidator.validateTargetName("foo@bar")).isNull();
+    assertNull(LabelValidator.validateTargetName("foo"));
+    assertNull(LabelValidator.validateTargetName("foo+bar"));
+    assertNull(LabelValidator.validateTargetName("foo_bar"));
+    assertNull(LabelValidator.validateTargetName("foo=bar"));
+    assertNull(LabelValidator.validateTargetName("foo-bar"));
+    assertNull(LabelValidator.validateTargetName("foo.bar"));
+    assertNull(LabelValidator.validateTargetName("foo@bar"));
+    assertNull(LabelValidator.validateTargetName("foo~bar"));
+    assertNull(LabelValidator.validateTargetName("foo#bar"));
 
-    assertThat(LabelValidator.validateTargetName("foo/"))
-        .isEqualTo("target names may not end with '/'");
-    assertThat(LabelValidator.validateTargetName("bar:baz"))
-        .isEqualTo("target names may not contain ':'");
-    assertThat(LabelValidator.validateTargetName("bar:"))
-        .isEqualTo("target names may not contain ':'");
+    assertEquals("target names may not end with '/'",
+                 LabelValidator.validateTargetName("foo/"));
+    assertEquals("target names may not contain ' '",
+                 LabelValidator.validateTargetName("bar baz"));
+    assertEquals("target names may not contain ':'",
+                 LabelValidator.validateTargetName("bar:baz"));
+    assertEquals("target names may not contain ':'",
+                 LabelValidator.validateTargetName("bar:"));
+    assertEquals("target names may not contain '&'",
+                 LabelValidator.validateTargetName("bar&"));
+    assertEquals("target names may not contain '$'",
+                 LabelValidator.validateTargetName("baz$a"));
+    assertEquals("target names may not contain '('",
+                 LabelValidator.validateTargetName("baz(foo)"));
+    assertEquals("target names may not contain ')'",
+                 LabelValidator.validateTargetName("bazfoo)"));
   }
 
   @Test
   public void testValidateAbsoluteLabel() throws Exception {
     PackageAndTarget emptyPackage = new PackageAndTarget("", "bar");
-    assertThat(LabelValidator.validateAbsoluteLabel("//:bar")).isEqualTo(emptyPackage);
-    assertThat(LabelValidator.validateAbsoluteLabel("@repo//:bar")).isEqualTo(emptyPackage);
-    assertThat(LabelValidator.validateAbsoluteLabel("@repo//foo:bar"))
-        .isEqualTo(new PackageAndTarget("foo", "bar"));
-    assertThat(LabelValidator.validateAbsoluteLabel("@//foo:bar"))
-        .isEqualTo(new PackageAndTarget("foo", "bar"));
-    emptyPackage = new PackageAndTarget("", "b$() ar");
-    assertThat(LabelValidator.validateAbsoluteLabel("//:b$() ar")).isEqualTo(emptyPackage);
-    assertThat(LabelValidator.validateAbsoluteLabel("@repo//:b$() ar")).isEqualTo(emptyPackage);
-    assertThat(LabelValidator.validateAbsoluteLabel("@repo//f$( )oo:b$() ar"))
-        .isEqualTo(new PackageAndTarget("f$( )oo", "b$() ar"));
-    assertThat(LabelValidator.validateAbsoluteLabel("@//f$( )oo:b$() ar"))
-        .isEqualTo(new PackageAndTarget("f$( )oo", "b$() ar"));
-    assertThat(LabelValidator.validateAbsoluteLabel("//f@oo"))
-        .isEqualTo(new PackageAndTarget("f@oo", "f@oo"));
-    assertThat(LabelValidator.validateAbsoluteLabel("//@foo"))
-        .isEqualTo(new PackageAndTarget("@foo", "@foo"));
-    assertThat(LabelValidator.validateAbsoluteLabel("//@foo:@bar"))
-        .isEqualTo(new PackageAndTarget("@foo", "@bar"));
+    assertEquals(emptyPackage, LabelValidator.validateAbsoluteLabel("//:bar"));
+    assertEquals(emptyPackage, LabelValidator.validateAbsoluteLabel("@repo//:bar"));
+    assertEquals(new PackageAndTarget("foo", "bar"),
+        LabelValidator.validateAbsoluteLabel("@repo//foo:bar"));
+    assertEquals(new PackageAndTarget("foo", "bar"),
+        LabelValidator.validateAbsoluteLabel("@//foo:bar"));
   }
 
   @Test
   public void testPackageAndTargetHashCode_distinctButEqualObjects() {
     PackageAndTarget fooTarget1 = newFooTarget();
     PackageAndTarget fooTarget2 = newFooTarget();
-    assertThat(fooTarget2).isNotSameAs(fooTarget1);
-    assertWithMessage("Should have same hash code")
-        .that(fooTarget1.hashCode())
-        .isEqualTo(fooTarget2.hashCode());
+    assertNotSame(fooTarget1, fooTarget2);
+    assertEquals("Should have same hash code", fooTarget2.hashCode(), fooTarget1.hashCode());
   }
 
   @Test
   public void testPackageAndTargetEquals_distinctButEqualObjects() {
     PackageAndTarget fooTarget1 = newFooTarget();
     PackageAndTarget fooTarget2 = newFooTarget();
-    assertThat(fooTarget2).isNotSameAs(fooTarget1);
-    assertWithMessage("Should be equal").that(fooTarget1).isEqualTo(fooTarget2);
+    assertNotSame(fooTarget1, fooTarget2);
+    assertEquals("Should be equal", fooTarget2, fooTarget1);
   }
 
   @Test
   public void testPackageAndTargetEquals_unequalObjects() {
-    assertWithMessage("should be unequal").that(newFooTarget().equals(newBarTarget())).isFalse();
+    assertFalse("should be unequal", newFooTarget().equals(newBarTarget()));
   }
 
   @Test
   public void testPackageAndTargetToString() {
-    assertThat(newFooTarget().toString()).isEqualTo("//foo:foo");
-    assertThat(newBarTarget().toString()).isEqualTo("//bar:bar");
+    assertEquals("//foo:foo", newFooTarget().toString());
+    assertEquals("//bar:bar", newBarTarget().toString());
   }
 
   @Test
   public void testSlashlessLabel_infersTargetNameFromRepoName() throws Exception {
-    assertThat(LabelValidator.parseAbsoluteLabel("@foo").toString()).isEqualTo("//:foo");
+    assertEquals("//:foo", LabelValidator.parseAbsoluteLabel("@foo").toString());
   }
 }
