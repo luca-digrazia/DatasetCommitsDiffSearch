@@ -1,13 +1,10 @@
 package com.yammer.metrics.core;
 
-import com.yammer.metrics.Metrics;
-import com.yammer.metrics.MetricsRegistry;
 import com.yammer.metrics.core.HistogramMetric.SampleType;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -20,45 +17,23 @@ public class TimerMetric implements Metered {
     private final TimeUnit durationUnit, rateUnit;
     private final MeterMetric meter;
     private final HistogramMetric histogram = new HistogramMetric(SampleType.BIASED);
-    private final Clock clock;
+    private final TimerTicker timerTicker;
 
     /**
      * Creates a new {@link TimerMetric}.
      *
      * @param durationUnit the scale unit for this timer's duration metrics
      * @param rateUnit the scale unit for this timer's rate metrics
-     * @deprecated either use the other constructor or create via the {@link MetricsRegistry} or {@link Metrics}
      */
     public TimerMetric(TimeUnit durationUnit, TimeUnit rateUnit) {
-        this(durationUnit, rateUnit, Clock.DEFAULT);
+        this(durationUnit,rateUnit,new TimerTicker.UserTimerTicker());
     }
-
-    /**
-     * Creates a new {@link TimerMetric} with the specified clock.
-     *
-     * @param durationUnit the scale unit for this timer's duration metrics
-     * @param rateUnit the scale unit for this timer's rate metrics
-     * @param clock the clock used to calculate duration
-     */
-    public TimerMetric(TimeUnit durationUnit, TimeUnit rateUnit, Clock clock) {
+    
+    public TimerMetric(TimeUnit durationUnit, TimeUnit rateUnit, TimerTicker timerTicker) {
         this.durationUnit = durationUnit;
         this.rateUnit = rateUnit;
         this.meter = MeterMetric.newMeter("calls", rateUnit);
-        this.clock = clock;
-        clear();
-    }
-
-    /**
-     * Creates a new {@link TimerMetric}.
-     *
-     * @param tickThread background thread for updating the rates
-     * @param durationUnit the scale unit for this timer's duration metrics
-     * @param rateUnit the scale unit for this timer's rate metrics
-     */
-    public TimerMetric(ScheduledExecutorService tickThread, TimeUnit durationUnit, TimeUnit rateUnit) {
-        this.durationUnit = durationUnit;
-        this.rateUnit = rateUnit;
-        this.meter = MeterMetric.newMeter(tickThread, "calls", rateUnit);
+        this.timerTicker = timerTicker;
         clear();
     }
 
@@ -103,11 +78,11 @@ public class TimerMetric implements Metered {
      * @throws Exception if {@code event} throws an {@link Exception}
      */
     public <T> T time(Callable<T> event) throws Exception {
-        final long startTime = clock.tick();
+        final long startTime = timerTicker.tickTime();
         try {
             return event.call();
         } finally {
-            update(clock.tick() - startTime);
+            update(timerTicker.tickTime() - startTime);
         }
     }
 

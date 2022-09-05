@@ -1,29 +1,19 @@
 package com.yammer.metrics.core;
 
-import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
+import java.lang.management.ManagementFactory;
 
 /**
  * An abstraction for how time passes. It is passed to {@link TimerMetric} to
  * track timing.
  */
-public abstract class Clock {
-
+public interface Clock {
     /**
      * Gets the current time tick
-     * 
+     *
      * @return time tick in nanoseconds
      */
-    public abstract long tick();
-
-    /**
-     * Gets the current time in milliseconds
-     * 
-     * @return time in milliseconds
-     */
-    public long time() {
-        return System.currentTimeMillis();
-    }
+    long tick();
 
     /**
      * The default clock to use.
@@ -33,7 +23,7 @@ public abstract class Clock {
     /**
      * Default implementation, uses {@link System#nanoTime()}.
      */
-    public static class UserTime extends Clock {
+    public static class UserTime implements Clock {
         @Override
         public long tick() {
             return System.nanoTime();
@@ -43,7 +33,7 @@ public abstract class Clock {
     /**
      * Another implementation, uses {@link ThreadMXBean#getCurrentThreadCpuTime()}
      */
-    public static class CpuTime extends Clock {
+    public static class CpuTime implements Clock {
         private static ThreadMXBean threadMxBean = ManagementFactory.getThreadMXBean();
 
         @Override
