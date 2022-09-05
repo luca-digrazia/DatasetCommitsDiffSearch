@@ -33,8 +33,9 @@ import static com.android.SdkConstants.TAG_RESOURCES;
 import static com.android.SdkConstants.TAG_STYLE;
 import static com.android.utils.SdkUtils.endsWith;
 import static com.android.utils.SdkUtils.endsWithIgnoreCase;
-import static java.nio.charset.StandardCharsets.UTF_8;
+import static com.google.common.base.Charsets.UTF_8;
 
+import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -123,7 +124,7 @@ public class ResourceShrinker {
   private static final Logger logger = Logger.getLogger(ResourceShrinker.class.getName());
 
   public static final int TYPICAL_RESOURCE_COUNT = 200;
-  private final Set<String> resourcePackages;
+  private final List<String> resourcePackages;
   private final Path rTxt;
   private final Path classesJar;
   private final Path mergedManifest;
@@ -155,7 +156,7 @@ public class ResourceShrinker {
   private Map<String, ResourceType> resourceClassOwners = Maps.newHashMapWithExpectedSize(20);
 
   public ResourceShrinker(
-      Set<String> resourcePackages,
+      List<String> resourcePackages,
       @NonNull Path rTxt,
       @NonNull Path classesJar,
       @NonNull Path manifest,
@@ -183,7 +184,15 @@ public class ResourceShrinker {
    * Remove resources (already identified by {@link #shrink(Path)}).
    *
    * <p>This task will copy all remaining used resources over from the full resource directory to a
-   * new reduced resource directory and removes unused values from all value xml files.
+   * new reduced resource directory. However, it can't just delete the resources, because it has no
+   * way to tell aapt to continue to use the same id's for the resources. When we re-run aapt on the
+   * stripped resource directory, it will assign new id's to some of the resources (to fill the
+   * gaps) which means the resource id's no longer match the constants compiled into the dex files,
+   * and as a result, the app crashes at runtime. <p> Therefore, it needs to preserve all id's by
+   * actually keeping all the resource names. It can still save a lot of space by making these
+   * resources tiny; e.g. all strings are set to empty, all styles, arrays and plurals are set to
+   * not contain any children, and most importantly, all file based resources like bitmaps and
+   * layouts are replaced by simple resource aliases which just point to @null.
    *
    * @param destination directory to copy resources into; if null, delete resources in place
    */
@@ -193,7 +202,6 @@ public class ResourceShrinker {
     int resourceCount = unused.size() * 4; // *4: account for some resource folder repetition
     Set<File> skip = Sets.newHashSetWithExpectedSize(resourceCount);
     Set<File> rewrite = Sets.newHashSetWithExpectedSize(resourceCount);
-    Set<Resource> deleted = Sets.newHashSetWithExpectedSize(resourceCount);
     for (Resource resource : unused) {
       if (resource.declarations != null) {
         for (File file : resource.declarations) {
@@ -203,12 +211,10 @@ public class ResourceShrinker {
             logger.fine("Deleted unused resource " + file);
             assert skip != null;
             skip.add(file);
-            deleted.add(resource);
           } else {
             // Can't delete values immediately; there can be many resources
             // in this file, so we have to process them all
             rewrite.add(file);
-            deleted.add(resource);
           }
         }
       }
@@ -216,30 +222,11 @@ public class ResourceShrinker {
     // Special case the base values.xml folder
     File values = new File(mergedResourceDir.toFile(),
         FD_RES_VALUES + File.separatorChar + "values.xml");
-    if (values.exists()) {
+    boolean valuesExists = values.exists();
+    if (valuesExists) {
       rewrite.add(values);
     }
-
     Map<File, String> rewritten = Maps.newHashMapWithExpectedSize(rewrite.size());
-    rewriteXml(rewrite, rewritten);
-    // TODO(apell): The graph traversal does not mark IDs as reachable or not, so they cannot be
-    // accurately removed from public.xml, but the declarations may be deleted if they occur in
-    // other files. IDs should be added to values.xml so that there are no definitions in public.xml
-    // without declarations.
-    createStubIds(values, rewritten);
-
-    File publicXml = new File(mergedResourceDir.toFile(),
-        FD_RES_VALUES + File.separatorChar + "public.xml");
-    trimPublicResources(publicXml, deleted, rewritten);
-
-    filteredCopy(mergedResourceDir.toFile(), destination, skip, rewritten);
-  }
-
-  /**
-   * Deletes unused resources from value XML files.
-   */
-  private void rewriteXml(Set<File> rewrite, Map<File, String> rewritten)
-      throws IOException, ParserConfigurationException, SAXException {
     // Delete value resources: Must rewrite the XML files
     for (File file : rewrite) {
       String xml = Files.toString(file, UTF_8);
@@ -248,20 +235,13 @@ public class ResourceShrinker {
       if (root != null && TAG_RESOURCES.equals(root.getTagName())) {
         List<String> removed = Lists.newArrayList();
         stripUnused(root, removed);
-        logger.fine("Removed " + removed.size() + " unused resources from " + file + ":\n  "
+        logger.info("Removed " + removed.size() + " unused resources from " + file + ":\n  "
             + Joiner.on(", ").join(removed));
         String formatted = XmlPrettyPrinter.prettyPrint(document, xml.endsWith("\n"));
         rewritten.put(file, formatted);
       }
     }
-  }
-
-  /**
-   * Write stub values for IDs to values.xml to match those available in public.xml. 
-   */
-  private void createStubIds(File values, Map<File, String> rewritten)
-      throws IOException, ParserConfigurationException, SAXException {
-    if (values.exists()) {
+    if (valuesExists) {
       String xml = rewritten.get(values);
       if (xml == null) {
         xml = Files.toString(values, UTF_8);
@@ -274,45 +254,25 @@ public class ResourceShrinker {
           item.setAttribute(ATTR_TYPE, resource.type.getName());
           item.setAttribute(ATTR_NAME, resource.name);
           root.appendChild(item);
+        } else if (!resource.reachable
+            && !resource.hasDefault
+            && resource.type != ResourceType.DECLARE_STYLEABLE
+            && resource.type != ResourceType.STYLE
+            && resource.type != ResourceType.PLURALS
+            && resource.type != ResourceType.ARRAY
+            && resource.isRelevantType()) {
+          Element item = document.createElement(TAG_ITEM);
+          item.setAttribute(ATTR_TYPE, resource.type.getName());
+          item.setAttribute(ATTR_NAME, resource.name);
+          root.appendChild(item);
+          String s = "@null";
+          item.appendChild(document.createTextNode(s));
         }
       }
       String formatted = XmlPrettyPrinter.prettyPrint(document, xml.endsWith("\n"));
       rewritten.put(values, formatted);
     }
-  }
-
-  /**
-   * Remove public definitions of unused resources. 
-   */
-  private void trimPublicResources(File publicXml, Set<Resource> deleted,
-      Map<File, String> rewritten) throws IOException, ParserConfigurationException, SAXException {
-    if (publicXml.exists()) {
-      String xml = rewritten.get(publicXml);
-      if (xml == null) {
-        xml = Files.toString(publicXml, UTF_8);
-      }
-      Document document = XmlUtils.parseDocument(xml, true);
-      Element root = document.getDocumentElement();
-      if (root != null && TAG_RESOURCES.equals(root.getTagName())) {
-        NodeList children = root.getChildNodes();
-        for (int i = children.getLength() - 1; i >= 0; i--) {
-          Node child = children.item(i);
-          if (child.getNodeType() == Node.ELEMENT_NODE) {
-            Element resourceElement = (Element) child;
-            ResourceType type = ResourceType.getEnum(resourceElement.getAttribute(ATTR_TYPE));
-            String name = resourceElement.getAttribute(ATTR_NAME);
-            if (type != null && name != null) {
-              Resource resource = getResource(type, name);
-              if (resource != null && deleted.contains(resource)) {
-                root.removeChild(child);
-              }
-            }
-          }
-        }
-      }
-      String formatted = XmlPrettyPrinter.prettyPrint(document, xml.endsWith("\n"));
-      rewritten.put(publicXml, formatted);
-    }
+    filteredCopy(mergedResourceDir.toFile(), destination, skip, rewritten);
   }
 
   /**
@@ -339,7 +299,7 @@ public class ResourceShrinker {
     } else if (!skip.contains(source) && source.isFile()) {
       String contents = replace.get(source);
       if (contents != null) {
-        Files.write(contents, destinationFile, UTF_8);
+        Files.write(contents, destinationFile, Charsets.UTF_8);
       } else {
         Files.copy(source, destinationFile);
       }
@@ -379,10 +339,38 @@ public class ResourceShrinker {
         stripUnused((Element) child, removed);
       }
     }
-    if (resource != null && !resource.reachable && resource.isRelevantType()) {
+    if (resource != null && !resource.reachable) {
       removed.add(resource.getUrl());
+      // for themes etc where .'s have been replaced by _'s
+      String name = element.getAttribute(ATTR_NAME);
+      if (name.isEmpty()) {
+        name = resource.name;
+      }
+      Node nextSibling = element.getNextSibling();
       Node parent = element.getParentNode();
+      NodeList oldChildren = element.getChildNodes();
       parent.removeChild(element);
+      Document document = element.getOwnerDocument();
+      element = document.createElement("item");
+      for (int i = 0; i < oldChildren.getLength(); i++) {
+        element.appendChild(oldChildren.item(i));
+      }
+      element.setAttribute(ATTR_NAME, name);
+      element.setAttribute(ATTR_TYPE, resource.type.getName());
+      String text = null;
+      switch (resource.type) {
+        case BOOL:
+          text = "true";
+          break;
+        case DIMEN:
+          text = "0dp";
+          break;
+        case INTEGER:
+          text = "0";
+          break;
+      }
+      element.setTextContent(text);
+      parent.insertBefore(element, nextSibling);
     }
   }
 
@@ -457,7 +445,7 @@ public class ResourceShrinker {
   private void dumpReferences() {
     for (Resource resource : resources) {
       if (resource.references != null) {
-        logger.fine(resource + " => " + resource.references);
+        logger.info(resource + " => " + resource.references);
       }
     }
   }
@@ -874,7 +862,7 @@ public class ResourceShrinker {
     }
   }
 
-  private void parseResourceTxtFile(Path rTxt, Set<String> resourcePackages) throws IOException {
+  private void parseResourceTxtFile(Path rTxt, List<String> resourcePackages) throws IOException {
     BufferedReader reader = java.nio.file.Files.newBufferedReader(rTxt, Charset.defaultCharset());
     String line;
     while ((line = reader.readLine()) != null) {
