@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,15 +15,25 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
+
 import java.util.List;
 
 /**
  * An {@link ActionContextProvider} that just provides the {@link ActionContext}s it's given.
  */
-final class SimpleActionContextProvider extends ActionContextProvider {
+public class SimpleActionContextProvider extends ActionContextProvider {
+
+  /**
+   * Creates an immutable list containing a single SimpleActionContextProvider with the given
+   * contexts as a convenience for BlazeModule.getActionContextProviders().
+   */
+  public static List<ActionContextProvider> of(ActionContext ... contexts) {
+    return ImmutableList.<ActionContextProvider>of(new SimpleActionContextProvider(contexts));
+  }
+
   private final List<ActionContext> actionContexts;
 
-  public SimpleActionContextProvider(ActionContext... contexts) {
+  public SimpleActionContextProvider(ActionContext ... contexts) {
     actionContexts = ImmutableList.<ActionContext>copyOf(contexts);
   }
 

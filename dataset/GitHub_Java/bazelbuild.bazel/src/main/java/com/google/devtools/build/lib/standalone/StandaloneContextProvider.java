@@ -17,14 +17,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
 import com.google.devtools.build.lib.actions.ActionContextProvider;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionGraph;
-import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
-import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.FileWriteStrategy;
@@ -43,7 +40,7 @@ import java.io.IOException;
 /**
  * Provide a standalone, local execution context.
  */
-public class StandaloneContextProvider implements ActionContextProvider {
+public class StandaloneContextProvider extends ActionContextProvider {
 
   /**
    * a IncludeScanningContext that does nothing. Since local execution does not need to
@@ -65,40 +62,40 @@ public class StandaloneContextProvider implements ActionContextProvider {
   }
 
   @SuppressWarnings("unchecked")
-  private final ActionContext localSpawnStrategy;
+  private final ActionContext standaloneSpawnStrategy;
   private final ImmutableList<ActionContext> strategies;
   private final BlazeRuntime runtime;
 
-  public StandaloneContextProvider(
-      BlazeRuntime runtime, BuildRequest buildRequest) {
+  public StandaloneContextProvider(BlazeRuntime runtime, BuildRequest buildRequest) {
     boolean verboseFailures = buildRequest.getOptions(ExecutionOptions.class).verboseFailures;
 
-    localSpawnStrategy = new LocalSpawnStrategy(
-        runtime.getDirectories().getExecRoot(), verboseFailures);
+    standaloneSpawnStrategy = new StandaloneSpawnStrategy(runtime.getExecRoot(), verboseFailures);
     this.runtime = runtime;
 
     TestActionContext testStrategy = new StandaloneTestStrategy(buildRequest,
-        runtime.getStartupOptionsProvider(), runtime.getBinTools(), runtime.getRunfilesPrefix());
+        runtime.getStartupOptionsProvider(), runtime.getBinTools(), runtime.getClientEnv(),
+        runtime.getWorkspace());
+
     Builder<ActionContext> strategiesBuilder = ImmutableList.builder();
     // order of strategies passed to builder is significant - when there are many strategies that
     // could potentially be used and a spawnActionContext doesn't specify which one it wants, the
     // last one from strategies list will be used
-    
+
     // put sandboxed strategy first, as we don't want it by default
     if (OS.getCurrent() == OS.LINUX) {
       LinuxSandboxedStrategy sandboxedLinuxStrategy =
           new LinuxSandboxedStrategy(runtime.getDirectories(), verboseFailures);
       strategiesBuilder.add(sandboxedLinuxStrategy);
     }
+
     strategiesBuilder.add(
-        localSpawnStrategy,
+        standaloneSpawnStrategy,
         new DummyIncludeScanningContext(),
         new LocalLinkStrategy(),
         testStrategy,
         new ExclusiveTestStrategy(testStrategy),
-        new LocalGccStrategy(buildRequest),
+        new LocalGccStrategy(),
         new FileWriteStrategy());
-  
 
     this.strategies = strategiesBuilder.build();
   }
@@ -107,20 +104,4 @@ public class StandaloneContextProvider implements ActionContextProvider {
   public Iterable<ActionContext> getActionContexts() {
     return strategies;
   }
-
-  @Override
-  public void executorCreated(Iterable<ActionContext> usedContexts) throws ExecutorInitException {
-  }
-
-  @Override
-  public void executionPhaseStarting(
-      ActionInputFileCache actionInputFileCache,
-      ActionGraph actionGraph,
-      Iterable<Artifact> topLevelArtifacts) throws ExecutorInitException {
-  }
-
-  @Override
-  public void executionPhaseEnding()  {}
 }
-
-

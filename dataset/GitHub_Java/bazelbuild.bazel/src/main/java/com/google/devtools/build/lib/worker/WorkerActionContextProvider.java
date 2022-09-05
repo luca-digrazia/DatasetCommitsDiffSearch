@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.worker;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionContextProvider;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
@@ -25,10 +24,9 @@ import com.google.devtools.build.lib.buildtool.BuildRequest;
 final class WorkerActionContextProvider extends ActionContextProvider {
   private final ImmutableList<ActionContext> strategies;
 
-  public WorkerActionContextProvider(
-      BuildRequest buildRequest, WorkerPool workers, EventBus eventBus) {
+  public WorkerActionContextProvider(BuildRequest buildRequest, WorkerPool workers) {
     this.strategies =
-        ImmutableList.<ActionContext>of(new WorkerSpawnStrategy(buildRequest, workers, eventBus));
+        ImmutableList.<ActionContext>of(new WorkerSpawnStrategy(buildRequest, workers));
   }
 
   @Override
