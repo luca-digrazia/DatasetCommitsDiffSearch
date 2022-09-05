@@ -73,7 +73,9 @@ public abstract class BugReport {
     BugReport.printBug(OutErr.SYSTEM_OUT_ERR, throwable);
     System.err.println("Blaze crash in async thread:");
     throwable.printStackTrace();
-    int exitCode = getExitCodeForThrowable(throwable);
+    int exitCode =
+        (throwable instanceof OutOfMemoryError) ? ExitCode.OOM_ERROR.getNumericExitCode()
+            : ExitCode.BLAZE_INTERNAL_ERROR.getNumericExitCode();
     if (runtime != null) {
       runtime.notifyCommandComplete(exitCode);
       // We don't call runtime#shutDown() here because all it does is shut down the modules, and who
@@ -84,13 +86,6 @@ public abstract class BugReport {
     // deadlock. This call would block on the shutdown sequence completing, but the shutdown
     // sequence would in turn be blocked on this thread finishing. Instead, exit fast via halt().
     Runtime.getRuntime().halt(exitCode);
-  }
-
-  /** Get exit code corresponding to throwable. */
-  public static int getExitCodeForThrowable(Throwable throwable) {
-    return (throwable instanceof OutOfMemoryError)
-        ? ExitCode.OOM_ERROR.getNumericExitCode()
-        : ExitCode.BLAZE_INTERNAL_ERROR.getNumericExitCode();
   }
 
   private static void printThrowableTo(OutErr outErr, Throwable e) {
