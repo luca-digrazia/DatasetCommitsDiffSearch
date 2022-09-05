@@ -20,10 +20,6 @@ import static com.android.SdkConstants.ATTR_NAME;
 import static com.android.SdkConstants.ATTR_PARENT;
 import static com.android.SdkConstants.ATTR_TYPE;
 import static com.android.SdkConstants.DOT_CLASS;
-import static com.android.SdkConstants.DOT_GIF;
-import static com.android.SdkConstants.DOT_JPEG;
-import static com.android.SdkConstants.DOT_JPG;
-import static com.android.SdkConstants.DOT_PNG;
 import static com.android.SdkConstants.DOT_XML;
 import static com.android.SdkConstants.FD_RES_VALUES;
 import static com.android.SdkConstants.PREFIX_ANDROID;
@@ -31,18 +27,8 @@ import static com.android.SdkConstants.STYLE_RESOURCE_PREFIX;
 import static com.android.SdkConstants.TAG_ITEM;
 import static com.android.SdkConstants.TAG_RESOURCES;
 import static com.android.SdkConstants.TAG_STYLE;
-import static com.android.utils.SdkUtils.endsWith;
 import static com.android.utils.SdkUtils.endsWithIgnoreCase;
-import static com.google.common.base.Charsets.UTF_8;
-
-import com.google.common.base.Charsets;
-import com.google.common.base.Joiner;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
-import com.google.common.io.ByteStreams;
-import com.google.common.io.Closeables;
-import com.google.common.io.Files;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.android.annotations.NonNull;
 import com.android.annotations.Nullable;
@@ -55,8 +41,34 @@ import com.android.ide.common.xml.XmlPrettyPrinter;
 import com.android.resources.FolderTypeRelationship;
 import com.android.resources.ResourceFolderType;
 import com.android.resources.ResourceType;
+import com.android.utils.Pair;
 import com.android.utils.XmlUtils;
-
+import com.google.common.base.Joiner;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import com.google.common.io.ByteStreams;
+import com.google.common.io.Closeables;
+import com.google.common.io.Files;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.FileHandler;
+import java.util.logging.Formatter;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import javax.xml.parsers.ParserConfigurationException;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;
@@ -69,64 +81,53 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
-
-import javax.xml.parsers.ParserConfigurationException;
-
 /**
  * Class responsible for searching through a Gradle built tree (after resource merging, compilation
  * and ProGuarding has been completed, but before final .apk assembly), which figures out which
- * resources if any are unused, and removes them. <p> It does this by examining <ul> <li>The merged
- * manifest, to find root resource references (such as drawables used for activity icons)</li>
- * <li>The merged R class (to find the actual integer constants assigned to resources)</li> <li>The
- * ProGuard log files (to find the mapping from original symbol names to short names)</li>* <li>The
- * merged resources (to find which resources reference other resources, e.g. drawable state lists
- * including other drawables, or layouts including other layouts, or styles referencing other
- * drawables, or menus items including action layouts, etc.)</li> <li>The ProGuard output classes
- * (to find resource references in code that are actually reachable)</li> </ul> From all this, it
- * builds up a reference graph, and based on the root references (e.g. from the manifest and from
- * the remaining code) it computes which resources are actually reachable in the app, and anything
- * that is not reachable is then marked for deletion. <p> A resource is referenced in code if either
- * the field R.type.name is referenced (which is the case for non-final resource references, e.g. in
- * libraries), or if the corresponding int value is referenced (for final resource values). We check
- * this by looking at the ProGuard output classes with an ASM visitor. One complication is that code
- * can also call {@code Resources#getIdentifier(String,String,String)} where they can pass in the
- * names of resources to look up. To handle this scenario, we use the ClassVisitor to see if there
- * are any calls to the specific {@code Resources#getIdentifier} method. If not, great, the usage
- * analysis is completely accurate. If we <b>do</b> find one, we check <b>all</b> the string
- * constants found anywhere in the app, and look to see if any look relevant. For example, if we
- * find the string "string/foo" or "my.pkg:string/foo", we will then mark the string resource named
- * foo (if any) as potentially used. Similarly, if we find just "foo" or "/foo", we will mark
- * <b>all</b> resources named "foo" as potentially used. However, if the string is "bar/foo" or "
- * foo " these strings are ignored. This means we can potentially miss resources usages where the
- * resource name is completed computed (e.g. by concatenating individual characters or taking
- * substrings of strings that do not look like resource names), but that seems extremely unlikely to
- * be a real-world scenario. <p> For now, for reasons detailed in the code, this only applies to
- * file-based resources like layouts, menus and drawables, not value-based resources like strings
- * and dimensions.
+ * resources if any are unused, and removes them.
+ * <p>It does this by examining
+ * <ul>
+ *   <li>The merged manifest, to find root resource references (such as drawables used for activity
+ *       icons)</li>
+ *   <li>The R.txt file (to find the actual integer constants assigned to resources)</li>
+ *   <li>The ProGuard log files (to find the mapping from original symbol names to short names)</li>
+ *   <li>The merged resources (to find which resources reference other resources, e.g. drawable
+ *       state lists including other drawables, or layouts including other layouts, or styles
+ *       referencing other drawables, or menus items including action layouts, etc.)</li>
+ *   <li>The ProGuard output classes (to find resource references in code that are actually
+ *       reachable)</li>
+ * </ul>
+ * From all this, it builds up a reference graph, and based on the root references (e.g. from the
+ * manifest and from the remaining code) it computes which resources are actually reachable in the
+ * app, and anything that is not reachable is then marked for deletion.
+ * <p>A resource is referenced in code if either the field R.type.name is referenced (which is the
+ * case for non-final resource references, e.g. in libraries), or if the corresponding int value is
+ * referenced (for final resource values). We check this by looking at the ProGuard output classes
+ * with an ASM visitor. One complication is that code can also call
+ * {@code Resources#getIdentifier(String,String,String)} where they can pass in the names of
+ * resources to look up. To handle this scenario, we use the ClassVisitor to see if there are any
+ * calls to the specific {@code Resources#getIdentifier} method. If not, great, the usage analysis
+ * is completely accurate. If we <b>do</b> find one, we check <b>all</b> the string constants found
+ * anywhere in the app, and look to see if any look relevant. For example, if we find the string
+ * "string/foo" or "my.pkg:string/foo", we will then mark the string resource named foo (if any) as
+ * potentially used. Similarly, if we find just "foo" or "/foo", we will mark <b>all</b> resources
+ * named "foo" as potentially used. However, if the string is "bar/foo" or " foo " these strings are
+ * ignored. This means we can potentially miss resources usages where the resource name is completed
+ * computed (e.g. by concatenating individual characters or taking substrings of strings that do not
+ * look like resource names), but that seems extremely unlikely to be a real-world scenario. <p> For
+ * now, for reasons detailed in the code, this only applies to file-based resources like layouts,
+ * menus and drawables, not value-based resources like strings and dimensions.
  */
 public class ResourceShrinker {
 
   public static final int TYPICAL_RESOURCE_COUNT = 200;
+  private final Set<String> resourcePackages;
   private final Path rTxt;
   private final Path proguardMapping;
   private final Path classesJar;
   private final Path mergedManifest;
   private final Path mergedResourceDir;
-  private final String rPackagePath;
+  private final Logger logger;
 
   /**
    * The computed set of unused resources
@@ -147,30 +148,49 @@ public class ResourceShrinker {
   private Map<ResourceType, Map<String, Resource>> typeToName =
       Maps.newEnumMap(ResourceType.class);
   /**
-   * Map from resource class owners (VM format class) to corresponding resource types. This will
-   * typically be the fully qualified names of the R classes, as well as any renamed versions of
-   * those discovered in the mapping.txt file from ProGuard
+   * Map from resource class owners (VM format class) to corresponding resource entries.
+   * This lets us map back from code references (obfuscated class and possibly obfuscated field
+   * reference) back to the corresponding resource type and name.
    */
-  private Map<String, ResourceType> resourceClassOwners = Maps.newHashMapWithExpectedSize(20);
+  private final Map<String, Pair<ResourceType, Map<String, String>>> resourceObfuscation =
+      Maps.newHashMapWithExpectedSize(30);
 
   public ResourceShrinker(
+      Set<String> resourcePackages,
       @NonNull Path rTxt,
       @NonNull Path classesJar,
       @NonNull Path manifest,
       @Nullable Path mapping,
       @NonNull Path resources,
-      @NonNull String rPackageName) {
+      Path logFile) {
+    this.resourcePackages = resourcePackages;
     this.rTxt = rTxt;
-    proguardMapping = mapping;
+    this.proguardMapping = mapping;
     this.classesJar = classesJar;
-    mergedManifest = manifest;
-    mergedResourceDir = resources;
-    this.rPackagePath = rPackageName.replace('.', '/');
+    this.mergedManifest = manifest;
+    this.mergedResourceDir = resources;
+
+    this.logger = Logger.getLogger(getClass().getName());
+    logger.setLevel(Level.FINE);
+    if (logFile != null) {
+      try {
+        FileHandler fileHandler = new FileHandler(logFile.toString());
+        fileHandler.setLevel(Level.FINE);
+        fileHandler.setFormatter(new Formatter(){
+          @Override public String format(LogRecord record) {
+            return record.getMessage() + "\n";
+          }
+        });
+        logger.addHandler(fileHandler);
+      } catch (SecurityException | IOException e) {
+        logger.warning(String.format("Unable to open '%s' to write log.", logFile));
+      }
+    }
   }
 
   public void shrink(Path destinationDir) throws IOException,
       ParserConfigurationException, SAXException {
-    gatherResourceValues(rTxt);
+    parseResourceTxtFile(rTxt, resourcePackages);
     recordMapping(proguardMapping);
     recordUsages(classesJar);
     recordManifestUsages(mergedManifest);
@@ -185,15 +205,7 @@ public class ResourceShrinker {
    * Remove resources (already identified by {@link #shrink(Path)}).
    *
    * <p>This task will copy all remaining used resources over from the full resource directory to a
-   * new reduced resource directory. However, it can't just delete the resources, because it has no
-   * way to tell aapt to continue to use the same id's for the resources. When we re-run aapt on the
-   * stripped resource directory, it will assign new id's to some of the resources (to fill the
-   * gaps) which means the resource id's no longer match the constants compiled into the dex files,
-   * and as a result, the app crashes at runtime. <p> Therefore, it needs to preserve all id's by
-   * actually keeping all the resource names. It can still save a lot of space by making these
-   * resources tiny; e.g. all strings are set to empty, all styles, arrays and plurals are set to
-   * not contain any children, and most importantly, all file based resources like bitmaps and
-   * layouts are replaced by simple resource aliases which just point to @null.
+   * new reduced resource directory and removes unused values from all value xml files.
    *
    * @param destination directory to copy resources into; if null, delete resources in place
    */
@@ -203,13 +215,15 @@ public class ResourceShrinker {
     int resourceCount = unused.size() * 4; // *4: account for some resource folder repetition
     Set<File> skip = Sets.newHashSetWithExpectedSize(resourceCount);
     Set<File> rewrite = Sets.newHashSetWithExpectedSize(resourceCount);
+    Set<Resource> deleted = Sets.newHashSetWithExpectedSize(resourceCount);
     for (Resource resource : unused) {
+      deleted.add(resource);
       if (resource.declarations != null) {
         for (File file : resource.declarations) {
           String folder = file.getParentFile().getName();
           ResourceFolderType folderType = ResourceFolderType.getFolderType(folder);
           if (folderType != null && folderType != ResourceFolderType.VALUES) {
-            System.out.println("Deleted unused resource " + file);
+            logger.fine("Deleted unused resource " + file);
             assert skip != null;
             skip.add(file);
           } else {
@@ -223,11 +237,30 @@ public class ResourceShrinker {
     // Special case the base values.xml folder
     File values = new File(mergedResourceDir.toFile(),
         FD_RES_VALUES + File.separatorChar + "values.xml");
-    boolean valuesExists = values.exists();
-    if (valuesExists) {
+    if (values.exists()) {
       rewrite.add(values);
     }
+
     Map<File, String> rewritten = Maps.newHashMapWithExpectedSize(rewrite.size());
+    rewriteXml(rewrite, rewritten);
+    // TODO(apell): The graph traversal does not mark IDs as reachable or not, so they cannot be
+    // accurately removed from public.xml, but the declarations may be deleted if they occur in
+    // other files. IDs should be added to values.xml so that there are no definitions in public.xml
+    // without declarations.
+    createStubIds(values, rewritten);
+
+    File publicXml = new File(mergedResourceDir.toFile(),
+        FD_RES_VALUES + File.separatorChar + "public.xml");
+    trimPublicResources(publicXml, deleted, rewritten);
+
+    filteredCopy(mergedResourceDir.toFile(), destination, skip, rewritten);
+  }
+
+  /**
+   * Deletes unused resources from value XML files.
+   */
+  private void rewriteXml(Set<File> rewrite, Map<File, String> rewritten)
+      throws IOException, ParserConfigurationException, SAXException {
     // Delete value resources: Must rewrite the XML files
     for (File file : rewrite) {
       String xml = Files.toString(file, UTF_8);
@@ -236,17 +269,25 @@ public class ResourceShrinker {
       if (root != null && TAG_RESOURCES.equals(root.getTagName())) {
         List<String> removed = Lists.newArrayList();
         stripUnused(root, removed);
-        System.out.println("Removed " + removed.size() + " unused resources from " + file + ":\n  "
+        logger.fine("Removed " + removed.size() + " unused resources from " + file + ":\n  "
             + Joiner.on(", ").join(removed));
         String formatted = XmlPrettyPrinter.prettyPrint(document, xml.endsWith("\n"));
         rewritten.put(file, formatted);
       }
     }
-    if (valuesExists) {
+  }
+
+  /**
+   * Write stub values for IDs to values.xml to match those available in public.xml.
+   */
+  private void createStubIds(File values, Map<File, String> rewritten)
+      throws IOException, ParserConfigurationException, SAXException {
+    if (values.exists()) {
       String xml = rewritten.get(values);
       if (xml == null) {
         xml = Files.toString(values, UTF_8);
       }
+      List<String> stubbed = Lists.newArrayList();
       Document document = XmlUtils.parseDocument(xml, true);
       Element root = document.getDocumentElement();
       for (Resource resource : resources) {
@@ -255,25 +296,48 @@ public class ResourceShrinker {
           item.setAttribute(ATTR_TYPE, resource.type.getName());
           item.setAttribute(ATTR_NAME, resource.name);
           root.appendChild(item);
-        } else if (!resource.reachable
-            && !resource.hasDefault
-            && resource.type != ResourceType.DECLARE_STYLEABLE
-            && resource.type != ResourceType.STYLE
-            && resource.type != ResourceType.PLURALS
-            && resource.type != ResourceType.ARRAY
-            && resource.isRelevantType()) {
-          Element item = document.createElement(TAG_ITEM);
-          item.setAttribute(ATTR_TYPE, resource.type.getName());
-          item.setAttribute(ATTR_NAME, resource.name);
-          root.appendChild(item);
-          String s = "@null";
-          item.appendChild(document.createTextNode(s));
+          stubbed.add(resource.getUrl());
         }
       }
+      logger.fine("Created " + stubbed.size() + " stub IDs for:\n  "
+          + Joiner.on(", ").join(stubbed));
       String formatted = XmlPrettyPrinter.prettyPrint(document, xml.endsWith("\n"));
       rewritten.put(values, formatted);
     }
-    filteredCopy(mergedResourceDir.toFile(), destination, skip, rewritten);
+  }
+
+  /**
+   * Remove public definitions of unused resources.
+   */
+  private void trimPublicResources(File publicXml, Set<Resource> deleted,
+      Map<File, String> rewritten) throws IOException, ParserConfigurationException, SAXException {
+    if (publicXml.exists()) {
+      String xml = rewritten.get(publicXml);
+      if (xml == null) {
+        xml = Files.toString(publicXml, UTF_8);
+      }
+      Document document = XmlUtils.parseDocument(xml, true);
+      Element root = document.getDocumentElement();
+      if (root != null && TAG_RESOURCES.equals(root.getTagName())) {
+        NodeList children = root.getChildNodes();
+        for (int i = children.getLength() - 1; i >= 0; i--) {
+          Node child = children.item(i);
+          if (child.getNodeType() == Node.ELEMENT_NODE) {
+            Element resourceElement = (Element) child;
+            ResourceType type = ResourceType.getEnum(resourceElement.getAttribute(ATTR_TYPE));
+            String name = resourceElement.getAttribute(ATTR_NAME);
+            if (type != null && name != null) {
+              Resource resource = getResource(type, name);
+              if (resource != null && deleted.contains(resource)) {
+                root.removeChild(child);
+              }
+            }
+          }
+        }
+      }
+      String formatted = XmlPrettyPrinter.prettyPrint(document, xml.endsWith("\n"));
+      rewritten.put(publicXml, formatted);
+    }
   }
 
   /**
@@ -300,7 +364,7 @@ public class ResourceShrinker {
     } else if (!skip.contains(source) && source.isFile()) {
       String contents = replace.get(source);
       if (contents != null) {
-        Files.write(contents, destinationFile, Charsets.UTF_8);
+        Files.write(contents, destinationFile, UTF_8);
       } else {
         Files.copy(source, destinationFile);
       }
@@ -330,7 +394,6 @@ public class ResourceShrinker {
           Node child = children.item(i);
           element.removeChild(child);
         }
-        return;
       }
     }
     NodeList children = element.getChildNodes();
@@ -340,38 +403,10 @@ public class ResourceShrinker {
         stripUnused((Element) child, removed);
       }
     }
-    if (resource != null && !resource.reachable) {
+    if (resource != null && !resource.reachable && resource.isRelevantType()) {
       removed.add(resource.getUrl());
-      // for themes etc where .'s have been replaced by _'s
-      String name = element.getAttribute(ATTR_NAME);
-      if (name.isEmpty()) {
-        name = resource.name;
-      }
-      Node nextSibling = element.getNextSibling();
       Node parent = element.getParentNode();
-      NodeList oldChildren = element.getChildNodes();
       parent.removeChild(element);
-      Document document = element.getOwnerDocument();
-      element = document.createElement("item");
-      for (int i = 0; i < oldChildren.getLength(); i++) {
-        element.appendChild(oldChildren.item(i));
-      }
-      element.setAttribute(ATTR_NAME, name);
-      element.setAttribute(ATTR_TYPE, resource.type.getName());
-      String text = null;
-      switch (resource.type) {
-        case BOOL:
-          text = "true";
-          break;
-        case DIMEN:
-          text = "0dp";
-          break;
-        case INTEGER:
-          text = "0";
-          break;
-      }
-      element.setTextContent(text);
-      parent.insertBefore(element, nextSibling);
     }
   }
 
@@ -415,7 +450,8 @@ public class ResourceShrinker {
         roots.add(resource);
       }
     }
-    System.out.println("The root reachable resources are: " + Joiner.on(",\n   ").join(roots));
+    logger.fine(String.format("The root reachable resources are:\n  %s",
+        Joiner.on(",\n  ").join(roots)));
     Map<Resource, Boolean> seen = new IdentityHashMap<>(resources.size());
     for (Resource root : roots) {
       visit(root, seen);
@@ -445,7 +481,7 @@ public class ResourceShrinker {
   private void dumpReferences() {
     for (Resource resource : resources) {
       if (resource.references != null) {
-        System.out.println(resource + " => " + resource.references);
+        logger.fine(resource + " => " + resource.references);
       }
     }
   }
@@ -458,9 +494,9 @@ public class ResourceShrinker {
     }
     List<String> strings = new ArrayList<String>(mStrings);
     Collections.sort(strings);
-    System.out.println("android.content.res.Resources#getIdentifier present: "
-        + mFoundGetIdentifier);
-    System.out.println("Referenced Strings:");
+    logger.fine(String.format("android.content.res.Resources#getIdentifier present: %s",
+        mFoundGetIdentifier));
+    logger.fine("Referenced Strings:");
     for (String s : strings) {
       s = s.trim().replace("\n", "\\n");
       if (s.length() > 40) {
@@ -468,8 +504,9 @@ public class ResourceShrinker {
       } else if (s.isEmpty()) {
         continue;
       }
-      System.out.println("  " + s);
+      logger.fine("  " + s);
     }
+
     Set<String> names = Sets.newHashSetWithExpectedSize(50);
     for (Map<String, Resource> map : typeToName.values()) {
       names.addAll(map.keySet());
@@ -529,7 +566,7 @@ public class ResourceShrinker {
           }
           Resource resource = getResource(type, name);
           if (resource != null) {
-            System.out.println("Marking " + resource + " used because it "
+            logger.fine("Marking " + resource + " used because it "
                 + "matches string pool constant " + string);
           }
           markReachable(resource);
@@ -541,7 +578,7 @@ public class ResourceShrinker {
         for (Map<String, Resource> map : typeToName.values()) {
           Resource resource = map.get(string);
           if (resource != null) {
-            System.out.println("Marking " + resource + " used because it "
+            logger.fine("Marking " + resource + " used because it "
                 + "matches string pool constant " + string);
           }
           markReachable(resource);
@@ -600,18 +637,16 @@ public class ResourceShrinker {
         boolean isXml = endsWithIgnoreCase(path, DOT_XML);
         Resource from = null;
         // Record resource for the whole file
-        if (folderType != ResourceFolderType.VALUES
-            && (isXml
-            || endsWith(path, DOT_PNG) //also true for endsWith(name, DOT_9PNG)
-            || endsWith(path, DOT_JPG)
-            || endsWith(path, DOT_GIF)
-            || endsWith(path, DOT_JPEG))) {
+        if (folderType != ResourceFolderType.VALUES) {
           List<ResourceType> types = FolderTypeRelationship.getRelatedResourceTypes(
               folderType);
           ResourceType type = types.get(0);
           assert type != ResourceType.ID : folderType;
           String name = file.getName();
-          name = name.substring(0, name.indexOf('.'));
+          int extension = name.indexOf('.');
+          if (extension > 0) {
+            name = name.substring(0, extension);
+          }
           Resource resource = getResource(type, name);
           if (resource != null) {
             resource.addLocation(file);
@@ -636,9 +671,36 @@ public class ResourceShrinker {
     }
     final String arrowIndicator = " -> ";
     final String resourceIndicator = ".R$";
+    Map<String, String> nameMap = null;
     for (String line : Files.readLines(mapping.toFile(), UTF_8)) {
       if (line.startsWith(" ") || line.startsWith("\t")) {
+        if (nameMap != null) {
+          // We're processing the members of a resource class: record names into the map
+          int n = line.length();
+          int i = 0;
+          for (; i < n; i++) {
+            if (!Character.isWhitespace(line.charAt(i))) {
+              break;
+            }
+          }
+          if (i < n && line.startsWith("int", i)) { // int or int[]
+            int start = line.indexOf(' ', i + 3) + 1;
+            int arrow = line.indexOf(arrowIndicator);
+            if (start > 0 && arrow != -1) {
+              int end = line.indexOf(' ', start + 1);
+              if (end != -1) {
+                String oldName = line.substring(start, end);
+                String newName = line.substring(arrow + arrowIndicator.length()).trim();
+                if (!newName.equals(oldName)) {
+                  nameMap.put(newName, oldName);
+                }
+              }
+            }
+          }
+        }
         continue;
+      } else {
+        nameMap = null;
       }
       int index = line.indexOf(resourceIndicator);
       if (index == -1) {
@@ -659,7 +721,10 @@ public class ResourceShrinker {
       }
       String target = line.substring(arrow + arrowIndicator.length(), end).trim();
       String ownerName = target.replace('.', '/');
-      resourceClassOwners.put(ownerName, type);
+
+      nameMap = Maps.newHashMap();
+      Pair<ResourceType, Map<String, String>> pair = Pair.of(type, nameMap);
+      resourceObfuscation.put(ownerName, pair);
     }
   }
 
@@ -692,6 +757,22 @@ public class ResourceShrinker {
     ResourceUrl url = ResourceUrl.parse(possibleUrlReference);
     if (url != null && !url.framework) {
       return getResource(url.type, url.name);
+    }
+    return null;
+  }
+
+  @VisibleForTesting
+  @Nullable
+  Resource getResourceFromCode(@NonNull String owner, @NonNull String name) {
+    Pair<ResourceType, Map<String, String>> pair = resourceObfuscation.get(owner);
+    if (pair != null) {
+      ResourceType type = pair.getFirst();
+      Map<String, String> nameMap = pair.getSecond();
+      String renamedField = nameMap.get(name);
+      if (renamedField != null) {
+        name = renamedField;
+      }
+      return getResource(type, name);
     }
     return null;
   }
@@ -894,17 +975,16 @@ public class ResourceShrinker {
     }
   }
 
-  private void gatherResourceValues(Path file) throws IOException {
-    parseResourceClass(file);
-  }
-
-  private void parseResourceClass(Path file) throws IOException {
-    BufferedReader reader = java.nio.file.Files.newBufferedReader(file, Charset.defaultCharset());
+  private void parseResourceTxtFile(Path rTxt, Set<String> resourcePackages) throws IOException {
+    BufferedReader reader = java.nio.file.Files.newBufferedReader(rTxt, UTF_8);
     String line;
     while ((line = reader.readLine()) != null) {
       String[] tokens = line.split(" ");
       ResourceType type = ResourceType.getEnum(tokens[1]);
-      resourceClassOwners.put(rPackagePath + "/R$" + type.getName(), type);
+      for (String resourcePackage : resourcePackages) {
+        resourceObfuscation.put(resourcePackage.replace('.', '/') + "/R$" + type.getName(),
+            Pair.<ResourceType, Map<String, String>>of(type, Maps.<String, String>newHashMap()));
+      }
       if (type == ResourceType.STYLEABLE) {
         if (tokens[0].equals("int[]")) {
           addResource(ResourceType.DECLARE_STYLEABLE, tokens[2], null);
@@ -1050,13 +1130,13 @@ public class ResourceShrinker {
   private class UsageVisitor extends ClassVisitor {
 
     public UsageVisitor() {
-      super(Opcodes.ASM4);
+      super(Opcodes.ASM5);
     }
 
     @Override
     public MethodVisitor visitMethod(int access, final String name,
         String desc, String signature, String[] exceptions) {
-      return new MethodVisitor(Opcodes.ASM4) {
+      return new MethodVisitor(Opcodes.ASM5) {
         @Override
         public void visitLdcInsn(Object cst) {
           if (cst instanceof Integer) {
@@ -1071,23 +1151,20 @@ public class ResourceShrinker {
         @Override
         public void visitFieldInsn(int opcode, String owner, String name, String desc) {
           if (opcode == Opcodes.GETSTATIC) {
-            ResourceType type = resourceClassOwners.get(owner);
-            if (type != null) {
-              Resource resource = getResource(type, name);
-              if (resource != null) {
-                markReachable(resource);
-              }
+            Resource resource = getResourceFromCode(owner, name);
+            if (resource != null) {
+              markReachable(resource);
             }
           }
         }
 
         @Override
-        public void visitMethodInsn(int opcode, String owner, String name, String desc) {
-          super.visitMethodInsn(opcode, owner, name, desc);
+        public void visitMethodInsn(
+            int opcode, String owner, String name, String desc, boolean isInterface) {
+          super.visitMethodInsn(opcode, owner, name, desc, isInterface);
           if (owner.equals("android/content/res/Resources")
               && name.equals("getIdentifier")
-              && desc.equals(
-              "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I")) {
+              && desc.equals("(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I")) {
             mFoundGetIdentifier = true;
             // TODO: Check previous instruction and see if we can find a literal
             // String; if so, we can more accurately dispatch the resource here
