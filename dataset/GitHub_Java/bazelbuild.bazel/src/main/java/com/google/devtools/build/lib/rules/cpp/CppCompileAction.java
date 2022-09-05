@@ -1107,7 +1107,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     f.addPaths(context.getDeclaredIncludeWarnDirs());
     f.addPaths(getDeclaredIncludeSrcsInStableOrder());
     f.addPaths(getExtraSystemIncludePrefixes());
-    f.addPaths(Artifact.asSortedPathFragments(getMandatoryInputs()));
     return f.hexDigestAndReset();
   }
 
