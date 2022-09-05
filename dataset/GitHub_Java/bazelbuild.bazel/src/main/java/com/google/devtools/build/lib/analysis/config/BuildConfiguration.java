@@ -242,6 +242,13 @@ public final class BuildConfiguration {
     }
 
     /**
+     * Return false if incremental build is not possible for some reason.
+     */
+    public boolean supportsIncrementalBuild() {
+      return true;
+    }
+
+    /**
      * Return true if the fragment performs static linking. This information is needed for
      * lincence checking.
      */
@@ -2384,6 +2391,18 @@ public final class BuildConfiguration {
 
   public String getCpu() {
     return options.cpu;
+  }
+
+  /**
+   * Returns true is incremental builds are supported with this configuration.
+   */
+  public boolean supportsIncrementalBuild() {
+    for (Fragment fragment : fragments.values()) {
+      if (!fragment.supportsIncrementalBuild()) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

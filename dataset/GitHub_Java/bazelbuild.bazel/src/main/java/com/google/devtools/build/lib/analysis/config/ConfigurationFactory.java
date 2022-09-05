@@ -22,9 +22,11 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -67,26 +69,23 @@ public final class ConfigurationFactory {
   @Nullable
   public BuildConfiguration createConfigurations(
       Cache<String, BuildConfiguration> cache,
-      PackageProviderForConfigurations loadedPackageProvider,
-      BuildOptions buildOptions,
+      PackageProviderForConfigurations loadedPackageProvider, BuildOptions buildOptions,
       EventHandler errorEventListener)
-      throws InvalidConfigurationException, InterruptedException {
+          throws InvalidConfigurationException {
     return configurationCollectionFactory.createConfigurations(this, cache,
         loadedPackageProvider, buildOptions, errorEventListener);
   }
 
   /**
-   * Returns a {@link com.google.devtools.build.lib.analysis.config.BuildConfiguration} based on the
-   * given set of build options.
+   * Returns a {@link com.google.devtools.build.lib.analysis.config.BuildConfiguration} based on
+   * the given set of build options.
    *
    * <p>If the configuration has already been created, re-uses it, otherwise, creates a new one.
    */
   @Nullable
-  public BuildConfiguration getConfiguration(
-      PackageProviderForConfigurations loadedPackageProvider,
-      BuildOptions buildOptions,
-      Cache<String, BuildConfiguration> cache)
-      throws InvalidConfigurationException, InterruptedException {
+  public BuildConfiguration getConfiguration(PackageProviderForConfigurations loadedPackageProvider,
+      BuildOptions buildOptions, boolean actionsDisabled, Cache<String, BuildConfiguration> cache)
+      throws InvalidConfigurationException {
 
     String cacheKey = buildOptions.computeCacheKey();
     BuildConfiguration result = cache.getIfPresent(cacheKey);
@@ -108,7 +107,7 @@ public final class ConfigurationFactory {
       return null;
     }
 
-    result = new BuildConfiguration(directories, fragments, buildOptions);
+    result = new BuildConfiguration(directories, fragments, buildOptions, actionsDisabled);
     cache.put(cacheKey, result);
     return result;
   }
