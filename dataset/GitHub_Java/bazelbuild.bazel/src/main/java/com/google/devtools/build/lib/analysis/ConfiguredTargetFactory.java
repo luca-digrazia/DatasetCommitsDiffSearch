@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
@@ -165,7 +164,7 @@ public final class ConfiguredTargetFactory {
   public final ConfiguredTarget createConfiguredTarget(AnalysisEnvironment analysisEnvironment,
       ArtifactFactory artifactFactory, Target target, BuildConfiguration config,
       BuildConfiguration hostConfig, ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
-      ImmutableMap<Label, ConfigMatchingProvider> configConditions)
+      Set<ConfigMatchingProvider> configConditions)
       throws InterruptedException {
     if (target instanceof Rule) {
       return createRule(analysisEnvironment, (Rule) target, config, hostConfig,
@@ -220,7 +219,7 @@ public final class ConfiguredTargetFactory {
       AnalysisEnvironment env, Rule rule, BuildConfiguration configuration,
       BuildConfiguration hostConfiguration,
       ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
-      ImmutableMap<Label, ConfigMatchingProvider> configConditions) throws InterruptedException {
+      Set<ConfigMatchingProvider> configConditions) throws InterruptedException {
     // Visibility computation and checking is done for every rule.
     RuleContext ruleContext =
         new RuleContext.Builder(
@@ -304,17 +303,23 @@ public final class ConfiguredTargetFactory {
       ConfiguredAspectFactory aspectFactory,
       Aspect aspect,
       ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
-      ImmutableMap<Label, ConfigMatchingProvider> configConditions,
+      Set<ConfigMatchingProvider> configConditions,
       BuildConfiguration aspectConfiguration,
       BuildConfiguration hostConfiguration)
       throws InterruptedException {
+    ConfigurationFragmentPolicy aspectPolicy =
+        aspect.getDefinition().getConfigurationFragmentPolicy();
+    ConfigurationFragmentPolicy rulePolicy =
+        ((Rule) associatedTarget.getTarget()).getRuleClassObject().getConfigurationFragmentPolicy();
     RuleContext.Builder builder = new RuleContext.Builder(env,
         associatedTarget.getTarget(),
         aspect.getAspectClass().getName(),
         aspectConfiguration,
         hostConfiguration,
         ruleClassProvider.getPrerequisiteValidator(),
-        aspect.getDefinition().getConfigurationFragmentPolicy());
+        // TODO(mstaib): When AspectDefinition can no longer have null ConfigurationFragmentPolicy,
+        // remove this conditional.
+        aspectPolicy != null ? aspectPolicy : rulePolicy);
     RuleContext ruleContext =
         builder
             .setVisibility(

@@ -24,6 +24,7 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
@@ -105,6 +106,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private ImmutableMap<String, Object> skylarkAccessibleTopLevels = ImmutableMap.of();
     private ImmutableList.Builder<Class<?>> skylarkModules =
         ImmutableList.<Class<?>>builder().addAll(SkylarkModules.MODULES);
+    private final List<Class<? extends FragmentOptions>> buildOptions = Lists.newArrayList();
     private ImmutableBiMap<String, Class<? extends TransitiveInfoProvider>>
         registeredSkylarkProviders = ImmutableBiMap.of();
  
@@ -125,6 +127,11 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
             String.format("Prelude label '%s' is invalid: %s", preludeLabelString, e.getMessage());
         throw new IllegalArgumentException(errorMsg);
       }
+      return this;
+    }
+
+    public Builder addBuildOptions(Collection<Class<? extends FragmentOptions>> optionsClasses) {
+      buildOptions.addAll(optionsClasses);
       return this;
     }
 
@@ -166,12 +173,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
     public Builder addConfigurationOptions(Class<? extends FragmentOptions> configurationOptions) {
       this.configurationOptions.add(configurationOptions);
-      return this;
-    }
-
-    public Builder addConfigurationOptions(
-        Collection<Class<? extends FragmentOptions>> optionsClasses) {
-      this.configurationOptions.addAll(optionsClasses);
       return this;
     }
 
@@ -287,6 +288,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
           prerequisiteValidator,
           skylarkAccessibleTopLevels,
           skylarkModules.build(),
+          buildOptions,
           registeredSkylarkProviders);
     }
 
@@ -385,6 +387,8 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
   private final Environment.Frame globals;
 
+  private final List<Class<? extends FragmentOptions>> buildOptions;
+  
   private final ImmutableBiMap<String, Class<? extends TransitiveInfoProvider>>
       registeredSkylarkProviders;
 
@@ -405,6 +409,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       PrerequisiteValidator prerequisiteValidator,
       ImmutableMap<String, Object> skylarkAccessibleJavaClasses,
       ImmutableList<Class<?>> skylarkModules,
+      List<Class<? extends FragmentOptions>> buildOptions,
       ImmutableBiMap<String, Class<? extends TransitiveInfoProvider>> registeredSkylarkProviders) {
     this.preludeLabel = preludeLabel;
     this.runfilesPrefix = runfilesPrefix;
@@ -421,6 +426,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     this.universalFragment = universalFragment;
     this.prerequisiteValidator = prerequisiteValidator;
     this.globals = createGlobals(skylarkAccessibleJavaClasses, skylarkModules);
+    this.buildOptions = buildOptions;
     this.registeredSkylarkProviders = registeredSkylarkProviders;
   }
 
@@ -514,6 +520,10 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   public String getDefaultsPackageContent(OptionsClassProvider optionsProvider) {
     return DefaultsPackage.getDefaultsPackageContent(
         BuildOptions.of(configurationOptions, optionsProvider));
+  }
+
+  public ImmutableList<Class<? extends FragmentOptions>> getOptionFragments() {
+    return ImmutableList.copyOf(buildOptions);
   }
 
   /**

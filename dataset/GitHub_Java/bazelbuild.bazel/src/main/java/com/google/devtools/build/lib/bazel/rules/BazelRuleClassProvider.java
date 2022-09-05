@@ -76,8 +76,6 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.rules.Alias.AliasRule;
-import com.google.devtools.build.lib.rules.AliasProvider;
 import com.google.devtools.build.lib.rules.android.AndroidBinaryOnlyRule;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryBaseRule;
@@ -132,7 +130,6 @@ import com.google.devtools.build.lib.rules.objc.ObjcConfigurationLoader;
 import com.google.devtools.build.lib.rules.objc.ObjcFrameworkRule;
 import com.google.devtools.build.lib.rules.objc.ObjcImportRule;
 import com.google.devtools.build.lib.rules.objc.ObjcLibraryRule;
-import com.google.devtools.build.lib.rules.objc.ObjcProtoAspect;
 import com.google.devtools.build.lib.rules.objc.ObjcProtoLibraryRule;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses;
@@ -201,12 +198,10 @@ public class BazelRuleClassProvider {
         } else {
           // Oddly enough, we use reportError rather than ruleError here.
           context.reportError(rule.getLocation(),
-              String.format("Target '%s' is not visible from target '%s'%s. Check "
+              String.format("Target '%s' is not visible from target '%s'. Check "
                   + "the visibility declaration of the former target if you think "
                   + "the dependency is legitimate",
-                  prerequisiteLabel,
-                  rule.getLabel(),
-                  AliasProvider.printVisibilityChain(prerequisite)));
+                  prerequisiteLabel, rule.getLabel()));
         }
       }
 
@@ -276,7 +271,11 @@ public class BazelRuleClassProvider {
         .setSkylarkAccessibleTopLevels(SKYLARK_BUILT_IN_JAVA_OBJECTS)
         .setSkylarkProviderRegistry(SKYLARK_PROVIDERS_TO_REGISTER);
 
-    builder.addConfigurationOptions(BUILD_OPTIONS);
+    builder.addBuildOptions(BUILD_OPTIONS);
+
+    for (Class<? extends FragmentOptions> fragmentOptions : BUILD_OPTIONS) {
+      builder.addConfigurationOptions(fragmentOptions);
+    }
 
     AndroidNeverlinkAspect androidNeverlinkAspect = new AndroidNeverlinkAspect();
     DexArchiveAspect dexArchiveAspect = new DexArchiveAspect(TOOLS_REPOSITORY);
@@ -285,7 +284,6 @@ public class BazelRuleClassProvider {
     J2ObjcAspect j2ObjcAspect = new J2ObjcAspect(TOOLS_REPOSITORY, bazelJ2ObjcProtoAspect);
     AndroidStudioInfoAspect androidStudioInfoAspect =
         new AndroidStudioInfoAspect(TOOLS_REPOSITORY, new BazelAndroidStudioInfoSemantics());
-    ObjcProtoAspect objcProtoAspect = new ObjcProtoAspect();
 
     builder.addNativeAspectClass(androidNeverlinkAspect);
     builder.addNativeAspectClass(dexArchiveAspect);
@@ -293,7 +291,6 @@ public class BazelRuleClassProvider {
     builder.addNativeAspectClass(bazelJ2ObjcProtoAspect);
     builder.addNativeAspectClass(j2ObjcAspect);
     builder.addNativeAspectClass(androidStudioInfoAspect);
-    builder.addNativeAspectClass(objcProtoAspect);
 
     builder.addRuleDefinition(new WorkspaceBaseRule());
 
@@ -308,7 +305,6 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new ConfigRuleClasses.ConfigBaseRule());
     builder.addRuleDefinition(new ConfigRuleClasses.ConfigSettingRule());
 
-    builder.addRuleDefinition(new AliasRule());
     builder.addRuleDefinition(new BazelFilegroupRule());
     builder.addRuleDefinition(new BazelTestSuiteRule());
     builder.addRuleDefinition(new BazelGenRuleRule());
@@ -396,7 +392,7 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new ObjcRuleClasses.ReleaseBundlingRule());
     builder.addRuleDefinition(new ObjcRuleClasses.SimulatorRule());
     builder.addRuleDefinition(new ObjcRuleClasses.CompilingRule());
-    builder.addRuleDefinition(new ObjcRuleClasses.LinkingRule(objcProtoAspect));
+    builder.addRuleDefinition(new ObjcRuleClasses.LinkingRule());
     builder.addRuleDefinition(new ObjcRuleClasses.ResourcesRule());
     builder.addRuleDefinition(new ObjcRuleClasses.XcodegenRule());
     builder.addRuleDefinition(new ObjcRuleClasses.AlwaysLinkRule());
@@ -404,7 +400,6 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new ObjcRuleClasses.CompileDependencyRule());
     builder.addRuleDefinition(new ObjcRuleClasses.ResourceToolsRule());
     builder.addRuleDefinition(new ObjcRuleClasses.XcrunRule());
-    builder.addRuleDefinition(new ObjcRuleClasses.LibtoolRule());
     builder.addRuleDefinition(new ObjcRuleClasses.IpaRule());
     builder.addRuleDefinition(new ObjcRuleClasses.ReleaseBundlingToolsRule());
     builder.addRuleDefinition(new ObjcRuleClasses.WatchExtensionBundleRule());

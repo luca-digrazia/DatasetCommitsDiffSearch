@@ -38,9 +38,8 @@ import com.google.devtools.build.lib.skyframe.PrecomputedValue.Injected;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.skyframe.DeterministicHelper;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
-import com.google.devtools.build.skyframe.NotifyingHelper.Listener;
+import com.google.devtools.build.skyframe.NotifyingInMemoryGraph;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -107,7 +106,7 @@ public abstract class BuildViewTestBase extends AnalysisTestCase {
     Path symlinkcycleBuildFile = scratch.file("symlinkcycle/BUILD",
         "sh_library(name = 'cycle', srcs = glob(['*.sh']))");
     Path dirPath = symlinkcycleBuildFile.getParentDirectory();
-    dirPath.getRelative("foo.sh").createSymbolicLink(PathFragment.create("foo.sh"));
+    dirPath.getRelative("foo.sh").createSymbolicLink(new PathFragment("foo.sh"));
     scratch.file("okaypkg/BUILD",
         "sh_library(name = 'transitively-a-cycle',",
         "           srcs = ['//symlinkcycle:cycle'])");
@@ -127,11 +126,10 @@ public abstract class BuildViewTestBase extends AnalysisTestCase {
     assertContainsEvent("circular symlinks detected");
   }
 
-  protected void injectGraphListenerForTesting(Listener listener, boolean deterministic) {
+  protected void setGraphForTesting(NotifyingInMemoryGraph notifyingInMemoryGraph) {
     InMemoryMemoizingEvaluator memoizingEvaluator =
         (InMemoryMemoizingEvaluator) skyframeExecutor.getEvaluatorForTesting();
-    memoizingEvaluator.injectGraphTransformerForTesting(
-        DeterministicHelper.makeTransformer(listener, deterministic));
+    memoizingEvaluator.setGraphForTesting(notifyingInMemoryGraph);
   }
 
   protected void runTestForMultiCpuAnalysisFailure(String badCpu, String goodCpu) throws Exception {
