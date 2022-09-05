@@ -21,8 +21,6 @@ import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.compiler.ByteCodeUtils;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -384,7 +382,7 @@ public final class EvalUtils {
     if (o instanceof Collection) {
       return (Collection<?>) o;
     } else if (o instanceof SkylarkList) {
-      return ((SkylarkList) o).getImmutableList();
+      return ((SkylarkList) o).getList();
     } else if (o instanceof Map) {
       // For dictionaries we iterate through the keys only
       // For determinism, we sort the keys.
