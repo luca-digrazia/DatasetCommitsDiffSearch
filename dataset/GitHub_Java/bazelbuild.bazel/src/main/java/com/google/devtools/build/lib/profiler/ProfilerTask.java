@@ -73,18 +73,6 @@ public enum ProfilerTask {
   CRITICAL_PATH_COMPONENT("critical path component", -1, 0x666699, 0),
   IDE_BUILD_INFO("ide_build_info", -1, 0xCC6633, 0),
   HANDLE_GC_NOTIFICATION("gc notification", -1, 0x996633, 0),
-  INCLUSION_LOOKUP("inclusion lookup", -1, 0x000000, 0),
-  INCLUSION_PARSE("inclusion parse", -1, 0x000000, 0),
-  PROCESS_SCAN("process scan", -1, 0x000000, 0),
-  LOOP_OUTPUT_ARTIFACTS("loop output artifacts"),
-  LOCATE_RELATIVE("locate relative"),
-  CONSTRUCT_INCLUDE_PATHS("construct include paths"),
-  PARSE_AND_HINTS_RESULTS("parse and hints results"),
-  PROCESS_RESULTS_AND_ENQUEUE("process results and enqueue"),
-  SKYLARK_LEXER("Skylark Lexer"),
-  SKYLARK_PARSER("Skylark Parser"),
-  SKYLARK_USER_FN("Skylark user function call", -1, 0xCC0033, 0),
-  SKYLARK_BUILTIN_FN("Skylark builtin function call", -1, 0x990033, 0),
   UNKNOWN("Unknown event", -1, 0x339966, 0);
 
   // Size of the ProfilerTask value space.
@@ -105,10 +93,6 @@ public enum ProfilerTask {
     this.minDuration = minDuration;
     this.color = color;
     this.slowestInstancesCount = slowestInstanceCount;
-  }
-
-  ProfilerTask(String description) {
-    this(description, -1, 0x000000, 0);
   }
 
   /** Whether the Profiler collects the slowest instances of this task. */
