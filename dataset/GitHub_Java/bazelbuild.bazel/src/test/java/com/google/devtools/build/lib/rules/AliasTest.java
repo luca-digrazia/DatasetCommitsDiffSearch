@@ -26,13 +26,14 @@ import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.License.LicenseType;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext;
-import java.util.Set;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
-/** Unit tests for the <code>alias</code> rule. */
-@RunWith(JUnit4.class)
+import org.junit.Test;
+
+import java.util.Set;
+
+/**
+ * Unit tests for the <code>alias</code> rule.
+ */
 public class AliasTest extends BuildViewTestCase {
   @Test
   public void smoke() throws Exception {
@@ -42,16 +43,6 @@ public class AliasTest extends BuildViewTestCase {
 
     ConfiguredTarget b = getConfiguredTarget("//a:b");
     assertThat(b.getProvider(CppCompilationContext.class)).isNotNull();
-  }
-
-  @Test
-  public void aliasToInputFile() throws Exception {
-    scratch.file("a/BUILD",
-        "exports_files(['a'])",
-        "alias(name='b', actual='a')");
-
-    ConfiguredTarget b = getConfiguredTarget("//a:b");
-    assertThat(ActionsTestUtil.baseArtifactNames(getFilesToBuild(b))).containsExactly("a");
   }
 
   @Test
@@ -78,7 +69,7 @@ public class AliasTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//c:c");
     assertContainsEvent(
-        "Target '//a:a' (aliased through '//b:b') is not visible from target '//c:c'");
+        "Target '//a:a' is not visible from target '//c:c' (aliased through '//b:b')");
   }
 
   @Test
@@ -95,18 +86,7 @@ public class AliasTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//d:d");
     assertContainsEvent(
-        "Target '//a:a' (aliased through '//c:c' -> '//b:b') is not visible from target '//d:d'");
-  }
-
-  @Test
-  public void testAliasWithPrivateVisibilityAccessibleFromSamePackage() throws Exception {
-    scratch.file("a/BUILD", "exports_files(['af'])");
-    scratch.file("b/BUILD",
-        "package(default_visibility=['//visibility:private'])",
-        "alias(name='al', actual='//a:af')",
-        "filegroup(name='ta', srcs=[':al'])");
-
-    getConfiguredTarget("//b:tf");
+        "Target '//a:a' is not visible from target '//d:d' (aliased through '//c:c' -> '//b:b')");
   }
 
   @Test
@@ -246,10 +226,5 @@ public class AliasTest extends BuildViewTestCase {
 
     useConfiguration("--crosstool_top=//a:cc");
     getConfiguredTarget("//a:a");
-  }
-
-  @Test
-  public void testNoActual() throws Exception {
-    checkError("a", "a", "missing value for mandatory attribute 'actual'", "alias(name='a')");
   }
 }
