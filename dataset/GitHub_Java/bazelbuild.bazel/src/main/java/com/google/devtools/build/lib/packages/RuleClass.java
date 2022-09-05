@@ -1254,6 +1254,11 @@ public final class RuleClass {
    * are declared, this allows access to all fragments for backwards compatibility.
    */
   public boolean isLegalConfigurationFragment(Class<?> configurationFragment) {
+    // For now, we allow all rules that don't declare allowed fragments to access any fragment.
+    // TODO(bazel-team): All built-in rules declare fragments, but Skylark rules don't.
+    if (requiredConfigurationFragments.isEmpty() && requiredConfigurationFragmentNames.isEmpty()) {
+      return true;
+    }
     return requiredConfigurationFragments.contains(configurationFragment)
         || hasLegalFragmentName(configurationFragment);
   }
