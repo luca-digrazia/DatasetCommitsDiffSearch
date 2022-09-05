@@ -22,7 +22,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
@@ -38,7 +37,6 @@ import com.google.devtools.build.lib.cmdline.TargetPattern;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -84,6 +82,7 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -151,15 +150,31 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     }
 
     ruleContext.registerAction(
-        new QueryResultAction(ruleContext.getActionOwner(), outputArtifact, result));
+        new AbstractFileWriteAction(
+            ruleContext.getActionOwner(), Collections.<Artifact>emptySet(), outputArtifact, false) {
+          @Override
+          public DeterministicWriter newDeterministicWriter(ActionExecutionContext ctx) {
+            return new DeterministicWriter() {
+              @Override
+              public void writeOutputFile(OutputStream out) throws IOException {
+                out.write(result);
+              }
+            };
+          }
+
+          @Override
+          protected String computeKey() {
+            Fingerprint f = new Fingerprint();
+            f.addBytes(result);
+            return f.hexDigestAndReset();
+          }
+        });
 
     NestedSet<Artifact> filesToBuild = NestedSetBuilder.create(Order.STABLE_ORDER, outputArtifact);
     return new RuleConfiguredTargetBuilder(ruleContext)
         .setFilesToBuild(filesToBuild)
         .add(RunfilesProvider.class, RunfilesProvider.simple(
-            new Runfiles.Builder(
-                ruleContext.getWorkspaceName(),
-                ruleContext.getConfiguration().legacyExternalRunfiles())
+            new Runfiles.Builder(ruleContext.getWorkspaceName())
                 .addTransitiveArtifacts(filesToBuild).build()))
         .build();
   }
@@ -312,33 +327,6 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     printStream.flush();
 
     return outputStream.toByteArray();
-  }
-
-  @Immutable // assuming no other reference to result
-  private static final class QueryResultAction extends AbstractFileWriteAction {
-    private final byte[] result;
-
-    private QueryResultAction(ActionOwner owner, Artifact output, byte[] result) {
-      super(owner, ImmutableList.<Artifact>of(), output, /*makeExecutable=*/false);
-      this.result = result;
-    }
-
-    @Override
-    public DeterministicWriter newDeterministicWriter(ActionExecutionContext ctx) {
-      return new DeterministicWriter() {
-        @Override
-        public void writeOutputFile(OutputStream out) throws IOException {
-          out.write(result);
-        }
-      };
-    }
-
-    @Override
-    protected String computeKey() {
-      Fingerprint f = new Fingerprint();
-      f.addBytes(result);
-      return f.hexDigestAndReset();
-    }
   }
 
   /**

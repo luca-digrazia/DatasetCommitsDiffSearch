@@ -20,7 +20,6 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.Constants;
-import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.collect.CompactHashSet;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Target;
@@ -165,13 +164,10 @@ public final class QueryCommand implements BlazeCommand {
     } else {
       callback = new AggregateAllOutputFormatterCallback<>();
     }
-    boolean catastrophe = true;
     try {
       callback.start();
       result = queryEnv.evaluateQuery(expr, callback);
-      catastrophe = false;
     } catch (QueryException e) {
-      catastrophe = false;
       // Keep consistent with reportBuildFileError()
       env.getReporter()
          // TODO(bazel-team): this is a kludge to fix a bug observed in the wild. We should make
@@ -179,7 +175,6 @@ public final class QueryCommand implements BlazeCommand {
          .handle(Event.error(e.getMessage() == null ? e.toString() : e.getMessage()));
       return ExitCode.ANALYSIS_FAILURE;
     } catch (InterruptedException e) {
-      catastrophe = false;
       IOException ioException = callback.getIoException();
       if (ioException == null || ioException instanceof ClosedByInterruptException) {
         env.getReporter().handle(Event.error("query interrupted"));
@@ -189,24 +184,20 @@ public final class QueryCommand implements BlazeCommand {
         return ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
       }
     } catch (IOException e) {
-      catastrophe = false;
       env.getReporter().handle(Event.error("I/O error: " + e.getMessage()));
       return ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
     } finally {
-      if (!catastrophe) {
-        if (streamResults) {
-          output.flush();
-        }
-        try {
-          callback.close();
-        } catch (IOException e) {
-          env.getReporter().handle(Event.error("I/O error: " + e.getMessage()));
-          return ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
-        }
+      if (streamResults) {
+        output.flush();
+      }
+      try {
+        callback.close();
+      } catch (IOException e) {
+        env.getReporter().handle(Event.error("I/O error: " + e.getMessage()));
+        return ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
       }
     }
 
-    env.getEventBus().post(new NoBuildEvent());
     if (!streamResults) {
       disableAnsiCharactersFiltering(env);
       output = new PrintStream(env.getReporter().getOutErr().getOutputStream());

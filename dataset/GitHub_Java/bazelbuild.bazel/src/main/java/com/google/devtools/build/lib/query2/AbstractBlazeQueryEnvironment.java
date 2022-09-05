@@ -144,9 +144,6 @@ public abstract class AbstractBlazeQueryEnvironment<T> implements QueryEnvironme
     return new QueryEvalResult(!eventHandler.hasErrors(), empty.get());
   }
 
-  public void afterCommand() {
-  }
-
   public QueryExpression transformParsedQuery(QueryExpression queryExpression) {
     return queryExpression;
   }
