@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -136,7 +136,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
   private void init() throws InterruptedException {
     long startTime = Profiler.nanoTimeMaybe();
     EvaluationResult<SkyValue> result =
-        graphFactory.prepareAndGet(universeScope, parserPrefix, loadingPhaseThreads, eventHandler);
+        graphFactory.prepareAndGet(universeScope, loadingPhaseThreads, eventHandler);
     graph = result.getWalkableGraph();
     long duration = Profiler.nanoTimeMaybe() - startTime;
     if (duration > 0) {
