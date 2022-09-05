@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,30 +13,42 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.auto.value.AutoValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import javax.annotation.Nullable;
 
-/** Description of the tools Blaze needs from an Android SDK. */
-@AutoValue
+/**
+ * Description of the tools Blaze needs from an Android SDK.
+ */
 @Immutable
-public abstract class AndroidSdkProvider implements TransitiveInfoProvider {
+public final class AndroidSdkProvider implements TransitiveInfoProvider {
+  private final Artifact frameworkAidl;
+  private final Artifact androidJar;
+  private final Artifact shrinkedAndroidJar;
+  private final Artifact androidJack;
+  private final Artifact annotationsJar;
+  private final Artifact mainDexClasses;
+  private final FilesToRunProvider adb;
+  private final FilesToRunProvider dx;
+  private final FilesToRunProvider mainDexListCreator;
+  private final FilesToRunProvider aidl;
+  private final FilesToRunProvider aapt;
+  private final FilesToRunProvider apkBuilder;
+  private final FilesToRunProvider proguard;
+  private final FilesToRunProvider zipalign;
+  private final FilesToRunProvider jack;
+  private final FilesToRunProvider jill;
+  private final FilesToRunProvider resourceExtractor;
 
-  public static AndroidSdkProvider create(
-      String buildToolsVersion,
-      boolean aaptSupportsMainDexGeneration,
+  public AndroidSdkProvider(
       Artifact frameworkAidl,
       Artifact androidJar,
       Artifact shrinkedAndroidJar,
-      NestedSet<Artifact> androidBaseClasspathForJack,
-      NestedSet<Artifact> javaBaseClasspathForJack,
+      Artifact androidJack,
       Artifact annotationsJar,
       Artifact mainDexClasses,
       FilesToRunProvider adb,
@@ -45,35 +57,28 @@ public abstract class AndroidSdkProvider implements TransitiveInfoProvider {
       FilesToRunProvider aidl,
       FilesToRunProvider aapt,
       FilesToRunProvider apkBuilder,
-      @Nullable FilesToRunProvider apkSigner,
       FilesToRunProvider proguard,
       FilesToRunProvider zipalign,
       FilesToRunProvider jack,
       FilesToRunProvider jill,
       FilesToRunProvider resourceExtractor) {
-
-    return new AutoValue_AndroidSdkProvider(
-        buildToolsVersion,
-        aaptSupportsMainDexGeneration,
-        frameworkAidl,
-        androidJar,
-        shrinkedAndroidJar,
-        androidBaseClasspathForJack,
-        javaBaseClasspathForJack,
-        annotationsJar,
-        mainDexClasses,
-        adb,
-        dx,
-        mainDexListCreator,
-        aidl,
-        aapt,
-        apkBuilder,
-        apkSigner,
-        proguard,
-        zipalign,
-        jack,
-        jill,
-        resourceExtractor);
+    this.frameworkAidl = frameworkAidl;
+    this.androidJar = androidJar;
+    this.shrinkedAndroidJar = shrinkedAndroidJar;
+    this.androidJack = androidJack;
+    this.annotationsJar = annotationsJar;
+    this.mainDexClasses = mainDexClasses;
+    this.adb = adb;
+    this.dx = dx;
+    this.mainDexListCreator = mainDexListCreator;
+    this.aidl = aidl;
+    this.aapt = aapt;
+    this.apkBuilder = apkBuilder;
+    this.proguard = proguard;
+    this.zipalign = zipalign;
+    this.jack = jack;
+    this.jill = jill;
+    this.resourceExtractor = resourceExtractor;
   }
 
   /**
@@ -102,57 +107,71 @@ public abstract class AndroidSdkProvider implements TransitiveInfoProvider {
     return true;
   }
 
-  /** The value of build_tools_version. May be null or empty. */
-  public abstract String getBuildToolsVersion();
+  public Artifact getFrameworkAidl() {
+    return frameworkAidl;
+  }
 
-  public abstract boolean getAaptSupportsMainDexGeneration();
+  public Artifact getAndroidJar() {
+    return androidJar;
+  }
 
-  public abstract Artifact getFrameworkAidl();
+  public Artifact getShrinkedAndroidJar() {
+    return shrinkedAndroidJar;
+  }
 
-  public abstract Artifact getAndroidJar();
+  public Artifact getAndroidJack() {
+    return androidJack;
+  }
 
-  public abstract Artifact getShrinkedAndroidJar();
+  public Artifact getAnnotationsJar() {
+    return annotationsJar;
+  }
 
-  /**
-   * Returns the set of jack files to be used as a base classpath for jack compilation of Android
-   * rules, typically a Jack translation of the jar returned by {@link getAndroidJar}.
-   */
-  public abstract NestedSet<Artifact> getAndroidBaseClasspathForJack();
+  public Artifact getMainDexClasses() {
+    return mainDexClasses;
+  }
 
-  /**
-   * Returns the set of jack files to be used as a base classpath for jack compilation of Java
-   * rules, typically a Jack translation of the jars in the Java bootclasspath.
-   */
-  public abstract NestedSet<Artifact> getJavaBaseClasspathForJack();
+  public FilesToRunProvider getAdb() {
+    return adb;
+  }
 
-  public abstract Artifact getAnnotationsJar();
+  public FilesToRunProvider getDx() {
+    return dx;
+  }
 
-  public abstract Artifact getMainDexClasses();
+  public FilesToRunProvider getMainDexListCreator() {
+    return mainDexListCreator;
+  }
 
-  public abstract FilesToRunProvider getAdb();
+  public FilesToRunProvider getAidl() {
+    return aidl;
+  }
 
-  public abstract FilesToRunProvider getDx();
+  public FilesToRunProvider getAapt() {
+    return aapt;
+  }
 
-  public abstract FilesToRunProvider getMainDexListCreator();
+  public FilesToRunProvider getApkBuilder() {
+    return apkBuilder;
+  }
 
-  public abstract FilesToRunProvider getAidl();
+  public FilesToRunProvider getProguard() {
+    return proguard;
+  }
 
-  public abstract FilesToRunProvider getAapt();
+  public FilesToRunProvider getZipalign() {
+    return zipalign;
+  }
 
-  public abstract FilesToRunProvider getApkBuilder();
+  public FilesToRunProvider getJack() {
+    return jack;
+  }
 
-  @Nullable
-  public abstract FilesToRunProvider getApkSigner();
+  public FilesToRunProvider getJill() {
+    return jill;
+  }
 
-  public abstract FilesToRunProvider getProguard();
-
-  public abstract FilesToRunProvider getZipalign();
-
-  public abstract FilesToRunProvider getJack();
-
-  public abstract FilesToRunProvider getJill();
-
-  public abstract FilesToRunProvider getResourceExtractor();
-
-  AndroidSdkProvider() {}
+  public FilesToRunProvider getResourceExtractor() {
+    return resourceExtractor;
+  }
 }

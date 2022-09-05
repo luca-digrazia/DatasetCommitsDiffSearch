@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 
 /**
  * Implementation of the {@code android_sdk} rule.
@@ -34,7 +33,7 @@ public class AndroidSdk implements RuleConfiguredTargetFactory {
     // If the user didn't specify --proguard_top, go with the proguard attribute in the android_sdk
     // rule. Otherwise, use what she told us to.
     FilesToRunProvider proguard =
-        ruleContext.getFragment(JavaConfiguration.class).getProguardBinary() == null
+        ruleContext.getFragment(AndroidConfiguration.class).getProguardLabel() == null
             ? ruleContext.getExecutablePrerequisite("proguard", Mode.HOST)
             : ruleContext.getExecutablePrerequisite(":proguard", Mode.HOST);
 

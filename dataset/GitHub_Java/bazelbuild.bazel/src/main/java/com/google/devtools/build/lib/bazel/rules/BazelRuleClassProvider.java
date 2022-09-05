@@ -60,13 +60,10 @@ import com.google.devtools.build.lib.bazel.rules.sh.BazelShBinaryRule;
 import com.google.devtools.build.lib.bazel.rules.sh.BazelShLibraryRule;
 import com.google.devtools.build.lib.bazel.rules.sh.BazelShRuleClasses;
 import com.google.devtools.build.lib.bazel.rules.sh.BazelShTestRule;
-import com.google.devtools.build.lib.bazel.rules.workspace.GitRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.HttpArchiveRule;
-import com.google.devtools.build.lib.bazel.rules.workspace.HttpFileRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.HttpJarRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.LocalRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenJarRule;
-import com.google.devtools.build.lib.bazel.rules.workspace.NewGitRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewLocalRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.WorkspaceBaseRule;
@@ -317,6 +314,7 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new ObjcProtoLibraryRule());
     builder.addRuleDefinition(new ObjcXcodeprojRule());
     builder.addRuleDefinition(new ObjcRuleClasses.CoptsRule());
+    builder.addRuleDefinition(new ObjcRuleClasses.ObjcProtoRule());
     builder.addRuleDefinition(new ObjcRuleClasses.IosTestBaseRule());
     builder.addRuleDefinition(new ObjcRuleClasses.BundlingRule());
     builder.addRuleDefinition(new ObjcRuleClasses.ReleaseBundlingRule());
@@ -340,14 +338,11 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new BazelActionListenerRule());
 
     builder.addRuleDefinition(new BindRule());
-    builder.addRuleDefinition(new GitRepositoryRule());
     builder.addRuleDefinition(new HttpArchiveRule());
     builder.addRuleDefinition(new HttpJarRule());
-    builder.addRuleDefinition(new HttpFileRule());
     builder.addRuleDefinition(new LocalRepositoryRule());
     builder.addRuleDefinition(new MavenJarRule());
     builder.addRuleDefinition(new NewHttpArchiveRule());
-    builder.addRuleDefinition(new NewGitRepositoryRule());
     builder.addRuleDefinition(new NewLocalRepositoryRule());
     builder.addRuleDefinition(new AndroidSdkRepositoryRule());
     builder.addRuleDefinition(new AndroidNdkRepositoryRule());

@@ -18,6 +18,7 @@ import static com.google.devtools.build.lib.analysis.config.BuildConfiguration.S
 import static com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode.STRICT;
 
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -31,6 +32,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -677,6 +679,8 @@ public class AndroidCommon {
   private void generateAndroidIdlActions(RuleContext ruleContext,
       Collection<Artifact> idls, AndroidIdlProvider transitiveIdlImportData,
       Map<Artifact, Artifact> translatedIdlSources) {
+    FilesToRunProvider toolRunner =
+        ruleContext.getExecutablePrerequisite("$android_tool_runner", Mode.HOST);
     AndroidSdkProvider sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
     Set<Artifact> preprocessedIdls = new LinkedHashSet<>();
     List<String> preprocessedArgs = new ArrayList<>();
@@ -700,7 +704,7 @@ public class AndroidCommon {
       preprocessedIdls.add(preprocessed);
       preprocessedArgs.add("-p" + preprocessed.getExecPathString());
 
-      createAndroidIdlPreprocessAction(ruleContext, idl, preprocessed);
+      createAndroidIdlPreprocessAction(ruleContext, toolRunner, idl, preprocessed);
     }
 
     // aggregate all preprocessed aidl files
@@ -710,15 +714,17 @@ public class AndroidCommon {
         ruleContext.getConfiguration().getMiddlemanDirectory());
 
     for (Artifact idl : translatedIdlSources.keySet()) {
-      createAndroidIdlAction(ruleContext, idl,
+      createAndroidIdlAction(ruleContext, toolRunner, idl,
           transitiveIdlImportData.getTransitiveIdlImports(),
           preprocessedIdlsMiddleman, translatedIdlSources.get(idl), preprocessedArgs);
     }
   }
 
   private void createAndroidIdlPreprocessAction(RuleContext ruleContext,
-      Artifact idl, Artifact preprocessed) {
+      FilesToRunProvider toolRunner, Artifact idl, Artifact preprocessed) {
+    RunfilesSupport toolRunnerRunfiles = toolRunner.getRunfilesSupport();
     AndroidSdkProvider sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
+    Preconditions.checkState(toolRunnerRunfiles != null, toolRunner.getLabel());
     ruleContext.registerAction(new SpawnAction.Builder()
         .setExecutable(sdk.getAidl())
         // Note the below may be an overapproximation of the actual runfiles, due to "conditional
@@ -736,9 +742,12 @@ public class AndroidCommon {
   }
 
   private void createAndroidIdlAction(RuleContext ruleContext,
+      FilesToRunProvider toolRunner,
       Artifact idl, Iterable<Artifact> idlImports, Artifact preprocessedIdls,
       Artifact output, List<String> preprocessedArgs) {
+    RunfilesSupport toolRunnerRunfiles = toolRunner.getRunfilesSupport();
     AndroidSdkProvider sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
+    Preconditions.checkState(toolRunnerRunfiles != null, toolRunner.getLabel());
     ruleContext.registerAction(new SpawnAction.Builder()
         .setExecutable(sdk.getAidl())
         .addInput(idl)
