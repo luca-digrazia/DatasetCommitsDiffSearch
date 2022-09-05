@@ -424,8 +424,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return new SkylarkImportLookupFunction(ruleClassProvider, this.pkgFactory);
   }
 
-  protected PerBuildSyscallCache newPerBuildSyscallCache(int concurrencyLevel) {
-    return PerBuildSyscallCache.newBuilder().setConcurrencyLevel(concurrencyLevel).build();
+  protected PerBuildSyscallCache newPerBuildSyscallCache() {
+    return PerBuildSyscallCache.newUnboundedCache();
   }
 
  @ThreadCompatible
@@ -887,7 +887,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     setupDefaultPackage(defaultsPackageContents);
     setPackageLocator(pkgLocator);
 
-    syscalls.set(newPerBuildSyscallCache(globbingThreads));
+    syscalls.set(newPerBuildSyscallCache());
     this.pkgFactory.setGlobbingThreads(globbingThreads);
     checkPreprocessorFactory();
     emittedEventState.clear();
