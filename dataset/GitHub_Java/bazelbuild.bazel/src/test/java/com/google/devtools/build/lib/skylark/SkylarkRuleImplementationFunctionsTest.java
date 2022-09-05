@@ -67,12 +67,10 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   @SkylarkSignature(
     name = "mock",
     documented = false,
-    parameters = {
-      @Param(name = "mandatory", doc = ""),
-      @Param(name = "optional", doc = "", defaultValue = "None"),
-      @Param(name = "mandatory_key", doc = "", positional = false, named = true),
-      @Param(name = "optional_key", doc = "", defaultValue = "'x'",
-          positional = false, named = true)},
+    mandatoryPositionals = {@Param(name = "mandatory", doc = "")},
+    optionalPositionals = {@Param(name = "optional", doc = "")},
+    mandatoryNamedOnly = {@Param(name = "mandatory_key", doc = "")},
+    optionalNamedOnly = {@Param(name = "optional_key", doc = "", defaultValue = "'x'")},
     useEnvironment = true
   )
   private BuiltinFunction mockFunc;

@@ -51,14 +51,16 @@ public class SkylarkNativeModule {
             + "(default <code>[]</code>).</li></ul>\n"
             + "If the <code>exclude_directories</code> argument is enabled (set to <code>1</code>),"
             + " files of type directory will be omitted from the results (default <code>1</code>).",
-    parameters = {
+    mandatoryPositionals = {
       @Param(
         name = "include",
         type = SkylarkList.class,
         generic1 = String.class,
         defaultValue = "[]",
         doc = "The list of glob patterns to include."
-      ),
+      )
+    },
+    optionalPositionals = {
       @Param(
         name = "exclude",
         type = SkylarkList.class,
@@ -99,7 +101,7 @@ public class SkylarkNativeModule {
     doc =
         "Returns a dictionary representing the attributes of a previously defined rule, "
             + "or None if the rule does not exist.",
-    parameters = {
+    mandatoryPositionals = {
       @Param(name = "name", type = String.class, doc = "The name of the rule.")
     },
     useAst = true,
@@ -131,7 +133,7 @@ public class SkylarkNativeModule {
         "Returns a dict containing all the rules instantiated so far. "
             + "The map key is the name of the rule. The map value is equivalent to the "
             + "existing_rule output for that rule.",
-    parameters = {},
+    mandatoryPositionals = {},
     useAst = true,
     useEnvironment = true
   )
@@ -149,14 +151,15 @@ public class SkylarkNativeModule {
       returnType = Runtime.NoneType.class,
       doc = "This function defines a set of packages and assigns a label to the group. "
           + "The label can be referenced in <code>visibility</code> attributes.",
-      parameters = {
-      @Param(name = "name", type = String.class, named = true, positional = false,
-          doc = "The unique name for this rule."),
+      mandatoryNamedOnly = {
+      @Param(name = "name", type = String.class,
+          doc = "The unique name for this rule.")},
+      optionalNamedOnly = {
       @Param(name = "packages", type = SkylarkList.class, generic1 = String.class,
-          defaultValue = "[]", named = true, positional = false,
+          defaultValue = "[]",
           doc = "A complete enumeration of packages in this group."),
       @Param(name = "includes", type = SkylarkList.class, generic1 = String.class,
-          defaultValue = "[]", named = true, positional = false,
+          defaultValue = "[]",
           doc = "Other package groups that are included in this one.")},
       useAst = true, useEnvironment = true)
   private static final BuiltinFunction packageGroup = new BuiltinFunction("package_group") {
@@ -171,16 +174,18 @@ public class SkylarkNativeModule {
       returnType = Runtime.NoneType.class,
       doc = "Specifies a list of files belonging to this package that are exported to other "
           + "packages but not otherwise mentioned.",
-      parameters = {
+      mandatoryPositionals = {
       @Param(name = "srcs", type = SkylarkList.class, generic1 = String.class,
-          doc = "The list of files to export."),
+          doc = "The list of files to export.")},
+      optionalPositionals = {
       // TODO(bazel-team): make it possible to express the precise type ListOf(LabelDesignator)
-      @Param(name = "visibility", type = SkylarkList.class, defaultValue = "None", noneable = true,
+      @Param(name = "visibility", type = SkylarkList.class,
+          noneable = true,
           doc = "A visibility declaration can to be specified. The files will be visible to the "
               + "targets specified. If no visibility is specified, the files will be visible to "
               + "every package."),
       @Param(name = "licenses", type = SkylarkList.class, generic1 = String.class, noneable = true,
-          defaultValue = "None", doc = "Licenses to be specified.")},
+          doc = "Licenses to be specified.")},
       useAst = true, useEnvironment = true)
   private static final BuiltinFunction exportsFiles = new BuiltinFunction("exports_files") {
       public Runtime.NoneType invoke(SkylarkList srcs, Object visibility, Object licenses,

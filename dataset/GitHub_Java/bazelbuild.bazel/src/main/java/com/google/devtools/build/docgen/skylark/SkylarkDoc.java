@@ -72,19 +72,16 @@ abstract class SkylarkDoc {
     }
   }
 
-  // Elide self parameter from parameters in class methods.
-  protected static Param[] adjustedParameters(SkylarkSignature annotation) {
-    Param[] params = annotation.parameters();
-    if (params.length > 0
-        && !params[0].named()
-        && (params[0].defaultValue() != null && params[0].defaultValue().isEmpty())
-        && params[0].positional()
+  // Elide self parameter from mandatoryPositionals in class methods.
+  protected static Param[] adjustedMandatoryPositionals(SkylarkSignature annotation) {
+    Param[] mandatoryPos = annotation.mandatoryPositionals();
+    if (mandatoryPos.length > 0
         && annotation.objectType() != Object.class
         && !FuncallExpression.isNamespace(annotation.objectType())) {
       // Skip the self parameter, which is the first mandatory positional parameter.
-      return Arrays.copyOfRange(params, 1, params.length);
+      return Arrays.copyOfRange(mandatoryPos, 1, mandatoryPos.length);
     } else {
-      return params;
+      return mandatoryPos;
     }
   }
 }

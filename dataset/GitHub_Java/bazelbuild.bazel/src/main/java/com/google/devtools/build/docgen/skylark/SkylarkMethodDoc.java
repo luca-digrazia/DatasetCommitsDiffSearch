@@ -76,21 +76,24 @@ abstract class SkylarkMethodDoc extends SkylarkDoc {
 
   protected String getSignature(String objectName, SkylarkSignature method) {
     List<String> argList = new ArrayList<>();
-    boolean named = false;
-    for (Param param : adjustedParameters(method)) {
-      if (param.named() && !param.positional() && !named) {
-        named = true;
-        if (!method.extraPositionals().name().isEmpty()) {
-          argList.add("*" + method.extraPositionals().name());
-        }
-        if (!argList.isEmpty()) {
-          argList.add("*");
-        }
-      }
-      argList.add(formatParameter(param));
+    for (Param param : adjustedMandatoryPositionals(method)) {
+      argList.add(param.name());
     }
-    if (!named && !method.extraPositionals().name().isEmpty()) {
+    for (Param param : method.optionalPositionals()) {
+      argList.add(formatOptionalParameter(param));
+    }
+    if (!method.extraPositionals().name().isEmpty()) {
       argList.add("*" + method.extraPositionals().name());
+    }
+    if (!argList.isEmpty() && method.extraPositionals().name().isEmpty()
+        && (method.optionalNamedOnly().length > 0 || method.mandatoryNamedOnly().length > 0)) {
+      argList.add("*");
+    }
+    for (Param param : method.mandatoryNamedOnly()) {
+      argList.add(param.name());
+    }
+    for (Param param : method.optionalNamedOnly()) {
+      argList.add(formatOptionalParameter(param));
     }
     if (!method.extraKeywords().name().isEmpty()) {
       argList.add("**" + method.extraKeywords().name());
@@ -105,13 +108,9 @@ abstract class SkylarkMethodDoc extends SkylarkDoc {
     }
   }
 
-  private String formatParameter(Param param) {
+  private String formatOptionalParameter(Param param) {
     String defaultValue = param.defaultValue();
-    String name = param.name();
-    if (defaultValue == null || !defaultValue.isEmpty()) {
-      return String.format("%s=%s", name, defaultValue == null ? "&hellip;" : defaultValue);
-    } else {
-      return name;
-    }
+    return String.format("%s=%s", param.name(),
+        (defaultValue == null || defaultValue.isEmpty()) ? "&hellip;" : defaultValue);
   }
 }

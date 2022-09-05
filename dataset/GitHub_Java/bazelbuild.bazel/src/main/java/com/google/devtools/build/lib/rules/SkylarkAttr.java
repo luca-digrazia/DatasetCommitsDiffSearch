@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -43,13 +42,9 @@ import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-
-import javax.annotation.Nullable;
 
 /**
  * A helper class to provide Attr module in Skylark.
@@ -254,32 +249,15 @@ public final class SkylarkAttr {
     }
   }
 
-  private static final Map<Type<?>, String> whyNotConfigurable =
-      ImmutableMap.<Type<?>, String>builder()
-          .put(BuildType.LICENSE,
-              "loading phase license checking logic assumes non-configurable values")
-          .put(BuildType.OUTPUT, "output paths are part of the static graph structure")
-          .build();
-
-  /**
-   * If the given attribute type is non-configurable, returns the reason why. Otherwise, returns
-   * {@code null}.
-   */
-  @Nullable
-  public static String maybeGetNonConfigurableReason(Type<?> type) {
-    return whyNotConfigurable.get(type);
-  }
-
   private static Descriptor createNonconfigurableAttrDescriptor(
       SkylarkDict<String, Object> kwargs,
       Type<?> type,
+      String whyNotConfigurable,
       FuncallExpression ast,
       Environment env) throws EvalException {
-    String whyNotConfigurableReason =
-        Preconditions.checkNotNull(maybeGetNonConfigurableReason(type), type);
     try {
       return new Descriptor(
-          createAttribute(type, kwargs, ast, env).nonconfigurable(whyNotConfigurableReason));
+          createAttribute(type, kwargs, ast, env).nonconfigurable(whyNotConfigurable));
     } catch (ConversionException e) {
       throw new EvalException(ast.getLocation(), e.getMessage());
     }
@@ -747,6 +725,7 @@ public final class SkylarkAttr {
               EvalUtils.<String, Object>optionMap(
                   env, DEFAULT_ARG, defaultO, MANDATORY_ARG, mandatory),
               BuildType.OUTPUT,
+              "output paths are part of the static graph structure",
               ast,
               env);
         }
@@ -896,6 +875,7 @@ public final class SkylarkAttr {
               EvalUtils.<String, Object>optionMap(
                   env, DEFAULT_ARG, defaultO, MANDATORY_ARG, mandatory),
               BuildType.LICENSE,
+              "loading phase license checking logic assumes non-configurable values",
               ast,
               env);
         }

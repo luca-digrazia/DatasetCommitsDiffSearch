@@ -234,12 +234,14 @@ public class SkylarkRuleClassFunctions {
       "Creates a new rule. Store it in a global value, so that it can be loaded and called "
       + "from BUILD files.",
       returnType = BaseFunction.class,
-      parameters = {
+      mandatoryPositionals = {
         @Param(name = "implementation", type = BaseFunction.class,
             doc = "the function implementing this rule, must have exactly one parameter: "
             + "<a href=\"ctx.html\">ctx</a>. The function is called during the analysis phase "
             + "for each instance of the rule. It can access the attributes provided by the user. "
-            + "It must create actions to generate all the declared outputs."),
+            + "It must create actions to generate all the declared outputs.")
+      },
+      optionalPositionals = {
         @Param(name = "test", type = Boolean.class, defaultValue = "False",
             doc = "Whether this rule is a test rule. "
             + "If True, the rule must end with <code>_test</code> (otherwise it must not), "
@@ -366,7 +368,7 @@ public class SkylarkRuleClassFunctions {
   @SkylarkSignature(name = "aspect", doc =
     "Creates a new aspect. The result of this function must be stored in a global value.",
     returnType = SkylarkAspect.class,
-    parameters = {
+    mandatoryPositionals = {
         @Param(name = "implementation", type = BaseFunction.class,
             doc = "the function implementing this aspect. Must have two parameters: "
             + "<a href=\"Target.html\">Target</a> (the target to which the aspect is applied) and "
@@ -374,6 +376,8 @@ public class SkylarkRuleClassFunctions {
             + " field. The function is called during the analysis phase for each application of "
             + "an aspect to a target."
         ),
+    },
+    optionalPositionals = {
       @Param(name = "attr_aspects", type = SkylarkList.class, generic1 = String.class,
         defaultValue = "[]",
         doc = "List of attribute names.  The aspect propagates along dependencies specified by "
@@ -641,14 +645,12 @@ public class SkylarkRuleClassFunctions {
       + "The argument must refer to an absolute label. "
       + "Example: <br><pre class=language-python>Label(\"//tools:default\")</pre>",
       returnType = Label.class,
-      parameters = {@Param(name = "label_string", type = String.class,
-          doc = "the label string"),
-        @Param(
+      mandatoryPositionals = {@Param(name = "label_string", type = String.class,
+          doc = "the label string")},
+      optionalNamedOnly = {@Param(
           name = "relative_to_caller_repository",
           type = Boolean.class,
           defaultValue = "False",
-          named = true,
-          positional = false,
           doc = "whether the label should be resolved relative to the label of the file this "
               + "function is called from.")},
       useLocation = true,
@@ -682,7 +684,7 @@ public class SkylarkRuleClassFunctions {
       + "files ending with .cc or .cpp, use: "
       + "<pre class=language-python>FileType([\".cc\", \".cpp\"])</pre>",
       returnType = SkylarkFileType.class,
-      parameters = {
+      mandatoryPositionals = {
       @Param(name = "types", type = SkylarkList.class, generic1 = String.class, defaultValue = "[]",
           doc = "a list of the accepted file extensions")})
   private static final BuiltinFunction fileType = new BuiltinFunction("FileType") {
@@ -707,7 +709,7 @@ public class SkylarkRuleClassFunctions {
           + "struct(key=struct(inner_key=struct(inner_inner_key='text'))).to_proto()\n"
           + "# key {\n#    inner_key {\n#     inner_inner_key: \"text\"\n#   }\n# }\n</pre>",
       objectType = SkylarkClassObject.class, returnType = String.class,
-      parameters = {
+      mandatoryPositionals = {
         // TODO(bazel-team): shouldn't we accept any ClassObject?
         @Param(name = "self", type = SkylarkClassObject.class,
             doc = "this struct")},
@@ -791,7 +793,7 @@ public class SkylarkRuleClassFunctions {
           + "struct(key=struct(inner_key=struct(inner_inner_key='text'))).to_json()\n"
           + "# {\"key\":{\"inner_key\":{\"inner_inner_key\":\"text\"}}}\n</pre>",
       objectType = SkylarkClassObject.class, returnType = String.class,
-      parameters = {
+      mandatoryPositionals = {
           // TODO(bazel-team): shouldn't we accept any ClassObject?
           @Param(name = "self", type = SkylarkClassObject.class,
               doc = "this struct")},
@@ -856,7 +858,7 @@ public class SkylarkRuleClassFunctions {
       documented = false, //  TODO(dslomov): document.
       objectType =  TransitiveInfoCollection.class,
       returnType = SkylarkNestedSet.class,
-      parameters = {
+      mandatoryPositionals = {
           @Param(name = "self", type = TransitiveInfoCollection.class, doc =
               "this target"
           ),
