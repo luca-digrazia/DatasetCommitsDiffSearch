@@ -48,21 +48,23 @@ public class ControllerTest extends SimpleWebApplicationTests {
     public ProcessInstance start() throws Exception {
         Map<String, Object> map = new HashMap<>();
         map.put("username", "admin");
-        map.put("leader", "zhangsan");
-        map.put("team", "lisi");
-        map.put("people", "wangwu");
-        return bpmProcessService.startProcessInstance("1", "testid", null, null, "流程名", map);
+        return bpmProcessService.startProcessInstance("1", "test", null, null, "流程名", map);
     }
 
     // 流程图元数据test
     @Test
     public void activityImplTest() {
-        ActivityImpl activity = bpmTaskService.selectActivityImplByTask("");
-        ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery().processDefinitionKey("testid").latestVersion().active().singleResult();
-        Map<String, List<String>> map = bpmActivityService.getNextClaim(processDefinition.getId(),activity.getId());
-        System.out.println("=========>>>");
-        System.out.println(JSON.toJSONString(map));
-        System.out.println("=========>>>");
+        List<ActivityImpl> activities = bpmActivityService.getActivityByKey("test",null);
+        Assert.assertNotNull(activities);
+        System.out.println("获取到的流程节点:"+activities);
+        for (ActivityImpl a: activities) {
+            if(a.getProperty("type").equals("startEvent")){
+                System.out.println(a);
+                List<PvmTransition> pvmTransitions = a.getOutgoingTransitions();
+                Assert.assertEquals(pvmTransitions.size(), 1);
+                System.out.println("流程第一节点办理人:"+((TaskDefinition)pvmTransitions.get(0).getDestination().getProperty("taskDefinition")).getAssigneeExpression());
+            }
+        }
     }
 
     // 流程流转test
@@ -77,52 +79,16 @@ public class ControllerTest extends SimpleWebApplicationTests {
             Assert.assertEquals(i,1);
             System.out.println("当前活动流程数:" + i);
             System.out.println("当前流程节点ID_" + processInstance.getActivityId());
+            Task task = bpmTaskService.selectTaskByProcessId(processInstance.getId());
+            Assert.assertNotNull(task);
+            System.out.println("当前环节:"+task.getName()+"__办理人:"+task.getAssignee());
         } catch (Exception e) {
             System.out.println("启动流程失败" + e);
         }
-        System.out.println("=========>>>");
-        List<Task> tasks = bpmTaskService.selectTaskByProcessId(processInstance.getId());
-        Assert.assertNotNull(tasks);
-        System.out.println("当前环节:"+tasks.get(0).getName()+"__办理人:"+tasks.get(0).getAssignee());
-        System.out.println("=========>>>");
+        ProcessDefinitionEntity processDefinitionEntity = ((BpmActivityServiceImp)bpmActivityService).getProcessDefinition(processInstance.getProcessDefinitionId());
         ActivityImpl activity = bpmActivityService.getActivityByProcInstId(processInstance.getProcessDefinitionId(), processInstance.getId());
         System.out.println("当前流程图元");
         System.out.println(activity);
-        System.out.println("=========>>>");
-        System.out.println("=========流程流转下一步，下一步为并行网关。>>>");
-//        for (Task task:tasks) {
-//            bpmTaskService.complete(task.getId(), "zhangsan",null,null);
-//        }
-        tasks = bpmTaskService.selectTaskByProcessId(processInstance.getId());
-        Assert.assertNotNull(tasks);
-        for (Task task:tasks) {
-            System.out.println("当前环节:"+task.getName()+"__id:"+task.getId()+"__办理人:"+task.getAssignee());
-
-            activity = bpmTaskService.selectActivityImplByTask(task.getId());
-            System.out.println("当前节点图元id:"+activity.getId());
-            System.out.println(activity);
-            System.out.println("=========>>>");
-            Map<String, List<String>> map = bpmActivityService.getNextClaim(task.getProcessDefinitionId(),activity.getId());
-            System.out.println("下一步执行json:"+JSON.toJSONString(map));
-        }
-        System.out.println("=========>>>");
-        activity = bpmActivityService.getActivityByProcInstId(processInstance.getProcessDefinitionId(), processInstance.getId());
-        System.out.println("当前流程图元");
-        System.out.println(activity);
-        System.out.println("=========>>>");
-
-    }
-
-    @Autowired
-    RepositoryService repositoryService;
-
-    @Test
-    public void task(){
-        ActivityImpl activity = bpmTaskService.selectActivityImplByTask("");
-        ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery().processDefinitionKey("testid").orderByProcessDefinitionVersion().desc().singleResult();
-        Map<String, List<String>> map = bpmActivityService.getNextClaim(processDefinition.getId(),activity.getId());
-        System.out.println("=========>>>");
-        System.out.println(JSON.toJSONString(map));
         System.out.println("=========>>>");
     }
 
