@@ -82,6 +82,11 @@ public class DelegatingWalkableGraph implements WalkableGraph {
     return errorInfo == null ? null : errorInfo.getException();
   }
 
+  @Override
+  public Iterable<SkyKey> getDirectDeps(SkyKey key) {
+    return getEntry(key).getDirectDeps();
+  }
+
   private static final Function<NodeEntry, Iterable<SkyKey>> GET_DIRECT_DEPS_FUNCTION =
       new Function<NodeEntry, Iterable<SkyKey>>() {
         @Override
@@ -93,6 +98,11 @@ public class DelegatingWalkableGraph implements WalkableGraph {
   @Override
   public Map<SkyKey, Iterable<SkyKey>> getDirectDeps(Iterable<SkyKey> keys) {
     return Maps.transformValues(getEntries(keys), GET_DIRECT_DEPS_FUNCTION);
+  }
+
+  @Override
+  public Iterable<SkyKey> getReverseDeps(SkyKey key) {
+    return getEntry(key).getReverseDeps();
   }
 
   private static final Function<NodeEntry, Iterable<SkyKey>> GET_REVERSE_DEPS_FUNCTION =
