@@ -9,8 +9,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import static java.lang.Math.exp;
 import static java.lang.Math.min;
 
-import com.codahale.metrics.WeightedSnapshot.WeightedSample;
-
 /**
  * An exponentially-decaying random reservoir of {@code long}s. Uses Cormode et al's
  * forward-decaying priority reservoir sampling method to produce a statistically representative
@@ -25,7 +23,7 @@ public class ExponentiallyDecayingReservoir implements Reservoir {
     private static final double DEFAULT_ALPHA = 0.015;
     private static final long RESCALE_THRESHOLD = TimeUnit.HOURS.toNanos(1);
 
-    private final ConcurrentSkipListMap<Double, WeightedSample> values;
+    private final ConcurrentSkipListMap<Double, Long> values;
     private final ReentrantReadWriteLock lock;
     private final double alpha;
     private final int size;
@@ -63,7 +61,7 @@ public class ExponentiallyDecayingReservoir implements Reservoir {
      * @param clock the clock used to timestamp samples and track rescaling
      */
     public ExponentiallyDecayingReservoir(int size, double alpha, Clock clock) {
-        this.values = new ConcurrentSkipListMap<Double, WeightedSample>();
+        this.values = new ConcurrentSkipListMap<Double, Long>();
         this.lock = new ReentrantReadWriteLock();
         this.alpha = alpha;
         this.size = size;
@@ -93,16 +91,14 @@ public class ExponentiallyDecayingReservoir implements Reservoir {
         rescaleIfNeeded();
         lockForRegularUsage();
         try {
-            final double itemWeight = weight(timestamp - startTime);
-            final WeightedSample sample = new WeightedSample(value, itemWeight);
-            final double priority = itemWeight / ThreadLocalRandom.current().nextDouble();
-            
+            final double priority = weight(timestamp - startTime) / ThreadLocalRandom.current()
+                                                                                     .nextDouble();
             final long newCount = count.incrementAndGet();
             if (newCount <= size) {
-                values.put(priority, sample);
+                values.put(priority, value);
             } else {
                 Double first = values.firstKey();
-                if (first < priority && values.putIfAbsent(priority, sample) == null) {
+                if (first < priority && values.putIfAbsent(priority, value) == null) {
                     // ensure we always remove an item
                     while (values.remove(first) == null) {
                         first = values.firstKey();
@@ -126,7 +122,7 @@ public class ExponentiallyDecayingReservoir implements Reservoir {
     public Snapshot getSnapshot() {
         lockForRegularUsage();
         try {
-            return new WeightedSnapshot(values.values());
+            return new Snapshot(values.values());
         } finally {
             unlockForRegularUsage();
         }
@@ -159,25 +155,22 @@ public class ExponentiallyDecayingReservoir implements Reservoir {
      * a linear pass over whatever data structure is being used."
      */
     private void rescale(long now, long next) {
-        lockForRescale();
-        try {
-            if (nextScaleTime.compareAndSet(next, now + RESCALE_THRESHOLD)) {
+        if (nextScaleTime.compareAndSet(next, now + RESCALE_THRESHOLD)) {
+            lockForRescale();
+            try {
                 final long oldStartTime = startTime;
                 this.startTime = currentTimeInSeconds();
-                final double scalingFactor = exp(-alpha * (startTime - oldStartTime));
-
                 final ArrayList<Double> keys = new ArrayList<Double>(values.keySet());
                 for (Double key : keys) {
-                    final WeightedSample sample = values.remove(key);
-                    final WeightedSample newSample = new WeightedSample(sample.value, sample.weight * scalingFactor);
-                    values.put(key * scalingFactor, newSample);
+                    final Long value = values.remove(key);
+                    values.put(key * exp(-alpha * (startTime - oldStartTime)), value);
                 }
 
                 // make sure the counter is in sync with the number of stored samples.
                 count.set(values.size());
+            } finally {
+                unlockForRescale();
             }
-        } finally {
-            unlockForRescale();
         }
     }
 

@@ -20,7 +20,7 @@ import java.lang.annotation.Target;
  * annotated method's return value as its value.
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ ElementType.METHOD, ElementType.FIELD, ElementType.ANNOTATION_TYPE })
+@Target({ ElementType.METHOD, ElementType.FIELD })
 public @interface Gauge {
     /**
      * @return The gauge's name.
