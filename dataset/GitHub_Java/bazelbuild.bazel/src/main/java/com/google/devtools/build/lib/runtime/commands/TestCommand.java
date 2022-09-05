@@ -16,6 +16,8 @@ package com.google.devtools.build.lib.runtime.commands;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.OutputGroupProvider;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.BuildResult;
 import com.google.devtools.build.lib.events.Event;
@@ -74,9 +76,15 @@ public class TestCommand implements BlazeCommand {
         runtime.getReporter().handle(Event.warn(
             "Streamed test output requested so all tests will be run locally, without sharding, " +
              "one at a time"));
+          optionsParser.parse(OptionPriority.SOFTWARE_REQUIREMENT,
+              "streamed output requires locally run tests, without sharding",
+              ImmutableList.of("--test_sharding_strategy=disabled", "--test_strategy=exclusive"));
+      }
+
+      if (optionsParser.getOptions(BuildConfiguration.Options.class).collectCodeCoverage) {
         optionsParser.parse(OptionPriority.SOFTWARE_REQUIREMENT,
-            "streamed output requires locally run tests, without sharding",
-            ImmutableList.of("--test_sharding_strategy=disabled", "--test_strategy=exclusive"));
+            "baseline coverage artifacts are built with running tests with coverage collection",
+            ImmutableList.of("--output_groups=" + OutputGroupProvider.BASELINE_COVERAGE));
       }
     } catch (OptionsParsingException e) {
       throw new IllegalStateException("Known options failed to parse", e);

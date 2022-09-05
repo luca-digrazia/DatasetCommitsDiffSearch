@@ -29,11 +29,14 @@ import com.google.devtools.build.lib.profiler.ProfileInfo.InfoListener;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.ProfilePhaseStatistics;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.chart.HtmlCreator;
+import com.google.devtools.build.lib.profiler.chart.AggregatingChartCreator;
+import com.google.devtools.build.lib.profiler.chart.Chart;
+import com.google.devtools.build.lib.profiler.chart.ChartCreator;
+import com.google.devtools.build.lib.profiler.chart.DetailedChartCreator;
+import com.google.devtools.build.lib.profiler.chart.HtmlChartVisitor;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.util.TimeUtilities;
@@ -44,8 +47,10 @@ import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsProvider;
 
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
@@ -98,15 +103,11 @@ public final class ProfileCommand implements BlazeCommand {
             + "pixels per second. Default is 50 pixels per second. ")
     public int htmlPixelsPerSecond;
 
-    @Option(
-      name = "html_details",
-      defaultValue = "false",
-      help =
-          "If --html_details is present, the task diagram contains all tasks of the profile "
-              + " and performance statistics on user-defined and built-in Skylark functions. "
-              + "If --nohtml_details is present, an aggregated diagram is generated. The default "
-              + "is to generate an aggregated diagram."
-    )
+    @Option(name = "html_details",
+        defaultValue = "false",
+        help = "If --html_details is present, the task diagram contains all tasks of the profile. "
+            + "If --nohtml_details is present, an aggregated diagram is generated. The default is "
+            + "to generate an aggregated diagram.")
     public boolean htmlDetails;
 
     @Option(name = "vfs_stats",
@@ -139,11 +140,10 @@ public final class ProfileCommand implements BlazeCommand {
   }
 
   @Override
-  public void editOptions(CommandEnvironment env, OptionsParser optionsParser) {}
+  public void editOptions(BlazeRuntime runtime, OptionsParser optionsParser) {}
 
   @Override
-  public ExitCode exec(final CommandEnvironment env, OptionsProvider options) {
-    final BlazeRuntime runtime = env.getRuntime();
+  public ExitCode exec(final BlazeRuntime runtime, OptionsProvider options) {
     ProfileOptions opts =
         options.getOptions(ProfileOptions.class);
 
@@ -162,9 +162,9 @@ public final class ProfileCommand implements BlazeCommand {
       }
     };
 
-    PrintStream out = new PrintStream(env.getReporter().getOutErr().getOutputStream());
+    PrintStream out = new PrintStream(runtime.getReporter().getOutErr().getOutputStream());
     try {
-      env.getReporter().handle(Event.warn(
+      runtime.getReporter().handle(Event.warn(
           null, "This information is intended for consumption by Blaze developers"
               + " only, and may change at any time.  Script against it at your own risk"));
 
@@ -176,22 +176,12 @@ public final class ProfileCommand implements BlazeCommand {
           if (opts.dumpMode != null) {
             dumpProfile(runtime, info, out, opts.dumpMode);
           } else if (opts.html) {
-            Path htmlFile =
-                profileFile.getParentDirectory().getChild(profileFile.getBaseName() + ".html");
-
-            env.getReporter().handle(Event.info("Creating HTML output in " + htmlFile));
-
-            HtmlCreator.createHtml(
-                info,
-                htmlFile,
-                getStatistics(runtime, info, opts),
-                opts.htmlDetails,
-                opts.htmlPixelsPerSecond);
+            createHtml(runtime, info, profileFile, opts);
           } else {
             createText(runtime, info, out, opts);
           }
         } catch (IOException e) {
-          env.getReporter().handle(Event.error(
+          runtime.getReporter().handle(Event.error(
               null, "Failed to process file " + name + ": " + e.getMessage()));
         }
       }
@@ -212,6 +202,31 @@ public final class ProfileCommand implements BlazeCommand {
         out.println("\n=== " + title.toUpperCase() + " ===\n");
       }
       out.print(stat.getStatistics());
+    }
+  }
+
+  private void createHtml(BlazeRuntime runtime, ProfileInfo info, Path profileFile,
+      ProfileOptions opts)
+      throws IOException {
+    Path htmlFile =
+        profileFile.getParentDirectory().getChild(profileFile.getBaseName() + ".html");
+    List<ProfilePhaseStatistics> statistics = getStatistics(runtime, info, opts);
+
+    runtime.getReporter().handle(Event.info("Creating HTML output in " + htmlFile));
+
+    ChartCreator chartCreator =
+        opts.htmlDetails ? new DetailedChartCreator(info, statistics)
+                         : new AggregatingChartCreator(info, statistics);
+    Chart chart = chartCreator.create();
+    OutputStream out = new BufferedOutputStream(htmlFile.getOutputStream());
+    try {
+      chart.accept(new HtmlChartVisitor(new PrintStream(out), opts.htmlPixelsPerSecond));
+    } finally {
+      try {
+        out.close();
+      } catch (IOException e) {
+        // Ignore
+      }
     }
   }
 

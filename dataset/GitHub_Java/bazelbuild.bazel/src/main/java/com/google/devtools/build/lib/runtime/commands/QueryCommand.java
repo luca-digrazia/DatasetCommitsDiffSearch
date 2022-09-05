@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
-import com.google.devtools.build.lib.query2.output.AspectResolver;
 import com.google.devtools.build.lib.query2.output.OutputFormatter;
 import com.google.devtools.build.lib.query2.output.QueryOptions;
 import com.google.devtools.build.lib.query2.output.QueryOutputUtils;
@@ -136,10 +135,8 @@ public final class QueryCommand implements BlazeCommand {
     // 3. Output results:
     PrintStream output = new PrintStream(runtime.getReporter().getOutErr().getOutputStream());
     try {
-      QueryOutputUtils.output(queryOptions, result, formatter, output, queryOptions.withAspectDeps 
-          ? new AspectResolver(runtime.getPackageManager(), runtime.getReporter())
-          : null);
-    } catch (ClosedByInterruptException | InterruptedException e) {
+      QueryOutputUtils.output(queryOptions, result, formatter, output);
+    } catch (ClosedByInterruptException e) {
       runtime.getReporter().handle(Event.error("query interrupted"));
       return ExitCode.INTERRUPTED;
     } catch (IOException e) {
