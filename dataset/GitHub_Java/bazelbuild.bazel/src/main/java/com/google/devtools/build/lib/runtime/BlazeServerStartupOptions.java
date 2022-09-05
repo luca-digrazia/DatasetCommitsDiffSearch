@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
+
 import java.util.Map;
 
 /**
@@ -86,9 +87,9 @@ public class BlazeServerStartupOptions extends OptionsBase {
    * any other embedded binaries - anything that ends up in the install_base).
    */
   @Option(name = "install_md5",
-      defaultValue = "", // NOTE: purely decorative!  See class docstring.
-      category = "hidden",
-      help = "This launcher option is intended for use only by tests.")
+                 defaultValue = "", // NOTE: purely decorative!  See class docstring.
+                 category = "hidden",
+                 help = "This launcher option is intended for use only by tests.")
   public String installMD5;
 
   /* Note: The help string in this option applies to the client code; not
@@ -100,13 +101,12 @@ public class BlazeServerStartupOptions extends OptionsBase {
       defaultValue = "null", // NOTE: purely decorative!  See class docstring.
       category = "server startup",
       converter = OptionsUtils.PathFragmentConverter.class,
-      valueHelp = "<path>",
       help = "If set, specifies the output location to which all build output will be written. "
           + "Otherwise, the location will be "
           + "${OUTPUT_ROOT}/_blaze_${USER}/${MD5_OF_WORKSPACE_ROOT}. Note: If you specify a "
           + "different option from one to the next Blaze invocation for this value, you'll likely "
           + "start up a new, additional Blaze server. Blaze starts exactly one server per "
-          + "specified output base. Typically there is one output base per workspace - however, "
+          + "specified output base. Typically there is one output base per workspace--however, "
           + "with this option you may have multiple output bases per workspace and thereby run "
           + "multiple builds for the same client on the same machine concurrently. See "
           + "'blaze help shutdown' on how to shutdown a Blaze server.")
@@ -120,7 +120,6 @@ public class BlazeServerStartupOptions extends OptionsBase {
       defaultValue = "null", // NOTE: purely decorative!  See class docstring.
       category = "server startup",
       converter = OptionsUtils.PathFragmentConverter.class,
-      valueHelp = "<path>",
       help = "The user-specific directory beneath which all build outputs are written; "
           + "by default, this is a function of $USER, but by specifying a constant, build outputs "
           + "can be shared between collaborating users.")
@@ -137,7 +136,6 @@ public class BlazeServerStartupOptions extends OptionsBase {
   @Option(name = "max_idle_secs",
       defaultValue = "" + (3 * 3600), // NOTE: purely decorative!  See class docstring.
       category = "server startup",
-      valueHelp = "<integer>",
       help = "The number of seconds the build server will wait idling before shutting down. Zero "
           + "means that the server will never shutdown.")
   public int maxIdleSeconds;
@@ -184,30 +182,27 @@ public class BlazeServerStartupOptions extends OptionsBase {
   @Option(name = "io_nice_level",
       defaultValue = "-1",  // NOTE: purely decorative!
       category = "server startup",
-      valueHelp = "{-1,0,1,2,3,4,5,6,7}",
-      help = "Only on Linux; set a level from 0-7 for best-effort IO scheduling using the "
-          + "sys_ioprio_set system call. 0 is highest priority, 7 is lowest. The anticipatory "
-          + "scheduler may only honor up to priority 4. If set to a negative value, then Blaze "
-          + "does not perform a system call.")
+      help = "Set a level from 0-7 for best-effort IO scheduling. 0 is highest priority, "
+          + "7 is lowest. The anticipatory scheduler may only honor up to priority 4. "
+          + "Negative values are ignored.")
   public int ioNiceLevel;
 
   @Option(name = "batch_cpu_scheduling",
       defaultValue = "false",  // NOTE: purely decorative!
       category = "server startup",
-      help = "Only on Linux; use 'batch' CPU scheduling for Blaze. This policy is useful for "
-          + "workloads that are non-interactive, but do not want to lower their nice value. "
-          + "See 'man 2 sched_setscheduler'. If false, then Blaze does not perform a system call.")
+      help = "Use 'batch' CPU scheduling for Blaze. This policy is useful for workloads that are "
+          + "non-interactive, but do not want to lower their nice value. "
+          + "See 'man 2 sched_setscheduler'.")
   public boolean batchCpuScheduling;
 
   @Option(name = "blazerc",
-      defaultValue = "null", // NOTE: purely decorative!
+      // NOTE: purely decorative!
+      defaultValue = "In the current directory, then in the user's home directory, the file named "
+         + ".$(basename $0)rc (i.e. .%{product}rc)",
       category = "misc",
-      valueHelp = "<path>",
       help = "The location of the .%{product}rc file containing default values of "
-          + "Blaze command options. By default, Blaze first checks the current directory, then "
-          + "the user's home directory, and then looks for a file named .$(basename $0)rc "
-          + "(i.e. .%{product}rc). Use /dev/null to disable the search for a %{product}rc file, "
-          + "e.g. in release builds.")
+          + "Blaze command options.  Use /dev/null to disable the search for a "
+          + "%{product}rc file, e.g. in release builds.")
   public String blazerc;
 
   @Option(name = "master_blazerc",
@@ -231,14 +226,11 @@ public class BlazeServerStartupOptions extends OptionsBase {
 
   // TODO(bazel-team): In order to make it easier to have local watchers in open source Bazel,
   // turn this into a non-startup option.
-  @Option(
-    name = "watchfs",
-    defaultValue = "false",
-    category = "server startup",
-    help =
-        "If true, %{product} tries to use the operating system's file watch service for local "
-            + "changes instead of scanning every file for a change."
-  )
+  @Option(name = "watchfs",
+      defaultValue = "false",
+      category = "undocumented",
+      help = "If true, %{product} tries to use the operating system's file watch service for local "
+          + "changes instead of scanning every file for a change.")
   public boolean watchFS;
 
   @Option(name = "invocation_policy",
@@ -250,7 +242,7 @@ public class BlazeServerStartupOptions extends OptionsBase {
   public String invocationPolicy;
 
   @Option(name = "command_port",
-      defaultValue = "0",
+      defaultValue = "-1",
       category = "undocumented",
       help = "Port to start up the gRPC command server on. If 0, let the kernel choose. If -1, "
           + "use a custom protocol on an AF_UNIX socket.")
@@ -258,7 +250,7 @@ public class BlazeServerStartupOptions extends OptionsBase {
 
   @Option(name = "product_name",
       defaultValue = "bazel", // NOTE: purely decorative!
-      category = "hidden",
+      category = "undocumented",
       help = "The name of the build system. It is used as part of the name of the generated "
           + "directories (e.g. productName-bin for binaries) as well as for printing error "
           + "messages and logging")
