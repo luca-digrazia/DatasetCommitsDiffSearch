@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.ArrayList;
@@ -63,26 +62,20 @@ public final class InstrumentedFilesCollector {
       InstrumentationSpec spec,
       LocalMetadataCollector localMetadataCollector,
       Iterable<Artifact> rootFiles) {
-    return collect(ruleContext, spec, localMetadataCollector, rootFiles,
-        NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
-        NestedSetBuilder.<Pair<String, String>>emptySet(Order.STABLE_ORDER),
-        false);
+    return collect(ruleContext, spec, localMetadataCollector, rootFiles, false);
   }
 
   /**
    * Collects transitive instrumentation data from dependencies, collects local source files from
    * dependencies, collects local metadata files by traversing the action graph of the current
-   * configured target, collect rule-specific instrumentation support file sand creates baseline
-   * coverage actions for the transitive closure of source files (if
-   * <code>withBaselineCoverage</code> is true).
+   * configured target, and creates baseline coverage actions for the transitive closure of source
+   * files (if <code>withBaselineCoverage</code> is true).
    */
   public static InstrumentedFilesProvider collect(
       RuleContext ruleContext,
       InstrumentationSpec spec,
       LocalMetadataCollector localMetadataCollector,
       Iterable<Artifact> rootFiles,
-      NestedSet<Artifact> coverageSupportFiles,
-      NestedSet<Pair<String, String>> coverageEnvironment,
       boolean withBaselineCoverage) {
     Preconditions.checkNotNull(ruleContext);
     Preconditions.checkNotNull(spec);
@@ -95,13 +88,6 @@ public final class InstrumentedFilesCollector {
     NestedSetBuilder<Artifact> metadataFilesBuilder = NestedSetBuilder.stableOrder();
     NestedSetBuilder<Artifact> baselineCoverageInstrumentedFilesBuilder =
         NestedSetBuilder.stableOrder();
-    NestedSetBuilder<Artifact> coverageSupportFilesBuilder =
-        NestedSetBuilder.<Artifact>stableOrder()
-            .addTransitive(coverageSupportFiles);
-    NestedSetBuilder<Pair<String, String>> coverageEnvironmentBuilder =
-        NestedSetBuilder.<Pair<String, String>>compileOrder()
-            .addTransitive(coverageEnvironment);
-
 
     // Transitive instrumentation data.
     for (TransitiveInfoCollection dep :
@@ -112,8 +98,6 @@ public final class InstrumentedFilesCollector {
         metadataFilesBuilder.addTransitive(provider.getInstrumentationMetadataFiles());
         baselineCoverageInstrumentedFilesBuilder.addTransitive(
             provider.getBaselineCoverageInstrumentedFiles());
-        coverageSupportFilesBuilder.addTransitive(provider.getCoverageSupportFiles());
-        coverageEnvironmentBuilder.addTransitive(provider.getCoverageEnvironment());
       }
     }
 
@@ -159,9 +143,7 @@ public final class InstrumentedFilesCollector {
         instrumentedFilesBuilder.build(),
         metadataFilesBuilder.build(),
         baselineCoverageFiles,
-        baselineCoverageArtifacts,
-        coverageSupportFilesBuilder.build(),
-        coverageEnvironmentBuilder.build());
+        baselineCoverageArtifacts);
   }
 
   /**
