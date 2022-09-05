@@ -28,7 +28,6 @@ public class CustomCodecsAutoConfiguration {
         @Bean
         @Order(1)
         @ConditionalOnBean(ObjectMapper.class)
-        @SuppressWarnings("all")
         CodecCustomizer jacksonDecoderCustomizer(EntityFactory entityFactory, ObjectMapper objectMapper) {
             //	objectMapper.setTypeFactory(new CustomTypeFactory(entityFactory));
             SimpleModule module = new SimpleModule();
@@ -38,10 +37,12 @@ public class CustomCodecsAutoConfiguration {
                                                                 DeserializationConfig config,
                                                                 BeanDescription beanDesc) {
                     JsonDeserializer<?> deser = null;
-                    if (type.isEnum() && EnumDict.class.isAssignableFrom(type)) {
-                        deser = new EnumDict.EnumDictJSONDeserializer(val -> EnumDict
-                                .find((Class) type, val)
-                                .orElse(null));
+                    if (type.isEnum()) {
+                        if (EnumDict.class.isAssignableFrom(type)) {
+                            deser = new EnumDict.EnumDictJSONDeserializer(val -> EnumDict
+                                    .find((Class) type, val)
+                                    .orElse(null));
+                        }
                     }
                     return deser;
                 }
@@ -50,7 +51,7 @@ public class CustomCodecsAutoConfiguration {
 
             return (configurer) -> {
                 CodecConfigurer.DefaultCodecs defaults = configurer.defaultCodecs();
-                defaults.jackson2JsonDecoder(new CustomJackson2JsonDecoder(entityFactory, objectMapper));
+                defaults.jackson2JsonDecoder(new CustomJackson2JsonDecoder(objectMapper));
             };
         }
 
