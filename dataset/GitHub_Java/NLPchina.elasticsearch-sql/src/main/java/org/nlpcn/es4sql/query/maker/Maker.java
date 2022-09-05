@@ -3,6 +3,9 @@ package org.nlpcn.es4sql.query.maker;
 import java.io.IOException;
 import java.util.Set;
 
+import com.esri.core.geometry.Geometry;
+import com.esri.core.geometry.GeometryEngine;
+import com.esri.core.geometry.WktImportFlags;
 import org.elasticsearch.common.collect.Sets;
 import org.elasticsearch.common.geo.ShapeRelation;
 import org.elasticsearch.common.geo.builders.ShapeBuilder;
@@ -17,7 +20,9 @@ import org.nlpcn.es4sql.exception.SqlParseException;
 
 import org.durid.sql.ast.expr.SQLIdentifierExpr;
 import org.durid.sql.ast.expr.SQLMethodInvokeExpr;
-import org.nlpcn.es4sql.spatial.*;
+import org.nlpcn.es4sql.spatial.BoundingBoxFilterParams;
+import org.nlpcn.es4sql.spatial.DistanceFilterParams;
+import org.nlpcn.es4sql.spatial.Point;
 
 public abstract class Maker {
 
@@ -232,32 +237,7 @@ public abstract class Maker {
             String distance = trimApostrophes(distanceFilterParams.getDistance());
             x = FilterBuilders.geoDistanceFilter(cond.getName()).distance(distance).lon(fromPoint.getLon()).lat(fromPoint.getLat());
             break;
-        case GEO_DISTANCE_RANGE:
-            if(isQuery)
-                throw new SqlParseException("RangeDistance is only for filter");
-            RangeDistanceFilterParams rangeDistanceFilterParams = (RangeDistanceFilterParams) cond.getValue();
-            fromPoint = rangeDistanceFilterParams.getFrom();
-            String distanceFrom = trimApostrophes(rangeDistanceFilterParams.getDistanceFrom());
-            String distanceTo = trimApostrophes(rangeDistanceFilterParams.getDistanceTo());
-            x = FilterBuilders.geoDistanceRangeFilter(cond.getName()).from(distanceFrom).to(distanceTo).lon(fromPoint.getLon()).lat(fromPoint.getLat());
-            break;
-        case GEO_POLYGON:
-            if(isQuery)
-                throw new SqlParseException("Polygon is only for filter");
-            PolygonFilterParams polygonFilterParams = (PolygonFilterParams) cond.getValue();
-            GeoPolygonFilterBuilder polygonFilterBuilder = FilterBuilders.geoPolygonFilter(cond.getName());
-            for(Point p : polygonFilterParams.getPolygon())
-                polygonFilterBuilder.addPoint(p.getLat(),p.getLon());
-            x = polygonFilterBuilder;
-            break;
-        case GEO_CELL:
-            if(isQuery)
-                throw new SqlParseException("geocell is only for filter");
-            CellFilterParams cellFilterParams = (CellFilterParams) cond.getValue();
-            Point geoHashPoint = cellFilterParams.getGeohashPoint();
-            x = FilterBuilders.geoHashCellFilter(cond.getName()).point(geoHashPoint.getLat(),geoHashPoint.getLon()).precision(cellFilterParams.getPrecision()).neighbors(cellFilterParams.isNeighbors());
-            break;
-        default:
+		default:
 			throw new SqlParseException("not define type " + cond.getName());
 		}
 
@@ -266,7 +246,7 @@ public abstract class Maker {
 	}
 
     private ShapeBuilder getShapeBuilderFromWkt(String wkt) throws IOException {
-        String json = WktToGeoJsonConverter.toGeoJson(trimApostrophes(wkt));
+        String json = getGeoJsonFromWkt(wkt);
         return getShapeBuilderFromJson(json);
     }
 
@@ -275,6 +255,13 @@ public abstract class Maker {
         parser = JsonXContent.jsonXContent.createParser(json);
         parser.nextToken();
         return ShapeBuilder.parse(parser);
+    }
+
+    private String getGeoJsonFromWkt(String wkt) {
+        wkt = trimApostrophes(wkt);
+        //using esri to validate that it is parsable geometry and create geoJson from it
+        com.esri.core.geometry.Geometry geometry = GeometryEngine.geometryFromWkt(wkt, WktImportFlags.wktImportDefaults, Geometry.Type.Unknown);
+        return GeometryEngine.geometryToGeoJson(geometry);
     }
 
     private String trimApostrophes(String str) {
