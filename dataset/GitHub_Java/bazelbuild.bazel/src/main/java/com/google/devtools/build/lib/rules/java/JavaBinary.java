@@ -160,6 +160,9 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
       javaArtifactsBuilder.addRuntimeJar(classJar);
     }
 
+    // Any JAR files should be added to the collection of runtime jars.
+    javaArtifactsBuilder.addRuntimeJars(attributes.getJarFiles());
+
     Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
 
     common.setJavaCompilationArtifacts(javaArtifactsBuilder.build());
