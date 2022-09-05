@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
@@ -39,6 +40,7 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
+import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
@@ -61,6 +63,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -323,8 +326,28 @@ public final class CommandEnvironment {
       throws InvalidConfigurationException, InterruptedException {
     BuildOptions buildOptions = runtime.createBuildOptions(optionsProvider);
     boolean keepGoing = optionsProvider.getOptions(BuildView.Options.class).keepGoing;
+    boolean loadingSuccessful =
+        loadForConfigurations(reporter,
+            ImmutableSet.copyOf(buildOptions.getAllLabels().values()),
+            keepGoing);
+    if (!loadingSuccessful) {
+      throw new InvalidConfigurationException("Configuration creation failed");
+    }
     return getSkyframeExecutor().createConfigurations(reporter, runtime.getConfigurationFactory(),
         buildOptions, ImmutableSet.<String>of(), keepGoing);
+  }
+
+  // TODO(ulfjack): Do we even need this method? With Skyframe, the config creation should
+  // implicitly trigger any necessary loading.
+  private boolean loadForConfigurations(EventHandler eventHandler,
+      Set<Label> labelsToLoad, boolean keepGoing) throws InterruptedException {
+    // Use a new Label Visitor here to avoid erasing the cache on the existing one.
+    TransitivePackageLoader transitivePackageLoader = getPackageManager().newTransitiveLoader();
+    boolean loadingSuccessful = transitivePackageLoader.sync(
+        eventHandler, ImmutableSet.<Target>of(),
+        labelsToLoad, keepGoing, /*parallelThreads=*/10,
+        /*maxDepth=*/Integer.MAX_VALUE);
+    return loadingSuccessful;
   }
 
   /**

@@ -27,6 +27,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.io.Flushables;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
@@ -197,7 +198,7 @@ public class BlazeCommandDispatcher {
     Path workspace = env.getWorkspace();
     // TODO(kchodorow): Remove this once spaces are supported.
     if (workspace.getPathString().contains(" ")) {
-      outErr.printErrLn(runtime.getProductName() + " does not currently work properly from paths "
+      outErr.printErrLn(Constants.PRODUCT_NAME + " does not currently work properly from paths "
           + "containing spaces (" + workspace + ").");
       return ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
     }
@@ -285,7 +286,7 @@ public class BlazeCommandDispatcher {
     BlazeCommand command = runtime.getCommandMap().get(commandName);
     if (command == null) {
       outErr.printErrLn(String.format(
-          "Command '%s' not found. Try '%s help'.", commandName, runtime.getProductName()));
+          "Command '%s' not found. Try '%s help'.", commandName, Constants.PRODUCT_NAME));
       return ExitCode.COMMAND_LINE_ERROR.getNumericExitCode();
     }
 

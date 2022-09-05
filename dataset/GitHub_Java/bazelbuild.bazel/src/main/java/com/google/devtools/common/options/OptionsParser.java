@@ -593,8 +593,7 @@ public class OptionsParser implements OptionsProvider {
    * @return A map of an option name to the old value of the options that were cleared.
    * @throws IllegalArgumentException If the flag does not exist.
    */
-  public Map<String, OptionValueDescription> clearValue(String optionName)
-      throws OptionsParsingException {
+  public Map<String, OptionValueDescription> clearValue(String optionName) {
     Map<String, OptionValueDescription> clearedValues = Maps.newHashMap();
     impl.clearValue(optionName, clearedValues);
     return clearedValues;
