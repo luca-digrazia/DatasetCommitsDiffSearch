@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,20 +30,11 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 public class ObjcConfigurationLoader implements ConfigurationFragmentFactory {
   @Override
   public ObjcConfiguration create(ConfigurationEnvironment env, BuildOptions buildOptions)
-      throws InvalidConfigurationException, InterruptedException {
+      throws InvalidConfigurationException {
     Options options = buildOptions.get(BuildConfiguration.Options.class);
     ObjcCommandLineOptions objcOptions = buildOptions.get(ObjcCommandLineOptions.class);
-    validate(objcOptions);
-    return new ObjcConfiguration(objcOptions, options, env.getBlazeDirectories());
-  }
 
-  private static void validate(ObjcCommandLineOptions objcOptions)
-      throws InvalidConfigurationException {
-    if (objcOptions.experimentalObjcHeaderThinning && !objcOptions.useDotdPruning) {
-      throw new InvalidConfigurationException(
-          "Experimental Objective-C header thinning (--experimental_objc_header_thinning) requires "
-              + "Objective-C dotd pruning (--objc_use_dotd_pruning).");
-    }
+    return new ObjcConfiguration(objcOptions, options, env.getBlazeDirectories());
   }
 
   @Override
