@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.common.options.Converters;
-import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 
 import java.util.List;
@@ -41,56 +40,9 @@ import java.util.List;
  */
 public class AndroidConfiguration extends BuildConfiguration.Fragment {
   /**
-   * Value used to avoid multiple configurations from conflicting.
-   *
-   * <p>This is set to {@code ANDROID} in Android configurations and to {@code MAIN} otherwise. This
-   * influences the output directory name: if it didn't, an Android and a non-Android configuration
-   * would conflict if they had the same toolchain identifier.
-   *
-   * <p>Note that this is not just a theoretical concern: even if {@code --crosstool_top} and
-   * {@code --android_crosstool_top} point to different labels, they may end up being redirected to
-   * the same thing, and this is exactly what happens on OSX X.
-   */
-  public enum ConfigurationDistinguisher {
-    MAIN(null),
-    ANDROID("android");
-
-    private final String suffix;
-
-    private ConfigurationDistinguisher(String suffix) {
-      this.suffix = suffix;
-    };
-  }
-
-  /**
-   * Converter for {@link com.google.devtools.build.lib.rules.android.AndroidConfiguration.ConfigurationDistinguisher}
-   */
-  public static final class ConfigurationDistinguisherConverter
-      extends EnumConverter<ConfigurationDistinguisher> {
-    public ConfigurationDistinguisherConverter() {
-      super(ConfigurationDistinguisher.class, "Android configuration distinguisher");
-    }
-  }
-
-  /**
    * Android configuration options.
    */
   public static class Options extends FragmentOptions {
-    // Spaces make it impossible to specify this on the command line
-    @Option(name = "Android configuration distinguisher",
-        defaultValue = "MAIN",
-        converter = ConfigurationDistinguisherConverter.class,
-        category = "undocumented")
-    public ConfigurationDistinguisher configurationDistinguisher;
-
-    // For deploying incremental installation of native libraries. Do not use on the command line.
-    // The idea is that once this option works, we'll flip the default value in a config file, then
-    // once it is proven that it works, remove it from Bazel and said config file.
-    @Option(name = "android_incremental_native_libs",
-        defaultValue = "false",
-        category = "undocumented")
-    public boolean incrementalNativeLibs;
-
     @Option(name = "android_crosstool_top",
         defaultValue = "null",
         category = "semantics",
@@ -168,8 +120,8 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         labelMap.put("android_proguard", proguard);
       }
 
-      if (realAndroidCrosstoolTop() != null) {
-        labelMap.put("android_crosstool_top", realAndroidCrosstoolTop());
+      if (androidCrosstoolTop != null) {
+        labelMap.put("android_crosstool_top", androidCrosstoolTop);
       }
 
       labelMap.put("android_sdk", realSdk());
@@ -182,21 +134,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       return sdk == null
           ? Label.parseAbsoluteUnchecked(Constants.ANDROID_DEFAULT_SDK)
           : sdk;
-    }
-
-    // This method is here because Constants.ANDROID_DEFAULT_CROSSTOOL cannot be a constant, because
-    // we replace the class file in the .jar after compilation. However, that means that we cannot
-    // use it as an attribute value in an annotation.
-    public Label realAndroidCrosstoolTop() {
-      if (androidCrosstoolTop != null) {
-        return androidCrosstoolTop;
-      }
-
-      if (Constants.ANDROID_DEFAULT_CROSSTOOL.equals("null")) {
-        return null;
-      }
-
-      return Label.parseAbsoluteUnchecked(Constants.ANDROID_DEFAULT_CROSSTOOL);
     }
 
     @Override
@@ -235,21 +172,17 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final StrictDepsMode strictDeps;
   private final boolean legacyNativeSupport;
   private final String cpu;
-  private final boolean incrementalNativeLibs;
   private final boolean fatApk;
-  private final ConfigurationDistinguisher configurationDistinguisher;
   private final Label proguard;
   private final boolean useJackForDexing;
   private final boolean jackSanityChecks;
 
   AndroidConfiguration(Options options) {
     this.sdk = options.realSdk();
-    this.incrementalNativeLibs = options.incrementalNativeLibs;
     this.strictDeps = options.strictDeps;
     this.legacyNativeSupport = options.legacyNativeSupport;
     this.cpu = options.cpu;
     this.fatApk = !options.fatApkCpus.isEmpty();
-    this.configurationDistinguisher = options.configurationDistinguisher;
     this.proguard = options.proguard;
     this.useJackForDexing = options.useJackForDexing;
     this.jackSanityChecks = options.jackSanityChecks;
@@ -290,10 +223,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     return jackSanityChecks;
   }
 
-  public boolean useIncrementalNativeLibs() {
-    return incrementalNativeLibs;
-  }
-
   @Override
   public void addGlobalMakeVariables(ImmutableMap.Builder<String, String> globalMakeEnvBuilder) {
     globalMakeEnvBuilder.put("ANDROID_CPU", cpu);
@@ -301,7 +230,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   @Override
   public String getOutputDirectoryName() {
-    return configurationDistinguisher.suffix;
+    return fatApk ? "fat-apk" : null;
   }
 
   public Label getProguardLabel() {
