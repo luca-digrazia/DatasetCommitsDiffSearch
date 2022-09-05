@@ -42,10 +42,8 @@ import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
-import com.google.devtools.build.lib.pkgcache.LegacyLoadingPhaseRunner;
-import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
-import com.google.devtools.build.lib.pkgcache.LoadingResult;
+import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
@@ -133,7 +131,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   protected void setUp() throws Exception {
     super.setUp();
     analysisMock = getAnalysisMock();
-    pkgLocator = new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory));
+    pkgLocator = new PathPackageLocator(rootDirectory);
     directories = new BlazeDirectories(outputBase, outputBase, rootDirectory);
     workspaceStatusActionFactory =
         new AnalysisTestUtil.DummyWorkspaceStatusActionFactory(directories);
@@ -183,8 +181,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         Options.getDefaults(PackageCacheOptions.class).defaultVisibility, true,
         3, ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID());
     packageManager = skyframeExecutor.getPackageManager();
-    loadingPhaseRunner =
-        new LegacyLoadingPhaseRunner(packageManager, pkgFactory.getRuleClassNames());
+    loadingPhaseRunner = new LoadingPhaseRunner(packageManager, pkgFactory.getRuleClassNames());
     buildView = new BuildView(directories, ruleClassProvider, skyframeExecutor, null);
     useConfiguration();
   }
@@ -243,7 +240,8 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   protected void update(EventBus eventBus, FlagBuilder config, String... labels) throws Exception {
     Set<Flag> flags = config.flags;
 
-    LoadingOptions loadingOptions = Options.getDefaults(LoadingOptions.class);
+    LoadingPhaseRunner.Options loadingOptions =
+        Options.getDefaults(LoadingPhaseRunner.Options.class);
     loadingOptions.loadingPhaseThreads = LOADING_PHASE_THREADS;
 
     BuildView.Options viewOptions = optionsParser.getOptions(BuildView.Options.class);
