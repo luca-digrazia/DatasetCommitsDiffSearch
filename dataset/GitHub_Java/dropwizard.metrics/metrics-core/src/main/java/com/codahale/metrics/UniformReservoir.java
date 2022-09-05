@@ -79,9 +79,9 @@ public class UniformReservoir implements Reservoir {
     @Override
     public Snapshot getSnapshot() {
         final int s = size();
-        long[] copy = new long[s];
+        final List<Long> copy = new ArrayList<Long>(s);
         for (int i = 0; i < s; i++) {
-            copy[i] = values.get(i);  
+            copy.add(values.get(i));
         }
         return new UniformSnapshot(copy);
     }

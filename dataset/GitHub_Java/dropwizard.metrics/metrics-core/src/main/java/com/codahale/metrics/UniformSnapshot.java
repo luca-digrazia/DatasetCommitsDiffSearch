@@ -139,7 +139,7 @@ public class UniformSnapshot extends Snapshot {
     /**
      * Returns the standard deviation of the values in the snapshot.
      *
-     * @return the standard deviation value
+     * @return the standard value
      */
     @Override
     public double getStdDev() {

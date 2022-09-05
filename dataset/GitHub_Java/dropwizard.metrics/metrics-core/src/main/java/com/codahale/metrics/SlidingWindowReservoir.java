@@ -1,8 +1,5 @@
 package com.codahale.metrics;
 
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicLongArray;
-
 import static java.lang.Math.min;
 
 /**
@@ -10,8 +7,8 @@ import static java.lang.Math.min;
  * measurements.
  */
 public class SlidingWindowReservoir implements Reservoir {
-    private final AtomicLongArray measurements;
-    private final AtomicLong count;
+    private final long[] measurements;
+    private long count;
 
     /**
      * Creates a new {@link SlidingWindowReservoir} which stores the last {@code size} measurements.
@@ -19,27 +16,28 @@ public class SlidingWindowReservoir implements Reservoir {
      * @param size the number of measurements to store
      */
     public SlidingWindowReservoir(int size) {
-        this.measurements = new AtomicLongArray(size);
-        this.count = new AtomicLong();
+        this.measurements = new long[size];
+        this.count = 0;
     }
 
     @Override
-    public int size() {
-        return (int) min(count.get(), measurements.length());
+    public synchronized int size() {
+        return (int) min(count, measurements.length);
     }
 
     @Override
-    public void update(long value) {
-        final int i = (int) (count.getAndIncrement() % measurements.length());
-        measurements.set(i, value);
+    public synchronized void update(long value) {
+        measurements[(int) (count++ % measurements.length)] = value;
     }
 
     @Override
     public Snapshot getSnapshot() {
         final long[] values = new long[size()];
         for (int i = 0; i < values.length; i++) {
-            values[i] = measurements.get(i);
+            synchronized (this) {
+                values[i] = measurements[i];
+            }
         }
-        return new Snapshot(values);
+        return new UniformSnapshot(values);
     }
 }
