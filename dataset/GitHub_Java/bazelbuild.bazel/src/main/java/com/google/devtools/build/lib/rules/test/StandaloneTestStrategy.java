@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.test;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BaseSpawn;
@@ -80,8 +79,8 @@ public class StandaloneTestStrategy extends TestStrategy {
         .getChild(getTmpDirName(action.getExecutionSettings().getExecutable().getExecPath()));
     Path workingDirectory = runfilesDir.getRelative(action.getRunfilesPrefix());
 
-    Path execRoot = actionExecutionContext.getExecutor().getExecRoot();
-    TestRunnerAction.ResolvedPaths resolvedPaths = action.resolve(execRoot);
+    TestRunnerAction.ResolvedPaths resolvedPaths =
+        action.resolve(actionExecutionContext.getExecutor().getExecRoot());
     Map<String, String> env = getEnv(action, runfilesDir, testTmpDir, resolvedPaths);
 
     Map<String, String> info = new HashMap<>();
@@ -101,8 +100,9 @@ public class StandaloneTestStrategy extends TestStrategy {
             new RunfilesSupplierImpl(
                 runfilesDir.asFragment(), action.getExecutionSettings().getRunfiles()),
             action,
-            action.getTestProperties().getLocalResourceUsage(executionOptions.usingLocalTestJobs()),
-            ImmutableSet.of(resolvedPaths.getXmlOutputPath().relativeTo(execRoot)));
+            action
+                .getTestProperties()
+                .getLocalResourceUsage(executionOptions.usingLocalTestJobs()));
 
     Executor executor = actionExecutionContext.getExecutor();
 
@@ -155,7 +155,7 @@ public class StandaloneTestStrategy extends TestStrategy {
     Map<String, String> vars = getDefaultTestEnvironment(action);
     BuildConfiguration config = action.getConfiguration();
 
-    vars.putAll(config.getLocalShellEnvironment());
+    vars.putAll(config.getDefaultShellEnvironment());
     vars.putAll(action.getTestEnv());
 
     /*
