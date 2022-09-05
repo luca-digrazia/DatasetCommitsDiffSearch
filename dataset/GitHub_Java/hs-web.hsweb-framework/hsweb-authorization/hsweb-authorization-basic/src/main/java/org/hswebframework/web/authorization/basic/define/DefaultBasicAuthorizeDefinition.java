@@ -30,13 +30,14 @@ public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
     @JsonIgnore
     private Class<?> targetClass;
 
+
     @JsonIgnore
     private Method targetMethod;
 
     private ResourcesDefinition resources = new ResourcesDefinition();
     private DimensionsDefinition dimensions = new DimensionsDefinition();
 
-    private String message = "权限不足,拒绝访问";
+    private String message;
 
     private Phased phased;
 
@@ -55,9 +56,7 @@ public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
     ));
 
     public static AopAuthorizeDefinition from(Class<?> targetClass, Method method) {
-        AopAuthorizeDefinitionParser parser = new AopAuthorizeDefinitionParser(targetClass, method);
-
-        return parser.parse();
+        return new AopAuthorizeDefinitionParser(targetClass,method).parse();
     }
 
     public void putAnnotation(Authorize ann) {
@@ -119,7 +118,7 @@ public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
         }
         DataAccessTypeDefinition typeDefinition = new DataAccessTypeDefinition();
         for (DataAccessType dataAccessType : ann.type()) {
-            if (dataAccessType.ignore()) {
+            if(dataAccessType.ignore()){
                 continue;
             }
             typeDefinition.setId(dataAccessType.id());
@@ -128,7 +127,7 @@ public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
             typeDefinition.setConfiguration(dataAccessType.configuration());
             typeDefinition.setDescription(String.join("\n", dataAccessType.description()));
         }
-        if (StringUtils.isEmpty(typeDefinition.getId())) {
+        if(StringUtils.isEmpty(typeDefinition.getId())){
             return;
         }
         definition.getDataAccess()
@@ -137,7 +136,7 @@ public class DefaultBasicAuthorizeDefinition implements AopAuthorizeDefinition {
     }
 
     public void putAnnotation(ResourceActionDefinition definition, DataAccessType dataAccessType) {
-        if (dataAccessType.ignore()) {
+        if(dataAccessType.ignore()){
             return;
         }
         DataAccessTypeDefinition typeDefinition = new DataAccessTypeDefinition();
