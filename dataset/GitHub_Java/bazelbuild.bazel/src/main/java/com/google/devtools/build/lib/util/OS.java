@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,10 +18,9 @@ package com.google.devtools.build.lib.util;
  */
 public enum OS {
   DARWIN("osx", "Mac OS X"),
-  FREEBSD("freebsd", "FreeBSD"),
   LINUX("linux", "Linux"),
   WINDOWS("windows", "Windows"),
-  UNKNOWN("unknown", "");
+  UNKNOWN("", "");
 
   private final String canonicalName;
   private final String detectionName;
@@ -42,15 +41,6 @@ public enum OS {
     return canonicalName;
   }
 
-  public static String getVersion() {
-    return System.getProperty("os.version");
-  }
-
-  @Override
-  public String toString() {
-    return getCanonicalName();
-  }
-
   // We inject a the OS name through blaze.os, so we can have
   // some coverage for Windows specific code on Linux.
   private static OS determineCurrentOs() {
@@ -59,7 +49,7 @@ public enum OS {
       osName = System.getProperty("os.name");
     }
 
-    if (osName == null) {
+    if (osName == null) { 
       return OS.UNKNOWN;
     }
 
