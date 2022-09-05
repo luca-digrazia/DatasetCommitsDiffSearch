@@ -16,11 +16,11 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
-import com.google.common.base.Predicate;
 import com.google.common.base.Verify;
 import com.google.common.base.VerifyException;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.LinkedListMultimap;
@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
+import com.google.devtools.build.lib.analysis.AspectDescriptor;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -54,7 +55,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Aspect;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
+import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
@@ -63,7 +64,6 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.skyframe.AspectFunction.AspectCreationException;
@@ -78,6 +78,7 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException;
 import com.google.devtools.build.skyframe.ValueOrException2;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -916,21 +917,24 @@ final class ConfiguredTargetFunction implements SkyFunction {
     return key;
   }
 
-  private static boolean aspectMatchesConfiguredTarget(final ConfiguredTarget dep, Aspect aspect) {
-    return aspect.getDefinition().getRequiredProviders().isSatisfiedBy(
-        new Predicate<Class<?>>() {
-          @Override
-          public boolean apply(Class<?> provider) {
-            return dep.getProvider(provider.asSubclass(TransitiveInfoProvider.class)) != null;
-          }
-        },
-        new Predicate<SkylarkProviderIdentifier>() {
-          @Override
-          public boolean apply(SkylarkProviderIdentifier skylarkProviderIdentifier) {
-            return dep.get(skylarkProviderIdentifier) != null;
-          }
+  private static boolean aspectMatchesConfiguredTarget(ConfiguredTarget dep, Aspect aspect) {
+    AspectDefinition aspectDefinition = aspect.getDefinition();
+    ImmutableList<ImmutableSet<Class<?>>> providersList = aspectDefinition.getRequiredProviders();
+
+    for (ImmutableSet<Class<?>> providers : providersList) {
+      boolean matched = true;
+      for (Class<?> provider : providers) {
+        if (dep.getProvider(provider.asSubclass(TransitiveInfoProvider.class)) == null) {
+          matched = false;
+          break;
         }
-    );
+      }
+
+      if (matched) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
