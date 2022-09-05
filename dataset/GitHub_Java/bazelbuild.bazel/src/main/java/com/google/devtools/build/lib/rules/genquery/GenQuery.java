@@ -44,7 +44,8 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
-import com.google.devtools.build.lib.pkgcache.PackageProvider;
+import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
+import com.google.devtools.build.lib.pkgcache.RecursivePackageProvider;
 import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.BlazeQueryEvalResult;
@@ -81,6 +82,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadPoolExecutor;
 
 import javax.annotation.Nullable;
 
@@ -211,20 +213,23 @@ public class GenQuery implements RuleConfiguredTargetFactory {
   @Nullable
   private byte[] executeQuery(RuleContext ruleContext, QueryOptions queryOptions,
       Set<Target> scope, String query) throws InterruptedException {
+    RecursivePackageProvider packageProvider;
+    Predicate<Label> labelFilter;
+    TargetPatternEvaluator evaluator;
 
     SkyFunction.Environment env = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
     Pair<ImmutableMap<PackageIdentifier, Package>, Set<Label>> closureInfo =
         constructPackageMap(env, scope);
     ImmutableMap<PackageIdentifier, Package> packageMap = closureInfo.first;
     Set<Label> validTargets = closureInfo.second;
-    PackageProvider packageProvider = new PreloadedMapPackageProvider(packageMap, validTargets);
-    TargetPatternEvaluator evaluator = new SkyframeEnvTargetPatternEvaluator(env);
-    Predicate<Label> labelFilter = Predicates.in(validTargets);
+    packageProvider = new PreloadedMapPackageProvider(packageMap, validTargets);
+    evaluator = new SkyframeEnvTargetPatternEvaluator(env);
+    labelFilter = Predicates.in(validTargets);
 
     return doQuery(queryOptions, packageProvider, labelFilter, evaluator, query, ruleContext);
   }
 
-  private byte[] doQuery(QueryOptions queryOptions, PackageProvider packageProvider,
+  private byte[] doQuery(QueryOptions queryOptions, RecursivePackageProvider packageProvider,
                          Predicate<Label> labelFilter, TargetPatternEvaluator evaluator,
                          String query, RuleContext ruleContext)
       throws InterruptedException {
@@ -262,8 +267,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
               labelFilter,
               getEventHandler(ruleContext),
               settings,
-              ImmutableList.<QueryFunction>of(),
-              /*packagePath=*/null).evaluateQuery(query);
+              ImmutableList.<QueryFunction>of()).evaluateQuery(query);
     } catch (SkyframeRestartQueryException e) {
       // Do not emit errors for skyframe restarts. They make output of the ConfiguredTargetFunction
       // inconsistent from run to run, and make detecting legitimate errors more difficult.
@@ -370,7 +374,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
   /**
    * Provide packages and targets to the query operations using precomputed transitive closure.
    */
-  private static final class PreloadedMapPackageProvider implements PackageProvider {
+  private static final class PreloadedMapPackageProvider implements RecursivePackageProvider {
 
     private final ImmutableMap<PackageIdentifier, Package> pkgMap;
     private final Set<Label> targets;
@@ -397,7 +401,17 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     }
 
     @Override
-    public boolean isPackage(EventHandler eventHandler, String packageName) {
+    public boolean isPackage(String packageName) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void visitPackageNamesRecursively(EventHandler eventHandler,
+                                             PathFragment directory,
+                                             boolean useTopLevelExcludes,
+                                             ThreadPoolExecutor visitorPool,
+                                             PathPackageLocator.AcceptsPathFragment observer)
+        throws InterruptedException {
       throw new UnsupportedOperationException();
     }
   }
