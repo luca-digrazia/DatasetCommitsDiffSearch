@@ -26,8 +26,6 @@ import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
 import com.sun.tools.javac.tree.JCTree.JCVariableDecl;
 import com.sun.tools.javac.util.Context;
-import java.io.IOError;
-import java.io.IOException;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -55,8 +53,6 @@ public class TreePrunerTest {
           parserFactory.newParser(
               input, /*keepDocComments=*/ false, /*keepEndPos=*/ false, /*keepLineMap=*/ false);
       return parser.parseCompilationUnit();
-    } catch (IOException e) {
-      throw new IOError(e);
     }
   }
 
@@ -293,12 +289,18 @@ public class TreePrunerTest {
   @Test
   public void interfaceDeclaration() {
     String[] lines = {
-      "interface Intf {", "  int CONST = 42;", "  int NONCONST = new Integer(42);", "}",
+      "interface Intf {",
+      "  int CONST = 42;",
+      "  int NONCONST = new Integer(42);",
+      "}",
     };
     JCCompilationUnit tree = parseLines(lines);
     TreePruner.prune(context, tree);
     String[] expected = {
-      "interface Intf {", "    int CONST = 42;", "    int NONCONST;", "}",
+      "interface Intf {",
+      "    int CONST = 42;",
+      "    int NONCONST;",
+      "}",
     };
     assertThat(prettyPrint(tree)).isEqualTo(Joiner.on('\n').join(expected));
   }
@@ -321,15 +323,15 @@ public class TreePrunerTest {
     JCCompilationUnit tree = parseLines(lines);
     TreePruner.prune(context, tree);
     String[] expected = {
-      "class Test {",
-      "    ",
-      "    class Inner {",
-      "        ",
-      "        Inner(OuterInstance outer) {",
-      "            outer.super();",
-      "        }",
-      "    }",
-      "}",
+        "class Test {",
+        "    ",
+        "    class Inner {",
+        "        ",
+        "        Inner(OuterInstance outer) {",
+        "            outer.super();",
+        "        }",
+        "    }",
+        "}",
     };
     assertThat(prettyPrint(tree)).isEqualTo(Joiner.on('\n').join(expected));
   }

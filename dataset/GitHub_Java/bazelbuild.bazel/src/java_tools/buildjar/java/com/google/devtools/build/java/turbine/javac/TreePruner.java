@@ -19,7 +19,6 @@ import static com.google.common.base.MoreObjects.firstNonNull;
 import com.sun.source.tree.BinaryTree;
 import com.sun.source.tree.ConditionalExpressionTree;
 import com.sun.source.tree.IdentifierTree;
-import com.sun.source.tree.ImportTree;
 import com.sun.source.tree.LambdaExpressionTree.BodyKind;
 import com.sun.source.tree.LiteralTree;
 import com.sun.source.tree.MemberSelectTree;
@@ -28,18 +27,15 @@ import com.sun.source.tree.Tree.Kind;
 import com.sun.source.tree.TypeCastTree;
 import com.sun.source.tree.UnaryTree;
 import com.sun.source.util.SimpleTreeVisitor;
-import com.sun.source.util.TreePathScanner;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Symtab;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCBlock;
 import com.sun.tools.javac.tree.JCTree.JCClassDecl;
-import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
 import com.sun.tools.javac.tree.JCTree.JCExpression;
 import com.sun.tools.javac.tree.JCTree.JCExpressionStatement;
 import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
 import com.sun.tools.javac.tree.JCTree.JCIdent;
-import com.sun.tools.javac.tree.JCTree.JCImport;
 import com.sun.tools.javac.tree.JCTree.JCLambda;
 import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
 import com.sun.tools.javac.tree.JCTree.JCMethodInvocation;
@@ -51,8 +47,6 @@ import com.sun.tools.javac.tree.TreeScanner;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.List;
 import com.sun.tools.javac.util.Name;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * Prunes AST nodes that are not required for header compilation.
@@ -73,9 +67,8 @@ public class TreePruner {
    *   <li>initializers of definitely non-constant fields
    * </ul>
    */
-  static void prune(Context context, JCCompilationUnit unit) {
-    unit.accept(new PruningVisitor(context));
-    removeUnusedImports(unit);
+  static void prune(Context context, JCTree tree) {
+    tree.accept(new PruningVisitor(context));
   }
 
   /** A {@link TreeScanner} that deletes method bodies and blocks from the AST. */
@@ -324,58 +317,4 @@ public class TreePruner {
           return r;
         }
       };
-
-  private static void removeUnusedImports(JCCompilationUnit unit) {
-    Set<String> usedNames = new HashSet<>();
-    // TODO(cushon): consider folding this into PruningVisitor to avoid a second pass
-    new TreePathScanner<Void, Void>() {
-      @Override
-      public Void visitImport(ImportTree importTree, Void usedSymbols) {
-        return null;
-      }
-
-      @Override
-      public Void visitIdentifier(IdentifierTree tree, Void unused) {
-        if (tree == null) {
-          return null;
-        }
-        usedNames.add(tree.getName().toString());
-        return null;
-      }
-    }.scan(unit, null);
-    com.sun.tools.javac.util.List<JCTree> replacements = com.sun.tools.javac.util.List.nil();
-    for (JCTree def : unit.defs) {
-      if (!def.hasTag(JCTree.Tag.IMPORT) || !isUnused(unit, usedNames, (JCImport) def)) {
-        replacements = replacements.append(def);
-      }
-    }
-    unit.defs = replacements;
-  }
-
-  private static boolean isUnused(
-      JCCompilationUnit unit, Set<String> usedNames, JCImport importTree) {
-    String simpleName =
-        importTree.getQualifiedIdentifier() instanceof JCIdent
-            ? ((JCIdent) importTree.getQualifiedIdentifier()).getName().toString()
-            : ((JCFieldAccess) importTree.getQualifiedIdentifier()).getIdentifier().toString();
-    String qualifier =
-        ((JCFieldAccess) importTree.getQualifiedIdentifier()).getExpression().toString();
-    if (qualifier.equals("java.lang")) {
-      return true;
-    }
-    if (unit.getPackageName() != null && unit.getPackageName().toString().equals(qualifier)) {
-      // remove imports of classes from the current package
-      return true;
-    }
-    if (importTree.getQualifiedIdentifier() instanceof JCFieldAccess
-        && ((JCFieldAccess) importTree.getQualifiedIdentifier())
-            .getIdentifier()
-            .contentEquals("*")) {
-      return false;
-    }
-    if (usedNames.contains(simpleName)) {
-      return false;
-    }
-    return true;
-  }
 }
