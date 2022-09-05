@@ -163,7 +163,7 @@ public class IosTestRule implements RuleDefinition {
                         return ImmutableList.of(
                             configuration
                                 .getFragment(ObjcConfiguration.class)
-                                .getGcovLabel());
+                                .getExperimentalGcovLabel());
                       }
                     }))
         .build();
