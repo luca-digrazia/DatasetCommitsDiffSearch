@@ -626,8 +626,6 @@ public class BazelCppRuleClasses {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          .requiresConfigurationFragments(CppConfiguration.class)
-          .failIfMissingConfigurationFragment()
           /*<!-- #BLAZE_RULE(cc_binary).IMPLICIT_OUTPUTS -->
           <ul>
           <li><code><var>name</var>.stripped</code> (only built if explicitly requested): A stripped
@@ -772,8 +770,6 @@ public class BazelCppRuleClasses {
           // TODO: Google cc_library overrides documentation for:
           // deps, data, linkopts, defines, srcs; override here too?
 
-          .requiresConfigurationFragments(CppConfiguration.class)
-          .failIfMissingConfigurationFragment()
           /*<!-- #BLAZE_RULE(cc_library).ATTRIBUTE(alwayslink) -->
           If 1, any binary that depends (directly or indirectly) on this C++
           library will link in all the object files for the files listed in
@@ -785,6 +781,10 @@ public class BazelCppRuleClasses {
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("alwayslink", BOOLEAN).
               nonconfigurable("value is referenced in an ImplicitOutputsFunction"))
+          // TODO(bazel-team): Remove this attribute?
+          .add(attr("implements", LABEL_LIST)
+              .allowedFileTypes()
+              .allowedRuleClasses("cc_public_library$headers"))
           .override(attr("linkstatic", BOOLEAN).value(false)
               .nonconfigurable("value is referenced in an ImplicitOutputsFunction"))
           .build();
