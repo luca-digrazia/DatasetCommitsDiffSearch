@@ -12,13 +12,11 @@ import org.hsweb.web.core.message.FastJsonHttpMessageConverter;
 import org.hsweb.web.core.message.ResponseMessage;
 import org.hsweb.web.core.utils.WebUtil;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import org.hsweb.commons.StringUtils;
+import org.webbuilder.utils.common.StringUtils;
 
-import javax.annotation.PostConstruct;
 import java.util.List;
 
 /**
@@ -27,20 +25,13 @@ import java.util.List;
 @Aspect
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@ConditionalOnProperty(prefix = "logger.access", value = "on")
 public class AopAccessLoggerResolverConfiguration extends AopAccessLoggerResolver {
 
-    @Autowired(required = false)
+    @Autowired
     private FastJsonHttpMessageConverter fastJsonHttpMessageConverter;
 
     @Autowired(required = false)
     private List<AccessLoggerPersisting> accessLoggerPersisting;
-
-    @PostConstruct
-    private void init() {
-        if (fastJsonHttpMessageConverter == null)
-            fastJsonHttpMessageConverter = new FastJsonHttpMessageConverter();
-    }
 
     @Around(value = "execution(* org.hsweb.web..controller..*Controller..*(..))||@annotation(org.hsweb.web.core.logger.annotation.AccessLogger)")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
@@ -52,7 +43,7 @@ public class AopAccessLoggerResolverConfiguration extends AopAccessLoggerResolve
         } catch (Throwable e) {
             if (!(e instanceof BusinessException)) {
                 result = ResponseMessage.error(e.getMessage());
-                loggerInfo.setExceptionInfo(StringUtils.throwable2String(e));
+                loggerInfo.setException_info(StringUtils.throwable2String(e));
             } else {
                 result = ResponseMessage.error(e.getMessage(), ((BusinessException) e).getStatus());
             }
@@ -60,13 +51,13 @@ public class AopAccessLoggerResolverConfiguration extends AopAccessLoggerResolve
         } finally {
             long responseTime = System.currentTimeMillis();
             User user = WebUtil.getLoginUser();
-            loggerInfo.setRequestTime(requestTime);
-            loggerInfo.setResponseTime(responseTime);
-            loggerInfo.setResponseContent(fastJsonHttpMessageConverter.converter(result));
+            loggerInfo.setRequest_time(requestTime);
+            loggerInfo.setResponse_time(responseTime);
+            loggerInfo.setResponse_content(fastJsonHttpMessageConverter.converter(result));
             if (user != null)
-                loggerInfo.setUserId(user.getId());
+                loggerInfo.setUser_id(user.getU_id());
             if (result instanceof ResponseMessage)
-                loggerInfo.setResponseCode(String.valueOf(((ResponseMessage) result).getCode()));
+                loggerInfo.setResponse_code(String.valueOf(((ResponseMessage) result).getCode()));
             if (accessLoggerPersisting != null) {
                 accessLoggerPersisting.forEach(loggerPersisting -> loggerPersisting.save(loggerInfo));
             }
