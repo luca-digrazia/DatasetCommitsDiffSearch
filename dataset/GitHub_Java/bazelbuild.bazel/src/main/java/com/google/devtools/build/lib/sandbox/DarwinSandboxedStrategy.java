@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
-import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.fileset.FilesetActionContext;
@@ -76,9 +75,9 @@ public class DarwinSandboxedStrategy implements SpawnActionContext {
   private final ImmutableMap<String, String> clientEnv;
   private final BlazeDirectories blazeDirs;
   private final Path execRoot;
-  private final BuildRequest buildRequest;
   private final SandboxOptions sandboxOptions;
   private final boolean verboseFailures;
+  private final boolean unblockNetwork;
   private final String productName;
   private final ImmutableList<Path> confPaths;
 
@@ -86,30 +85,32 @@ public class DarwinSandboxedStrategy implements SpawnActionContext {
   private final AtomicInteger execCounter = new AtomicInteger();
 
   private DarwinSandboxedStrategy(
-      BuildRequest buildRequest,
+      SandboxOptions options,
       Map<String, String> clientEnv,
       BlazeDirectories blazeDirs,
       ExecutorService backgroundWorkers,
       boolean verboseFailures,
+      boolean unblockNetwork,
       String productName,
       ImmutableList<Path> confPaths) {
-    this.buildRequest = buildRequest;
-    this.sandboxOptions = buildRequest.getOptions(SandboxOptions.class);
+    this.sandboxOptions = options;
     this.clientEnv = ImmutableMap.copyOf(clientEnv);
     this.blazeDirs = blazeDirs;
     this.execRoot = blazeDirs.getExecRoot();
     this.backgroundWorkers = Preconditions.checkNotNull(backgroundWorkers);
     this.verboseFailures = verboseFailures;
+    this.unblockNetwork = unblockNetwork;
     this.productName = productName;
     this.confPaths = confPaths;
   }
 
   public static DarwinSandboxedStrategy create(
-      BuildRequest buildRequest,
+      SandboxOptions options,
       Map<String, String> clientEnv,
       BlazeDirectories blazeDirs,
       ExecutorService backgroundWorkers,
       boolean verboseFailures,
+      boolean unblockNetwork,
       String productName)
       throws IOException {
     // On OS X, in addition to what is specified in $TMPDIR, two other temporary directories may be
@@ -124,11 +125,12 @@ public class DarwinSandboxedStrategy implements SpawnActionContext {
     }
 
     return new DarwinSandboxedStrategy(
-        buildRequest,
+        options,
         clientEnv,
         blazeDirs,
         backgroundWorkers,
         verboseFailures,
+        unblockNetwork,
         productName,
         writablePaths.build());
   }
@@ -262,7 +264,9 @@ public class DarwinSandboxedStrategy implements SpawnActionContext {
     DarwinSandboxRunner runner;
     try {
       Path sandboxConfigPath =
-          generateScriptFile(sandboxPath, SandboxHelpers.shouldAllowNetwork(buildRequest, spawn));
+          generateScriptFile(
+              sandboxPath,
+              unblockNetwork || spawn.getExecutionInfo().containsKey("requires-network"));
       runner =
           new DarwinSandboxRunner(
               execRoot,
@@ -293,7 +297,7 @@ public class DarwinSandboxedStrategy implements SpawnActionContext {
     return dirs.build();
   }
 
-  private Path generateScriptFile(Path sandboxPath, boolean allowNetwork) throws IOException {
+  private Path generateScriptFile(Path sandboxPath, boolean network) throws IOException {
     FileSystemUtils.createDirectoryAndParents(sandboxPath);
     Path sandboxConfigPath =
         sandboxPath.getParentDirectory().getRelative(sandboxPath.getBaseName() + ".sb");
@@ -312,7 +316,7 @@ public class DarwinSandboxedStrategy implements SpawnActionContext {
       out.println("(allow network* (remote unix-socket (subpath \"/\")))");
       out.println("(allow network* (local unix-socket (subpath \"/\")))");
       // check network
-      if (allowNetwork) {
+      if (network) {
         out.println("(allow network*)");
       }
 

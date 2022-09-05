@@ -14,10 +14,11 @@
 package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableList.Builder;
 import com.google.devtools.build.lib.actions.ActionContextProvider;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.OS;
@@ -29,59 +30,52 @@ import java.util.concurrent.ExecutorService;
  */
 public class SandboxActionContextProvider extends ActionContextProvider {
 
-  public static final String SANDBOX_NOT_SUPPORTED_MESSAGE =
-      "Sandboxed execution is not supported on your system and thus hermeticity of actions cannot "
-          + "be guaranteed. See http://bazel.io/docs/bazel-user-manual.html#sandboxing for more "
-          + "information. You can turn off this warning via --ignore_unsupported_sandboxing";
-
   @SuppressWarnings("unchecked")
-  private final ImmutableList<ActionContext> contexts;
+  private final ImmutableList<ActionContext> strategies;
 
-  private SandboxActionContextProvider(ImmutableList<ActionContext> contexts) {
-    this.contexts = contexts;
+  private SandboxActionContextProvider(ImmutableList<ActionContext> strategies) {
+    this.strategies = strategies;
   }
 
   public static SandboxActionContextProvider create(
       CommandEnvironment env, BuildRequest buildRequest, ExecutorService backgroundWorkers)
       throws IOException {
     boolean verboseFailures = buildRequest.getOptions(ExecutionOptions.class).verboseFailures;
-    ImmutableList.Builder<ActionContext> contexts = ImmutableList.builder();
+    boolean unblockNetwork =
+        buildRequest
+            .getOptions(BuildConfiguration.Options.class)
+            .testArguments
+            .contains("--wrapper_script_flag=--debug");
+    Builder<ActionContext> strategies = ImmutableList.builder();
 
-    switch (OS.getCurrent()) {
-      case LINUX:
-        if (LinuxSandboxedStrategy.isSupported(env)) {
-          contexts.add(
-              new LinuxSandboxedStrategy(
-                  buildRequest,
-                  env.getDirectories(),
-                  backgroundWorkers,
-                  verboseFailures,
-                  env.getRuntime().getProductName()));
-        } else if (!buildRequest.getOptions(SandboxOptions.class).ignoreUnsupportedSandboxing) {
-          env.getReporter().handle(Event.warn(SANDBOX_NOT_SUPPORTED_MESSAGE));
-        }
-        break;
-      case DARWIN:
-        if (DarwinSandboxRunner.isSupported()) {
-          contexts.add(
-              DarwinSandboxedStrategy.create(
-                  buildRequest,
-                  env.getClientEnv(),
-                  env.getDirectories(),
-                  backgroundWorkers,
-                  verboseFailures,
-                  env.getRuntime().getProductName()));
-        }
-        break;
-      default:
-        // No sandboxing available.
+    if (OS.getCurrent() == OS.LINUX) {
+      strategies.add(
+          new LinuxSandboxedStrategy(
+              buildRequest.getOptions(SandboxOptions.class),
+              env.getClientEnv(),
+              env.getDirectories(),
+              backgroundWorkers,
+              verboseFailures,
+              unblockNetwork,
+              env.getRuntime().getProductName()));
+    } else if (OS.getCurrent() == OS.DARWIN) {
+      strategies.add(
+          DarwinSandboxedStrategy.create(
+              buildRequest.getOptions(SandboxOptions.class),
+              env.getClientEnv(),
+              env.getDirectories(),
+              backgroundWorkers,
+              verboseFailures,
+              unblockNetwork,
+              env.getRuntime().getProductName()));
     }
 
-    return new SandboxActionContextProvider(contexts.build());
+    return new SandboxActionContextProvider(strategies.build());
   }
 
   @Override
   public Iterable<ActionContext> getActionContexts() {
-    return contexts;
+    return strategies;
   }
+
 }
