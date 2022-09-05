@@ -54,8 +54,7 @@ public class PreciseAspectResolver implements AspectResolver {
   }
 
   @Override
-  public ImmutableMultimap<Attribute, Label> computeAspectDependencies(Target target,
-      DependencyFilter dependencyFilter)
+  public ImmutableMultimap<Attribute, Label> computeAspectDependencies(Target target)
       throws InterruptedException {
     Multimap<Attribute, Label> result = LinkedListMultimap.create();
     if (target instanceof Rule) {
@@ -65,12 +64,7 @@ public class PreciseAspectResolver implements AspectResolver {
         Target toTarget;
         try {
           toTarget = packageProvider.getTarget(eventHandler, entry.getValue());
-          result.putAll(
-              AspectDefinition.visitAspectsIfRequired(
-                  target,
-                  entry.getKey(),
-                  toTarget,
-                  dependencyFilter));
+          result.putAll(AspectDefinition.visitAspectsIfRequired(target, entry.getKey(), toTarget));
         } catch (NoSuchThingException e) {
           // Do nothing. One of target direct deps has an error. The dependency on the BUILD file
           // (or one of the files included in it) will be reported in the query result of :BUILD.
