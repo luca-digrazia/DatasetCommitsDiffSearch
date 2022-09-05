@@ -111,7 +111,6 @@ import com.google.devtools.build.lib.rules.java.JavaOptions;
 import com.google.devtools.build.lib.rules.java.JavaToolchainRule;
 import com.google.devtools.build.lib.rules.java.JvmConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.ProguardLibraryRule;
-import com.google.devtools.build.lib.rules.java.proto.JavaProtoSkylarkCommon;
 import com.google.devtools.build.lib.rules.objc.AppleBinaryRule;
 import com.google.devtools.build.lib.rules.objc.AppleDynamicLibraryRule;
 import com.google.devtools.build.lib.rules.objc.AppleSkylarkCommon;
@@ -235,21 +234,13 @@ public class BazelRuleClassProvider {
     private void validateDirectPrerequisiteForTestOnly(
         RuleContext.Builder context, ConfiguredTarget prerequisite) {
       Rule rule = context.getRule();
-
-      if (rule.getRuleClassObject().canHaveAnyProvider()) {
-        // testonly-ness will be checked directly between the depender and the target of the alias;
-        // getTarget() called by the depender will not return the alias rule, but its actual target
-        return;
-      }
-
       Target prerequisiteTarget = prerequisite.getTarget();
       Label prerequisiteLabel = prerequisiteTarget.getLabel();
       String thisPackage = rule.getLabel().getPackageName();
 
       if (isTestOnlyRule(prerequisiteTarget) && !isTestOnlyRule(rule)) {
         String message = "non-test target '" + rule.getLabel() + "' depends on testonly target '"
-            + prerequisiteLabel + "'" + AliasProvider.printVisibilityChain(prerequisite)
-            + " and doesn't have testonly attribute set";
+            + prerequisiteLabel + "' and doesn't have testonly attribute set";
         if (thisPackage.startsWith("experimental/")) {
           context.ruleWarning(message);
         } else {
@@ -516,7 +507,6 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new BazelAarImportRule());
 
           builder.addSkylarkAccessibleTopLevels("android_common", new AndroidSkylarkCommon());
-          builder.addSkylarkAccessibleTopLevels("java_proto_common", JavaProtoSkylarkCommon.class);
 
           try {
             builder.addWorkspaceFilePrefix(
