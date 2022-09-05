@@ -1,7 +1,6 @@
 package org.hswebframework.web.system.authorization.defaults.service;
 
 import org.apache.commons.codec.digest.DigestUtils;
-import org.apache.commons.collections4.CollectionUtils;
 import org.hswebframework.ezorm.core.param.QueryParam;
 import org.hswebframework.ezorm.rdb.mapping.ReactiveRepository;
 import org.hswebframework.web.api.crud.entity.TransactionManagers;
@@ -125,14 +124,12 @@ public class DefaultReactiveUserService extends GenericReactiveCrudService<UserE
     public Mono<Integer> changeState(Publisher<String> userId, byte state) {
         return Flux.from(userId)
                 .collectList()
-                .filter(CollectionUtils::isNotEmpty)
                 .flatMap(list -> repository
                         .createUpdate()
                         .set(UserEntity::getStatus, state)
                         .where()
                         .in(UserEntity::getId, list)
-                        .execute())
-                .defaultIfEmpty(0);
+                        .execute());
     }
 
     @Override
@@ -171,8 +168,8 @@ public class DefaultReactiveUserService extends GenericReactiveCrudService<UserE
     public Mono<Boolean> deleteUser(String userId) {
         return this.findById(userId)
                 .flatMap(user -> this
-                        .deleteById(Mono.just(userId))
-                        .doOnNext(i -> eventPublisher.publishEvent(new UserDeletedEvent(user)))
-                        .thenReturn(true));
+                .deleteById(Mono.just(userId))
+                .doOnNext(i -> eventPublisher.publishEvent(new UserDeletedEvent(user)))
+                .thenReturn(true));
     }
 }
