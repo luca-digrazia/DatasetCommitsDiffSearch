@@ -62,10 +62,6 @@ public abstract class AbstractJ2ObjcProtoAspect extends NativeAspectClass
       new Attribute("$protobuf_lib", Mode.TARGET),
       new Attribute("deps", Mode.TARGET));
 
-  /** Flags passed to J2ObjC proto compiler plugin. */
-  protected static final Iterable<String> J2OBJC_PLUGIN_PARAMS =
-      ImmutableList.of("file_dir_mapping", "generate_class_mappings");
-
   protected final String toolsRepository;
 
   public AbstractJ2ObjcProtoAspect(String toolsRepository) {
@@ -89,9 +85,6 @@ public abstract class AbstractJ2ObjcProtoAspect extends NativeAspectClass
         .add(attr("$xcrunwrapper", LABEL).cfg(HOST).exec()
             .value(Label.parseAbsoluteUnchecked(
                 toolsRepository + "//tools/objc:xcrunwrapper")))
-        .add(attr(ObjcRuleClasses.LIBTOOL_ATTRIBUTE, LABEL).cfg(HOST).exec()
-              .value(Label.parseAbsoluteUnchecked(
-                toolsRepository + "//tools/objc:libtool")))
         .add(attr(":xcode_config", LABEL)
             .allowedRuleClasses("xcode_config")
             .checkConstraints()

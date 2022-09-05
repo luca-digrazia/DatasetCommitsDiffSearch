@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.bazel.rules;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Functions;
-import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
@@ -24,7 +23,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.PrerequisiteValidator;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigRuleClasses;
@@ -71,7 +69,6 @@ import com.google.devtools.build.lib.bazel.rules.workspace.NewGitRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.ideinfo.AndroidStudioInfoAspect;
-import com.google.devtools.build.lib.ideinfo.BazelAndroidStudioInfoSemantics;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
@@ -131,7 +128,6 @@ import com.google.devtools.build.lib.rules.objc.ObjcFrameworkRule;
 import com.google.devtools.build.lib.rules.objc.ObjcImportRule;
 import com.google.devtools.build.lib.rules.objc.ObjcLibraryRule;
 import com.google.devtools.build.lib.rules.objc.ObjcProtoLibraryRule;
-import com.google.devtools.build.lib.rules.objc.ObjcProvider;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses;
 import com.google.devtools.build.lib.rules.objc.ObjcXcodeprojRule;
 import com.google.devtools.build.lib.rules.proto.BazelProtoLibraryRule;
@@ -244,19 +240,10 @@ public class BazelRuleClassProvider {
   /**
    * Java objects accessible from Skylark rule implementations using this module.
    */
-  public static final ImmutableMap<String, Object> SKYLARK_BUILT_IN_JAVA_OBJECTS =
+  public static final ImmutableMap<String, Object> skylarkBuiltinJavaObects =
       ImmutableMap.of(
           "android_common", new AndroidSkylarkCommon(),
           "apple_common", new AppleSkylarkCommon());
-  /**
-   * Native provider types registered for use in skylark.  If these provider types are exported
-   * by native rules, they will be made accessible to dependent skylark rules. They also can
-   * be exported by skylark rules under the name (map key).
-   */
-  private static final ImmutableBiMap<String, Class<? extends TransitiveInfoProvider>>
-      SKYLARK_PROVIDERS_TO_REGISTER =
-          ImmutableBiMap.<String, Class<? extends TransitiveInfoProvider>>of(
-              ObjcProvider.OBJC_SKYLARK_PROVIDER_NAME, ObjcProvider.class);
 
   public static void setup(ConfiguredRuleClassProvider.Builder builder) {
     builder
@@ -265,11 +252,10 @@ public class BazelRuleClassProvider {
         .addBuildInfoFactory(new ObjcBuildInfoFactory())
         .setConfigurationCollectionFactory(new BazelConfigurationCollection())
         .setPrelude("//tools/build_rules:prelude_bazel")
-        .setRunfilesPrefix("__main__")
+        .setRunfilesPrefix("")
         .setToolsRepository(TOOLS_REPOSITORY)
         .setPrerequisiteValidator(new BazelPrerequisiteValidator())
-        .setSkylarkAccessibleTopLevels(SKYLARK_BUILT_IN_JAVA_OBJECTS)
-        .setSkylarkProviderRegistry(SKYLARK_PROVIDERS_TO_REGISTER);
+        .setSkylarkAccessibleTopLevels(skylarkBuiltinJavaObects);
 
     builder.addBuildOptions(BUILD_OPTIONS);
 
@@ -282,8 +268,7 @@ public class BazelRuleClassProvider {
     JackAspect jackAspect = new JackAspect(TOOLS_REPOSITORY);
     BazelJ2ObjcProtoAspect bazelJ2ObjcProtoAspect = new BazelJ2ObjcProtoAspect(TOOLS_REPOSITORY);
     J2ObjcAspect j2ObjcAspect = new J2ObjcAspect(TOOLS_REPOSITORY, bazelJ2ObjcProtoAspect);
-    AndroidStudioInfoAspect androidStudioInfoAspect =
-        new AndroidStudioInfoAspect(TOOLS_REPOSITORY, new BazelAndroidStudioInfoSemantics());
+    AndroidStudioInfoAspect androidStudioInfoAspect = new AndroidStudioInfoAspect(TOOLS_REPOSITORY);
 
     builder.addNativeAspectClass(androidNeverlinkAspect);
     builder.addNativeAspectClass(dexArchiveAspect);
