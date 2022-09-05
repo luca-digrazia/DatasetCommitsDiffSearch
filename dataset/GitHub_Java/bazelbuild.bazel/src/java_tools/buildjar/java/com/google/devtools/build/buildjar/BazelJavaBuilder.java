@@ -1,4 +1,4 @@
-// Copyright 2016 The Bazel Authors. All rights reserved.
+// Copyright 2007 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ package com.google.devtools.build.buildjar;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.buildjar.instrumentation.JacocoInstrumentationProcessor;
 import com.google.devtools.build.buildjar.javac.JavacOptions;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
 import com.google.devtools.build.buildjar.javac.plugins.classloader.ClassLoaderMaskingPlugin;
@@ -24,6 +23,7 @@ import com.google.devtools.build.buildjar.javac.plugins.dependency.DependencyMod
 import com.google.devtools.build.buildjar.javac.plugins.errorprone.ErrorPronePlugin;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
+
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -31,16 +31,18 @@ import java.io.StringWriter;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.List;
-import java.util.ListIterator;
 
-/** The JavaBuilder main called by bazel. */
+/**
+ * The JavaBuilder main called by bazel.
+ */
 public abstract class BazelJavaBuilder {
 
   private static final String CMDNAME = "BazelJavaBuilder";
 
-  /** The main method of the BazelJavaBuilder. */
+  /**
+   * The main method of the BazelJavaBuilder.
+   */
   public static void main(String[] args) {
-    AbstractPostProcessor.addPostProcessor("jacoco", new JacocoInstrumentationProcessor());
     if (args.length == 1 && args[0].equals("--persistent_worker")) {
       System.exit(runPersistentWorker());
     } else {
@@ -84,10 +86,9 @@ public abstract class BazelJavaBuilder {
   public static int processRequest(List<String> args, PrintWriter err) {
     try {
       JavaLibraryBuildRequest build = parse(args);
-      AbstractJavaBuilder builder =
-          build.getDependencyModule().reduceClasspath()
-              ? new ReducedClasspathJavaLibraryBuilder()
-              : new SimpleJavaLibraryBuilder();
+      AbstractJavaBuilder builder = build.getDependencyModule().reduceClasspath()
+          ? new ReducedClasspathJavaLibraryBuilder()
+          : new SimpleJavaLibraryBuilder();
       return builder.run(build, err).exitCode;
     } catch (InvalidCommandLineException e) {
       System.err.println(CMDNAME + " threw exception: " + e.getMessage());
@@ -98,53 +99,23 @@ public abstract class BazelJavaBuilder {
     }
   }
 
-  private static boolean processAndRemoveExtraChecksOptions(List<String> args) {
-    // error-prone is enabled by default for Bazel.
-    boolean errorProneEnabled = true;
-
-    ListIterator<String> arg = args.listIterator();
-    while (arg.hasNext()) {
-      switch (arg.next()) {
-        case "-extra_checks":
-        case "-extra_checks:on":
-          errorProneEnabled = true;
-          arg.remove();
-          break;
-        case "-extra_checks:off":
-          errorProneEnabled = false;
-          arg.remove();
-          break;
-      }
-    }
-
-    return errorProneEnabled;
-  }
-
   /**
-   * Parses the list of arguments into a {@link JavaLibraryBuildRequest}. The returned {@link
-   * JavaLibraryBuildRequest} object can be then used to configure the compilation itself.
+   * Parses the list of arguments into a {@link JavaLibraryBuildRequest}. The returned
+   * {@link JavaLibraryBuildRequest} object can be then used to configure the compilation itself.
    *
    * @throws IOException if the argument list contains a file (with the @ prefix) and reading that
-   *     file failed
+   *         file failed
    * @throws InvalidCommandLineException on any command line error
    */
   @VisibleForTesting
-  public static JavaLibraryBuildRequest parse(List<String> args)
-      throws IOException, InvalidCommandLineException {
-    OptionsParser optionsParser = new OptionsParser(args);
-    ImmutableList.Builder<BlazeJavaCompilerPlugin> plugins = ImmutableList.builder();
-    plugins.add(new ClassLoaderMaskingPlugin());
-
-    // Support for -extra_checks:off was removed from ErrorPronePlugin, but Bazel still needs it,
-    // so we'll emulate support for this here by handling the flag ourselves and not loading the
-    // plug-in when it is specified.
-    boolean errorProneEnabled = processAndRemoveExtraChecksOptions(optionsParser.getJavacOpts());
-    if (errorProneEnabled) {
-      plugins.add(new ErrorPronePlugin());
-    }
-
+  public static JavaLibraryBuildRequest parse(List<String> args) throws IOException,
+      InvalidCommandLineException {
+    ImmutableList<BlazeJavaCompilerPlugin> plugins =
+        ImmutableList.<BlazeJavaCompilerPlugin>of(
+            new ClassLoaderMaskingPlugin(),
+            new ErrorPronePlugin());
     JavaLibraryBuildRequest build =
-        new JavaLibraryBuildRequest(optionsParser, plugins.build(), new DependencyModule.Builder());
+        new JavaLibraryBuildRequest(args, plugins, new DependencyModule.Builder());
     build.setJavacOpts(JavacOptions.normalizeOptions(build.getJavacOpts()));
     return build;
   }
