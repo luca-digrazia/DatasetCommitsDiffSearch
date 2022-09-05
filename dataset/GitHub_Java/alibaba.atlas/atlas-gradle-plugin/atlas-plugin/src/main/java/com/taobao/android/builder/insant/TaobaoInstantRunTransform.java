@@ -26,7 +26,6 @@ import com.google.common.collect.Sets;
 import com.google.common.io.Files;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.extension.PatchConfig;
-import com.taobao.android.builder.insant.incremental.TBIncrementalVisitor;
 import org.gradle.api.logging.Logging;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
@@ -431,15 +430,13 @@ public class TaobaoInstantRunTransform extends Transform {
     protected Void transformToClasses3Format(File inputDir, File inputFile, File outputDir)
             throws IOException {
         File outputFile =
-                TBIncrementalVisitor.instrumentClass(
+                IncrementalVisitor.instrumentClass(
                         targetPlatformApi.getFeatureLevel(),
                         inputDir,
                         inputFile,
                         outputDir,
                         IncrementalChangeVisitor.VISITOR_BUILDER,
-                        LOGGER,
-                        null,
-                        false);
+                        LOGGER);
 
         // if the visitor returned null, that means the class cannot be hot swapped or more likely
         // that it was disabled for InstantRun, we don't add it to our collection of generated
@@ -469,17 +466,13 @@ public class TaobaoInstantRunTransform extends Transform {
         if (inputFile.getPath().endsWith(SdkConstants.DOT_CLASS)) {
             String path = FileUtils.relativePath(inputFile, inputDir);
             try {
-                File file = TBIncrementalVisitor.instrumentClass(
+                File file = IncrementalVisitor.instrumentClass(
                         targetPlatformApi.getFeatureLevel(),
                         inputDir,
                         inputFile,
                         outputDir,
                         IncrementalSupportVisitor.VISITOR_BUILDER,
-                        LOGGER,
-                        errorType -> {
-                            errors.add(errorType.name()+":"+path);
-                        },
-                        true);
+                        LOGGER);
                 if (file.length() == inputFile.length()){
                     errors.add("NO INJECT:"+path);
                 }
