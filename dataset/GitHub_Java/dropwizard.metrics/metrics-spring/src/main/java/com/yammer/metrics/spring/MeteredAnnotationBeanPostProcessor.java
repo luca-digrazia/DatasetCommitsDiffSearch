@@ -4,17 +4,17 @@ import org.aopalliance.intercept.MethodInterceptor;
 import org.springframework.aop.Pointcut;
 import org.springframework.aop.support.annotation.AnnotationMatchingPointcut;
 
-import com.yammer.metrics.annotation.ExceptionMetered;
+import com.yammer.metrics.annotation.Metered;
 import com.yammer.metrics.core.MetricsRegistry;
 
-public class ExceptionMeteredAnnotationBeanPostProcessor extends AbstractProxyingBeanPostProcessor {
+public class MeteredAnnotationBeanPostProcessor extends AbstractProxyingBeanPostProcessor {
 
-	private static final long serialVersionUID = -1967025297766933304L;
+	private static final long serialVersionUID = 3513098435344496676L;
 
-	private final Pointcut pointcut = new AnnotationMatchingPointcut(null, ExceptionMetered.class);
+	private final Pointcut pointcut = new AnnotationMatchingPointcut(null, Metered.class);
 	private final MetricsRegistry metrics;
 
-	public ExceptionMeteredAnnotationBeanPostProcessor(MetricsRegistry metrics) {
+	public MeteredAnnotationBeanPostProcessor(final MetricsRegistry metrics) {
 		this.metrics = metrics;
 	}
 
@@ -25,7 +25,7 @@ public class ExceptionMeteredAnnotationBeanPostProcessor extends AbstractProxyin
 
 	@Override
 	public MethodInterceptor getMethodInterceptor(Class<?> targetClass) {
-		return new ExceptionMeteredMethodInterceptor(metrics, targetClass);
+		return new MeteredMethodInterceptor(metrics, targetClass);
 	}
 
 }
