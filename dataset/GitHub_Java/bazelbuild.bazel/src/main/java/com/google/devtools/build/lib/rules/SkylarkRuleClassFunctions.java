@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules;
 
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.DATA;
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
+import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.NONE;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
@@ -85,8 +86,8 @@ import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkCallbackFunction;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkModuleNameResolver;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.syntax.Type;
@@ -94,6 +95,7 @@ import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -225,8 +227,7 @@ public class SkylarkRuleClassFunctions {
             doc = "Whether this rule is a test rule. "
             + "If True, the rule must end with <code>_test</code> (otherwise it must not), "
             + "and there must be an action that generates <code>ctx.outputs.executable</code>."),
-        @Param(name = "attrs", type = SkylarkDict.class, noneable = true, defaultValue = "None",
-            doc =
+        @Param(name = "attrs", type = Map.class, noneable = true, defaultValue = "None", doc =
             "dictionary to declare all the attributes of the rule. It maps from an attribute name "
             + "to an attribute object (see <a href=\"attr.html\">attr</a> module). "
             + "Attributes starting with <code>_</code> are private, and can be used to add "
@@ -235,7 +236,7 @@ public class SkylarkRuleClassFunctions {
             + "<code>deprecation</code>, <code>tags</code>, <code>testonly</code>, and "
             + "<code>features</code> are implicitly added and might be overriden."),
             // TODO(bazel-team): need to give the types of these builtin attributes
-        @Param(name = "outputs", type = SkylarkDict.class, callbackEnabled = true, noneable = true,
+        @Param(name = "outputs", type = Map.class, callbackEnabled = true, noneable = true,
             defaultValue = "None", doc = "outputs of this rule. "
             + "It is a dictionary mapping from string to a template name. "
             + "For example: <code>{\"ext\": \"%{name}.ext\"}</code>. <br>"
@@ -307,14 +308,31 @@ public class SkylarkRuleClassFunctions {
         builder.setOutputToGenfiles();
       }
 
-      builder.requiresConfigurationFragmentsBySkylarkModuleName(
-          fragments.getContents(String.class, "fragments"));
-      builder.requiresHostConfigurationFragmentsBySkylarkModuleName(
-          hostFragments.getContents(String.class, "host_fragments"));
+      registerRequiredFragments(fragments, hostFragments, builder);
       builder.setConfiguredTargetFunction(implementation);
       builder.setRuleDefinitionEnvironment(funcallEnv);
       return new RuleFunction(builder, type, attributes, ast.getLocation());
     }
+
+      private void registerRequiredFragments(
+          SkylarkList fragments, SkylarkList hostFragments, RuleClass.Builder builder)
+          throws EvalException {
+        Map<ConfigurationTransition, ImmutableSet<String>> map = new HashMap<>();
+        addFragmentsToMap(map, fragments, NONE); // NONE represents target configuration
+        addFragmentsToMap(map, hostFragments, HOST);
+
+        builder.requiresConfigurationFragments(new SkylarkModuleNameResolver(), map);
+      }
+
+      private void addFragmentsToMap(
+          Map<ConfigurationTransition, ImmutableSet<String>> map,
+          SkylarkList fragments,
+          ConfigurationTransition config)
+          throws EvalException {
+        if (!fragments.isEmpty()) {
+          map.put(config, ImmutableSet.copyOf(fragments.getContents(String.class, "fragments")));
+        }
+      }
     };
 
   protected static ImmutableList<Pair<String, Descriptor>> attrObjectToAttributesList(
@@ -364,7 +382,7 @@ public class SkylarkRuleClassFunctions {
         doc = "List of attribute names.  The aspect propagates along dependencies specified by "
         + " attributes of a target with this name"
       ),
-      @Param(name = "attrs", type = SkylarkDict.class, noneable = true, defaultValue = "None",
+      @Param(name = "attrs", type = Map.class, noneable = true, defaultValue = "None",
         doc = "dictionary to declare all the attributes of the aspect.  "
         + "It maps from an attribute name to an attribute object "
         + "(see <a href=\"attr.html\">attr</a> module). "
@@ -372,24 +390,6 @@ public class SkylarkRuleClassFunctions {
         + "All aspect attributes must be private, so their names must start with <code>_</code>. "
         + "All aspect attributes must be have default values, and be of type "
         + "<code>label</code> or <code>label_list</code>"
-      ),
-      @Param(
-        name = "fragments",
-        type = SkylarkList.class,
-        generic1 = String.class,
-        defaultValue = "[]",
-        doc =
-            "List of names of configuration fragments that the aspect requires "
-                + "in target configuration."
-      ),
-      @Param(
-        name = "host_fragments",
-        type = SkylarkList.class,
-        generic1 = String.class,
-        defaultValue = "[]",
-        doc =
-            "List of names of configuration fragments that the aspect requires "
-                + "in host configuration."
       )
     },
     useEnvironment = true,
@@ -401,8 +401,6 @@ public class SkylarkRuleClassFunctions {
             BaseFunction implementation,
             SkylarkList attributeAspects,
             Object attrs,
-            SkylarkList fragments,
-            SkylarkList hostFragments,
             FuncallExpression ast,
             Environment funcallEnv)
             throws EvalException {
@@ -432,13 +430,7 @@ public class SkylarkRuleClassFunctions {
             }
           }
 
-          return new SkylarkAspect(
-              implementation,
-              attrAspects.build(),
-              attributes,
-              ImmutableSet.copyOf(fragments.getContents(String.class, "fragments")),
-              ImmutableSet.copyOf(hostFragments.getContents(String.class, "host_fragments")),
-              funcallEnv);
+          return new SkylarkAspect(implementation, attrAspects.build(), attributes, funcallEnv);
         }
       };
 
@@ -704,8 +696,6 @@ public class SkylarkRuleClassFunctions {
     private final BaseFunction implementation;
     private final ImmutableList<String> attributeAspects;
     private final ImmutableList<Pair<String, Descriptor>> attributes;
-    private final ImmutableSet<String> fragments;
-    private final ImmutableSet<String> hostFragments;
     private final Environment funcallEnv;
     private Exported exported;
 
@@ -713,14 +703,10 @@ public class SkylarkRuleClassFunctions {
         BaseFunction implementation,
         ImmutableList<String> attributeAspects,
         ImmutableList<Pair<String, Descriptor>> attributes,
-        ImmutableSet<String> fragments,
-        ImmutableSet<String> hostFragments,
         Environment funcallEnv) {
       this.implementation = implementation;
       this.attributeAspects = attributeAspects;
       this.attributes = attributes;
-      this.fragments = fragments;
-      this.hostFragments = hostFragments;
       this.funcallEnv = funcallEnv;
     }
 
@@ -738,20 +724,6 @@ public class SkylarkRuleClassFunctions {
 
     public ImmutableList<Pair<String, Descriptor>> getAttributes() {
       return attributes;
-    }
-
-    /**
-     * Gets the set of configuration fragment names needed in the target configuration.
-     */
-    public ImmutableSet<String> getFragments() {
-      return fragments;
-    }
-
-    /**
-     * Gets the set of configuration fragment names needed in the host configuration.
-     */
-    public ImmutableSet<String> getHostFragments() {
-      return hostFragments;
     }
 
     @Override
@@ -831,9 +803,6 @@ public class SkylarkRuleClassFunctions {
       for (Pair<String, Descriptor> attribute : attributes) {
         builder.add(attribute.second.getAttributeBuilder().build(attribute.first));
       }
-      builder.requiresConfigurationFragmentsBySkylarkModuleName(skylarkAspect.getFragments());
-      builder.requiresHostConfigurationFragmentsBySkylarkModuleName(
-          skylarkAspect.getHostFragments());
       this.aspectDefinition = builder.build();
     }
 
@@ -842,12 +811,10 @@ public class SkylarkRuleClassFunctions {
       return aspectDefinition;
     }
 
-    @Override
     public Label getExtensionLabel() {
       return extensionLabel;
     }
 
-    @Override
     public String getExportedName() {
       return exportedName;
     }

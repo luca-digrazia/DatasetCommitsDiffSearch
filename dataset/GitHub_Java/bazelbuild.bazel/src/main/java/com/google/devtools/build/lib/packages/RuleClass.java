@@ -30,9 +30,9 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
@@ -40,6 +40,7 @@ import com.google.devtools.build.lib.packages.RuleFactory.AttributeValuesMap;
 import com.google.devtools.build.lib.syntax.Argument;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
+import com.google.devtools.build.lib.syntax.FragmentClassNameResolver;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.GlobList;
 import com.google.devtools.build.lib.syntax.Runtime;
@@ -104,9 +105,6 @@ import javax.annotation.concurrent.Immutable;
 public final class RuleClass {
   public static final Function<? super Rule, Map<String, Label>> NO_EXTERNAL_BINDINGS =
         Functions.<Map<String, Label>>constant(ImmutableMap.<String, Label>of());
-
-  private static final PathFragment THIRD_PARTY_PREFIX = new PathFragment("third_party");
-
   /**
    * A constraint for the package name of the Rule instances.
    */
@@ -510,8 +508,8 @@ public final class RuleClass {
         if (parent.preferredDependencyPredicate != Predicates.<String>alwaysFalse()) {
           setPreferredDependencyPredicate(parent.preferredDependencyPredicate);
         }
-        configurationFragmentPolicy
-            .includeConfigurationFragmentsFrom(parent.getConfigurationFragmentPolicy());
+        configurationFragmentPolicy.requiresConfigurationFragments(
+            parent.getConfigurationFragmentPolicy().getRequiredConfigurationFragments());
         configurationFragmentPolicy.setMissingFragmentPolicy(
             parent.getConfigurationFragmentPolicy().getMissingFragmentPolicy());
         supportsConstraintChecking = parent.supportsConstraintChecking;
@@ -563,11 +561,10 @@ public final class RuleClass {
       Preconditions.checkState(
           (type == RuleClassType.ABSTRACT)
           == (configuredTargetFactory == null && configuredTargetFunction == null));
-      if (!workspaceOnly) {
-        Preconditions.checkState(skylarkExecutable == (configuredTargetFunction != null));
-        Preconditions.checkState(skylarkExecutable == (ruleDefinitionEnvironment != null));
-        Preconditions.checkState(externalBindingsFunction == NO_EXTERNAL_BINDINGS);
-      }
+      Preconditions.checkState(skylarkExecutable == (configuredTargetFunction != null));
+      Preconditions.checkState(skylarkExecutable == (ruleDefinitionEnvironment != null));
+      Preconditions.checkState(workspaceOnly || externalBindingsFunction == NO_EXTERNAL_BINDINGS);
+
       return new RuleClass(name, skylark, skylarkExecutable, documented, publicByDefault,
           binaryOutput, workspaceOnly, outputsDefaultExecutable, implicitOutputsFunction,
           configurator, configuredTargetFactory, validityPredicate, preferredDependencyPredicate,
@@ -583,8 +580,7 @@ public final class RuleClass {
      * <p>The value is inherited by subclasses.
      */
     public Builder requiresConfigurationFragments(Class<?>... configurationFragments) {
-      configurationFragmentPolicy.requiresConfigurationFragments(
-          ImmutableSet.<Class<?>>copyOf(configurationFragments));
+      configurationFragmentPolicy.requiresConfigurationFragments(configurationFragments);
       return this;
     }
 
@@ -595,36 +591,24 @@ public final class RuleClass {
      * <p>The value is inherited by subclasses.
      */
     public Builder requiresHostConfigurationFragments(Class<?>... configurationFragments) {
-      configurationFragmentPolicy.requiresHostConfigurationFragments(
-          ImmutableSet.<Class<?>>copyOf(configurationFragments));
+      configurationFragmentPolicy
+          .requiresConfigurationFragments(ConfigurationTransition.HOST, configurationFragments);
       return this;
     }
 
     /**
-     * Declares the configuration fragments that are required by this rule for the target
-     * configuration.
+     * Declares the configuration fragments that are required by this rule for the specified
+     * configuration. Valid transition values are HOST for the host configuration and NONE for
+     * the target configuration.
      *
      * <p>In contrast to {@link #requiresConfigurationFragments(Class...)}, this method takes the
-     * Skylark module names of fragments instead of their classes.
+     * names of fragments instead of their classes.
      */
-    public Builder requiresConfigurationFragmentsBySkylarkModuleName(
-        Collection<String> configurationFragmentNames) {
-      configurationFragmentPolicy
-          .requiresConfigurationFragmentsBySkylarkModuleName(configurationFragmentNames);
-      return this;
-    }
-
-    /**
-     * Declares the configuration fragments that are required by this rule for the host
-     * configuration.
-     *
-     * <p>In contrast to {@link #requiresHostConfigurationFragments(Class...)}, this method takes
-     * Skylark module names of fragments instead of their classes.
-     */
-    public Builder requiresHostConfigurationFragmentsBySkylarkModuleName(
-        Collection<String> configurationFragmentNames) {
-      configurationFragmentPolicy
-          .requiresHostConfigurationFragmentsBySkylarkModuleName(configurationFragmentNames);
+    public Builder requiresConfigurationFragments(
+        FragmentClassNameResolver fragmentNameResolver,
+        Map<ConfigurationTransition, ImmutableSet<String>> configurationFragmentNames) {
+      configurationFragmentPolicy.requiresConfigurationFragments(
+          fragmentNameResolver, configurationFragmentNames);
       return this;
     }
 
@@ -1401,6 +1385,7 @@ public final class RuleClass {
       boolean explicit = attributeValues.isAttributeExplicitlySpecified(attributeName);
       setRuleAttributeValue(rule, eventHandler, attr, nativeAttributeValue, explicit);
       definedAttrIndices.set(attrIndex);
+      checkAttrValNonEmpty(rule, eventHandler, attributeValue, attr);
     }
     return definedAttrIndices;
   }
@@ -1456,6 +1441,7 @@ public final class RuleClass {
         attrsWithComputedDefaults.add(attr);
       } else {
         Object defaultValue = getAttributeNoncomputedDefaultValue(attr, pkgBuilder);
+        checkAttrValNonEmpty(rule, eventHandler, defaultValue, attr);
         rule.setAttributeValue(attr, defaultValue, /*explicit=*/ false);
         checkAllowedValues(rule, attr, eventHandler);
       }
@@ -1498,27 +1484,26 @@ public final class RuleClass {
         /*explicit=*/false);
   }
 
-  public void checkAttributesNonEmpty(
-      Rule rule, RuleErrorConsumer ruleErrorConsumer, AttributeMap attributes) {
-    for (String attributeName : attributes.getAttributeNames()) {
-      Attribute attr = attributes.getAttributeDefinition(attributeName);
-      if (!attr.isNonEmpty()) {
-        continue;
-      }
-      Object attributeValue = attributes.get(attributeName, attr.getType());
+  private void checkAttrValNonEmpty(
+      Rule rule, EventHandler eventHandler, Object attributeValue, Attribute attr) {
+    if (!attr.isNonEmpty()) {
+      return;
+    }
 
-      boolean isEmpty = false;
-      if (attributeValue instanceof SkylarkList) {
-        isEmpty = ((SkylarkList) attributeValue).isEmpty();
-      } else if (attributeValue instanceof List<?>) {
-        isEmpty = ((List<?>) attributeValue).isEmpty();
-      } else if (attributeValue instanceof Map<?, ?>) {
-        isEmpty = ((Map<?, ?>) attributeValue).isEmpty();
-      }
+    boolean isEmpty = false;
 
-      if (isEmpty) {
-        ruleErrorConsumer.attributeError(attr.getName(), "attribute must be non empty");
-      }
+    if (attributeValue instanceof SkylarkList) {
+      isEmpty = ((SkylarkList) attributeValue).isEmpty();
+    } else if (attributeValue instanceof List<?>) {
+      isEmpty = ((List<?>) attributeValue).isEmpty();
+    } else if (attributeValue instanceof Map<?, ?>) {
+      isEmpty = ((Map<?, ?>) attributeValue).isEmpty();
+    }
+
+    if (isEmpty) {
+      rule.reportError(rule.getLabel() + ": non empty attribute '" + attr.getName()
+          + "' in '" + name + "' rule '" + rule.getLabel() + "' has to have at least one value",
+          eventHandler);
     }
   }
 
@@ -1543,7 +1528,7 @@ public final class RuleClass {
    */
   private static void checkThirdPartyRuleHasLicense(Rule rule,
       Package.Builder pkgBuilder, EventHandler eventHandler) {
-    if (isThirdPartyPackage(rule.getLabel().getPackageIdentifier())) {
+    if (rule.getLabel().getPackageName().startsWith("third_party/")) {
       License license = rule.getLicense();
       if (license == null) {
         license = pkgBuilder.getDefaultLicense();
@@ -1780,21 +1765,5 @@ public final class RuleClass {
    */
   public boolean outputsDefaultExecutable() {
     return outputsDefaultExecutable;
-  }
-
-  public static boolean isThirdPartyPackage(PackageIdentifier packageIdentifier) {
-    if (!packageIdentifier.getRepository().isMain()) {
-      return false;
-    }
-
-    if (!packageIdentifier.getPackageFragment().startsWith(THIRD_PARTY_PREFIX)) {
-      return false;
-    }
-
-    if (packageIdentifier.getPackageFragment().segmentCount() <= 1) {
-      return false;
-    }
-
-    return true;
   }
 }
