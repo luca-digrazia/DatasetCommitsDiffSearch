@@ -339,7 +339,7 @@ public class BazelJavaRuleClasses {
                 @Override
                 public Object getDefault(AttributeMap rule) {
                   return rule.get("use_testrunner", Type.BOOLEAN)
-                    ? env.getToolsLabel(JUNIT_TESTRUNNER)
+                    ? env.getLabel(env.getToolsRepository() + JUNIT_TESTRUNNER)
                     : null;
                 }
               }))

@@ -571,9 +571,7 @@ public class JavaCommon {
     addInstrumentationFilesProvider(builder, filesToBuild, instrumentationSpec);
     builder
         .add(JavaExportsProvider.class, new JavaExportsProvider(collectTransitiveExports()))
-        .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, new JavaSkylarkApiProvider())
-        .addOutputGroup(OutputGroupProvider.FILES_TO_COMPILE, getFilesToCompile(classJar))
-        .add(JavaCompilationInfoProvider.class, createCompilationInfoProvider());
+        .addOutputGroup(OutputGroupProvider.FILES_TO_COMPILE, getFilesToCompile(classJar));
   }
 
   private void addInstrumentationFilesProvider(RuleConfiguredTargetBuilder builder,
@@ -755,14 +753,5 @@ public class JavaCommon {
   
   public RuleContext getRuleContext() {
     return ruleContext;
-  }
-
-  private JavaCompilationInfoProvider createCompilationInfoProvider() {
-    return new JavaCompilationInfoProvider.Builder()
-        .setJavacOpts(javacOpts)
-        .setBootClasspath(getBootClasspath())
-        .setCompilationClasspath(getCompileTimeClasspath())
-        .setRuntimeClasspath(getRuntimeClasspath())
-        .build();
   }
 }
