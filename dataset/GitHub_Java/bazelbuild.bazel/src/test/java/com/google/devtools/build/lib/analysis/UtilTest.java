@@ -1,4 +1,4 @@
-// Copyright 2006 The Bazel Authors. All rights reserved.
+// Copyright 2006-2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ public class UtilTest {
 
   @Test
   public void testContainsHyphen() throws Exception {
-    assertTrue(Util.containsHyphen(PathFragment.create("foo/bar/with-hyphen")));
-    assertFalse(Util.containsHyphen(PathFragment.create("foo/bar/no/hyphen")));
+    assertTrue(Util.containsHyphen(new PathFragment("foo/bar/with-hyphen")));
+    assertFalse(Util.containsHyphen(new PathFragment("foo/bar/no/hyphen")));
   }
 }

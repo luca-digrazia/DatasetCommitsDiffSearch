@@ -87,7 +87,7 @@ public class DependencyResolverTest extends AnalysisTestCase {
   }
 
   private void pkg(String name, String... contents) throws Exception {
-    scratch.file("" + name + "/BUILD", contents);
+    scratchFile("" + name + "/BUILD", contents);
   }
 
   @SafeVarargs
