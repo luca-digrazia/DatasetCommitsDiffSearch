@@ -1385,9 +1385,10 @@ public class Package implements Serializable {
       defaultDistributionSet =
           Collections.unmodifiableSet(defaultDistributionSet);
 
-      // Now all targets have been loaded, so we validate the group's member environments.
+      // Now all targets have been loaded, so we can check all declared environments in an
+      // environment group exist.
       for (EnvironmentGroup envGroup : ImmutableSet.copyOf(environmentGroups.values())) {
-        Collection<Event> errors = envGroup.processMemberEnvironments(targets);
+        Collection<Event> errors = envGroup.checkEnvironmentsExist(targets);
         if (!errors.isEmpty()) {
           addEvents(errors);
           setContainsErrors();

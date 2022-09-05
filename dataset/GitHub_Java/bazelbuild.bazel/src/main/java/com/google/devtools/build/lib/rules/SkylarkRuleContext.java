@@ -323,9 +323,8 @@ public final class SkylarkRuleContext {
   @SkylarkCallable(name = "target", structField = true,
       doc = "A <code>struct</code> containing prerequisite targets defined in label type "
           + "attributes. The struct fields correspond to the attribute names. The struct value "
-          + "is always a <a href=\"#modules.Target\"><code>Target</code></a> or <code>None</code>. "
-          + "If an optional attribute is not specified in the rule, the corresponding struct "
-          + "value is <code>None</code>.")
+          + "is always a <code>target</code> or <code>None</code>. If an optional attribute "
+          + "is not specified in the rule, the corresponding struct value is <code>None</code>.")
   public SkylarkClassObject getTarget() {
     return targetObject;
   }
@@ -336,12 +335,12 @@ public final class SkylarkRuleContext {
   @SkylarkCallable(name = "targets", structField = true,
       doc = "A <code>struct</code> containing prerequisite targets defined in label or label list "
           + "type attributes. The struct fields correspond to the attribute names. The struct "
-          + "values are <code>list</code> of <a href=\"#modules.Target\"><code>Target</code></a>s. "
-          + "If an optional attribute is not specified in the rule, an empty list is generated.")
+          + "values are <code>list</code> of <code>target</code>s. If an optional attribute is "
+          + "not specified in the rule, an empty list is generated.")
   public SkylarkClassObject getTargets() {
     return targetsObject;
   }
-
+  
   @SkylarkCallable(name = "workspace_name", structField = true,
       doc = "Returns the workspace name as defined in the WORKSPACE file.")
   public String getWorkspaceName() {
@@ -465,23 +464,7 @@ public final class SkylarkRuleContext {
     return true;
   }
 
-  @SkylarkCallable(doc =
-        "Returns a string after expanding all references to \"Make variables\". The variables "
-      + "have to have the following format: <code>$(VAR_NAME)</code>. Also, <code>$$VAR_NAME"
-      + "</code> expands to <code>$VAR_NAME</code>. Parameters:"
-      + "<ul><li>The name of the attribute (<code>string</code>). It's only used for error "
-      + "reporting.</li>\n"
-      + "<li>The expression to expand (<code>string</code>). It can contain references to "
-      + "\"Make variables\".</li>\n"
-      + "<li>A mapping of additional substitutions (<code>dict</code> of <code>string</code> : "
-      + "<code>string</code>).</li></ul>\n"
-      + "Examples:"
-      + "<pre class=language-python>\n"
-      + "ctx.expand_make_variables(\"cmd\", \"$(MY_VAR)\", {\"MY_VAR\": \"Hi\"})  # == \"Hi\"\n"
-      + "ctx.expand_make_variables(\"cmd\", \"$$PWD\", {})  # == \"$PWD\"\n"
-      + "</pre>"
-      + "Additional variables may come from other places, such as configurations. Note that "
-      + "this function is experimental.")
+  @SkylarkCallable(doc = "")
   public String expandMakeVariables(String attributeName, String command,
       final Map<String, String> additionalSubstitutions) {
     return ruleContext.expandMakeVariables(attributeName,
