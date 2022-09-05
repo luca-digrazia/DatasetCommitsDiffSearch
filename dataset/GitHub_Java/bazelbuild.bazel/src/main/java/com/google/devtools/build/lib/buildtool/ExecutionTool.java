@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.buildtool;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.HashBasedTable;
@@ -81,7 +82,6 @@ import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
@@ -326,7 +326,7 @@ public class ExecutionTool {
    * @param buildId UUID of the build id
    * @param analysisResult the analysis phase output
    * @param buildResult the mutable build result
-   * @param packageRoots package roots collected from loading phase and BuildConfigurationCollection
+   * @param packageRoots package roots collected from loading phase and BuildConfigutaionCollection
    * creation
    */
   void executeBuild(UUID buildId, AnalysisResult analysisResult,
@@ -341,6 +341,21 @@ public class ExecutionTool {
 
     // Get top-level artifacts.
     ImmutableSet<Artifact> additionalArtifacts = analysisResult.getAdditionalArtifactsToBuild();
+
+    // Create symlinks only after we've verified that we're actually
+    // supposed to build something.
+    if (getWorkspace().getFileSystem().supportsSymbolicLinks()) {
+      List<BuildConfiguration> targetConfigurations = configurations.getTargetConfigurations();
+      // TODO(bazel-team): This is not optimal - we retain backwards compatibility in the case where
+      // there's only a single configuration, but we don't create any symlinks in the multi-config
+      // case. Can we do better? [multi-config]
+      if (targetConfigurations.size() == 1) {
+        OutputDirectoryLinksUtils.createOutputDirectoryLinks(
+            runtime.getWorkspaceName(), getWorkspace(), getExecRoot(),
+            runtime.getOutputPath(), getReporter(), targetConfigurations.get(0),
+            request.getBuildOptions().getSymlinkPrefix());
+      }
+    }
 
     OutputService outputService = env.getOutputService();
     ModifiedFileSet modifiedOutputFiles = ModifiedFileSet.EVERYTHING_MODIFIED;
@@ -435,21 +450,6 @@ public class ExecutionTool {
       }
       if (buildCompleted) {
         getReporter().handle(Event.progress("Building complete."));
-
-        // Create symlinks only after we've actually built something so that we don't create
-        // dangling symlinks.
-        if (getWorkspace().getFileSystem().supportsSymbolicLinks()) {
-          List<BuildConfiguration> targetConfigurations = configurations.getTargetConfigurations();
-          // TODO(bazel-team): This is not optimal - we retain backwards compatibility in the case
-          // where there's only a single configuration, but we don't create any symlinks in the
-          // multi-config case. Can we do better? [multi-config]
-          if (targetConfigurations.size() == 1) {
-            OutputDirectoryLinksUtils.createOutputDirectoryLinks(
-                runtime.getWorkspaceName(), getWorkspace(), getExecRoot(),
-                runtime.getOutputPath(), getReporter(), targetConfigurations.get(0),
-                request.getBuildOptions().getSymlinkPrefix());
-          }
-        }
       }
 
       env.getEventBus().post(new ExecutionFinishedEvent(ImmutableMap.<String, Long> of(), 0L,
