@@ -155,8 +155,9 @@ final class ConfiguredTargetFunction implements SkyFunction {
     Target target;
     try {
       target = packageValue.getPackage().getTarget(lc.getLabel().getName());
-    } catch (NoSuchTargetException e) {
-      throw new ConfiguredTargetFunctionException(e);
+    } catch (NoSuchTargetException e1) {
+      throw new ConfiguredTargetFunctionException(new NoSuchTargetException(lc.getLabel(),
+          "No such target"));
     }
     transitivePackages.add(packageValue.getPackage());
     // TODO(bazel-team): This is problematic - we create the right key, but then end up with a value

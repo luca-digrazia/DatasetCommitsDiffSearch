@@ -17,10 +17,8 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions.SkylarkAspect;
-import com.google.devtools.build.lib.skyframe.AspectFunction.AspectCreationException;
 import com.google.devtools.build.lib.skyframe.AspectValue.SkylarkAspectLoadingKey;
 import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction.SkylarkImportFailedException;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
@@ -55,7 +53,6 @@ public class ToplevelSkylarkAspectFunction implements SkyFunction {
       labelLookupMap =
           SkylarkImportLookupFunction.labelsForAbsoluteImports(ImmutableSet.of(extensionFile), env);
     } catch (SkylarkImportFailedException e) {
-      env.getListener().handle(Event.error(e.getMessage()));
       throw new LoadSkylarkAspectFunctionException(e, skyKey);
     }
     if (labelLookupMap == null) {
@@ -66,14 +63,8 @@ public class ToplevelSkylarkAspectFunction implements SkyFunction {
     try {
       skylarkAspect = AspectFunction.loadSkylarkAspect(
           env, labelLookupMap.get(extensionFile), skylarkValueName);
-    } catch (SkylarkImportFailedException e) {
-      env.getListener().handle(Event.error(e.getMessage()));
-      throw new LoadSkylarkAspectFunctionException(
-          new AspectCreationException(e.getMessage()), skyKey);
     } catch (ConversionException e) {
-      env.getListener().handle(Event.error(e.getMessage()));
-      throw new LoadSkylarkAspectFunctionException(
-          new AspectCreationException(e.getMessage()), skyKey);
+      throw new LoadSkylarkAspectFunctionException(e, skyKey);
     }
     if (skylarkAspect == null) {
       return null;

@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
+import com.google.common.base.Function;
+import com.google.common.base.Verify;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -38,6 +40,7 @@ import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Type;
@@ -48,6 +51,7 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -60,6 +64,134 @@ import javax.annotation.Nullable;
  * <p>Includes logic to derive the right configurations depending on transition type.
  */
 public abstract class DependencyResolver {
+  /**
+   * A dependency of a configured target through a label.
+   *
+   * <p>For static configurations: includes the target and the configuration of the dependency
+   * configured target and any aspects that may be required.
+   *
+   * <p>For dynamic configurations: includes the target and the desired configuration transitions
+   * that should be applied to produce the dependency's configuration. It's the caller's
+   * responsibility to construct an actual configuration out of that.
+   *
+   * <p>Note that the presence of an aspect here does not necessarily mean that it will be created.
+   * They will be filtered based on the {@link TransitiveInfoProvider} instances their associated
+   * configured targets have (we cannot do that here because the configured targets are not
+   * available yet). No error or warning is reported in this case, because it is expected that rules
+   * sometimes over-approximate the providers they supply in their definitions.
+   */
+  public static final class Dependency {
+
+    /**
+     * Returns the {@link ConfiguredTargetKey} for a direct dependency.
+     *
+     * <p>Essentially the same information as {@link Dependency} minus the aspects.
+     */
+    public static final Function<Dependency, ConfiguredTargetKey>
+        TO_CONFIGURED_TARGET_KEY = new Function<Dependency, ConfiguredTargetKey>() {
+          @Override
+          public ConfiguredTargetKey apply(Dependency input) {
+            return new ConfiguredTargetKey(input.getLabel(), input.getConfiguration());
+          }
+        };
+
+    private final Label label;
+
+    // Only one of the two below fields is set. Use hasStaticConfiguration to determine which.
+    @Nullable private final BuildConfiguration configuration;
+    private final Attribute.Transition transition;
+
+    private final boolean hasStaticConfiguration;
+    private final ImmutableSet<Aspect> aspects;
+
+    /**
+     * Constructs a Dependency with a given configuration (suitable for static configuration
+     * builds).
+     */
+    public Dependency(
+        Label label, @Nullable BuildConfiguration configuration, ImmutableSet<Aspect> aspects) {
+      this.label = Preconditions.checkNotNull(label);
+      this.configuration = configuration;
+      this.transition = null;
+      this.hasStaticConfiguration = true;
+      this.aspects = Preconditions.checkNotNull(aspects);
+    }
+
+    /**
+     * Constructs a Dependency with a given configuration (suitable for static configuration
+     * builds).
+     */
+    public Dependency(Label label, @Nullable BuildConfiguration configuration) {
+      this(label, configuration, ImmutableSet.<Aspect>of());
+    }
+
+    /**
+     * Constructs a Dependency with a given transition (suitable for dynamic configuration builds).
+     */
+    public Dependency(Label label, Attribute.Transition transition, ImmutableSet<Aspect> aspects) {
+      this.label = Preconditions.checkNotNull(label);
+      this.configuration = null;
+      this.transition = Preconditions.checkNotNull(transition);
+      this.hasStaticConfiguration = false;
+      this.aspects = Preconditions.checkNotNull(aspects);
+    }
+
+    /**
+     * Does this dependency represent a null configuration?
+     */
+    public boolean isNull() {
+      return configuration == null && transition == null;
+    }
+
+    /**
+     * Does this dependency specify a static configuration (vs. a dynamic transition)?
+     */
+    public boolean hasStaticConfiguration() {
+      return hasStaticConfiguration;
+    }
+
+    public Label getLabel() {
+      return label;
+    }
+
+    @Nullable
+    public BuildConfiguration getConfiguration() {
+      Verify.verify(hasStaticConfiguration);
+      return configuration;
+    }
+
+    public Attribute.Transition getTransition() {
+      Verify.verify(!hasStaticConfiguration);
+      return transition;
+    }
+
+    public ImmutableSet<Aspect> getAspects() {
+      return aspects;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(label, configuration, aspects);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (!(other instanceof Dependency)) {
+        return false;
+      }
+      Dependency otherDep = (Dependency) other;
+      return label.equals(otherDep.label)
+          && (configuration == otherDep.configuration
+              || (configuration != null && configuration.equals(otherDep.configuration)))
+          && aspects.equals(otherDep.aspects);
+    }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "Dependency{label=%s, configuration=%s, aspects=%s}", label, configuration, aspects);
+    }
+  }
 
   protected DependencyResolver() {
   }
@@ -96,7 +228,7 @@ public abstract class DependencyResolver {
       Preconditions.checkNotNull(config);
       visitTargetVisibility(node, outgoingEdges.get(null));
       Rule rule = ((OutputFile) target).getGeneratingRule();
-      outgoingEdges.put(null, Dependency.withConfiguration(rule.getLabel(), config));
+      outgoingEdges.put(null, new Dependency(rule.getLabel(), config));
     } else if (target instanceof InputFile) {
       visitTargetVisibility(node, outgoingEdges.get(null));
     } else if (target instanceof EnvironmentGroup) {
@@ -270,7 +402,6 @@ public abstract class DependencyResolver {
     // their values from somewhere else. This incidentally means that aspects attributes are not
     // configurable. It would be nice if that wasn't the case, but we'd have to revamp how
     // attribute mapping works, which is a large chunk of work.
-    Label ruleLabel = rule.getLabel();
     ImmutableSet<String> mappedAttributes = ImmutableSet.copyOf(attributeMap.getAttributeNames());
     for (Attribute attribute : attributes) {
       if (!attribute.isImplicit() || !attribute.getCondition().apply(attributeMap)) {
@@ -286,32 +417,9 @@ public abstract class DependencyResolver {
           builder.put(attribute, LabelAndConfiguration.of(label, configuration));
         }
       } else if (attribute.getType() == BuildType.LABEL_LIST) {
-        List<Label> labelList;
-        if (mappedAttributes.contains(attribute.getName())) {
-          labelList = new ArrayList<>();
-          for (Label label : attributeMap.get(attribute.getName(), BuildType.LABEL_LIST)) {
-            if (attribute.getName().equals("$config_dependencies")) {
-              // This is a hack necessary due to the confluence of the following circumstances:
-              //   - We need to call ruleLabel.resolveRepositoryRelative() on every label except
-              //     implicit ones so that the implicit labels specified in rule class definitions
-              //     work as expected
-              //   - The way dependencies for selectors is loaded is through the
-              //     $config_dependencies attribute, and thus the labels there need to be a verbatim
-              //     copy of those in the BUILD file (because
-              //     AggregatingAttributeMapper#visitLabels() calls
-              //     Label#resolveRepositoryRelative() on them, and calling it twice would be wrong
-              // Thus, we are stuck with the situation where the only implicit attribute on which
-              // Label#resolveRepositoryRelative needs to be called here is $config_dependencies.
-              //
-              // This is a bad state of affairs and the proper fix would be not to use labels in the
-              // default repository to signal configured targets in the main repository in SkyKeys.
-              label = ruleLabel.resolveRepositoryRelative(label);
-            }
-            labelList.add(label);
-          }
-        } else {
-          labelList = BuildType.LABEL_LIST.cast(attribute.getDefaultValue(rule));
-        }
+        List<Label> labelList = mappedAttributes.contains(attribute.getName())
+            ? attributeMap.get(attribute.getName(), BuildType.LABEL_LIST)
+            : BuildType.LABEL_LIST.cast(attribute.getDefaultValue(rule));
 
         for (Label label : labelList) {
           builder.put(attribute, LabelAndConfiguration.of(label, configuration));
@@ -422,7 +530,7 @@ public abstract class DependencyResolver {
           continue;
         }
 
-        outgoingEdges.add(Dependency.withNullConfiguration(label));
+        outgoingEdges.add(new Dependency(label, null));
       } catch (NoSuchThingException e) {
         // Don't visit targets that don't exist (--keep_going)
       }
@@ -544,7 +652,7 @@ public abstract class DependencyResolver {
         }
 
         // Visibility always has null configuration
-        outgoingEdges.add(Dependency.withNullConfiguration(label));
+        outgoingEdges.add(new Dependency(label, null));
       } catch (NoSuchThingException e) {
         // Don't visit targets that don't exist (--keep_going)
       }

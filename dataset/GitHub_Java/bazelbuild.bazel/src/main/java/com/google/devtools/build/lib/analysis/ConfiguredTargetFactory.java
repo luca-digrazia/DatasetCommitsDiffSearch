@@ -221,10 +221,8 @@ public final class ConfiguredTargetFactory {
       ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
       Set<ConfigMatchingProvider> configConditions) throws InterruptedException {
     // Visibility computation and checking is done for every rule.
-    RuleContext ruleContext = new RuleContext.Builder(env, rule, null,
-        configuration, hostConfiguration,
-        ruleClassProvider.getPrerequisiteValidator(),
-        rule.getRuleClassObject().getConfigurationFragmentPolicy())
+    RuleContext ruleContext = new RuleContext.Builder(env, rule, configuration, hostConfiguration,
+        ruleClassProvider.getPrerequisiteValidator())
         .setVisibility(convertVisibility(prerequisiteMap, env.getEventHandler(), rule, null))
         .setPrerequisites(prerequisiteMap)
         .setConfigConditions(configConditions)
@@ -298,19 +296,11 @@ public final class ConfiguredTargetFactory {
       Set<ConfigMatchingProvider> configConditions,
       BuildConfiguration hostConfiguration)
       throws InterruptedException {
-    ConfigurationFragmentPolicy aspectPolicy =
-        aspect.getDefinition().getConfigurationFragmentPolicy();
-    ConfigurationFragmentPolicy rulePolicy =
-        ((Rule) associatedTarget.getTarget()).getRuleClassObject().getConfigurationFragmentPolicy();
     RuleContext.Builder builder = new RuleContext.Builder(env,
         associatedTarget.getTarget(),
-        aspect.getAspectClass().getName(),
         associatedTarget.getConfiguration(),
         hostConfiguration,
-        ruleClassProvider.getPrerequisiteValidator(),
-        // TODO(mstaib): When AspectDefinition can no longer have null ConfigurationFragmentPolicy,
-        // remove this conditional.
-        aspectPolicy != null ? aspectPolicy : rulePolicy);
+        ruleClassProvider.getPrerequisiteValidator());
     RuleContext ruleContext =
         builder
             .setVisibility(
