@@ -70,7 +70,6 @@ import com.google.devtools.build.lib.vfs.UnixGlob;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -262,17 +261,33 @@ public final class PackageFactory {
     }
   }
 
+  /**
+   * Declares the package() attribute specifying the default value for
+   * java_proto_library.strict_deps.
+   *
+   * <p>This attribute should be considered as undocumented/experimental, and is subject to change
+   * at any time without prior notice.
+   */
+  private static class DefaultStrictDepsJavaProtos extends PackageArgument<Boolean> {
+    private DefaultStrictDepsJavaProtos() {
+      super("default_strict_deps_java_protos", Type.BOOLEAN);
+    }
+
+    @Override
+    protected void process(Package.Builder pkgBuilder, Location location, Boolean value) {
+      pkgBuilder.setDefaultStrictDepsJavaProtos(value ? TriState.YES : TriState.NO);
+    }
+  }
+
   public static final String PKG_CONTEXT = "$pkg_context";
 
   // Used outside of Bazel!
   /** {@link Globber} that uses the legacy GlobCache. */
   public static class LegacyGlobber implements Globber {
     private final GlobCache globCache;
-    private final boolean sort;
 
-    private LegacyGlobber(GlobCache globCache, boolean sort) {
+    public LegacyGlobber(GlobCache globCache) {
       this.globCache = globCache;
-      this.sort = sort;
     }
 
     private static class Token extends Globber.Token {
@@ -291,25 +306,20 @@ public final class PackageFactory {
     public Token runAsync(List<String> includes, List<String> excludes, boolean excludeDirs)
         throws BadGlobException {
       for (String pattern : Iterables.concat(includes, excludes)) {
-        globCache.getGlobUnsortedAsync(pattern, excludeDirs);
+        globCache.getGlobAsync(pattern, excludeDirs);
       }
       return new Token(includes, excludes, excludeDirs);
     }
 
     @Override
     public List<String> fetch(Globber.Token token) throws IOException, InterruptedException {
-      List<String> result;
       Token legacyToken = (Token) token;
       try {
-        result = globCache.globUnsorted(legacyToken.includes, legacyToken.excludes,
+        return globCache.glob(legacyToken.includes, legacyToken.excludes,
             legacyToken.excludeDirs);
       } catch (BadGlobException e) {
         throw new IllegalStateException(e);
       }
-      if (sort) {
-        Collections.sort(result);
-      }
-      return result;
     }
 
     @Override
@@ -463,6 +473,7 @@ public final class PackageFactory {
     ImmutableList.Builder<PackageArgument<?>> arguments =
         ImmutableList.<PackageArgument<?>>builder()
             .add(new DefaultDeprecation())
+            .add(new DefaultStrictDepsJavaProtos())
             .add(new DefaultDistribs())
             .add(new DefaultLicenses())
             .add(new DefaultTestOnly())
@@ -1417,31 +1428,10 @@ public final class PackageFactory {
     }
   }
 
-  /** Returns a new {@link LegacyGlobber}. */
-  public LegacyGlobber createLegacyGlobber(
-      Path packageDirectory,
-      PackageIdentifier packageId,
-      CachingPackageLocator locator) {
-    return createLegacyGlobber(new GlobCache(packageDirectory, packageId, locator, syscalls,
-        threadPool));
-  }
-
-  /** Returns a new {@link LegacyGlobber}. */
-  public static LegacyGlobber createLegacyGlobber(GlobCache globCache) {
-    return new LegacyGlobber(globCache, /*sort=*/ true);
-  }
-
-  /**
-   * Returns a new {@link LegacyGlobber}, the same as in {@link #createLegacyGlobber}, except that
-   * the implementation of {@link Globber#fetch} intentionally breaks the contract and doesn't
-   * return sorted results.
-   */
-  public LegacyGlobber createLegacyGlobberThatDoesntSort(
-      Path packageDirectory,
-      PackageIdentifier packageId,
+  public LegacyGlobber createLegacyGlobber(Path packageDirectory, PackageIdentifier packageId,
       CachingPackageLocator locator) {
     return new LegacyGlobber(new GlobCache(packageDirectory, packageId, locator, syscalls,
-        threadPool), /*sort=*/ false);
+        threadPool));
   }
 
   @Nullable
