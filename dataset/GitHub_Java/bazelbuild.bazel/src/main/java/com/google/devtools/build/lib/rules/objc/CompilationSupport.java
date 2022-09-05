@@ -71,7 +71,6 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.TargetUtils;
@@ -1070,8 +1069,8 @@ public final class CompilationSupport {
    * <p>Required as a hack to the link command line because that may contain two commands, which are
    * then passed to {@code /bin/bash -c}, and accordingly need to be a single argument.
    */
-  @Immutable // if original is immutable
-  private static final class SingleArgCommandLine extends CommandLine {
+  private static class SingleArgCommandLine extends CommandLine {
+
     private final CommandLine original;
 
     private SingleArgCommandLine(CommandLine original) {
