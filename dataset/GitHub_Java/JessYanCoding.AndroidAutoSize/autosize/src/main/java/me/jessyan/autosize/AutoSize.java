@@ -21,13 +21,8 @@ import android.app.Fragment;
 import android.util.DisplayMetrics;
 import android.view.View;
 
-import java.util.Locale;
-
-import me.jessyan.autosize.external.ExternalAdaptInfo;
-import me.jessyan.autosize.external.ExternalAdaptManager;
 import me.jessyan.autosize.internal.CancelAdapt;
 import me.jessyan.autosize.internal.CustomAdapt;
-import me.jessyan.autosize.utils.LogUtils;
 import me.jessyan.autosize.utils.Preconditions;
 
 /**
@@ -85,27 +80,6 @@ public final class AutoSize {
     }
 
     /**
-     * 使用外部三方库的 {@link Activity} 的自定义适配参数进行适配
-     *
-     * @param activity    {@link Activity}
-     * @param externalAdaptInfo 三方库的 {@link Activity} 提供的适配参数, 需要配合 {@link ExternalAdaptManager#addExternalAdaptInfoOfActivity(Class, ExternalAdaptInfo)}
-     */
-    public static void autoConvertDensityOfExternalAdaptInfo(Activity activity, ExternalAdaptInfo externalAdaptInfo) {
-        Preconditions.checkNotNull(externalAdaptInfo, "externalAdaptInfo == null");
-        float sizeInDp = externalAdaptInfo.getSizeInDp();
-
-        //如果 ExternalAdaptInfo#getSizeInDp() 返回 0, 则使用在 AndroidManifest 上填写的设计图尺寸
-        if (sizeInDp <= 0) {
-            if (externalAdaptInfo.isBaseOnWidth()) {
-                sizeInDp = AutoSizeConfig.getInstance().getDesignWidthInDp();
-            } else {
-                sizeInDp = AutoSizeConfig.getInstance().getDesignHeightInDp();
-            }
-        }
-        autoConvertDensity(activity, sizeInDp, externalAdaptInfo.isBaseOnWidth());
-    }
-
-    /**
      * 以宽度为基准进行适配
      *
      * @param activity        {@link Activity}
@@ -144,8 +118,7 @@ public final class AutoSize {
         } else {
             targetDensity = AutoSizeConfig.getInstance().getScreenHeight() * 1.0f / sizeInDp;
         }
-        final float targetScaledDensity = targetDensity * (AutoSizeConfig.getInstance().
-                getInitScaledDensity() * 1.0f / AutoSizeConfig.getInstance().getInitDensity());
+        final float targetScaledDensity = targetDensity * (AutoSizeConfig.getInstance().getInitScaledDensity() * 1.0f / AutoSizeConfig.getInstance().getInitDensity());
         final int targetDensityDpi = (int) (targetDensity * 160);
 
         //Application
@@ -161,9 +134,5 @@ public final class AutoSize {
         activityDisplayMetrics.density = targetDensity;
         activityDisplayMetrics.densityDpi = targetDensityDpi;
         activityDisplayMetrics.scaledDensity = targetScaledDensity;
-
-        LogUtils.d(String.format(Locale.ENGLISH, "The %s has been adapted! \nInfo: isBaseOnWidth = %s, %s = %f, targetDensity = %f, targetScaledDensity = %f, targetDensityDpi = %d"
-                , activity.getClass().getName(), isBaseOnWidth, isBaseOnWidth ? "designWidthInDp"
-                        : "designHeightInDp", sizeInDp, targetDensity, targetScaledDensity, targetDensityDpi));
     }
 }
