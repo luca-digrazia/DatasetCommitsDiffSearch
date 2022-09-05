@@ -43,6 +43,7 @@ public final class OptionsParser {
 
   private String strictJavaDeps;
 
+  private String outputDepsFile;
   private String outputDepsProtoFile;
   private final Set<String> depsArtifacts = new HashSet<>();
 
@@ -121,6 +122,9 @@ public final class OptionsParser {
           }
         case "--strict_java_deps":
           strictJavaDeps = getArgument(argQueue, arg);
+          break;
+        case "--output_deps":
+          outputDepsFile = getArgument(argQueue, arg);
           break;
         case "--output_deps_proto":
           outputDepsProtoFile = getArgument(argQueue, arg);
@@ -312,6 +316,10 @@ public final class OptionsParser {
 
   public String getStrictJavaDeps() {
     return strictJavaDeps;
+  }
+
+  public String getOutputDepsFile() {
+    return outputDepsFile;
   }
 
   public String getOutputDepsProtoFile() {
