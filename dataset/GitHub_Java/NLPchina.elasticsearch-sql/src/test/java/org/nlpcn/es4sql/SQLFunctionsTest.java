@@ -181,7 +181,7 @@ public class SQLFunctionsTest {
         ScriptFilter scriptFilter = (ScriptFilter) (((Condition) (where.getWheres().get(0))).getValue());
 
         Assert.assertTrue(scriptFilter.getScript().contains("doc['address'].value.split(' ')[0]"));
-        Pattern pattern = Pattern.compile("\\(\\(Comparable\\)floor_\\d+\\).compareTo\\(doc\\['b'\\].value\\) > 0");
+        Pattern pattern = Pattern.compile("floor_\\d+ > doc\\['b'\\].value");
         Matcher matcher = pattern.matcher(scriptFilter.getScript());
         Assert.assertTrue(matcher.find());
 
@@ -205,7 +205,7 @@ public class SQLFunctionsTest {
         Assert.assertTrue(((Condition) (where.getWheres().get(0))).getValue() instanceof ScriptFilter);
         ScriptFilter scriptFilter = (ScriptFilter) (((Condition) (where.getWheres().get(0))).getValue());
         Assert.assertTrue(scriptFilter.getScript().contains("doc['address'].value.split(' ')[0]"));
-        Pattern pattern = Pattern.compile("\\(\\(Comparable\\)floor_\\d+\\).compareTo\\(floor_\\d+\\) == 0");
+        Pattern pattern = Pattern.compile("floor_\\d+ == floor_\\d+");
         Matcher matcher = pattern.matcher(scriptFilter.getScript());
         Assert.assertTrue(matcher.find());
     }
@@ -265,14 +265,6 @@ public class SQLFunctionsTest {
         List<String> content = csvResult.getLines();
         Assert.assertTrue(content.toString().contains("625"));
         Assert.assertTrue(content.toString().contains("21"));
-    }
-
-    @Test
-    public void testSumTwoFields() throws Exception {
-        String query = "SELECT SUM(account_number+age) AS sum from " + TEST_INDEX_PEOPLE + "/people";
-        CSVResult csvResult = getCsvResult(false, query);
-        List<String> content = csvResult.getLines();
-        Assert.assertTrue(content.toString().contains("752"));
     }
 
     // todo: change when split is back on language
