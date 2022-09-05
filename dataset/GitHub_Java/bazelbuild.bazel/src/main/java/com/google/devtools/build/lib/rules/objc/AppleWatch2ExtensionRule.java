@@ -32,9 +32,8 @@ public class AppleWatch2ExtensionRule implements RuleDefinition {
     return builder
         .requiresConfigurationFragments(ObjcConfiguration.class, AppleConfiguration.class)
         /* <!-- #BLAZE_RULE(apple_watch2_extension).ATTRIBUTE(binary) -->
-        The binary target containing the logic for the watch extension. This must be an
-        <code>apple_binary</code> target with <code>platformtype</code> attribute set to
-        <code>watchos</code>.
+        The binary target containing the logic for the watch extension.
+        ${SYNOPSIS}
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(
             attr("binary", LABEL)

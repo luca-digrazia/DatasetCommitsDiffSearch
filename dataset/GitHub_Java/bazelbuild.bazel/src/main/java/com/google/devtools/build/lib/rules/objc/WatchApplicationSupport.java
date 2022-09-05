@@ -194,10 +194,6 @@ final class WatchApplicationSupport {
       releaseBundling.setFallbackBundleId(attributes.bundleId());
     }
 
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
-
-    PlatformType appPlatformType = watchOSVersion == WatchOSVersion.OS1
-         ? PlatformType.IOS : PlatformType.WATCHOS;
     ReleaseBundlingSupport releaseBundlingSupport =
         new ReleaseBundlingSupport(
                 ruleContext,
@@ -207,8 +203,7 @@ final class WatchApplicationSupport {
                 bundleName,
                 WatchUtils.determineMinimumOsVersion(
                     ObjcRuleClasses.objcConfiguration(ruleContext).getMinimumOs()),
-                releaseBundling.build(),
-                appleConfiguration.getMultiArchPlatform(appPlatformType))
+                releaseBundling.build())
             .registerActions(DsymOutputType.APP);
 
     if (xcodeProviderBuilder.isPresent()) {

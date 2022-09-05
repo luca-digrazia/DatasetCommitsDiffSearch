@@ -49,19 +49,20 @@ public class AppleWatch2Extension implements RuleConfiguredTargetFactory {
     validateAttributes(ruleContext);
 
     ObjcProvider.Builder exposedObjcProviderBuilder = new ObjcProvider.Builder();
-    NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
+    NestedSetBuilder<Artifact> applicationFilesToBuild = NestedSetBuilder.stableOrder();
 
     // 1. Build watch extension bundle.
-    createWatchExtensionBundle(ruleContext, filesToBuild, exposedObjcProviderBuilder);
+    createWatchExtensionBundle(ruleContext);
 
     // 2. Build watch application bundle, which will contain the extension bundle.
     createWatchApplicationBundle(
         ruleContext,
         watchExtensionIpaArtifact(ruleContext),
-        filesToBuild);
+        applicationFilesToBuild,
+        exposedObjcProviderBuilder);
 
     RuleConfiguredTargetBuilder targetBuilder =
-        ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
+        ObjcRuleClasses.ruleConfiguredTarget(ruleContext, applicationFilesToBuild.build())
             .addProvider(
                 InstrumentedFilesProvider.class,
                 InstrumentedFilesCollector.forward(ruleContext, "binary"));
@@ -82,15 +83,12 @@ public class AppleWatch2Extension implements RuleConfiguredTargetFactory {
    *
    * @param ruleContext rule context in which to create the bundle
    */
-  private void createWatchExtensionBundle(RuleContext ruleContext,
-      NestedSetBuilder<Artifact> filesToBuild,
-      ObjcProvider.Builder exposedObjcProviderBuilder) throws InterruptedException {
+  private void createWatchExtensionBundle(RuleContext ruleContext) throws InterruptedException {
     new Watch2ExtensionSupport(
             ruleContext,
             ObjcRuleClasses.intermediateArtifacts(ruleContext),
             watchExtensionBundleName(ruleContext))
-        .createBundle(watchExtensionIpaArtifact(ruleContext), filesToBuild,
-            exposedObjcProviderBuilder);
+        .createBundle(watchExtensionIpaArtifact(ruleContext));
   }
 
   /**
@@ -107,7 +105,8 @@ public class AppleWatch2Extension implements RuleConfiguredTargetFactory {
   private void createWatchApplicationBundle(
       RuleContext ruleContext,
       Artifact extensionIpa,
-      NestedSetBuilder<Artifact> filesToBuild)
+      NestedSetBuilder<Artifact> filesToBuild,
+      ObjcProvider.Builder exposedObjcProviderBuilder)
       throws InterruptedException {
     new WatchApplicationSupport(
             ruleContext,
@@ -119,7 +118,7 @@ public class AppleWatch2Extension implements RuleConfiguredTargetFactory {
             watchApplicationBundleName(ruleContext),
             watchApplicationIpaArtifact(ruleContext),
             watchApplicationBundleName(ruleContext))
-        .createBundle(ImmutableList.of(extensionIpa), filesToBuild);
+        .createBundle(ImmutableList.of(extensionIpa), filesToBuild, exposedObjcProviderBuilder);
   }
 
   /** Returns the {@Artifact} containing final watch application bundle. */

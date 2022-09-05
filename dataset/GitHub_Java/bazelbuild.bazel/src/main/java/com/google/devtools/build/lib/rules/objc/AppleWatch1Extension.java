@@ -56,6 +56,7 @@ public class AppleWatch1Extension implements RuleConfiguredTargetFactory {
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
     ObjcProvider.Builder extensionObjcProviderBuilder = new ObjcProvider.Builder();
+    ObjcProvider.Builder exposedObjcProviderBuilder = new ObjcProvider.Builder();
     XcodeProvider.Builder applicationXcodeProviderBuilder = new XcodeProvider.Builder();
     XcodeProvider.Builder extensionXcodeProviderBuilder = new XcodeProvider.Builder();
     NestedSetBuilder<Artifact> applicationFilesToBuild = NestedSetBuilder.stableOrder();
@@ -65,7 +66,8 @@ public class AppleWatch1Extension implements RuleConfiguredTargetFactory {
     createWatchApplicationBundle(
         ruleContext,
         applicationXcodeProviderBuilder,
-        applicationFilesToBuild);
+        applicationFilesToBuild,
+        exposedObjcProviderBuilder);
 
     // 2. Build watch extension bundle.
     createWatchExtensionBundle(ruleContext, extensionXcodeProviderBuilder,
@@ -82,7 +84,7 @@ public class AppleWatch1Extension implements RuleConfiguredTargetFactory {
                 InstrumentedFilesCollector.forward(ruleContext, "binary"));
 
     // 4. Exposed {@ObjcProvider} for bundling into final IPA.
-    exposeObjcProvider(ruleContext, targetBuilder, extensionObjcProviderBuilder);
+    exposeObjcProvider(ruleContext, targetBuilder, exposedObjcProviderBuilder);
 
     return targetBuilder.build();
   }
@@ -139,11 +141,13 @@ public class AppleWatch1Extension implements RuleConfiguredTargetFactory {
    * @param ruleContext rule context in which to create the bundle
    * @param xcodeProviderBuilder {@link XcodeProvider.Builder} for the application
    * @param filesToBuild the list to contain the files to be built for this bundle
+   * @param exposedObjcProviderBuilder {@link ObjcProvider.Builder} exposed to the parent target
    */
   private void createWatchApplicationBundle(
       RuleContext ruleContext,
       XcodeProvider.Builder xcodeProviderBuilder,
-      NestedSetBuilder<Artifact> filesToBuild)
+      NestedSetBuilder<Artifact> filesToBuild,
+      ObjcProvider.Builder exposedObjcProviderBuilder)
       throws InterruptedException {
     new WatchApplicationSupport(
             ruleContext,
@@ -156,7 +160,8 @@ public class AppleWatch1Extension implements RuleConfiguredTargetFactory {
         .createBundleAndXcodeproj(
             xcodeProviderBuilder,
             ImmutableList.<Artifact>of(),
-            filesToBuild);
+            filesToBuild,
+            exposedObjcProviderBuilder);
   }
 
   /**

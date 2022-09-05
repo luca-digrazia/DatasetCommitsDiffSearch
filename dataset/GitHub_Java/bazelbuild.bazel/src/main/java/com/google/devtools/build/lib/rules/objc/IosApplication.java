@@ -14,8 +14,10 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Streams;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
@@ -23,6 +25,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag;
@@ -30,11 +33,7 @@ import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArch
 
 /**
  * Implementation for {@code ios_application}.
- *
- * @deprecated The native bundling rules have been deprecated. This class will be removed in the
- *     future.
  */
-@Deprecated
 public class IosApplication extends ReleaseBundlingTargetFactory {
 
   /**
@@ -51,7 +50,8 @@ public class IosApplication extends ReleaseBundlingTargetFactory {
           new Attribute("extensions", Mode.TARGET));
 
   public IosApplication() {
-    super(ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT, DEPENDENCY_ATTRIBUTES);
+    super(ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT, XcodeProductType.APPLICATION,
+        DEPENDENCY_ATTRIBUTES, ConfigurationDistinguisher.IOS_APPLICATION);
   }
   
   /**
@@ -67,13 +67,15 @@ public class IosApplication extends ReleaseBundlingTargetFactory {
           + "watch extension for each watch OS version");
     }
   }
-
-  private boolean hasMoreThanOneWatchExtension(
-      Iterable<ObjcProvider> objcProviders, final Flag watchExtensionVersionFlag) {
-    return Streams.stream(objcProviders)
-            .filter(objcProvider -> objcProvider.is(watchExtensionVersionFlag))
-            .count()
-        > 1;
+  
+  private boolean hasMoreThanOneWatchExtension(Iterable<ObjcProvider> objcProviders,
+      final Flag watchExtensionVersionFlag) {
+    return Lists.newArrayList(Iterables.filter(objcProviders, new Predicate<ObjcProvider>() {
+      @Override
+      public boolean apply(ObjcProvider objcProvider) {
+        return objcProvider.is(watchExtensionVersionFlag);
+      }
+    })).size() > 1;
   }
 
   @Override
