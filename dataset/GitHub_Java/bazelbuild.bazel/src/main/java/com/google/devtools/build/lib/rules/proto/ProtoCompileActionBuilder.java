@@ -357,7 +357,6 @@ public class ProtoCompileActionBuilder {
         protosToCompile,
         transitiveSources,
         protosInDirectDeps,
-        ruleContext.getLabel().getCanonicalForm(),
         outputs,
         "Descriptor Set",
         allowServices);
@@ -381,7 +380,6 @@ public class ProtoCompileActionBuilder {
    * method instead of the soup of methods above.
    *
    * @param toolchainInvocations See {@link #createCommandLineFromToolchains}.
-   * @param ruleLabel See {@link #createCommandLineFromToolchains}.
    * @param outputs The artifacts that the resulting action must create.
    * @param flavorName e.g., "Java (Immutable)"
    * @param allowServices If false, the compilation will break if any .proto file has service
@@ -391,8 +389,7 @@ public class ProtoCompileActionBuilder {
       List<ToolchainInvocation> toolchainInvocations,
       Iterable<Artifact> protosToCompile,
       NestedSet<Artifact> transitiveSources,
-      @Nullable NestedSet<Artifact> protosInDirectDeps,
-      String ruleLabel,
+      NestedSet<Artifact> protosInDirectDeps,
       Iterable<Artifact> outputs,
       String flavorName,
       boolean allowServices) {
@@ -427,7 +424,6 @@ public class ProtoCompileActionBuilder {
                 protosToCompile,
                 transitiveSources,
                 protosInDirectDeps,
-                ruleLabel,
                 allowServices,
                 ruleContext.getFragment(ProtoConfiguration.class).protocOpts()))
         .setProgressMessage("Generating " + flavorName + " proto_library " + ruleContext.getLabel())
@@ -452,17 +448,15 @@ public class ProtoCompileActionBuilder {
    * called. As some plugins rely on output from other plugins, their order matters.
    *
    * @param toolchainInvocations See {@link #createCommandLineFromToolchains}.
-   * @param ruleLabel Name of the proto_library for which we're compiling. This string is used to
-   *     populate an error message format that's passed to proto-compiler.
    * @param allowServices If false, the compilation will break if any .proto file has
+   *     service @return a command-line to pass to proto-compiler.
    */
   @VisibleForTesting
   static CustomCommandLine createCommandLineFromToolchains(
       List<ToolchainInvocation> toolchainInvocations,
       Iterable<Artifact> protosToCompile,
       NestedSet<Artifact> transitiveSources,
-      @Nullable NestedSet<Artifact> protosInDirectDeps,
-      String ruleLabel,
+      NestedSet<Artifact> protosInDirectDeps,
       boolean allowServices,
       ImmutableList<String> protocOpts) {
     CustomCommandLine.Builder cmdLine = CustomCommandLine.builder();
@@ -503,16 +497,6 @@ public class ProtoCompileActionBuilder {
 
     // Add include maps
     cmdLine.add(new ProtoCommandLineArgv(protosInDirectDeps, transitiveSources));
-
-    if (protosInDirectDeps != null) {
-      // Note: the %s in the line below is used by proto-compiler. That is, the string we create
-      // here should have a literal %s in it.
-      cmdLine.add(
-          "--direct_dependencies_violation_msg=%s is imported, "
-              + "but "
-              + ruleLabel
-              + " doesn't directly depend on a proto_library that 'srcs' it.");
-    }
 
     for (Artifact src : protosToCompile) {
       cmdLine.addPath(src.getRootRelativePath());
