@@ -375,11 +375,6 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  public boolean isFilePathCaseSensitive() {
-    return true;
-  }
-
-  @Override
   protected boolean createDirectory(Path path) throws IOException {
     synchronized (path) {
       // Note: UNIX mkdir(2), FilesystemUtils.mkdir() and createDirectory all
