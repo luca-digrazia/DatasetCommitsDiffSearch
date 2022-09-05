@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.java;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsConverter;
@@ -26,9 +27,11 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaOptimizationMode;
+import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Converters.StringSetConverter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
+import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.TriState;
 
 import java.util.HashMap;
@@ -42,6 +45,19 @@ import java.util.Set;
  */
 public class JavaOptions extends FragmentOptions {
   public static final String DEFAULT_LANGTOOLS = "//tools/jdk:langtools";
+
+  /** Converter for --javabase and --host_javabase. */
+  public static class JavabaseConverter implements Converter<String> {
+    @Override
+    public String convert(String input) throws OptionsParsingException {
+      return input.isEmpty() ? Constants.TOOLS_REPOSITORY + "//tools/jdk:jdk" : input;
+    }
+
+    @Override
+    public String getTypeDescription() {
+      return "a string";
+    }
+  }
 
   /**
    * Converter for the --javawarn option.
@@ -99,7 +115,8 @@ public class JavaOptions extends FragmentOptions {
   }
 
   @Option(name = "javabase",
-      defaultValue = "@bazel_tools//tools/jdk:jdk",
+      defaultValue = "",
+      converter = JavabaseConverter.class,
       category = "version",
       help = "JAVABASE used for the JDK invoked by Blaze. This is the "
           + "JAVABASE which will be used to execute external Java "
@@ -114,7 +131,8 @@ public class JavaOptions extends FragmentOptions {
   public Label javaToolchain;
 
   @Option(name = "host_javabase",
-      defaultValue = "@bazel_tools//tools/jdk:jdk",
+      defaultValue = "",
+      converter = JavabaseConverter.class,
       category = "version",
       help = "JAVABASE used for the host JDK. This is the JAVABASE which is used to execute "
            + " tools during a build.")
