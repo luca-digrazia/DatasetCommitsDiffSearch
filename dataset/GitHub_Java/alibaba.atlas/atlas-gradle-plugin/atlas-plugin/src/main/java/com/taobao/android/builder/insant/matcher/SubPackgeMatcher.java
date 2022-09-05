@@ -23,14 +23,4 @@ public class SubPackgeMatcher implements Imatcher {
         }
         return false;
     }
-
-    @Override
-    public String rule() {
-        return mRule;
-    }
-
-    @Override
-    public Imatcher superMatcher() {
-        return null;
-    }
 }

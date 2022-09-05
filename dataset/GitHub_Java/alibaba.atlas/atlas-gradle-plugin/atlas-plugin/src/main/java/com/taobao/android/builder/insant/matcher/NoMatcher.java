@@ -10,14 +10,4 @@ public class NoMatcher implements Imatcher {
     public boolean match(String s) {
         return false;
     }
-
-    @Override
-    public String rule() {
-        return null;
-    }
-
-    @Override
-    public Imatcher superMatcher() {
-        return new NoMatcher();
-    }
 }

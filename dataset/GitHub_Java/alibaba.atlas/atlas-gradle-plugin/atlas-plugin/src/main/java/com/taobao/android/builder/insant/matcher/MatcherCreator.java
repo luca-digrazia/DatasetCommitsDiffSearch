@@ -2,7 +2,10 @@ package com.taobao.android.builder.insant.matcher;
 
 import org.apache.commons.lang3.StringUtils;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 创建日期：2018/11/23 on 下午3:04
@@ -10,10 +13,6 @@ import java.util.*;
  * 作者:zhayu.ll
  */
 public class MatcherCreator {
-
-
-
-    static Set<ImplementsMatcher> matchers = new HashSet<>();
 
     static Map<String, Imatcher> sMatchers = new LinkedHashMap<>();
 
@@ -30,18 +29,11 @@ public class MatcherCreator {
         }
         Imatcher imatcher = null;
         if (rule.startsWith("!")) {
-            if (rule.contains("|")){
-                imatcher = new SeveralExcludeMatcher(rule);
-            }else {
-                imatcher = new ExcludeMatcher(rule);
-            }
+            imatcher = new ExcludeMatcher(rule);
         } else if (rule.endsWith(".**")) {
             imatcher = new PackageMatcher(rule);
         } else if (rule.endsWith(".*")) {
             imatcher = new SubPackgeMatcher(rule);
-        } else if (rule.startsWith("*") && rule.contains("implements")){
-            imatcher = new ImplementsMatcher(rule);
-            matchers.add((ImplementsMatcher) imatcher);
         } else {
             imatcher = new ClassMatcher(rule);
         }
@@ -50,9 +42,5 @@ public class MatcherCreator {
 
         return imatcher;
 
-    }
-
-    public static Set<ImplementsMatcher> getMatchers(){
-        return matchers;
     }
 }

@@ -21,15 +21,4 @@ public class ClassMatcher implements Imatcher {
 
         return mRule.equals(className);
     }
-
-    @Override
-    public String rule() {
-        return mRule;
-    }
-
-    @Override
-    public Imatcher superMatcher() {
-
-        return new SubPackgeMatcher(mRule.substring(0,mRule.lastIndexOf("."))+".*");
-    }
 }

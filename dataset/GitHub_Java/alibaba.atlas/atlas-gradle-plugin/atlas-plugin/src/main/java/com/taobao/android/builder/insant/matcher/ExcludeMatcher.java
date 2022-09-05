@@ -9,8 +9,6 @@ public class ExcludeMatcher implements Imatcher {
 
     private String mRule;
 
-    private Imatcher imatcher;
-
     public ExcludeMatcher(String rule) {
         this.mRule = rule;
     }
@@ -18,37 +16,11 @@ public class ExcludeMatcher implements Imatcher {
     @Override
     public boolean match(String s) {
         String tempRule = mRule.substring(1);
-        if (imatcher == null) {
-            imatcher = MatcherCreator.create(tempRule);
-        }
-
+        Imatcher imatcher = MatcherCreator.create(tempRule);
         if (imatcher.match(s)) {
             return false;
-        }
-
-       Imatcher sMatcher = imatcher.superMatcher();
-
-        if (sMatcher.match(s)){
-            return true;
         }else {
-            return false;
+            return true;
         }
-    }
-
-    @Override
-    public String rule() {
-        return mRule;
-    }
-
-    @Override
-    public Imatcher superMatcher() {
-        String tempRule = mRule.substring(1);
-        if (imatcher == null) {
-            imatcher = MatcherCreator.create(tempRule);
-        }
-        String superRule = imatcher.superMatcher().rule();
-
-        return new ExcludeMatcher("!".concat(superRule));
-
     }
 }
