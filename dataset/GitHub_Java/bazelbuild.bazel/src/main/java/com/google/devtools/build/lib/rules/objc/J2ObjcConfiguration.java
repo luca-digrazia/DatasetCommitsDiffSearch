@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
@@ -26,7 +25,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import java.util.Collections;
-import java.util.List;
+import java.util.Set;
 
 /**
  * A J2ObjC transpiler configuration fragment containing J2ObjC translation flags.
@@ -36,29 +35,21 @@ import java.util.List;
 @Immutable
 public class J2ObjcConfiguration extends Fragment {
   /**
-   * Always-on flags for J2ObjC translation. These flags are always used when invoking the J2ObjC
-   * transpiler, and cannot be overriden by user-specified flags in {@link
-   * J2ObjcCommandLineOptions}. See http://j2objc.org/docs/j2objc.html for flag documentation.
+   * Always-on flags for J2ObjC translation. These flags will always be used for invoking the J2ObjC
+   * transpiler. See http://j2objc.org/docs/j2objc.html for flag documentation.
    */
-  private static final List<String> J2OBJC_ALWAYS_ON_TRANSLATION_FLAGS = ImmutableList.of(
+  private static final Set<String> J2OBJC_ALWAYS_ON_TRANSLATION_FLAGS = ImmutableSet.of(
       "-encoding",
       "UTF-8",
       "--doc-comments",
       "-XcombineJars");
 
   /**
-   * Default flags for J2ObjC translation. These flags are used by default when invoking the J2ObjC
-   * transpiler, but can be overriden by user-specified flags in {@link J2ObjcCommandLineOptions}.
-   * See http://j2objc.org/docs/j2objc.html for flag documentation.
-   */
-  private static final List<String> J2OBJC_DEFAULT_TRANSLATION_FLAGS = ImmutableList.of("-g");
-
-  /**
-   * Disallowed flags for J2ObjC translation. See http://j2objc.org/docs/j2objc.html for flag
+   * Allowed flags for J2ObjC translation. See http://j2objc.org/docs/j2objc.html for flag
    * documentation.
    */
-  static final List<String> J2OBJC_BLACKLISTED_TRANSLATION_FLAGS =
-      ImmutableList.of("--prefixes", "--prefix", "-x");
+  static final Set<String> J2OBJC_BLACKLISTED_TRANSLATION_FLAGS =
+      ImmutableSet.of("--prefixes", "--prefix", "-x");
 
   static final String INVALID_TRANSLATION_FLAGS_MSG_TEMPLATE =
       "J2Objc translation flags: %s not supported. Unsupported flags are: %s";
@@ -83,27 +74,27 @@ public class J2ObjcConfiguration extends Fragment {
     }
   }
 
-  private final List<String> translationFlags;
+  private final Set<String> translationFlags;
   private final boolean removeDeadCode;
   private final boolean explicitJreDeps;
   private final boolean annotationProcessingEnabled;
+  private final boolean zipTreeArtifact;
 
   J2ObjcConfiguration(J2ObjcCommandLineOptions j2ObjcOptions) {
     this.removeDeadCode = j2ObjcOptions.removeDeadCode;
     this.explicitJreDeps = j2ObjcOptions.explicitJreDeps;
-    this.translationFlags = ImmutableList.<String>builder()
-        .addAll(J2OBJC_DEFAULT_TRANSLATION_FLAGS)
+    this.translationFlags = ImmutableSet.<String>builder()
         .addAll(j2ObjcOptions.translationFlags)
         .addAll(J2OBJC_ALWAYS_ON_TRANSLATION_FLAGS)
         .build();
     this.annotationProcessingEnabled = j2ObjcOptions.annotationProcessingEnabled;
+    this.zipTreeArtifact = j2ObjcOptions.zipTreeArtifact;
   }
 
   /**
    * Returns the translation flags used to invoke the J2ObjC transpiler. The returned flags contain
-   * the default flags from {@link #J2OBJC_DEFAULT_TRANSLATION_FLAGS}, user-specified flags from
-   * {@link J2ObjcCommandLineOptions}, and always-on flags from {@link
-   * #J2OBJC_ALWAYS_ON_TRANSLATION_FLAGS}. The set of disallowed flags can be found at
+   * both the always-on flags from {@link #J2OBJC_ALWAYS_ON_TRANSLATION_FLAGS} and user-specified
+   * flags from {@link J2ObjcCommandLineOptions}. The set of valid flags can be found at
    * {@link #J2OBJC_BLACKLISTED_TRANSLATION_FLAGS}.
    */
   public Iterable<String> getTranslationFlags() {
@@ -133,6 +124,13 @@ public class J2ObjcConfiguration extends Fragment {
    */
   public boolean annotationProcessingEnabled() {
     return annotationProcessingEnabled;
+  }
+
+  /**
+   * Returns whether to enable the zipping/unzipping implementation of tree artifact creation.
+   */
+  public boolean zipTreeArtifact() {
+    return zipTreeArtifact;
   }
 
   @Override

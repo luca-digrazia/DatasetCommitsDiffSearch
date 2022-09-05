@@ -86,15 +86,6 @@ public final class IntermediateArtifacts {
   }
 
   /**
-   * Returns the location of this target's extension plist which contains entries required by all
-   * watch extensions (for final merging into the bundle plist).
-   */
-  public Artifact watchExtensionAutomaticPlist() {
-    return ruleContext.getRelatedArtifact(
-        ruleContext.getUniqueDirectory("plists"), "-automatic-watchExtensionInfo.plist");
-  }
-
-  /**
    * Returns a derived artifact in the bin directory obtained by appending some extension to the end
    * of the given {@link PathFragment}.
    */
@@ -326,14 +317,6 @@ public final class IntermediateArtifacts {
    */
   public Artifact swiftFrameworksFileZip() {
     return appendExtension(".swiftstdlib.zip");
-  }
-
-  /**
-   * Same as {@link #swiftFrameworksFileZip()} but used to put Swift dylibs at a different location
-   * in SwiftSupport directory at the top of the IPA.
-   */
-  public Artifact swiftSupportZip() {
-    return appendExtension(".swiftsupport.zip");
   }
 
   /**

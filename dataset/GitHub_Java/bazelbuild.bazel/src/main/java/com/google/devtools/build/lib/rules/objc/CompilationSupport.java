@@ -96,6 +96,7 @@ import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -761,7 +762,7 @@ public final class CompilationSupport {
    * Returns the copts for the compile action in the current rule context (using a combination
    * of the rule's "copts" attribute as well as the current configuration copts).
    */
-  Iterable<String> getCompileRuleCopts() {
+  private Iterable<String> getCompileRuleCopts() {
     List<String> copts = Lists.newArrayList(
         Iterables.concat(objcConfiguration.getCopts(), attributes.copts()));
 
@@ -979,11 +980,7 @@ public final class CompilationSupport {
         .build(ruleContext));
   }
 
-  /**
-   * Registers an action that writes given set of object files to the given objList. This objList is
-   * suitable to signal symbols to archive in a libtool archiving invocation.
-   */
-  CompilationSupport registerObjFilelistAction(Iterable<Artifact> objFiles, Artifact objList) {
+  private void registerObjFilelistAction(Iterable<Artifact> objFiles, Artifact objList) {
     ImmutableSet<Artifact> dedupedObjFiles = ImmutableSet.copyOf(objFiles);
     CustomCommandLine.Builder objFilesToLinkParam = new CustomCommandLine.Builder();
     ImmutableList.Builder<Artifact> treeObjFiles = new ImmutableList.Builder<>();
@@ -1006,7 +1003,6 @@ public final class CompilationSupport {
         objFilesToLinkParam.build(),
         ParameterFile.ParameterFileType.UNQUOTED,
         ISO_8859_1));
-    return this;
   }
 
   /**
