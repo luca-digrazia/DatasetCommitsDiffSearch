@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Builder;
@@ -38,6 +37,7 @@ import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
 import com.google.devtools.build.lib.rules.cpp.CcSpecificLinkParamsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.FileType;
 
 import java.util.ArrayList;
@@ -189,7 +189,7 @@ public final class JavaLibraryHelper {
   public JavaLibraryHelper addDeps(Iterable<? extends TransitiveInfoCollection> deps) {
     for (TransitiveInfoCollection dep : deps) {
       Preconditions.checkArgument(dep.getConfiguration() == null
-          || configuration.equalsOrIsSupersetOf(dep.getConfiguration()));
+          || dep.getConfiguration().equals(configuration));
       this.deps.add(dep);
     }
     return this;
