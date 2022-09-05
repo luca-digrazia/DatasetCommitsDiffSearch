@@ -47,7 +47,6 @@ import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.Nullable;
 
@@ -115,8 +114,6 @@ public abstract class TestStrategy implements TestActionContext {
   // Used for selecting subset of testcase / testmethods.
   private static final String TEST_BRIDGE_TEST_FILTER_ENV = "TESTBRIDGE_TEST_ONLY";
 
-  // Used for generating unique temporary directory names.
-  private final AtomicInteger tmpIndex = new AtomicInteger(0);
   private final boolean statusServerRunning;
   protected final ImmutableMap<String, String> clientEnv;
   protected final ExecutionOptions executionOptions;
@@ -228,19 +225,6 @@ public abstract class TestStrategy implements TestActionContext {
   }
 
   /**
-   * Returns a unique name for a temporary directory a test could use.
-   *
-   * <p>Since each test within single Blaze run must have a unique TEST_TMPDIR,
-   * we will use rule name and a unique (within single Blaze request) number
-   * to generate directory name.</p>
-   *
-   * <p>This does not create the directory.</p>
-   */
-  protected String getTmpDirName(PathFragment execPath) {
-    return execPath.getBaseName() + "_" + tmpIndex.incrementAndGet();
-  }
-
-  /**
    * Parse a test result XML file into a {@link TestCase}.
    */
   @Nullable
@@ -256,19 +240,6 @@ public abstract class TestStrategy implements TestActionContext {
     } catch (IOException | TestXmlOutputParserException e) {
       return null;
     }
-  }
-
-  /**
-   * Returns a temporary directory for all tests in a workspace to use. Individual tests should
-   * create child directories to actually use.
-   *
-   * <p>This either dynamically generates a directory name or uses the directory specified by
-   * --test_tmpdir. This does not create the directory.</p>
-   */
-  public static Path getTmpRoot(Path workspace, Path execRoot, ExecutionOptions executionOptions) {
-    return executionOptions.testTmpDir != null
-        ? workspace.getRelative(executionOptions.testTmpDir).getRelative(TEST_TMP_ROOT)
-        : execRoot.getRelative(TEST_TMP_ROOT);
   }
 
   /**
@@ -296,15 +267,16 @@ public abstract class TestStrategy implements TestActionContext {
       InterruptedException {
     TestTargetExecutionSettings execSettings = testAction.getExecutionSettings();
 
-    // If the symlink farm is already created then return the existing directory. If not we
-    // need to explicitly build it. This can happen when --nobuild_runfile_links is supplied
-    // as a flag to the build.
-    if (execSettings.getRunfilesSymlinksCreated()) {
-      return execSettings.getRunfilesDir();
+    // --nobuild_runfile_links disables runfiles generation only for C++ rules.
+    // In that case, getManifest returns the .runfiles_manifest (input) file,
+    // not the MANIFEST output file of the build-runfiles action. So the
+    // extension ".runfiles_manifest" indicates no runfiles tree.
+    if (!execSettings.getManifest().equals(execSettings.getInputManifest())) {
+      return execSettings.getManifest().getPath().getParentDirectory();
     }
 
-    // TODO(bazel-team): Should we be using TestTargetExecutionSettings#getRunfilesDir() here over
-    // generating the directory ourselves?
+    // We might need to build runfiles tree now, since it was not created yet
+    // local testing is needed.
     Path program = execSettings.getExecutable().getPath();
     Path runfilesDir = program.getParentDirectory().getChild(program.getBaseName() + ".runfiles");
 
@@ -313,7 +285,7 @@ public abstract class TestStrategy implements TestActionContext {
     // trying to generate same runfiles tree in case of --runs_per_test > 1 or
     // local test sharding.
     long startTime = Profiler.nanoTimeMaybe();
-    synchronized (execSettings.getInputManifest()) {
+    synchronized (execSettings.getManifest()) {
       Profiler.instance().logSimpleTask(startTime, ProfilerTask.WAIT, testAction);
       updateLocalRunfilesDirectory(testAction, runfilesDir, actionExecutionContext, binTools);
     }
@@ -334,10 +306,8 @@ public abstract class TestStrategy implements TestActionContext {
 
     TestTargetExecutionSettings execSettings = testAction.getExecutionSettings();
     try {
-      // Avoid rebuilding the runfiles directory if the manifest in it matches the input manifest,
-      // implying the symlinks exist and are already up to date.
       if (Arrays.equals(runfilesDir.getRelative("MANIFEST").getMD5Digest(),
-          execSettings.getInputManifest().getPath().getMD5Digest())) {
+          execSettings.getManifest().getPath().getMD5Digest())) {
         return;
       }
     } catch (IOException e1) {
@@ -347,7 +317,7 @@ public abstract class TestStrategy implements TestActionContext {
     executor.getEventHandler().handle(Event.progress(
         "Building runfiles directory for '" + execSettings.getExecutable().prettyPrint() + "'."));
 
-    new SymlinkTreeHelper(execSettings.getInputManifest().getExecPath(),
+    new SymlinkTreeHelper(execSettings.getManifest().getExecPath(),
         runfilesDir.relativeTo(executor.getExecRoot()), /* filesetTree= */ false)
         .createSymlinks(testAction, actionExecutionContext, binTools);
 

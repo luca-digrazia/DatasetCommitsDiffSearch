@@ -58,6 +58,7 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
       ConfigurationFactory configurationFactory,
       PackageProviderForConfigurations loadedPackageProvider,
       BuildOptions buildOptions,
+      Map<String, String> testEnv,
       EventHandler errorEventListener,
       boolean performSanityCheck) throws InvalidConfigurationException {
 
@@ -70,7 +71,7 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
 
     // Target configuration
     BuildConfiguration targetConfiguration = configurationFactory.getConfiguration(
-        loadedPackageProvider, buildOptions, false, cache);
+        loadedPackageProvider, buildOptions, testEnv, false, cache);
     if (targetConfiguration == null) {
       return null;
     }
@@ -81,7 +82,7 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
     // Note that this passes in the dataConfiguration, not the target
     // configuration. This is intentional.
     BuildConfiguration hostConfiguration = getHostConfigurationFromRequest(configurationFactory,
-        loadedPackageProvider, dataConfiguration, buildOptions);
+        loadedPackageProvider, testEnv, dataConfiguration, buildOptions);
     if (hostConfiguration == null) {
       return null;
     }
@@ -130,7 +131,7 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
   @Nullable
   private BuildConfiguration getHostConfigurationFromRequest(
       ConfigurationFactory configurationFactory,
-      PackageProviderForConfigurations loadedPackageProvider,
+      PackageProviderForConfigurations loadedPackageProvider, Map<String, String> testEnv,
       BuildConfiguration requestConfig, BuildOptions buildOptions)
       throws InvalidConfigurationException {
     BuildConfiguration.Options commonOptions = buildOptions.get(BuildConfiguration.Options.class);
@@ -138,7 +139,7 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
       return requestConfig;
     } else {
       BuildConfiguration hostConfig = configurationFactory.getHostConfiguration(
-          loadedPackageProvider, buildOptions, /*fallback=*/false);
+          loadedPackageProvider, testEnv, buildOptions, /*fallback=*/false);
       if (hostConfig == null) {
         return null;
       }

@@ -20,6 +20,8 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.analysis.config.PackageProviderForConfigurations;
 import com.google.devtools.build.lib.events.EventHandler;
 
+import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -34,6 +36,7 @@ public interface ConfigurationCollectionFactory {
    * via configuration transitions.
    * @param loadedPackageProvider the package provider
    * @param buildOptions top-level build options representing the command-line
+   * @param testEnv the test environment
    * @param errorEventListener the event listener for errors
    * @param performSanityCheck flag to signal about performing sanity check. Can be false only for
    * tests in skyframe. Legacy mode uses loadedPackageProvider == null condition for this.
@@ -45,6 +48,7 @@ public interface ConfigurationCollectionFactory {
       ConfigurationFactory configurationFactory,
       PackageProviderForConfigurations loadedPackageProvider,
       BuildOptions buildOptions,
+      Map<String, String> testEnv,
       EventHandler errorEventListener,
       boolean performSanityCheck) throws InvalidConfigurationException;
 }

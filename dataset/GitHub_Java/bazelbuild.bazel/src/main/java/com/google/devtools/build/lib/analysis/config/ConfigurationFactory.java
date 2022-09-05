@@ -84,7 +84,8 @@ public final class ConfigurationFactory {
       BuildConfigurationKey key, EventHandler errorEventListener)
           throws InvalidConfigurationException {
     return configurationCollectionFactory.createConfigurations(this,
-        loadedPackageProvider, buildOptions, errorEventListener, performSanityCheck);
+        loadedPackageProvider, buildOptions, key.getTestEnv(),
+        errorEventListener, performSanityCheck);
   }
 
   /**
@@ -93,10 +94,10 @@ public final class ConfigurationFactory {
    */
   @Nullable
   public BuildConfiguration getHostConfiguration(
-      PackageProviderForConfigurations loadedPackageProvider,
+      PackageProviderForConfigurations loadedPackageProvider, Map<String, String> testEnv,
       BuildOptions buildOptions, boolean fallback) throws InvalidConfigurationException {
     return getConfiguration(loadedPackageProvider, buildOptions.createHostOptions(fallback),
-        false, hostConfigCache);
+        testEnv, false, hostConfigCache);
   }
 
   /**
@@ -105,7 +106,7 @@ public final class ConfigurationFactory {
    */
   @Nullable
   public BuildConfiguration getConfiguration(PackageProviderForConfigurations loadedPackageProvider,
-      BuildOptions buildOptions,
+      BuildOptions buildOptions, Map<String, String> testEnv,
       boolean actionsDisabled, Cache<String, BuildConfiguration> cache)
           throws InvalidConfigurationException {
 
@@ -135,10 +136,11 @@ public final class ConfigurationFactory {
     fragments = ImmutableMap.copyOf(fragments);
 
     String key = BuildConfiguration.computeCacheKey(
-        directories, fragments, buildOptions);
+        directories, fragments, buildOptions, testEnv);
     BuildConfiguration configuration = cache.getIfPresent(key);
     if (configuration == null) {
-      configuration = new BuildConfiguration(directories, fragments, buildOptions, actionsDisabled);
+      configuration = new BuildConfiguration(directories, fragments, buildOptions,
+          testEnv, actionsDisabled);
       cache.put(key, configuration);
     }
     return configuration;

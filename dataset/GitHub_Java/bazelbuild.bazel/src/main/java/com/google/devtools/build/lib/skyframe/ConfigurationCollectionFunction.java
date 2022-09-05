@@ -33,6 +33,7 @@ import com.google.devtools.build.skyframe.SkyValue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nullable;
@@ -43,12 +44,15 @@ import javax.annotation.Nullable;
 public class ConfigurationCollectionFunction implements SkyFunction {
 
   private final Supplier<ConfigurationFactory> configurationFactory;
+  private final Supplier<Map<String, String>> testEnv;
   private final Supplier<Set<Package>> configurationPackages;
 
   public ConfigurationCollectionFunction(
       Supplier<ConfigurationFactory> configurationFactory,
+      Supplier<Map<String, String>> testEnv,
       Supplier<Set<Package>> configurationPackages) {
     this.configurationFactory = configurationFactory;
+    this.testEnv = testEnv;
     this.configurationPackages = configurationPackages;
   }
 
@@ -57,6 +61,7 @@ public class ConfigurationCollectionFunction implements SkyFunction {
       ConfigurationCollectionFunctionException {
     ConfigurationCollectionKey collectionKey = (ConfigurationCollectionKey) skyKey.argument();
     try {
+      PrecomputedValue.TEST_ENVIRONMENT_VARIABLES.get(env);
       BlazeDirectories directories = PrecomputedValue.BLAZE_DIRECTORIES.get(env);
       if (env.valuesMissing()) {
         return null;
@@ -65,8 +70,8 @@ public class ConfigurationCollectionFunction implements SkyFunction {
       BuildConfigurationCollection result =
           getConfigurations(env.getListener(),
           new SkyframePackageLoaderWithValueEnvironment(env, configurationPackages.get()),
-          new BuildConfigurationKey(
-              collectionKey.getBuildOptions(), directories, collectionKey.getMultiCpu()));
+          new BuildConfigurationKey(collectionKey.getBuildOptions(), directories, testEnv.get(),
+              collectionKey.getMultiCpu()));
 
       // BuildConfigurationCollection can be created, but dependencies to some files might be
       // missing. In that case we need to build configurationCollection again.

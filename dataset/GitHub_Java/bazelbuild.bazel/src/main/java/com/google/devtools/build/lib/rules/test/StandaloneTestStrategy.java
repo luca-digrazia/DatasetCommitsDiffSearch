@@ -47,19 +47,20 @@ import java.util.Map;
 /**
  * Runs TestRunnerAction actions.
  */
-@ExecutionStrategy(contextType = TestActionContext.class, name = { "standalone" })
+@ExecutionStrategy(contextType = TestActionContext.class,
+          name = { "standalone" })
 public class StandaloneTestStrategy extends TestStrategy {
-  // TODO(bazel-team) - add tests for this strategy.
-  // TODO(bazel-team) - add support for test timeouts.
-  // TODO(bazel-team) - add support for parsing XML output.
-
-  private final Path workspace;
+  /*
+    TODO(bazel-team):
+    * tests
+    * It would be nice to get rid of (cd $TEST_SRCDIR) in the test-setup script.
+    * test timeouts.
+    * parsing XML output.
+    */
 
   public StandaloneTestStrategy(OptionsClassProvider requestOptions,
-      OptionsClassProvider startupOptions, BinTools binTools, Map<String, String> clientEnv,
-      Path workspace) {
+      OptionsClassProvider startupOptions, BinTools binTools, Map<String, String> clientEnv) {
     super(requestOptions, startupOptions, binTools, clientEnv);
-    this.workspace = workspace;
   }
 
   private static final String TEST_SETUP = "tools/test/test-setup.sh";
@@ -75,24 +76,14 @@ public class StandaloneTestStrategy extends TestStrategy {
       throw new TestExecException(e.getMessage());
     }
 
-    Path testTmpDir = TestStrategy.getTmpRoot(
-        workspace, actionExecutionContext.getExecutor().getExecRoot(), executionOptions)
-        .getChild(getTmpDirName(action.getExecutionSettings().getExecutable().getExecPath()));
     Path workingDirectory = runfilesDir.getRelative(action.getRunfilesPrefix());
-    Map<String, String> env = getEnv(action, runfilesDir, testTmpDir);
+    Map<String, String> env = getEnv(action, runfilesDir);
     Spawn spawn = new BaseSpawn(getArgs(action), env,
         action.getTestProperties().getExecutionInfo(),
         action,
         action.getTestProperties().getLocalResourceUsage(executionOptions.usingLocalTestJobs()));
 
     Executor executor = actionExecutionContext.getExecutor();
-
-    try {
-      FileSystemUtils.createDirectoryAndParents(testTmpDir);
-    } catch (IOException e) {
-      executor.getEventHandler().handle(Event.error("Could not create TEST_TMPDIR: " + e));
-      throw new EnvironmentalExecException("Could not create TEST_TMPDIR " + testTmpDir, e);
-    }
 
     ResourceSet resources = null;
     FileOutErr fileOutErr = null;
@@ -125,14 +116,15 @@ public class StandaloneTestStrategy extends TestStrategy {
     }
   }
 
-  private Map<String, String> getEnv(TestRunnerAction action, Path runfilesDir, Path tmpDir) {
+  private Map<String, String> getEnv(TestRunnerAction action, Path runfilesDir) {
     Map<String, String> vars = getDefaultTestEnvironment(action);
     BuildConfiguration config = action.getConfiguration();
 
     vars.putAll(config.getDefaultShellEnvironment());
     vars.putAll(action.getTestEnv());
     vars.put("TEST_SRCDIR", runfilesDir.getPathString());
-    vars.put("TEST_TMPDIR", tmpDir.getPathString());
+
+    // TODO(bazel-team): set TEST_TMPDIR.
 
     return vars;
   }

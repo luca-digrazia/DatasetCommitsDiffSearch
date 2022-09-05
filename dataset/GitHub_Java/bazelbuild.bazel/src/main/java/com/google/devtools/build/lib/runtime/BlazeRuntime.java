@@ -138,7 +138,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -235,7 +234,7 @@ public final class BlazeRuntime {
    */
   private static Map<String, String> computeTestEnv(List<Map.Entry<String, String>> envOverrides,
       Map<String, String> clientEnvironment) {
-    Map<String, String> testEnv = new TreeMap<>();
+    Map<String, String> testEnv = new HashMap<>();
     for (Map.Entry<String, String> var : envOverrides) {
       if (var.getValue() != null) {
         testEnv.put(var.getKey(), var.getValue());

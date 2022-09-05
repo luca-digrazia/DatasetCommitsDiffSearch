@@ -65,19 +65,19 @@ public class StandaloneContextProvider implements ActionContextProvider {
   }
 
   @SuppressWarnings("unchecked")
-  private final ActionContext standaloneSpawnStrategy;
+  private final ActionContext localSpawnStrategy;
   private final ImmutableList<ActionContext> strategies;
   private final BlazeRuntime runtime;
 
   public StandaloneContextProvider(BlazeRuntime runtime, BuildRequest buildRequest) {
     boolean verboseFailures = buildRequest.getOptions(ExecutionOptions.class).verboseFailures;
 
-    standaloneSpawnStrategy = new StandaloneSpawnStrategy(runtime.getExecRoot(), verboseFailures);
+    localSpawnStrategy = new LocalSpawnStrategy(
+        runtime.getDirectories().getExecRoot(), verboseFailures);
     this.runtime = runtime;
 
     TestActionContext testStrategy = new StandaloneTestStrategy(buildRequest,
-        runtime.getStartupOptionsProvider(), runtime.getBinTools(), runtime.getClientEnv(),
-        runtime.getWorkspace());
+        runtime.getStartupOptionsProvider(), runtime.getBinTools(), runtime.getClientEnv());
     Builder<ActionContext> strategiesBuilder = ImmutableList.builder();
     // order of strategies passed to builder is significant - when there are many strategies that
     // could potentially be used and a spawnActionContext doesn't specify which one it wants, the
@@ -90,7 +90,7 @@ public class StandaloneContextProvider implements ActionContextProvider {
       strategiesBuilder.add(sandboxedLinuxStrategy);
     }
     strategiesBuilder.add(
-        standaloneSpawnStrategy,
+        localSpawnStrategy,
         new DummyIncludeScanningContext(),
         new LocalLinkStrategy(),
         testStrategy,
