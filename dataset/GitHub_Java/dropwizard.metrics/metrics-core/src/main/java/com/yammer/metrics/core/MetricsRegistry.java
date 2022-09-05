@@ -16,7 +16,8 @@ public class MetricsRegistry {
             new CopyOnWriteArrayList<MetricsRegistryListener>();
 
     /**
-     * Given a new {@link Gauge}, registers it under the given class and name.
+     * Given a new {@link Gauge}, registers it under the given class
+     * and name.
      *
      * @param klass  the class which owns the metric
      * @param name   the name of the metric
@@ -25,13 +26,14 @@ public class MetricsRegistry {
      * @return {@code metric}
      */
     public <T> Gauge<T> newGauge(Class<?> klass,
-                                 String name,
-                                 Gauge<T> metric) {
+                                       String name,
+                                       Gauge<T> metric) {
         return newGauge(klass, name, null, metric);
     }
 
     /**
-     * Given a new {@link Gauge}, registers it under the given class and name.
+     * Given a new {@link Gauge}, registers it under the given class
+     * and name.
      *
      * @param klass  the class which owns the metric
      * @param name   the name of the metric
@@ -41,14 +43,15 @@ public class MetricsRegistry {
      * @return {@code metric}
      */
     public <T> Gauge<T> newGauge(Class<?> klass,
-                                 String name,
-                                 String scope,
-                                 Gauge<T> metric) {
+                                       String name,
+                                       String scope,
+                                       Gauge<T> metric) {
         return newGauge(createName(klass, name, scope), metric);
     }
 
     /**
-     * Given a new {@link Gauge}, registers it under the given metric name.
+     * Given a new {@link Gauge}, registers it under the given metric
+     * name.
      *
      * @param metricName the name of the metric
      * @param metric     the metric
@@ -56,24 +59,26 @@ public class MetricsRegistry {
      * @return {@code metric}
      */
     public <T> Gauge<T> newGauge(MetricName metricName,
-                                 Gauge<T> metric) {
+                                       Gauge<T> metric) {
         return getOrAdd(metricName, metric);
     }
 
     /**
-     * Creates a new {@link Counter} and registers it under the given class and name.
+     * Creates a new {@link Counter} and registers it under the given
+     * class and name.
      *
      * @param klass the class which owns the metric
      * @param name  the name of the metric
      * @return a new {@link Counter}
      */
     public Counter newCounter(Class<?> klass,
-                              String name) {
+                                    String name) {
         return newCounter(klass, name, null);
     }
 
     /**
-     * Creates a new {@link Counter} and registers it under the given class and name.
+     * Creates a new {@link Counter} and registers it under the given
+     * class and name.
      *
      * @param klass the class which owns the metric
      * @param name  the name of the metric
@@ -81,13 +86,14 @@ public class MetricsRegistry {
      * @return a new {@link Counter}
      */
     public Counter newCounter(Class<?> klass,
-                              String name,
-                              String scope) {
+                                    String name,
+                                    String scope) {
         return newCounter(createName(klass, name, scope));
     }
 
     /**
-     * Creates a new {@link Counter} and registers it under the given metric name.
+     * Creates a new {@link Counter} and registers it under the given
+     * metric name.
      *
      * @param metricName the name of the metric
      * @return a new {@link Counter}
@@ -105,13 +111,14 @@ public class MetricsRegistry {
      * @return a new {@link Histogram}
      */
     public Histogram newHistogram(Class<?> klass,
-                                  String name,
-                                  boolean biased) {
+                                        String name,
+                                        boolean biased) {
         return newHistogram(klass, name, null, biased);
     }
 
     /**
-     * Creates a new {@link Histogram} and registers it under the given class, name, and scope.
+     * Creates a new {@link Histogram} and registers it under the given class, name, and
+     * scope.
      *
      * @param klass  the class which owns the metric
      * @param name   the name of the metric
@@ -120,27 +127,28 @@ public class MetricsRegistry {
      * @return a new {@link Histogram}
      */
     public Histogram newHistogram(Class<?> klass,
-                                  String name,
-                                  String scope,
-                                  boolean biased) {
+                                        String name,
+                                        String scope,
+                                        boolean biased) {
         return newHistogram(createName(klass, name, scope), biased);
     }
 
     /**
-     * Creates a new non-biased {@link Histogram} and registers it under the given class and name.
+     * Creates a new non-biased {@link Histogram} and registers it under the given class and
+     * name.
      *
      * @param klass the class which owns the metric
      * @param name  the name of the metric
      * @return a new {@link Histogram}
      */
     public Histogram newHistogram(Class<?> klass,
-                                  String name) {
+                                        String name) {
         return newHistogram(klass, name, false);
     }
 
     /**
-     * Creates a new non-biased {@link Histogram} and registers it under the given class, name, and
-     * scope.
+     * Creates a new non-biased {@link Histogram} and registers it under the given class,
+     * name, and scope.
      *
      * @param klass the class which owns the metric
      * @param name  the name of the metric
@@ -148,8 +156,8 @@ public class MetricsRegistry {
      * @return a new {@link Histogram}
      */
     public Histogram newHistogram(Class<?> klass,
-                                  String name,
-                                  String scope) {
+                                        String name,
+                                        String scope) {
         return newHistogram(klass, name, scope, false);
     }
 
@@ -161,7 +169,7 @@ public class MetricsRegistry {
      * @return a new {@link Histogram}
      */
     public Histogram newHistogram(MetricName metricName,
-                                  boolean biased) {
+                                        boolean biased) {
         return getOrAdd(metricName,
                         new Histogram(biased ? SampleType.BIASED : SampleType.UNIFORM));
     }
@@ -177,9 +185,9 @@ public class MetricsRegistry {
      * @return a new {@link Meter}
      */
     public Meter newMeter(Class<?> klass,
-                          String name,
-                          String eventType,
-                          TimeUnit unit) {
+                                String name,
+                                String eventType,
+                                TimeUnit unit) {
         return newMeter(klass, name, null, eventType, unit);
     }
 
@@ -195,10 +203,10 @@ public class MetricsRegistry {
      * @return a new {@link Meter}
      */
     public Meter newMeter(Class<?> klass,
-                          String name,
-                          String scope,
-                          String eventType,
-                          TimeUnit unit) {
+                                String name,
+                                String scope,
+                                String eventType,
+                                TimeUnit unit) {
         return newMeter(createName(klass, name, scope), eventType, unit);
     }
 
@@ -212,8 +220,8 @@ public class MetricsRegistry {
      * @return a new {@link Meter}
      */
     public Meter newMeter(MetricName metricName,
-                          String eventType,
-                          TimeUnit unit) {
+                                String eventType,
+                                TimeUnit unit) {
         final Metric existingMetric = metrics.get(metricName);
         if (existingMetric != null) {
             return (Meter) existingMetric;
@@ -231,7 +239,7 @@ public class MetricsRegistry {
      * @return a new {@link Timer}
      */
     public Timer newTimer(Class<?> klass,
-                          String name) {
+                                String name) {
         return newTimer(klass, name, null, TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
     }
 
@@ -245,9 +253,9 @@ public class MetricsRegistry {
      * @return a new {@link Timer}
      */
     public Timer newTimer(Class<?> klass,
-                          String name,
-                          TimeUnit durationUnit,
-                          TimeUnit rateUnit) {
+                                String name,
+                                TimeUnit durationUnit,
+                                TimeUnit rateUnit) {
         return newTimer(klass, name, null, durationUnit, rateUnit);
     }
 
@@ -261,8 +269,8 @@ public class MetricsRegistry {
      * @return a new {@link Timer}
      */
     public Timer newTimer(Class<?> klass,
-                          String name,
-                          String scope) {
+                                String name,
+                                String scope) {
         return newTimer(klass, name, scope, TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
     }
 
@@ -277,10 +285,10 @@ public class MetricsRegistry {
      * @return a new {@link Timer}
      */
     public Timer newTimer(Class<?> klass,
-                          String name,
-                          String scope,
-                          TimeUnit durationUnit,
-                          TimeUnit rateUnit) {
+                                String name,
+                                String scope,
+                                TimeUnit durationUnit,
+                                TimeUnit rateUnit) {
         return newTimer(createName(klass, name, scope), durationUnit, rateUnit);
     }
 
@@ -293,8 +301,8 @@ public class MetricsRegistry {
      * @return a new {@link Timer}
      */
     public Timer newTimer(MetricName metricName,
-                          TimeUnit durationUnit,
-                          TimeUnit rateUnit) {
+                                TimeUnit durationUnit,
+                                TimeUnit rateUnit) {
         final Metric existingMetric = metrics.get(metricName);
         if (existingMetric != null) {
             return (Timer) existingMetric;
@@ -322,18 +330,18 @@ public class MetricsRegistry {
     }
 
     /**
-     * Returns a grouped and sorted map of all registered metrics which match then given {@link
-     * MetricPredicate}.
+     * Returns a grouped and sorted map of all registered metrics which match then given
+     * {@link MetricPredicate}.
      *
-     * @param predicate a predicate which metrics have to match to be in the results
+     *
+     * @param predicate    a predicate which metrics have to match to be in the results
      * @return all registered metrics which match {@code predicate}, sorted by name
      */
     public SortedMap<String, SortedMap<MetricName, Metric>> groupedMetrics(MetricPredicate predicate) {
         final SortedMap<String, SortedMap<MetricName, Metric>> groups =
                 new TreeMap<String, SortedMap<MetricName, Metric>>();
         for (Map.Entry<MetricName, Metric> entry : metrics.entrySet()) {
-            final String qualifiedTypeName = entry.getKey().getGroup() + "." + entry.getKey()
-                                                                                    .getType();
+            final String qualifiedTypeName = entry.getKey().getGroup() + "." + entry.getKey().getType();
             if (predicate.matches(entry.getKey(), entry.getValue())) {
                 final String scopedName;
                 if (entry.getKey().hasScope()) {
@@ -459,9 +467,9 @@ public class MetricsRegistry {
     /**
      * Gets any existing metric with the given name or, if none exists, adds the given metric.
      *
-     * @param name   the metric's name
-     * @param metric the new metric
-     * @param <T>    the type of the metric
+     * @param name      the metric's name
+     * @param metric    the new metric
+     * @param <T>       the type of the metric
      * @return either the existing metric or {@code metric}
      */
     @SuppressWarnings("unchecked")
