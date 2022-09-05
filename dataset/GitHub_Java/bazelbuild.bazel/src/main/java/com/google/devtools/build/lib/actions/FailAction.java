@@ -46,6 +46,11 @@ public final class FailAction extends AbstractAction {
   }
 
   @Override
+  public ResourceSet estimateResourceConsumption(Executor executor) {
+    return ResourceSet.ZERO;
+  }
+
+  @Override
   protected String computeKey() {
     return GUID;
   }

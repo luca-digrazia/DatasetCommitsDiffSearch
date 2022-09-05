@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
@@ -21,39 +22,68 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.vfs.PathFragment;
+
+import javax.annotation.Nullable;
 
 /**
  * Action responsible for the symlink tree creation.
  * Used to generate runfiles and fileset symlink farms.
  */
-public class SymlinkTreeAction extends AbstractAction {
+@Immutable
+public final class SymlinkTreeAction extends AbstractAction {
 
   private static final String GUID = "63412bda-4026-4c8e-a3ad-7deb397728d4";
 
   private final Artifact inputManifest;
   private final Artifact outputManifest;
   private final boolean filesetTree;
+  private final PathFragment shExecutable;
+  private final ImmutableMap<String, String> shellEnviroment;
 
   /**
    * Creates SymlinkTreeAction instance.
    *
    * @param owner action owner
-   * @param inputManifest exec path to the input runfiles manifest
-   * @param outputManifest exec path to the generated symlink tree manifest
+   * @param inputManifest the input runfiles manifest
+   * @param artifactMiddleman the middleman artifact representing all the files the symlinks
+   *                          point to (on Windows we need to know if the target of a "symlink" is
+   *                          a directory or a file so we need to build it before)
+   * @param outputManifest the generated symlink tree manifest
    *                       (must have "MANIFEST" base name). Symlink tree root
    *                       will be set to the artifact's parent directory.
    * @param filesetTree true if this is fileset symlink tree,
    *                    false if this is a runfiles symlink tree.
    */
-  public SymlinkTreeAction(ActionOwner owner, Artifact inputManifest, Artifact outputManifest,
-      boolean filesetTree) {
-    super(owner, ImmutableList.of(inputManifest), ImmutableList.of(outputManifest));
+  public SymlinkTreeAction(
+      ActionOwner owner,
+      Artifact inputManifest,
+      @Nullable Artifact artifactMiddleman,
+      Artifact outputManifest,
+      boolean filesetTree,
+      PathFragment shExecutable,
+      ImmutableMap<String, String> shellEnvironment) {
+    super(owner, computeInputs(inputManifest, artifactMiddleman), ImmutableList.of(outputManifest));
     Preconditions.checkArgument(outputManifest.getPath().getBaseName().equals("MANIFEST"));
     this.inputManifest = inputManifest;
     this.outputManifest = outputManifest;
     this.filesetTree = filesetTree;
+    this.shExecutable = shExecutable;
+    this.shellEnviroment = shellEnvironment;
+  }
+
+  private static ImmutableList<Artifact> computeInputs(
+      Artifact inputManifest, Artifact artifactMiddleman) {
+    ImmutableList.Builder<Artifact> result = ImmutableList.<Artifact>builder()
+        .add(inputManifest);
+    if (artifactMiddleman != null
+        && !artifactMiddleman.getPath().getFileSystem().supportsSymbolicLinksNatively()) {
+      result.add(artifactMiddleman);
+    }
+    return result.build();
   }
 
   public Artifact getInputManifest() {
@@ -89,21 +119,16 @@ public class SymlinkTreeAction extends AbstractAction {
 
   @Override
   public ResourceSet estimateResourceConsumption(Executor executor) {
-    // Return null here to indicate that resources would be managed manually
-    // during action execution.
-    return null;
-  }
-
-  @Override
-  public String describeStrategy(Executor executor) {
-    return "local"; // Symlink tree is always generated locally.
+    return ResourceSet.ZERO;
   }
 
   @Override
   public void execute(
       ActionExecutionContext actionExecutionContext)
           throws ActionExecutionException, InterruptedException {
-    actionExecutionContext.getExecutor().getContext(SymlinkTreeActionContext.class)
-        .createSymlinks(this, actionExecutionContext);
+    actionExecutionContext
+        .getExecutor()
+        .getContext(SymlinkTreeActionContext.class)
+        .createSymlinks(this, actionExecutionContext, shExecutable, shellEnviroment);
   }
 }

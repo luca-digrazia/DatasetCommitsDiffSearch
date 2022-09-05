@@ -19,11 +19,14 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.Executor;
+import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.protobuf.GeneratedMessage.GeneratedExtension;
 import com.google.protobuf.MessageLite;
+
 import java.util.Collection;
 import java.util.UUID;
 
@@ -69,6 +72,11 @@ public class PseudoAction<InfoType extends MessageLite> extends AbstractAction {
   }
 
   @Override
+  public ResourceSet estimateResourceConsumption(Executor executor) {
+    return ResourceSet.ZERO;
+  }
+
+  @Override
   public ExtraActionInfo.Builder getExtraActionInfo() {
     return super.getExtraActionInfo().setExtension(infoExtension, info);
   }
@@ -76,7 +84,6 @@ public class PseudoAction<InfoType extends MessageLite> extends AbstractAction {
   public static Artifact getDummyOutput(RuleContext ruleContext) {
     return ruleContext.getPackageRelativeArtifact(
         ruleContext.getLabel().getName() + ".extra_action_dummy",
-        ruleContext.getConfiguration().getGenfilesDirectory(
-            ruleContext.getRule().getRepository()));
+        ruleContext.getConfiguration().getGenfilesDirectory());
   }
 }

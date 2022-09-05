@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.AbstractAction;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
@@ -28,11 +28,13 @@ import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.IOException;
 
 /**
@@ -127,7 +129,7 @@ public final class SolibSymlinkAction extends AbstractAction {
    *     consumer
    * @return mangled symlink artifact.
    */
-  public static Artifact getDynamicLibrarySymlink(final RuleContext ruleContext,
+  public static LibraryToLink getDynamicLibrarySymlink(final RuleContext ruleContext,
                                                        final Artifact library,
                                                        boolean preserveName,
                                                        boolean prefixConsumer,
@@ -135,8 +137,7 @@ public final class SolibSymlinkAction extends AbstractAction {
     PathFragment mangledName = getMangledName(
         ruleContext, library.getRootRelativePath(), preserveName, prefixConsumer,
         configuration.getFragment(CppConfiguration.class));
-    return getDynamicLibrarySymlinkInternal(
-        ruleContext, library, mangledName, configuration);
+    return getDynamicLibrarySymlinkInternal(ruleContext, library, mangledName, configuration);
   }
 
    /**
@@ -144,7 +145,7 @@ public final class SolibSymlinkAction extends AbstractAction {
    * These are handled differently than other libraries: neither their names nor directories are
    * mangled, i.e. libstdc++.so.6 is symlinked from _solib_[arch]/libstdc++.so.6
    */
-  public static Artifact getCppRuntimeSymlink(RuleContext ruleContext, Artifact library,
+  public static LibraryToLink getCppRuntimeSymlink(RuleContext ruleContext, Artifact library,
       String solibDirOverride, BuildConfiguration configuration) {
     PathFragment solibDir = new PathFragment(solibDirOverride != null
         ? solibDirOverride
@@ -157,7 +158,7 @@ public final class SolibSymlinkAction extends AbstractAction {
    * Internal implementation that takes a pre-determined symlink name; supports both the
    * generic {@link #getDynamicLibrarySymlink} and the specialized {@link #getCppRuntimeSymlink}.
    */
-  private static Artifact getDynamicLibrarySymlinkInternal(RuleContext ruleContext,
+  private static LibraryToLink getDynamicLibrarySymlinkInternal(RuleContext ruleContext,
       Artifact library, PathFragment symlinkName, BuildConfiguration configuration) {
     Preconditions.checkArgument(Link.SHARED_LIBRARY_FILETYPES.matches(library.getFilename()));
     Preconditions.checkArgument(!library.getRootRelativePath().getSegment(0).startsWith("_solib_"));
@@ -167,7 +168,7 @@ public final class SolibSymlinkAction extends AbstractAction {
     Artifact symlink = ruleContext.getShareableArtifact(symlinkName, root);
     ruleContext.registerAction(
         new SolibSymlinkAction(ruleContext.getActionOwner(), library, symlink));
-    return symlink;
+    return LinkerInputs.solibLibraryToLink(symlink, library);
   }
 
   /**
@@ -223,7 +224,7 @@ public final class SolibSymlinkAction extends AbstractAction {
   }
 
   @Override
-  public boolean shouldReportPathPrefixConflict(ActionAnalysisMetadata action) {
+  public boolean shouldReportPathPrefixConflict(Action action) {
     return false; // Always ignore path prefix conflict for the SolibSymlinkAction.
   }
 }
