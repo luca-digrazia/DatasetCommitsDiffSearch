@@ -188,7 +188,7 @@ public final class BuildType {
 
     @Override
     public void visitLabels(LabelVisitor visitor, Object value) throws InterruptedException {
-      for (Label label : cast(value).getLabels()) {
+      for (Object label : cast(value).getLabels()) {
         visitor.visit(label);
       }
     }

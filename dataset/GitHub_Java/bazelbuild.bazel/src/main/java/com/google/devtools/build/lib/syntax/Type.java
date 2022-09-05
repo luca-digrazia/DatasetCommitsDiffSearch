@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
@@ -125,11 +124,11 @@ public abstract class Type<T> {
 
   /** Function accepting a (potentially null) object value. See {@link #visitLabels}. */
   public static interface LabelVisitor {
-    void visit(@Nullable Label label) throws InterruptedException;
+    void visit(@Nullable Object object) throws InterruptedException;
   }
 
   /**
-   * Extracts all labels associated with the instance of the type to visitor.
+   * Pall labels associated with the instance of the type to visitor.
    *
    * <p>This is used to support reliable label visitation in
    * {@link com.google.devtools.build.lib.packages.AbstractAttributeMapper#visitLabels}. To preserve

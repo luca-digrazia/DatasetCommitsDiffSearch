@@ -415,14 +415,14 @@ public class BuildTypeTest {
     assertFalse(EvalUtils.isImmutable(makeFilesetEntry()));
   }
 
-  private static ImmutableList<Label> collectLabels(Type<?> type, Object value)
+  private static <T> Iterable<T> collectLabels(Type<T> type, Object value)
       throws InterruptedException {
-    ImmutableList.Builder<Label> result = ImmutableList.builder();
+    ImmutableList.Builder<T> result = ImmutableList.builder();
     type.visitLabels(new Type.LabelVisitor() {
       @SuppressWarnings("unchecked")
       @Override
-      public void visit(Label label) throws InterruptedException {
-        result.add(label);
+      public void visit(Object object) throws InterruptedException {
+        result.add((T) object);
       }
     }, value);
     return result.build();
