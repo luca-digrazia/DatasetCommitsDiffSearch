@@ -343,7 +343,6 @@ public class DiffResExtractor {
         try {
             removeStringValue(valuesXml, "config_channel");
             removeStringValue(valuesXml, "ttid");
-            removeStringValue(valuesXml, "config_channel");
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
