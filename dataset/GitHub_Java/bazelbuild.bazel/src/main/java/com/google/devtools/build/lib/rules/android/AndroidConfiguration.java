@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
+
 import java.util.List;
 
 /**
@@ -179,7 +180,8 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     // TODO(bazel-team): Maybe merge this with --android_cpu above.
     @Option(name = "fat_apk_cpu",
             converter = Converters.CommaSeparatedOptionListConverter.class,
-            defaultValue = "armeabi-v7a",
+            allowMultiple = true,
+            defaultValue = "",
             category = "undocumented",
             help = "Setting this option enables fat APKs, which contain native binaries for all "
                 + "specified target architectures, e.g., --fat_apk_cpu=x86,armeabi-v7a. Note that "
@@ -251,6 +253,17 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       return host;
     }
 
+    // This method is here because Constants.ANDROID_DEFAULT_FAT_APK_CPUS cannot be a constant
+    // because we replace the class file in the .jar after compilation. However, that means that we
+    // cannot use it as an attribute value in an annotation.
+    public List<String> realFatApkCpus() {
+      if (fatApkCpus.isEmpty()) {
+        return Constants.ANDROID_DEFAULT_FAT_APK_CPUS;
+      } else {
+        return fatApkCpus;
+      }
+    }
+
     @Override
     public ImmutableList<String> getDefaultsRules() {
       return ImmutableList.of("android_tools_defaults_jar(name = 'android_jar')");
@@ -303,7 +316,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.strictDeps = options.strictDeps;
     this.legacyNativeSupport = options.legacyNativeSupport;
     this.cpu = options.cpu;
-    this.fatApk = !options.fatApkCpus.isEmpty();
+    this.fatApk = !options.realFatApkCpus().isEmpty();
     this.configurationDistinguisher = options.configurationDistinguisher;
     this.useJackForDexing = options.useJackForDexing;
     this.jackSanityChecks = options.jackSanityChecks;
