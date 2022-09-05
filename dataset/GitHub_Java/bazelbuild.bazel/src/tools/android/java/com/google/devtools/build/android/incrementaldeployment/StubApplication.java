@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,8 +75,6 @@ public class StubApplication extends Application {
 
   private String externalResourceFile;
   private Application realApplication;
-
-  private Object stashedContentProviders;
 
   public StubApplication() {
     String[] stubApplicationData = getResourceAsString("stub_application_data.txt").split("\n");
@@ -455,68 +453,6 @@ public class StubApplication extends Application {
     }
   }
 
-  private static Field getField(Object instance, String fieldName)
-      throws ClassNotFoundException {
-    for (Class<?> clazz = instance.getClass(); clazz != null; clazz = clazz.getSuperclass()) {
-      try {
-        Field field = clazz.getDeclaredField(fieldName);
-        field.setAccessible(true);
-        return field;
-      } catch (NoSuchFieldException e) {
-        // IllegalStateException will be thrown below
-      }
-    }
-
-    throw new IllegalStateException("Field '" + fieldName + "' not found");
-  }
-
-  private void enableContentProviders() {
-    Log.v("INCREMENTAL", "enableContentProviders");
-    try {
-      Class<?> activityThread = Class.forName("android.app.ActivityThread");
-      Method mCurrentActivityThread = activityThread.getMethod("currentActivityThread");
-      mCurrentActivityThread.setAccessible(true);
-      Object currentActivityThread = mCurrentActivityThread.invoke(null);
-      Object boundApplication = getField(
-          currentActivityThread, "mBoundApplication").get(currentActivityThread);
-      getField(boundApplication, "providers").set(boundApplication, stashedContentProviders);
-      if (stashedContentProviders != null) {
-        Method mInstallContentProviders = activityThread.getDeclaredMethod(
-            "installContentProviders", Context.class, List.class);
-        mInstallContentProviders.setAccessible(true);
-        mInstallContentProviders.invoke(
-            currentActivityThread, realApplication, stashedContentProviders);
-        stashedContentProviders = null;
-      }
-    } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException
-        | InvocationTargetException e) {
-      throw new IllegalStateException(e);
-    }
-  }
-
-  // ActivityThread instantiates all the content providers between attachBaseContext() and
-  // onCreate(). Since we replace the Application instance in onCreate(), this may fail if
-  // they depend on the correct Application being present, so we postpone instantiating the
-  // content providers until we have the real Application instance.
-  private void disableContentProviders() {
-    Log.v("INCREMENTAL", "disableContentProviders");
-    try {
-      Class<?> activityThread = Class.forName("android.app.ActivityThread");
-      Method mCurrentActivityThread = activityThread.getMethod("currentActivityThread");
-      mCurrentActivityThread.setAccessible(true);
-      Object currentActivityThread = mCurrentActivityThread.invoke(null);
-      Object boundApplication = getField(
-          currentActivityThread, "mBoundApplication").get(currentActivityThread);
-      Field fProviders = getField(boundApplication, "providers");
-
-      stashedContentProviders = fProviders.get(boundApplication);
-      fProviders.set(boundApplication, null);
-    } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException
-        | InvocationTargetException e) {
-      throw new IllegalStateException(e);
-    }
-  }
-
   @Override
   protected void attachBaseContext(Context context) {
     instantiateRealApplication(
@@ -533,7 +469,7 @@ public class StubApplication extends Application {
           ContextWrapper.class.getDeclaredMethod("attachBaseContext", Context.class);
       attachBaseContext.setAccessible(true);
       attachBaseContext.invoke(realApplication, context);
-      disableContentProviders();
+
     } catch (Exception e) {
       throw new IllegalStateException(e);
     }
@@ -543,7 +479,6 @@ public class StubApplication extends Application {
   public void onCreate() {
     monkeyPatchApplication();
     monkeyPatchExistingResources();
-    enableContentProviders();
     super.onCreate();
     realApplication.onCreate();
   }
