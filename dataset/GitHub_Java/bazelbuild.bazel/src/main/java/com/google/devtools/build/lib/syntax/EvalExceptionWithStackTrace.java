@@ -130,7 +130,7 @@ public class EvalExceptionWithStackTrace extends EvalException {
   private boolean isSameLocation(Location first, Location second) {
     try {
       return Objects.equals(first.getPath(), second.getPath())
-          && first.getStartOffset() == second.getStartOffset();
+          && Objects.equals(first.getStartOffset(), second.getStartOffset());
     } catch (NullPointerException ex) {
       return first == second;
     }
