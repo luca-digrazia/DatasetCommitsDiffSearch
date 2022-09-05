@@ -28,8 +28,7 @@ import java.io.IOException;
 import java.util.*;
 
 /**
- * 为动态部署的dex diff的工具类
- * Created by shenghua.nish on 2016-02-19 上午11:15.
+ * tpatch diff tool
  */
 public class TPatchDexTool {
 
@@ -122,56 +121,6 @@ public class TPatchDexTool {
 //        }
         return dexDiffInfo;
 
-    }
-
-
-    public static baksmaliOptions getBuildOption(Iterable<? extends ClassDef> collection, int apiLevel) {
-        baksmaliOptions options = new baksmaliOptions();
-
-        options.deodex = false;
-        options.noParameterRegisters = false;
-        options.useLocalsDirective = true;
-        options.useSequentialLabels = true;
-        options.outputDebugInfo = false;
-        options.addCodeOffsets = false;
-        options.jobs = -1;
-        options.noAccessorComments = false;
-        options.registerInfo = 0;// 128
-        options.ignoreErrors = false;
-        options.inlineResolver = null;
-        options.apiLevel = apiLevel;
-        options.checkPackagePrivateAccess = false;
-        if (!options.noAccessorComments) {
-            options.syntheticAccessorResolver = new SyntheticAccessorResolver(collection);
-        }
-
-        return options;
-    }
-
-    public static File removeDebugInfo(File file) {
-        File smaliDir = null;
-        if (file == null || !file.exists() || !file.isFile()) {
-            return null;
-        }
-        try {
-            Set<? extends DexBackedClassDef> classes = DexFileFactory.loadDexFile(file, 19, true).getClasses();
-            DexBuilder dexBuilder = DexBuilder.makeDexBuilder();
-             smaliDir = new File(file.getParentFile(), "smali");
-            smaliDir.mkdirs();
-            final ClassFileNameHandler outFileNameHandler = new ClassFileNameHandler(smaliDir, ".smali");
-            final ClassFileNameHandler inFileNameHandler = new ClassFileNameHandler(smaliDir, ".smali");
-            for (DexBackedClassDef classDef : classes) {
-                AfBakSmali.disassembleClass(classDef, outFileNameHandler, getBuildOption(classes, 19), true, true);
-                String className = TypeGenUtil.newType(classDef.getType());
-                File smaliFile = inFileNameHandler.getUniqueFilenameForClass(className);
-                SmaliMod.assembleSmaliFile(smaliFile, dexBuilder, true, true);
-            }
-            dexBuilder.writeTo(new FileDataStore(file));
-            FileUtils.deleteDirectory(smaliDir);
-        } catch (Exception e) {
-
-        }
-        return file;
     }
 
 }

@@ -226,6 +226,7 @@ import com.taobao.android.tpatch.model.ApkBO;
 import com.taobao.android.tpatch.model.BundleBO;
 import com.taobao.android.tpatch.utils.HttpClientUtils;
 import com.taobao.android.utils.CommandUtils;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -280,7 +281,7 @@ public class BasePatchTool {
     }
 
     /**
-     * 设置是否只包含变化的bundle信息，对于主bundle，不管是否设置都会进行对比
+     * set only diff modify bundle, default is true
      *
      * @param onlyIncludeModifyBundle
      */
@@ -289,7 +290,7 @@ public class BasePatchTool {
     }
 
     /**
-     * 判断当前bundle是否有变化
+     * judge if bundle has changes
      *
      * @param bundleSoFileName
      * @return
@@ -348,11 +349,11 @@ public class BasePatchTool {
     }
 
     /**
-     * 解压二个apk文件
+     * unzip 2 apk file
      *
      * @param outPatchDir
      */
-    protected File unzipApk(File outPatchDir) {
+    protected File unzipApk(File outPatchDir) throws IOException {
         File unzipFolder = new File(outPatchDir, "unzip");
         if (!unzipFolder.exists()){
             unzipFolder.mkdirs();
@@ -360,7 +361,13 @@ public class BasePatchTool {
         File baseApkUnzipFolder = new File(unzipFolder, BASE_APK_UNZIP_NAME);
         File newApkUnzipFolder = new File(unzipFolder, NEW_APK_UNZIP_NAME);
         CommandUtils.exec(outPatchDir,"unzip "+baseApkBO.getApkFile().getAbsolutePath()+" -d "+baseApkUnzipFolder.getAbsolutePath());
-        CommandUtils.exec(outPatchDir,"unzip "+newApkBO.getApkFile().getAbsolutePath()+" -d "+ newApkUnzipFolder.getAbsolutePath());
+
+        if (newApkBO.getApkFile().isDirectory()){
+            FileUtils.moveDirectory(newApkBO.getApkFile(), newApkUnzipFolder);
+        }else {
+            CommandUtils.exec(outPatchDir,"unzip "+newApkBO.getApkFile().getAbsolutePath()+" -d "+ newApkUnzipFolder.getAbsolutePath());
+        }
+
         return unzipFolder;
     }
 
@@ -397,7 +404,7 @@ public class BasePatchTool {
     }
 
     /**
-     * http下载
+     * http download
      */
     private void downloadFile(String httpUrl, File saveFile) throws IOException {
         // 下载网络文件
