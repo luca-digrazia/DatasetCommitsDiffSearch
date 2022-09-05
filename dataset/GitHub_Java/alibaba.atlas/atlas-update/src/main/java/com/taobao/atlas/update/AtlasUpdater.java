@@ -11,7 +11,6 @@ import android.util.Log;
 import com.taobao.atlas.dexmerge.MergeCallback;
 import com.taobao.atlas.update.exception.MergeException;
 import com.taobao.atlas.update.model.UpdateInfo;
-import com.taobao.atlas.update.model.UpdateInfo.Item;
 import com.taobao.atlas.update.util.PatchCleaner;
 import com.taobao.atlas.update.util.PatchInstaller;
 import com.taobao.atlas.update.util.PatchMerger;
@@ -86,12 +85,12 @@ public class AtlasUpdater {
 
         if (enableHot) {
             List<UpdateInfo.Item> needPatchHotBundles = DexPatchUpdater.filterNeedHotPatchList(
-                UpdateBundleDivider.dividePatchInfo(updateInfo.updateBundles, Item.PATCH_DEX_HOT)
+                DexPatchUpdater.dividePatchInfo(updateInfo.updateBundles, true)
             );
             DexPatchUpdater.installHotPatch(updateInfo.updateVersion, needPatchHotBundles, patchFile, hotMonitor);
         }
         updateInfo.updateBundles = DexPatchUpdater.filterNeedColdPatchList(
-            UpdateBundleDivider.dividePatchInfo(updateInfo.updateBundles, Item.PATCH_DEX_COLD)
+            DexPatchUpdater.dividePatchInfo(updateInfo.updateBundles, false)
         );
         DexPatchUpdater.installColdPatch(updateInfo, patchFile, coldMonitor);
     }
