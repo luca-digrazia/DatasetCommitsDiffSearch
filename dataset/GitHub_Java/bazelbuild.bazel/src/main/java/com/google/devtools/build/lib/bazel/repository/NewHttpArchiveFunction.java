@@ -14,17 +14,17 @@
 
 package com.google.devtools.build.lib.bazel.repository;
 
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
+import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.rules.repository.NewRepositoryBuildFileHandler;
-import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.skyframe.SkyFunction.Environment;
+import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
+import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
 import java.io.IOException;
@@ -37,17 +37,21 @@ import javax.annotation.Nullable;
  */
 public class NewHttpArchiveFunction extends HttpArchiveFunction {
 
+  @Override
+  public SkyFunctionName getSkyFunctionName() {
+    return SkyFunctionName.create(NewHttpArchiveRule.NAME);
+  }
+
   @Nullable
   @Override
-  public SkyValue fetch(
-      Rule rule, Path outputDirectory, BlazeDirectories directories, Environment env)
-          throws RepositoryFunctionException, InterruptedException {
-    NewRepositoryBuildFileHandler buildFileHandler =
-        new NewRepositoryBuildFileHandler(directories.getWorkspace());
-    if (!buildFileHandler.prepareBuildFile(rule, env)) {
+  public SkyValue compute(SkyKey skyKey, SkyFunction.Environment env)
+      throws RepositoryFunctionException {
+    RepositoryName repositoryName = (RepositoryName) skyKey.argument();
+    Rule rule = getRule(repositoryName, NewHttpArchiveRule.NAME, env);
+    if (rule == null) {
       return null;
     }
-
+    Path outputDirectory = getExternalRepositoryDirectory().getRelative(rule.getName());
     try {
       FileSystemUtils.createDirectoryAndParents(outputDirectory);
     } catch (IOException e) {
@@ -56,28 +60,44 @@ public class NewHttpArchiveFunction extends HttpArchiveFunction {
     }
 
     // Download.
-    Path downloadedPath = HttpDownloader.download(rule, outputDirectory, env.getListener());
+    HttpDownloadValue downloadedFileValue;
+    try {
+      downloadedFileValue = (HttpDownloadValue) env.getValueOrThrow(
+          HttpDownloadFunction.key(rule, outputDirectory), IOException.class);
+    } catch (IOException e) {
+      throw new RepositoryFunctionException(e, Transience.PERSISTENT);
+    }
+    if (downloadedFileValue == null) {
+      return null;
+    }
 
     // Decompress.
-    Path decompressed;
-    AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
-    String prefix = null;
-    if (mapper.has("strip_prefix", Type.STRING)
-        && !mapper.get("strip_prefix", Type.STRING).isEmpty()) {
-      prefix = mapper.get("strip_prefix", Type.STRING);
+    DecompressorValue decompressed;
+    try {
+      AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
+      String prefix = null;
+      if (mapper.has("strip_prefix", Type.STRING)
+          && !mapper.get("strip_prefix", Type.STRING).isEmpty()) {
+        prefix = mapper.get("strip_prefix", Type.STRING);
+      }
+      decompressed = (DecompressorValue) env.getValueOrThrow(
+          DecompressorValue.key(DecompressorDescriptor.builder()
+              .setTargetKind(rule.getTargetKind())
+              .setTargetName(rule.getName())
+              .setArchivePath(downloadedFileValue.getPath())
+              .setRepositoryPath(outputDirectory)
+              .setPrefix(prefix)
+              .build()), IOException.class);
+      if (decompressed == null) {
+        return null;
+      }
+    } catch (IOException e) {
+      throw new RepositoryFunctionException(
+          new IOException(e.getMessage()), Transience.TRANSIENT);
     }
-    decompressed = DecompressorValue.decompress(DecompressorDescriptor.builder()
-        .setTargetKind(rule.getTargetKind())
-        .setTargetName(rule.getName())
-        .setArchivePath(downloadedPath)
-        .setRepositoryPath(outputDirectory)
-        .setPrefix(prefix)
-        .build());
 
-    // Finally, write WORKSPACE and BUILD files.
-    createWorkspaceFile(decompressed, rule);
-    buildFileHandler.finishBuildFile(outputDirectory);
-
-    return RepositoryDirectoryValue.create(outputDirectory);
+    // Add WORKSPACE and BUILD files.
+    createWorkspaceFile(decompressed.getDirectory(), rule);
+    return symlinkBuildFile(rule, getWorkspace(), outputDirectory, env);
   }
 }

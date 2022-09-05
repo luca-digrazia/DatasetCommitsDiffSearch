@@ -15,41 +15,49 @@
 package com.google.devtools.build.lib.rules.repository;
 
 import com.google.devtools.build.lib.analysis.RuleDefinition;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException;
+import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
 /**
  * Create a repository from a directory on the local filesystem.
  */
 public class NewLocalRepositoryFunction extends RepositoryFunction {
-  @Override
-  public boolean isLocal() {
-    return true;
-  }
 
   @Override
-  public SkyValue fetch(Rule rule, Path outputDirectory, Environment env)
-      throws SkyFunctionException {
-    FileValue buildFileValue = getBuildFileValue(rule, env);
-    if (env.valuesMissing()) {
+  public SkyValue compute(SkyKey skyKey, Environment env) throws SkyFunctionException {
+    RepositoryName repositoryName = (RepositoryName) skyKey.argument();
+    Rule rule = getRule(repositoryName, NewLocalRepositoryRule.NAME, env);
+    if (rule == null) {
       return null;
     }
-    prepareLocalRepositorySymlinkTree(rule, outputDirectory);
-    PathFragment pathFragment = getTargetPath(rule, getWorkspace());
+
+    Path outputDirectory = prepareLocalRepositorySymlinkTree(rule, env);
+    PathFragment pathFragment = getTargetPath(rule);
     
     // Link x/y/z to /some/path/to/y/z.
     if (!symlinkLocalRepositoryContents(
-        outputDirectory, getOutputBase().getFileSystem().getPath(pathFragment))) {
+        outputDirectory,
+        getOutputBase().getFileSystem().getPath(pathFragment),
+        env)) {
       return null;
     }
 
     // Link x/BUILD to <build_root>/x.BUILD.
-    return symlinkBuildFile(buildFileValue, outputDirectory);
+    return symlinkBuildFile(rule, getWorkspace(), outputDirectory, env);
+  }
+
+  /**
+   * @see RepositoryFunction#getRule(RepositoryName, String, Environment)
+   */
+  @Override
+  public SkyFunctionName getSkyFunctionName() {
+    return SkyFunctionName.create(NewLocalRepositoryRule.NAME.toUpperCase());
   }
 
   @Override

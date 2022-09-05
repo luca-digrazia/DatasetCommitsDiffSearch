@@ -17,17 +17,14 @@ package com.google.devtools.build.lib.rules.repository;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.RuleSerializer;
 import com.google.devtools.build.lib.skyframe.FileSymlinkException;
 import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.skyframe.InconsistentFilesystemException;
@@ -35,53 +32,25 @@ import com.google.devtools.build.lib.skyframe.PackageValue;
 import com.google.devtools.build.lib.skyframe.RepositoryValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
-import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
+import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
-import com.google.devtools.build.skyframe.SkyValue;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.Arrays;
 
 import javax.annotation.Nullable;
 
 /**
- * Implementation of fetching various external repository types.
- *
- * <p>These objects are called from {@link RepositoryDelegatorFunction}.
- *
- * <p>External repositories come in two flavors: local and non-local.
- *
- * <p>Local ones are those whose fetching does not require access to any external resources
- * (e.g. network). These are always re-fetched on Bazel server restarts. This operation is fast
- * (usually just a few symlinks and maybe writing a BUILD file). {@code --nofetch} does not apply
- * to local repositories.
- *
- * <p>The up-to-dateness of non-local repositories is checked using a marker file under the
- * output base. When such a repository is fetched, data from the rule in the WORKSPACE file is
- * written to the marker file which is consulted on next server startup. If the rule hasn't changed,
- * the repository is not re-fetched.
- *
- * <p>Fetching repositories can be disabled using the {@code --nofetch} command line option. If a
- * repository is on the file system, Bazel just tries to use it and hopes for the best. If the
- * repository has never been fetched, Bazel errors out for lack of a better option. This is
- * implemented using
- * {@link com.google.devtools.build.lib.bazel.BazelRepositoryModule#REPOSITORY_VALUE_CHECKER} and
- * a flag in {@link RepositoryValue} that tells Bazel whether the value in Skyframe is stale
- * according to the value of {@code --nofetch} or not.
- *
- * <p>When a rule in the WORKSPACE file is changed, the corresponding {@link RepositoryValue} is
- * invalidated using the usual Skyframe route.
+ * Parent class for repository-related Skyframe functions.
  */
-public abstract class RepositoryFunction {
+public abstract class RepositoryFunction implements SkyFunction {
   /**
    * Exception thrown when something goes wrong accessing a remote repository.
    *
@@ -109,88 +78,6 @@ public abstract class RepositoryFunction {
   }
 
   private BlazeDirectories directories;
-
-  private byte[] computeRuleKey(Rule rule, byte[] ruleSpecificData) {
-    return new Fingerprint()
-        .addBytes(RuleSerializer.serializeRule(rule).build().toByteArray())
-        .addBytes(ruleSpecificData)
-        .digestAndReset();
-  }
-
-  /**
-   * Fetch the remote repository represented by the given rule.
-   *
-   * <p>When this method is called, it has already been determined that the repository is stale and
-   * that it needs to be re-fetched.
-   */
-  @ThreadSafe
-  @Nullable
-  public abstract SkyValue fetch(Rule rule, Environment env)
-      throws SkyFunctionException, InterruptedException;
-
-  /**
-   * Whether fetching is done using local operations only.
-   *
-   * <p>If this is false, Bazel may decide not to re-fetch the repository, for example when the
-   * {@code --nofetch} command line option is used.
-   */
-  protected abstract boolean isLocal();
-
-  /**
-   * Returns a block of data that must be equal for two Rules for them to be considered the same.
-   *
-   * <p>This is used for the up-to-dateness check of fetched directory trees. The only reason for
-   * this to exist is the {@code maven_server} rule (which should go away, but until then, we need
-   * to keep it working somehow)
-   */
-  protected byte[] getRuleSpecificMarkerData(Rule rule, Environment env)
-    throws RepositoryFunctionException {
-    return new byte[] {};
-  }
-
-  private Path getMarkerPath(Rule rule) {
-    return getExternalRepositoryDirectory().getChild("@" + rule.getName() + ".marker");
-  }
-
-  /**
-   * Checks if the state of the repository in the file system is consistent with the rule in the
-   * WORKSPACE file.
-   *
-   * <p>Deletes the marker file if not so that no matter what happens after, the state of the file
-   * system stays consistent.
-   */
-  boolean isFilesystemUpToDate(Rule rule, byte[] ruleSpecificData)
-      throws RepositoryFunctionException {
-    try {
-      Path markerPath = getMarkerPath(rule);
-      if (!markerPath.exists()) {
-        return false;
-      }
-
-      boolean result = Arrays.equals(
-          computeRuleKey(rule, ruleSpecificData),
-          FileSystemUtils.readContent(markerPath));
-      if (!result) {
-        // So that we are in a consistent state if something happens while fetching the repository
-        markerPath.delete();
-      }
-
-      return result;
-
-    } catch (IOException e) {
-      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
-    }
-  }
-
-  void writeMarkerFile(Rule rule, byte[] ruleSpecificData)
-      throws RepositoryFunctionException {
-    try {
-      FileSystemUtils.writeContent(getMarkerPath(rule), computeRuleKey(rule, ruleSpecificData));
-    } catch (IOException e) {
-      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
-    }
-  }
-
 
   protected Path prepareLocalRepositorySymlinkTree(Rule rule, Environment env)
       throws RepositoryFunctionException {
@@ -230,11 +117,22 @@ public abstract class RepositoryFunction {
     return RepositoryValue.create(repositoryDirectory);
   }
 
-  protected FileValue getBuildFileValue(Rule rule, Environment env)
+  /**
+   * Symlinks a BUILD file from the local filesystem into the external repository's root.
+   * @param rule the rule that declares the build_file path.
+   * @param workspaceDirectory the workspace root for the build.
+   * @param outputDirectory the directory of the remote repository
+   * @param env the Skyframe environment.
+   * @return the file value of the symlink created.
+   * @throws RepositoryFunctionException if the BUILD file specified does not exist or cannot be
+   *         linked.
+   */
+  protected RepositoryValue symlinkBuildFile(
+      Rule rule, Path workspaceDirectory, Path outputDirectory, Environment env)
       throws RepositoryFunctionException {
     AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
     PathFragment buildFile = new PathFragment(mapper.get("build_file", Type.STRING));
-    Path buildFileTarget = directories.getWorkspace().getRelative(buildFile);
+    Path buildFileTarget = workspaceDirectory.getRelative(buildFile);
     if (!buildFileTarget.exists()) {
       throw new RepositoryFunctionException(
           new EvalException(rule.getLocation(),
@@ -248,17 +146,11 @@ public abstract class RepositoryFunction {
       rootedBuild = RootedPath.toRootedPath(
           buildFileTarget.getParentDirectory(), new PathFragment(buildFileTarget.getBaseName()));
     } else {
-      rootedBuild = RootedPath.toRootedPath(directories.getWorkspace(), buildFile);
+      rootedBuild = RootedPath.toRootedPath(workspaceDirectory, buildFile);
     }
     SkyKey buildFileKey = FileValue.key(rootedBuild);
     FileValue buildFileValue;
     try {
-      // Note that this dependency is, strictly speaking, not necessary: the symlink could simply
-      // point to this FileValue and the symlink chasing could be done while loading the package
-      // but this results in a nicer error message and it's correct as long as RepositoryFunctions
-      // don't write to things in the file system this FileValue depends on. In theory, the latter
-      // is possible if the file referenced by build_file is a symlink to somewhere under the
-      // external/ directory, but if you do that, you are really asking for trouble.
       buildFileValue = (FileValue) env.getValueOrThrow(buildFileKey, IOException.class,
           FileSymlinkException.class, InconsistentFilesystemException.class);
       if (buildFileValue == null) {
@@ -270,29 +162,11 @@ public abstract class RepositoryFunction {
           Transience.TRANSIENT);
     }
 
-    return buildFileValue;
-  }
-
-  /**
-   * Symlinks a BUILD file from the local filesystem into the external repository's root.
-   * @param rule the rule that declares the build_file path.
-   * @param outputDirectory the directory of the remote repository
-   * @param env the Skyframe environment.
-   * @return the file value of the symlink created.
-   * @throws RepositoryFunctionException if the BUILD file specified does not exist or cannot be
-   *         linked.
-   */
-  protected RepositoryValue symlinkBuildFile(Rule rule, Path outputDirectory, Environment env)
-      throws RepositoryFunctionException {
-    FileValue buildFileValue = getBuildFileValue(rule, env);
-    if (env.valuesMissing()) {
-      return null;
-    }
     Path buildFilePath = outputDirectory.getRelative("BUILD");
-    if (createSymbolicLink(buildFilePath, buildFileValue.realRootedPath().asPath(), env) == null) {
+    if (createSymbolicLink(buildFilePath, buildFileTarget, env) == null) {
       return null;
     }
-    return RepositoryValue.create(outputDirectory);
+    return RepositoryValue.createNew(outputDirectory, buildFileValue);
   }
 
   protected static PathFragment getTargetPath(Rule rule) throws RepositoryFunctionException {
@@ -370,7 +244,7 @@ public abstract class RepositoryFunction {
   @Nullable
   public static Package getExternalPackage(Environment env)
       throws RepositoryFunctionException {
-    SkyKey packageKey = PackageValue.key(Label.EXTERNAL_PACKAGE_IDENTIFIER);
+    SkyKey packageKey = PackageValue.key(Package.EXTERNAL_PACKAGE_IDENTIFIER);
     PackageValue packageValue;
     try {
       packageValue = (PackageValue) env.getValueOrThrow(packageKey,
@@ -378,7 +252,7 @@ public abstract class RepositoryFunction {
     } catch (NoSuchPackageException e) {
       throw new RepositoryFunctionException(
           new BuildFileNotFoundException(
-              Label.EXTERNAL_PACKAGE_IDENTIFIER, "Could not load //external package"),
+              Package.EXTERNAL_PACKAGE_IDENTIFIER, "Could not load //external package"),
           Transience.PERSISTENT);
     }
     if (packageValue == null) {
@@ -389,7 +263,7 @@ public abstract class RepositoryFunction {
     if (externalPackage.containsErrors()) {
       throw new RepositoryFunctionException(
           new BuildFileContainsErrorsException(
-              Label.EXTERNAL_PACKAGE_IDENTIFIER, "Could not load //external package"),
+              Package.EXTERNAL_PACKAGE_IDENTIFIER, "Could not load //external package"),
           Transience.PERSISTENT);
     }
     return externalPackage;
@@ -426,7 +300,7 @@ public abstract class RepositoryFunction {
     if (rule == null) {
       throw new RepositoryFunctionException(
           new BuildFileContainsErrorsException(
-              Label.EXTERNAL_PACKAGE_IDENTIFIER,
+              Package.EXTERNAL_PACKAGE_IDENTIFIER,
               "The repository named '" + repositoryName + "' could not be resolved"),
           Transience.PERSISTENT);
     }
@@ -456,6 +330,16 @@ public abstract class RepositoryFunction {
     return value;
   }
 
+  @Override
+  public String extractTag(SkyKey skyKey) {
+    return null;
+  }
+
+  /**
+   * Gets Skyframe's name for this.
+   */
+  public abstract SkyFunctionName getSkyFunctionName();
+
   /**
    * Sets up output path information.
    */
@@ -470,7 +354,7 @@ public abstract class RepositoryFunction {
   public static Path getExternalRepositoryDirectory(BlazeDirectories directories) {
     return directories
         .getOutputBase()
-        .getRelative(Label.EXTERNAL_PATH_PREFIX);
+        .getRelative(Package.EXTERNAL_PACKAGE_IDENTIFIER.getPackageFragment());
   }
 
   /**

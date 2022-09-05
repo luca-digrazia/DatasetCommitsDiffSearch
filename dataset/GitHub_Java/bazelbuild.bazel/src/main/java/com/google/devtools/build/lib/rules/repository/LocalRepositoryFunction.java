@@ -15,18 +15,21 @@
 package com.google.devtools.build.lib.rules.repository;
 
 import com.google.devtools.build.lib.analysis.RuleDefinition;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.skyframe.RepositoryValue;
+import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.skyframe.SkyFunction.Environment;
+import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
+import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
 import java.io.IOException;
@@ -35,31 +38,38 @@ import java.io.IOException;
  * Access a repository on the local filesystem.
  */
 public class LocalRepositoryFunction extends RepositoryFunction {
-  @Override
-  public boolean isLocal() {
-    return true;
-  }
 
   @Override
-  public SkyValue fetch(Rule rule, Path outputDirectory, Environment env)
-      throws SkyFunctionException {
+  public SkyValue compute(SkyKey skyKey, Environment env) throws SkyFunctionException {
+    RepositoryName repositoryName = (RepositoryName) skyKey.argument();
+    Rule rule = RepositoryFunction.getRule(repositoryName, LocalRepositoryRule.NAME, env);
+    if (rule == null) {
+      return null;
+    }
+
     AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
-    PathFragment pathFragment = new PathFragment(mapper.get("path", Type.STRING));
+    String path = mapper.get("path", Type.STRING);
+    PathFragment pathFragment = new PathFragment(path);
+    if (!pathFragment.isAbsolute()) {
+      throw new RepositoryFunctionException(
+          new EvalException(
+              rule.getLocation(),
+              "In " + rule + " the 'path' attribute must specify an absolute path"),
+          Transience.PERSISTENT);
+    }
+    Path repositoryPath = getExternalRepositoryDirectory().getRelative(rule.getName());
     try {
-      FileSystem fs = outputDirectory.getFileSystem();
-      if (fs.supportsSymbolicLinksNatively()) {
-        outputDirectory.createSymbolicLink(pathFragment);
-      } else {
-        FileSystemUtils.createDirectoryAndParents(outputDirectory);
-        FileSystemUtils.copyTreesBelow(
-            fs.getPath(getTargetPath(rule, getWorkspace())), outputDirectory);
+      FileSystemUtils.createDirectoryAndParents(repositoryPath.getParentDirectory());
+      if (repositoryPath.exists(Symlinks.NOFOLLOW)) {
+        repositoryPath.delete();
       }
+      repositoryPath.createSymbolicLink(pathFragment);
     } catch (IOException e) {
       throw new RepositoryFunctionException(
           new IOException("Could not create symlink to repository " + pathFragment + ": "
               + e.getMessage()), Transience.TRANSIENT);
     }
-    FileValue repositoryValue = getRepositoryDirectory(outputDirectory, env);
+    FileValue repositoryValue = getRepositoryDirectory(repositoryPath, env);
     if (repositoryValue == null) {
       // TODO(bazel-team): If this returns null, we unnecessarily recreate the symlink above on the
       // second execution.
@@ -71,7 +81,12 @@ public class LocalRepositoryFunction extends RepositoryFunction {
           new IOException(rule + " must specify an existing directory"), Transience.TRANSIENT);
     }
 
-    return RepositoryValue.create(outputDirectory);
+    return RepositoryValue.create(repositoryPath);
+  }
+
+  @Override
+  public SkyFunctionName getSkyFunctionName() {
+    return SkyFunctionName.create(LocalRepositoryRule.NAME.toUpperCase());
   }
 
   @Override

@@ -123,7 +123,7 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
     }
 
     String buildFile = createBuildFile(ruleName, crosstoolsAndStls.build());
-    return writeBuildFile(outputDirectory, buildFile);
+    return writeBuildFile(getOutputBase(), buildFile);
   }
 
   @Override
