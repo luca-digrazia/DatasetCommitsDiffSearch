@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,19 +18,13 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 
 import javax.annotation.Nullable;
 
-/** The collection of gen jars from the transitive closure. */
+/**
+ * The collection of gen jars from the transitive closure.
+ */
 @Immutable
-@SkylarkModule(
-  name = "java_annotation_processing",
-  category = SkylarkModuleCategory.NONE,
-  doc = "Information about jars that are a result of annotation processing for a Java rule."
-)
 public final class JavaGenJarsProvider implements TransitiveInfoProvider {
 
   private final boolean usesAnnotationProcessing;
@@ -54,55 +48,24 @@ public final class JavaGenJarsProvider implements TransitiveInfoProvider {
     this.transitiveGenSourceJars = transitiveGenSourceJars;
   }
 
-  @SkylarkCallable(
-    name = "enabled",
-    structField = true,
-    doc = "Returns true if the Java rule uses annotation processing"
-  )
   public boolean usesAnnotationProcessing() {
     return usesAnnotationProcessing;
   }
 
-  @SkylarkCallable(
-    name = "class_jar",
-    structField = true,
-    allowReturnNones = true,
-    doc = "Returns a jar File that is a result of annotation processing for this rule."
-  )
   @Nullable
   public Artifact getGenClassJar() {
     return genClassJar;
   }
 
-  @SkylarkCallable(
-    name = "source_jar",
-    structField = true,
-    allowReturnNones = true,
-    doc = "Returns a source archive resulting from annotation processing of this rule."
-  )
   @Nullable
   public Artifact getGenSourceJar() {
     return genSourceJar;
   }
 
-  @SkylarkCallable(
-    name = "transitive_class_jars",
-    structField = true,
-    doc =
-        "Returns a transitive set of class file jars resulting from annotation "
-            + "processing of this rule and its dependencies."
-  )
   public NestedSet<Artifact> getTransitiveGenClassJars() {
     return transitiveGenClassJars;
   }
 
-  @SkylarkCallable(
-    name = "transitive_source_jars",
-    structField = true,
-    doc =
-        "Returns a transitive set of source archives resulting from annotation processing "
-            + "of this rule and its dependencies."
-  )
   public NestedSet<Artifact> getTransitiveGenSourceJars() {
     return transitiveGenSourceJars;
   }
