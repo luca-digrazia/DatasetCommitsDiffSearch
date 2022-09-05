@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.PackageRootResolutionException;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
@@ -39,6 +38,7 @@ import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.extra.CppCompileInfo;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.CollectionUtils;
@@ -298,6 +298,9 @@ public class CppCompileAction extends AbstractAction
             ruleContext,
             mandatoryInputs,
             context.getTransitiveCompilationPrerequisites(),
+            useHeaderModules && !cppConfiguration.getSkipUnusedModules()
+                ? context.getTransitiveModules(usePic)
+                : null,
             optionalSourceFile,
             lipoScannables),
         CollectionUtils.asListWithoutNulls(
@@ -379,6 +382,7 @@ public class CppCompileAction extends AbstractAction
       RuleContext ruleContext,
       NestedSet<Artifact> mandatoryInputs,
       Set<Artifact> prerequisites,
+      NestedSet<Artifact> transitiveModules,
       Artifact optionalSourceFile,
       Iterable<IncludeScannable> lipoScannables) {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
@@ -388,6 +392,12 @@ public class CppCompileAction extends AbstractAction
     builder.addAll(prerequisites);
     builder.addAll(CppHelper.getToolchain(ruleContext).getBuiltinIncludeFiles());
     builder.addTransitive(mandatoryInputs);
+    if (transitiveModules != null) {
+      // In theory, it is enough to add the actually used modules after input discovery. In
+      // practice, this interacts badly with orphan detection, which needs to run before input
+      // discovery.
+      builder.addTransitive(transitiveModules);
+    }
     if (lipoScannables != null && lipoScannables.iterator().hasNext()) {
       // We need to add "legal generated scanner files" coming through LIPO scannables here. These
       // usually contain pre-grepped source files, i.e. files just containing the #include lines
@@ -447,7 +457,8 @@ public class CppCompileAction extends AbstractAction
     // discarded as orphans.
     // This is strictly better than marking all transitive modules as inputs, which would also
     // effectively disable orphan detection for .pcm files.
-    if (CppFileTypes.CPP_MODULE.matches(outputFile.getFilename())) {
+    if (cppConfiguration.getSkipUnusedModules()
+        && CppFileTypes.CPP_MODULE.matches(outputFile.getFilename())) {
       return ImmutableSet.of(outputFile);
     }
     return super.getMandatoryOutputs();
@@ -501,12 +512,18 @@ public class CppCompileAction extends AbstractAction
 
     if (shouldPruneModules) {
       Set<Artifact> initialResultSet = Sets.newLinkedHashSet(initialResult);
-      usedModules = Sets.newLinkedHashSet();
+      Set<Artifact> usedModules = Sets.newLinkedHashSet();
       for (CppCompilationContext.TransitiveModuleHeaders usedModule :
           context.getUsedModules(usePic, initialResultSet)) {
         usedModules.add(usedModule.getModule());
+        if (!cppConfiguration.getPruneMoreModules()) {
+          usedModules.addAll(usedModule.getTransitiveModules());
+        }
       }
       initialResultSet.addAll(usedModules);
+      if (cppConfiguration.getPruneMoreModules()) {
+        this.usedModules = usedModules;
+      }
       initialResult = initialResultSet;
     }
 
@@ -568,7 +585,7 @@ public class CppCompileAction extends AbstractAction
 
   @Override
   public Iterable<Artifact> getInputsWhenSkippingInputDiscovery() {
-    if (useHeaderModules) {
+    if (useHeaderModules && cppConfiguration.getSkipUnusedModules()) {
       this.additionalInputs = context.getTransitiveModules(usePic).toCollection();
       return this.additionalInputs;
     }
