@@ -18,7 +18,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType.ABSTRACT;
 import static com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType.TEST;
 
-import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -42,7 +41,6 @@ import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SkylarkEnvironment;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.ValidationEnvironment;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsClassProvider;
 
 import java.lang.reflect.Constructor;
@@ -79,7 +77,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    */
   public static class Builder implements RuleDefinitionEnvironment {
     private final StringBuilder defaultWorkspaceFile = new StringBuilder();
-    private PathFragment preludePath;
     private final List<ConfigurationFragmentFactory> configurationFragments = new ArrayList<>();
     private final List<BuildInfoFactory> buildInfoFactories = new ArrayList<>();
     private final List<Class<? extends FragmentOptions>> configurationOptions = new ArrayList<>();
@@ -100,14 +97,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
     public void addWorkspaceFile(String contents) {
       defaultWorkspaceFile.append(contents);
-    }
-
-    public Builder setPrelude(String workspaceRelativePath) {
-      PathFragment preludePathFragment = new PathFragment(workspaceRelativePath);
-      Preconditions.checkArgument(!preludePathFragment.isAbsolute());
-      Preconditions.checkArgument(preludePathFragment.isNormalized());
-      this.preludePath = preludePathFragment;
-      return this;
     }
 
     public Builder setPrerequisiteValidator(PrerequisiteValidator prerequisiteValidator) {
@@ -218,7 +207,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       }
 
       return new ConfiguredRuleClassProvider(
-          preludePath,
           ImmutableMap.copyOf(ruleClassMap),
           ImmutableMap.copyOf(ruleDefinitionMap),
           ImmutableMap.copyOf(aspectFactoryMap),
@@ -260,11 +248,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   String defaultWorkspaceFile;
 
   /**
-   * Workspace-relative path to the prelude.
-   */
-  private final PathFragment preludePath;
-
-  /**
    * Maps rule class name to the metaclass instance for that rule.
    */
   private final ImmutableMap<String, RuleClass> ruleClassMap;
@@ -303,7 +286,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   private final ValidationEnvironment skylarkValidationEnvironment;
 
   public ConfiguredRuleClassProvider(
-      PathFragment preludePath,
       ImmutableMap<String, RuleClass> ruleClassMap,
       ImmutableMap<String, Class<? extends RuleDefinition>> ruleDefinitionMap,
       ImmutableMap<String, Class<? extends AspectFactory<?, ?, ?>>> aspectFactoryMap,
@@ -314,7 +296,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       ConfigurationCollectionFactory configurationCollectionFactory,
       PrerequisiteValidator prerequisiteValidator,
       ImmutableMap<String, SkylarkType> skylarkAccessibleJavaClasses) {
-    this.preludePath = preludePath;
+
     this.ruleClassMap = ruleClassMap;
     this.ruleDefinitionMap = ruleDefinitionMap;
     this.aspectFactoryMap = aspectFactoryMap;
@@ -332,11 +314,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
   public PrerequisiteValidator getPrerequisiteValidator() {
     return prerequisiteValidator;
-  }
-
-  @Override
-  public PathFragment getPreludePath() {
-    return preludePath;
   }
 
   @Override
