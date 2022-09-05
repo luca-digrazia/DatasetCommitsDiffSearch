@@ -76,7 +76,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
 
 /**
  * Action that represents some kind of C++ compilation step.
@@ -163,8 +162,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
    */
   private final UUID actionClassId;
 
-  // This can be read/written from multiple threads, and so accesses should be synchronized.
-  @GuardedBy("this")
   private boolean inputsKnown = false;
 
   /**
@@ -316,7 +313,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   }
 
   @Override
-  public synchronized boolean inputsKnown() {
+  public boolean inputsKnown() {
     return inputsKnown;
   }
 
@@ -770,7 +767,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
    */
   @VisibleForTesting
   @ThreadCompatible
-  public final synchronized void updateActionInputs(Path execRoot,
+  public final void updateActionInputs(Path execRoot,
       ArtifactResolver artifactResolver, CppCompileActionContext.Reply reply)
       throws ActionExecutionException {
     if (!cppConfiguration.shouldScanIncludes()) {
@@ -1217,8 +1214,23 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
     public List<String> getCompilerOptions() {
       List<String> options = new ArrayList<>();
+
+      for (PathFragment quoteIncludePath : context.getQuoteIncludeDirs()) {
+        // "-iquote" is a gcc-specific option.  For C compilers that don't support "-iquote",
+        // we should instead use "-I".
+        options.add("-iquote");
+        options.add(quoteIncludePath.getSafePathString());
+      }
+      for (PathFragment includePath : context.getIncludeDirs()) {
+        options.add("-I" + includePath.getSafePathString());
+      }
+      for (PathFragment systemIncludePath : context.getSystemIncludeDirs()) {
+        options.add("-isystem");
+        options.add(systemIncludePath.getSafePathString());
+      }
+
       CppConfiguration toolchain = cppConfiguration;
-      
+
       // pluginOpts has to be added before defaultCopts because -fplugin must precede -plugin-arg.
       options.addAll(pluginOpts);
       addFilteredOptions(options, toolchain.getCompilerOptions(features));
@@ -1252,31 +1264,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       if (fdoBuildStamp != null) {
         options.add("-D" + CppConfiguration.FDO_STAMP_MACRO + "=\"" + fdoBuildStamp + "\"");
       }
-
-      CcToolchainFeatures.Variables.Builder buildVariables =
-          new CcToolchainFeatures.Variables.Builder();
-      if (featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAPS)) {
-        buildVariables.addVariable("module_name", cppModuleMap.getName());
-        buildVariables.addVariable("module_map_file",
-            cppModuleMap.getArtifact().getExecPathString());
-      }
-      if (featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES)) {
-        buildVariables.addSequenceVariable("module_files", getHeaderModulePaths());
-      }      
-      if (featureConfiguration.isEnabled(CppRuleClasses.INCLUDE_PATHS)) {
-        buildVariables.addSequenceVariable("include_paths",
-            getSafePathStrings(context.getIncludeDirs()));
-        buildVariables.addSequenceVariable("quote_include_paths",
-            getSafePathStrings(context.getQuoteIncludeDirs()));
-        buildVariables.addSequenceVariable("system_include_paths",
-            getSafePathStrings(context.getSystemIncludeDirs()));
-      }
-      // TODO(bazel-team): This needs to be before adding getUnfilteredCompilerOptions() and after
-      // adding the warning flags until all toolchains are migrated; currently toolchains use the
-      // unfiltered compiler options to inject include paths, which is superseded by the feature
-      // configuration; on the other hand toolchains switch off warnings for the layering check
-      // that will be re-added by the feature flags.
-      options.addAll(featureConfiguration.getCommandLine(getActionName(), buildVariables.build()));
 
       options.addAll(toolchain.getUnfilteredCompilerOptions(features));
 
@@ -1328,18 +1315,18 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
         options.add("-fPIC");
       }
 
-      return options;
-    }
-
-    /**
-     * Get the safe path strings for a list of paths to use in the build variables.
-     */
-    private Collection<String> getSafePathStrings(Collection<PathFragment> paths) {
-      ImmutableSet.Builder<String> result = ImmutableSet.builder();
-      for (PathFragment path : paths) {
-        result.add(path.getSafePathString());
+      CcToolchainFeatures.Variables.Builder buildVariables =
+          new CcToolchainFeatures.Variables.Builder();
+      if (featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAPS)) {
+        buildVariables.addVariable("module_name", cppModuleMap.getName());
+        buildVariables.addVariable("module_map_file",
+            cppModuleMap.getArtifact().getExecPathString());
       }
-      return result.build();
+      if (featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES)) {
+        buildVariables.addSequenceVariable("module_files", getHeaderModulePaths());
+      }
+      options.addAll(featureConfiguration.getCommandLine(getActionName(), buildVariables.build()));
+      return options;
     }
 
     /**

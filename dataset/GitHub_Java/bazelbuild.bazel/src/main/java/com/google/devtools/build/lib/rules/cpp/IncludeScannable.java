@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@ public interface IncludeScannable {
    * does not mention it.
    */
   @Nullable
-  List<Artifact> getBuiltInIncludeFiles();
+  Artifact getBuiltInIncludeFile();
 
   /**
    * Returns the artifact relative to which the {@code getCmdlineIncludes()} should be interpreted. 

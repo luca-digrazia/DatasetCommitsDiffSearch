@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
@@ -52,19 +53,15 @@ public interface IncludeScanner {
    * <p>{@code mainSource} is the source file relative to which the {@code cmdlineIncludes} are
    * interpreted.
    */
-  void process(Artifact mainSource, Collection<Artifact> sources,
+  public void process(Artifact mainSource, Collection<Artifact> sources,
       Map<Artifact, Artifact> legalOutputPaths, List<String> cmdlineIncludes,
       Set<Artifact> includes, ActionExecutionContext actionExecutionContext)
       throws IOException, ExecException, InterruptedException;
 
   /** Supplies IncludeScanners upon request. */
   interface IncludeScannerSupplier {
-    /**
-     * Returns the possibly shared scanner to be used for a given pair of include paths. The paths
-     * are specified as PathFragments relative to the execution root.
-     */
-    IncludeScanner scannerFor(List<PathFragment> quoteIncludePaths,
-        List<PathFragment> includePaths);
+    /** Returns the possibly shared scanner to be used for a given pair of include paths. */
+    IncludeScanner scannerFor(List<Path> quoteIncludePaths, List<Path> includePaths);
   }
 
   /**
@@ -125,7 +122,9 @@ public interface IncludeScanner {
             includeDirs.add(pathFragment);
           }
 
-          IncludeScanner scanner = includeScannerSupplier.scannerFor(quoteIncludeDirs, includeDirs);
+          IncludeScanner scanner = includeScannerSupplier.scannerFor(
+              relativeTo(execRoot, quoteIncludeDirs),
+              relativeTo(execRoot, includeDirs));
 
           Artifact mainSource =  scannable.getMainIncludeScannerSource();
           Collection<Artifact> sources = scannable.getIncludeScannerSources();
@@ -168,6 +167,15 @@ public interface IncludeScanner {
         inputs.add(included);
       }
       return inputs;
+    }
+
+    private static List<Path> relativeTo(
+        Path path, Collection<PathFragment> fragments) {
+      List<Path> result = Lists.newArrayListWithCapacity(fragments.size());
+      for (PathFragment fragment : fragments) {
+        result.add(path.getRelative(fragment));
+      }
+      return result;
     }
   }
 }
