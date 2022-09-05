@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.rules.genquery.GenQuery;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.GotOptionsEvent;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.common.options.Converters.AssignmentConverter;
@@ -54,25 +53,21 @@ public class BazelRulesModule extends BlazeModule {
    */
   public static class BazelExecutionOptions extends OptionsBase {
     @Option(
-      name = "spawn_strategy",
-      defaultValue = "",
-      category = "strategy",
-      help =
-          "Specify how spawn actions are executed by default."
-              + "'standalone' means run all of them locally."
-              + "'sandboxed' means run them in namespaces based sandbox (available only on Linux)"
-    )
+        name = "spawn_strategy",
+        defaultValue = "standalone",
+        category = "strategy",
+        help = "Specify how spawn actions are executed by default."
+            + "'standalone' means run all of them locally."
+            + "'sandboxed' means run them in namespaces based sandbox (available only on Linux)")
     public String spawnStrategy;
 
     @Option(
-      name = "genrule_strategy",
-      defaultValue = "",
-      category = "strategy",
-      help =
-          "Specify how to execute genrules."
-              + "'standalone' means run all of them locally."
-              + "'sandboxed' means run them in namespaces based sandbox (available only on Linux)"
-    )
+        name = "genrule_strategy",
+        defaultValue = "standalone",
+        category = "strategy",
+        help = "Specify how to execute genrules."
+            + "'standalone' means run all of them locally."
+            + "'sandboxed' means run them in namespaces based sandbox (available only on Linux)")
     public String genruleStrategy;
 
     @Option(name = "strategy",
@@ -132,9 +127,9 @@ public class BazelRulesModule extends BlazeModule {
   private OptionsProvider optionsProvider;
 
   @Override
-  public void beforeCommand(Command command, CommandEnvironment env) {
-    this.runtime = env.getRuntime();
-    env.getEventBus().register(this);
+  public void beforeCommand(BlazeRuntime blazeRuntime, Command command) {
+    this.runtime = blazeRuntime;
+    runtime.getEventBus().register(this);
   }
 
   @Override
