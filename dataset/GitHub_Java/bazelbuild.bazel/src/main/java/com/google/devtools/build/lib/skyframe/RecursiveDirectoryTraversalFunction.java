@@ -135,7 +135,7 @@ abstract class RecursiveDirectoryTraversalFunction
       return getEmptyReturn();
     }
 
-    PackageIdentifier packageId = PackageIdentifier.create(
+    PackageIdentifier packageId = new PackageIdentifier(
         recursivePkgKey.getRepository(), rootRelativePath);
     PackageLookupValue pkgLookupValue;
     try {
