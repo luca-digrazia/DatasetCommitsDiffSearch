@@ -105,10 +105,6 @@ public class LocalRepositoryLookupFunction implements SkyFunction {
       if (workspaceFileValue == null) {
         return Optional.absent();
       }
-      if (workspaceFileValue.isDirectory()) {
-        // There is a directory named WORKSPACE, ignore it for checking repository existence.
-        return Optional.of(false);
-      }
       return Optional.of(workspaceFileValue.exists());
     } catch (IOException e) {
       throw new LocalRepositoryLookupFunctionException(
@@ -208,7 +204,7 @@ public class LocalRepositoryLookupFunction implements SkyFunction {
                 @Override
                 public boolean apply(@Nullable Rule rule) {
                   AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
-                  PathFragment pathAttr = PathFragment.create(mapper.get("path", Type.STRING));
+                  PathFragment pathAttr = new PathFragment(mapper.get("path", Type.STRING));
                   return directory.getRelativePath().equals(pathAttr);
                 }
               },
