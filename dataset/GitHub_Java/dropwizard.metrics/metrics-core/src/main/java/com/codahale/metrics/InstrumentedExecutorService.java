@@ -22,7 +22,7 @@ public class InstrumentedExecutorService implements ExecutorService
 {
   private static final AtomicLong nameCounter = new AtomicLong();
 
-  private final ExecutorService delegate;
+  private final ExecutorService executorService;
   final Counter submitted;
   final Counter running;
   final Counter completed;
@@ -31,24 +31,24 @@ public class InstrumentedExecutorService implements ExecutorService
   /**
    * Wraps an {@link ExecutorService} uses an auto-generated default name.
    *
-   * @param delegate {@link ExecutorService} to wrap.
+   * @param executorService {@link ExecutorService} to wrap.
    * @param registry {@link MetricRegistry} that will contain the metrics.
    */
-  public InstrumentedExecutorService(ExecutorService delegate, MetricRegistry registry)
+  public InstrumentedExecutorService(ExecutorService executorService, MetricRegistry registry)
   {
-    this(delegate, registry, "instrumented-delegate-" + nameCounter.incrementAndGet());
+    this(executorService, registry, "instrumented-executorService-" + nameCounter.incrementAndGet());
   }
 
   /**
    * Wraps an {@link ExecutorService} with an explicit name.
    *
-   * @param delegate {@link ExecutorService} to wrap.
+   * @param executorService {@link ExecutorService} to wrap.
    * @param registry {@link MetricRegistry} that will contain the metrics.
    * @param name name for this executor service.
    */
-  public InstrumentedExecutorService(ExecutorService delegate, MetricRegistry registry, String name)
+  public InstrumentedExecutorService(ExecutorService executorService, MetricRegistry registry, String name)
   {
-    this.delegate = delegate;
+    this.executorService = executorService;
     this.submitted = registry.counter(name + ".submitted");
     this.running = registry.counter(name + ".running");
     this.completed = registry.counter(name + ".completed");
@@ -62,7 +62,7 @@ public class InstrumentedExecutorService implements ExecutorService
   public void execute(Runnable runnable)
   {
     System.out.println("executing");
-    delegate.execute(new InstrumentedRunnable(runnable));
+    executorService.execute(new InstrumentedRunnable(runnable));
   }
 
   /**
@@ -72,7 +72,7 @@ public class InstrumentedExecutorService implements ExecutorService
   public Future<?> submit(Runnable runnable)
   {
     submitted.inc();
-    return delegate.submit(new InstrumentedRunnable(runnable));
+    return executorService.submit(new InstrumentedRunnable(runnable));
   }
 
   /**
@@ -82,7 +82,7 @@ public class InstrumentedExecutorService implements ExecutorService
   public <T> Future<T> submit(Runnable runnable, T result)
   {
     submitted.inc();
-    return delegate.submit(new InstrumentedRunnable(runnable), result);
+    return executorService.submit(new InstrumentedRunnable(runnable), result);
   }
 
   /**
@@ -92,7 +92,7 @@ public class InstrumentedExecutorService implements ExecutorService
   public <T> Future<T> submit(Callable<T> task)
   {
     submitted.inc();
-    return delegate.submit(new InstrumentedCallable<T>(task));
+    return executorService.submit(new InstrumentedCallable<T>(task));
   }
 
   /**
@@ -103,7 +103,7 @@ public class InstrumentedExecutorService implements ExecutorService
   {
     submitted.inc(tasks.size());
     Collection<? extends Callable<T>> instrumented = instrument(tasks);
-    return delegate.invokeAll(instrumented);
+    return executorService.invokeAll(instrumented);
   }
 
   /**
@@ -115,7 +115,7 @@ public class InstrumentedExecutorService implements ExecutorService
   {
     submitted.inc(tasks.size());
     Collection<? extends Callable<T>> instrumented = instrument(tasks);
-    return delegate.invokeAll(instrumented, timeout, unit);
+    return executorService.invokeAll(instrumented, timeout, unit);
   }
 
   /**
@@ -126,7 +126,7 @@ public class InstrumentedExecutorService implements ExecutorService
   {
     submitted.inc(tasks.size());
     Collection<? extends Callable<T>> instrumented = instrument(tasks);
-    return delegate.invokeAny(instrumented);
+    return executorService.invokeAny(instrumented);
   }
 
   /**
@@ -138,7 +138,7 @@ public class InstrumentedExecutorService implements ExecutorService
   {
     submitted.inc(tasks.size());
     Collection<? extends Callable<T>> instrumented = instrument(tasks);
-    return delegate.invokeAny(instrumented, timeout, unit);
+    return executorService.invokeAny(instrumented, timeout, unit);
   }
 
   private <T> Collection<? extends Callable<T>> instrument(Collection<? extends Callable<T>> tasks)
@@ -154,31 +154,31 @@ public class InstrumentedExecutorService implements ExecutorService
   @Override
   public void shutdown()
   {
-    delegate.shutdown();
+    executorService.shutdown();
   }
 
   @Override
   public List<Runnable> shutdownNow()
   {
-    return delegate.shutdownNow();
+    return executorService.shutdownNow();
   }
 
   @Override
   public boolean isShutdown()
   {
-    return delegate.isShutdown();
+    return executorService.isShutdown();
   }
 
   @Override
   public boolean isTerminated()
   {
-    return delegate.isTerminated();
+    return executorService.isTerminated();
   }
 
   @Override
   public boolean awaitTermination(long l, TimeUnit timeUnit) throws InterruptedException
   {
-    return delegate.awaitTermination(l, timeUnit);
+    return executorService.awaitTermination(l, timeUnit);
   }
 
   private class InstrumentedRunnable implements Runnable
