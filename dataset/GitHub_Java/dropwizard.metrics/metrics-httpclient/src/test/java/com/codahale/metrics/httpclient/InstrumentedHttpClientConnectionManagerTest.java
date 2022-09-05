@@ -1,6 +1,7 @@
 package com.codahale.metrics.httpclient;
 
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import org.junit.Assert;
 import org.junit.Test;
 
