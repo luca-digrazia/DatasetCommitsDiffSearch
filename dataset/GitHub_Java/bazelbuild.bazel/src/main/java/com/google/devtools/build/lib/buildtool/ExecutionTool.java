@@ -187,7 +187,7 @@ public class ExecutionTool {
             new FilesetActionContextImpl.Provider(
                 env.getReporter(), runtime.getWorkspaceName()),
             new SimpleActionContextProvider(
-                new SymlinkTreeStrategy(env.getOutputService(), runtime.getBinTools())));
+                new SymlinkTreeStrategy(runtime.getOutputService(), runtime.getBinTools())));
     StrategyConverter strategyConverter = new StrategyConverter(actionContextProviders);
 
     ImmutableList<ActionContextConsumer> actionContextConsumers =
@@ -356,7 +356,7 @@ public class ExecutionTool {
       }
     }
 
-    OutputService outputService = env.getOutputService();
+    OutputService outputService = runtime.getOutputService();
     if (outputService != null) {
       outputService.startBuild(buildId);
     } else {
@@ -484,10 +484,10 @@ public class ExecutionTool {
       }
       // Finalize output service last, so that if we do throw an exception, we know all the other
       // code has already run.
-      if (env.getOutputService() != null) {
+      if (runtime.getOutputService() != null) {
         boolean isBuildSuccessful =
             buildResult.getSuccessfulTargets().size() == configuredTargets.size();
-        env.getOutputService().finalizeBuild(isBuildSuccessful);
+        runtime.getOutputService().finalizeBuild(isBuildSuccessful);
       }
     }
   }
