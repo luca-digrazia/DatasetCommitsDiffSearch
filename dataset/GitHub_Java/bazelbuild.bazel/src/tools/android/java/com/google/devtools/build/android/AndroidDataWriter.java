@@ -70,8 +70,7 @@ public class AndroidDataWriter implements Flushable, AndroidDataWritingVisitor {
               StandardOpenOption.CREATE_NEW,
               StandardOpenOption.WRITE)) {
         writer.write(START_RESOURCES);
-        for (FullyQualifiedName key :
-            Ordering.natural().immutableSortedCopy(valueFragments.keySet())) {
+        for (FullyQualifiedName key : valueFragments.keySet()) {
           for (String line : valueFragments.get(key)) {
             writer.write(line);
             writer.write(LINE_END);
@@ -208,7 +207,7 @@ public class AndroidDataWriter implements Flushable, AndroidDataWritingVisitor {
   public void copyResource(Path source, String relativeDestinationPath)
       throws IOException, MergingException {
     Path destinationPath = resourceDirectory.resolve(relativeDestinationPath);
-    if (!source.getParent().getFileName().toString().startsWith(SdkConstants.FD_RES_RAW)
+    if (source.getParent().getFileName().toString().startsWith(SdkConstants.DRAWABLE_FOLDER)
         && source.getFileName().toString().endsWith(SdkConstants.DOT_PNG)) {
       try {
         Files.createDirectories(destinationPath.getParent());
