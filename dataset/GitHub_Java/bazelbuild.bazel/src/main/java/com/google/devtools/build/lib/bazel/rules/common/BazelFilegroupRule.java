@@ -15,11 +15,12 @@ package com.google.devtools.build.lib.bazel.rules.common;
 
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.DATA;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.BuildType.LICENSE;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.Type.LICENSE;
+import static com.google.devtools.build.lib.packages.Type.STRING;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -30,6 +31,9 @@ import com.google.devtools.build.lib.util.FileTypeSet;
 /**
  * Rule object implementing "filegroup".
  */
+@BlazeRule(name = "filegroup",
+             ancestors = { BaseRuleClasses.BaseRule.class },
+             factoryClass = Filegroup.class)
 public final class BazelFilegroupRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -40,9 +44,8 @@ public final class BazelFilegroupRule implements RuleDefinition {
         ${SYNOPSIS}
         <p>
           It is common to use the result of a <a href="#glob">glob</a> expression for the value
-          of the <code>srcs</code> attribute. If a rule and a source file with the same name both
-          exist in the package, the glob will return the outputs of the rule instead of the source
-          file.
+          of the <code>srcs</code> attribute. If the glob matches a source file with the same
+          name as a build rule, the rule will override the file.
         </p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("srcs", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE))
@@ -70,15 +73,6 @@ public final class BazelFilegroupRule implements RuleDefinition {
         </p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("path", STRING))
-        .build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("filegroup")
-        .ancestors(BaseRuleClasses.BaseRule.class)
-        .factoryClass(Filegroup.class)
         .build();
   }
 }
