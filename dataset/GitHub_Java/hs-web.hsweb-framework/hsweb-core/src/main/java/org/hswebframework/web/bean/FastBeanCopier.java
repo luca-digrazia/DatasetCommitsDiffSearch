@@ -2,7 +2,6 @@ package org.hswebframework.web.bean;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.PropertyUtilsBean;
@@ -34,27 +33,9 @@ public final class FastBeanCopier {
 
     private static final Map<Class, Class> wrapperClassMapping = new HashMap<>();
 
-    @SuppressWarnings("all")
+    public static final DefaultConvert DEFAULT_CONVERT = new DefaultConvert();
+
     public static final Class[] EMPTY_CLASS_ARRAY = new Class[0];
-
-    private static BeanFactory BEAN_FACTORY = new BeanFactory() {
-        @Override
-        @SneakyThrows
-        public <T> T newInstance(Class<T> beanType) {
-            return beanType == Map.class ? (T) new HashMap<>() : beanType.newInstance();
-        }
-    };
-
-    public static final DefaultConverter DEFAULT_CONVERT;
-
-    public static void setBeanFactory(BeanFactory beanFactory) {
-        BEAN_FACTORY = beanFactory;
-        DEFAULT_CONVERT.setBeanFactory(beanFactory);
-    }
-
-    public static BeanFactory getBeanFactory() {
-        return BEAN_FACTORY;
-    }
 
     static {
         wrapperClassMapping.put(byte.class, Byte.class);
@@ -65,25 +46,6 @@ public final class FastBeanCopier {
         wrapperClassMapping.put(char.class, Character.class);
         wrapperClassMapping.put(boolean.class, Boolean.class);
         wrapperClassMapping.put(long.class, Long.class);
-        BEAN_FACTORY = new BeanFactory() {
-            @Override
-            @SneakyThrows
-            public <T> T newInstance(Class<T> beanType) {
-                return beanType == Map.class ? (T) new HashMap<>() : beanType.newInstance();
-            }
-        };
-        DEFAULT_CONVERT = new DefaultConverter();
-        DEFAULT_CONVERT.setBeanFactory(BEAN_FACTORY);
-    }
-
-    @SuppressWarnings("all")
-    public static Set<String> include(String... inculdeProperties) {
-        return new HashSet<String>(Arrays.asList(inculdeProperties)) {
-            @Override
-            public boolean contains(Object o) {
-                return !super.contains(o);
-            }
-        };
     }
 
     public static <T, S> T copy(S source, T target, String... ignore) {
@@ -94,29 +56,12 @@ public final class FastBeanCopier {
         return copy(source, target.get(), DEFAULT_CONVERT, ignore);
     }
 
-    @SneakyThrows
     public static <T, S> T copy(S source, Class<T> target, String... ignore) {
-        return copy(source, target.newInstance(), DEFAULT_CONVERT, ignore);
-    }
-
-    public static <T, S> T copy(S source, T target, Converter converter, String... ignore) {
-        return copy(source, target, converter, (ignore == null || ignore.length == 0) ? Collections.emptySet() : new HashSet<>(Arrays.asList(ignore)));
-    }
-
-    public static <T, S> T copy(S source, T target, Set<String> ignore) {
-        return copy(source, target, DEFAULT_CONVERT, ignore);
-    }
-
-    @SuppressWarnings("all")
-    public static <T, S> T copy(S source, T target, Converter converter, Set<String> ignore) {
-        if (source instanceof Map && target instanceof Map) {
-            ((Map) target).putAll(((Map) source));
-            return target;
+        try {
+            return copy(source, target.newInstance(), DEFAULT_CONVERT, ignore);
+        } catch (Exception e) {
+            throw new RuntimeException(e.getMessage(), e);
         }
-
-        getCopier(source, target, true)
-                .copy(source, target, ignore, converter);
-        return target;
     }
 
     public static Copier getCopier(Object source, Object target, boolean autoCreate) {
@@ -129,6 +74,16 @@ public final class FastBeanCopier {
             return CACHE.get(key);
         }
 
+    }
+
+    public static <T, S> T copy(S source, T target, Converter converter, String... ignore) {
+        if (source instanceof Map && target instanceof Map) {
+            ((Map) target).putAll(((Map) source));
+            return target;
+        }
+        getCopier(source, target, true)
+                .copy(source, target, (ignore == null || ignore.length == 0) ? Collections.emptySet() : new HashSet<>(Arrays.asList(ignore)), converter);
+        return target;
     }
 
     private static CacheKey createCacheKey(Class source, Class target) {
@@ -147,6 +102,7 @@ public final class FastBeanCopier {
                 "\n}\n" +
                 "\n}";
         try {
+//            System.out.println(method);
             return Proxy.create(Copier.class)
                     .addMethod(method)
                     .newInstance();
@@ -157,22 +113,16 @@ public final class FastBeanCopier {
     }
 
     private static Map<String, ClassProperty> createProperty(Class type) {
-
-        List<String> fieldNames = Arrays.stream(type.getDeclaredFields())
-                .map(Field::getName).collect(Collectors.toList());
-
         return Stream.of(propertyUtils.getPropertyDescriptors(type))
                 .filter(property -> !property.getName().equals("class") && property.getReadMethod() != null && property.getWriteMethod() != null)
                 .map(BeanClassProperty::new)
-                //让字段有序
-                .sorted(Comparator.comparing(property -> fieldNames.indexOf(property.name)))
-                .collect(Collectors.toMap(ClassProperty::getName, Function.identity(), (k, k2) -> k, LinkedHashMap::new));
+                .collect(Collectors.toMap(ClassProperty::getName, Function.identity()));
 
     }
 
     private static Map<String, ClassProperty> createMapProperty(Map<String, ClassProperty> template) {
         return template.values().stream().map(classProperty -> new MapClassProperty(classProperty.name))
-                .collect(Collectors.toMap(ClassProperty::getName, Function.identity(), (k, k2) -> k, LinkedHashMap::new));
+                .collect(Collectors.toMap(ClassProperty::getName, Function.identity()));
     }
 
     private static String createCopierCode(Class source, Class target) {
@@ -315,9 +265,7 @@ public final class FastBeanCopier {
                 boolean hasGeneric = false;
                 if (field != null) {
                     String[] arr = Arrays.stream(ResolvableType.forField(field)
-                            .getGenerics())
-                            .map(ResolvableType::getRawClass)
-                            .filter(Objects::nonNull)
+                            .getGenerics()).map(ResolvableType::getRawClass)
                             .map(t -> t.getName().concat(".class"))
                             .toArray(String[]::new);
                     if (arr.length > 0) {
@@ -376,16 +324,16 @@ public final class FastBeanCopier {
                 } else {
                     if (Cloneable.class.isAssignableFrom(targetType)) {
                         try {
-                            convertCode.append("(").append(getTypeName()).append(")").append(getterCode).append(".clone()");
+                            convertCode.append("(" + getTypeName() + ")").append(getterCode).append(".clone()");
                         } catch (Exception e) {
                             convertCode.append(getterCode);
                         }
                     } else {
                         if ((Map.class.isAssignableFrom(targetType)
                                 || Collection.class.isAssignableFrom(type)) && hasGeneric) {
-                            convertCode.append("(").append(getTypeName()).append(")").append(convert);
+                            convertCode.append("(" + getTypeName() + ")").append(convert);
                         } else {
-                            convertCode.append("(").append(getTypeName()).append(")").append(getterCode);
+                            convertCode.append("(" + getTypeName() + ")").append(getterCode);
 //                            convertCode.append(getterCode);
                         }
 
@@ -450,12 +398,7 @@ public final class FastBeanCopier {
     }
 
 
-    public static final class DefaultConverter implements Converter {
-        private BeanFactory beanFactory = BEAN_FACTORY;
-
-        public void setBeanFactory(BeanFactory beanFactory) {
-            this.beanFactory = beanFactory;
-        }
+    static final class DefaultConvert implements Converter {
 
         public Collection newCollection(Class targetClass) {
 
@@ -561,7 +504,9 @@ public final class FastBeanCopier {
                     return converter.convert(targetClass, source);
                 }
 
-                return copy(source, beanFactory.newInstance(targetClass), this);
+                T newTarget = targetClass == Map.class ? (T) new HashMap<>() : targetClass.newInstance();
+                copy(source, newTarget);
+                return newTarget;
             } catch (Exception e) {
                 log.warn("复制类型{}->{}失败", source, targetClass, e);
                 throw new UnsupportedOperationException(e.getMessage(), e);
