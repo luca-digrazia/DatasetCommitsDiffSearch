@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
-import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SelectorList;
 import com.google.devtools.build.lib.syntax.SelectorValue;
 import com.google.devtools.build.lib.syntax.SkylarkEnvironment;
@@ -473,7 +472,7 @@ public class MethodLibrary {
       int res = stringFind(false, self, sub, start, end, "'end' argument to rindex");
       if (res < 0) {
         throw new EvalException(loc, String.format("substring %s not found in %s",
-                Printer.repr(sub), Printer.repr(self)));
+                EvalUtils.prettyPrintValue(sub), EvalUtils.prettyPrintValue(self)));
       }
       return res;
     }
@@ -499,7 +498,7 @@ public class MethodLibrary {
       int res = stringFind(true, self, sub, start, end, "'end' argument to index");
       if (res < 0) {
         throw new EvalException(loc, String.format("substring %s not found in %s",
-                Printer.repr(sub), Printer.repr(self)));
+                EvalUtils.prettyPrintValue(sub), EvalUtils.prettyPrintValue(self)));
       }
       return res;
     }
@@ -579,7 +578,7 @@ public class MethodLibrary {
         if (!kwargs.containsKey(word)) {
           throw new EvalException(loc, "No replacement found for '" + word + "'");
         }
-        matcher.appendReplacement(result, Printer.str(kwargs.get(word)));
+        matcher.appendReplacement(result, EvalUtils.printValue(kwargs.get(word)));
       }
       matcher.appendTail(result);
       return result.toString();
@@ -719,7 +718,7 @@ public class MethodLibrary {
         Map<?, ?> dictionary = (Map<?, ?>) self;
         if (!dictionary.containsKey(key)) {
           throw new EvalException(loc, String.format("Key %s not found in dictionary",
-                  Printer.repr(key)));
+                  EvalUtils.prettyPrintValue(key)));
         }
         return dictionary.get(key);
 
@@ -873,17 +872,8 @@ public class MethodLibrary {
       "Converts any object to string. This is useful for debugging.",
       mandatoryPositionals = {@Param(name = "x", doc = "The object to convert.")})
   private static BuiltinFunction str = new BuiltinFunction("str") {
-    public String invoke(Object x) {
-      return Printer.str(x);
-    }
-  };
-
-  @SkylarkSignature(name = "repr", returnType = String.class, doc =
-      "Converts any object to a string representation. This is useful for debugging.",
-      mandatoryPositionals = {@Param(name = "x", doc = "The object to convert.")})
-  private static BuiltinFunction repr = new BuiltinFunction("repr") {
-    public String invoke(Object x) {
-      return Printer.repr(x);
+    public String invoke(Object x) throws EvalException {
+      return EvalUtils.printValue(x);
     }
   };
 
@@ -918,11 +908,12 @@ public class MethodLibrary {
           return Integer.parseInt((String) x);
         } catch (NumberFormatException e) {
           throw new EvalException(loc,
-              "invalid literal for int(): " + Printer.repr(x));
+              "invalid literal for int(): " + EvalUtils.prettyPrintValue(x));
         }
       } else {
         throw new EvalException(loc,
-            String.format("%s is not of type string or int or bool", Printer.repr(x)));
+            String.format("argument must be string, int, or bool, not '%s'",
+                EvalUtils.prettyPrintValue(x)));
       }
     }
   };
@@ -1122,7 +1113,7 @@ public class MethodLibrary {
           return defaultValue;
         } else {
           throw new EvalException(loc, String.format("Object of type '%s' has no field %s",
-                  EvalUtils.getDataTypeName(obj), Printer.repr(name)));
+                  EvalUtils.getDataTypeName(obj), EvalUtils.prettyPrintValue(name)));
         }
       }
       return result;
@@ -1198,7 +1189,7 @@ public class MethodLibrary {
               new com.google.common.base.Function<Object, String>() {
                 @Override
                 public String apply(Object input) {
-                  return Printer.str(input);
+                  return EvalUtils.printValue(input);
                 }}));
       env.handleEvent(Event.warn(loc, msg));
       return Environment.NONE;
@@ -1307,7 +1298,7 @@ public class MethodLibrary {
       items, get, keys, values);
 
   private static final List<BaseFunction> pureGlobalFunctions = ImmutableList.<BaseFunction>of(
-      bool, int_, len, minus, repr, select, sorted, str);
+      bool, int_, len, minus, select, sorted, str);
 
   private static final List<BaseFunction> skylarkGlobalFunctions =
       ImmutableList.<BaseFunction>builder()
