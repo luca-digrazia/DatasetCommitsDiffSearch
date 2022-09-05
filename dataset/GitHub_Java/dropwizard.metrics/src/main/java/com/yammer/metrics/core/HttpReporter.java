@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
@@ -13,7 +12,6 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 import static com.yammer.metrics.core.VirtualMachineMetrics.*;
 
@@ -29,11 +27,9 @@ import org.codehaus.jackson.JsonGenerator;
  */
 public class HttpReporter {
 	private final JsonFactory factory = new JsonFactory();
+	private final ServerSocket serverSocket;
 	private final ExecutorService serverThread = Executors.newSingleThreadExecutor(new NamedThreadFactory("http-metric-reporter"));
 	private final Map<MetricName, Metric> metrics;
-	private final int port;
-	private ServerSocket serverSocket;
-	private Future<?> future;
 
 	private class ServerThread implements Runnable {
 		@Override
@@ -66,29 +62,16 @@ public class HttpReporter {
 		}
 	}
 
-	/*package*/ HttpReporter(Map<MetricName, Metric> metrics, int port) {
-		this.port = port;
+	/*package*/ HttpReporter(Map<MetricName, Metric> metrics, int port) throws IOException {
+		this.serverSocket = new ServerSocket(port);
 		this.metrics = metrics;
 	}
 
 	/**
 	 * Begins listening on the specified port.
 	 */
-	public void start() throws IOException {
-		this.serverSocket = new ServerSocket(port);
-		this.future = serverThread.submit(new ServerThread());
-	}
-
-	/**
-	 * Stops listening if the server thread is running.
-	 */
-	public void stop() throws IOException {
-		if (future != null) {
-			serverSocket.close();
-			future.cancel(false);
-			future = null;
-			serverSocket = null;
-		}
+	public void start() {
+		serverThread.execute(new ServerThread());
 	}
 
 	private void writeRegularMetrics(JsonGenerator json) throws IOException {
