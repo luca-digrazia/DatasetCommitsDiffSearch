@@ -220,7 +220,6 @@ import android.os.Message;
 import android.taobao.atlas.startup.patch.KernalConstants;
 import android.taobao.atlas.startup.DexFileCompat;
 import android.util.Log;
-import com.taobao.android.runtime.AndroidRuntime;
 import dalvik.system.DexFile;
 import java.io.File;
 import java.io.FileFilter;
@@ -471,7 +470,7 @@ public class BundleReleaser {
         String optimizedPath = optimizedPathFor(validDex, dexOptDir());
         try {
             if(!externalStorage) {
-                dexFile = /*DexFile*/AndroidRuntime.getInstance().loadDex(validDex.getPath(), optimizedPath, 0, null);
+                dexFile = DexFile.loadDex(validDex.getPath(), optimizedPath, 0);
                 if(!new File(optimizedPath).exists()){
                     Log.e(TAG,"odex not exist");
                 }
