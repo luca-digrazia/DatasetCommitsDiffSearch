@@ -6,7 +6,6 @@ import org.junit.Test;
 
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -67,15 +66,9 @@ public class ScheduledReporterTest {
 
     @Test
     public void pollsPeriodically() throws Exception {
-        CountDownLatch latch = new CountDownLatch(2);
-        reporter.start(100, 100, TimeUnit.MILLISECONDS, () -> {
-            if (latch.getCount() > 0) {
-                reporter.report();
-                latch.countDown();
-            }
-        });
-        latch.await(5, TimeUnit.SECONDS);
+        reporter.start(200, TimeUnit.MILLISECONDS);
 
+        Thread.sleep(500);
         verify(reporter, times(2)).report(
                 map("gauge", gauge),
                 map("counter", counter),
@@ -105,14 +98,9 @@ public class ScheduledReporterTest {
 
     @Test
     public void shouldAutoCreateExecutorWhenItNull() throws Exception {
-        CountDownLatch latch = new CountDownLatch(2);
-        reporterWithNullExecutor.start(100, 100, TimeUnit.MILLISECONDS, () -> {
-            if (latch.getCount() > 0) {
-                reporterWithNullExecutor.report();
-                latch.countDown();
-            }
-        });
-        latch.await(5, TimeUnit.SECONDS);
+        reporterWithNullExecutor.start(200, TimeUnit.MILLISECONDS);
+
+        Thread.sleep(500);
         verify(reporterWithNullExecutor, times(2)).report(
                 map("gauge", gauge),
                 map("counter", counter),
