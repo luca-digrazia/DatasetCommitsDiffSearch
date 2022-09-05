@@ -13,14 +13,31 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import static com.google.devtools.build.lib.syntax.compiler.ByteCodeUtils.append;
+
 import com.google.common.base.Strings;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.Concatable.Concatter;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
+import com.google.devtools.build.lib.syntax.compiler.ByteCodeMethodCalls;
+import com.google.devtools.build.lib.syntax.compiler.ByteCodeUtils;
+import com.google.devtools.build.lib.syntax.compiler.DebugInfo;
+import com.google.devtools.build.lib.syntax.compiler.DebugInfo.AstAccessors;
+import com.google.devtools.build.lib.syntax.compiler.Jump;
+import com.google.devtools.build.lib.syntax.compiler.Jump.PrimitiveComparison;
+import com.google.devtools.build.lib.syntax.compiler.LabelAdder;
+import com.google.devtools.build.lib.syntax.compiler.VariableScope;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.IllegalFormatException;
+import java.util.List;
+import net.bytebuddy.implementation.bytecode.ByteCodeAppender;
+import net.bytebuddy.implementation.bytecode.Duplication;
+import net.bytebuddy.implementation.bytecode.Removal;
+import net.bytebuddy.implementation.bytecode.StackManipulation;
 
 /**
  * Syntax node for a binary operator expression.
@@ -59,8 +76,12 @@ public final class BinaryOperatorExpression extends Expression {
     return lhs + " " + operator + " " + rhs;
   }
 
-  /** Implements comparison operators.  */
-  private static int compare(Object lval, Object rval, Location location) throws EvalException {
+  /**
+   * Implements comparison operators.
+   *
+   * <p>Publicly accessible for reflection and compiled Skylark code.
+   */
+  public static int compare(Object lval, Object rval, Location location) throws EvalException {
     try {
       return EvalUtils.SKYLARK_COMPARATOR.compare(lval, rval);
     } catch (EvalUtils.ComparisonException e) {
@@ -68,8 +89,12 @@ public final class BinaryOperatorExpression extends Expression {
     }
   }
 
-  /** Implements the "in" operator. */
-  private static boolean in(Object lval, Object rval, Location location) throws EvalException {
+  /**
+   * Implements the "in" operator.
+   *
+   * <p>Publicly accessible for reflection and compiled Skylark code.
+   */
+  public static boolean in(Object lval, Object rval, Location location) throws EvalException {
     if (rval instanceof SkylarkQueryable) {
       return ((SkylarkQueryable) rval).containsKey(lval, location);
     } else if (rval instanceof String) {
@@ -177,8 +202,112 @@ public final class BinaryOperatorExpression extends Expression {
     rhs.validate(env);
   }
 
-  /** Implements Operator.PLUS. */
-  private static Object plus(Object lval, Object rval, Environment env, Location location)
+  @Override
+  ByteCodeAppender compile(VariableScope scope, DebugInfo debugInfo) throws EvalException {
+    AstAccessors debugAccessors = debugInfo.add(this);
+    List<ByteCodeAppender> code = new ArrayList<>();
+    ByteCodeAppender leftCompiled = lhs.compile(scope, debugInfo);
+    ByteCodeAppender rightCompiled = rhs.compile(scope, debugInfo);
+    // generate byte code for short-circuiting operators
+    if (EnumSet.of(Operator.AND, Operator.OR).contains(operator)) {
+      LabelAdder after = new LabelAdder();
+      code.add(leftCompiled);
+      append(
+          code,
+          // duplicate the value, one to convert to boolean, one to leave on stack
+          // assumes we don't compile Skylark values to long/double
+          Duplication.SINGLE,
+          EvalUtils.toBoolean,
+          // short-circuit and jump behind second operand expression if first is false/true
+          Jump.ifIntOperandToZero(
+                  operator == Operator.AND
+                      ? PrimitiveComparison.EQUAL
+                      : PrimitiveComparison.NOT_EQUAL)
+              .to(after),
+          // remove the duplicated value from above, as only the rhs is still relevant
+          Removal.SINGLE);
+      code.add(rightCompiled);
+      append(code, after);
+    } else if (EnumSet.of(
+            Operator.LESS, Operator.LESS_EQUALS, Operator.GREATER, Operator.GREATER_EQUALS)
+        .contains(operator)) {
+      compileComparison(debugAccessors, code, leftCompiled, rightCompiled);
+    } else {
+      code.add(leftCompiled);
+      code.add(rightCompiled);
+      switch (operator) {
+        case PLUS:
+          append(code, callImplementation(scope, debugAccessors, operator));
+          break;
+        case PIPE:
+        case MINUS:
+        case MULT:
+        case DIVIDE:
+        case PERCENT:
+          append(code, callImplementation(debugAccessors, operator));
+          break;
+        case EQUALS_EQUALS:
+          append(code, ByteCodeMethodCalls.BCObject.equals, ByteCodeMethodCalls.BCBoolean.valueOf);
+          break;
+        case NOT_EQUALS:
+          append(
+              code,
+              ByteCodeMethodCalls.BCObject.equals,
+              ByteCodeUtils.intLogicalNegation(),
+              ByteCodeMethodCalls.BCBoolean.valueOf);
+          break;
+        case IN:
+          append(
+              code,
+              callImplementation(debugAccessors, operator),
+              ByteCodeMethodCalls.BCBoolean.valueOf);
+          break;
+        case NOT_IN:
+          append(
+              code,
+              callImplementation(debugAccessors, Operator.IN),
+              ByteCodeUtils.intLogicalNegation(),
+              ByteCodeMethodCalls.BCBoolean.valueOf);
+          break;
+        default:
+          throw new UnsupportedOperationException("Unsupported binary operator: " + operator);
+      } // endswitch
+    }
+    return ByteCodeUtils.compoundAppender(code);
+  }
+
+  /**
+   * Compile a comparison oer
+   *
+   * @param debugAccessors
+   * @param code
+   * @param leftCompiled
+   * @param rightCompiled
+   * @throws Error
+   */
+  private void compileComparison(
+      AstAccessors debugAccessors,
+      List<ByteCodeAppender> code,
+      ByteCodeAppender leftCompiled,
+      ByteCodeAppender rightCompiled) {
+    PrimitiveComparison byteCodeOperator = PrimitiveComparison.forOperator(operator);
+    code.add(leftCompiled);
+    code.add(rightCompiled);
+    append(
+        code,
+        debugAccessors.loadLocation,
+        ByteCodeUtils.invoke(
+            BinaryOperatorExpression.class, "compare", Object.class, Object.class, Location.class),
+        ByteCodeUtils.intToPrimitiveBoolean(byteCodeOperator),
+        ByteCodeMethodCalls.BCBoolean.valueOf);
+  }
+
+  /**
+   * Implements Operator.PLUS.
+   *
+   * <p>Publicly accessible for reflection and compiled Skylark code.
+   */
+  public static Object plus(Object lval, Object rval, Environment env, Location location)
       throws EvalException {
     // int + int
     if (lval instanceof Integer && rval instanceof Integer) {
@@ -226,24 +355,36 @@ public final class BinaryOperatorExpression extends Expression {
     throw typeException(lval, rval, Operator.PLUS, location);
   }
 
-  /** Implements Operator.PIPE. */
-  private static Object pipe(Object lval, Object rval, Location location) throws EvalException {
+  /**
+   * Implements Operator.PIPE.
+   *
+   * <p>Publicly accessible for reflection and compiled Skylark code.
+   */
+  public static Object pipe(Object lval, Object rval, Location location) throws EvalException {
     if (lval instanceof SkylarkNestedSet) {
       return new SkylarkNestedSet((SkylarkNestedSet) lval, rval, location);
     }
     throw typeException(lval, rval, Operator.PIPE, location);
   }
 
-  /** Implements Operator.MINUS. */
-  private static Object minus(Object lval, Object rval, Location location) throws EvalException {
+  /**
+   * Implements Operator.MINUS.
+   *
+   * <p>Publicly accessible for reflection and compiled Skylark code.
+   */
+  public static Object minus(Object lval, Object rval, Location location) throws EvalException {
     if (lval instanceof Integer && rval instanceof Integer) {
       return ((Integer) lval).intValue() - ((Integer) rval).intValue();
     }
     throw typeException(lval, rval, Operator.MINUS, location);
   }
 
-  /** Implements Operator.MULT. */
-  private static Object mult(Object lval, Object rval, Environment env, Location location)
+  /**
+   * Implements Operator.MULT.
+   *
+   * <p>Publicly accessible for reflection and compiled Skylark code.
+   */
+  public static Object mult(Object lval, Object rval, Environment env, Location location)
       throws EvalException {
     Integer number = null;
     Object otherFactor = null;
@@ -271,8 +412,12 @@ public final class BinaryOperatorExpression extends Expression {
     throw typeException(lval, rval, Operator.MULT, location);
   }
 
-  /** Implements Operator.DIVIDE. */
-  private static Object divide(Object lval, Object rval, Location location) throws EvalException {
+  /**
+   * Implements Operator.DIVIDE.
+   *
+   * <p>Publicly accessible for reflection and compiled Skylark code.
+   */
+  public static Object divide(Object lval, Object rval, Location location) throws EvalException {
     // int / int
     if (lval instanceof Integer && rval instanceof Integer) {
       if (rval.equals(0)) {
@@ -288,8 +433,12 @@ public final class BinaryOperatorExpression extends Expression {
     throw typeException(lval, rval, Operator.DIVIDE, location);
   }
 
-  /** Implements Operator.PERCENT. */
-  private static Object percent(Object lval, Object rval, Location location) throws EvalException {
+  /**
+   * Implements Operator.PERCENT.
+   *
+   * <p>Publicly accessible for reflection and compiled Skylark code.
+   */
+  public static Object percent(Object lval, Object rval, Location location) throws EvalException {
     // int % int
     if (lval instanceof Integer && rval instanceof Integer) {
       if (rval.equals(0)) {
@@ -320,6 +469,38 @@ public final class BinaryOperatorExpression extends Expression {
       }
     }
     throw typeException(lval, rval, Operator.PERCENT, location);
+  }
+
+  /**
+   * Returns a StackManipulation that calls the given operator's implementation method.
+   *
+   * <p> The method must be named exactly as the lower case name of the operator and in addition to
+   * the operands require an Environment and Location.
+   */
+  private static StackManipulation callImplementation(
+      VariableScope scope, AstAccessors debugAccessors, Operator operator) {
+    Class<?>[] parameterTypes =
+        new Class<?>[] {Object.class, Object.class, Environment.class, Location.class};
+    return new StackManipulation.Compound(
+        scope.loadEnvironment(),
+        debugAccessors.loadLocation,
+        ByteCodeUtils.invoke(
+            BinaryOperatorExpression.class, operator.name().toLowerCase(), parameterTypes));
+  }
+
+  /**
+   * Returns a StackManipulation that calls the given operator's implementation method.
+   *
+   * <p> The method must be named exactly as the lower case name of the operator and in addition to
+   * the operands require a Location.
+   */
+  private static StackManipulation callImplementation(
+      AstAccessors debugAccessors, Operator operator) {
+    Class<?>[] parameterTypes = new Class<?>[] {Object.class, Object.class, Location.class};
+    return new StackManipulation.Compound(
+        debugAccessors.loadLocation,
+        ByteCodeUtils.invoke(
+            BinaryOperatorExpression.class, operator.name().toLowerCase(), parameterTypes));
   }
 
   /**
