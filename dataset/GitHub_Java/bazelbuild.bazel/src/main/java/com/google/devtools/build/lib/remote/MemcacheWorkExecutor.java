@@ -29,8 +29,10 @@ import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.shell.CommandResult;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
+
 import io.grpc.ManagedChannel;
 import io.grpc.netty.NettyChannelBuilder;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -40,16 +42,16 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Implementation of {@link RemoteWorkExecutor} that uses ConcurrentMapActionCache and gRPC for
+ * Implementation of {@link RemoteWorkExecutor} that uses MemcacheActionCache and gRPC for
  * communicating the work, inputs and outputs.
  */
 @ThreadSafe
 public class MemcacheWorkExecutor implements RemoteWorkExecutor {
   /**
-   * A cache used to store the input and output files as well as the build status of the remote
-   * work.
+   * A cache used to store the input and output files as well as the build status
+   * of the remote work.
    */
-  protected final ConcurrentMapActionCache cache;
+  protected final MemcacheActionCache cache;
 
   /** Execution root for running this work locally. */
   private final Path execRoot;
@@ -60,20 +62,20 @@ public class MemcacheWorkExecutor implements RemoteWorkExecutor {
   private static final int MAX_WORK_SIZE_BYTES = 1024 * 1024 * 512;
 
   /**
-   * This constructor is used when this class is used in a client. It requires a host address and
-   * port to connect to a remote service.
+   * This constructor is used when this class is used in a client.
+   * It requires a host address and port to connect to a remote service.
    */
-  private MemcacheWorkExecutor(ConcurrentMapActionCache cache, String host, int port) {
+  private MemcacheWorkExecutor(MemcacheActionCache cache, String host, int port) {
     this.cache = cache;
     this.execRoot = null;
     this.channel = NettyChannelBuilder.forAddress(host, port).usePlaintext(true).build();
   }
 
   /**
-   * This constructor is used when this class is used in the remote worker. A path to the execution
-   * root is needed for executing work locally.
+   * This constructor is used when this class is used in the remote worker.
+   * A path to the execution root is needed for executing work locally.
    */
-  private MemcacheWorkExecutor(ConcurrentMapActionCache cache, Path execRoot) {
+  private MemcacheWorkExecutor(MemcacheActionCache cache, Path execRoot) {
     this.cache = cache;
     this.execRoot = execRoot;
     this.channel = null;
@@ -81,26 +83,24 @@ public class MemcacheWorkExecutor implements RemoteWorkExecutor {
 
   /**
    * Create an instance of MemcacheWorkExecutor that talks to a remote server.
-   *
-   * @param cache An instance of ConcurrentMapActionCache.
+   * @param cache An instance of MemcacheActionCache.
    * @param host Hostname of the server to connect to.
    * @param port Port of the server to connect to.
    * @return An instance of MemcacheWorkExecutor that talks to a remote server.
    */
   public static MemcacheWorkExecutor createRemoteWorkExecutor(
-      ConcurrentMapActionCache cache, String host, int port) {
+      MemcacheActionCache cache, String host, int port) {
     return new MemcacheWorkExecutor(cache, host, port);
   }
 
   /**
    * Create an instance of MemcacheWorkExecutor that runs locally.
-   *
-   * @param cache An instance of ConcurrentMapActionCache.
+   * @param cache An instance of MemcacheActionCache.
    * @param execRoot Path of the execution root where work is executed.
    * @return An instance of MemcacheWorkExecutor tthat runs locally in the execution root.
    */
   public static MemcacheWorkExecutor createLocalWorkExecutor(
-      ConcurrentMapActionCache cache, Path execRoot) {
+      MemcacheActionCache cache, Path execRoot) {
     return new MemcacheWorkExecutor(cache, execRoot);
   }
 
@@ -114,7 +114,7 @@ public class MemcacheWorkExecutor implements RemoteWorkExecutor {
       ImmutableMap<String, String> environment,
       Collection<? extends ActionInput> outputs,
       int timeout)
-      throws IOException, WorkTooLargeException, InterruptedException {
+      throws IOException, WorkTooLargeException {
     RemoteWorkRequest.Builder work = RemoteWorkRequest.newBuilder();
     work.setOutputKey(actionOutputKey);
 
@@ -162,8 +162,7 @@ public class MemcacheWorkExecutor implements RemoteWorkExecutor {
   }
 
   /** Execute a work item locally. */
-  public RemoteWorkResponse executeLocally(RemoteWorkRequest work)
-      throws IOException, InterruptedException {
+  public RemoteWorkResponse executeLocally(RemoteWorkRequest work) throws IOException {
     ByteArrayOutputStream stdout = new ByteArrayOutputStream();
     ByteArrayOutputStream stderr = new ByteArrayOutputStream();
     try {
