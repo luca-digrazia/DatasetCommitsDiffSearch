@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -45,7 +44,6 @@ public final class TestTargetExecutionSettings {
   private final Artifact executable;
   private final boolean runfilesSymlinksCreated;
   private final Path runfilesDir;
-  private final Runfiles runfiles;
   private final Artifact runfilesInputManifest;
   private final Artifact instrumentedFileManifest;
 
@@ -68,7 +66,6 @@ public final class TestTargetExecutionSettings {
     this.executable = executable;
     this.runfilesSymlinksCreated = runfilesSupport.getCreateSymlinks();
     this.runfilesDir = runfilesSupport.getRunfilesDirectory();
-    this.runfiles = runfilesSupport.getRunfiles();
     this.runfilesInputManifest = runfilesSupport.getRunfilesInputManifest();
     this.instrumentedFileManifest = instrumentedFileManifest;
   }
@@ -113,11 +110,6 @@ public final class TestTargetExecutionSettings {
   /** @return the directory of the runfiles */
   public Path getRunfilesDir() {
     return runfilesDir;
-  }
-
-  /** @return the runfiles for the test */
-  public Runfiles getRunfiles() {
-    return runfiles;
   }
 
   /**
