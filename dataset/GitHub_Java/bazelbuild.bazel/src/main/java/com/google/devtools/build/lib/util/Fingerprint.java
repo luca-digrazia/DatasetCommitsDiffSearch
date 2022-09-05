@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.UUID;
-
-import javax.annotation.Nullable;
 
 /**
  * Simplified wrapper for MD5 message digests. See also
@@ -141,14 +139,6 @@ public final class Fingerprint {
   }
 
   /**
-   * Updates the digest with a boolean value, correctly handling null.
-   */
-  public Fingerprint addNullableBoolean(Boolean input) {
-    addInt(input == null ? -1 : (input.booleanValue() ? 1 : 0));
-    return this;
-  }
-
-  /**
    * Updates the digest with the little-endian bytes of a given int value.
    *
    * @param input the integer with which to update the digest
@@ -185,22 +175,6 @@ public final class Fingerprint {
   }
 
   /**
-   * Updates the digest with the little-endian bytes of a given int value, correctly distinguishing
-   * between null and non-null values.
-   *
-   * @param input the integer with which to update the digest
-   */
-  public Fingerprint addNullableInt(@Nullable Integer input) {
-    if (input == null) {
-      addInt(0);
-    } else {
-      addInt(1);
-      addInt(input);
-    }
-    return this;
-  }
-
-  /**
    * Updates the digest with a UUID.
    *
    * @param uuid the UUID with which to update the digest. Must not be null.
@@ -221,22 +195,6 @@ public final class Fingerprint {
     byte[] bytes = input.getBytes(UTF_8);
     addInt(bytes.length);
     md.update(bytes);
-    return this;
-  }
-
-  /**
-   * Updates the digest with a String using its length plus its UTF8 encoded bytes; if the string
-   * is null, then it uses -1 as the length.
-   *
-   * @param input the String with which to update the digest
-   * @see java.security.MessageDigest#update(byte[])
-   */
-  public Fingerprint addNullableString(@Nullable String input) {
-    if (input == null) {
-      addInt(-1);
-    } else {
-      addString(input);
-    }
     return this;
   }
 
