@@ -18,9 +18,11 @@ import com.google.common.base.StandardSystemProperty;
 import com.google.devtools.build.lib.profiler.statistics.SkylarkStatistics;
 import com.google.devtools.build.lib.profiler.statistics.TasksStatistics;
 import com.google.devtools.build.lib.util.LongArrayList;
+
 import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * Formats {@link SkylarkStatistics} as HTML tables and histogram charts.
@@ -31,8 +33,7 @@ public final class SkylarkHtml extends HtmlPrinter {
    * How many characters from the end of the location of a Skylark function to display.
    */
   private static final int NUM_LOCATION_CHARS_UNABBREVIATED = 40;
-
-  private static final String JS_DATA_VAR = "starlarkData";
+  private static final String JS_DATA_VAR = "skylarkData";
   private static final String JS_TABLE_VAR = JS_DATA_VAR + "Table";
 
   private final SkylarkStatistics stats;
@@ -53,13 +54,13 @@ public final class SkylarkHtml extends HtmlPrinter {
    */
   void printHtmlHead() {
     lnOpen("style", "type", "text/css", "<!--");
-    lnPrint("div.starlark-histogram {");
+    lnPrint("div.skylark-histogram {");
     lnPrint("  width: 95%; margin: 0 auto; display: none;");
     lnPrint("}");
-    lnPrint("div.starlark-chart {");
+    lnPrint("div.skylark-chart {");
     lnPrint("  width: 100%; height: 200px; margin: 0 auto 2em;");
     lnPrint("}");
-    lnPrint("div.starlark-table {");
+    lnPrint("div.skylark-table {");
     lnPrint("  width: 95%; margin: 0 auto;");
     lnPrint("}");
     lnPrint("-->");
@@ -164,7 +165,7 @@ public final class SkylarkHtml extends HtmlPrinter {
   private void printHistogramData(Map<String, LongArrayList> functionDurations, String category) {
     lnPrintf("'%s': {", category);
     down();
-    for (Map.Entry<String, LongArrayList> entry : functionDurations.entrySet()) {
+    for (Entry<String, LongArrayList> entry : functionDurations.entrySet()) {
       String function = entry.getKey();
       LongArrayList durations = entry.getValue();
       lnPrintf("'%s': google.visualization.arrayToDataTable(", function);
@@ -210,7 +211,7 @@ public final class SkylarkHtml extends HtmlPrinter {
       lnPrintf("%s.addColumn('number', 'relative (%%)');", tmpVar);
       lnPrintf("%s.addRows([", tmpVar);
       down();
-      for (Map.Entry<String, TasksStatistics> entry : taskStatistics.entrySet()) {
+      for (Entry<String, TasksStatistics> entry : taskStatistics.entrySet()) {
         String function = entry.getKey();
         TasksStatistics stats = entry.getValue();
         TasksStatistics selfStats = taskSelfStatistics.get(function);
@@ -266,29 +267,29 @@ public final class SkylarkHtml extends HtmlPrinter {
    * Skylark functions.
    */
   void printHtmlBody() {
-    lnPrint("<a name='starlark_stats'/>");
-    lnElement("h3", "Starlark Statistics");
+    lnPrint("<a name='skylark_stats'/>");
+    lnElement("h3", "Skylark Statistics");
     lnElement("p", "All duration columns in milliseconds, except where noted otherwise.");
     lnElement("h4", "User-Defined function execution time");
-    lnOpen("div", "class", "starlark-histogram", "id", "user-histogram");
-    lnElement("div", "class", "starlark-chart", "id", "user-chart");
+    lnOpen("div", "class", "skylark-histogram", "id", "user-histogram");
+    lnElement("div", "class", "skylark-chart", "id", "user-chart");
     lnElement("button", "id", "user-close", "Hide");
     lnClose(); // div user-histogram
-    lnElement("div", "class", "starlark-table", "id", "user_function_stats");
+    lnElement("div", "class", "skylark-table", "id", "user_function_stats");
 
     lnElement("h4", "Compiled function execution time");
-    lnOpen("div", "class", "starlark-histogram", "id", "compiled-histogram");
-    lnElement("div", "class", "starlark-chart", "id", "compiled-chart");
+    lnOpen("div", "class", "skylark-histogram", "id", "compiled-histogram");
+    lnElement("div", "class", "skylark-chart", "id", "compiled-chart");
     lnElement("button", "id", "user-close", "Hide");
     lnClose(); // div compiled-histogram
-    lnElement("div", "class", "starlark-table", "id", "compiled_function_stats");
+    lnElement("div", "class", "skylark-table", "id", "compiled_function_stats");
 
     lnElement("h4", "Builtin function execution time");
-    lnOpen("div", "class", "starlark-histogram", "id", "builtin-histogram");
-    lnElement("div", "class", "starlark-chart", "id", "builtin-chart");
+    lnOpen("div", "class", "skylark-histogram", "id", "builtin-histogram");
+    lnElement("div", "class", "skylark-chart", "id", "builtin-chart");
     lnElement("button", "id", "builtin-close", "Hide");
     lnClose(); // div builtin-histogram
-    lnElement("div", "class", "starlark-table", "id", "builtin_function_stats");
+    lnElement("div", "class", "skylark-table", "id", "builtin_function_stats");
   }
 
   /**
@@ -346,3 +347,5 @@ public final class SkylarkHtml extends HtmlPrinter {
     return root + Joiner.on(separator).join(Arrays.asList(elements).subList(1, elements.length));
   }
 }
+
+
