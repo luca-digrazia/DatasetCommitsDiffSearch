@@ -90,7 +90,6 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
         .setObjcProvider(common.getObjcProvider())
         .setInfoplistMerging(
             BundleSupport.infoPlistMerging(ruleContext, common.getObjcProvider(), optionsProvider,
-                /*primaryBundleId=*/null, /*fallbackBundleId=*/null,
                 new BundleSupport.ExtraMergePlists()))
         .setIntermediateArtifacts(intermediateArtifacts)
         .setMinimumOsVersion(objcConfiguration.getMinimumOs())
