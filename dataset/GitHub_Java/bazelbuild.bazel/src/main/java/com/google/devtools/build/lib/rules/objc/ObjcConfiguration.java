@@ -18,10 +18,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
-import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.xcode.common.Platform;
 
@@ -56,8 +53,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   private final boolean runMemleaks;
   private final List<String> copts;
   private final CompilationMode compilationMode;
-  private final List<String> iosMultiCpus;
-  private final String iosSplitCpu;
 
   // We only load this label if coverage mode is enabled. That is know as part of the
   // BuildConfiguration. This label needs to be part of a configuration because only configurations
@@ -84,8 +79,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.copts = ImmutableList.copyOf(objcOptions.copts);
     this.compilationMode = Preconditions.checkNotNull(options.compilationMode, "compilationMode");
     this.gcovLabel = gcovLabel;
-    this.iosMultiCpus = Preconditions.checkNotNull(objcOptions.iosMultiCpus, "iosMultiCpus");
-    this.iosSplitCpu = Preconditions.checkNotNull(objcOptions.iosSplitCpu, "iosSplitCpu");
   }
 
   public String getIosSdkVersion() {
@@ -113,7 +106,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   }
 
   public String getIosCpu() {
-    return iosSplitCpu.isEmpty() ? iosCpu : iosSplitCpu;
+    return iosCpu;
   }
 
   public Platform getPlatform() {
@@ -171,14 +164,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     return gcovLabel;
   }
 
-  /**
-   * List of all CPUs that this invocation is being built for. Different from {@link #getIosCpu()}
-   * which is the specific CPU <b>this target</b> is being built for.
-   */
-  public List<String> getIosMultiCpus() {
-    return iosMultiCpus;
-  }
-
   @Override
   public String getName() {
     return "Objective-C";
@@ -187,19 +172,5 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   @Override
   public String cacheKey() {
     return iosSdkVersion;
-  }
-
-  @Nullable
-  @Override
-  public String getOutputDirectoryName() {
-    return !iosSplitCpu.isEmpty() ? "ios-" + iosSplitCpu : null;
-  }
-
-  @Override
-  public void reportInvalidOptions(EventHandler reporter, BuildOptions buildOptions) {
-    if (generateDebugSymbols && !iosMultiCpus.isEmpty()) {
-      reporter.handle(Event.error(
-          "--objc_generate_debug_symbols is not supported when --ios_multi_cpus is set"));
-    }
   }
 }
