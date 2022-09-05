@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,9 +54,9 @@ public class InterruptibleTest {
     };
 
   private Command command;
-
   @Before
-  public final void startInterrupter() throws Exception  {
+  public void setUp() throws Exception {
+
     Thread.interrupted(); // side effect: clear interrupted status
     assertFalse("Unexpected interruption!", mainThread.isInterrupted());
 
@@ -68,7 +68,7 @@ public class InterruptibleTest {
   }
 
   @After
-  public final void waitForInterrupter() throws Exception  {
+  public void tearDown() throws Exception {
     interrupter.join();
     Thread.interrupted(); // Clear interrupted status, or else other tests may fail.
   }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.shell;
 
-import com.google.common.util.concurrent.Uninterruptibles;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
@@ -130,7 +129,8 @@ class Consumers {
   /**
    * This consumer sends the input to a stream while consuming it.
    */
-  private static class StreamingConsumer extends FutureConsumption {
+  private static class StreamingConsumer extends FutureConsumption
+                                         implements OutputConsumer {
     private OutputStream out;
 
     StreamingConsumer(OutputStream out) {
@@ -158,7 +158,8 @@ class Consumers {
    * while consuming it. This accumulated stream can be obtained by
    * calling {@link #getAccumulatedOut()}.
    */
-  private static class AccumulatingConsumer extends FutureConsumption {
+  private static class AccumulatingConsumer extends FutureConsumption
+                                            implements OutputConsumer {
     private ByteArrayOutputStream out = new ByteArrayOutputStream();
 
     @Override
@@ -179,7 +180,8 @@ class Consumers {
   /**
    * This consumer just discards whatever it reads.
    */
-  private static class DiscardingConsumer extends FutureConsumption {
+  private static class DiscardingConsumer extends FutureConsumption
+                                          implements OutputConsumer {
     private DiscardingConsumer() {
     }
 
@@ -222,30 +224,45 @@ class Consumers {
 
     @Override
     public void waitForCompletion() throws IOException {
+      boolean wasInterrupted = false;
       try {
-        Uninterruptibles.getUninterruptibly(future);
-      } catch (ExecutionException ee) {
-        // Runnable threw a RuntimeException
-        Throwable nested = ee.getCause();
-        if (nested instanceof RuntimeException) {
-          final RuntimeException re = (RuntimeException) nested;
-          // The stream sink classes, unfortunately, tunnel IOExceptions
-          // out of run() in a RuntimeException. If that's the case,
-          // unpack and re-throw the IOException. Otherwise, re-throw
-          // this unexpected RuntimeException
-          final Throwable cause = re.getCause();
-          if (cause instanceof IOException) {
-            throw (IOException) cause;
-          } else {
-            throw re;
+        while (true) {
+          try {
+            future.get();
+            break;
+          } catch (InterruptedException ie) {
+            wasInterrupted = true;
+            // continue waiting
+          } catch (ExecutionException ee) {
+            // Runnable threw a RuntimeException
+            Throwable nested = ee.getCause();
+            if (nested instanceof RuntimeException) {
+              final RuntimeException re = (RuntimeException) nested;
+              // The stream sink classes, unfortunately, tunnel IOExceptions
+              // out of run() in a RuntimeException. If that's the case,
+              // unpack and re-throw the IOException. Otherwise, re-throw
+              // this unexpected RuntimeException
+              final Throwable cause = re.getCause();
+              if (cause instanceof IOException) {
+                throw (IOException) cause;
+              } else {
+                throw re;
+              }
+            } else if (nested instanceof OutOfMemoryError) {
+              // OutOfMemoryError does not support exception chaining.
+              throw (OutOfMemoryError) nested;
+            } else if (nested instanceof Error) {
+              throw new Error("unhandled Error in worker thread", ee);
+            } else {
+              throw new RuntimeException("unknown execution problem", ee);
+            }
           }
-        } else if (nested instanceof OutOfMemoryError) {
-          // OutOfMemoryError does not support exception chaining.
-          throw (OutOfMemoryError) nested;
-        } else if (nested instanceof Error) {
-          throw new Error("unhandled Error in worker thread", ee);
-        } else {
-          throw new RuntimeException("unknown execution problem", ee);
+        }
+      } finally {
+        // Read this for detailed explanation:
+        // http://www.ibm.com/developerworks/java/library/j-jtp05236/
+        if (wasInterrupted) {
+          Thread.currentThread().interrupt(); // preserve interrupted status
         }
       }
     }

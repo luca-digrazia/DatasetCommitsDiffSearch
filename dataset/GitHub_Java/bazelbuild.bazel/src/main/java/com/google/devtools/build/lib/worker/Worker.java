@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,13 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.worker;
 
-import com.google.common.hash.HashCode;
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -42,13 +40,11 @@ final class Worker {
   private final int workerId;
   private final Process process;
   private final Thread shutdownHook;
-  private final HashCode workerFilesHash;
 
-  private Worker(Process process, Thread shutdownHook, int pid, HashCode workerFilesHash) {
+  private Worker(Process process, Thread shutdownHook, int pid) {
     this.process = process;
     this.shutdownHook = shutdownHook;
     this.workerId = pid;
-    this.workerFilesHash = workerFilesHash;
   }
 
   static Worker create(WorkerKey key, Path logDir, Reporter reporter, boolean verbose)
@@ -59,15 +55,8 @@ final class Worker {
     int workerId = pidCounter.getAndIncrement();
     Path logFile = logDir.getRelative("worker-" + workerId + "-" + key.getMnemonic() + ".log");
 
-    String[] command = key.getArgs().toArray(new String[0]);
-
-    // Follows the logic of {@link com.google.devtools.build.lib.shell.Command}.
-    File executable = new File(command[0]);
-    if (!executable.isAbsolute() && executable.getParent() != null) {
-      command[0] = new File(key.getWorkDir().getPathFile(), command[0]).getAbsolutePath();
-    }
     ProcessBuilder processBuilder =
-        new ProcessBuilder(command)
+        new ProcessBuilder(key.getArgs().toArray(new String[0]))
             .directory(key.getWorkDir().getPathFile())
             .redirectError(Redirect.appendTo(logFile.getPathFile()));
     processBuilder.environment().putAll(key.getEnv());
@@ -94,7 +83,7 @@ final class Worker {
                   + logFile));
     }
 
-    return new Worker(process, shutdownHook, workerId, key.getWorkerFilesHash());
+    return new Worker(process, shutdownHook, workerId);
   }
 
   void destroy() {
@@ -134,10 +123,6 @@ final class Worker {
    */
   int getWorkerId() {
     return this.workerId;
-  }
-
-  HashCode getWorkerFilesHash() {
-    return workerFilesHash;
   }
 
   boolean isAlive() {
