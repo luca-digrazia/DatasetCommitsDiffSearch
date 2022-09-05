@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Label.SyntaxException;
 import com.google.devtools.build.lib.vfs.Path;
 
-import java.io.Serializable;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -34,9 +33,7 @@ import java.util.Map.Entry;
  * This creates the //external package, where targets not homed in this repository can be bound.
  */
 public class ExternalPackage extends Package {
-  public static final String NAME = "external";
 
-  private Map<Label, Binding> bindMap;
   private Map<RepositoryName, Rule> repositoryMap;
 
   ExternalPackage() {
@@ -52,27 +49,9 @@ public class ExternalPackage extends Package {
   }
 
   /**
-   * If the given label is bound, returns the (fully resolved) label it is bound to. Otherwise,
-   * returns null.
-   */
-  public Label getActualLabel(Label label) {
-    if (bindMap.containsKey(label)) {
-      return bindMap.get(label).getActual();
-    }
-    return null;
-  }
-
-  /**
-   * Checks if the given package is //external.
-   */
-  public static boolean isExternal(Package pkg) {
-    return pkg != null && pkg.getName().equals(NAME);
-  }
-
-  /**
    * Holder for a binding's actual label and location.
    */
-  public static class Binding implements Serializable {
+  public static class Binding {
     private final Label actual;
     private final Location location;
 
@@ -118,7 +97,6 @@ public class ExternalPackage extends Package {
 
     @Override
     public ExternalPackage build() {
-      pkg.bindMap = ImmutableMap.copyOf(bindMap);
       pkg.repositoryMap = ImmutableMap.copyOf(repositoryMap);
       return super.build();
     }
