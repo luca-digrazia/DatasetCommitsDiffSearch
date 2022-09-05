@@ -424,8 +424,7 @@ public final class BundleClassLoader extends BaseDexClassLoader {
         }
 
         throw new ClassNotFoundException(
-            "Can't find class " + classname + " in BundleClassLoader: " + bundle.getLocation() + ", dependencies="
-                + dependencies);
+            "Can't find class " + classname + " in BundleClassLoader: " + bundle.getLocation());
     }
 
     /**
