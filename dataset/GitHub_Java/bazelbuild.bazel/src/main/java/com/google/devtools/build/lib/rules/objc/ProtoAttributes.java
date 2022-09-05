@@ -50,11 +50,6 @@ final class ProtoAttributes {
       ImmutableSet.of("url", "http", "https");
 
   @VisibleForTesting
-  static final String FILES_NOT_ALLOWED_ERROR =
-      "Using files and filegroups in objc_proto_library with portable_proto_filters is not "
-          + "allowed. Please wrap the files inside a proto_library target.";
-
-  @VisibleForTesting
   static final String FILES_DEPRECATED_WARNING =
       "Using files and filegroups in objc_proto_library is deprecated";
 
@@ -109,13 +104,13 @@ final class ProtoAttributes {
     PrerequisiteArtifacts prerequisiteArtifacts =
         ruleContext.getPrerequisiteArtifacts("deps", Mode.TARGET);
     ImmutableList<Artifact> protos = prerequisiteArtifacts.filter(FileType.of(".proto")).list();
+    if (!protos.isEmpty()) {
+      ruleContext.attributeWarning("deps", FILES_DEPRECATED_WARNING);
+    }
 
     if (ruleContext
         .attributes()
         .isAttributeValueExplicitlySpecified(ObjcProtoLibraryRule.PORTABLE_PROTO_FILTERS_ATTR)) {
-      if (!protos.isEmpty()) {
-        ruleContext.throwWithAttributeError("deps", FILES_NOT_ALLOWED_ERROR);
-      }
       if (getProtoFiles().isEmpty() && !hasObjcProtoLibraryDependencies()) {
         ruleContext.throwWithRuleError(NO_PROTOS_ERROR);
       }
@@ -134,11 +129,14 @@ final class ProtoAttributes {
       }
 
     } else {
-      if (!protos.isEmpty()) {
-        ruleContext.attributeWarning("deps", FILES_DEPRECATED_WARNING);
-      }
       if (getProtoFiles().isEmpty()) {
         ruleContext.throwWithRuleError(NO_PROTOS_ERROR);
+      }
+
+      if (!usesObjcHeaderNames()) {
+        ruleContext.ruleWarning(
+            "As part of the migration process, it is recommended to enable "
+                + "use_objc_header_names. Please refer to b/29368416 for more information.");
       }
       if (hasObjcProtoLibraryDependencies()) {
         ruleContext.throwWithRuleError(OBJC_PROTO_LIB_DEP_IN_PROTOCOL_BUFFERS2_DEPS_ERROR);

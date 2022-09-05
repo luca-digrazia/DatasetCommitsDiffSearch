@@ -41,8 +41,7 @@ import java.util.List;
  * to identify these proto files and avoid linking in their associated generated files.
  */
 public class ProtoSourceFileBlacklist {
-  private static final PathFragment BAZEL_TOOLS_PREFIX =
-      PathFragment.create("external/bazel_tools/");
+  private static final PathFragment BAZEL_TOOLS_PREFIX = new PathFragment("external/bazel_tools/");
   private final RuleContext ruleContext;
   private final ImmutableSet<PathFragment> blacklistProtoFilePaths;
 
