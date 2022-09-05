@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,15 +48,8 @@ public class ReducedClasspathJavaLibraryBuilder extends SimpleJavaLibraryBuilder
     // JavaBuilder are only building resource jars).
     String compressedClasspath = build.getClassPath();
     if (!build.getSourceFiles().isEmpty()) {
-      compressedClasspath =
-          build.getDependencyModule().computeStrictClasspath(build.getClassPath());
-    }
-    if (compressedClasspath.isEmpty()) {
-      // If the empty classpath is specified and javac is invoked programatically,
-      // javac falls back to using the host classpath. We don't want JavaBuilder
-      // to leak onto the compilation classpath, so we add the (hopefully empty)
-      // class output directory to prevent that from happening.
-      compressedClasspath = build.getClassDir();
+      compressedClasspath = build.getDependencyModule()
+          .computeStrictClasspath(build.getClassPath(), build.getClassDir());
     }
     String[] javacArguments = makeJavacArguments(build, compressedClasspath);
 
