@@ -53,11 +53,7 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
     Collection<Artifact> publicHdrs = Sets.newHashSet(compilationAttributes.hdrs());
 
     CcLibraryHelper helper =
-        new CcLibraryHelper(
-                ruleContext,
-                ObjcCppSemantics.INSTANCE,
-                featureConfiguration,
-                CcLibraryHelper.SourceCategory.CC_AND_OBJC)
+        new CcLibraryHelper(ruleContext, ObjcCppSemantics.INSTANCE, featureConfiguration)
             .addSources(sources)
             .addSources(privateHdrs)
             .enableCompileProviders()

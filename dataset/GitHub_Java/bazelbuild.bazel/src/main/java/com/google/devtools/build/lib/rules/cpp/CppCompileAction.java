@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
+import com.google.devtools.build.lib.actions.ArtifactFile;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
@@ -126,6 +127,16 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
    */
   public static final String CPP_COMPILE = "c++-compile";
 
+  /**
+   * A string constant for the objc compilation action.
+   */
+  public static final String OBJC_COMPILE = "objc-compile";
+
+  /**
+   * A string constant for the objc++ compile action.
+   */
+  public static final String OBJCPP_COMPILE = "objc++-compile";
+  
   /**
    * A string constant for the c++ header parsing.
    */
@@ -719,7 +730,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       throws ActionExecutionException {
     IncludeProblems errors = new IncludeProblems();
     IncludeProblems warnings = new IncludeProblems();
-    Set<Artifact> allowedIncludes = new HashSet<>();
+    Set<ArtifactFile> allowedIncludes = new HashSet<>();
     for (Artifact input : mandatoryInputs) {
       if (input.isMiddlemanArtifact() || input.isTreeArtifact()) {
         artifactExpander.expand(input, allowedIncludes);
@@ -1335,6 +1346,10 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
         return C_COMPILE;
       } else if (CppFileTypes.CPP_SOURCE.matches(sourcePath)) {
         return CPP_COMPILE;
+      } else if (CppFileTypes.OBJC_SOURCE.matches(sourcePath)) {
+        return OBJC_COMPILE;
+      } else if (CppFileTypes.OBJCPP_SOURCE.matches(sourcePath)) {
+        return OBJCPP_COMPILE;
       } else if (CppFileTypes.ASSEMBLER.matches(sourcePath)) {
         return ASSEMBLE;
       } else if (CppFileTypes.ASSEMBLER_WITH_C_PREPROCESSOR.matches(sourcePath)) {

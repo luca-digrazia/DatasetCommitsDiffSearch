@@ -30,7 +30,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
  * CppSemantics for objc builds.
  */
 public class ObjcCppSemantics implements CppSemantics {
-
+  
   // We make CppSemantics a singleton object for efficiency and consistency, since we expect
   // any instance to be identical.
   public static final CppSemantics INSTANCE = new ObjcCppSemantics();
@@ -51,6 +51,7 @@ public class ObjcCppSemantics implements CppSemantics {
     actionBuilder.setShouldScanIncludes(false);
   }
 
+  
   @Override
   public void setupCompilationContext(RuleContext ruleContext, Builder contextBuilder) {
     // For objc builds, no extra setup is required.

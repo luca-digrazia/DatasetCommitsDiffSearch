@@ -155,9 +155,9 @@ public class ObjcRuleClasses {
       };
 
   /**
-   * A null value for the lipo context collector.  Objc builds do not use a lipo context collector.
+   * A null value for the lipo context colletor.  Objc builds do not use a lipo context collector.
    */
-  // TODO(b/28084560): Allow :lipo_context_collector not to be set instead of having a null
+  // TODO(b/28084560): Allow :lipo_context_collector not to be set instead of having a null 
   // instance.
   public static final LateBoundLabel<BuildConfiguration> NULL_LIPO_CONTEXT_COLLECTOR =
       new LateBoundLabel<BuildConfiguration>() {
