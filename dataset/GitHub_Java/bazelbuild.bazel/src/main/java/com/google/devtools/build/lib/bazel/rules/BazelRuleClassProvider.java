@@ -183,7 +183,7 @@ public class BazelRuleClassProvider {
         ConfiguredTarget prerequisite, Attribute attribute) {
       validateDirectPrerequisiteVisibility(context, prerequisite, attribute.getName());
       DeprecationValidator.validateDirectPrerequisiteForDeprecation(
-          context, context.getRule(), prerequisite, context.forAspect());
+          context, context.getRule(), prerequisite);
     }
 
     private void validateDirectPrerequisiteVisibility(

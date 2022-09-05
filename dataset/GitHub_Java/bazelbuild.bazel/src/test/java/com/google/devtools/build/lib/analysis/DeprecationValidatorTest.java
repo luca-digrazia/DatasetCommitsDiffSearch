@@ -94,7 +94,7 @@ public final class DeprecationValidatorTest extends BuildViewTestCase {
 
   @Test
   public void deprecationWarningForSamePackageInDifferentRepository() throws Exception {
-    try (OutputStream output = scratch.resolve("WORKSPACE").getOutputStream(/* append= */ true)) {
+    try (OutputStream output = scratch.resolve("WORKSPACE").getOutputStream(true /* append */)) {
       output.write(
           "\nlocal_repository(name = 'r', path = '/r')\n".getBytes(StandardCharsets.UTF_8));
     }
@@ -111,7 +111,7 @@ public final class DeprecationValidatorTest extends BuildViewTestCase {
   @Test
   public void deprecationWarningForJavatestsCompanionOfJavaPackageInDifferentRepository()
       throws Exception {
-    try (OutputStream output = scratch.resolve("WORKSPACE").getOutputStream(/* append= */ true)) {
+    try (OutputStream output = scratch.resolve("WORKSPACE").getOutputStream(true /* append */)) {
       output.write(
           "\nlocal_repository(name = 'r', path = '/r')\n".getBytes(StandardCharsets.UTF_8));
     }
