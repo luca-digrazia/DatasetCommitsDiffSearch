@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -104,8 +104,9 @@ abstract class RecursiveDirectoryTraversalFunction
    * by {@link #aggregateWithSubdirectorySkyValues}, and returns that aggregation.
    *
    * <p>Returns null if {@code env.valuesMissing()} is true, checked after each call to one of
-   * {@link RecursiveDirectoryTraversalFunction}'s abstract methods that were given {@code env}.
-   * (And after each of {@code visitDirectory}'s own uses of {@code env}, of course.)
+   * {@link RecursiveDirectoryTraversalFunction}'s abstract methods except for {@link
+   * #getEmptyReturn}. (And after each of {@code visitDirectory}'s own uses of {@code env}, of
+   * course.)
    */
   TReturn visitDirectory(RecursivePkgKey recursivePkgKey, Environment env) {
     RootedPath rootedPath = recursivePkgKey.getRootedPath();
@@ -150,6 +151,10 @@ abstract class RecursiveDirectoryTraversalFunction
     }
 
     TVisitor visitor = getInitialVisitor();
+    if (env.valuesMissing()) {
+      return null;
+    }
+
     if (pkgLookupValue.packageExists()) {
       if (pkgLookupValue.getRoot().equals(root)) {
         Package pkg = null;
@@ -247,12 +252,19 @@ abstract class RecursiveDirectoryTraversalFunction
       RootedPath subdirectoryRootedPath = RootedPath.toRootedPath(root, subdirectory);
       childDeps.add(getSkyKeyForSubdirectory(recursivePkgKey.getRepository(),
           subdirectoryRootedPath, excludedSubdirectoriesBeneathThisSubdirectory));
+      if (env.valuesMissing()) {
+        return null;
+      }
     }
     Map<SkyKey, SkyValue> subdirectorySkyValues = env.getValues(childDeps);
     if (env.valuesMissing()) {
       return null;
     }
-    return aggregateWithSubdirectorySkyValues(visitor, subdirectorySkyValues);
+    TReturn aggregation = aggregateWithSubdirectorySkyValues(visitor, subdirectorySkyValues);
+    if (env.valuesMissing()) {
+      return null;
+    }
+    return aggregation;
   }
 
   // Ignore all errors in traversal and return an empty value.

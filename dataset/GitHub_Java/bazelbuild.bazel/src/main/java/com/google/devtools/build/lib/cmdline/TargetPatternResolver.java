@@ -49,12 +49,11 @@ public interface TargetPatternResolver<T> {
    * only return rules in the given package.
    *
    * @param originalPattern the original target pattern for error reporting purposes
-   * @param packageIdentifier the identifier of the package
+   * @param packageName the name of the package
    * @param rulesOnly whether to return rules only
    */
-  ResolvedTargets<T> getTargetsInPackage(String originalPattern,
-      PackageIdentifier packageIdentifier, boolean rulesOnly)
-      throws TargetParsingException, InterruptedException;
+  ResolvedTargets<T> getTargetsInPackage(String originalPattern, String packageName,
+      boolean rulesOnly) throws TargetParsingException, InterruptedException;
 
   /**
    * Returns the set containing the targets found below the given {@code directory}. Conceptually,
@@ -86,7 +85,7 @@ public interface TargetPatternResolver<T> {
    * Returns true, if and only if the given name corresponds to a package, i.e., a file with the
    * name {@code packageName/BUILD} exists.
    */
-  boolean isPackage(PackageIdentifier packageIdentifier);
+  boolean isPackage(String packageName);
 
   /**
    * Returns the target kind of the given target, for example {@code cc_library rule}.

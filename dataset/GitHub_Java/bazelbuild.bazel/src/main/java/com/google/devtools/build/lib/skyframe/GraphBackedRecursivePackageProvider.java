@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -110,9 +110,7 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
     for (TargetPatternKey patternKey : universeTargetPatternKeys) {
       TargetPattern pattern = patternKey.getParsedPattern();
       boolean isTBD = pattern.getType().equals(Type.TARGETS_BELOW_DIRECTORY);
-      PackageIdentifier packageIdentifier = PackageIdentifier.create(
-          repository, directory.getRelativePath());
-      if (isTBD && pattern.containsBelowDirectory(packageIdentifier)) {
+      if (isTBD && pattern.containsBelowDirectory(directory.getRelativePath().getPathString())) {
         filteringPolicy =
             pattern.getRulesOnly() ? FilteringPolicies.RULES_ONLY : FilteringPolicies.NO_FILTER;
         break;

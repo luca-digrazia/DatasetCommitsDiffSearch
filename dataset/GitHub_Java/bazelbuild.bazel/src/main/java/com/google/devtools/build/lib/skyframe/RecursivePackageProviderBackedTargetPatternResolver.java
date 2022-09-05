@@ -76,7 +76,7 @@ public class RecursivePackageProviderBackedTargetPatternResolver
   public Target getTargetOrNull(String targetName) throws InterruptedException {
     try {
       Label label = Label.parseAbsolute(targetName);
-      if (!isPackage(label.getPackageIdentifier())) {
+      if (!isPackage(label.getPackageName())) {
         return null;
       }
       return recursivePackageProvider.getTarget(eventHandler, label);
@@ -100,31 +100,35 @@ public class RecursivePackageProviderBackedTargetPatternResolver
   }
 
   @Override
-  public ResolvedTargets<Target> getTargetsInPackage(
-      String originalPattern, PackageIdentifier packageIdentifier, boolean rulesOnly)
+  public ResolvedTargets<Target> getTargetsInPackage(String originalPattern, String packageName,
+                                                     boolean rulesOnly)
       throws TargetParsingException, InterruptedException {
     FilteringPolicy actualPolicy = rulesOnly
         ? FilteringPolicies.and(FilteringPolicies.RULES_ONLY, policy)
         : policy;
-    return getTargetsInPackage(originalPattern, packageIdentifier, actualPolicy);
+    return getTargetsInPackage(originalPattern, new PathFragment(packageName), actualPolicy);
   }
 
   private ResolvedTargets<Target> getTargetsInPackage(String originalPattern,
-      PackageIdentifier packageIdentifier, FilteringPolicy policy)
+      PathFragment packageNameFragment, FilteringPolicy policy)
       throws TargetParsingException, InterruptedException {
+    TargetPatternResolverUtil.validatePatternPackage(originalPattern, packageNameFragment, this);
     try {
-      Package pkg = getPackage(packageIdentifier);
+      Package pkg = getPackage(PackageIdentifier.createInDefaultRepo(packageNameFragment));
       return TargetPatternResolverUtil.resolvePackageTargets(pkg, policy);
     } catch (NoSuchThingException e) {
       String message = TargetPatternResolverUtil.getParsingErrorMessage(
-          e.getMessage(), originalPattern);
+          "package contains errors", originalPattern);
       throw new TargetParsingException(message, e);
     }
   }
 
   @Override
-  public boolean isPackage(PackageIdentifier packageIdentifier) {
-    return recursivePackageProvider.isPackage(eventHandler, packageIdentifier);
+  public boolean isPackage(String packageName) {
+    // TODO(bazel-team): this should get the whole PackageIdentifier. Using only the package name
+    // makes it impossible to use the //... wildcard to refer to targets in remote repositories.
+    return recursivePackageProvider.isPackage(
+        eventHandler, PackageIdentifier.createInDefaultRepo(packageName));
   }
 
   @Override
@@ -152,9 +156,7 @@ public class RecursivePackageProviderBackedTargetPatternResolver
           recursivePackageProvider.getPackagesUnderDirectory(
               repository, rootedPath, excludedPathFragments);
       for (PathFragment pkg : packagesUnderDirectory) {
-        targetBuilder.merge(getTargetsInPackage(originalPattern,
-            PackageIdentifier.createInDefaultRepo(pkg),
-            FilteringPolicies.NO_FILTER));
+        targetBuilder.merge(getTargetsInPackage(originalPattern, pkg, FilteringPolicies.NO_FILTER));
       }
     }
 

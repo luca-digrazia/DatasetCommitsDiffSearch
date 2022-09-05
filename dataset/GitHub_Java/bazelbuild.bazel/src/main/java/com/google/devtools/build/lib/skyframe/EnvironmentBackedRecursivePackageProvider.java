@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,13 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
@@ -27,18 +26,11 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.RecursivePackageProvider;
-import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 /**
  * A {@link RecursivePackageProvider} backed by an {@link Environment}. Its methods
@@ -80,17 +72,6 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
   }
 
   @Override
-  public Map<PackageIdentifier, Package> bulkGetPackages(EventHandler eventHandler,
-          Iterable<PackageIdentifier> pkgIds)
-          throws NoSuchPackageException, InterruptedException {
-    ImmutableMap.Builder<PackageIdentifier, Package> builder = ImmutableMap.builder();
-    for (PackageIdentifier pkgId : pkgIds) {
-      builder.put(pkgId, getPackage(eventHandler, pkgId));
-    }
-    return builder.build();
-  }
-
-  @Override
   public boolean isPackage(EventHandler eventHandler, PackageIdentifier packageId)
       throws MissingDepException {
     SkyKey packageLookupKey = PackageLookupValue.key(packageId);
@@ -110,48 +91,26 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
 
   @Override
   public Iterable<PathFragment> getPackagesUnderDirectory(
-      RepositoryName repository, PathFragment directory,
+      RepositoryName repository, RootedPath directory,
       ImmutableSet<PathFragment> excludedSubdirectories)
       throws MissingDepException {
-    PathPackageLocator packageLocator = PrecomputedValue.PATH_PACKAGE_LOCATOR.get(env);
-    if (packageLocator == null) {
+    PathFragment rootedPathFragment = directory.getRelativePath();
+    PathFragment.checkAllPathsAreUnder(excludedSubdirectories, rootedPathFragment);
+    RecursivePkgValue lookup = (RecursivePkgValue) env.getValue(
+        RecursivePkgValue.key(repository, directory, excludedSubdirectories));
+    if (lookup == null) {
+      // Typically a null value from Environment.getValue(k) means that either the key k is missing
+      // a dependency or an exception was thrown during evaluation of k. Here, if this getValue
+      // call returns null in a keep_going build, it can only mean a missing dependency, because
+      // RecursivePkgFunction#compute never throws.
+      // In a nokeep_going build, a lower-level exception that RecursivePkgFunction ignored may
+      // bubble up to here, but we ignore it and depend on the top-level caller to be flexible in
+      // the exception types it can accept.
       throw new MissingDepException();
-    }
-
-    List<Path> roots = new ArrayList<>();
-    if (repository.isDefault()) {
-      roots.addAll(packageLocator.getPathEntries());
-    } else {
-      RepositoryValue repositoryValue =
-          (RepositoryValue) env.getValue(RepositoryValue.key(repository));
-      if (repositoryValue == null) {
-        throw new MissingDepException();
-      }
-
-      roots.add(repositoryValue.getPath());
-    }
-
-    NestedSetBuilder<String> packageNames = NestedSetBuilder.stableOrder();
-    for (Path root : roots) {
-      PathFragment.checkAllPathsAreUnder(excludedSubdirectories, directory);
-      RecursivePkgValue lookup = (RecursivePkgValue) env.getValue(RecursivePkgValue.key(
-          repository, RootedPath.toRootedPath(root, directory), excludedSubdirectories));
-      if (lookup == null) {
-        // Typically a null value from Environment.getValue(k) means that either the key k is
-        // missing a dependency or an exception was thrown during evaluation of k. Here, if this
-        // getValue call returns null in a keep_going build, it can only mean a missing dependency
-        // because RecursivePkgFunction#compute never throws.
-        // In a nokeep_going build, a lower-level exception that RecursivePkgFunction ignored may
-        // bubble up to here, but we ignore it and depend on the top-level caller to be flexible in
-        // the exception types it can accept.
-        throw new MissingDepException();
-      }
-
-      packageNames.addTransitive(lookup.getPackages());
     }
     // TODO(bazel-team): Make RecursivePkgValue return NestedSet<PathFragment> so this transform is
     // unnecessary.
-    return Iterables.transform(packageNames.build(), PathFragment.TO_PATH_FRAGMENT);
+    return Iterables.transform(lookup.getPackages(), PathFragment.TO_PATH_FRAGMENT);
   }
 
   @Override

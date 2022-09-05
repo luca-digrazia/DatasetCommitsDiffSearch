@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,27 +52,11 @@ import java.util.Objects;
 public final class PrepareDepsOfTargetsUnderDirectoryValue implements SkyValue {
   public static final PrepareDepsOfTargetsUnderDirectoryValue EMPTY =
       new PrepareDepsOfTargetsUnderDirectoryValue(false, ImmutableMap.<RootedPath, Boolean>of());
-  public static final PrepareDepsOfTargetsUnderDirectoryValue EMPTY_DIRECTORY_PACKAGE =
-      new PrepareDepsOfTargetsUnderDirectoryValue(true, ImmutableMap.<RootedPath, Boolean>of());
-
-  public static final PrepareDepsOfTargetsUnderDirectoryValue of(boolean isDirectoryPackage,
-      ImmutableMap<RootedPath, Boolean> subdirectoryTransitivelyContainsPackages) {
-    if (subdirectoryTransitivelyContainsPackages.isEmpty()) {
-      if (isDirectoryPackage) {
-        return EMPTY_DIRECTORY_PACKAGE;
-      } else {
-        return EMPTY;
-      }
-    } else {
-      return new PrepareDepsOfTargetsUnderDirectoryValue(
-          isDirectoryPackage, subdirectoryTransitivelyContainsPackages);
-    }
-  }
 
   private final boolean isDirectoryPackage;
   private final ImmutableMap<RootedPath, Boolean> subdirectoryTransitivelyContainsPackages;
 
-  private PrepareDepsOfTargetsUnderDirectoryValue(boolean isDirectoryPackage,
+  public PrepareDepsOfTargetsUnderDirectoryValue(boolean isDirectoryPackage,
       ImmutableMap<RootedPath, Boolean> subdirectoryTransitivelyContainsPackages) {
     this.isDirectoryPackage = isDirectoryPackage;
     this.subdirectoryTransitivelyContainsPackages = Preconditions.checkNotNull(
