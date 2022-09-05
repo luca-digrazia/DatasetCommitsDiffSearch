@@ -54,8 +54,11 @@ public class CpuProfileServlet extends HttpServlet {
         resp.setStatus(HttpServletResponse.SC_OK);
         resp.setHeader(CACHE_CONTROL, NO_CACHE);
         resp.setContentType(CONTENT_TYPE);
-        try (OutputStream output = resp.getOutputStream()) {
+        final OutputStream output = resp.getOutputStream();
+        try {
             doProfile(output, duration, frequency, state);
+        } finally {
+            output.close();
         }
     }
 
