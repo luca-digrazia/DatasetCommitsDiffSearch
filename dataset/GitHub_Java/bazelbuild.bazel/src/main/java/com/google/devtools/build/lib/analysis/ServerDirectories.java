@@ -18,14 +18,10 @@ import com.google.common.base.Strings;
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hashing;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.PathCodec;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.protobuf.CodedInputStream;
-import com.google.protobuf.CodedOutputStream;
-import java.io.IOException;
-import java.util.Objects;
+
 import javax.annotation.Nullable;
 
 /**
@@ -40,25 +36,19 @@ public final class ServerDirectories {
   /** Where Blaze gets unpacked. */
   private final Path installBase;
   /** The content hash of everything in installBase. */
-  @Nullable private final HashCode installMD5;
+  private final HashCode installMD5;
   /** The root of the temp and output trees. */
   private final Path outputBase;
 
   public ServerDirectories(Path installBase, Path outputBase, @Nullable String installMD5) {
-    this(
-        installBase,
-        outputBase,
-        Strings.isNullOrEmpty(installMD5) ? null : checkMD5(HashCode.fromString(installMD5)));
-  }
-
-  private ServerDirectories(Path installBase, Path outputBase, HashCode installMD5) {
     this.installBase = installBase;
     this.outputBase = outputBase;
-    this.installMD5 = installMD5;
+    this.installMD5 =
+        Strings.isNullOrEmpty(installMD5) ? null : checkMD5(HashCode.fromString(installMD5));
   }
 
   public ServerDirectories(Path installBase, Path outputBase) {
-    this(installBase, outputBase, (HashCode) null);
+    this(installBase, outputBase, null);
   }
 
   private static HashCode checkMD5(HashCode hash) {
@@ -104,44 +94,5 @@ public final class ServerDirectories {
   */
   public HashCode getInstallMD5() {
     return installMD5;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(installBase, installMD5, outputBase);
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-    if (this == obj) {
-      return true;
-    }
-    if (!(obj instanceof ServerDirectories)) {
-      return false;
-    }
-    ServerDirectories that = (ServerDirectories) obj;
-    return this.installBase.equals(that.installBase)
-        && Objects.equals(this.installMD5, that.installMD5)
-        && this.outputBase.equals(that.outputBase);
-  }
-
-  void serialize(CodedOutputStream out, PathCodec pathCodec) throws IOException {
-    pathCodec.serialize(installBase, out);
-    out.writeBoolNoTag(installMD5 != null);
-    if (installMD5 != null) {
-      out.writeByteArrayNoTag(installMD5.asBytes());
-    }
-    pathCodec.serialize(outputBase, out);
-  }
-
-  static ServerDirectories deserialize(CodedInputStream in, PathCodec pathCodec)
-      throws IOException {
-    Path installBase = pathCodec.deserialize(in);
-    HashCode installMd5 = null;
-    if (in.readBool()) {
-      installMd5 = HashCode.fromBytes(in.readByteArray());
-    }
-    Path outputBase = pathCodec.deserialize(in);
-    return new ServerDirectories(installBase, outputBase, installMd5);
   }
 }

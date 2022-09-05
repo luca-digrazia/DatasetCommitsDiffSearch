@@ -40,11 +40,12 @@ import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsBase;
-import com.google.devtools.common.options.OptionsClassProvider;
 import com.google.devtools.common.options.OptionsProvider;
+
 import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
+
 import javax.annotation.Nullable;
 
 /**
@@ -319,15 +320,10 @@ public abstract class BlazeModule {
   }
 
   /**
-   * Optionally returns a factory to create coverage report actions; this is called once per build,
-   * such that it can be affected by command options. 
-   *
-   * <p>It is an error if multiple modules return non-null values.
-   *
-   * @param commandOptions the options for the current command
+   * Optionally returns a factory to create coverage report actions.
    */
   @Nullable
-  public CoverageReportActionFactory getCoverageReportFactory(OptionsClassProvider commandOptions) {
+  public CoverageReportActionFactory getCoverageReportFactory() {
     return null;
   }
 }

@@ -18,9 +18,11 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
  * Encapsulates the directories related to a workspace.
@@ -67,9 +69,9 @@ public final class BlazeDirectories {
       String productName) {
     this.serverDirectories = serverDirectories;
     this.workspace = workspace;
+    boolean useDefaultExecRootName = this.workspace == null || this.workspace.isRootDirectory();
     Path outputBase = serverDirectories.getOutputBase();
     Path execRootBase = deepExecRoot ? outputBase.getChild("execroot") : outputBase;
-    boolean useDefaultExecRootName = this.workspace == null || this.workspace.isRootDirectory();
     if (useDefaultExecRootName) {
       // TODO(bazel-team): if workspace is null execRoot should be null, but at the moment there is
       // a lot of code that depends on it being non-null.
@@ -79,6 +81,10 @@ public final class BlazeDirectories {
     }
     String relativeOutputPath = getRelativeOutputPath(productName);
     this.outputPath = execRoot.getRelative(relativeOutputPath);
+    Preconditions.checkState(useDefaultExecRootName || outputPath.asFragment().equals(
+        outputPathFromOutputBase(outputBase.asFragment(), workspace.asFragment(), deepExecRoot,
+            productName)));
+
     this.localOutputPath = outputBase.getRelative(relativeOutputPath);
   }
 
@@ -148,6 +154,21 @@ public final class BlazeDirectories {
    */
   public Path getOutputPath() {
     return outputPath;
+  }
+
+  /**
+   * @param outputBase the outputBase as a path fragment.
+   * @param workspace the workspace as a path fragment.
+   * @return the outputPath as a path fragment, given the outputBase.
+   */
+  public static PathFragment outputPathFromOutputBase(
+      PathFragment outputBase, PathFragment workspace, boolean deepExecRoot, String productName) {
+    PathFragment execRoot = deepExecRoot ? outputBase.getChild("execroot") : outputBase;
+
+    if (workspace.equals(PathFragment.EMPTY_FRAGMENT)) {
+      return execRoot;
+    }
+    return execRoot.getRelative(workspace.getBaseName() + "/" + getRelativeOutputPath(productName));
   }
 
   /**
