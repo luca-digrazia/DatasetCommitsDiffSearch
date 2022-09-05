@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.actions.ActionCacheChecker.Token;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
 import com.google.devtools.build.lib.actions.ActionExecutedEvent;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionContextFactory;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
 import com.google.devtools.build.lib.actions.ActionGraph;
@@ -53,14 +52,14 @@ import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.TargetOutOfDateException;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.ExecutorUtil;
+import com.google.devtools.build.lib.concurrent.ExecutorShutdownUtil;
 import com.google.devtools.build.lib.concurrent.Sharder;
 import com.google.devtools.build.lib.concurrent.ThrowableRecordingRunnableWrapper;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.util.io.OutErr;
@@ -95,8 +94,8 @@ import javax.annotation.Nullable;
  * Action executor: takes care of preparing an action for execution, executing it, validating that
  * all output artifacts were created, error reporting, etc.
  */
-public final class SkyframeActionExecutor implements ActionExecutionContextFactory {
-  private Reporter reporter;
+public final class SkyframeActionExecutor {
+  private final Reporter reporter;
   private final AtomicReference<EventBus> eventBus;
   private final ResourceManager resourceManager;
   private Executor executorEngine;
@@ -131,9 +130,10 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
   private ActionCompletedReceiver completionReceiver;
   private final AtomicReference<ActionExecutionStatusReporter> statusReporterRef;
 
-  SkyframeActionExecutor(ResourceManager resourceManager,
+  SkyframeActionExecutor(Reporter reporter, ResourceManager resourceManager,
       AtomicReference<EventBus> eventBus,
       AtomicReference<ActionExecutionStatusReporter> statusReporterRef) {
+    this.reporter = reporter;
     this.resourceManager = resourceManager;
     this.eventBus = eventBus;
     this.statusReporterRef = statusReporterRef;
@@ -288,7 +288,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
       executor.execute(
           wrapper.wrap(actionRegistration(shard, actionGraph, artifactPathMap, badActionMap)));
     }
-    boolean interrupted = ExecutorUtil.interruptibleShutdown(executor);
+    boolean interrupted = ExecutorShutdownUtil.interruptibleShutdown(executor);
     Throwables.propagateIfPossible(wrapper.getFirstThrownError());
     if (interrupted) {
       throw new InterruptedException();
@@ -330,9 +330,8 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     };
   }
 
-  void prepareForExecution(Reporter reporter, Executor executor, boolean keepGoing,
+  void prepareForExecution(Executor executor, boolean keepGoing,
       boolean explain, ActionCacheChecker actionCacheChecker) {
-    this.reporter = Preconditions.checkNotNull(reporter);
     this.executorEngine = Preconditions.checkNotNull(executor);
 
     // Start with a new map each build so there's no issue with internal resizing.
@@ -350,7 +349,6 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
   }
 
   void executionOver() {
-    this.reporter = null;
     // This transitively holds a bunch of heavy objects, so it's important to clear it at the
     // end of a build.
     this.executorEngine = null;
@@ -446,9 +444,8 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
    * pass the returned context to {@link #executeAction}, and any other method that needs to execute
    * tasks related to that action.
    */
-  @Override
-  public ActionExecutionContext getContext(
-      ActionInputFileCache graphFileCache, MetadataHandler metadataHandler,
+  ActionExecutionContext constructActionExecutionContext(
+      PerActionFileCache graphFileCache, MetadataHandler metadataHandler,
       Map<Artifact, Collection<Artifact>> expandedInputMiddlemen) {
     FileOutErr fileOutErr = actionLogBufferPathGenerator.generate();
     return new ActionExecutionContext(
@@ -1057,7 +1054,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     private final ActionInputFileCache perActionCache;
     private final ActionInputFileCache perBuildFileCache;
 
-    private DelegatingPairFileCache(ActionInputFileCache mainCache,
+    private DelegatingPairFileCache(PerActionFileCache mainCache,
         ActionInputFileCache perBuildFileCache) {
       this.perActionCache = mainCache;
       this.perBuildFileCache = perBuildFileCache;

@@ -32,7 +32,6 @@ import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCacheChecker;
-import com.google.devtools.build.lib.actions.ActionExecutionContextFactory;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
@@ -308,9 +307,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(SkyFunctions.GLOB, new GlobFunction());
     map.put(SkyFunctions.TARGET_PATTERN, new TargetPatternFunction(pkgLocator));
     map.put(SkyFunctions.PREPARE_DEPS_OF_PATTERNS, new PrepareDepsOfPatternsFunction());
-    map.put(SkyFunctions.PREPARE_DEPS_OF_PATTERN, new PrepareDepsOfPatternFunction(pkgLocator));
-    map.put(SkyFunctions.PREPARE_DEPS_OF_TARGETS_UNDER_DIRECTORY,
-        new PrepareDepsOfTargetsUnderDirectoryFunction());
     map.put(SkyFunctions.RECURSIVE_PKG, new RecursivePkgFunction());
     map.put(SkyFunctions.PACKAGE, new PackageFunction(
         reporter, pkgFactory, packageManager, showLoadingProgress, packageFunctionCache,
@@ -327,9 +323,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         configurationFactory, configurationPackages));
     map.put(SkyFunctions.CONFIGURATION_FRAGMENT, new ConfigurationFragmentFunction(
         configurationFragments, configurationPackages));
-    map.put(
-        SkyFunctions.WORKSPACE_FILE,
-        new WorkspaceFileFunction(ruleClassProvider, pkgFactory, directories));
+    map.put(SkyFunctions.WORKSPACE_FILE, new WorkspaceFileFunction(pkgFactory, directories));
     map.put(SkyFunctions.TARGET_COMPLETION, new TargetCompletionFunction(eventBus));
     map.put(SkyFunctions.TEST_COMPLETION, new TestCompletionFunction());
     map.put(SkyFunctions.ARTIFACT, new ArtifactFunction(allowedMissingInputs));
@@ -673,10 +667,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   public EventBus getEventBus() {
     return eventBus.get();
-  }
-
-  public ActionExecutionContextFactory getActionExecutionContextFactory() {
-    return skyframeActionExecutor;
   }
 
   /**
@@ -1264,8 +1254,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             reportCycles(result.getError().getCycleInfo(), key);
             // This can only happen if a package is freshly loaded outside of the target parsing
             // or loading phase
-            throw new BuildFileContainsErrorsException(
-                pkgName, "Cycle encountered while loading package " + pkgName);
+            throw new BuildFileContainsErrorsException(pkgName.toString(),
+                "Cycle encountered while loading package " + pkgName);
           }
           Throwable e = error.getException();
           // PackageFunction should be catching, swallowing, and rethrowing all transitive

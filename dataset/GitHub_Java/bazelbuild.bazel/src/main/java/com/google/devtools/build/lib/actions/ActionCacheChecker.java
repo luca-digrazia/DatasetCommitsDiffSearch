@@ -224,7 +224,7 @@ public class ActionCacheChecker {
       // Remove old records from the cache if they used different key.
       String execPath = output.getExecPathString();
       if (!key.equals(execPath)) {
-        actionCache.remove(execPath);
+        actionCache.remove(key);
       }
       if (!metadataHandler.artifactOmitted(output)) {
         // Output files *must* exist and be accessible after successful action execution.

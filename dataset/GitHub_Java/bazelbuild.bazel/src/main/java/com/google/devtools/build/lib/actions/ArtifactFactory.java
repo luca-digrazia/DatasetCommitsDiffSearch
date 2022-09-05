@@ -109,8 +109,8 @@ public class ArtifactFactory implements ArtifactResolver, ArtifactSerializer, Ar
 
   @Override
   public Artifact getSourceArtifact(PathFragment execPath, Root root, ArtifactOwner owner) {
-    Preconditions.checkArgument(!execPath.isAbsolute(), "%s %s %s", execPath, root, owner);
-    Preconditions.checkNotNull(owner, "%s %s", execPath, root);
+    Preconditions.checkArgument(!execPath.isAbsolute());
+    Preconditions.checkNotNull(owner, execPath);
     execPath = execPath.normalize();
     return getArtifact(root.getPath().getRelative(execPath), root, execPath, owner, null);
   }
