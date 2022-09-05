@@ -12,7 +12,6 @@ import java.util.concurrent.*;
  * A registry of metric instances.
  */
 public class MetricsRegistry {
-    private static final int EXPECTED_METRIC_COUNT = 1024;
     private final ConcurrentMap<MetricName, Metric> metrics = newMetricsMap();
     private final ThreadPools threadPools = new ThreadPools();
     private final List<MetricsRegistryListener> listeners =
@@ -525,7 +524,7 @@ public class MetricsRegistry {
      * @return a new {@link ConcurrentMap}
      */
     protected ConcurrentMap<MetricName, Metric> newMetricsMap() {
-        return new ConcurrentHashMap<MetricName, Metric>(EXPECTED_METRIC_COUNT);
+        return new ConcurrentHashMap<MetricName, Metric>(1024);
     }
 
     @SuppressWarnings("unchecked")
