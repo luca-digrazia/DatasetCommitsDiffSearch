@@ -27,7 +27,7 @@ import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
@@ -457,8 +457,9 @@ public class BuildView {
                   skylarkFunctionName));
         }
       } else {
-        final NativeAspectClass aspectFactoryClass =
-            ruleClassProvider.getNativeAspectClassMap().get(aspect);
+        final Class<? extends ConfiguredNativeAspectFactory> aspectFactoryClass =
+            ruleClassProvider.getAspectFactoryMap().get(aspect)
+                .asSubclass(ConfiguredNativeAspectFactory.class);
         if (aspectFactoryClass != null) {
           for (ConfiguredTargetKey targetSpec : targetSpecs) {
             aspectKeys.add(
@@ -468,7 +469,7 @@ public class BuildView {
                     // aspect and the base target while the top-level configuration is untrimmed.
                     targetSpec.getConfiguration(),
                     targetSpec.getConfiguration(),
-                    aspectFactoryClass));
+                    new NativeAspectClass<ConfiguredNativeAspectFactory>(aspectFactoryClass)));
           }
         } else {
           throw new ViewCreationFailedException("Aspect '" + aspect + "' is unknown");
@@ -551,7 +552,7 @@ public class BuildView {
           getArtifactFactory(),
           CoverageReportValue.ARTIFACT_OWNER);
       if (actionsWrapper != null) {
-        ImmutableList<ActionAnalysisMetadata> actions = actionsWrapper.getActions();
+        ImmutableList <Action> actions = actionsWrapper.getActions();
         skyframeExecutor.injectCoverageReportData(actions);
         artifactsToBuild.addAll(actionsWrapper.getCoverageOutputs());
       }
@@ -570,7 +571,7 @@ public class BuildView {
     final ActionGraph actionGraph = new ActionGraph() {
       @Nullable
       @Override
-      public ActionAnalysisMetadata getGeneratingAction(Artifact artifact) {
+      public Action getGeneratingAction(Artifact artifact) {
         ArtifactOwner artifactOwner = artifact.getArtifactOwner();
         if (artifactOwner instanceof ActionLookupValue.ActionLookupKey) {
           SkyKey key = ActionLookupValue.key((ActionLookupValue.ActionLookupKey) artifactOwner);
