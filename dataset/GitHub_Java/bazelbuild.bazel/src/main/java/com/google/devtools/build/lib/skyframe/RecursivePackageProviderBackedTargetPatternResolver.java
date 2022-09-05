@@ -20,7 +20,6 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -148,10 +147,6 @@ public class RecursivePackageProviderBackedTargetPatternResolver
           throws TargetParsingException, InterruptedException {
     try {
       Map<PackageIdentifier, Package> pkgs = bulkGetPackages(pkgIds);
-      if (pkgs.size() != Iterables.size(pkgIds)) {
-        throw new IllegalStateException("Bulk package retrieval missing results: "
-            + Sets.difference(ImmutableSet.copyOf(pkgIds), pkgs.keySet()));
-      }
       ImmutableMap.Builder<PackageIdentifier, ResolvedTargets<Target>> result =
               ImmutableMap.builder();
       for (PackageIdentifier pkgId : pkgIds) {
@@ -162,8 +157,7 @@ public class RecursivePackageProviderBackedTargetPatternResolver
     } catch (NoSuchThingException e) {
       String message = TargetPatternResolverUtil.getParsingErrorMessage(
               e.getMessage(), originalPattern);
-      throw new IllegalStateException(
-          "Mismatch: Expected given pkgIds to correspond to valid Packages. " + message, e);
+      throw new TargetParsingException(message, e);
     }
   }
 

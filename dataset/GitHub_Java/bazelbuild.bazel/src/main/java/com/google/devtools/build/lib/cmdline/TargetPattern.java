@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
-import java.util.regex.Pattern;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -335,17 +334,17 @@ public abstract class TargetPattern implements Serializable {
 
     private final PackageIdentifier packageIdentifier;
     private final String suffix;
-    private final boolean wasOriginallyAbsolute;
+    private final boolean isAbsolute;
     private final boolean rulesOnly;
     private final boolean checkWildcardConflict;
 
     private TargetsInPackage(String originalPattern, String offset,
-        PackageIdentifier packageIdentifier, String suffix, boolean wasOriginallyAbsolute,
-        boolean rulesOnly, boolean checkWildcardConflict) {
+        PackageIdentifier packageIdentifier, String suffix, boolean isAbsolute, boolean rulesOnly,
+        boolean checkWildcardConflict) {
       super(Type.TARGETS_IN_PACKAGE, originalPattern, offset);
       this.packageIdentifier = packageIdentifier;
       this.suffix = Preconditions.checkNotNull(suffix);
-      this.wasOriginallyAbsolute = wasOriginallyAbsolute;
+      this.isAbsolute = isAbsolute;
       this.rulesOnly = rulesOnly;
       this.checkWildcardConflict = checkWildcardConflict;
     }
@@ -397,7 +396,7 @@ public abstract class TargetPattern implements Serializable {
         return false;
       }
       TargetsInPackage that = (TargetsInPackage) o;
-      return wasOriginallyAbsolute == that.wasOriginallyAbsolute && rulesOnly == that.rulesOnly
+      return isAbsolute == that.isAbsolute && rulesOnly == that.rulesOnly
           && checkWildcardConflict == that.checkWildcardConflict
           && getOriginalPattern().equals(that.getOriginalPattern())
           && packageIdentifier.equals(that.packageIdentifier) && suffix.equals(that.suffix);
@@ -405,8 +404,8 @@ public abstract class TargetPattern implements Serializable {
 
     @Override
     public int hashCode() {
-      return Objects.hash(getType(), getOriginalPattern(), packageIdentifier, suffix,
-          wasOriginallyAbsolute, rulesOnly, checkWildcardConflict);
+      return Objects.hash(getType(), getOriginalPattern(), packageIdentifier, suffix, isAbsolute,
+          rulesOnly, checkWildcardConflict);
     }
 
     /**
@@ -418,7 +417,7 @@ public abstract class TargetPattern implements Serializable {
      */
     private <T> ResolvedTargets<T> getWildcardConflict(TargetPatternResolver<T> resolver)
         throws InterruptedException {
-      if (!wasOriginallyAbsolute) {
+      if (!isAbsolute) {
         return null;
       }
 
@@ -516,10 +515,6 @@ public abstract class TargetPattern implements Serializable {
 
   @Immutable
   public static final class Parser {
-    // A valid pattern either starts with exactly 0 slashes (relative pattern) or exactly two
-    // slashes (absolute pattern).
-    private static final Pattern VALID_SLASH_PREFIX = Pattern.compile("(//)?([^/]|$)");
-
     // TODO(bazel-team): Merge the Label functionality that requires similar constants into this
     // class.
     /**
@@ -605,16 +600,14 @@ public abstract class TargetPattern implements Serializable {
 
         pattern = pattern.substring(pkgStart);
       }
+      final boolean isAbsolute = pattern.startsWith("//");
 
-      if (!VALID_SLASH_PREFIX.matcher(pattern).lookingAt()) {
-        throw new TargetParsingException("not a valid absolute pattern (absolute target patterns "
-            + "must start with exactly two slashes): '" + pattern + "'");
+      // We now absolutize non-absolute target patterns.
+      pattern = isAbsolute ? pattern.substring(2) : absolutize(pattern);
+      // Check for common errors.
+      if (pattern.startsWith("/")) {
+        throw new TargetParsingException("not a relative path or label: '" + pattern + "'");
       }
-
-      final boolean wasOriginallyAbsolute = pattern.startsWith("//");
-      // We now ensure the relativeDirectory is applied to relative patterns.
-      pattern = absolutize(pattern).substring(2);
-
       if (pattern.isEmpty()) {
         throw new TargetParsingException("the empty string is not a valid target");
       }
@@ -666,7 +659,7 @@ public abstract class TargetPattern implements Serializable {
               "Invalid package name '" + packagePart + "': " + e.getMessage());
         }
         return new TargetsInPackage(originalPattern, relativeDirectory, packageIdentifier,
-            targetPart, wasOriginallyAbsolute, true, true);
+            targetPart, isAbsolute, true, true);
       }
 
       if (ALL_TARGETS_IN_SUFFIXES.contains(targetPart)) {
@@ -678,10 +671,10 @@ public abstract class TargetPattern implements Serializable {
               "Invalid package name '" + packagePart + "': " + e.getMessage());
         }
         return new TargetsInPackage(originalPattern, relativeDirectory, packageIdentifier,
-            targetPart, wasOriginallyAbsolute, false, true);
+            targetPart, isAbsolute, false, true);
       }
 
-      if (includesRepo || wasOriginallyAbsolute || pattern.contains(":")) {
+      if (includesRepo || isAbsolute || pattern.contains(":")) {
         PackageIdentifier packageIdentifier;
         String fullLabel = repository.getName() + "//" + pattern;
         try {
@@ -717,20 +710,19 @@ public abstract class TargetPattern implements Serializable {
 
     /**
      * Absolutizes the target pattern to the offset.
-     * Patterns starting with "//" are absolute and not modified.
-     * Assumes the given pattern is not invalid wrt leading "/"s.
+     * Patterns starting with "/" are absolute and not modified.
      *
      * If the offset is "foo":
-     *   absolutize(":bar") --> "//foo:bar"
-     *   absolutize("bar") --> "//foo/bar"
-     *   absolutize("//biz/bar") --> "//biz/bar" (absolute)
-     *   absolutize("biz:bar") --> "//foo/biz:bar"
+     *   absolutize(":bar") --> "foo:bar"
+     *   absolutize("bar") --> "foo/bar"
+     *   absolutize("/biz/bar") --> "biz/bar" (absolute)
+     *   absolutize("biz:bar") --> "foo/biz:bar"
      *
      * @param pattern The target pattern to parse.
      * @return the pattern, absolutized to the offset if approprate.
      */
-    public String absolutize(String pattern) {
-      if (pattern.startsWith("//")) {
+    private String absolutize(String pattern) {
+      if (relativeDirectory.isEmpty() || pattern.startsWith("/")) {
         return pattern;
       }
 
@@ -738,9 +730,9 @@ public abstract class TargetPattern implements Serializable {
       // but it doesn't work when the pattern starts with ":".
       // "foo".getRelative(":all") would return "foo/:all", where we
       // really want "foo:all".
-      return pattern.startsWith(":") || relativeDirectory.isEmpty()
-          ? "//" + relativeDirectory + pattern
-          : "//" + relativeDirectory + "/" + pattern;
+      return pattern.startsWith(":")
+          ? relativeDirectory + pattern
+          : relativeDirectory + "/" + pattern;
     }
   }
 

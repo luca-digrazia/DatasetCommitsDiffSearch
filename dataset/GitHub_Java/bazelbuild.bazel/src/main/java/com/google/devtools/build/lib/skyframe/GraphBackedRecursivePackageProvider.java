@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.RecursivePackageProvider;
-import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
@@ -99,9 +98,8 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
 
     ImmutableMap.Builder<PackageIdentifier, Package> pkgResults = ImmutableMap.builder();
     Map<SkyKey, SkyValue> packages = graph.getSuccessfulValues(pkgKeys);
-    for (Map.Entry<SkyKey, SkyValue> pkgEntry : packages.entrySet()) {
-      PackageIdentifier pkgId = (PackageIdentifier) pkgEntry.getKey().argument();
-      PackageValue pkgValue = (PackageValue) pkgEntry.getValue();
+    for (PackageIdentifier pkgId : pkgIds) {
+      PackageValue pkgValue = (PackageValue) packages.get(PackageValue.key(pkgId));
       pkgResults.put(pkgId, Preconditions.checkNotNull(pkgValue.getPackage(), pkgId));
     }
 
@@ -174,8 +172,8 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
     if (repository.isDefault()) {
       roots.addAll(pkgPath.getPathEntries());
     } else {
-      RepositoryDirectoryValue repositoryValue =
-            (RepositoryDirectoryValue) graph.getValue(RepositoryDirectoryValue.key(repository));
+      RepositoryValue repositoryValue =
+            (RepositoryValue) graph.getValue(RepositoryValue.key(repository));
       if (repositoryValue == null) {
         // If this key doesn't exist, the repository is outside the universe, so we return
         // "nothing".

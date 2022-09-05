@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.TargetPatternResolverUtil;
-import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.skyframe.EnvironmentBackedRecursivePackageProvider.MissingDepException;
 import com.google.devtools.build.lib.util.BatchCallback;
 import com.google.devtools.build.lib.util.BatchCallback.NullCallback;
@@ -79,24 +78,12 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
     Preconditions.checkState(patternKey.getPolicy().equals(FilteringPolicies.NO_FILTER),
         patternKey.getPolicy());
 
-    TargetPattern parsedPattern = patternKey.getParsedPattern();
-
-    BlacklistedPackagePrefixesValue blacklist =
-        (BlacklistedPackagePrefixesValue) env.getValue(BlacklistedPackagePrefixesValue.key());
-    if (blacklist == null) {
-      return null;
-    }
-    ImmutableSet<PathFragment> subdirectoriesToExclude =
-        patternKey.getAllSubdirectoriesToExclude(blacklist.getPatterns());
-
-    DepsOfPatternPreparer preparer = new DepsOfPatternPreparer(env, pkgPath.get());
-
     try {
+      TargetPattern parsedPattern = patternKey.getParsedPattern();
+      DepsOfPatternPreparer preparer = new DepsOfPatternPreparer(env, pkgPath.get());
+      ImmutableSet<PathFragment> excludedSubdirectories = patternKey.getExcludedSubdirectories();
       parsedPattern.eval(
-          preparer,
-          subdirectoriesToExclude,
-          NullCallback.<Void>instance(),
-          RuntimeException.class);
+          preparer, excludedSubdirectories, NullCallback.<Void>instance(), RuntimeException.class);
     } catch (TargetParsingException e) {
       throw new PrepareDepsOfPatternFunctionException(e);
     } catch (MissingDepException e) {
@@ -235,11 +222,11 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
           rulesOnly ? FilteringPolicies.RULES_ONLY : FilteringPolicies.NO_FILTER;
       PathFragment pathFragment = TargetPatternResolverUtil.getPathFragment(directory);
       List<Path> roots = new ArrayList<>();
-      if (repository.isMain()) {
+      if (repository.isDefault()) {
         roots.addAll(pkgPath.getPathEntries());
       } else {
-        RepositoryDirectoryValue repositoryValue =
-            (RepositoryDirectoryValue) env.getValue(RepositoryDirectoryValue.key(repository));
+        RepositoryValue repositoryValue =
+            (RepositoryValue) env.getValue(RepositoryValue.key(repository));
         if (repositoryValue == null) {
           throw new MissingDepException();
         }
