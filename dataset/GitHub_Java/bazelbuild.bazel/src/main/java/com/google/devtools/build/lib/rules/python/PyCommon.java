@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.rules.python;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
@@ -45,7 +46,6 @@ import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.Local
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.protobuf.GeneratedMessage.GeneratedExtension;
 
@@ -169,8 +169,7 @@ public final class PyCommon {
         .getPrerequisites("srcs", Mode.TARGET, FileProvider.class)) {
       // Make sure that none of the sources contain hyphens.
       if (Util.containsHyphen(src.getLabel().getPackageFragment())) {
-        ruleContext.attributeError("srcs",
-            src.getLabel() + ": paths to Python packages may not contain '-'");
+        ruleContext.attributeError("srcs", src.getLabel() + ": package name may not contain '-'");
       }
       Iterable<Artifact> pySrcs = FileType.filter(src.getFilesToBuild(),
           PyRuleClasses.PYTHON_SOURCE);
@@ -192,7 +191,7 @@ public final class PyCommon {
    */
   void validatePackageName() {
     if (Util.containsHyphen(ruleContext.getLabel().getPackageFragment())) {
-      ruleContext.ruleError("paths to Python packages may not contain '-'");
+      ruleContext.ruleError("package name may not contain '-'");
     }
   }
 
