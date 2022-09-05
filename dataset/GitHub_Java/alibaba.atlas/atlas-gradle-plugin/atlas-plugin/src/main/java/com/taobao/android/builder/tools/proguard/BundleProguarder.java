@@ -221,9 +221,7 @@ import com.alibaba.fastjson.JSON;
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.android.build.gradle.internal.api.AwbTransform;
 import com.google.common.collect.Lists;
-import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.model.AwbBundle;
-import com.taobao.android.builder.tools.FileNameUtils;
 import com.taobao.android.builder.tools.ReflectUtils;
 import com.taobao.android.builder.tools.cache.FileCacheCenter;
 import com.taobao.android.builder.tools.cache.FileCacheException;
@@ -252,17 +250,12 @@ import static proguard.AtlasProguardConstants.INOUT_CFG;
  */
 public class BundleProguarder {
 
-    public static final String CACHE_TYPE = "proguard-bundles-0.10";
+    public static final String CACHE_TYPE = "proguard-bundles-0.09";
 
     private static Logger logger = LoggerFactory.getLogger(BundleProguarder.class);
     private static FileLogger fileLogger = FileLogger.getInstance("proguard");
 
     public static void execute(AppVariantContext appVariantContext, Input input) throws Exception {
-
-        if (!appVariantContext.getAtlasExtension().getTBuildConfig().isProguardCacheEnabled()) {
-            doProguard(appVariantContext, input);
-            return;
-        }
 
         String md5 = input.getMd5();
 
@@ -282,12 +275,10 @@ public class BundleProguarder {
         fileLogger.log(bundleName + "proguard consume (s) " + during);
 
         //cache
-        if (null != result.cacheDir) {
-            try {
-                cacheProguard(appVariantContext, input, result);
-            } catch (Throwable e) {
-                logger.error(e.getMessage(), e);
-            }
+        try {
+            cacheProguard(appVariantContext, input, result);
+        } catch (Throwable e) {
+            logger.error(e.getMessage(), e);
         }
 
     }
@@ -298,17 +289,21 @@ public class BundleProguarder {
 
         String md5 = input.getMd5();
 
-        result.key = input.getAwbBundles().get(0).getAwbBundle().getName() + "_" + md5;
+        result.key = md5;
 
-        logger.info("bundle proguard for " + result.key + " with md5 key " + md5);
+        String name = input.getAwbBundles().get(0).getAwbBundle().getName();
+        logger.info("bundle proguard for " + name + " with md5 key " + md5);
 
-        File cacheDir = FileCacheCenter.queryFile(CACHE_TYPE, result.key, true, isRemoteCacheEnabled(appVariantContext));
+        //TODO 先简单实现以下
+        //SimpleFileCache simpleFileCache = new SimpleFileCache();
+        //File cacheDir = simpleFileCache.getCacheFile(md5, CACHE_TYPE);
+        File cacheDir = FileCacheCenter.queryFile(CACHE_TYPE, md5, true, true);
         result.cacheDir = cacheDir;
-        if (null == cacheDir || !cacheDir.exists()) {
-            logger.warn("bundle proguard for " + result.key  + " miss  cache " + cacheDir.getAbsolutePath());
+        if (!cacheDir.exists()) {
+            logger.warn("bundle proguard for " + name + " miss  cache " + cacheDir.getAbsolutePath());
             return result;
         }
-        logger.warn("bundle proguard for " + result.key + " hit  cache ");
+        logger.warn("bundle proguard for " + name + " hit  cache ");
 
         File keepJson = new File(cacheDir, "keep.json");
         File proguardCfg = new File(cacheDir, "proguard.cfg");
@@ -334,10 +329,10 @@ public class BundleProguarder {
 
             result.success = true;
             return result;
-        } else {
+        }else {
 
             if (!keepJson.exists()) {
-                logger.error("bundle proguard for " + result.key + " missing keep.json  ");
+                logger.error("bundle proguard for " + name + " missing keep.json  ");
                 FileUtils.deleteDirectory(cacheDir);
                 return result;
             }
@@ -394,10 +389,7 @@ public class BundleProguarder {
 
         }
 
-    }
 
-    private static boolean isRemoteCacheEnabled(AppVariantContext appVariantContext) {
-        return appVariantContext.getAtlasExtension().getTBuildConfig().isProguardNetworkCacheEnabled();
     }
 
     public static void doProguard(AppVariantContext appVariantContext, Input input)
@@ -495,14 +487,7 @@ public class BundleProguarder {
             for (File inputLibrary : awbTransform.getInputLibraries()) {
 
                 configs.add(INJARS_OPTION + " " + inputLibrary.getAbsolutePath());
-
-                String name = input.getFileMd5s().get(inputLibrary);
-                if (null == name){
-                    name = FileNameUtils.getUniqueFileName(inputLibrary.getName(), "proguard");
-                }
-
-                File obsJar = new File(proguardDir,
-                                       name + ".jar");
+                File obsJar = new File(proguardDir, input.getFileMd5s().get(inputLibrary) + ".jar");
 
                 inputLibraries.add(obsJar);
                 configs.add(OUTJARS_OPTION + " " + obsJar.getAbsolutePath());
@@ -511,14 +496,7 @@ public class BundleProguarder {
             //configs.add();
             if (null != awbTransform.getInputDir() && awbTransform.getInputDir().exists()) {
                 configs.add(INJARS_OPTION + " " + awbTransform.getInputDir().getAbsolutePath());
-
-                String name = input.getFileMd5s().get(awbTransform.getInputDir());
-                if (null == name){
-                    name = FileNameUtils.getUniqueFileName(awbTransform.getInputDir().getName(), "proguard");
-                }
-
-                File obsJar = new File(proguardDir,
-                                       name + ".jar");
+                File obsJar = new File(proguardDir, input.getFileMd5s().get(awbTransform.getInputDir()) + ".jar");
                 inputLibraries.add(obsJar);
                 configs.add(OUTJARS_OPTION + " " + obsJar.getAbsolutePath());
             }
@@ -577,7 +555,7 @@ public class BundleProguarder {
             FileUtils.copyFileToDirectory(usageCfg, tmpDir);
         }
 
-        FileCacheCenter.cacheFile(CACHE_TYPE, result.key, tmpDir, AtlasBuildContext.sBuilderAdapter.pushCacheToNetwork && isRemoteCacheEnabled(appVariantContext));
+        FileCacheCenter.cacheFile(CACHE_TYPE, result.key, tmpDir, true);
 
     }
 }

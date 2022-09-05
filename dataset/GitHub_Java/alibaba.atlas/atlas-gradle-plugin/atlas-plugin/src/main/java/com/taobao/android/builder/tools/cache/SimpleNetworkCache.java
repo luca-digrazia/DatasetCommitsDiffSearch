@@ -243,7 +243,7 @@ public class SimpleNetworkCache implements Cache{
                 throw new FileCacheException("upload file failed");
             }
         }finally {
-            //Delete folder
+            //删除文件夹
             if(toUploadFile.getName().endsWith("_tmp.zip")){
                 toUploadFile.delete();
             }
@@ -261,7 +261,7 @@ public class SimpleNetworkCache implements Cache{
 
         if (folder){
 
-            //Unzip the files
+            //解压文件
             File current = new File(localFile.getAbsolutePath());
             File zipFile = new File(localFile.getParentFile(),localFile.getName()+"_tmp.zip");
             localFile.renameTo(zipFile);

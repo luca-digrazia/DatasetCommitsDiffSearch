@@ -275,12 +275,11 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
-import com.taobao.android.AaptLib;
+import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.extension.AtlasExtension;
 import com.taobao.android.builder.hook.dex.DexByteCodeConverterHook;
 import com.taobao.android.builder.tools.FileNameUtils;
 import com.taobao.android.builder.tools.MD5Util;
-import com.taobao.android.builder.tools.PathUtil;
 import com.taobao.android.builder.tools.Profiler;
 import com.taobao.android.builder.tools.cache.FileCacheCenter;
 import com.taobao.android.builder.tools.cache.FileCacheException;
@@ -308,7 +307,7 @@ public class AtlasBuilder extends AndroidBuilder {
 
     private static Logger sLogger = LoggerFactory.getLogger(AtlasBuilder.class);
 
-    public static final String PRE_DEXCACHE_TYPE = "pre-dex-0.09";
+    public static final String PRE_DEXCACHE_TYPE = "pre-dex-0.06";
 
     protected AtlasExtension atlasExtension;
 
@@ -321,7 +320,6 @@ public class AtlasBuilder extends AndroidBuilder {
     private JavaProcessExecutor javaProcessExecutor;
 
     private boolean verboseExec;
-    private boolean useMyDex;
 
 
     /**
@@ -891,12 +889,16 @@ public class AtlasBuilder extends AndroidBuilder {
             fileName = "aapt.exe";
         }
         String aaptPath = "aapt/" + osName + "/" + fileName;
-        File aaptFile = new File(AaptLib.class.getClassLoader().getResource(aaptPath).getFile());
+        File aaptFile = new File(AtlasBuilder.class.getClassLoader().getResource(aaptPath).getFile());
         if (aaptFile.isFile()) {
             return aaptFile;
         }
 
-        File jarFile = PathUtil.getJarFile(AaptLib.class);
+        String path = AtlasBuilder.class.getProtectionDomain()
+            .getCodeSource()
+            .getLocation()
+            .getFile();
+        File jarFile = new File(path);
         File jarFolder = new File(jarFile.getParentFile(),
                                   FilenameUtils.getBaseName(jarFile.getName()));
         jarFolder.mkdirs();
@@ -928,7 +930,7 @@ public class AtlasBuilder extends AndroidBuilder {
             Profiler.release();
         }
 
-        if ( atlasExtension.getTBuildConfig().isDexCacheEnabled() && inputs.size() > 1) {
+        if (AtlasBuildContext.sBuilderAdapter.isBuildCacheEnabled() && inputs.size() > 1) {
 
             Profiler.enter("jar2dex");
 
@@ -1033,21 +1035,11 @@ public class AtlasBuilder extends AndroidBuilder {
                          endDexTime - startTime,
                          finishTime - endDexTime);
         } else {
-            DefaultDexOptions myDexOptions = DefaultDexOptions.copyOf(dexOptions);
-            if (dexOptions.getAdditionalParameters().contains("--useMyDex")){
-                dexOptions.getAdditionalParameters().remove("--useMyDex");
-                myDexOptions.setDexInProcess(true);
-                useMyDex = true;
-                if (inputs.size() > 1){
-                    myDexOptions.setJavaMaxHeapSize("500m");
-                }
-            }
-
             super.convertByteCode(inputs,
                                   outDexFolder,
                                   multidex,
                                   mainDexList,
-                                  myDexOptions,
+                                  dexOptions,
                                   processOutputHandler);
         }
 
@@ -1089,7 +1081,7 @@ public class AtlasBuilder extends AndroidBuilder {
                               @NonNull ProcessOutputHandler processOutputHandler)
         throws IOException, InterruptedException, ProcessException {
 
-        if (!atlasExtension.getTBuildConfig().isDexCacheEnabled() || multiDex) {
+        if (!AtlasBuildContext.sBuilderAdapter.dexCacheEnabled || multiDex) {
             super.preDexLibrary(inputFile, outFile, multiDex, dexOptions, processOutputHandler);
             return;
         }
@@ -1108,19 +1100,10 @@ public class AtlasBuilder extends AndroidBuilder {
                                                              true));
             }
 
-            //TODO md5 with other
             if (StringUtils.isNotEmpty(md5)) {
 
-                String other = "" + dexOptions.getAdditionalParameters().contains("--useMyDex") + dexOptions.getJumboMode() + dexOptions.getKeepRuntimeAnnotatedClasses();
-
                 try {
-                    md5 = MD5Util.getMD5(other+md5);
-                } catch (Exception e) {
-                    throw new GradleException(e.getMessage(),e);
-                }
-
-                try {
-                    FileCacheCenter.fetchFile(PRE_DEXCACHE_TYPE,md5, false, atlasExtension.getTBuildConfig().isDexNetworkCacheEnabled(), dexFile);
+                    FileCacheCenter.fetchFile(PRE_DEXCACHE_TYPE,md5, false, true, dexFile);
                 } catch (FileCacheException e) {
                     sLogger.error(e.getMessage(),e);
                 }
@@ -1142,14 +1125,15 @@ public class AtlasBuilder extends AndroidBuilder {
         dexFile.delete();
 
         //todo  设置dexOptions
-        DefaultDexOptions defaultDexOptions = DefaultDexOptions.copyOf(dexOptions);
+        DefaultDexOptions defaultDexOptions = new DefaultDexOptions();
+
+        //外部已经启动了多线程，尽量少一点
+        defaultDexOptions.setThreadCount(dexOptions.getThreadCount());
+        defaultDexOptions.setAdditionalParameters(dexOptions.getAdditionalParameters());
+        defaultDexOptions.setJumboMode(dexOptions.getJumboMode());
         if (!multiDex){
             defaultDexOptions.setJavaMaxHeapSize("500m");
             defaultDexOptions.setDexInProcess(true);
-        }
-        if (defaultDexOptions.getAdditionalParameters().contains("--useMyDex")){
-            defaultDexOptions.getAdditionalParameters().remove("--useMyDex");
-            useMyDex = true;
         }
         sLogger.info("[mtldex] pre dex for {} {}",
                      inputFile.getAbsolutePath(),
@@ -1169,8 +1153,9 @@ public class AtlasBuilder extends AndroidBuilder {
         sLogger.warn("dex success " + dexFile.getAbsolutePath() + "->" + inputFile.getAbsolutePath());
 
         if (StringUtils.isNotEmpty(md5) && dexFile.exists()) {
+
             try {
-                FileCacheCenter.cacheFile(PRE_DEXCACHE_TYPE,md5, dexFile, atlasExtension.getTBuildConfig().isDexNetworkCacheEnabled());
+                FileCacheCenter.cacheFile(PRE_DEXCACHE_TYPE,md5, dexFile, true);
             } catch (FileCacheException e) {
                 sLogger.error(e.getMessage(),e);
             }
@@ -1343,7 +1328,7 @@ public class AtlasBuilder extends AndroidBuilder {
     @NonNull
     public DexByteCodeConverter getDexByteCodeConverter() {
 
-        if (!useMyDex){
+        if (AtlasBuildContext.appVariantContext == null||AtlasBuildContext.appVariantContext.getBuildType().getDexConfig()==null||!AtlasBuildContext.appVariantContext.getBuildType().getDexConfig().isUseMyDex()){
             return super.getDexByteCodeConverter();
         }
         if (dexByteCodeConverter == null){
@@ -1352,8 +1337,6 @@ public class AtlasBuilder extends AndroidBuilder {
         sLogger.debug("use DexByteCodeConverterHook......");
         return dexByteCodeConverter;
     }
-
-
     public static interface MultiDexer {
 
         public Collection<File> repackageJarList(Collection<File> files) throws IOException;
