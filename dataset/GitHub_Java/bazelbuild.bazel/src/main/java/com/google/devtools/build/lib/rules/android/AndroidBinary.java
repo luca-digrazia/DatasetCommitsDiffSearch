@@ -451,7 +451,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     filesBuilder.add(binaryJar);
     filesBuilder.add(unsignedApk);
     filesBuilder.add(zipAlignedApk);
-    NestedSet<Artifact> filesToBuild = filesBuilder.build();
 
     Artifact deployInfo = ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.DEPLOY_INFO);
     AndroidDeployInfoAction.createDeployInfoAction(ruleContext,
@@ -459,6 +458,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         applicationManifest.getManifest(),
         additionalMergedManifests,
         Iterables.concat(ImmutableList.of(zipAlignedApk), apksUnderTest));
+    filesBuilder.add(deployInfo);
+
+    NestedSet<Artifact> filesToBuild = filesBuilder.build();
 
     NestedSet<Artifact> coverageMetadata = (androidCommon.getInstrumentedJar() != null)
         ? NestedSetBuilder.create(Order.STABLE_ORDER, androidCommon.getInstrumentedJar())
@@ -536,12 +538,12 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         additionalMergedManifests,
         ImmutableList.<Artifact>of());
 
-    NestedSet<Artifact> fullInstallOutputGroup = NestedSetBuilder.<Artifact>stableOrder()
+    NestedSet<Artifact> fullOutputGroup = NestedSetBuilder.<Artifact>stableOrder()
         .add(fullDeployMarker)
         .add(incrementalDeployInfo)
         .build();
 
-    NestedSet<Artifact> incrementalInstallOutputGroup = NestedSetBuilder.<Artifact>stableOrder()
+    NestedSet<Artifact> incrementalOutputGroup = NestedSetBuilder.<Artifact>stableOrder()
         .add(incrementalDeployMarker)
         .add(incrementalDeployInfo)
         .build();
@@ -636,7 +638,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         additionalMergedManifests,
         ImmutableList.<Artifact>of());
 
-    NestedSet<Artifact> splitInstallOutputGroup = NestedSetBuilder.<Artifact>stableOrder()
+    NestedSet<Artifact> splitOutputGroup = NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(allSplitApks)
         .add(splitDeployMarker)
         .add(splitDeployInfo)
@@ -697,12 +699,11 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 NestedSetBuilder.create(Order.STABLE_ORDER, applicationManifest.getManifest())
             ))
         .add(AndroidPreDexJarProvider.class, new AndroidPreDexJarProvider(jarToDex))
-        .addOutputGroup("mobile_install_full", fullInstallOutputGroup)
-        .addOutputGroup("mobile_install_incremental", incrementalInstallOutputGroup)
-        .addOutputGroup("mobile_install_split", splitInstallOutputGroup)
+        .addOutputGroup("mobile_install_full", fullOutputGroup)
+        .addOutputGroup("mobile_install_incremental", incrementalOutputGroup)
+        .addOutputGroup("mobile_install_split", splitOutputGroup)
         .addOutputGroup("apk_manifest", apkManifest)
-        .addOutputGroup("apk_manifest_text", apkManifestText)
-        .addOutputGroup("android_deploy_info", deployInfo);
+        .addOutputGroup("apk_manifest_text", apkManifestText);
   }
 
   private static void createSplitInstallAction(RuleContext ruleContext,
