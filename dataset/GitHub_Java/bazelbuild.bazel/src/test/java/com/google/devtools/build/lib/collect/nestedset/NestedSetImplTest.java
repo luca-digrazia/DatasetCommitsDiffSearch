@@ -13,13 +13,15 @@
 // limitations under the License.
 package com.google.devtools.build.lib.collect.nestedset;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.testing.EqualsTester;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -40,15 +42,15 @@ public class NestedSetImplTest {
   public void simple() {
     NestedSet<String> set = nestedSetBuilder("a").build();
 
-    assertThat(set.toList()).containsExactly("a");
-    assertThat(set.isEmpty()).isFalse();
+    assertEquals(ImmutableList.of("a"), set.toList());
+    assertFalse(set.isEmpty());
   }
 
   @Test
   public void flatToString() {
-    assertThat(nestedSetBuilder().build().toString()).isEqualTo("{}");
-    assertThat(nestedSetBuilder("a").build().toString()).isEqualTo("{a}");
-    assertThat(nestedSetBuilder("a", "b").build().toString()).isEqualTo("{a, b}");
+    assertEquals("{}", nestedSetBuilder().build().toString());
+    assertEquals("{a}", nestedSetBuilder("a").build().toString());
+    assertEquals("{a, b}", nestedSetBuilder("a", "b").build().toString());
   }
 
   @Test
@@ -56,33 +58,33 @@ public class NestedSetImplTest {
     NestedSet<String> b = nestedSetBuilder("b1", "b2").build();
     NestedSet<String> c = nestedSetBuilder("c1", "c2").build();
 
-    assertThat(nestedSetBuilder("a").addTransitive(b).build().toString())
-        .isEqualTo("{{b1, b2}, a}");
-    assertThat(nestedSetBuilder("a").addTransitive(b).addTransitive(c).build().toString())
-        .isEqualTo("{{b1, b2}, {c1, c2}, a}");
+    assertEquals("{{b1, b2}, a}",
+      nestedSetBuilder("a").addTransitive(b).build().toString());
+    assertEquals("{{b1, b2}, {c1, c2}, a}",
+      nestedSetBuilder("a").addTransitive(b).addTransitive(c).build().toString());
 
-    assertThat(nestedSetBuilder().addTransitive(b).build().toString()).isEqualTo("{b1, b2}");
+    assertEquals("{b1, b2}", nestedSetBuilder().addTransitive(b).build().toString());
   }
 
   @Test
   public void isEmpty() {
     NestedSet<String> triviallyEmpty = nestedSetBuilder().build();
-    assertThat(triviallyEmpty.isEmpty()).isTrue();
+    assertTrue(triviallyEmpty.isEmpty());
 
     NestedSet<String> emptyLevel1 = nestedSetBuilder().addTransitive(triviallyEmpty).build();
-    assertThat(emptyLevel1.isEmpty()).isTrue();
+    assertTrue(emptyLevel1.isEmpty());
 
     NestedSet<String> emptyLevel2 = nestedSetBuilder().addTransitive(emptyLevel1).build();
-    assertThat(emptyLevel2.isEmpty()).isTrue();
+    assertTrue(emptyLevel2.isEmpty());
 
     NestedSet<String> triviallyNonEmpty = nestedSetBuilder("mango").build();
-    assertThat(triviallyNonEmpty.isEmpty()).isFalse();
+    assertFalse(triviallyNonEmpty.isEmpty());
 
     NestedSet<String> nonEmptyLevel1 = nestedSetBuilder().addTransitive(triviallyNonEmpty).build();
-    assertThat(nonEmptyLevel1.isEmpty()).isFalse();
+    assertFalse(nonEmptyLevel1.isEmpty());
 
     NestedSet<String> nonEmptyLevel2 = nestedSetBuilder().addTransitive(nonEmptyLevel1).build();
-    assertThat(nonEmptyLevel2.isEmpty()).isFalse();
+    assertFalse(nonEmptyLevel2.isEmpty());
   }
 
   @Test
@@ -166,53 +168,38 @@ public class NestedSetImplTest {
   public void shallowEquality() {
     // Used below to check that inner nested sets can be compared by reference equality.
     SetWrapper<Integer> myRef = nest(nest(flat(7, 8)), flat(9));
-    // Used to check equality for deserializing nested sets
-    ListenableFuture<Object[]> contents = Futures.immediateFuture(new Object[] {"a", "b"});
-    NestedSet<String> referenceNestedSet = NestedSet.withFuture(Order.STABLE_ORDER, contents);
-    NestedSet<String> otherReferenceNestedSet = NestedSet.withFuture(Order.STABLE_ORDER, contents);
 
     // Each "equality group" contains elements that are equal to one another
     // (according to equals() and hashCode()), yet distinct from all elements
     // of all other equality groups.
     new EqualsTester()
-        .addEqualityGroup(flat(), flat(), nest(flat())) // Empty set elision.
-        .addEqualityGroup(NestedSetBuilder.<Integer>linkOrder().build())
-        .addEqualityGroup(flat(3), flat(3), flat(3, 3)) // Element de-duplication.
-        .addEqualityGroup(flat(4), nest(flat(4))) // Automatic elision of one-element nested sets.
-        .addEqualityGroup(NestedSetBuilder.<Integer>linkOrder().add(4).build())
-        .addEqualityGroup(nestedSetBuilder("4").build()) // Like flat("4").
-        .addEqualityGroup(flat(3, 4), flat(3, 4))
-        // Make a couple sets deep enough that shallowEquals() fails.
-        // If this test case fails because you improve the representation, just delete it.
-        .addEqualityGroup(nest(nest(flat(3, 4), flat(5)), nest(flat(6, 7), flat(8))))
-        .addEqualityGroup(nest(nest(flat(3, 4), flat(5)), nest(flat(6, 7), flat(8))))
-        .addEqualityGroup(nest(myRef), nest(myRef), nest(myRef, myRef)) // Set de-duplication.
-        .addEqualityGroup(nest(3, myRef))
-        .addEqualityGroup(nest(4, myRef))
-        .addEqualityGroup(
-            new SetWrapper<>(referenceNestedSet), new SetWrapper<>(otherReferenceNestedSet))
-        .testEquals();
+      .addEqualityGroup(flat(),
+                        flat(),
+                        nest(flat()))  // Empty set elision.
+      .addEqualityGroup(NestedSetBuilder.<Integer>linkOrder().build())
+      .addEqualityGroup(flat(3),
+                        flat(3),
+                        flat(3, 3))  // Element de-duplication.
+      .addEqualityGroup(flat(4),
+                        nest(flat(4))) // Automatic elision of one-element nested sets.
+      .addEqualityGroup(NestedSetBuilder.<Integer>linkOrder().add(4).build())
+      .addEqualityGroup(nestedSetBuilder("4").build())  // Like flat("4").
+      .addEqualityGroup(flat(3, 4),
+                        flat(3, 4))
+      // Make a couple sets deep enough that shallowEquals() fails.
+      // If this test case fails because you improve the representation, just delete it.
+      .addEqualityGroup(nest(nest(flat(3, 4), flat(5)), nest(flat(6, 7), flat(8))))
+      .addEqualityGroup(nest(nest(flat(3, 4), flat(5)), nest(flat(6, 7), flat(8))))
+      .addEqualityGroup(nest(myRef),
+                        nest(myRef),
+                        nest(myRef, myRef))  // Set de-duplication.
+      .addEqualityGroup(nest(3, myRef))
+      .addEqualityGroup(nest(4, myRef))
+      .testEquals();
 
     // Some things that are not tested by the above:
     //  - ordering among direct members
     //  - ordering among transitive sets
-  }
-
-  @Test
-  public void shallowInequality() {
-    assertThat(nestedSetBuilder("a").build().shallowEquals(null)).isFalse();
-    Object[] contents = {"a", "b"};
-    assertThat(
-            NestedSet.withFuture(Order.STABLE_ORDER, Futures.immediateFuture(contents))
-                .shallowEquals(null))
-        .isFalse();
-
-    // shallowEquals() should require reference equality for underlying futures
-    assertThat(
-            NestedSet.withFuture(Order.STABLE_ORDER, Futures.immediateFuture(contents))
-                .shallowEquals(
-                    NestedSet.withFuture(Order.STABLE_ORDER, Futures.immediateFuture(contents))))
-        .isFalse();
   }
 
   /** Checks that the builder always return a nested set with the correct order. */
@@ -221,13 +208,11 @@ public class NestedSetImplTest {
     for (Order order : Order.values()) {
       for (int numDirects = 0; numDirects < 3; numDirects++) {
         for (int numTransitives = 0; numTransitives < 3; numTransitives++) {
-          assertThat(createNestedSet(order, numDirects, numTransitives, order).getOrder())
-              .isEqualTo(order);
+          assertEquals(order, createNestedSet(order, numDirects, numTransitives, order).getOrder());
           // We allow mixing orders if one of them is stable. This tests that the top level order is
           // the correct one.
-          assertThat(
-                  createNestedSet(order, numDirects, numTransitives, Order.STABLE_ORDER).getOrder())
-              .isEqualTo(order);
+          assertEquals(order,
+              createNestedSet(order, numDirects, numTransitives, Order.STABLE_ORDER).getOrder());
         }
       }
     }

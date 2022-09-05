@@ -13,15 +13,19 @@
 // limitations under the License.
 package com.google.devtools.build.lib.collect.nestedset;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+
+import org.junit.Test;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import org.junit.Test;
 
 /**
  * Base class for tests of {@link NestedSetExpander} implementations.
@@ -40,7 +44,7 @@ public abstract class ExpanderTestBase  {
   public void simple() {
     NestedSet<String> s = prepareBuilder("c", "a", "b").build();
 
-    assertThat(s.toList()).isEqualTo(simpleResult());
+    assertEquals(simpleResult(), s.toList());
     assertSetContents(simpleResult(), s);
   }
 
@@ -48,7 +52,7 @@ public abstract class ExpanderTestBase  {
   public void simpleNoDuplicates() {
     NestedSet<String> s = prepareBuilder("c", "a", "a", "a", "b").build();
 
-    assertThat(s.toList()).isEqualTo(simpleResult());
+    assertEquals(simpleResult(), s.toList());
     assertSetContents(simpleResult(), s);
   }
 
@@ -89,6 +93,7 @@ public abstract class ExpanderTestBase  {
     NestedSet<String> s1 = prepareBuilder().add("a").add("c").add("b").build();
     NestedSet<String> s2 = prepareBuilder().addAll(ImmutableList.of("a", "c", "b")).build();
 
+    assertCollectionsEqual(s1.toCollection(), s2.toCollection());
     assertCollectionsEqual(s1.toList(), s2.toList());
     assertCollectionsEqual(Lists.newArrayList(s1), Lists.newArrayList(s2));
   }
@@ -99,6 +104,7 @@ public abstract class ExpanderTestBase  {
     NestedSet<String> s2 = prepareBuilder().add("a").addAll(ImmutableList.of("b", "c")).add("d")
         .build();
 
+    assertCollectionsEqual(s1.toCollection(), s2.toCollection());
     assertCollectionsEqual(s1.toList(), s2.toList());
     assertCollectionsEqual(Lists.newArrayList(s1), Lists.newArrayList(s2));
   }
@@ -186,15 +192,15 @@ public abstract class ExpanderTestBase  {
   @Test
   public void getOrderingEmpty() {
     NestedSet<String> s = prepareBuilder().build();
-    assertThat(s.isEmpty()).isTrue();
-    assertThat(s.getOrder()).isEqualTo(expanderOrder());
+    assertTrue(s.isEmpty());
+    assertEquals(expanderOrder(), s.getOrder());
   }
 
   @Test
   public void getOrdering() {
     NestedSet<String> s = prepareBuilder("a", "b").build();
-    assertThat(s.isEmpty()).isFalse();
-    assertThat(s.getOrder()).isEqualTo(expanderOrder());
+    assertFalse(s.isEmpty());
+    assertEquals(expanderOrder(), s.getOrder());
   }
 
   @Test
@@ -222,14 +228,15 @@ public abstract class ExpanderTestBase  {
   }
 
   protected final void assertSetContents(Collection<String> expected, NestedSet<String> set) {
-    assertThat(Lists.newArrayList(set)).isEqualTo(expected);
-    assertThat(Lists.newArrayList(set.toList())).isEqualTo(expected);
-    assertThat(Lists.newArrayList(set.toSet())).isEqualTo(expected);
+    assertEquals(expected, Lists.newArrayList(set));
+    assertEquals(expected, Lists.newArrayList(set.toCollection()));
+    assertEquals(expected, Lists.newArrayList(set.toList()));
+    assertEquals(expected, Lists.newArrayList(set.toSet()));
   }
 
   protected final void assertCollectionsEqual(
       Collection<String> expected, Collection<String> actual) {
-    assertThat(Lists.newArrayList(actual)).isEqualTo(Lists.newArrayList(expected));
+    assertEquals(Lists.newArrayList(expected), Lists.newArrayList(actual));
   }
 
   /**

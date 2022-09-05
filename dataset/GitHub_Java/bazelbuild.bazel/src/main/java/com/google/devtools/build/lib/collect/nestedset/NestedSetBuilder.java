@@ -121,7 +121,7 @@ public final class NestedSetBuilder<E> {
     Preconditions.checkNotNull(subset);
     Preconditions.checkArgument(
         order.isCompatible(subset.getOrder()),
-        "Order mismatch: %s != %s", subset.getOrder().getSkylarkName(), order.getSkylarkName());
+        "Order mismatch: %s != %s", subset.getOrder(), order);
     if (!subset.isEmpty()) {
       transitiveSets.add(subset);
     }
