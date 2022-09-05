@@ -215,6 +215,7 @@ import java.util.Set;
 
 import com.taobao.android.builder.tools.proguard.dto.RefClazz;
 import org.jetbrains.annotations.NotNull;
+import proguard.classfile.ClassPool;
 import proguard.classfile.Clazz;
 import proguard.classfile.LibraryClass;
 import proguard.classfile.ProgramClass;
@@ -244,33 +245,62 @@ public class LibClassRefVisitor implements ClassVisitor, ConstantVisitor {
 
     private Set<String> defaultClasses;
 
-    public LibClassRefVisitor(Set<String> defaultClasses) {
+    private ClassPool self;
+
+    public LibClassRefVisitor(Set<String> defaultClasses, ClassPool self) {
         this.defaultClasses = defaultClasses;
+        this.self = self;
     }
 
     @Override
     public void visitProgramClass(ProgramClass programClass) {
 
-        String superName = programClass.getSuperName();
-
-        if (defaultClasses.contains(superName)) {
-            return;
-        }
-        RefClazz refClazz = getRefClazz(superName);
-        refClazz.setKeepAll(true);
+        addSuperClass(programClass);
 
         for (int i = 0; i < programClass.getInterfaceCount(); i++) {
-            String interfaceClazz = programClass.getInterfaceName(i);
-            if (defaultClasses.contains(interfaceClazz)) {
-                return;
-            }
-            RefClazz refClazz2 = getRefClazz(interfaceClazz);
-            refClazz2.setKeepAll(true);
+            addInterface(programClass, i);
         }
 
         programClass.interfaceConstantsAccept(this);
 
         programClass.constantPoolEntriesAccept(this);
+    }
+
+    private void addInterface(ProgramClass programClass, int i) {
+        String interfaceClazz = programClass.getInterfaceName(i);
+        if (isNotRefClazz(interfaceClazz)) {
+            return;
+        }
+        RefClazz refClazz2 = getRefClazz(interfaceClazz);
+        refClazz2.setKeepAll(true);
+    }
+
+    private void addSuperClass(ProgramClass programClass) {
+        String superName = programClass.getSuperName();
+
+        if (isNotRefClazz(superName)) {
+            return;
+        }
+        RefClazz refClazz = getRefClazz(superName);
+        refClazz.setKeepAll(true);
+    }
+
+    private boolean isNotRefClazz(String className) {
+
+        System.out.println(className);
+
+        if (defaultClasses.contains(className)){
+            return true;
+        }
+        if (className.contains("[")){
+            return true;
+        }
+
+        if ( null != self.getClass(className)){
+            return true;
+        }
+
+        return false;
     }
 
     @Override
@@ -322,7 +352,7 @@ public class LibClassRefVisitor implements ClassVisitor, ConstantVisitor {
     public void visitFieldrefConstant(Clazz clazz, FieldrefConstant fieldrefConstant) {
         String clazzName = clazz.getClassName(fieldrefConstant.u2classIndex);
 
-        if (defaultClasses.contains(clazzName)) {
+        if (isNotRefClazz(clazzName)) {
             return;
         }
 
@@ -340,7 +370,7 @@ public class LibClassRefVisitor implements ClassVisitor, ConstantVisitor {
 
         String clazzName = clazz.getClassName(methodrefConstant.u2classIndex);
 
-        if (defaultClasses.contains(clazzName)) {
+        if (isNotRefClazz(clazzName)) {
             return;
         }
 
