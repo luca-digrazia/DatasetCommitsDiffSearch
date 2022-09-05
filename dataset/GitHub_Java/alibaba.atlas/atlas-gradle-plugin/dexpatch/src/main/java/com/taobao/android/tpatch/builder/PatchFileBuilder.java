@@ -79,7 +79,7 @@ public class PatchFileBuilder {
     }
 
     /**
-     * create history tpatch
+     * 创建历史版本的tpatch
      */
     public BuildPatchInfos createHistoryTPatches(boolean diffBundleDex, final ILogger logger) throws PatchException {
         final BuildPatchInfos buildPatchInfos = new BuildPatchInfos();
@@ -128,7 +128,7 @@ public class PatchFileBuilder {
     }
 
     /**
-     * create patch for target version
+     * 创建指定版本的patch文件
      *
      * @param targetVersion
      */
@@ -185,7 +185,7 @@ public class PatchFileBuilder {
     }
 
     /**
-     * generate main dex so
+     * 生成主dex的so
      *
      * @param bundleFolder
      * @param soOutputFile
@@ -213,7 +213,7 @@ public class PatchFileBuilder {
     }
 
     /**
-     * compare two patch
+     * 比较2个patch版本之间的差异
      *
      * @param hisPatchInfo
      * @param currentPatchInfo
@@ -309,7 +309,7 @@ public class PatchFileBuilder {
     }
 
     /**
-     * process so file
+     * 处理各自bundle的patch文件
      *
      * @param hisPatchInfo
      * @param bundlePatchs
@@ -402,7 +402,7 @@ public class PatchFileBuilder {
                         } else {
                             downloadTPathAndUnzip(hisPatchInfo.getDownloadUrl(), hisTPatchFile, hisTPatchUnzipFolder);
                             File mainDexFile = new File(hisTPatchUnzipFolder,"libcom_taobao_maindex.so");
-                            if (mainDexFile.exists()&&Boolean.FALSE.booleanValue()){
+                            if (mainDexFile.exists()){
                                 try {
                                     System.out.println("start put bundleInfos for version:"+hisPatchInfo.getPatchVersion()+"......");
                                     TPatchTool.bundleInfos.put(hisPatchInfo.getPatchVersion(),new AtlasFrameworkPropertiesReader(
@@ -559,7 +559,7 @@ public class PatchFileBuilder {
     }
 
     /**
-     * download file
+     * 如果下载的文件不存在，则下载文件
      *
      * @param httpUrl
      * @param saveFile
@@ -598,6 +598,7 @@ public class PatchFileBuilder {
     }
 
     /**
+     * 转换为map
      *
      * @param bundles
      * @return
@@ -611,6 +612,7 @@ public class PatchFileBuilder {
     }
 
     /**
+     * 创建Andfix的manifest信息
      *
      * @return
      */
@@ -624,6 +626,7 @@ public class PatchFileBuilder {
     }
 
     /**
+     * 往jar文件里增加文件
      *
      * @param jos
      * @param file

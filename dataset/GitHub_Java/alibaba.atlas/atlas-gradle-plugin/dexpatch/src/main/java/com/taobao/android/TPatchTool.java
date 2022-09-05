@@ -259,15 +259,17 @@ import org.apache.commons.lang3.StringUtils;
 import org.jf.dexlib2.iface.ClassDef;
 
 /**
- * generate atlas dynamic tpatch
+ * 生成为atlas做动态部署的diff工具类
  * <p/>
+ * TODO: 需要支持指定文件的过滤，包括dex文件，资源文件。不对指定文件做diff操作
+ * Created by shenghua.nish on 2016-03-19 下午9:42.
  */
 public class TPatchTool extends BasePatchTool {
     public static boolean isTpatch = false;
 
     public static boolean debug;
 
-    // bundle diff
+    // 是否对awb的bundle进行增量的dex
     private boolean diffBundleDex = true;
 
     private boolean retainMainBundleRes = true;
@@ -278,14 +280,15 @@ public class TPatchTool extends BasePatchTool {
 
     private ApkDiff apkPatchInfos = new ApkDiff();
 
-    private List<BundleDiffResult> bundleDiffResults = Collections.synchronizedList(new ArrayList<BundleDiffResult>());
+    private List<BundleDiffResult> bundleDiffResults = Collections.synchronizedList(new ArrayList<>());
 
-    private List<BundleDiffResult> patchInfos = Collections.synchronizedList(new ArrayList<BundleDiffResult>());
+    private List<BundleDiffResult> patchInfos = Collections.synchronizedList(new ArrayList<>());
 
     private final PathMatcher pathMatcher = new PathMatcher();
 
     private final String ANDROID_MANIFEST = "AndroidManifest.xml";
 
+    // 不进入patch包的主bundle资源的资料列表,dex,lib将做另外的对比
     private static final String[] DEFAULT_NOT_INCLUDE_RESOURCES = new String[] {"*.dex",
         "lib/**",
         "META-INF/**"};
@@ -293,8 +296,6 @@ public class TPatchTool extends BasePatchTool {
     private String[] notIncludeFiles;
 
     private String mainBundleName = "libcom_taobao_maindex";
-
-    private String mainBundleDexPatchName = "com.taobao.maindex";
 
     protected File baseApkFileList;
 
@@ -312,15 +313,15 @@ public class TPatchTool extends BasePatchTool {
 
     private List<String> noPatchBundles = Lists.newArrayList();
 
-    private List<String> whiteList = new ArrayList<String>();
+    private List<String> whiteList = new ArrayList<>();
 
     public void setVersionList(List<String> versionList) {
         this.versionList = versionList;
     }
 
-    private List<String> versionList = new ArrayList<String>();
+    private List<String> versionList = new ArrayList<>();
 
-    public static Map<String,LinkedHashMap>bundleInfos = new HashMap<String, LinkedHashMap>();
+    public static Map<String,LinkedHashMap>bundleInfos = new HashMap<>();
 
     private boolean dexPatch;
 
@@ -342,6 +343,7 @@ public class TPatchTool extends BasePatchTool {
     }
 
     /**
+     * 是否保留主bundle的资源文件（不包括so文件，so文件会进行增量对比)，如果支持atals的主bundle的资源动态更新，这个值应该为true
      *
      * @param retainMainBundleRes
      */
@@ -358,7 +360,7 @@ public class TPatchTool extends BasePatchTool {
     }
 
     /**
-     * set resource not in patch file
+     * 设置不需要在patch包里出现的资源的列表
      *
      * @param notIncludeFiles
      */
@@ -375,15 +377,15 @@ public class TPatchTool extends BasePatchTool {
     }
 
     /**
-     * generate patch file
+     * 生成patch文件
      *
-     * @param outPatchDir        patch dir
+     * @param outPatchDir        生成patch文件的目录
      * @param createPatchJson
      * @param outPatchJson
      * @param createHistoryPatch
      * @param patchHistoryUrl
      * @param productName
-     * @return patchFile
+     * @return 得到最后的patch的地址
      */
     public File doPatch(File outPatchDir,
                         boolean createPatchJson,
@@ -406,7 +408,7 @@ public class TPatchTool extends BasePatchTool {
         final File diffTxtFile = new File(outPatchDir, "diff.json");
         final File patchInfoFile = new File(outPatchDir, "patchInfo.json");
         final File patchTmpDir = new File(outPatchDir, "tpatch-tmp");
-        final File mainDiffFolder = new File(patchTmpDir, mainBundleName);
+        File mainDiffFolder = new File(patchTmpDir, mainBundleName);
         //        FileUtils.cleanDirectory(outPatchDir);
         patchTmpDir.mkdirs();
         FileUtils.cleanDirectory(patchTmpDir);
@@ -418,7 +420,7 @@ public class TPatchTool extends BasePatchTool {
         Profiler.release();
 
         Profiler.enter("unzip apks");
-        // unzip apk
+        // 解压apk
         File unzipFolder = unzipApk(outPatchDir);
         final File newApkUnzipFolder = new File(unzipFolder, NEW_APK_UNZIP_NAME);
         final File baseApkUnzipFolder = new File(unzipFolder, BASE_APK_UNZIP_NAME);
@@ -426,14 +428,14 @@ public class TPatchTool extends BasePatchTool {
 
         ExecutorServicesHelper executorServicesHelper = new ExecutorServicesHelper();
         String taskName = "diffBundleTask";
-        //
+        // 判断主bundle的so和awb的插件
 
 
         Collection<File> soFiles = FileUtils.listFiles(newApkUnzipFolder, new String[] {"so"}, true);
 
-        //process remote bumdle
+        //处理远程bundle
         if (splitDiffBundle != null) {
-            for (final Pair<BundleBO, BundleBO> bundle : splitDiffBundle) {
+            for (Pair<BundleBO, BundleBO> bundle : splitDiffBundle) {
                 executorServicesHelper.submitTask(taskName, new Callable<Boolean>() {
                     @Override
                     public Boolean call() throws Exception {
@@ -445,7 +447,6 @@ public class TPatchTool extends BasePatchTool {
         }
 
         Profiler.enter("awbspatch");
-
         executorServicesHelper.submitTask(taskName, new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
@@ -459,7 +460,7 @@ public class TPatchTool extends BasePatchTool {
                                      true);
 
                 // 是否保留主bundle的资源文件
-                if (isRetainMainBundleRes()&&!dexPatch) {
+                if (isRetainMainBundleRes()) {
                     copyMainBundleResources(newApkUnzipFolder,
                                             baseApkUnzipFolder,
                                             new File(patchTmpDir, mainBundleName));
@@ -485,7 +486,7 @@ public class TPatchTool extends BasePatchTool {
                     if (isBundleFile(soFile)) {
                         processBundleFiles(soFile, baseSoFile, patchTmpDir);
 
-                    } else if (!dexPatch){ // if bundleFile
+                    } else { // 如果是bundle文件
                         if (isFileModify(soFile, baseSoFile)) { FileUtils.copyFile(soFile, destFile); }
                     }
                     return true;
@@ -498,7 +499,7 @@ public class TPatchTool extends BasePatchTool {
         Profiler.release();
 
         Profiler.enter("ziptpatchfile");
-        // zip file
+        // 压缩patch文件夹，得到tpatch文件
         File patchFile = createTPatchFile(outPatchDir, patchTmpDir);
         PatchInfo curPatchInfo = createBasePatchInfo(patchFile);
 
@@ -623,14 +624,8 @@ public class TPatchTool extends BasePatchTool {
         FileUtils.deleteDirectory(mainBundleFoder);
 
         // 再压缩各自的bundle
-        File patchFile = null;
-        if (dexPatch){
-            patchFile = new File(outPatchDir,
-                    newApkBO.getVersionName() + "@" + baseApkBO.getVersionName() + ".tpatch");
-        }else {
-            patchFile = new File(outPatchDir,
-                    "patch-" + newApkBO.getVersionName() + "@" + baseApkBO.getVersionName() + ".tpatch");
-        }
+        File patchFile = new File(outPatchDir,
+                                  "patch-" + newApkBO.getVersionName() + "@" + baseApkBO.getVersionName() + ".tpatch");
         if (patchFile.exists()) {
             FileUtils.deleteQuietly(patchFile);
         }
@@ -641,7 +636,7 @@ public class TPatchTool extends BasePatchTool {
     }
 
     /**
-     * tralate to so file
+     * 将一个文件夹转换为so
      *
      * @param toZipFolder
      * @param soOutputFile
@@ -674,7 +669,7 @@ public class TPatchTool extends BasePatchTool {
     }
 
     /**
-     * process bundle files
+     * 处理bundle的patch文件
      *
      * @param newBundleFile
      * @param baseBundleFile
@@ -720,10 +715,10 @@ public class TPatchTool extends BasePatchTool {
     }
 
     private void doBundlePatch(File newBundleFile, File baseBundleFile, File patchTmpDir, String bundleName,
-                               File destPatchBundleDir, final File newBundleUnzipFolder, File baseBundleUnzipFolder)
+                               File destPatchBundleDir, File newBundleUnzipFolder, File baseBundleUnzipFolder)
         throws Exception {
-        // unzip
-        // compare dex changes
+        // 解压文件
+        // 判断dex的差异性
         CommandUtils.exec(patchTmpDir,
                           "unzip " + newBundleFile.getAbsolutePath() + " -d " + newBundleUnzipFolder.getAbsolutePath());
         CommandUtils.exec(patchTmpDir, "unzip " + baseBundleFile.getAbsolutePath() + " -d " + baseBundleUnzipFolder
@@ -739,7 +734,7 @@ public class TPatchTool extends BasePatchTool {
             return;
         }
 
-        // compare resource changes
+        // 比较其他资源文件的差异性
         Collection<File> newBundleResFiles = FileUtils.listFiles(newBundleUnzipFolder,
                                                                  new IOFileFilter() {
 
@@ -784,17 +779,17 @@ public class TPatchTool extends BasePatchTool {
                 if (isFileModify(newBundleResFile,
                                  baseBundleResFile,
                                  bundleName,
-                                 resPath)) { // modify resource
+                                 resPath)) { // 修改的资源
                     FileUtils.copyFile(newBundleResFile, destResFile);
                 }
-            } else {// new resource
+            } else {// 新增的资源
                 FileUtils.copyFile(newBundleResFile, destResFile);
             }
         }
     }
 
     /**
-     * resource changes in main bundle
+     * 复制主bundle的增量资源
      *
      * @param newApkUnzipFolder
      * @param baseApkUnzipFolder
@@ -844,7 +839,7 @@ public class TPatchTool extends BasePatchTool {
     }
 
     /**
-     * get bundle diff dex file
+     * 得到bundle的dex diff文件，支持多dex
      *
      * @param newApkUnzipFolder
      * @param baseApkUnzipFolder
@@ -895,7 +890,7 @@ public class TPatchTool extends BasePatchTool {
         }
 
         FileUtils.deleteDirectory(tmpDexFile);
-        if (mainDex&&!dexPatch&&Boolean.FALSE.booleanValue()){
+        if (mainDex){
             bundleInfos.put(newApkBO.getVersionName(),new AtlasFrameworkPropertiesReader(
                     new MethodReader(
                             new ClassReader(
@@ -905,11 +900,6 @@ public class TPatchTool extends BasePatchTool {
                             new ClassReader(
                                     new DexReader(baseDexFiles))),bundleInfos.get(newApkBO.getVersionName())).read("Landroid/taobao/atlas/framework/FrameworkProperties;","<clinit>"));
 
-        }
-
-        if (mainDex&&dexPatch&&getMainBundleDiffType().equals(DiffType.NONE)){
-            FileUtils.cleanDirectory(destDex.getParentFile());
-            return null;
         }
         return destDex;
     }
@@ -946,11 +936,7 @@ public class TPatchTool extends BasePatchTool {
                     patchBundleInfo.setNewBundle(DiffType.ADD.equals(artifactBundleInfo.getDiffType()));
                     patchBundleInfo.setMainBundle(true);
                     patchBundleInfo.setVersion(artifactBundleInfo.getVersion());
-                    if (dexPatch){
-                        patchBundleInfo.setName(mainBundleDexPatchName);
-                    }else {
-                        patchBundleInfo.setName(mainBundleName);
-                    }
+                    patchBundleInfo.setName(mainBundleName);
                     patchBundleInfo.setSrcUnitTag(artifactBundleInfo.getSrcUnitTag());
                     patchBundleInfo.setUnitTag(artifactBundleInfo.getUnitTag());
                     patchBundleInfo.setApplicationName(artifactBundleInfo.getApplicationName());
@@ -970,10 +956,6 @@ public class TPatchTool extends BasePatchTool {
                 patchBundleInfo.setUnitTag(artifactBundleInfo.getUnitTag());
                 patchBundleInfo.setVersion(artifactBundleInfo.getVersion());
                 patchBundleInfo.setName(artifactBundleInfo.getName());
-                if (dexPatch){
-                    patchBundleInfo.setName(artifactBundleInfo.getPkgName());
-
-                }
                 patchBundleInfo.setApplicationName(artifactBundleInfo.getApplicationName());
                 patchBundleInfo.setArtifactId(artifactBundleInfo.getArtifactId());
                 patchBundleInfo.setPkgName(artifactBundleInfo.getPkgName());
@@ -994,9 +976,6 @@ public class TPatchTool extends BasePatchTool {
                 patchBundleInfo.setDependency(artifactBundleInfo.getDependency());
                 patchBundleInfo.setBaseVersion(artifactBundleInfo.getBaseVersion());
                 patchInfo.getBundles().add(patchBundleInfo);
-                if (artifactBundleInfo.getUnitTag().equals(artifactBundleInfo.getSrcUnitTag())){
-                    throw new RuntimeException(artifactBundleInfo.getPkgName()+"内容发生了变化,但是unitTag一致"+artifactBundleInfo.getUnitTag()+",请修改版本做集成");
-                }
             }
         }
 
@@ -1019,8 +998,7 @@ public class TPatchTool extends BasePatchTool {
     }
 
     /**
-     * create increment patch
-     * file
+     * 生成增量的patch文件
      */
     private BuildPatchInfos createIncrementPatchFiles(String productionName,
                                                       File curTPatchFile,
@@ -1117,7 +1095,7 @@ public class TPatchTool extends BasePatchTool {
     }
 
     /**
-     * create manifest for patch file
+     * 创建tpatch的manifest信息
      *
      * @return
      */
@@ -1131,9 +1109,9 @@ public class TPatchTool extends BasePatchTool {
     }
 
     /**
-     * judge if is file modified
+     * 判断2个文件是否修改过
      *
-     * @param newFile  new File
+     * @param newFile  新的文件,不能为空
      * @param baseFile
      * @return
      */
@@ -1152,7 +1130,7 @@ public class TPatchTool extends BasePatchTool {
     }
 
     /**
-     * if a file is modify
+     * 判断2个文件是否变动过
      *
      * @param newFile
      * @param baseFile
@@ -1206,12 +1184,12 @@ public class TPatchTool extends BasePatchTool {
     }
 
     /**
-     * get file md5 from apkFileList
+     * 从apkFileList对象中获取之前映射的md5
      *
      * @param apkFileList
      * @param bundleFileName,如果为null,则表示是主bundle
      * @param filePath
-     * @param curMd5
+     * @param curMd5                             当前这个文件的md5值
      * @return
      */
     private String getBundleFileMappingMd5(ApkFileList apkFileList,
@@ -1240,7 +1218,7 @@ public class TPatchTool extends BasePatchTool {
     }
 
     /**
-     * add files to jar
+     * 往jar文件里增加文件
      *
      * @param jos
      * @param file
@@ -1328,7 +1306,7 @@ public class TPatchTool extends BasePatchTool {
     }
 
     /**
-     * get base apkFileList
+     * 获取基线版本的apkFileList
      *
      * @return
      */
@@ -1375,13 +1353,5 @@ public class TPatchTool extends BasePatchTool {
     }
 
 
-    public DiffType getMainBundleDiffType() {
 
-        for (ArtifactBundleInfo artifactBundleInfo:artifactBundleInfos){
-            if(artifactBundleInfo.getMainBundle()){
-                return artifactBundleInfo.getDiffType();
-            }
-        }
-        return DiffType.NONE;
-    }
 }
