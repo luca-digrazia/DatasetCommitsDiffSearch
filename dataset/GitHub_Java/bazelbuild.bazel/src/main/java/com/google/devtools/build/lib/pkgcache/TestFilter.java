@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.packages.TestTargetUtils;
 import com.google.devtools.build.lib.packages.TestTimeout;
+import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner.Options;
 
 import java.util.List;
 import java.util.Objects;
@@ -29,14 +29,14 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
- * Predicate that implements test filtering using the command-line options in {@link LoadingOptions}.
+ * Predicate that implements test filtering using the command-line options in {@link Options}.
  * Implements {@link #hashCode} and {@link #equals} so it can be used as a Skyframe key.
  */
 public final class TestFilter implements Predicate<Target> {
   /**
    * Convert the options into a test filter.
    */
-  public static TestFilter forOptions(LoadingOptions options, EventHandler eventHandler,
+  public static TestFilter forOptions(Options options, EventHandler eventHandler,
       Set<String> ruleNames) {
     Predicate<Target> testFilter = Predicates.alwaysTrue();
     if (!options.testSizeFilterSet.isEmpty()) {
@@ -49,7 +49,7 @@ public final class TestFilter implements Predicate<Target> {
     }
     if (!options.testTagFilterList.isEmpty()) {
       testFilter = Predicates.and(testFilter,
-          TargetUtils.tagFilter(options.testTagFilterList));
+          TestTargetUtils.tagFilter(options.testTagFilterList));
     }
     if (!options.testLangFilterList.isEmpty()) {
       testFilter = Predicates.and(testFilter,
