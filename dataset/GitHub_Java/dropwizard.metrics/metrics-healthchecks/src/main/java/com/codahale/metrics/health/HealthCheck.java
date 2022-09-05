@@ -106,7 +106,7 @@ public abstract class HealthCheck {
         private final String message;
         private final Throwable error;
         private final Map<String, Object> details;
-        private final long time;
+        private final String timestamp;
 
         private long duration; // Calculated field
 
@@ -123,7 +123,12 @@ public abstract class HealthCheck {
             this.message = message;
             this.error = error;
             this.details = details == null ? null : Collections.unmodifiableMap(details);
-            this.time = clock.getTime();
+            this.timestamp = DATE_FORMAT_PATTERN.format(currentTimeFrom(clock));
+        }
+
+        private static ZonedDateTime currentTimeFrom(Clock clock) {
+            Instant currentInstant = Instant.ofEpochMilli(clock.getTime());
+            return ZonedDateTime.ofInstant(currentInstant, ZoneId.systemDefault());
         }
 
         /**
@@ -156,23 +161,12 @@ public abstract class HealthCheck {
         }
 
         /**
-         * Returns the timestamp when the result was created as a formatted String.
+         * Returns the timestamp when the result was created.
          *
          * @return a formatted timestamp
          */
         public String getTimestamp() {
-            Instant currentInstant = Instant.ofEpochMilli(time);
-            ZonedDateTime zonedDateTime = ZonedDateTime.ofInstant(currentInstant, ZoneId.systemDefault());
-            return DATE_FORMAT_PATTERN.format(zonedDateTime);
-        }
-
-        /**
-         * Returns the time when the result was created, in milliseconds since Epoch
-         *
-         * @return the time when the result was created
-         */
-        public long getTime() {
-            return time;
+            return timestamp;
         }
 
         /**
@@ -209,7 +203,7 @@ public abstract class HealthCheck {
             return healthy == result.healthy &&
                     !(error != null ? !error.equals(result.error) : result.error != null) &&
                     !(message != null ? !message.equals(result.message) : result.message != null) &&
-                    time == result.time;
+                    !(timestamp != null ? !timestamp.equals(result.timestamp) : result.timestamp != null);
         }
 
         @Override
@@ -217,7 +211,7 @@ public abstract class HealthCheck {
             int result = healthy ? 1 : 0;
             result = PRIME * result + (message != null ? message.hashCode() : 0);
             result = PRIME * result + (error != null ? error.hashCode() : 0);
-            result = PRIME * result + (Long.hashCode(time));
+            result = PRIME * result + (timestamp != null ? timestamp.hashCode() : 0);
             return result;
         }
 
@@ -232,7 +226,7 @@ public abstract class HealthCheck {
                 builder.append(", error=").append(error);
             }
             builder.append(", duration=").append(duration);
-            builder.append(", timestamp=").append(getTimestamp());
+            builder.append(", timestamp=").append(timestamp);
             if (details != null) {
                 for (Map.Entry<String, Object> e : details.entrySet()) {
                     builder.append(", ");
