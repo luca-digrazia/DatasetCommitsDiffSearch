@@ -1,17 +1,14 @@
 package org.hswebframework.web.starter.convert;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONPObject;
 import com.alibaba.fastjson.parser.ParserConfig;
-import com.alibaba.fastjson.parser.deserializer.JavaBeanDeserializer;
-import com.alibaba.fastjson.parser.deserializer.ObjectDeserializer;
-import com.alibaba.fastjson.serializer.PropertyFilter;
-import com.alibaba.fastjson.serializer.SerializeFilter;
+import com.alibaba.fastjson.serializer.PropertyPreFilter;
 import com.alibaba.fastjson.serializer.SerializerFeature;
 import com.alibaba.fastjson.serializer.SimplePropertyPreFilter;
 import org.hswebframework.web.ThreadLocalUtils;
 import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
-import org.hswebframework.web.commons.model.Model;
 import org.hswebframework.web.controller.message.ResponseMessage;
 import org.hswebframwork.utils.StringUtils;
 import org.springframework.http.HttpInputMessage;
@@ -25,8 +22,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.Type;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +29,11 @@ import java.util.Map;
 import java.util.Set;
 
 public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<Object> {
+
+    static {
+        // TODO: 17-3-16  白名单应可配置
+        ParserConfig.getGlobalInstance().addAccept("org.hswebframework.web.entity.");
+    }
 
     public final static Charset UTF8 = Charset.forName("UTF-8");
 
@@ -83,9 +83,9 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
 
     public Object readByBytes(Class<?> clazz, byte[] bytes) {
         if (clazz == String.class) return new String(bytes, charset);
-        if (entityFactory != null && (Entity.class.isAssignableFrom(clazz) || Model.class.isAssignableFrom(clazz))) {
+        if (entityFactory != null && Entity.class.isAssignableFrom(clazz)) {
             @SuppressWarnings("unchecked")
-            Class tmp = entityFactory.getInstanceType(clazz);
+            Class<Entity> tmp = entityFactory.getInstanceType((Class<Entity>) clazz);
             if (tmp != null) clazz = tmp;
         }
         return JSON.parseObject(bytes, 0, bytes.length, charset.newDecoder(), clazz);
@@ -138,8 +138,8 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
         out.flush();
     }
 
-    protected static SerializeFilter[] parseFilter(ResponseMessage<?> responseMessage) {
-        List<SerializeFilter> filters = new ArrayList<>();
+    protected PropertyPreFilter[] parseFilter(ResponseMessage<?> responseMessage) {
+        List<PropertyPreFilter> filters = new ArrayList<>();
         if (responseMessage.getIncludes() != null)
             for (Map.Entry<Class<?>, Set<String>> classSetEntry : responseMessage.getIncludes().entrySet()) {
                 SimplePropertyPreFilter filter = new SimplePropertyPreFilter(classSetEntry.getKey());
@@ -152,11 +152,7 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
                 filter.getExcludes().addAll(classSetEntry.getValue());
                 filters.add(filter);
             }
-        PropertyFilter responseMessageFilter = (object, name, value) ->
-                !(object instanceof ResponseMessage) || value != null;
-        filters.add(responseMessageFilter);
-
-        return filters.toArray(new SerializeFilter[filters.size()]);
+        return filters.toArray(new PropertyPreFilter[filters.size()]);
     }
 
 }

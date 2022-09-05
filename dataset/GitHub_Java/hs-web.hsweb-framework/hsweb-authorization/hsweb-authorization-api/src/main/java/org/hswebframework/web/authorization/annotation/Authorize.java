@@ -89,8 +89,4 @@ public @interface Authorize {
      */
     Logical logical() default Logical.DEFAULT;
 
-    /**
-     * @return 是否忽略, 忽略后将不进行权限控制
-     */
-    boolean ignore() default false;
 }

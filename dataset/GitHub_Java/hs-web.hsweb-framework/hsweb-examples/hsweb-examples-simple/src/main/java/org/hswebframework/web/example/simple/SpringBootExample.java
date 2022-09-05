@@ -17,23 +17,19 @@
 
 package org.hswebframework.web.example.simple;
 
-import com.alibaba.fastjson.JSON;
 import org.hsweb.ezorm.rdb.executor.AbstractJdbcSqlExecutor;
 import org.hsweb.ezorm.rdb.executor.SqlExecutor;
-import org.hswebframework.web.authorization.Authentication;
+import org.hswebframework.web.authorization.Authorization;
 import org.hswebframework.web.authorization.Permission;
-import org.hswebframework.web.authorization.access.DataAccessConfig;
-import org.hswebframework.web.authorization.oauth2.server.entity.OAuth2ClientEntity;
-import org.hswebframework.web.authorization.simple.SimpleFieldFilterDataAccessConfig;
+import org.hswebframework.web.authorization.access.DataAccess;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
+import org.hswebframework.web.dao.authorization.oauth2.OAuth2ClientDao;
 import org.hswebframework.web.dao.datasource.DataSourceHolder;
 import org.hswebframework.web.dao.datasource.DatabaseType;
-import org.hswebframework.web.dao.oauth2.OAuth2ClientDao;
 import org.hswebframework.web.entity.authorization.*;
 import org.hswebframework.web.entity.authorization.bind.BindPermissionRoleEntity;
 import org.hswebframework.web.entity.authorization.bind.BindRoleUserEntity;
-import org.hswebframework.web.loggin.aop.EnableAccessLogger;
-import org.hswebframework.web.logging.AccessLoggerListener;
+import org.hswebframework.web.entity.authorization.oauth2.OAuth2ClientEntity;
 import org.hswebframework.web.service.authorization.PermissionService;
 import org.hswebframework.web.service.authorization.RoleService;
 import org.hswebframework.web.service.authorization.UserService;
@@ -42,10 +38,8 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.jdbc.datasource.DataSourceUtils;
 import springfox.documentation.builders.ApiInfoBuilder;
 import springfox.documentation.builders.PathSelectors;
@@ -62,7 +56,6 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Arrays;
-import java.util.Collections;
 
 /**
  * TODO 完成注释
@@ -72,22 +65,14 @@ import java.util.Collections;
 @SpringBootApplication
 @Configuration
 @EnableSwagger2
-@EnableCaching
-@EnableAspectJAutoProxy
-@EnableAccessLogger
 public class SpringBootExample implements CommandLineRunner {
-
-    @Bean
-    public AccessLoggerListener accessLoggerListener() {
-        return loggerInfo -> System.out.println("有请求啦:" + JSON.toJSONString(loggerInfo.getAction()));
-    }
 
     @Bean
     public Docket createRestApi() {
         return new Docket(DocumentationType.SWAGGER_2)
                 .apiInfo(apiInfo())
                 .groupName("example")
-                .ignoredParameterTypes(HttpSession.class, Authentication.class, HttpServletRequest.class, HttpServletResponse.class)
+                .ignoredParameterTypes(HttpSession.class, Authorization.class, HttpServletRequest.class, HttpServletResponse.class)
                 .select()
                 .apis(RequestHandlerSelectors.basePackage("org.hswebframework.web"))
                 .paths(PathSelectors.any())
@@ -131,8 +116,9 @@ public class SpringBootExample implements CommandLineRunner {
     PermissionService permissionService;
     @Autowired
     EntityFactory     entityFactory;
+
     @Autowired
-    OAuth2ClientDao   oAuth2ClientDao;
+    OAuth2ClientDao oAuth2ClientDao;
 
     public static void main(String[] args) {
         SpringApplication.run(SpringBootExample.class);
@@ -142,33 +128,33 @@ public class SpringBootExample implements CommandLineRunner {
     public void run(String... strings) throws Exception {
         //只能查询自己创建的数据
         DataAccessEntity accessEntity = new DataAccessEntity();
-        accessEntity.setType(DataAccessConfig.DefaultType.OWN_CREATED);
+        accessEntity.setType(DataAccess.Type.OWN_CREATED.name());
         accessEntity.setAction(Permission.ACTION_QUERY);
 
         //只能修改自己创建的数据
         DataAccessEntity updateAccessEntity = new DataAccessEntity();
-        updateAccessEntity.setType(DataAccessConfig.DefaultType.OWN_CREATED);
+        updateAccessEntity.setType(DataAccess.Type.OWN_CREATED.name());
         updateAccessEntity.setAction(Permission.ACTION_UPDATE);
+        //脚本方式自定义控制
+//        updateAccessEntity.setConfig(JSON.toJSONString(new SimpleScriptDataAccess("" +
+//                "println(id);" +
+//                "println(entity);" +
+//                "println('脚本权限控制');" +
+//                "return true;" +
+//                "","groovy")));
 
-        //不能查询password
-        DataAccessEntity denyQueryFields = new DataAccessEntity();
-        denyQueryFields.setType(DataAccessConfig.DefaultType.ALLOW_FIELDS);
-        denyQueryFields.setAction(Permission.ACTION_QUERY);
-        denyQueryFields.setConfig(JSON.toJSONString(new SimpleFieldFilterDataAccessConfig("password")));
-
-        //不能修改password
-        DataAccessEntity denyUpdateFields = new DataAccessEntity();
-        denyUpdateFields.setType(DataAccessConfig.DefaultType.ALLOW_FIELDS);
-        denyUpdateFields.setAction(Permission.ACTION_UPDATE);
-        denyUpdateFields.setConfig(JSON.toJSONString(new SimpleFieldFilterDataAccessConfig("password")));
-
+        //password 属性不能读取和修改
+        FieldAccessEntity fieldAccessEntity = new FieldAccessEntity();
+        fieldAccessEntity.setField("password");
+        fieldAccessEntity.setActions(ActionEntity.create(Permission.ACTION_QUERY, Permission.ACTION_UPDATE));
 
         PermissionEntity permission = entityFactory.newInstance(PermissionEntity.class);
         permission.setName("测试");
         permission.setId("test");
         permission.setStatus((byte) 1);
         permission.setActions(ActionEntity.create(Permission.ACTION_QUERY, Permission.ACTION_UPDATE));
-        permission.setDataAccess(Arrays.asList(accessEntity, updateAccessEntity, denyUpdateFields,denyUpdateFields));
+        permission.setDataAccess(Arrays.asList(accessEntity, updateAccessEntity));
+        permission.setFieldAccess(Arrays.asList(fieldAccessEntity));
         permissionService.insert(permission);
 
         BindPermissionRoleEntity<PermissionRoleEntity> roleEntity = entityFactory.newInstance(BindPermissionRoleEntity.class);
@@ -177,6 +163,7 @@ public class SpringBootExample implements CommandLineRunner {
         permissionRoleEntity.setPermissionId("test");
         permissionRoleEntity.setActions(Arrays.asList(Permission.ACTION_QUERY, Permission.ACTION_UPDATE));
         permissionRoleEntity.setDataAccesses(permission.getDataAccess());
+        permissionRoleEntity.setFieldAccesses(permission.getFieldAccess());
         roleEntity.setId("admin");
         roleEntity.setName("test");
         roleEntity.setPermissions(Arrays.asList(permissionRoleEntity));
@@ -202,7 +189,7 @@ public class SpringBootExample implements CommandLineRunner {
         clientEntity.setCreatorId("admin");
         clientEntity.setRedirectUri("http://localhost");
         clientEntity.setCreateTime(System.currentTimeMillis());
-        clientEntity.setSupportGrantTypes(Collections.singleton("*"));
+        clientEntity.setSupportGrantType(Arrays.asList("*"));
         oAuth2ClientDao.insert(clientEntity);
     }
 }
