@@ -13,15 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.devtools.build.lib.vfs.FileStatus;
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.Objects;
 
 /**
  * In case we can't get a fast digest from the filesystem, we store this metadata as a proxy to
  * the file contents. Currently it is a pair of the mtime and "value id" (which is right now just
- * the inode number). We may wish to augment this object with the following data:
+ * the ivalue number). We may wish to augment this object with the following data:
  * a. the device number
  * b. the ctime, which cannot be tampered with in userspace
  *
@@ -33,17 +31,13 @@ public final class FileContentsProxy implements Serializable {
   private final long mtime;
   private final long valueId;
 
-  /**
-   * Visible for serialization / deserialization. Do not use this method, but call {@link #create}
-   * instead.
-   */
   public FileContentsProxy(long mtime, long valueId) {
     this.mtime = mtime;
     this.valueId = valueId;
   }
 
-  public static FileContentsProxy create(FileStatus stat) throws IOException {
-    return new FileContentsProxy(stat.getLastModifiedTime(), stat.getNodeId());
+  public static FileContentsProxy create(long mtime, long valueId) {
+    return new FileContentsProxy(mtime, valueId);
   }
 
   public long getMtime() {
@@ -79,7 +73,6 @@ public final class FileContentsProxy implements Serializable {
   }
 
   public String prettyPrint() {
-    return String.format("mtime of %d and valueId of %d", mtime, valueId);
+    return String.format("mtime of %d and nodeId of %d", mtime, valueId);
   }
 }
-
