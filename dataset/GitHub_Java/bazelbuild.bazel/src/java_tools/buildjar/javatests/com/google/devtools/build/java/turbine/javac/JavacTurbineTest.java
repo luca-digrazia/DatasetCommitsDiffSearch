@@ -15,7 +15,6 @@
 package com.google.devtools.build.java.turbine.javac;
 
 import static com.google.common.truth.Truth.assertThat;
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
@@ -29,12 +28,7 @@ import com.google.devtools.build.java.turbine.javac.JavacTurbine.Result;
 import com.google.devtools.build.lib.view.proto.Deps;
 import com.google.devtools.build.lib.view.proto.Deps.Dependency;
 
-import com.sun.source.tree.LiteralTree;
 import com.sun.source.util.JavacTask;
-import com.sun.source.util.TaskEvent;
-import com.sun.source.util.TaskEvent.Kind;
-import com.sun.source.util.TaskListener;
-import com.sun.source.util.TreeScanner;
 import com.sun.tools.javac.api.ClientCodeWrapper.Trusted;
 import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.file.JavacFileManager;
@@ -58,6 +52,7 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -68,7 +63,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -77,7 +71,6 @@ import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
 
 import javax.annotation.processing.AbstractProcessor;
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.lang.model.SourceVersion;
@@ -127,7 +120,7 @@ public class JavacTurbineTest {
   private void addSourceLines(String path, String... lines) throws IOException {
     Path source = sourcedir.resolve(path);
     sources.add(source);
-    Files.write(source, Arrays.asList(lines), UTF_8);
+    Files.write(source, Arrays.asList(lines), StandardCharsets.UTF_8);
   }
 
   void compile() throws IOException {
@@ -238,7 +231,7 @@ public class JavacTurbineTest {
       try {
         JavaFileObject sourceFile = processingEnv.getFiler().createSourceFile("Generated", element);
         try (OutputStream os = sourceFile.openOutputStream()) {
-          os.write("public class Generated {}".getBytes(UTF_8));
+          os.write("public class Generated {}".getBytes(StandardCharsets.UTF_8));
         }
       } catch (IOException e) {
         throw new IOError(e);
@@ -249,7 +242,7 @@ public class JavacTurbineTest {
                 .getFiler()
                 .createResource(StandardLocation.CLASS_OUTPUT, "com.foo", "hello.txt", element);
         try (OutputStream os = file.openOutputStream()) {
-          os.write("hello".getBytes(UTF_8));
+          os.write("hello".getBytes(StandardCharsets.UTF_8));
         }
       } catch (IOException e) {
         throw new IOError(e);
@@ -462,7 +455,7 @@ public class JavacTurbineTest {
       Path jar, Iterable<Path> classpath, Iterable<? extends JavaFileObject> units)
       throws IOException {
     final Path outdir = temp.newFolder().toPath();
-    JavacFileManager fm = new JavacFileManager(new Context(), false, UTF_8);
+    JavacFileManager fm = new JavacFileManager(new Context(), false, StandardCharsets.UTF_8);
     fm.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, Collections.singleton(outdir));
     fm.setLocationFromPaths(StandardLocation.CLASS_PATH, classpath);
     List<String> options = Arrays.asList("-d", outdir.toString());
@@ -802,9 +795,10 @@ public class JavacTurbineTest {
       try {
         JavaFileObject sourceFile = processingEnv.getFiler().createSourceFile("Generated", element);
         try (OutputStream os = sourceFile.openOutputStream()) {
-          os.write("class Generated { public static String x = \"".getBytes(UTF_8));
+          os.write(
+              "class Generated { public static String x = \"".getBytes(StandardCharsets.UTF_8));
           os.write(0xc2); // write an unpaired surrogate
-          os.write("\";}}".getBytes(UTF_8));
+          os.write("\";}}".getBytes(StandardCharsets.UTF_8));
         }
       } catch (IOException e) {
         throw new IOError(e);
@@ -942,7 +936,7 @@ public class JavacTurbineTest {
                 .getFiler()
                 .createResource(StandardLocation.CLASS_OUTPUT, "", "result.txt");
         try (OutputStream os = fileObject.openOutputStream()) {
-          os.write(message.getBytes(UTF_8));
+          os.write(message.getBytes(StandardCharsets.UTF_8));
         }
       } catch (IOException e) {
         throw new IOError(e);
@@ -957,7 +951,15 @@ public class JavacTurbineTest {
     addSourceLines("Hello.java", "@MyAnnotation class Hello {}");
 
     // create a jar containing only HostClasspathProcessor
-    Path processorJar = createClassJar("libprocessor.jar", HostClasspathProcessor.class);
+    Path processorJar = temp.newFile("libprocessor.jar").toPath();
+    try (OutputStream os = Files.newOutputStream(processorJar);
+        JarOutputStream jos = new JarOutputStream(os)) {
+      String classFileName = HostClasspathProcessor.class.getName().replace('.', '/') + ".class";
+      jos.putNextEntry(new JarEntry(classFileName));
+      try (InputStream is = getClass().getClassLoader().getResourceAsStream(classFileName)) {
+        ByteStreams.copy(is, jos);
+      }
+    }
 
     optionsBuilder.addProcessors(ImmutableList.of(HostClasspathProcessor.class.getName()));
     optionsBuilder.addProcessorPathEntries(ImmutableList.of(processorJar.toString()));
@@ -968,26 +970,11 @@ public class JavacTurbineTest {
     Map<String, byte[]> outputs = collectOutputs();
     assertThat(outputs.keySet()).contains("result.txt");
 
-    String text = new String(outputs.get("result.txt"), UTF_8);
+    String text = new String(outputs.get("result.txt"), StandardCharsets.UTF_8);
     assertThat(text)
         .contains(
             "java.lang.NoClassDefFoundError:"
                 + " com/google/devtools/build/java/turbine/javac/JavacTurbine");
-  }
-
-  private Path createClassJar(String jarName, Class<?>... classes) throws IOException {
-    Path jarPath = temp.newFile(jarName).toPath();
-    try (OutputStream os = Files.newOutputStream(jarPath);
-        JarOutputStream jos = new JarOutputStream(os)) {
-      for (Class<?> clazz : classes) {
-        String classFileName = clazz.getName().replace('.', '/') + ".class";
-        jos.putNextEntry(new JarEntry(classFileName));
-        try (InputStream is = getClass().getClassLoader().getResourceAsStream(classFileName)) {
-          ByteStreams.copy(is, jos);
-        }
-      }
-    }
-    return jarPath;
   }
 
   @Test
@@ -996,14 +983,14 @@ public class JavacTurbineTest {
     try (OutputStream os = Files.newOutputStream(sourceJar1);
         JarOutputStream jos = new JarOutputStream(os)) {
       jos.putNextEntry(new JarEntry("Hello.java"));
-      jos.write("public class Hello {}".getBytes(UTF_8));
+      jos.write("public class Hello {}".getBytes(StandardCharsets.UTF_8));
     }
 
     Path sourceJar2 = temp.newFile("srcs2.jar").toPath();
     try (OutputStream os = Files.newOutputStream(sourceJar2);
         JarOutputStream jos = new JarOutputStream(os)) {
       jos.putNextEntry(new JarEntry("Hello.java"));
-      jos.write("public class Hello {}".getBytes(UTF_8));
+      jos.write("public class Hello {}".getBytes(StandardCharsets.UTF_8));
     }
 
     optionsBuilder.setSourceJars(ImmutableList.of(sourceJar2.toString(), sourceJar1.toString()));
@@ -1102,138 +1089,5 @@ public class JavacTurbineTest {
     compile();
     Map<String, byte[]> outputs = collectOutputs();
     assertThat(outputs.keySet()).containsExactly("dummy");
-  }
-
-  /** An annotation processor that violates the contract. */
-  @SupportedAnnotationTypes("*")
-  public static class MisguidedAnnotationProcessor extends AbstractProcessor {
-
-    public final class Scanner extends TreeScanner<Void, Void> {
-      @Override
-      public Void visitLiteral(LiteralTree tree, Void unused) {
-        values.add(tree.getValue());
-        return null;
-      }
-    }
-
-    public final class Listener implements TaskListener {
-
-      public final ProcessingEnvironment processingEnv;
-
-      Listener(ProcessingEnvironment processingEnv) {
-        this.processingEnv = processingEnv;
-      }
-
-      @Override
-      public void started(TaskEvent e) {}
-
-      @Override
-      public void finished(TaskEvent e) {
-        if (e.getKind() == Kind.ANALYZE) {
-          e.getCompilationUnit().accept(new Scanner(), null);
-        } else if (e.getKind() == Kind.GENERATE) {
-          try {
-            FileObject file =
-                processingEnv
-                    .getFiler()
-                    .createResource(
-                        StandardLocation.CLASS_OUTPUT, "", "output.txt", e.getTypeElement());
-            try (OutputStream os = file.openOutputStream()) {
-              os.write(values.toString().getBytes(UTF_8));
-            }
-          } catch (IOException exception) {
-            throw new IOError(exception);
-          }
-        }
-      }
-    }
-
-    public final Set<Object> values = new LinkedHashSet<>();
-
-    @Override
-    public SourceVersion getSupportedSourceVersion() {
-      return SourceVersion.latest();
-    }
-
-    @Override
-    public synchronized void init(final ProcessingEnvironment processingEnv) {
-      JavacTask.instance(processingEnv).addTaskListener(new Listener(processingEnv));
-    }
-
-    @Override
-    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-      return false;
-    }
-  }
-
-  void setupMisguidedProcessor() throws Exception {
-    addSourceLines(
-        "Hello.java",
-        "@Deprecated class Hello {",
-        "  int x = 42;",
-        "  String s = \"hello\";",
-        "  double y = 42.1;",
-        "}");
-
-    Path processorJar =
-        createClassJar(
-            "libprocessor.jar",
-            MisguidedAnnotationProcessor.class,
-            MisguidedAnnotationProcessor.Listener.class,
-            MisguidedAnnotationProcessor.Scanner.class);
-
-    optionsBuilder.addProcessors(ImmutableList.of(MisguidedAnnotationProcessor.class.getName()));
-    optionsBuilder.addProcessorPathEntries(ImmutableList.of(processorJar.toString()));
-  }
-
-  @Test
-  public void misguidedProcessor_pruning() throws Exception {
-    setupMisguidedProcessor();
-    compile();
-    Map<String, byte[]> outputs = collectOutputs();
-
-    assertThat(outputs.keySet()).containsExactly("Hello.class", "output.txt");
-    String output = new String(outputs.get("output.txt"), UTF_8);
-    assertThat(output).isEqualTo("[]");
-  }
-
-  @Test
-  public void misguidedProcessor() throws Exception {
-    setupMisguidedProcessor();
-    optionsBuilder.addBlacklistedProcessors(
-        ImmutableList.of(MisguidedAnnotationProcessor.class.getName()));
-    compile();
-    Map<String, byte[]> outputs = collectOutputs();
-
-    assertThat(outputs.keySet()).containsExactly("Hello.class", "output.txt");
-    String output = new String(outputs.get("output.txt"), UTF_8);
-    assertThat(output).isEqualTo("[42, hello, 42.1]");
-  }
-
-  public static class TransitiveDep {}
-
-  public static class DirectDep extends TransitiveDep {}
-
-  @Test
-  public void noNativeHeaderOutput() throws Exception {
-
-    // deliberately exclude TransitiveDep
-    Path deps = createClassJar("libdeps.jar", JavacTurbineTest.class, DirectDep.class);
-
-    // compilation will complete supertypes of DirectDep iff NATIVE_HEADER_OUTPUT is set
-    addSourceLines(
-        "Hello.java",
-        "import " + DirectDep.class.getCanonicalName() + ";",
-        "class Hello {",
-        "  public native DirectDep foo() /*-{",
-        "  }-*/;",
-        "}");
-
-    optionsBuilder.addClassPathEntries(Collections.singleton(deps.toString()));
-    optionsBuilder.addDirectJarToTarget(deps.toString(), "//deps");
-
-    compile();
-    Map<String, byte[]> outputs = collectOutputs();
-    assertThat(outputs.keySet()).containsExactly("Hello.class");
   }
 }
