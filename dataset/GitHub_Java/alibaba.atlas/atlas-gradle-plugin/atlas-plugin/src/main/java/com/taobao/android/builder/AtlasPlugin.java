@@ -254,6 +254,12 @@ public class AtlasPlugin extends AtlasBasePlugin {
                 multiDex.put("module", "multidex");
                 project1.getConfigurations().all(configuration -> configuration.exclude(multiDex));
 
+                if (AtlasBuildContext.sBuilderAdapter.addAtlasDependency){
+                    project.getDependencies().add("compile", "com.taobao.android:atlasupdate:1.1.4.5");
+                    project.getDependencies().add("compile", "com.taobao.android:atlas_core:5.0.6-rc21@aar");
+                }
+
+
             }
 
             Plugin plugin = project.getPlugins().findPlugin("kotlin-android");
@@ -264,7 +270,7 @@ public class AtlasPlugin extends AtlasBasePlugin {
             atlasConfigurationHelper.registAtlasStreams();
 
 
-            atlasConfigurationHelper.configDependencies(atlasExtension.getTBuildConfig().getAwbConfigFile());
+            atlasConfigurationHelper.configDependencies();
 
 
             //3. update extension
