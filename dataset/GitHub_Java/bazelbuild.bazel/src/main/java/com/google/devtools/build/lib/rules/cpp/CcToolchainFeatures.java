@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariableValue;
+import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import java.io.IOException;
@@ -351,7 +352,6 @@ public class CcToolchainFeatures implements Serializable {
     private final ImmutableSet<String> usedVariables;
     private String iterateOverVariable;
     private final ImmutableSet<String> expandIfAllAvailable;
-    private final ImmutableSet<String> expandIfNoneAvailable;
     private final String expandIfTrue;
     private final String expandIfFalse;
     private final VariableWithValue expandIfEqual;
@@ -390,7 +390,6 @@ public class CcToolchainFeatures implements Serializable {
       this.usedVariables = usedVariables.build();
       this.expandables = expandables.build();
       this.expandIfAllAvailable = ImmutableSet.copyOf(flagGroup.getExpandIfAllAvailableList());
-      this.expandIfNoneAvailable = ImmutableSet.copyOf(flagGroup.getExpandIfNoneAvailableList());
       this.expandIfTrue = Strings.emptyToNull(flagGroup.getExpandIfTrue());
       this.expandIfFalse = Strings.emptyToNull(flagGroup.getExpandIfFalse());
       if (flagGroup.hasExpandIfEqual()) {
@@ -428,11 +427,6 @@ public class CcToolchainFeatures implements Serializable {
     private boolean canBeExpanded(Variables variables) {
       for (String variable : expandIfAllAvailable) {
         if (!variables.isAvailable(variable)) {
-          return false;
-        }
-      }
-      for (String variable : expandIfNoneAvailable) {
-        if (variables.isAvailable(variable)) {
           return false;
         }
       }
@@ -1518,7 +1512,12 @@ public class CcToolchainFeatures implements Serializable {
      *     accessing a field of non-structured variable
      */
     public VariableValue getVariable(String name) {
-      return lookupVariable(name, true);
+      Pair<VariableValue, String> pair = lookupVariable(name);
+      if (pair.getFirst() == null) {
+        throw new ExpansionException(pair.getSecond());
+      } else {
+        return pair.getFirst();
+      }
     }
 
     /**
@@ -1528,73 +1527,17 @@ public class CcToolchainFeatures implements Serializable {
      * @return Pair<VariableValue, String> returns either (variable value, null) or (null, string
      *     reason why variable was not found)
      */
-    private VariableValue lookupVariable(String name, boolean throwOnMissingVariable) {
-      VariableValue nonStructuredVariable = getNonStructuredVariable(name);
-      if (nonStructuredVariable != null) {
-        return nonStructuredVariable;
+    private Pair<VariableValue, String> lookupVariable(String name) {
+      Pair<VariableValue, String> nonStructuredPair = getNonStructuredVariable(name);
+      if (nonStructuredPair.getFirst() != null) {
+        return nonStructuredPair;
       }
-      VariableValue structuredVariable = getStructureVariable(name, throwOnMissingVariable);
-      if (structuredVariable != null) {
-        return structuredVariable;
-      } else if (throwOnMissingVariable) {
-        throw new ExpansionException(
-            String.format(
-                "Invalid toolchain configuration: Cannot find variable named '%s'.", name));
+      Pair<VariableValue, String> structuredPair = getStructureVariable(name);
+      if (structuredPair.getFirst() != null || structuredPair.getSecond() != null) {
+        return structuredPair;
       } else {
-        return null;
+        return nonStructuredPair;
       }
-    }
-
-    private VariableValue getNonStructuredVariable(String name) {
-      if (variablesMap.containsKey(name)) {
-        return variablesMap.get(name);
-      }
-      if (stringVariablesMap.containsKey(name)) {
-        return new StringValue(stringVariablesMap.get(name));
-      }
-
-      if (parent != null) {
-        return parent.getNonStructuredVariable(name);
-      }
-
-      return null;
-    }
-
-    private VariableValue getStructureVariable(String name, boolean throwOnMissingVariable) {
-      if (!name.contains(".")) {
-        return null;
-      }
-
-      Stack<String> fieldsToAccess = new Stack<>();
-      String structPath = name;
-      VariableValue variable;
-
-      do {
-        fieldsToAccess.push(structPath.substring(structPath.lastIndexOf('.') + 1));
-        structPath = structPath.substring(0, structPath.lastIndexOf('.'));
-        variable = getNonStructuredVariable(structPath);
-      } while (variable == null && structPath.contains("."));
-
-      if (variable == null) {
-        return null;
-      }
-
-      while (!fieldsToAccess.empty()) {
-        String field = fieldsToAccess.pop();
-        variable = variable.getFieldValue(structPath, field);
-        if (variable == null) {
-          if (throwOnMissingVariable) {
-            throw new ExpansionException(
-                String.format(
-                    "Invalid toolchain configuration: Cannot expand variable '%s.%s': structure %s "
-                        + "doesn't have a field named '%s'",
-                    structPath, field, structPath, field));
-          } else {
-            return null;
-          }
-        }
-      }
-      return variable;
     }
 
     public String getStringVariable(String variableName) {
@@ -1605,10 +1548,62 @@ public class CcToolchainFeatures implements Serializable {
       return getVariable(variableName).getSequenceValue(variableName);
     }
 
+    private Pair<VariableValue, String> getNonStructuredVariable(String name) {
+      if (variablesMap.containsKey(name)) {
+        return Pair.of(variablesMap.get(name), null);
+      }
+      if (stringVariablesMap.containsKey(name)) {
+        return Pair.<VariableValue, String>of(new StringValue(stringVariablesMap.get(name)), null);
+      }
+
+      if (parent != null) {
+        return parent.getNonStructuredVariable(name);
+      }
+
+      return Pair.of(
+          null,
+          String.format("Invalid toolchain configuration: Cannot find variable named '%s'.", name));
+    }
+
+    private Pair<VariableValue, String> getStructureVariable(String name) {
+      if (!name.contains(".")) {
+        return Pair.of(null, null);
+      }
+
+      Stack<String> fieldsToAccess = new Stack<>();
+      String structPath = name;
+      Pair<VariableValue, String> pair;
+
+      do {
+        fieldsToAccess.push(structPath.substring(structPath.lastIndexOf('.') + 1));
+        structPath = structPath.substring(0, structPath.lastIndexOf('.'));
+        pair = getNonStructuredVariable(structPath);
+      } while (pair.getFirst() == null && structPath.contains("."));
+
+      if (pair.getFirst() == null) {
+        return pair;
+      }
+
+      VariableValue structure = pair.getFirst();
+      while (!fieldsToAccess.empty()) {
+        String field = fieldsToAccess.pop();
+        structure = structure.getFieldValue(structPath, field);
+        if (structure == null) {
+          return Pair.of(
+              null,
+              String.format(
+                  "Invalid toolchain configuration: Cannot expand variable '%s.%s': structure %s "
+                      + "doesn't have a field named '%s'",
+                  structPath, field, structPath, field));
+        }
+      }
+      return Pair.of(structure, null);
+    }
+
     private String guessIteratedOverVariable(ImmutableSet<String> usedVariables) {
       String sequenceName = null;
       for (String usedVariable : usedVariables) {
-        VariableValue variableValue = lookupVariable(usedVariable, false);
+        VariableValue variableValue = lookupVariable(usedVariable).getFirst();
         if (variableValue != null && variableValue.isSequence()) {
           if (sequenceName != null) {
             throw new ExpansionException(
@@ -1628,7 +1623,7 @@ public class CcToolchainFeatures implements Serializable {
 
     /** Returns whether {@code variable} is set. */
     boolean isAvailable(String variable) {
-      return lookupVariable(variable, false) != null;
+      return lookupVariable(variable).getFirst() != null;
     }
   }
   

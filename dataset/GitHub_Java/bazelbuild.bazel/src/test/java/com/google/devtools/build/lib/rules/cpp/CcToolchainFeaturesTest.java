@@ -28,11 +28,9 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionExce
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.IntegerValue;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.LibraryToLinkValue;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.SequenceBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.StringSequenceBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.StructureBuilder;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariableValue;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariableValueBuilder;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
@@ -528,39 +526,6 @@ public class CcToolchainFeaturesTest {
   }
 
   @Test
-  public void testExpandIfNoneAvailableExpandsIfNotAvailable() throws Exception {
-    assertThat(
-        getCommandLineForFlagGroups(
-            "flag_group {"
-                + "  flag_group {"
-                + "    expand_if_none_available: 'not_available'"
-                + "    flag: '-foo'"
-                + "  }"
-                + "  flag_group { "
-                + "    expand_if_none_available: 'available'"
-                + "    flag: '-bar'"
-                + "  }"
-                + "}",
-            createVariables("available", "available")))
-        .containsExactly("-foo");
-  }
-
-  @Test
-  public void testExpandIfNoneAvailableDoesntExpandIfThereIsOneOfManyAvailable() throws Exception {
-    assertThat(
-        getCommandLineForFlagGroups(
-            "flag_group {"
-                + "  flag_group {"
-                + "    expand_if_none_available: 'not_available'"
-                + "    expand_if_none_available: 'available'"
-                + "    flag: '-foo'"
-                + "  }"
-                + "}",
-            createVariables("available", "available")))
-        .isEmpty();
-  }
-
-  @Test
   public void testExpandIfTrueDoesntExpandIfMissing() throws Exception {
     assertThat(
         getCommandLineForFlagGroups(
@@ -1040,109 +1005,6 @@ public class CcToolchainFeaturesTest {
     assertThat(features.getFeatureConfiguration("b").getCommandLine(CppCompileAction.CPP_COMPILE,
         createVariables("v", "1"))).containsExactly("-f", "1");
   }
-  
-  @Test
-  public void testDefaultFeatures() throws Exception {
-    CcToolchainFeatures features =
-        buildFeatures("feature { name: 'a' }", "feature { name: 'b' enabled: true }");
-    assertThat(features.getDefaultFeatures()).containsExactly("b");
-  }
-
-  @Test
-  public void testWithFeature_OneSetOneFeature() throws Exception {
-    CcToolchainFeatures features =
-        buildFeatures(
-            "feature {",
-            "  name: 'a'",
-            "  flag_set {",
-            "    with_feature {feature: 'b'}",
-            "    action: 'c++-compile'",
-            "    flag_group {",
-            "      flag: 'dummy_flag'",
-            "    }",
-            "  }",
-            "}",
-            "feature {name: 'b'}");
-    assertThat(
-            features
-                .getFeatureConfiguration("a", "b")
-                .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .containsExactly("dummy_flag");
-    assertThat(
-            features
-                .getFeatureConfiguration("a")
-                .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .doesNotContain("dummy_flag");
-  }
-
-  @Test
-  public void testWithFeature_OneSetMultipleFeatures() throws Exception {
-    CcToolchainFeatures features =
-        buildFeatures(
-            "feature {",
-            "  name: 'a'",
-            "  flag_set {",
-            "    with_feature {feature: 'b', feature: 'c'}",
-            "    action: 'c++-compile'",
-            "    flag_group {",
-            "      flag: 'dummy_flag'",
-            "    }",
-            "  }",
-            "}",
-            "feature {name: 'b'}",
-            "feature {name: 'c'}");
-    assertThat(
-            features
-                .getFeatureConfiguration("a", "b", "c")
-                .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .containsExactly("dummy_flag");
-    assertThat(
-            features
-                .getFeatureConfiguration("a", "b")
-                .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .doesNotContain("dummy_flag");
-    assertThat(
-            features
-                .getFeatureConfiguration("a")
-                .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .doesNotContain("dummy_flag");
-  }
-
-  @Test
-  public void testWithFeature_MulipleSetsMultipleFeatures() throws Exception {
-    CcToolchainFeatures features =
-        buildFeatures(
-            "feature {",
-            "  name: 'a'",
-            "  flag_set {",
-            "    with_feature {feature: 'b1', feature: 'c1'}",
-            "    with_feature {feature: 'b2', feature: 'c2'}",
-            "    action: 'c++-compile'",
-            "    flag_group {",
-            "      flag: 'dummy_flag'",
-            "    }",
-            "  }",
-            "}",
-            "feature {name: 'b1'}",
-            "feature {name: 'c1'}",
-            "feature {name: 'b2'}",
-            "feature {name: 'c2'}");
-    assertThat(
-            features
-                .getFeatureConfiguration("a", "b1", "c1", "b2", "c2")
-                .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .containsExactly("dummy_flag");
-    assertThat(
-            features
-                .getFeatureConfiguration("a", "b1", "c1")
-                .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .containsExactly("dummy_flag");
-    assertThat(
-            features
-                .getFeatureConfiguration("a", "b1", "b2")
-                .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .doesNotContain("dummy_flag");
-  }
 
   @Test
   public void testActivateActionConfigFromFeature() throws Exception {
@@ -1209,7 +1071,7 @@ public class CcToolchainFeaturesTest {
                 "   implies: 'action-a'",
                 "}")
             .getFeatureConfiguration("activates-action-a");
-    PathFragment crosstoolPath = PathFragment.create("crosstool/");
+    PathFragment crosstoolPath = new PathFragment("crosstool/");
     PathFragment toolPath = configuration.getToolForAction("action-a").getToolPath(crosstoolPath);
     assertThat(toolPath.toString()).isEqualTo("crosstool/toolchain/a");
   }
@@ -1251,7 +1113,7 @@ public class CcToolchainFeaturesTest {
             "  implies: 'action-a'",
             "}");
 
-    PathFragment crosstoolPath = PathFragment.create("crosstool/");
+    PathFragment crosstoolPath = new PathFragment("crosstool/");
 
     FeatureConfiguration featureAConfiguration =
         toolchainFeatures.getFeatureConfiguration("feature-a", "activates-action-a");
@@ -1310,7 +1172,7 @@ public class CcToolchainFeaturesTest {
             "  implies: 'action-a'",
             "}");
 
-    PathFragment crosstoolPath = PathFragment.create("crosstool/");
+    PathFragment crosstoolPath = new PathFragment("crosstool/");
 
     FeatureConfiguration noFeaturesConfiguration =
         toolchainFeatures.getFeatureConfiguration("activates-action-a");
@@ -1439,32 +1301,5 @@ public class CcToolchainFeaturesTest {
       assertThat(e.getMessage())
           .contains(String.format(ActionConfig.FLAG_SET_WITH_ACTION_ERROR, "c++-compile"));
     }
-  }
-
-  @Test
-  public void testLibraryToLinkValue() {
-    assertThat(
-            LibraryToLinkValue.forDynamicLibrary("foo", false)
-                .getFieldValue("LibraryToLinkValue", LibraryToLinkValue.NAME_FIELD_NAME)
-                .getStringValue(LibraryToLinkValue.NAME_FIELD_NAME))
-        .isEqualTo("foo");
-    assertThat(
-            LibraryToLinkValue.forDynamicLibrary("foo", false)
-                .getFieldValue("LibraryToLinkValue", LibraryToLinkValue.OBJECT_FILES_FIELD_NAME))
-        .isNull();
-
-    assertThat(
-            LibraryToLinkValue.forObjectFileGroup(ImmutableList.of("foo", "bar"), false)
-                .getFieldValue("LibraryToLinkValue", LibraryToLinkValue.NAME_FIELD_NAME))
-        .isNull();
-    Iterable<? extends VariableValue> objects =
-        LibraryToLinkValue.forObjectFileGroup(ImmutableList.of("foo", "bar"), false)
-            .getFieldValue("LibraryToLinkValue", LibraryToLinkValue.OBJECT_FILES_FIELD_NAME)
-            .getSequenceValue(LibraryToLinkValue.OBJECT_FILES_FIELD_NAME);
-    ImmutableList.Builder<String> objectNames = ImmutableList.builder();
-    for (VariableValue object : objects) {
-      objectNames.add(object.getStringValue("name"));
-    }
-    assertThat(objectNames.build()).containsExactly("foo", "bar");
   }
 }
