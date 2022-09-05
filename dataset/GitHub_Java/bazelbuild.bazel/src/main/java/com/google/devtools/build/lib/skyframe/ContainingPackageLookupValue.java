@@ -15,9 +15,7 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.skyframe.LegacySkyKey;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
@@ -28,7 +26,7 @@ import com.google.devtools.build.skyframe.SkyValue;
  */
 public abstract class ContainingPackageLookupValue implements SkyValue {
 
-  public static final NoContainingPackage NONE = NoContainingPackage.INSTANCE;
+  public static final NoContainingPackage NONE = new NoContainingPackage();
 
   /** Returns whether there is a containing package. */
   public abstract boolean hasContainingPackage();
@@ -37,22 +35,19 @@ public abstract class ContainingPackageLookupValue implements SkyValue {
   public abstract PackageIdentifier getContainingPackageName();
 
   /** If there is a containing package, returns its package root */
-  public abstract Root getContainingPackageRoot();
+  public abstract Path getContainingPackageRoot();
 
   public static SkyKey key(PackageIdentifier id) {
     Preconditions.checkArgument(!id.getPackageFragment().isAbsolute(), id);
-    Preconditions.checkArgument(!id.getRepository().isDefault(), id);
-    return LegacySkyKey.create(SkyFunctions.CONTAINING_PACKAGE_LOOKUP, id);
+    return new SkyKey(SkyFunctions.CONTAINING_PACKAGE_LOOKUP, id);
   }
 
-  public static ContainingPackage withContainingPackage(PackageIdentifier pkgId, Root root) {
+  public static ContainingPackage withContainingPackage(PackageIdentifier pkgId, Path root) {
     return new ContainingPackage(pkgId, root);
   }
 
   /** Value indicating there is no containing package. */
-  @AutoCodec(strategy = AutoCodec.Strategy.SINGLETON)
   public static class NoContainingPackage extends ContainingPackageLookupValue {
-    public static final NoContainingPackage INSTANCE = new NoContainingPackage();
 
     private NoContainingPackage() {}
 
@@ -67,21 +62,18 @@ public abstract class ContainingPackageLookupValue implements SkyValue {
     }
 
     @Override
-    public Root getContainingPackageRoot() {
+    public Path getContainingPackageRoot() {
       throw new IllegalStateException();
     }
   }
 
   /** A successful lookup value. */
-  @AutoCodec
   public static class ContainingPackage extends ContainingPackageLookupValue {
     private final PackageIdentifier containingPackage;
-    private final Root containingPackageRoot;
+    private final Path containingPackageRoot;
 
-    @AutoCodec.Instantiator
-    @AutoCodec.VisibleForSerialization
-    ContainingPackage(PackageIdentifier containingPackage, Root containingPackageRoot) {
-      this.containingPackage = containingPackage;
+    private ContainingPackage(PackageIdentifier pkgId, Path containingPackageRoot) {
+      this.containingPackage = pkgId;
       this.containingPackageRoot = containingPackageRoot;
     }
 
@@ -96,7 +88,7 @@ public abstract class ContainingPackageLookupValue implements SkyValue {
     }
 
     @Override
-    public Root getContainingPackageRoot() {
+    public Path getContainingPackageRoot() {
       return containingPackageRoot;
     }
 
