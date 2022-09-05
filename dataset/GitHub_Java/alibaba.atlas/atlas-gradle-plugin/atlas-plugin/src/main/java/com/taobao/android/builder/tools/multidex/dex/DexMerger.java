@@ -268,7 +268,9 @@ public class DexMerger {
     }
 
     public List<DexGroup> group() {
+
         List<DexGroup> dexGroupList = new ArrayList<>();
+
         addDexByRule(dexGroupList);
 
         addDexLimited(dexGroupList, true);
@@ -355,8 +357,7 @@ public class DexMerger {
         fistDto.firstDex = (true);
         dexDtos.add(0, fistDto);
         for (File file : fileList) {
-            if (file.getParentFile().getName().startsWith(FASTMAINDEX_JAR)) {
-                logger.warn(String.format("add %s to first dex!",file.getAbsolutePath()));
+            if (file.getParentFile().getName().equals(FASTMAINDEX_JAR)) {
                 Dex dex = jarDexMap.get(file);
                 fistDto.addDex(dex);
                 dexList.remove(dex);

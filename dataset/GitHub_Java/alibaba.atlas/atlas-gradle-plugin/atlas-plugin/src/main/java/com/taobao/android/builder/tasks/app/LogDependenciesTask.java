@@ -214,10 +214,10 @@ package com.taobao.android.builder.tasks.app;
  */
 
 import com.alibaba.fastjson.JSON;
-import com.android.build.gradle.api.BaseVariantOutput;
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.android.build.gradle.internal.api.AppVariantOutputContext;
 import com.android.build.gradle.internal.tasks.BaseTask;
+import com.android.build.gradle.internal.variant.BaseVariantOutputData;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.AtlasDependencyTree;
 import com.taobao.android.builder.dependency.output.DependencyJson;
@@ -251,15 +251,13 @@ public class LogDependenciesTask extends BaseTask {
 
         AtlasDependencyTree atlasDependencyTree = AtlasBuildContext.androidDependencyTrees.get(
             getVariantName());
+
         if (null == atlasDependencyTree) {
             return;
         }
 
         File treeFile = new File(getProject().getBuildDir(),
                                  "outputs/dependencyTree-" + getVariantName() + ".json");
-        File treeFileWithFileSize = new File(
-                getProject().getBuildDir(),
-                "outputs/dependencyTree-fileSize-" + getVariantName() + ".json");
         File dependenciesFile = new File(getProject().getBuildDir(), "outputs/dependencies.txt");
         File versionProperties = new File(getProject().getBuildDir(), "outputs/version.properties");
         File buildInfo = new File(getProject().getBuildDir(), "outputs/build.txt");
@@ -284,12 +282,6 @@ public class LogDependenciesTask extends BaseTask {
             Collections.sort(dependencyJson.getMainDex());
 
             FileUtils.write(treeFile, JSON.toJSONString(dependencyJson, true));
-
-            dependencyJson = atlasDependencyTree.createDependencyJson(true);
-
-            Collections.sort(dependencyJson.getMainDex());
-
-            FileUtils.write(treeFileWithFileSize, JSON.toJSONString(dependencyJson, true));
 
             //add to ap
             appBuildInfo.getOtherFilesMap().put("awo/dependencyTree.json", treeFile);
@@ -390,10 +382,10 @@ public class LogDependenciesTask extends BaseTask {
 
     public static class ConfigAction extends MtlBaseTaskAction<LogDependenciesTask> {
 
-        private final AppVariantContext appVariantContext;
+        private AppVariantContext appVariantContext;
 
         public ConfigAction(AppVariantContext appVariantContext,
-                            BaseVariantOutput baseVariantOutputData) {
+                            BaseVariantOutputData baseVariantOutputData) {
             super(appVariantContext, baseVariantOutputData);
             this.appVariantContext = appVariantContext;
         }

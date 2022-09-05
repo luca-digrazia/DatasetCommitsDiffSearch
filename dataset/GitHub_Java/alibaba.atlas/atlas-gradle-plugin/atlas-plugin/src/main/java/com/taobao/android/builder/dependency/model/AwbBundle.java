@@ -214,6 +214,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import com.android.builder.model.AndroidLibrary;
 import com.android.builder.model.JavaLibrary;
@@ -224,9 +225,11 @@ import com.taobao.android.builder.dependency.parser.ResolvedDependencyInfo;
 import com.taobao.android.builder.tools.bundleinfo.model.BundleInfo;
 import com.taobao.android.builder.tools.manifest.ManifestFileUtils;
 import org.apache.commons.lang.StringUtils;
+import org.gradle.api.artifacts.ModuleIdentifier;
+import org.jetbrains.annotations.TestOnly;
 
 /**
- * Created by shenghua.nish on 2016-05-06 下午5:46.
+ * Created by shenghua.nish on 2016-05-06 "In the afternoon.
  * <p>
  * <p>
  * for atlas bundle
@@ -241,20 +244,33 @@ public class AwbBundle {
 
     private boolean dataBindEnabled;
 
-    //当前模块本身, 主bundle为空， 否则为awb本身
+    //The current module itself, The main bundle is empty, Otherwise it's awb itself
     private AndroidLibrary androidLibrary;
 
     private final List<AndroidLibrary> androidLibraries = new ArrayList<>();
 
     private final List<JavaLibrary> javaLibraries = new ArrayList<>();
 
-    //兼容老的模式，逐步废弃到 androidLibrary
+    //Compatible with old patterns, gradually discarded androidLibrary
     private final List<SoLibrary> soLibraries = new ArrayList<>();
 
     private File mergedManifest;
 
+    private Map<ModuleIdentifier, String> baseAwbDependencies;
+    /**
+     * The bundle corresponds to a bundle that corresponds to the data configured in bundleInfo
+     */
+    private List<AwbBundle> bundleDependencies = new ArrayList<>();
+
+    private File keepProguardFile;
+
     public AwbBundle() {
         mainBundle = true;
+        this.name = "mainbundle";
+    }
+
+    public AwbBundle(String name) {
+        this.name = name;
     }
 
     public AwbBundle(ResolvedDependencyInfo resolvedDependencyInfo, AndroidLibrary androidLibrary) {
@@ -315,6 +331,18 @@ public class AwbBundle {
         return _cacheManifestProviders;
     }
 
+    public List<AwbBundle> getBundleDependencies() {
+        return bundleDependencies;
+    }
+
+    public File getKeepProguardFile() {
+        return keepProguardFile;
+    }
+
+    public void setKeepProguardFile(File keepProguardFile) {
+        this.keepProguardFile = keepProguardFile;
+    }
+
     ////////////////////////////////////for outputs////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -331,7 +359,12 @@ public class AwbBundle {
     public String getPackageName() {
 
         if (StringUtils.isEmpty(packageName)) {
-            packageName = ManifestFileUtils.getPackage(androidLibrary.getManifest());
+            File manifest = androidLibrary.getManifest();
+            if (!manifest.exists()) {
+                return null;
+            }
+
+            packageName = ManifestFileUtils.getPackage(manifest);
         }
 
         return packageName;
@@ -340,6 +373,10 @@ public class AwbBundle {
     public String getAwbSoName() {
         if (org.apache.commons.lang3.StringUtils.isEmpty(soFileName)) {
             String packageName = getPackageName();
+            if (packageName == null) {
+                return null;
+            }
+
             soFileName = "lib" + StringUtils.replace(packageName, ".", "_") + ".so";
         }
         return soFileName;
@@ -348,7 +385,7 @@ public class AwbBundle {
     public File getManifest() {return androidLibrary.getManifest();}
 
     /**
-     * 获取所有的相关jar
+     * Get all the associated jars
      *
      * @return
      */
@@ -380,7 +417,7 @@ public class AwbBundle {
     }
 
     /**
-     * 获取所有的相关aars
+     * Get all relevant aars
      *
      * @return
      */
@@ -429,4 +466,11 @@ public class AwbBundle {
         return list;
     }
 
+    public Map<ModuleIdentifier, String> getBaseAwbDependencies() {
+        return baseAwbDependencies;
+    }
+
+    public void setBaseAwbDependencies(Map<ModuleIdentifier, String> baseAwbDependencies) {
+        this.baseAwbDependencies = baseAwbDependencies;
+    }
 }

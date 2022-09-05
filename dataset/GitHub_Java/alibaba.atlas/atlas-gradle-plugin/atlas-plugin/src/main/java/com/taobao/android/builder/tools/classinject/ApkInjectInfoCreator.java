@@ -245,6 +245,7 @@ public class ApkInjectInfoCreator {
         injectParam.removePreverify = !appVariantContext.getAtlasExtension()
             .getTBuildConfig()
             .getDoPreverify();
+
         injectParam.version = appVariantContext.getVariantConfiguration().getVersionName();
 
         AtlasDependencyTree atlasDependencyTree = AtlasBuildContext.androidDependencyTrees.get(
@@ -312,15 +313,6 @@ public class ApkInjectInfoCreator {
             if (!bundleInfo.getServices().isEmpty()) {
                 basicBundleInfo.setServices(bundleInfo.getServices());
             }
-            if (!bundleInfo.getRemoteFragments().isEmpty()) {
-                basicBundleInfo.setRemoteFragments(bundleInfo.getRemoteFragments());
-            }
-            if (!bundleInfo.getRemoteViews().isEmpty()) {
-                basicBundleInfo.setRemoteViews(bundleInfo.getRemoteViews());
-            }
-            if (!bundleInfo.getRemoteTransactors().isEmpty()) {
-                basicBundleInfo.setRemoteTransactors(bundleInfo.getRemoteTransactors());
-            }
 
             basicBundleInfos.add(basicBundleInfo);
             basicBundleInfoMap.put(bundleInfo.getPkgName(), basicBundleInfo);
@@ -339,8 +331,6 @@ public class ApkInjectInfoCreator {
         //    autoStartBundles.add(0, updateConfig.getSdkPkgName());
         //}
         //
-        injectParam.group = appVariantContext.getAtlasExtension().getTBuildConfig().getGroup();
-
         injectParam.autoStartBundles = StringUtils.join(appVariantContext.getAtlasExtension()
                                                             .getTBuildConfig()
                                                             .getAutoStartBundles(), ",");
@@ -392,16 +382,6 @@ public class ApkInjectInfoCreator {
                 if (!baseBundleInfo.getServices().isEmpty()) {
                     basicBundleInfo.setServices(concatList(baseBundleInfo.getServices(),
                                                            basicBundleInfo.getServices()));
-                }
-
-                if(!baseBundleInfo.getRemoteFragments().isEmpty()){
-                    basicBundleInfo.getRemoteFragments().putAll(baseBundleInfo.getRemoteFragments());
-                }
-                if(!baseBundleInfo.getRemoteViews().isEmpty()){
-                    basicBundleInfo.getRemoteViews().putAll(baseBundleInfo.getRemoteViews());
-                }
-                if(!baseBundleInfo.getRemoteTransactors().isEmpty()){
-                    basicBundleInfo.getRemoteTransactors().putAll(baseBundleInfo.getRemoteTransactors());
                 }
             }
             injectParam.bundleInfo = JSON.toJSONString(basicBundleInfos);

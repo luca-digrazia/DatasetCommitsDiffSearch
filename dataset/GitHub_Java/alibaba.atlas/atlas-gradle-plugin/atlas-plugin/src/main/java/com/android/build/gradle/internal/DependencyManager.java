@@ -209,10 +209,22 @@
 
 package com.android.build.gradle.internal;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
 import com.android.SdkConstants;
 import com.android.annotations.NonNull;
 import com.android.annotations.Nullable;
 import com.android.build.gradle.AndroidGradleOptions;
+import com.android.build.gradle.AppPlugin;
 import com.android.build.gradle.internal.dependency.DependencyGraph;
 import com.android.build.gradle.internal.dependency.MutableDependencyDataMap;
 import com.android.build.gradle.internal.dependency.VariantDependencies;
@@ -242,7 +254,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-
 import org.gradle.api.CircularReferenceException;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.Project;
@@ -264,17 +275,6 @@ import org.gradle.api.logging.Logging;
 import org.gradle.api.specs.Specs;
 import org.gradle.util.GUtil;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-
 import static com.android.SdkConstants.DOT_JAR;
 import static com.android.SdkConstants.EXT_ANDROID_PACKAGE;
 import static com.android.SdkConstants.EXT_JAR;
@@ -290,7 +290,7 @@ import static com.android.builder.model.AndroidProject.FD_INTERMEDIATES;
  *
  *  1. not warning awb & solib
  *  2. public apis
- *  3. jar 依赖aar 的检查
+ *  3. jar Rely on aar The check
  *
  */
 public class DependencyManager {
@@ -787,7 +787,7 @@ public class DependencyManager {
             int indent) {
 
         ModuleVersionIdentifier moduleVersion = resolvedComponentResult.getModuleVersion();
-        if (configDependencies.getChecker().checkForExclusion(moduleVersion)) {
+        if (checkForExclusion(configDependencies, moduleVersion, resolvedComponentResult)) {
             return;
         }
 
@@ -915,7 +915,10 @@ public class DependencyManager {
                         }
 
                         // if we don't have one, need to create it.
-                        if (EXT_LIB_ARCHIVE.equals(artifact.getExtension())) {
+                        if (EXT_LIB_ARCHIVE.equals(artifact.getExtension()) ||
+                            //Not app engineering, and awb dependency
+                            ("awb".equals(artifact.getExtension())  && !project.getPlugins().hasPlugin(AppPlugin.class))) {
+
                             if (DEBUG_DEPENDENCY) {
                                 printIndent(indent, "TYPE: AAR");
                             }
@@ -1235,6 +1238,10 @@ public class DependencyManager {
             }
         }
     }
+
+    protected boolean checkForExclusion(@NonNull VariantDependencies configDependencies,
+                                        ModuleVersionIdentifier moduleVersion,
+                                        ResolvedComponentResult resolvedComponentResult) {return configDependencies.getChecker().checkForExclusion(moduleVersion);}
 
     @NonNull
     private static MavenCoordinatesImpl createMavenCoordinates(

@@ -255,7 +255,7 @@ public class AwbDataBindingMergeArtifactsTask extends BaseTask {
     private ApkVariantOutputData variantOutputData;
 
     /**
-     * 生成so的目录
+     * Directory of so
      */
     @TaskAction
     void createAwbPackages() throws ExecutionException, InterruptedException {
@@ -270,6 +270,10 @@ public class AwbDataBindingMergeArtifactsTask extends BaseTask {
         List<Runnable> runnables = new ArrayList<>();
 
         for (final AwbBundle awbBundle : atlasDependencyTree.getAwbBundles()) {
+
+            if (!appVariantContext.getAtlasExtension().getTBuildConfig().getDataBindingBundles().contains(awbBundle.getPackageName())){
+                continue;
+            }
 
             runnables.add(new Runnable() {
                 @Override

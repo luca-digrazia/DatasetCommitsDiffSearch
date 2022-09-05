@@ -242,8 +242,6 @@ public class ApContext {
 
     public static final String DEPENDENCIES_FILENAME = "dependencies.txt";
 
-    public static final String STABLE_IDS_FILENAME = "public.txt";
-
     private String apDependency;
 
     private File apFile;
@@ -267,8 +265,6 @@ public class ApContext {
     private File basePackageIdFile;
 
     private File baseDependenciesFile;
-
-    private File baseStableIdsFile;
 
     private File baseUnzipBundleDirectory;
 
@@ -306,7 +302,6 @@ public class ApContext {
         this.basePackageIdFile = new File(apExploredFolder, PACKAGE_ID_PROPERTIES_FILENAME);
         this.baseAtlasFrameworkPropertiesFile = new File(apExploredFolder, ATLAS_FRAMEWORK_PROPERTIES_FILENAME);
         this.baseDependenciesFile = new File(apExploredFolder, DEPENDENCIES_FILENAME);
-        this.baseStableIdsFile = new File(apExploredFolder, STABLE_IDS_FILENAME);
     }
 
     public File getBaseApkDirectory() {
@@ -339,10 +334,6 @@ public class ApContext {
 
     public File getBaseDependenciesFile() {
         return baseDependenciesFile;
-    }
-
-    public File getBaseStableIdsFile() {
-        return baseStableIdsFile;
     }
 
     public File getBaseAwb(String soFileName) {

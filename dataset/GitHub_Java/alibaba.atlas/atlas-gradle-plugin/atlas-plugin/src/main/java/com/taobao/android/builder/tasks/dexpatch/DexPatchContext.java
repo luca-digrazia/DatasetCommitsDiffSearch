@@ -1,6 +1,9 @@
 package com.taobao.android.builder.tasks.dexpatch;
 
 import com.android.build.gradle.internal.variant.BaseVariantOutputData;
+import com.taobao.android.builder.AtlasBuildContext;
+import com.taobao.android.builder.tasks.dexpatch.builder.DexBuilder;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -10,7 +13,7 @@ import java.util.Map;
 
 /**
  * @author lilong
- * @create 2017-05-03 下午6:53
+ * @create 2017-05-03 So in the afternoon
  */
 
 public class DexPatchContext {
@@ -21,6 +24,8 @@ public class DexPatchContext {
     private File outPutDir = null;
     private File diffFolder = null;
     File bundleFolder = null;
+    public static DexBuilder dexBuilder = AtlasBuildContext.dexBuilder;
+
 
     public String getBaseVersion() {
         return baseVersion;
@@ -36,6 +41,12 @@ public class DexPatchContext {
     private DexPatchContext() {
 
         baseVersion = System.getProperty("apVersion", "");
+        if (StringUtils.isBlank(baseVersion)){
+            baseVersion = System.getProperty("MUPP_DEXPATCH_BASE_VERSION", "");
+        }
+        if (StringUtils.isBlank(baseVersion)){
+            baseVersion = System.getProperty("MUPP_VERSION_NAME","");
+        }
     }
 
     public static DexPatchContext getInstance() {

@@ -25,7 +25,7 @@ import java.util.concurrent.ExecutionException;
 
 /**
  * @author lilong
- * @create 2017-05-05 上午10:07
+ * @create 2017-05-05 At 10:07
  */
 
 public class DexPatchDiffTask extends BaseTask {
@@ -38,7 +38,7 @@ public class DexPatchDiffTask extends BaseTask {
 
         ExecutorServicesHelper executorServicesHelper = new ExecutorServicesHelper();
 
-        for (Map.Entry entry : DexBuilder.getInstance().getOutputs().entrySet()) {
+        for (Map.Entry entry : DexPatchContext.dexBuilder.getOutputs().entrySet()) {
             executorServicesHelper.submitTask("dexDiff", new Callable<Boolean>() {
                 @Override
                 public Boolean call() throws Exception {

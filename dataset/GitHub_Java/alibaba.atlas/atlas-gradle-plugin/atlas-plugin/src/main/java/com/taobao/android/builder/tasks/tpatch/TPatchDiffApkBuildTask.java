@@ -240,7 +240,7 @@ public class TPatchDiffApkBuildTask extends BaseTask {
     @TaskAction
     public void doApkBuild() throws Exception {
 
-        //TODO 合并2个zip包
+        //TODO Merge 2 zip packages
         apkFile = getApkFile();
         diffAPkFile = getDiffAPkFile();
 
@@ -275,7 +275,11 @@ public class TPatchDiffApkBuildTask extends BaseTask {
 
         Profiler.enter("rezip");
 
-        BetterZip.zipDirectory(tmpWorkDir,diffAPkFile);
+        if (getProject().hasProperty("atlas.createDiffApk")) {
+            BetterZip.zipDirectory(tmpWorkDir, diffAPkFile);
+        }else {
+            FileUtils.moveDirectory(tmpWorkDir,diffAPkFile);
+        }
 
         //ZipUtils.rezip(diffAPkFile, tmpWorkDir, zipEntityMap);
         Profiler.release();

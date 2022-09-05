@@ -253,12 +253,11 @@ public class AtlasDependencyTree {
         this.mResolvedDependencies = mResolvedDependencies;
     }
 
-    private void addChildDependency(List<String> deps, ResolvedDependencyInfo dependencyInfo,
-            boolean printFileSize) {
+    private void addChildDependency(List<String> deps, ResolvedDependencyInfo dependencyInfo) {
         for (ResolvedDependencyInfo child : dependencyInfo.getChildren()) {
-            String childValue = child.getDependencyString(printFileSize);
+            String childValue = child.getDependencyString();
             deps.add(childValue);
-            addChildDependency(deps, child, printFileSize);
+            addChildDependency(deps, child);
         }
     }
 
@@ -289,9 +288,9 @@ public class AtlasDependencyTree {
 
             allAndroidLibrarys = new ArrayList<>();
 
-            allAndroidLibrarys.addAll(getMainBundle().getAndroidLibraries());
+            allAndroidLibrarys.addAll(this.getMainBundle().getAndroidLibraries());
 
-            for (AwbBundle awbBundle : getAwbBundles()) {
+            for (AwbBundle awbBundle : this.getAwbBundles()) {
                 allAndroidLibrarys.add(awbBundle.getAndroidLibrary());
                 allAndroidLibrarys.addAll(awbBundle.getAndroidLibraries());
             }
@@ -307,7 +306,7 @@ public class AtlasDependencyTree {
      */
     public Set<AndroidLibrary> getAllAwbLibrarys() {
         Set<AndroidLibrary> sets = new HashSet<>();
-        for (AwbBundle awbBundle : getAwbBundles()) {
+        for (AwbBundle awbBundle : this.getAwbBundles()) {
             sets.add(awbBundle.getAndroidLibrary());
         }
         return sets;
@@ -315,7 +314,7 @@ public class AtlasDependencyTree {
 
     public Set<File> getAllLibraryManifests() {
         Set<File> libManifests = new HashSet<File>();
-        for (AndroidLibrary manifestDependency : getAllAndroidLibrarys()) {
+        for (AndroidLibrary manifestDependency : this.getAllAndroidLibrarys()) {
             libManifests.add(manifestDependency.getManifest());
         }
         return libManifests;
@@ -323,8 +322,8 @@ public class AtlasDependencyTree {
 
     public List<SoLibrary> getAllSoLibraries() {
         List<SoLibrary> soLibraries = new ArrayList<>();
-        soLibraries.addAll(getMainBundle().getSoLibraries());
-        for (AwbBundle awbBundle : getAwbBundles()) {
+        soLibraries.addAll(this.getMainBundle().getSoLibraries());
+        for (AwbBundle awbBundle : this.getAwbBundles()) {
             soLibraries.addAll(awbBundle.getSoLibraries());
         }
         return soLibraries;
@@ -353,25 +352,20 @@ public class AtlasDependencyTree {
      */
     public DependencyJson getDependencyJson() {
         if (dependencyJson == null) {
-            dependencyJson = createDependencyJson(false);
-        }
-        return dependencyJson;
-    }
-
-    public DependencyJson createDependencyJson(boolean printFileSize) {
-        DependencyJson dependencyJson = new DependencyJson();
-        for (ResolvedDependencyInfo dep : mResolvedDependencies) {
-            String value = dep.getDependencyString(printFileSize);
-            if ("awb".equalsIgnoreCase(dep.getType())) {
-                ArrayList<String> awbDeps = dependencyJson.getAwbs().get(value);
-                if (null == awbDeps) {
-                    awbDeps = new ArrayList<String>();
+            dependencyJson = new DependencyJson();
+            for (ResolvedDependencyInfo dep : mResolvedDependencies) {
+                String value = dep.getDependencyString();
+                if ("awb".equalsIgnoreCase(dep.getType())) {
+                    ArrayList<String> awbDeps = dependencyJson.getAwbs().get(value);
+                    if (null == awbDeps) {
+                        awbDeps = new ArrayList<String>();
+                    }
+                    addChildDependency(awbDeps, dep);
+                    dependencyJson.getAwbs().put(value, awbDeps);
+                } else {
+                    dependencyJson.getMainDex().add(value);
+                    addChildDependency(dependencyJson.getMainDex(), dep);
                 }
-                addChildDependency(awbDeps, dep, printFileSize);
-                dependencyJson.getAwbs().put(value, awbDeps);
-            } else {
-                dependencyJson.getMainDex().add(value);
-                addChildDependency(dependencyJson.getMainDex(), dep, printFileSize);
             }
         }
         return dependencyJson;

@@ -30,7 +30,7 @@ import java.util.zip.ZipEntry;
 
 /**
  * @author lilong
- * @create 2017-05-03 下午1:03
+ * @create 2017-05-03 On the afternoon of 1:03
  */
 
 public class DexPatchPackageTask extends BaseTask {
@@ -74,7 +74,7 @@ public class DexPatchPackageTask extends BaseTask {
         List<PatchBundleInfo> list = new ArrayList<>();
         boolean add = false;
         for (ArtifactBundleInfo artifactBundleInfo : appVariantOutputContext.artifactBundleInfos) {
-            for (String key : DexBuilder.getInstance().getOutputs().keySet()) {
+            for (String key : DexPatchContext.dexBuilder.getOutputs().keySet()) {
                 if (artifactBundleInfo.getPkgName().equals(key)) {
                     PatchBundleInfo dexPatchBundelInfo = new PatchBundleInfo();
                     dexPatchBundelInfo.setPkgName(artifactBundleInfo.getPkgName());

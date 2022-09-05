@@ -209,17 +209,16 @@
 
 package com.taobao.android.builder.tasks.manager;
 
-import com.android.build.gradle.api.BaseVariantOutput;
 import com.android.build.gradle.internal.api.VariantContext;
 import com.android.build.gradle.internal.tasks.BaseTask;
 import com.android.build.gradle.internal.tasks.DefaultAndroidTask;
+import com.android.build.gradle.internal.variant.BaseVariantOutputData;
 import com.android.builder.core.AndroidBuilder;
 import org.apache.commons.lang.StringUtils;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -239,9 +238,9 @@ public class MtlTaskInjector {
 
     public void injectTasks(List<MtlTaskContext> mtlTaskContexts, AndroidBuilder androidBuilder) {
 
-        Collection<BaseVariantOutput> baseVariantOutputDataList = variantContext.getVariantOutputData();
+        List<BaseVariantOutputData> baseVariantOutputDataList = variantContext.getVariantOutputData();
 
-        for (final BaseVariantOutput vod : baseVariantOutputDataList) {
+        for (final BaseVariantOutputData vod : baseVariantOutputDataList) {
 
             //TODO What if the intermediate step does not generate task
             List<Task> beforeTasks = new ArrayList<Task>();
@@ -255,15 +254,16 @@ public class MtlTaskInjector {
                         tasks.add(mtlTaskContext.getSysTask());
                     } else if (null != mtlTaskContext.getSysTaskClazz()) {
                         Class taskClazz = mtlTaskContext.getSysTaskClazz();
-                        tasks.addAll(findTask(taskClazz, vod.getName() ));
+                        tasks.addAll(findTask(taskClazz, vod.variantData.getName()));
                     } else {
                         Task task = project.getTasks().findByName(
-                            variantContext.getBaseVariantData().getTaskName(mtlTaskContext.getTaskName(),""));
+                            vod.getScope().getTaskName(mtlTaskContext.getTaskName()));
                         if (null != task) {
                             tasks.add(task);
                         }
                     }
                 } else {
+
                     Task task = mtlTaskFactory.createTask(variantContext, vod, mtlTaskContext.getTaskActionClazz());
                     if (null != task) {
 
@@ -277,12 +277,12 @@ public class MtlTaskInjector {
 
                 if (tasks.isEmpty()) {
                     //                    throw new RuntimeException("task is not found " + mtlTaskContext);
-                    project.getLogger().info("task is not found " + vod.getName() + mtlTaskContext);
+                    project.getLogger().info("task is not found " + vod.getFullName() + mtlTaskContext);
                 } else {
                     if (!beforeTasks.isEmpty()) {
                         for (Task task : tasks) {
                             project.getLogger().debug(
-                                "[MtlTaskInjector]" + vod.getName() + ":" + task + "->" + StringUtils
+                                "[MtlTaskInjector]" + vod.getFullName() + ":" + task + "->" + StringUtils
                                     .join(beforeTasks.toArray()));
                             for (Task before : beforeTasks) {
                                 project.getLogger().info(
@@ -299,7 +299,7 @@ public class MtlTaskInjector {
                         List<Task> beforeTasks2 = mtlTaskContext.getTaskFilter().getBeforeTasks(project, vod);
                         for (Task task : tasks) {
                             project.getLogger().debug(
-                                "[MtlTaskInjector]" + vod.getName() + ":" + task + "->" + StringUtils
+                                "[MtlTaskInjector]" + vod.getFullName() + ":" + task + "->" + StringUtils
                                     .join(beforeTasks2.toArray()));
                             for (Task before : beforeTasks2) {
                                 project.getLogger().info(
@@ -322,20 +322,18 @@ public class MtlTaskInjector {
             if (task.getName().endsWith("TestJavaWithJavac")){
                 continue;
             }
-            if (variantName.contains("-")){
-                variantName = variantName.replace("-","");
-            }
             if (task instanceof DefaultAndroidTask) {
-
-                if (variantName.equals(((DefaultAndroidTask)task).getVariantName().toLowerCase())) {
+                if (variantName.equals(((DefaultAndroidTask)task).getVariantName())) {
                     taskList.add(task);
                 }
             } else {
+
                 String name = task.getName();
                 if (name.toLowerCase().contains(variantName)) {
                     taskList.add(task);
                 }
             }
+
         }
         return taskList;
     }

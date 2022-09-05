@@ -212,16 +212,17 @@ package com.taobao.android.builder.manager;
 import com.android.build.gradle.BaseExtension;
 import com.android.build.gradle.internal.ExtraModelInfo;
 import com.android.build.gradle.internal.LoggerWrapper;
+import com.android.build.gradle.internal.TaskContainerAdaptor;
+import com.android.build.gradle.internal.scope.AndroidTaskRegistry;
 import com.android.builder.core.AtlasBuilder;
 import com.android.utils.ILogger;
 import com.taobao.android.builder.extension.AtlasExtension;
-
 import org.gradle.api.Project;
 import org.gradle.api.logging.Logging;
 
 /**
- * 任务管理的基类
- * Created by shenghua.nish on 2016-05-10 下午9:51.
+ * Base classes for task management
+ * Created by shenghua.nish on 2016-05-10 9:51 in the afternoon.
  */
 public abstract class AtlasBaseTaskManager<T extends BaseExtension> {
 
@@ -231,6 +232,10 @@ public abstract class AtlasBaseTaskManager<T extends BaseExtension> {
 
     protected final Project project;
 
+    protected final AndroidTaskRegistry androidTasks = new AndroidTaskRegistry();
+
+    protected final TaskContainerAdaptor tasks;
+
     protected final AtlasExtension atlasExtension;
 
     protected ExtraModelInfo extraModelInfo;
@@ -239,13 +244,12 @@ public abstract class AtlasBaseTaskManager<T extends BaseExtension> {
 
     //protected DependencyManager dependencyManager;
 
-    public AtlasBaseTaskManager(AtlasBuilder androidBuilder,
-                                T androidExtension,
-                                Project project,
+    public AtlasBaseTaskManager(AtlasBuilder androidBuilder, T androidExtension, Project project,
                                 AtlasExtension atlasExtension) {
         this.tAndroidBuilder = androidBuilder;
         this.androidExtension = androidExtension;
         this.project = project;
+        this.tasks = new TaskContainerAdaptor(project.getTasks());
         this.atlasExtension = atlasExtension;
         this.extraModelInfo = new ExtraModelInfo(project);
         this.logger = new LoggerWrapper(Logging.getLogger(AtlasBaseTaskManager.class));
@@ -257,7 +261,7 @@ public abstract class AtlasBaseTaskManager<T extends BaseExtension> {
 
         resolveDependencies();
 
-        //初始化配置
+        //Initialization configuration
         parseConfig();
 
         runTask();
@@ -268,12 +272,12 @@ public abstract class AtlasBaseTaskManager<T extends BaseExtension> {
     }
 
     /**
-     * 运行inject的任务haob
+     * Run the inject task haob
      */
     public abstract void runTask();
 
     /**
-     * 解析配置文件
+     * Parse configuration file
      */
     public void parseConfig() {
     }

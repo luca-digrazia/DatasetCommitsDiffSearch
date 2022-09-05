@@ -231,10 +231,8 @@ import com.android.build.gradle.internal.variant.ApkVariantOutputData;
 import com.android.build.gradle.internal.variant.BaseVariantOutputData;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.AtlasDependencyTree;
-import com.taobao.android.builder.dependency.diff.DependencyCompareUtils;
 import com.taobao.android.builder.dependency.diff.DependencyDiff;
 import com.taobao.android.builder.dependency.model.AwbBundle;
-import com.taobao.android.builder.dependency.output.DependencyJson;
 import com.taobao.android.builder.tasks.manager.MtlBaseTaskAction;
 import com.taobao.android.builder.tools.bundleinfo.model.BundleInfo;
 import com.taobao.android.builder.tools.manifest.ManifestFileUtils;
@@ -293,14 +291,14 @@ public class DiffBundleInfoTask extends BaseTask {
     }
 
     /**
-     * 生成这个文件
+     * Generate this file
      */
     @TaskAction
     public void generate() throws IOException {
 
         dependencyDiff = getDependencyDiff();
 
-        //如果是patch的话,得到diff的操作
+        //If it's patch, get the diff operation
         if (null == dependencyDiff) {
             return;
         }
@@ -339,7 +337,7 @@ public class DiffBundleInfoTask extends BaseTask {
             tagMap.put(obj.getString("pkgName"), obj.getString("unique_tag"));
         }
 
-        // 1. 首先添加主bundle
+        // 1. First add the main bundle
         ArtifactBundleInfo mainBundleInfo = getMainArtifactBundInfo(mainfestFile);
         mainBundleInfo.setBaseVersion(apVersion);
         mainBundleInfo.setMainBundle(true);
@@ -351,9 +349,13 @@ public class DiffBundleInfoTask extends BaseTask {
         } else {
             mainBundleInfo.setDiffType(DiffType.NONE);
         }
+
+        mainBundleInfo.setSrcUnitTag(jsonObject.getString("unit_tag"));
+        mainBundleInfo.setUnitTag(appVariantOutputContext.getVariantContext().unit_tag);
+
         artifactBundleInfos.add(mainBundleInfo);
 
-        // 2. 添加各自的bundle
+        // 2. Add your own bundle
         AtlasDependencyTree atlasDependencyTree = AtlasBuildContext.androidDependencyTrees.get(
                 appVariantOutputContext.getVariantContext().
                         getVariantConfiguration().getFullName());
@@ -369,7 +371,7 @@ public class DiffBundleInfoTask extends BaseTask {
             awbBundleInfo.setApplicationName(bundleInfo.getApplicationName());
             awbBundleInfo.setArtifactId(awbBundle.getResolvedCoordinates().getArtifactId());
             awbBundleInfo.setName(bundleInfo.getName());
-            //历史bundle的tag todo
+            //History bundle's tag todo
             awbBundleInfo.setSrcUnitTag(tagMap.get(bundleInfo.getPkgName()));
             awbBundleInfo.setUnitTag(bundleInfo.getUnique_tag());
             String version = bundleInfo.getVersion();
@@ -407,13 +409,13 @@ public class DiffBundleInfoTask extends BaseTask {
     private static ArtifactBundleInfo getMainArtifactBundInfo(File manifestFile) {
         ArtifactBundleInfo mainBundleInfo = new ArtifactBundleInfo();
         SAXReader reader = new SAXReader();
-        Document document = null;// 读取XML文件
+        Document document = null;// Read the XML file
         try {
             document = reader.read(manifestFile);
         } catch (DocumentException e) {
             throw new GradleException(e.getMessage(), e);
         }
-        Element root = document.getRootElement();// 得到根节点
+        Element root = document.getRootElement();// Get the root node
 
         List<? extends Node> metadataNodes = root.selectNodes("//meta-data");
         for (Node node : metadataNodes) {
@@ -463,7 +465,7 @@ public class DiffBundleInfoTask extends BaseTask {
          */
         @Override
         public String getName() {
-            return scope.getTaskName("DiffBundleInfo");
+            return scope.getTaskName("diffBundleInfo");
         }
 
         /**
@@ -510,32 +512,13 @@ public class DiffBundleInfoTask extends BaseTask {
                 }
             });
 
-            //设置DependencyDiff
+            //Set the DependencyDiff
             ConventionMappingHelper.map(diffBundleInfoTask,
                                         "dependencyDiff",
                                         new Callable<DependencyDiff>() {
                                             @Override
                                             public DependencyDiff call() throws Exception {
-
-                                                if (null !=
-                                                        appVariantContext.apContext.getApExploredFolder() &&
-                                                        appVariantContext.apContext.getApExploredFolder()
-                                                                .exists()) {
-                                                    DependencyJson dependencyJson = AtlasBuildContext.androidDependencyTrees
-                                                            .get(scope.getVariantOutputData().variantData
-                                                                         .getName())
-                                                            .getDependencyJson();
-                                                    File baseDependencyFile = new File(
-                                                            appVariantContext.apContext.getApExploredFolder(),
-                                                            "dependencies.txt");
-                                                    if (baseDependencyFile.exists()) {
-                                                        DependencyDiff dependencyDiff = DependencyCompareUtils
-                                                                .diff(baseDependencyFile,
-                                                                      dependencyJson);
-                                                        return dependencyDiff;
-                                                    }
-                                                }
-                                                return null;
+                                                return appVariantContext.getDependencyDiff();
                                             }
                                         });
 

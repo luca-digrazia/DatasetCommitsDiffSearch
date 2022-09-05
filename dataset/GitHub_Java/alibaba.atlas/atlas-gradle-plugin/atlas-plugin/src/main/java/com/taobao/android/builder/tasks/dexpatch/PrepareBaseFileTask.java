@@ -18,7 +18,7 @@ import java.util.List;
 
 /**
  * @author lilong
- * @create 2017-08-23 下午4:03
+ * @create 2017-08-23 On the afternoon of 4:03
  */
 
 public class PrepareBaseFileTask extends BaseTask {
@@ -67,7 +67,7 @@ public class PrepareBaseFileTask extends BaseTask {
                         File jarFile = androidLibrary.getJarFile();
 
                         if (DexPatchContext.modifyArtifact.containsKey(androidLibrary.getResolvedCoordinates().getArtifactId())) {
-                            FileUtils.copyFileToDirectory(jarFile, DexPatchContext.getInstance().getBundleArtifactFolder(DexPatchContext.modifyArtifact.get(androidLibrary.getResolvedCoordinates().getArtifactId()).bundleName, androidLibrary.getRequestedCoordinates().getArtifactId(), DexPatchContext.modifyArtifact.get(androidLibrary.getResolvedCoordinates().getArtifactId()).isMaindex));
+                            FileUtils.copyFileToDirectory(jarFile, DexPatchContext.getInstance().getBundleArtifactFolder(DexPatchContext.modifyArtifact.get(androidLibrary.getResolvedCoordinates().getArtifactId()).bundleName, androidLibrary.getResolvedCoordinates().getArtifactId(), DexPatchContext.modifyArtifact.get(androidLibrary.getResolvedCoordinates().getArtifactId()).isMaindex));
                         }
                     }
 

@@ -216,17 +216,16 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
 import com.android.build.gradle.AndroidConfig;
-import com.android.build.gradle.api.BaseVariantOutput;
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.android.build.gradle.internal.api.AppVariantOutputContext;
 import com.android.build.gradle.internal.api.AwbTransform;
 import com.android.build.gradle.internal.core.GradleVariantConfiguration;
 import com.android.build.gradle.internal.tasks.BaseTask;
-import com.android.ide.common.internal.WaitableExecutor;
+import com.android.build.gradle.internal.variant.ApkVariantOutputData;
+import com.android.build.gradle.internal.variant.BaseVariantOutputData;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.AtlasDependencyTree;
 import com.taobao.android.builder.dependency.model.AwbBundle;
@@ -247,13 +246,13 @@ public class AwbDataBindingRenameTask extends BaseTask {
     private AppVariantContext appVariantContext;
     private AppVariantOutputContext appVariantOutputContext;
     private GradleVariantConfiguration config;
+    private ApkVariantOutputData variantOutputData;
 
     /**
      * Directory of so
      */
     @TaskAction
     void createAwbPackages() throws ExecutionException, InterruptedException {
-        WaitableExecutor workerExecutor = WaitableExecutor.useGlobalSharedThreadPool();
 
         AtlasDependencyTree atlasDependencyTree = AtlasBuildContext.androidDependencyTrees.get(getVariantName());
 
@@ -262,6 +261,7 @@ public class AwbDataBindingRenameTask extends BaseTask {
         }
 
         ExecutorServicesHelper executorServicesHelper = new ExecutorServicesHelper(taskName, getLogger(), 0);
+        List<Runnable> runnables = new ArrayList<>();
 
         for (final AwbBundle awbBundle : atlasDependencyTree.getAwbBundles()) {
 
@@ -272,10 +272,11 @@ public class AwbDataBindingRenameTask extends BaseTask {
             if (!awbBundle.isDataBindEnabled()) {
                 continue;
             }
-            workerExecutor.execute(new Callable() {
+
+            runnables.add(new Runnable() {
 
                 @Override
-                public Object call() {
+                public void run() {
 
                     try {
 
@@ -290,31 +291,8 @@ public class AwbDataBindingRenameTask extends BaseTask {
                         if (!dataMapperClazz.exists()) {
                             throw new GradleException("missing datamapper class");
                         }
-                        File dataBindComponentClazz = new File(dataBindingClazzFolder,
-                                "android/databinding/DataBindingComponent.class");
-                        if (!dataBindComponentClazz.exists()) {
-                            throw new GradleException("missing dataBindComponent.class");
-                        }
-                        File dataBindDynamicUtilsClazz = new File(dataBindingClazzFolder,
-                                "android/databinding/DynamicUtil.class");
-                        if (!dataBindDynamicUtilsClazz.exists()) {
-                            throw new GradleException("missing dataBindDynamicUtils.class");
-                        }
 
-                        ClassNameRenamer.rewriteDataBinderMapper(dataBindingClazzFolder, "android/databinding/DataBinderMapper",
-                                packageName.replace(".", "/") +
-                                        "/DataBinderMapper", dataMapperClazz);
-                        ClassNameRenamer.rewriteDataBinderMapper(dataBindingClazzFolder, "android/databinding/DataBindingComponent",
-                                packageName.replace(".", "/") +
-                                        "/DataBindingComponent", dataBindComponentClazz);
-
-                        ClassNameRenamer.rewriteDataBinderMapper(dataBindingClazzFolder, "android/databinding/dataBindDynamicUtils",
-                                packageName.replace(".", "/") +
-                                        "/dataBindDynamicUtils", dataBindDynamicUtilsClazz);
-
-                        FileUtils.deleteDirectory(new File(dataBindingClazzFolder, "com/android/databinding"));
-
-
+                        rewriteDataBinderMapper(dataBindingClazzFolder, packageName, dataMapperClazz);
                         //FileUtils.deleteDirectory(new File(dataBindingClazzFolder, packageName.replace(".", "/") +
                         // "/_bundleapp_" ));
 
@@ -363,12 +341,12 @@ public class AwbDataBindingRenameTask extends BaseTask {
                         throw new GradleException("databinding awb failed", e);
                     }
 
-                    return null;
                 }
             });
 
         }
-        workerExecutor.waitForTasksWithQuickFail(true);
+
+        executorServicesHelper.execute(runnables);
 
     }
 
@@ -376,8 +354,8 @@ public class AwbDataBindingRenameTask extends BaseTask {
 
         private AppVariantContext appVariantContext;
 
-        public ConfigAction(AppVariantContext appVariantContext, BaseVariantOutput baseVariantOutput) {
-            super(appVariantContext, baseVariantOutput);
+        public ConfigAction(AppVariantContext appVariantContext, BaseVariantOutputData baseVariantOutputData) {
+            super(appVariantContext, baseVariantOutputData);
             this.appVariantContext = appVariantContext;
         }
 
@@ -396,14 +374,24 @@ public class AwbDataBindingRenameTask extends BaseTask {
 
             super.execute(packageAwbsTask);
 
-//            packageAwbsTask.androidConfig = appVariantContext.getAppExtension();
+            packageAwbsTask.androidConfig = appVariantContext.getAppExtension();
             packageAwbsTask.appVariantContext = appVariantContext;
             packageAwbsTask.appVariantOutputContext = getAppVariantOutputContext();
-//            packageAwbsTask.config = scope.getVariantConfiguration();
-//            packageAwbsTask.variantOutputData = (ApkVariantOutputData)scope.getVariantOutputData();
+            packageAwbsTask.config = scope.getVariantScope().getVariantConfiguration();
+            packageAwbsTask.variantOutputData = (ApkVariantOutputData)scope.getVariantOutputData();
 
         }
     }
-    
+
+    private void rewriteDataBinderMapper(File dataBindingClazzFolder, String packageName,
+                                         File dataMapperClazz) throws IOException {
+
+        ClassNameRenamer.rewriteDataBinderMapper(dataBindingClazzFolder, "android/databinding/DataBinderMapper",
+                                                 packageName.replace(".", "/") +
+                                                     "/DataBinderMapper", dataMapperClazz);
+
+        FileUtils.deleteDirectory(new File(dataBindingClazzFolder, "android/databinding"));
+        FileUtils.deleteDirectory(new File(dataBindingClazzFolder, "com/android/databinding"));
+    }
 
 }

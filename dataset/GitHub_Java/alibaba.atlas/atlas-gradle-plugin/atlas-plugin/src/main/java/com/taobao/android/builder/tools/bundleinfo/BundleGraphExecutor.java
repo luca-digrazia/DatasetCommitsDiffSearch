@@ -267,7 +267,7 @@ public class BundleGraphExecutor {
 
                 if (bundleItem.canResolve()) {
 
-                    logger.info("resolve bundle  >>>> " + index++ + bundleItem.bundleInfo.getPkgName());
+                    index++;
                     //bundleItem.resolve();
                     keys.add(key);
 
@@ -284,7 +284,7 @@ public class BundleGraphExecutor {
                 }
             }
 
-            Profiler.enter("execute step " + j++ + " runnables " + runnables.size());
+            Profiler.enter("execute stage " + j++ + " runnables " + runnables.size());
             executorServicesHelper.execute(runnables);
             Profiler.release();
 
@@ -316,13 +316,16 @@ public class BundleGraphExecutor {
                 bundleItemMap.put(bundleInfo.getPkgName(), bundleItem);
             }
 
-            //计算依赖
+            //Computing rely on
             for (String dependency : bundleInfo.getDependency()) {
                 if (StringUtils.isNotEmpty(dependency)) {
                     BundleItem child = bundleItemMap.get(dependency);
                     if (null == child) {
                         child = new BundleItem();
                         child.bundleInfo = bundleInfoMap.get(dependency);
+                        if (null == child.bundleInfo){
+                            throw new GradleException("bundle dependency is error , not bundle found for " + dependency + " ; which may define in " + bundleInfo.getPkgName());
+                        }
                         bundleItemMap.put(dependency, child);
                     }
 
@@ -346,15 +349,16 @@ public class BundleGraphExecutor {
                     list.add(b.bundleInfo.getPkgName());
                 }
                 Collections.sort(list);
-                String key = StringUtils.join(list.toArray());
+                String key = StringUtils.join(list.toArray(),",");
                 circleMap.put(key, bundleItems);
             }
         }
 
+        //TODO
         for (Set<BundleItem> sets : circleMap.values()) {
             int i = 0;
             BundleItem main = null;
-            for (BundleItem bundleItem : sets) {
+            for (BundleItem bundleItem : getOrderList(sets)) {
                 if (i++ == 0) {
                     main = bundleItem;
                 } else {
@@ -363,6 +367,15 @@ public class BundleGraphExecutor {
                 }
             }
         }
+
+
+
+    }
+
+    private static List<BundleItem> getOrderList(Set<BundleItem> sets){
+        List<BundleItem> list = new ArrayList<>(sets);
+        list.sort((o1, o2) -> o1.bundleInfo.getPkgName().compareTo(o2.bundleInfo.getPkgName()));
+        return list;
     }
 
 }

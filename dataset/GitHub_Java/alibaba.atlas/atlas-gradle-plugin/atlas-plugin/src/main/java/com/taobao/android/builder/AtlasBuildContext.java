@@ -209,20 +209,19 @@
 
 package com.taobao.android.builder;
 
-import com.android.build.api.transform.QualifiedContent;
 import com.android.builder.core.AtlasBuilder;
 import com.android.builder.model.MavenCoordinates;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Multimap;
 import com.taobao.android.builder.adapter.BuilderAdapter;
 import com.taobao.android.builder.dependency.AtlasDependencyTree;
 import com.taobao.android.builder.dependency.model.AwbBundle;
-import com.taobao.android.builder.manager.AtlasConfigurationHelper;
-import com.taobao.android.builder.tasks.app.BuildAtlasEnvTask;
+import com.taobao.android.builder.tasks.dexpatch.builder.DefaultDexBuilder;
+import com.taobao.android.builder.tasks.dexpatch.builder.DexBuilder;
 import org.gradle.api.Project;
 
-import java.io.File;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Created by shenghua.nish on 2016-05-09 At 3:50 p.m.
@@ -234,8 +233,6 @@ public class AtlasBuildContext {
      */
     public static BuilderAdapter sBuilderAdapter = new BuilderAdapter();
 
-    public static Map<String,File>bundleExploadDir = new HashMap<>();
-
     public static Map<String, AtlasDependencyTree> androidDependencyTrees = Maps.newHashMap();
 
     public static Map<String, AtlasDependencyTree> libDependencyTrees = Maps.newHashMap();
@@ -246,20 +243,9 @@ public class AtlasBuildContext {
 
     public static Map<String, AwbBundle> awbBundleMap = new HashMap<String, AwbBundle>();
 
-
     public static Set<String> conflictDependencies;
 
-    public static Map<String,Boolean>mainDexMap = new HashMap<>();
-
-    public static AtlasConfigurationHelper atlasConfigurationHelper;
-
-    public static LinkedHashSet<BuildAtlasEnvTask.FileIdentity>mainDexJar = new LinkedHashSet<>();
-
-    public static LinkedHashSet<BuildAtlasEnvTask.FileIdentity>awbDexJar = new LinkedHashSet<>();
-
-    public static Map<AwbBundle, Multimap<QualifiedContent, File>> awbDexFiles = new HashMap<AwbBundle, com.google.common.collect.Multimap<QualifiedContent, File>>();
-
-    public static STATUS status;
+    public static DexBuilder dexBuilder = DefaultDexBuilder.getInstance();
 
     /**
      * Depending on the original coordinate address, classInject You need to find atlas.
@@ -273,11 +259,6 @@ public class AtlasBuildContext {
      */
     public static Map<String, String> jarTraceMap = new HashMap<String, String>();
 
-    public static Map<String, Boolean> mainNativeSoMap = new LinkedHashMap<>();
-
-    public static Map<String, Boolean> mainResMap = new LinkedHashMap<>();
-    public static Set<File> localLibs = new HashSet<>();
-
     public static void reset(){
         dependencyTraceMap.clear();
         jarTraceMap.clear();
@@ -287,11 +268,6 @@ public class AtlasBuildContext {
         customPackageIdMaps.clear();
         libDependencyTrees.clear();
         androidBuilderMap.clear();
-    }
-
-    public enum STATUS{
-        MULTIDEX,DEXARCHIVE,PREDEX,DEX,EXTERNALLIBSMERGE,DEXMERGE
-
     }
 
 }
