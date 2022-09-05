@@ -233,7 +233,6 @@ import com.taobao.android.builder.extension.TBuildType;
 import com.taobao.android.builder.tasks.manager.MtlBaseTaskAction;
 import com.taobao.android.builder.tools.manifest.ManifestFileUtils;
 import com.taobao.android.builder.tools.zip.BetterZip;
-import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.StringUtils;
 import org.dom4j.DocumentException;
 import org.gradle.api.Nullable;
@@ -247,9 +246,7 @@ import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 
 import static com.android.SdkConstants.ANDROID_MANIFEST_XML;
-import static com.android.SdkConstants.FN_APK_CLASSES_DEX;
 import static com.android.build.gradle.internal.api.ApContext.AP_INLINE_APK_FILENAME;
-import static com.android.build.gradle.internal.api.ApContext.AP_INLINE_AWB_EXPLODED_DIRECTORY;
 import static com.android.build.gradle.internal.api.ApContext.AP_INLINE_AWB_EXTRACT_DIRECTORY;
 import static com.android.builder.model.AndroidProject.FD_INTERMEDIATES;
 
@@ -337,21 +334,18 @@ public class PrepareAPTask extends BaseTask {
         if (null != apBaseFile && apBaseFile.exists()) {
             explodedDir = getExplodedDir();
             BetterZip.unzipDirectory(apBaseFile, explodedDir);
+
             apContext.setApExploredFolder(explodedDir);
-            Set<String> awbBundles = getAwbBundles();
+            // apContext.setBaseApk(new File(explodedDir, ApContext.AP_INLINE_APK_FILENAME));
+            // apContext.setBaseManifest(new File(explodedDir, "AndroidManifest.xml"));
+            // BetterZip.extractFile(apContext.getBaseApk(),
+            //                       "lib/armeabi/*",
+            //                       new File(explodedDir, ApContext.AP_INLINE_AWB_FILENAME));
             if (awbBundles != null) {
-                // 解压基线Bundle
                 for (String awbBundle : awbBundles) {
-                    File awbFile = BetterZip.extractFile(new File(explodedDir, AP_INLINE_APK_FILENAME),
-                                                         "lib/armeabi/" + awbBundle,
-                                                         new File(explodedDir, AP_INLINE_AWB_EXTRACT_DIRECTORY));
-                    File awbExplodedDir = new File(new File(explodedDir, AP_INLINE_AWB_EXPLODED_DIRECTORY),
-                                                   FilenameUtils.getBaseName(awbBundle));
-                    BetterZip.unzipDirectory(awbFile, awbExplodedDir);
-                    FileUtils.renameTo(new File(awbExplodedDir, FN_APK_CLASSES_DEX),
-                                       new File(awbExplodedDir, "classes2.dex"));
+                    BetterZip.extractFile(new File(explodedDir, AP_INLINE_APK_FILENAME), "lib/armeabi/" + awbBundle,
+                                          new File(explodedDir, AP_INLINE_AWB_EXTRACT_DIRECTORY));
                 }
-                // 预处理增量AndroidManifest.xml
                 ManifestFileUtils.updatePreProcessBaseManifestFile(
                     FileUtils.join(explodedDir, "manifest-modify", ANDROID_MANIFEST_XML),
                     new File(explodedDir, ANDROID_MANIFEST_XML));
@@ -395,6 +389,8 @@ public class PrepareAPTask extends BaseTask {
                 variantContext.getProject().getBuildDir().getAbsolutePath() + "/" + FD_INTERMEDIATES + "/exploded-ap"
                 + "/");
             variantContext.apContext.setApExploredFolder(explodedDir);
+            // variantContext.apContext.setBaseApk(new File(explodedDir,
+            //                                              ApContext.AP_INLINE_APK_FILENAME));
 
             ConventionMappingHelper.map(prepareAPTask, "apFile", new Callable<File>() {
                 @Override
@@ -421,16 +417,11 @@ public class PrepareAPTask extends BaseTask {
             });
 
             if (variantContext.getAtlasExtension().getTBuildConfig().isIncremental()) {
-                ConventionMappingHelper.map(prepareAPTask, "awbBundles", new Callable<Set<String>>() {
-                    @Override
-                    public Set<String> call() throws Exception {
-                        AtlasDependencyTree dependencyTree = AtlasBuildContext.androidDependencyTrees.get(
-                            variantContext.getVariantName());
-                        Set<String> awbBundles = Sets.newHashSet(
-                            Iterables.transform(dependencyTree.getAwbBundles(), AwbBundle::getAwbSoName));
-                        return awbBundles;
-                    }
-                });
+                AtlasDependencyTree dependencyTree = AtlasBuildContext.androidDependencyTrees.get(
+                    variantContext.getVariantName());
+                Set<String> awbBundles = Sets.newHashSet(
+                    Iterables.transform(dependencyTree.getAwbBundles(), AwbBundle::getAwbSoName));
+                prepareAPTask.setAwbBundles(awbBundles);
             }
         }
     }
