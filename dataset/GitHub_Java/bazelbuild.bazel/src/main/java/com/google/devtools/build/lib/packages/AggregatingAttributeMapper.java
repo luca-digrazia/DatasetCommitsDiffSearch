@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -459,8 +460,8 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
       }
 
       @Override
-      public boolean isConfigurable(String attributeName) {
-        return owner.isConfigurable(attributeName);
+      public <T> boolean isConfigurable(String attributeName, Type<T> type) {
+        return owner.isConfigurable(attributeName, type);
       }
 
       @Override
@@ -524,12 +525,7 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
       }
 
       @Override
-      public boolean has(String attrName) {
-        return owner.has(attrName);
-      }
-
-      @Override
-      public <T> boolean has(String attrName, Type<T> type) {
+      public boolean has(String attrName, Type<?> type) {
         return owner.has(attrName, type);
       }
     };

@@ -244,10 +244,8 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public void close(boolean failFast) throws IOException {
-      if (!failFast) {
-        flushAndCheckError(printStream);
-      }
+    public void close() throws IOException {
+      flushAndCheckError(printStream);
     }
   }
 
@@ -331,14 +329,12 @@ public abstract class OutputFormatter implements Serializable {
         }
 
         @Override
-        public void close(boolean failFast) throws IOException {
-          if (!failFast) {
-            final String lineTerm = options.getLineTerminator();
-            for (String packageName : packageNames) {
-              printStream.printf("%s%s", packageName, lineTerm);
-            }
+        public void close() throws IOException {
+          final String lineTerm = options.getLineTerminator();
+          for (String packageName : packageNames) {
+            printStream.printf("%s%s", packageName, lineTerm);
           }
-          super.close(failFast);
+          super.close();
         }
       };
     }
