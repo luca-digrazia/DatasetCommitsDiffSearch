@@ -131,11 +131,8 @@ public class ExternalFilesHelper {
         throw new FileOutsidePackageRootsException(rootedPath);
       }
     } else if (getFileType(rootedPath) == FileType.EXTERNAL_IMMUTABLE_FILE) {
-      PackageValue pkgValue =
-          (PackageValue)
-              Preconditions.checkNotNull(
-                  env.getValue(PackageValue.key(ExternalPackage.PACKAGE_IDENTIFIER)));
-      Preconditions.checkState(!pkgValue.getPackage().containsErrors());
+      Preconditions.checkNotNull(
+          env.getValue(PackageValue.key(ExternalPackage.PACKAGE_IDENTIFIER)));
     }
   }
 }

@@ -60,8 +60,7 @@ public class WorkspaceFileFunction implements SkyFunction {
     }
 
     Path repoWorkspace = workspaceRoot.getRoot().getRelative(workspaceRoot.getRelativePath());
-    Builder builder = new Builder(repoWorkspace,
-        packageFactory.getRuleClassProvider().getRunfilesPrefix());
+    Builder builder = new Builder(repoWorkspace);
     WorkspaceFactory parser = new WorkspaceFactory(
         builder, packageFactory.getRuleClassProvider(), installDir.getPathString());
     parser.parse(ParserInputSource.create(
