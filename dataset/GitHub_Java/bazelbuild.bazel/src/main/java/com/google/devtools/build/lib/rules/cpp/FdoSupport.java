@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
-import com.google.devtools.build.lib.actions.PackageRootResolutionException;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
@@ -256,12 +255,11 @@ public class FdoSupport implements Serializable {
    * FDO gcda zip file into a clean working directory under execRoot.
    *
    * @throws FdoException if the FDO ZIP contains a file of unknown type
-   * @throws PackageRootResolutionException
    */
   @ThreadHostile // must be called before starting the build
   public void prepareToBuild(Path execRoot, PathFragment genfilesPath,
       ArtifactFactory artifactDeserializer, PackageRootResolver resolver)
-      throws IOException, FdoException, PackageRootResolutionException {
+      throws IOException, FdoException {
     // The execRoot != null case is only there for testing. We cannot provide a real ZIP file in
     // tests because ZipFileSystem does not work with a ZIP on an in-memory file system.
     // IMPORTANT: Keep in sync with #declareSkyframeDependencies to avoid incrementality issues.
@@ -312,13 +310,11 @@ public class FdoSupport implements Serializable {
    *
    * @throws IOException if any of the I/O operations failed
    * @throws FdoException if the FDO ZIP contains a file of unknown type
-   * @throws PackageRootResolutionException on exception resolving package roots for imports
    */
   private void extractFdoZip(ArtifactFactory artifactFactory, Path sourceDir,
       Path targetDir, ImmutableSet.Builder<PathFragment> gcdaFilesBuilder,
       ImmutableMultimap.Builder<PathFragment, Artifact> importsBuilder,
-      PackageRootResolver resolver)
-          throws IOException, FdoException, PackageRootResolutionException {
+      PackageRootResolver resolver) throws IOException, FdoException {
     for (Path sourceFile : sourceDir.getDirectoryEntries()) {
       Path targetFile = targetDir.getRelative(sourceFile.getBaseName());
       if (sourceFile.isDirectory()) {
@@ -344,12 +340,10 @@ public class FdoSupport implements Serializable {
    * Reads a .gcda.imports file and stores the imports information.
    *
    * @throws FdoException if an auxiliary LIPO input was not found
-   * @throws PackageRootResolutionException on exception resolving package roots for imports
    */
   private void readCoverageImports(ArtifactFactory artifactFactory, Path importsFile,
       ImmutableMultimap.Builder<PathFragment, Artifact> importsBuilder,
-      PackageRootResolver resolver)
-          throws IOException, FdoException, PackageRootResolutionException {
+      PackageRootResolver resolver) throws IOException, FdoException {
     PathFragment key = importsFile.asFragment().relativeTo(ZIP_ROOT);
     String baseName = key.getBaseName();
     String ext = Iterables.getOnlyElement(CppFileTypes.COVERAGE_DATA_IMPORTS.getExtensions());
@@ -376,12 +370,11 @@ public class FdoSupport implements Serializable {
 
   /**
    * Reads a .afdo.imports file and stores the imports information.
-   * @throws PackageRootResolutionException
    */
   private ImmutableMultimap<PathFragment, Artifact> readAutoFdoImports(
       ArtifactFactory artifactFactory, Path importsFile, PathFragment genFilePath,
       PackageRootResolver resolver)
-          throws IOException, FdoException, PackageRootResolutionException {
+          throws IOException, FdoException {
     ImmutableMultimap.Builder<PathFragment, Artifact> importBuilder = ImmutableMultimap.builder();
     for (String line : FileSystemUtils.iterateLinesAsLatin1(importsFile)) {
       if (!line.isEmpty()) {
