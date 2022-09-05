@@ -8,7 +8,7 @@ import org.hswebframework.web.authorization.basic.handler.AuthorizingHandler;
 import org.hswebframework.web.authorization.define.AuthorizeDefinition;
 import org.hswebframework.web.authorization.exception.UnAuthorizedException;
 import org.hswebframework.web.boost.aop.context.MethodInterceptorHolder;
-import org.hswebframework.web.boost.aop.context.MethodInterceptorContext;
+import org.hswebframework.web.boost.aop.context.MethodInterceptorParamContext;
 import org.springframework.aop.support.StaticMethodMatcherPointcutAdvisor;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,20 +25,16 @@ public class AopAuthorizingController extends StaticMethodMatcherPointcutAdvisor
 
             MethodInterceptorHolder holder = MethodInterceptorHolder.create(methodInvocation);
 
-            MethodInterceptorContext paramContext = holder.createParamContext();
+            MethodInterceptorParamContext paramContext = holder.createParamContext();
 
             AuthorizeDefinition definition = aopMethodAuthorizeDefinitionParser.parse(paramContext);
 
             if (null != definition) {
-                Authentication authentication = Authentication.current().orElseThrow(UnAuthorizedException::new);
-
-                if (!definition.isEmpty()) {
-                    AuthorizingContext context = new AuthorizingContext();
-                    context.setAuthentication(authentication);
-                    context.setDefinition(definition);
-                    context.setParamContext(paramContext);
-                    authorizingHandler.handle(context);
-                }
+                AuthorizingContext context = new AuthorizingContext();
+                context.setAuthentication(Authentication.current().orElseThrow(UnAuthorizedException::new));
+                context.setDefinition(definition);
+                context.setParamContext(paramContext);
+                authorizingHandler.handle(context);
             }
             return methodInvocation.proceed();
         });
