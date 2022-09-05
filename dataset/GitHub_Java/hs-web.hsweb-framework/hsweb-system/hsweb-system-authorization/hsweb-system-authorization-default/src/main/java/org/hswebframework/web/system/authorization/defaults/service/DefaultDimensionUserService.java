@@ -1,12 +1,10 @@
 package org.hswebframework.web.system.authorization.defaults.service;
 
 import lombok.extern.slf4j.Slf4j;
-import org.hswebframework.ezorm.rdb.exception.DuplicateKeyException;
 import org.hswebframework.ezorm.rdb.mapping.ReactiveDelete;
 import org.hswebframework.ezorm.rdb.mapping.ReactiveUpdate;
 import org.hswebframework.ezorm.rdb.mapping.defaults.SaveResult;
 import org.hswebframework.web.crud.service.GenericReactiveCrudService;
-import org.hswebframework.web.exception.BusinessException;
 import org.hswebframework.web.system.authorization.api.entity.DimensionUserEntity;
 import org.hswebframework.web.system.authorization.api.event.ClearUserAuthorizationCacheEvent;
 import org.hswebframework.web.system.authorization.api.event.UserDeletedEvent;
@@ -37,9 +35,8 @@ public class DefaultDimensionUserService extends GenericReactiveCrudService<Dime
     @Override
     public Mono<SaveResult> save(Publisher<DimensionUserEntity> entityPublisher) {
         return Flux.from(entityPublisher)
-                   .doOnNext(DimensionUserEntity::generateId)
-                   .doOnNext(entity -> eventPublisher.publishEvent(ClearUserAuthorizationCacheEvent.of(entity.getUserId())))
-                   .as(super::save);
+                .doOnNext(entity -> eventPublisher.publishEvent(ClearUserAuthorizationCacheEvent.of(entity.getUserId())))
+                .as(super::save);
     }
 
     @Override
@@ -52,21 +49,18 @@ public class DefaultDimensionUserService extends GenericReactiveCrudService<Dime
     @Override
     public Mono<Integer> insert(Publisher<DimensionUserEntity> entityPublisher) {
         return Flux.from(entityPublisher)
-                   .doOnNext(DimensionUserEntity::generateId)
-                   .doOnNext(entity -> eventPublisher.publishEvent(ClearUserAuthorizationCacheEvent.of(entity.getUserId())))
-                   .as(super::insert)
-                   .onErrorMap(DuplicateKeyException.class, (err) -> new BusinessException("重复的绑定请求"));
+                .doOnNext(entity -> eventPublisher.publishEvent(ClearUserAuthorizationCacheEvent.of(entity.getUserId())))
+                .as(super::insert);
     }
 
     @Override
     public Mono<Integer> insertBatch(Publisher<? extends Collection<DimensionUserEntity>> entityPublisher) {
         return Flux.from(entityPublisher)
-                   .doOnNext(entity -> eventPublisher
-                           .publishEvent(ClearUserAuthorizationCacheEvent
-                                                 .of(entity.stream()
-                                                           .map(DimensionUserEntity::getUserId)
-                                                           .collect(Collectors.toSet()))))
-                   .as(super::insertBatch);
+                .doOnNext(entity -> eventPublisher.publishEvent(ClearUserAuthorizationCacheEvent.of(entity
+                        .stream()
+                        .map(DimensionUserEntity::getUserId)
+                        .collect(Collectors.toSet()))))
+                .as(super::insertBatch);
     }
 
     @Override
@@ -81,25 +75,24 @@ public class DefaultDimensionUserService extends GenericReactiveCrudService<Dime
     @SuppressWarnings("all")
     public ReactiveUpdate<DimensionUserEntity> createUpdate() {
         return super.createUpdate()
-                    .onExecute((update, r) -> r
-                            .doOnSuccess(i -> {
-                                this.createQuery()
-                                    .select(DimensionUserEntity::getUserId)
-                                    .setParam(update.toQueryParam())
-                                    .fetch()
-                                    .map(DimensionUserEntity::getUserId)
-                                    .collectList()
-                                    .map(ClearUserAuthorizationCacheEvent::of)
-                                    .subscribe();
-                            }));
+                .onExecute((update, r) -> r.doOnSuccess(i -> {
+                    createQuery()
+                            .select(DimensionUserEntity::getUserId)
+                            .setParam(update.toQueryParam())
+                            .fetch()
+                            .map(DimensionUserEntity::getUserId)
+                            .collectList()
+                            .map(ClearUserAuthorizationCacheEvent::of)
+                            .subscribe();
+                }));
     }
 
     @Override
     @SuppressWarnings("all")
     public ReactiveDelete createDelete() {
         return super.createDelete()
-                    .onExecute((delete, r) -> r.doOnSuccess(i -> {
-                        this.createQuery()
+                .onExecute((delete, r) -> r.doOnSuccess(i -> {
+                    createQuery()
                             .select(DimensionUserEntity::getUserId)
                             .setParam(delete.toQueryParam())
                             .fetch()
@@ -107,6 +100,6 @@ public class DefaultDimensionUserService extends GenericReactiveCrudService<Dime
                             .collectList()
                             .map(ClearUserAuthorizationCacheEvent::of)
                             .subscribe();
-                    }));
+                }));
     }
 }
