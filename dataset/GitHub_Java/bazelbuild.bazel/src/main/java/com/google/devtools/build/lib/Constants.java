@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,26 +14,14 @@
 
 package com.google.devtools.build.lib;
 
-import com.google.common.collect.ImmutableList;
-
 /**
- * Various constants required by Bazel.
- *
- * <p>The extra {@code .toString()} calls are there so that javac doesn't inline these constants
- * so that we can replace this class file in the .jar after Bazel was built.
+ * A temporary class of constants; these encode differences between Google's internal setup and
+ * Bazel. We're working to remove this class, which requires cleaning up our internal code base.
+ * Please don't add anything here unless you know what you're doing.
  */
-public class Constants {
-  private Constants() {
-  }
+public final class Constants {
+  private Constants() {}
 
-  public static final String PRODUCT_NAME = "bazel".toString();
-  public static final ImmutableList<String> DEFAULT_PACKAGE_PATH = ImmutableList.of("%workspace%");
-  public static final String MAIN_RULE_CLASS_PROVIDER =
-      "com.google.devtools.build.lib.bazel.rules.BazelRuleClassProvider".toString();
-  public static final ImmutableList<String> IGNORED_TEST_WARNING_PREFIXES = ImmutableList.of();
-  public static final String RUNFILES_PREFIX = "".toString();
-
-  public static final ImmutableList<String> WATCHFS_BLACKLIST = ImmutableList.of();
-
-  public static final String PRELUDE_FILE_DEPOT_RELATIVE_PATH = "tools/build_rules/prelude_bazel";
+  // Google's internal name for Bazel is 'Blaze', and it will take some more time to change that.
+  public static final String PRODUCT_NAME = "bazel";
 }
