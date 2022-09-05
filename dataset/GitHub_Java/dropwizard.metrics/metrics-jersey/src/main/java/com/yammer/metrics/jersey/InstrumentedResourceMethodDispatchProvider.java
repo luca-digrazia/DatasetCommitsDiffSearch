@@ -4,16 +4,14 @@ import com.sun.jersey.api.core.HttpContext;
 import com.sun.jersey.api.model.AbstractResourceMethod;
 import com.sun.jersey.spi.container.ResourceMethodDispatchProvider;
 import com.sun.jersey.spi.dispatch.RequestDispatcher;
-import com.yammer.metrics.Metrics;
+import com.yammer.metrics.Meter;
+import com.yammer.metrics.MetricRegistry;
+import com.yammer.metrics.Timer;
 import com.yammer.metrics.annotation.ExceptionMetered;
 import com.yammer.metrics.annotation.Metered;
 import com.yammer.metrics.annotation.Timed;
-import com.yammer.metrics.core.Meter;
-import com.yammer.metrics.core.Timer;
-import com.yammer.metrics.core.TimerContext;
-import sun.misc.Unsafe;
 
-import java.util.concurrent.TimeUnit;
+import static com.yammer.metrics.MetricRegistry.name;
 
 class InstrumentedResourceMethodDispatchProvider implements ResourceMethodDispatchProvider {
     private static class TimedRequestDispatcher implements RequestDispatcher {
@@ -27,7 +25,7 @@ class InstrumentedResourceMethodDispatchProvider implements ResourceMethodDispat
 
         @Override
         public void dispatch(Object resource, HttpContext httpContext) {
-            final TimerContext context = timer.time();
+            final Timer.Context context = timer.time();
             try {
                 underlying.dispatch(resource, httpContext);
             } finally {
@@ -69,19 +67,34 @@ class InstrumentedResourceMethodDispatchProvider implements ResourceMethodDispat
         public void dispatch(Object resource, HttpContext httpContext) {
             try {
                 underlying.dispatch(resource, httpContext);
+            } catch (Error e) {
+                throw e;
             } catch (Throwable e) {
-                if (exceptionClass.isAssignableFrom(e.getClass())) {
+                if (exceptionClass.isAssignableFrom(e.getClass()) ||
+                        (e.getCause() != null && exceptionClass.isAssignableFrom(e.getCause().getClass()))) {
                     meter.mark();
                 }
-                Unsafe.getUnsafe().throwException(e);
+                InstrumentedResourceMethodDispatchProvider.<RuntimeException>throwUnchecked(e);
             }
         }
     }
 
-    private final ResourceMethodDispatchProvider provider;
+    /*
+     * A dirty hack to allow us to throw exceptions of any type without bringing down the unsafe
+     * thunder.
+     */
+    @SuppressWarnings("unchecked")
+    private static <T extends Exception> void throwUnchecked(Throwable e) throws T {
+        throw (T) e;
+    }
 
-    public InstrumentedResourceMethodDispatchProvider(ResourceMethodDispatchProvider provider) {
+    private final ResourceMethodDispatchProvider provider;
+    private final MetricRegistry registry;
+
+    public InstrumentedResourceMethodDispatchProvider(ResourceMethodDispatchProvider provider,
+                                                      MetricRegistry registry) {
         this.provider = provider;
+        this.registry = registry;
     }
 
     @Override
@@ -93,40 +106,43 @@ class InstrumentedResourceMethodDispatchProvider implements ResourceMethodDispat
 
         if (method.getMethod().isAnnotationPresent(Timed.class)) {
             final Timed annotation = method.getMethod().getAnnotation(Timed.class);
-            final Timer timer = Metrics.newTimer(method.getDeclaringResource().getResourceClass(),
-                                                       annotation.name() == null ?
-                                                               method.getMethod().getName() : annotation.name(),
-                                                       annotation.durationUnit() == null ?
-                                                               TimeUnit.MILLISECONDS : annotation.durationUnit(),
-                                                       annotation.rateUnit() == null ?
-                                                               TimeUnit.SECONDS : annotation.rateUnit());
+            final String name = chooseName(annotation.name(), annotation.absolute(), method);
+            final Timer timer = registry.timer(name);
             dispatcher = new TimedRequestDispatcher(dispatcher, timer);
         }
 
         if (method.getMethod().isAnnotationPresent(Metered.class)) {
             final Metered annotation = method.getMethod().getAnnotation(Metered.class);
-            final Meter meter = Metrics.newMeter(method.getDeclaringResource().getResourceClass(),
-                                                       annotation.name() == null ?
-                                                               method.getMethod().getName() : annotation.name(),
-                                                       annotation.eventType() == null ?
-                                                               "requests" : annotation.eventType(),
-                                                       annotation.rateUnit() == null ?
-                                                               TimeUnit.SECONDS : annotation.rateUnit());
+            final String name = chooseName(annotation.name(), annotation.absolute(), method);
+            final Meter meter = registry.meter(name);
             dispatcher = new MeteredRequestDispatcher(dispatcher, meter);
         }
 
         if (method.getMethod().isAnnotationPresent(ExceptionMetered.class)) {
-            final ExceptionMetered annotation = method.getMethod().getAnnotation(ExceptionMetered.class);
-            final Meter meter = Metrics.newMeter(method.getDeclaringResource().getResourceClass(),
-                                                       annotation.name() == null ?
-                                                               method.getMethod().getName() + ExceptionMetered.DEFAULT_NAME_SUFFIX : annotation.name(),
-                                                       annotation.eventType() == null ?
-                                                               "requests" : annotation.eventType(),
-                                                       annotation.rateUnit() == null ?
-                                                               TimeUnit.SECONDS : annotation.rateUnit());
-            dispatcher = new ExceptionMeteredRequestDispatcher(dispatcher, meter, annotation.cause());
+            final ExceptionMetered annotation = method.getMethod()
+                                                      .getAnnotation(ExceptionMetered.class);
+            final String name = chooseName(annotation.name(),
+                                           annotation.absolute(),
+                                           method,
+                                           ExceptionMetered.DEFAULT_NAME_SUFFIX);
+            final Meter meter = registry.meter(name);
+            dispatcher = new ExceptionMeteredRequestDispatcher(dispatcher,
+                                                               meter,
+                                                               annotation.cause());
         }
 
         return dispatcher;
+    }
+
+    private String chooseName(String explicitName, boolean absolute, AbstractResourceMethod method, String... suffixes) {
+        if (explicitName != null && !explicitName.isEmpty()) {
+            if (absolute) {
+                return explicitName;
+            }
+            return name(method.getDeclaringResource().getResourceClass(), explicitName);
+        }
+        return name(name(method.getDeclaringResource().getResourceClass(),
+                         method.getMethod().getName()),
+                    suffixes);
     }
 }
