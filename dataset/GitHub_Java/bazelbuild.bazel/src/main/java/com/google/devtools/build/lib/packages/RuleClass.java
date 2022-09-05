@@ -160,12 +160,6 @@ public final class RuleClass {
    */
   public interface Configurator<TConfig, TRule> {
     TConfig apply(TRule rule, TConfig configuration);
-
-    /**
-     * Describes the Bazel feature this configurator is used for. Used for checking that dynamic
-     * configuration transitions are only applied to expected configurator types.
-     */
-    String getCategory();
   }
 
   /**
@@ -187,11 +181,6 @@ public final class RuleClass {
         public Object apply(Object rule, Object configuration) {
           return configuration;
         }
-
-        @Override
-        public String getCategory() {
-          return "core";
-        };
   };
 
   /**
