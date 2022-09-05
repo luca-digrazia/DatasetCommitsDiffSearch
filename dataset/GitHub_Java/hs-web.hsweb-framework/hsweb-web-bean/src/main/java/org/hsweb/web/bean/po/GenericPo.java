@@ -1,9 +1,11 @@
 package org.hsweb.web.bean.po;
 
 
-import org.webbuilder.utils.common.MD5;
+import org.hsweb.commons.MD5;
+import org.hsweb.web.bean.po.module.Module;
 
 import java.io.Serializable;
+import java.lang.reflect.Field;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -12,57 +14,79 @@ import java.util.UUID;
  * 通用的PO对象，实现基本的属性和方法。新建的PO都应继承该类
  * Created by 浩 on 2015-07-20 0020.
  */
-public class GenericPo<PK> implements Serializable {
+public class GenericPo<PK> implements Serializable, Cloneable {
     private static final long serialVersionUID = 9197157871004374522L;
     /**
      * 主键
      */
-    private PK u_id;
+    private PK id;
 
-    public PK getU_id() {
-        return u_id;
+    public PK getId() {
+        return id;
     }
 
-    private Map<String, Object> customAttr = new LinkedHashMap<>();
+    public void setId(PK id) {
+        this.id = id;
+    }
 
-    public <T> T attr(String attr, T value) {
-        customAttr.put(attr, value);
+    /**
+     * 自定义属性
+     */
+    private Map<String, Object> properties;
+
+    public <T> T setProperty(String attr, T value) {
+        if (properties == null) properties = new LinkedHashMap<>();
+        properties.put(attr, value);
         return value;
     }
 
-    public <T> T attr(String attr) {
-        return ((T) customAttr.get(attr));
+    public <T> T getProperty(String attr) {
+        if (properties == null) return null;
+        return ((T) properties.get(attr));
     }
 
     @Override
     public int hashCode() {
-        if (getU_id() == null) return 0;
-        return getU_id().hashCode();
+        if (getId() == null) return 0;
+        return getId().hashCode();
     }
 
     @Override
     public boolean equals(Object obj) {
+        if (obj == null) return false;
         return this.hashCode() == obj.hashCode();
     }
 
-    public void setU_id(PK u_id) {
-        this.u_id = u_id;
-    }
 
     /**
      * 创建一个主键
      *
-     * @return
      */
     public static String createUID() {
         return MD5.encode(UUID.randomUUID().toString());
     }
 
-    public Map<String, Object> getCustomAttr() {
-        return customAttr;
+    public Map<String, Object> getProperties() {
+        return properties;
     }
 
-    public void setCustomAttr(Map<String, Object> customAttr) {
-        this.customAttr = customAttr;
+    public void setProperties(Map<String, Object> properties) {
+        this.properties = properties;
+    }
+
+    public interface Property {
+        /**
+         * 主键
+         *
+         * @see GenericPo#id
+         */
+        String id = "id";
+
+        /**
+         * 其他属性
+         *
+         * @see GenericPo#properties
+         */
+        String properties = "properties";
     }
 }
