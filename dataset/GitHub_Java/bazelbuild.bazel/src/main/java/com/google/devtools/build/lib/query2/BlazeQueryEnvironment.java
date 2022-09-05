@@ -106,13 +106,6 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     this.labelVisitor = new LabelVisitor(packageProvider, dependencyFilter);
   }
 
-  /**
-   * Calling close is optional because {@link BlazeQueryEnvironment} has no resources that need
-   * manual management.
-   */
-  @Override
-  public void close() {}
-
   @Override
   public DigraphQueryEvalResult<Target> evaluateQuery(QueryExpression expr,
       final Callback<Target> callback) throws QueryException, InterruptedException {
