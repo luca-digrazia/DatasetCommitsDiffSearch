@@ -1,10 +1,9 @@
 package com.prolificinteractive.materialcalendarview;
 
 import android.content.Context;
+import android.util.AttributeSet;
 import android.view.View;
-import android.widget.LinearLayout;
-
-import com.prolificinteractive.materialcalendarview.format.WeekDayFormatter;
+import android.widget.GridLayout;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -17,11 +16,11 @@ import static java.util.Calendar.SUNDAY;
  * Display a month of {@linkplain DayView}s and
  * seven {@linkplain WeekDayView}s.
  */
-class MonthView extends LinearLayout implements View.OnClickListener {
+class MonthView extends GridLayout implements View.OnClickListener {
 
-    public interface Callbacks {
+    public static interface Callbacks {
 
-        void onDateChanged(CalendarDay date);
+        public void onDateChanged(CalendarDay date);
     }
 
     private Callbacks callbacks;
@@ -40,40 +39,35 @@ class MonthView extends LinearLayout implements View.OnClickListener {
     private boolean showOtherDates = false;
 
     public MonthView(Context context) {
-        super(context);
+        this(context, null);
+    }
 
-        setOrientation(VERTICAL);
-        setWeightSum(7);
+    public MonthView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+
+        setColumnCount(7);
+        setRowCount(7);
 
         setClipChildren(false);
         setClipToPadding(false);
-
-        LinearLayout row = makeRow(this);
-        for (int i = 0; i < 7; i++) {
-            WeekDayView weekDayView = new WeekDayView(context);
-            weekDayViews.add(weekDayView);
-            row.addView(weekDayView, new LayoutParams(0, LayoutParams.MATCH_PARENT, 1f));
-        }
-        for(int r = 0; r < 6; r++) {
-            row = makeRow(this);
-            for(int i = 0; i < 7; i++) {
-                DayView dayView = new DayView(context);
-                dayView.setOnClickListener(this);
-                monthDayViews.add(dayView);
-                row.addView(dayView, new LayoutParams(0, LayoutParams.MATCH_PARENT, 1f));
-            }
-        }
-
-        setFirstDayOfWeek(firstDayOfWeek);
-        setSelectedDate(new CalendarDay());
     }
 
-    private static LinearLayout makeRow(LinearLayout parent) {
-        LinearLayout row = new LinearLayout(parent.getContext());
-        row.setOrientation(HORIZONTAL);
-        row.setWeightSum(7);
-        parent.addView(row, new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f));
-        return row;
+    @Override
+    protected void onFinishInflate() {
+        super.onFinishInflate();
+
+        int children = getChildCount();
+        for(int i = 0; i < children; i++) {
+            View child = getChildAt(i);
+            if(child instanceof WeekDayView) {
+                weekDayViews.add((WeekDayView) child);
+            } else if(child instanceof DayView) {
+                monthDayViews.add((DayView) child);
+                child.setOnClickListener(this);
+            }
+        }
+        setFirstDayOfWeek(firstDayOfWeek);
+        setSelectedDate(new CalendarDay());
     }
 
     public void setWeekDayTextAppearance(int taId) {
@@ -124,12 +118,6 @@ class MonthView extends LinearLayout implements View.OnClickListener {
         for(WeekDayView dayView : weekDayViews) {
             dayView.setDayOfWeek(calendar);
             calendar.add(DATE, 1);
-        }
-    }
-
-    public void setWeekDayFormatter(WeekDayFormatter formatter) {
-        for(WeekDayView dayView : weekDayViews) {
-            dayView.setWeekDayFormatter(formatter);
         }
     }
 
