@@ -26,8 +26,9 @@ import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.syntax.SkylarkImport;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunctionName;
+
 import javax.annotation.Nullable;
 
 /**
@@ -222,20 +223,20 @@ public final class AspectValue extends ActionLookupValue {
     private final Label targetLabel;
     private final BuildConfiguration aspectConfiguration;
     private final BuildConfiguration targetConfiguration;
-    private final SkylarkImport skylarkImport;
+    private final PathFragment extensionFile;
     private final String skylarkValueName;
 
     private SkylarkAspectLoadingKey(
         Label targetLabel,
         BuildConfiguration aspectConfiguration,
         BuildConfiguration targetConfiguration,
-        SkylarkImport skylarkImport,
+        PathFragment extensionFile,
         String skylarkFunctionName) {
       this.targetLabel = targetLabel;
       this.aspectConfiguration = aspectConfiguration;
       this.targetConfiguration = targetConfiguration;
 
-      this.skylarkImport = skylarkImport;
+      this.extensionFile = extensionFile;
       this.skylarkValueName = skylarkFunctionName;
     }
 
@@ -244,16 +245,16 @@ public final class AspectValue extends ActionLookupValue {
       return SkyFunctions.LOAD_SKYLARK_ASPECT;
     }
 
-    public Label getTargetLabel() {
-      return targetLabel;
+    public PathFragment getExtensionFile() {
+      return extensionFile;
     }
 
     public String getSkylarkValueName() {
       return skylarkValueName;
     }
 
-    public SkylarkImport getSkylarkImport() {
-      return skylarkImport;
+    public Label getTargetLabel() {
+      return targetLabel;
     }
 
     /**
@@ -273,35 +274,7 @@ public final class AspectValue extends ActionLookupValue {
     @Override
     public String getDescription() {
       // Skylark aspects are referred to on command line with <file>%<value ame>
-      return String.format("%s%%%s of %s", skylarkImport.getImportString(),
-          skylarkValueName, targetLabel);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hashCode(targetLabel,
-          aspectConfiguration,
-          targetConfiguration,
-          skylarkImport,
-          skylarkValueName);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (o == this) {
-        return true;
-      }
-
-      if (!(o instanceof SkylarkAspectLoadingKey)) {
-        return false;
-      }
-      SkylarkAspectLoadingKey that = (SkylarkAspectLoadingKey) o;
-      return Objects.equal(targetLabel, that.targetLabel)
-          && Objects.equal(aspectConfiguration, that.aspectConfiguration)
-          && Objects.equal(targetConfiguration, that.targetConfiguration)
-          && Objects.equal(skylarkImport, that.skylarkImport)
-          && Objects.equal(skylarkValueName, that.skylarkValueName);
-
+      return String.format("%s%%%s of %s", extensionFile.toString(), skylarkValueName, targetLabel);
     }
   }
 
@@ -377,9 +350,9 @@ public final class AspectValue extends ActionLookupValue {
       Label targetLabel,
       BuildConfiguration aspectConfiguration,
       BuildConfiguration targetConfiguration,
-      SkylarkImport skylarkImport,
+      PathFragment skylarkFile,
       String skylarkExportName) {
     return new SkylarkAspectLoadingKey(
-        targetLabel, aspectConfiguration, targetConfiguration, skylarkImport, skylarkExportName);
+        targetLabel, aspectConfiguration, targetConfiguration, skylarkFile, skylarkExportName);
   }
 }

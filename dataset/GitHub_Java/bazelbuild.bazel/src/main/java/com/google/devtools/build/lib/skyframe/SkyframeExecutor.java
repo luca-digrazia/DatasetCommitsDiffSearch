@@ -29,6 +29,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Range;
 import com.google.common.eventbus.EventBus;
@@ -1039,8 +1040,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
     SkyKey skyKey = ConfigurationCollectionValue.key(
         buildOptions, ImmutableSortedSet.copyOf(multiCpu));
-    EvaluationResult<ConfigurationCollectionValue> result =
-        buildDriver.evaluate(Arrays.asList(skyKey), keepGoing, DEFAULT_THREAD_COUNT, eventHandler);
+    EvaluationResult<ConfigurationCollectionValue> result = buildDriver.evaluate(
+            Arrays.asList(skyKey), keepGoing, DEFAULT_THREAD_COUNT, eventHandler);
     if (result.hasError()) {
       Throwable e = result.getError(skyKey).getException();
       // Wrap loading failed exceptions
@@ -1051,7 +1052,10 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       throw new IllegalStateException(
           "Unknown error during ConfigurationCollectionValue evaluation", e);
     }
-    ConfigurationCollectionValue configurationValue = result.get(skyKey);
+    Preconditions.checkState(result.values().size() == 1,
+        "Result of evaluate() must contain exactly one value %s", result);
+    ConfigurationCollectionValue configurationValue =
+        Iterables.getOnlyElement(result.values());
     return configurationValue.getConfigurationCollection();
   }
 
@@ -1841,6 +1845,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         List<String> targetPatterns,
         PathFragment relativeWorkingDirectory,
         LoadingOptions options,
+        ListMultimap<String, Label> labelsToLoadUnconditionally,
         boolean keepGoing,
         boolean determineTests,
         @Nullable LoadingCallback callback)

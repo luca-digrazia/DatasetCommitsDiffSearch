@@ -203,15 +203,12 @@ public final class SkyframeBuildView {
       List<ConfiguredTargetKey> values,
       List<AspectValueKey> aspectKeys,
       EventBus eventBus,
-      boolean keepGoing,
-      int numThreads)
+      boolean keepGoing)
       throws InterruptedException, ViewCreationFailedException {
     enableAnalysis(true);
     EvaluationResult<ActionLookupValue> result;
     try {
-      result =
-          skyframeExecutor.configureTargets(
-              eventHandler, values, aspectKeys, keepGoing, numThreads);
+      result = skyframeExecutor.configureTargets(eventHandler, values, aspectKeys, keepGoing);
     } finally {
       enableAnalysis(false);
     }

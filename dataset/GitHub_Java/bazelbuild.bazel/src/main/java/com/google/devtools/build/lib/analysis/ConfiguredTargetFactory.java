@@ -14,11 +14,7 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import static com.google.common.collect.Iterables.transform;
-
-import com.google.common.base.Function;
 import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
@@ -35,9 +31,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.AdvertisedProviderSet;
 import com.google.devtools.build.lib.packages.Aspect;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
@@ -233,7 +227,8 @@ public final class ConfiguredTargetFactory {
         new RuleContext.Builder(
                 env,
                 rule,
-                ImmutableList.<AspectDescriptor>of(),
+                null,
+                null,
                 configuration,
                 hostConfiguration,
                 ruleClassProvider.getPrerequisiteValidator(),
@@ -309,13 +304,6 @@ public final class ConfiguredTargetFactory {
     return result.toString();
   }
 
-  private static final Function<Aspect, AspectDescriptor> ASPECT_TO_DESCRIPTOR =
-      new Function<Aspect, AspectDescriptor>() {
-        @Override
-        public AspectDescriptor apply(Aspect aspect) {
-          return aspect.getDescriptor();
-        }
-      };
   /**
    * Constructs an {@link ConfiguredAspect}. Returns null if an error occurs; in that case,
    * {@code aspectFactory} should call one of the error reporting methods of {@link RuleContext}.
@@ -323,7 +311,6 @@ public final class ConfiguredTargetFactory {
   public ConfiguredAspect createAspect(
       AnalysisEnvironment env,
       ConfiguredTarget associatedTarget,
-      ImmutableList<Aspect> aspectPath,
       ConfiguredAspectFactory aspectFactory,
       Aspect aspect,
       OrderedSetMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
@@ -334,7 +321,8 @@ public final class ConfiguredTargetFactory {
     RuleContext.Builder builder = new RuleContext.Builder(
         env,
         associatedTarget.getTarget().getAssociatedRule(),
-        ImmutableList.copyOf(transform(aspectPath, ASPECT_TO_DESCRIPTOR)),
+        aspect.getAspectClass().getName(),
+        aspect.getParameters(),
         aspectConfiguration,
         hostConfiguration,
         ruleClassProvider.getPrerequisiteValidator(),
@@ -353,49 +341,7 @@ public final class ConfiguredTargetFactory {
       return null;
     }
 
-    ConfiguredAspect configuredAspect = aspectFactory
-        .create(associatedTarget, ruleContext, aspect.getParameters());
-    validateAdvertisedProviders(
-        configuredAspect, aspect.getDefinition().getAdvertisedProviders(),
-        associatedTarget.getTarget(),
-        env.getEventHandler()
-    );
-    return configuredAspect;
-  }
-
-  private void validateAdvertisedProviders(
-      ConfiguredAspect configuredAspect,
-      AdvertisedProviderSet advertisedProviders, Target target,
-      EventHandler eventHandler) {
-    if (advertisedProviders.canHaveAnyProvider()) {
-      return;
-    }
-    for (Class<?> aClass : advertisedProviders.getNativeProviders()) {
-      if (configuredAspect.getProvider(aClass.asSubclass(TransitiveInfoProvider.class)) == null) {
-        eventHandler.handle(Event.error(
-            target.getLocation(),
-            String.format(
-                "Aspect '%s', applied to '%s', does not provide advertised provider '%s'",
-                configuredAspect.getName(),
-                target.getLabel(),
-                aClass.getSimpleName()
-            )));
-      }
-    }
-
-    for (String providerName : advertisedProviders.getSkylarkProviders()) {
-      SkylarkProviders skylarkProviders = configuredAspect.getProvider(SkylarkProviders.class);
-      if (skylarkProviders == null || skylarkProviders.getValue(providerName) == null) {
-        eventHandler.handle(Event.error(
-            target.getLocation(),
-            String.format(
-                "Aspect '%s', applied to '%s', does not provide advertised provider '%s'",
-                configuredAspect.getName(),
-                target.getLabel(),
-                providerName
-            )));
-      }
-    }
+    return aspectFactory.create(associatedTarget, ruleContext, aspect.getParameters());
   }
 
   /**

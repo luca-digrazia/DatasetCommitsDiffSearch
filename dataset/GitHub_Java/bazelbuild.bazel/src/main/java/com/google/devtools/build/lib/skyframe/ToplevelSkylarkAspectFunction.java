@@ -14,9 +14,8 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.AspectDescriptor;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
@@ -25,11 +24,12 @@ import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.skyframe.AspectFunction.AspectCreationException;
 import com.google.devtools.build.lib.skyframe.AspectValue.SkylarkAspectLoadingKey;
 import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction.SkylarkImportFailedException;
-import com.google.devtools.build.lib.syntax.SkylarkImport;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import javax.annotation.Nullable;
 
 /**
@@ -47,17 +47,13 @@ public class ToplevelSkylarkAspectFunction implements SkyFunction {
       throws LoadSkylarkAspectFunctionException, InterruptedException {
     SkylarkAspectLoadingKey aspectLoadingKey = (SkylarkAspectLoadingKey) skyKey.argument();
     String skylarkValueName = aspectLoadingKey.getSkylarkValueName();
-    SkylarkImport extensionFile = aspectLoadingKey.getSkylarkImport();
+    PathFragment extensionFile = aspectLoadingKey.getExtensionFile();
     
     // Find label corresponding to skylark file, if one exists.
-    ImmutableMap<String, Label> labelLookupMap;
+    ImmutableMap<PathFragment, Label> labelLookupMap;
     try {
       labelLookupMap =
-          SkylarkImportLookupFunction.findLabelsForLoadStatements(
-              ImmutableList.of(extensionFile),
-              Label.parseAbsoluteUnchecked("//:empty"),
-              env
-          );
+          SkylarkImportLookupFunction.labelsForAbsoluteImports(ImmutableSet.of(extensionFile), env);
     } catch (SkylarkImportFailedException e) {
       env.getListener().handle(Event.error(e.getMessage()));
       throw new LoadSkylarkAspectFunctionException(
@@ -67,17 +63,16 @@ public class ToplevelSkylarkAspectFunction implements SkyFunction {
       return null;
     }
 
-    SkylarkAspect skylarkAspect;
-    Label extensionFileLabel = Iterables.getOnlyElement(labelLookupMap.values());
+    SkylarkAspect skylarkAspect = null;
     try {
       skylarkAspect = AspectFunction.loadSkylarkAspect(
-          env, extensionFileLabel, skylarkValueName);
+          env, labelLookupMap.get(extensionFile), skylarkValueName);
       if (skylarkAspect == null) {
         return null;
       }
       if (!skylarkAspect.getParamAttributes().isEmpty()) {
         throw new AspectCreationException("Cannot instantiate parameterized aspect "
-            + skylarkAspect.getName() + " at the top level.", extensionFileLabel);
+            + skylarkAspect.getName() + " at the top level.", labelLookupMap.get(extensionFile));
       }
     } catch (AspectCreationException e) {
       throw new LoadSkylarkAspectFunctionException(e);
