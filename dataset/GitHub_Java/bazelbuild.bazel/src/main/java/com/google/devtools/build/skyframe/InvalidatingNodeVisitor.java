@@ -148,13 +148,9 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
       visit(ImmutableList.of(visitData.first), visitData.second, !MUST_EXIST);
     }
     executor.awaitQuiescence(/*interruptWorkers=*/ true);
-
-    // Note: implementations that do not support interruption also do not update pendingVisitations.
-    Preconditions.checkState(!getSupportInterruptions() || pendingVisitations.isEmpty(),
+    Preconditions.checkState(pendingVisitations.isEmpty(),
         "All dirty nodes should have been processed: %s", pendingVisitations);
   }
-
-  protected abstract boolean getSupportInterruptions();
 
   @VisibleForTesting
   public CountDownLatch getInterruptionLatchForTestingOnly() {
@@ -254,11 +250,6 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
     }
 
     @Override
-    protected boolean getSupportInterruptions() {
-      return true;
-    }
-
-    @Override
     public void visit(Iterable<SkyKey> keys, InvalidationType invalidationType, boolean mustExist) {
       Preconditions.checkState(invalidationType == InvalidationType.DELETED, keys);
       Builder<SkyKey> unvisitedKeysBuilder = ImmutableList.builder();
@@ -344,7 +335,6 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
         Collections.newSetFromMap(
             new ConcurrentHashMap<Pair<SkyKey, InvalidationType>, Boolean>(
                 EXPECTED_VISITED_SET_SIZE, .75f, DEFAULT_THREAD_COUNT));
-    private final boolean supportInterruptions;
 
     protected DirtyingNodeVisitor(
         ThinNodeQueryableGraph graph,
@@ -353,32 +343,20 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
         DirtyKeyTracker dirtyKeyTracker,
         Function<ExecutorParams, ? extends ExecutorService> executorFactory) {
       super(graph, invalidationReceiver, state, dirtyKeyTracker, executorFactory);
-      this.supportInterruptions = true;
     }
 
-    /**
-     * Use cases that do not require support for interruptibility can avoid unnecessary work by
-     * passing {@code false} for {@param supportInterruptions}.
-     */
     protected DirtyingNodeVisitor(
         ThinNodeQueryableGraph graph,
         EvaluationProgressReceiver invalidationReceiver,
         InvalidationState state,
         DirtyKeyTracker dirtyKeyTracker,
-        ForkJoinPool forkJoinPool,
-        boolean supportInterruptions) {
+        ForkJoinPool forkJoinPool) {
       super(graph, invalidationReceiver, state, dirtyKeyTracker, forkJoinPool);
-      this.supportInterruptions = supportInterruptions;
     }
 
     @Override
     protected long count() {
       return visited.size();
-    }
-
-    @Override
-    protected boolean getSupportInterruptions() {
-      return supportInterruptions;
     }
 
     /**
@@ -423,9 +401,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
       }
       List<SkyKey> keysToGet =
           Lists.transform(invalidationPairs, Pair.<SkyKey, InvalidationType>firstFunction());
-      if (supportInterruptions) {
-        pendingVisitations.addAll(invalidationPairs);
-      }
+      pendingVisitations.addAll(invalidationPairs);
       final Map<SkyKey, ? extends ThinNodeEntry> entries = graph.getBatch(keysToGet);
       for (final Pair<SkyKey, InvalidationType> invalidationPair : invalidationPairs) {
         executor.execute(
@@ -441,18 +417,14 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
                       "%s does not exist in the graph but was enqueued for dirtying by another "
                           + "node",
                       key);
-                  if (supportInterruptions) {
-                    pendingVisitations.remove(invalidationPair);
-                  }
+                  pendingVisitations.remove(invalidationPair);
                   return;
                 }
 
                 if (entry.isChanged() || (!isChanged && entry.isDirty())) {
                   // If this node is already marked changed, or we are only marking this node
                   // dirty, and it already is, move along.
-                  if (supportInterruptions) {
-                    pendingVisitations.remove(invalidationPair);
-                  }
+                  pendingVisitations.remove(invalidationPair);
                   return;
                 }
 
@@ -463,9 +435,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
                 MarkedDirtyResult markedDirtyResult = entry.markDirty(isChanged);
                 if (markedDirtyResult == null) {
                   // Another thread has already dirtied this node. Don't do anything in this thread.
-                  if (supportInterruptions) {
-                    pendingVisitations.remove(invalidationPair);
-                  }
+                  pendingVisitations.remove(invalidationPair);
                   return;
                 }
                 // Propagate dirtiness upwards and mark this node dirty/changed. Reverse deps should
@@ -476,9 +446,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
                 informInvalidationReceiver(key, EvaluationProgressReceiver.InvalidationState.DIRTY);
                 dirtyKeyTracker.dirty(key);
                 // Remove the node from the set as the last operation.
-                if (supportInterruptions) {
-                  pendingVisitations.remove(invalidationPair);
-                }
+                pendingVisitations.remove(invalidationPair);
               }
             });
       }
