@@ -48,7 +48,6 @@ import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
-import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
 import java.io.IOException;
 import java.util.Arrays;
@@ -127,27 +126,21 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
   }
 
   protected void setUpSkyframe(RuleVisibility defaultVisibility, String defaultsPackageContents) {
-    PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
-    packageCacheOptions.defaultVisibility = defaultVisibility;
-    packageCacheOptions.showLoadingProgress = true;
-    packageCacheOptions.globbingThreads = GLOBBING_THREADS;
     skyframeExecutor.preparePackageLoading(
         new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
-        packageCacheOptions,
-        defaultsPackageContents,
-        UUID.randomUUID(),
-        ImmutableMap.<String, String>of(),
+        defaultVisibility, true, GLOBBING_THREADS, defaultsPackageContents,
+        UUID.randomUUID(), ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
   }
 
   private void setUpSkyframe(PackageCacheOptions packageCacheOptions) {
     PathPackageLocator pkgLocator = PathPackageLocator.create(
         outputBase, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
-    packageCacheOptions.showLoadingProgress = true;
-    packageCacheOptions.globbingThreads = GLOBBING_THREADS;
     skyframeExecutor.preparePackageLoading(
         pkgLocator,
-        packageCacheOptions,
+        packageCacheOptions.defaultVisibility,
+        true,
+        GLOBBING_THREADS,
         loadingMock.getDefaultsPackageContent(),
         UUID.randomUUID(),
         ImmutableMap.<String, String>of(),
