@@ -35,9 +35,9 @@ import java.util.function.Supplier;
  */
 @SuppressWarnings("unchecked")
 public class MapperEntityFactory implements EntityFactory {
-    private Map<Class, Mapper> realTypeMapper = new HashMap<>();
-    private Logger logger = LoggerFactory.getLogger(this.getClass());
-    private Map<String, PropertyCopier> copierCache = new HashMap<>();
+    private Map<Class, Mapper>          realTypeMapper = new HashMap<>();
+    private Logger                      logger         = LoggerFactory.getLogger(this.getClass());
+    private Map<String, PropertyCopier> copierCache    = new HashMap<>();
 
     private static final DefaultMapperFactory DEFAULT_MAPPER_FACTORY = clazz -> {
         String simpleClassName = clazz.getPackage().getName().concat(".Simple").concat(clazz.getSimpleName());
@@ -49,10 +49,9 @@ public class MapperEntityFactory implements EntityFactory {
         return null;
     };
 
-    /**
-     * 默认的属性复制器
-     */
-    private static final DefaultPropertyCopier DEFAULT_PROPERTY_COPIER = FastBeanCopier::copy;
+    private static final DefaultPropertyCopier DEFAULT_PROPERTY_COPIER = (source, target) -> {
+        return FastBeanCopier.copy(source, target);
+    };
 
     private DefaultMapperFactory defaultMapperFactory = DEFAULT_MAPPER_FACTORY;
 
@@ -126,7 +125,7 @@ public class MapperEntityFactory implements EntityFactory {
             realType = beanClass;
         }
         if (mapper == null && realType != null) {
-            if (logger.isDebugEnabled() && realType != beanClass) {
+            if (logger.isDebugEnabled()) {
                 logger.debug("use instance {} for {}", realType, beanClass);
             }
             mapper = new Mapper<>(realType, new DefaultInstanceGetter(realType));
@@ -189,7 +188,7 @@ public class MapperEntityFactory implements EntityFactory {
     }
 
     public static class Mapper<T> {
-        Class<T> target;
+        Class<T>    target;
         Supplier<T> instanceGetter;
 
         public Mapper(Class<T> target, Supplier<T> instanceGetter) {
