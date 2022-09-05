@@ -21,6 +21,7 @@ import static com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.UI_DEV
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -35,7 +36,6 @@ import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.BinaryFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
@@ -50,10 +50,8 @@ import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplic
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
-import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.objc.BundleSupport.ExtraActoolArgs;
-import com.google.devtools.build.lib.rules.objc.Bundling.Builder;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.XcodeprojBuildSetting;
@@ -155,13 +153,9 @@ public final class ReleaseBundlingSupport {
    *    for (<b>not</b> the minimum OS version its binary is compiled with, that needs to be set
    *    through the configuration)
    */
-  ReleaseBundlingSupport(
-      RuleContext ruleContext,
-      ObjcProvider objcProvider,
-      LinkedBinary linkedBinary,
-      String bundleDirFormat,
-      String bundleName,
-      DottedVersion bundleMinimumOsVersion) {
+  ReleaseBundlingSupport(RuleContext ruleContext, ObjcProvider objcProvider,
+      LinkedBinary linkedBinary, String bundleDirFormat, String bundleName,
+      String bundleMinimumOsVersion) {
     this.linkedBinary = linkedBinary;
     this.attributes = new Attributes(ruleContext);
     this.ruleContext = ruleContext;
@@ -188,12 +182,8 @@ public final class ReleaseBundlingSupport {
    *    for (<b>not</b> the minimum OS version its binary is compiled with, that needs to be set
    *    through the configuration)
    */
-  ReleaseBundlingSupport(
-      RuleContext ruleContext,
-      ObjcProvider objcProvider,
-      LinkedBinary linkedBinary,
-      String bundleDirFormat,
-      DottedVersion bundleMinimumOsVersion) {
+  ReleaseBundlingSupport(RuleContext ruleContext, ObjcProvider objcProvider,
+      LinkedBinary linkedBinary, String bundleDirFormat, String bundleMinimumOsVersion) {
     this(ruleContext, objcProvider, linkedBinary, bundleDirFormat, ruleContext.getLabel().getName(),
         bundleMinimumOsVersion);
   }
@@ -224,34 +214,7 @@ public final class ReleaseBundlingSupport {
       ruleContext.attributeError("families", INVALID_FAMILIES_ERROR);
     }
 
-    validateLaunchScreen();
-
     return this;
-  }
-
-  private void validateLaunchScreen() {
-    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("launch_storyboard")) {
-      DottedVersion minimumOs = ObjcRuleClasses.objcConfiguration(ruleContext).getMinimumOs();
-      if (ObjcRuleClasses.useLaunchStoryboard(ruleContext)) {
-        if (ruleContext.attributes().isAttributeValueExplicitlySpecified("launch_image")) {
-          ruleContext.attributeWarning(
-              "launch_image",
-              String.format(
-                  "launch_image was specified but since --ios_minimum_os=%s (>=8.0), the also "
-                      + "specified launch_storyboard will be used instead",
-                  minimumOs));
-        }
-      } else {
-        if (!ruleContext.attributes().isAttributeValueExplicitlySpecified("launch_image")) {
-          ruleContext.attributeWarning(
-              "launch_storyboard",
-              String.format(
-                  "launch_storyboard was specified but since --ios_minimum_os=%s (<8.0) and no "
-                      + "launch_image was specified instead it will be ignored",
-                  minimumOs));
-        }
-      }
-    }
   }
 
   /**
@@ -295,10 +258,6 @@ public final class ReleaseBundlingSupport {
 
     registerEmbedLabelPlistAction();
     registerEnvironmentPlistAction();
-
-    if (ObjcRuleClasses.useLaunchStoryboard(ruleContext)) {
-      registerLaunchStoryboardPlistAction();
-    }
 
     BundleMergeControlBytes bundleMergeControlBytes = new BundleMergeControlBytes(
         bundling, maybeSignedIpa, appleConfiguration, bundleSupport.targetDeviceFamilies());
@@ -346,27 +305,6 @@ public final class ReleaseBundlingSupport {
         .build(ruleContext));
   }
 
-  private void registerLaunchStoryboardPlistAction() {
-    String launchStoryboard = attributes.launchStoryboard().getFilename();
-    String launchStoryboardName = launchStoryboard.substring(0, launchStoryboard.lastIndexOf('.'));
-    String contents =
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-            + "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" "
-            + "\"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
-            + "<plist version=\"1.0\">\n"
-            + "<dict>\n"
-            + "  <key>UILaunchStoryboardName</key>\n"
-            + "  <string>"
-            + launchStoryboardName
-            + "</string>\n"
-            + "</dict>\n"
-            + "</plist>\n";
-
-    ruleContext.registerAction(
-        new FileWriteAction(
-            ruleContext.getActionOwner(), getLaunchStoryboardPlist(), contents, false));
-  }
-
   private void registerEnvironmentPlistAction() {
     AppleConfiguration configuration = ruleContext.getFragment(AppleConfiguration.class);
     // Generates a .plist that contains environment values (such as the SDK used to build, the Xcode
@@ -374,10 +312,8 @@ public final class ReleaseBundlingSupport {
     // Platforms' plists.
     // The resulting file is meant to be merged with the final bundle.
     String platformWithVersion =
-        String.format(
-            "%s%s",
-            configuration.getBundlingPlatform().getLowerCaseNameInPlist(),
-            configuration.getIosSdkVersion());
+        String.format("%s%s", configuration.getBundlingPlatform().getLowerCaseNameInPlist(),
+            Strings.nullToEmpty(configuration.getIosSdkVersion()));
     ruleContext.registerAction(
         ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
             .setMnemonic("EnvironmentPlist")
@@ -492,8 +428,7 @@ public final class ReleaseBundlingSupport {
       Artifact ipaInput) {
     ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     String escapedSimDevice = ShellUtils.shellEscape(objcConfiguration.getIosSimulatorDevice());
-    String escapedSdkVersion =
-        ShellUtils.shellEscape(objcConfiguration.getIosSimulatorVersion().toString());
+    String escapedSdkVersion = ShellUtils.shellEscape(objcConfiguration.getIosSimulatorVersion());
     ImmutableList<Substitution> substitutions = ImmutableList.of(
         Substitution.of("%app_name%", ruleContext.getLabel().getName()),
         Substitution.of("%ipa_file%", ipaInput.getRootRelativePath().getPathString()),
@@ -528,18 +463,14 @@ public final class ReleaseBundlingSupport {
     if (attributes.appIcon() != null) {
       extraArgs.add("--app-icon", attributes.appIcon());
     }
-    if (attributes.launchImage() != null && !ObjcRuleClasses.useLaunchStoryboard(ruleContext)) {
+    if (attributes.launchImage() != null) {
       extraArgs.add("--launch-image", attributes.launchImage());
     }
     return new ExtraActoolArgs(extraArgs.build());
   }
 
-  private Bundling bundling(
-      RuleContext ruleContext,
-      ObjcProvider objcProvider,
-      String bundleDirFormat,
-      String bundleName,
-      DottedVersion minimumOsVersion) {
+  private Bundling bundling(RuleContext ruleContext, ObjcProvider objcProvider,
+      String bundleDirFormat, String bundleName, String minimumOsVersion) {
     ImmutableList<BundleableFile> extraBundleFiles;
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
     if (appleConfiguration.getBundlingPlatform() == Platform.IOS_DEVICE) {
@@ -559,27 +490,21 @@ public final class ReleaseBundlingSupport {
       fallbackBundleId = ruleContext.attributes().get("bundle_id", Type.STRING);
     }
 
-    Bundling.Builder bundling =
-        new Builder()
-            .setName(bundleName)
-            // Architecture that determines which nested bundles are kept.
-            .setArchitecture(appleConfiguration.getDependencySingleArchitecture())
-            .setBundleDirFormat(bundleDirFormat)
-            .addExtraBundleFiles(extraBundleFiles)
-            .setObjcProvider(objcProvider)
-            .addInfoplistInputFromRule(ruleContext)
-            .addInfoplistInput(getGeneratedVersionPlist())
-            .addInfoplistInput(getGeneratedEnvironmentPlist())
-            .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
-            .setPrimaryBundleId(primaryBundleId)
-            .setFallbackBundleId(fallbackBundleId)
-            .setMinimumOsVersion(minimumOsVersion);
-
-    if (ObjcRuleClasses.useLaunchStoryboard(ruleContext)) {
-      bundling.addInfoplistInput(getLaunchStoryboardPlist());
-    }
-
-    return bundling.build();
+    return new Bundling.Builder()
+        .setName(bundleName)
+        // Architecture that determines which nested bundles are kept.
+        .setArchitecture(appleConfiguration.getDependencySingleArchitecture())
+        .setBundleDirFormat(bundleDirFormat)
+        .addExtraBundleFiles(extraBundleFiles)
+        .setObjcProvider(objcProvider)
+        .addInfoplistInputFromRule(ruleContext)
+        .addInfoplistInput(getGeneratedVersionPlist())
+        .addInfoplistInput(getGeneratedEnvironmentPlist())
+        .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
+        .setPrimaryBundleId(primaryBundleId)
+        .setFallbackBundleId(fallbackBundleId)
+        .setMinimumOsVersion(minimumOsVersion)
+        .build();
   }
 
   private void registerCombineArchitecturesAction() {
@@ -617,7 +542,7 @@ public final class ReleaseBundlingSupport {
           .setValue(attributes.appIcon())
           .build());
     }
-    if (attributes.launchImage() != null && !ObjcRuleClasses.useLaunchStoryboard(ruleContext)) {
+    if (attributes.launchImage() != null) {
       buildSettings.add(XcodeprojBuildSetting.newBuilder()
           .setName("ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME")
           .setValue(attributes.launchImage())
@@ -889,11 +814,6 @@ public final class ReleaseBundlingSupport {
         ruleContext.getUniqueDirectory("plists"), "-environment.plist");
   }
 
-  private Artifact getLaunchStoryboardPlist() {
-    return ruleContext.getRelatedArtifact(
-        ruleContext.getUniqueDirectory("plists"), "-launchstoryboard.plist");
-  }
-
   /**
    * Logic to access attributes required by application support. Attributes are required and
    * guaranteed to return a value or throw unless they are annotated with {@link Nullable} in which
@@ -914,11 +834,6 @@ public final class ReleaseBundlingSupport {
     @Nullable
     String launchImage() {
       return stringAttribute("launch_image");
-    }
-
-    @Nullable
-    Artifact launchStoryboard() {
-      return ruleContext.getPrerequisiteArtifact("launch_storyboard", Mode.TARGET);
     }
 
     @Nullable
