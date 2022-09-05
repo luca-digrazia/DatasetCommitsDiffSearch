@@ -77,9 +77,9 @@ import com.google.devtools.build.skyframe.ValueOrException;
 import com.google.devtools.build.skyframe.ValueOrException2;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -396,12 +396,11 @@ final class ConfiguredTargetFunction implements SkyFunction {
   }
 
   /**
-   * Variation of {@link Multimap#put} that triggers an exception if a value already exists.
+   * Variation of {@link Map#put} that triggers an exception if another value already exists.
    */
-  private static <K, V> void putOnlyEntry(Multimap<K, V> map, K key, V value) {
-    Verify.verify(!map.containsKey(key),
+  private static <K, V> void putOnlyEntry(Map<K, V> map, K key, V value) {
+    Verify.verify(map.put(key, value) == null,
         "couldn't insert %s: map already has key %s", value.toString(), key.toString());
-    map.put(key, value);
   }
 
   /**
@@ -433,9 +432,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
     // particular subset of fragments. By caching this, we save from redundantly computing the
     // same transition for every dependency edge that requests that transition. This can have
     // real effect on analysis time for commonly triggered transitions.
-    //
-    // Split transitions may map to multiple values. All other transitions map to one.
-    Map<FragmentsAndTransition, List<BuildOptions>> transitionsMap = new LinkedHashMap<>();
+    Map<FragmentsAndTransition, BuildOptions> transitionsMap = new HashMap<>();
 
     // The fragments used by the current target's configuration.
     Set<Class<? extends BuildConfiguration.Fragment>> ctgFragments =
@@ -448,7 +445,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
     // the results in order (some results need Skyframe-evaluated configurations while others can
     // be computed trivially), we dump them all into this map, then as a final step iterate through
     // the original list and pluck out values from here for the final value.
-    Multimap<AttributeAndLabel, Dependency> trimmedDeps = ArrayListMultimap.create();
+    Map<AttributeAndLabel, Dependency> trimmedDeps = new HashMap<>();
 
     for (Map.Entry<Attribute, Dependency> depsEntry : originalDeps.entries()) {
       Dependency dep = depsEntry.getValue();
@@ -458,7 +455,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
       if (dep.hasStaticConfiguration()) {
         // Certain targets (like output files and late-bound splits) trivially pass their
         // configurations to their deps. So no need to transform them in any way.
-        trimmedDeps.put(attributeAndLabel, dep);
+        putOnlyEntry(trimmedDeps, attributeAndLabel, dep);
         continue;
       } else if (dep.getTransition() == Attribute.ConfigurationTransition.NULL) {
         putOnlyEntry(
@@ -511,24 +508,26 @@ final class ConfiguredTargetFunction implements SkyFunction {
 
       // Apply the transition or use the cached result if it was already applied.
       FragmentsAndTransition transitionKey = new FragmentsAndTransition(depFragments, transition);
-      List<BuildOptions> toOptions = transitionsMap.get(transitionKey);
+      BuildOptions toOptions = transitionsMap.get(transitionKey);
       if (toOptions == null) {
-        ImmutableList.Builder<BuildOptions> toOptionsBuilder = ImmutableList.builder();
-        for (BuildOptions options : getDynamicTransitionOptions(ctgOptions, transition)) {
-          if (!sameFragments) {
-            options = options.trim(BuildConfiguration.getOptionsClasses(
-                transitiveDepInfo.getTransitiveConfigFragments(), ruleClassProvider));
-          }
-          toOptionsBuilder.add(options);
+        Verify.verify(transition == Attribute.ConfigurationTransition.NONE
+            || transition instanceof PatchTransition);
+        BuildOptions fromOptions = ctgOptions;
+        // TODO(bazel-team): safety-check that the below call never mutates fromOptions.
+        toOptions = transition == Attribute.ConfigurationTransition.NONE
+            ? fromOptions
+            : ((PatchTransition) transition).apply(fromOptions);
+        if (!sameFragments) {
+          // TODO(bazel-team): pre-compute getOptionsClasses in the constructor.
+          toOptions = toOptions.trim(BuildConfiguration.getOptionsClasses(
+              transitiveDepInfo.getTransitiveConfigFragments(), ruleClassProvider));
         }
-        toOptions = toOptionsBuilder.build();
         transitionsMap.put(transitionKey, toOptions);
       }
 
       // If the transition doesn't change the configuration, trivially re-use the original
       // configuration.
-      if (sameFragments && toOptions.size() == 1
-          && Iterables.getOnlyElement(toOptions).equals(ctgOptions)) {
+      if (sameFragments && toOptions.equals(ctgOptions)) {
         putOnlyEntry(
             trimmedDeps,
             attributeAndLabel,
@@ -538,9 +537,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
       }
 
       // If we get here, we have to get the configuration from Skyframe.
-      for (BuildOptions options : toOptions) {
-        keysToEntries.put(BuildConfigurationValue.key(depFragments, options), depsEntry);
-      }
+      keysToEntries.put(BuildConfigurationValue.key(depFragments, toOptions), depsEntry);
     }
 
     // Get all BuildConfigurations we need to get from Skyframe.
@@ -558,14 +555,11 @@ final class ConfiguredTargetFunction implements SkyFunction {
         BuildConfigurationValue trimmedConfig = (BuildConfigurationValue) entry.getValue().get();
         for (Map.Entry<Attribute, Dependency> info : keysToEntries.get(key)) {
           Dependency originalDep = info.getValue();
-          AttributeAndLabel attr = new AttributeAndLabel(info.getKey(), originalDep.getLabel());
-          Dependency resolvedDep = Dependency.withConfigurationAndAspects(originalDep.getLabel(),
-              trimmedConfig.getConfiguration(), originalDep.getAspects());
-          if (originalDep.getTransition() instanceof Attribute.SplitTransition) {
-            trimmedDeps.put(attr, resolvedDep);
-          } else {
-            putOnlyEntry(trimmedDeps, attr, resolvedDep);
-          }
+          putOnlyEntry(trimmedDeps, new AttributeAndLabel(info.getKey(), originalDep.getLabel()),
+              Dependency.withConfigurationAndAspects(
+                  originalDep.getLabel(),
+                  trimmedConfig.getConfiguration(),
+                  originalDep.getAspects()));
         }
       }
     } catch (InvalidConfigurationException e) {
@@ -576,45 +570,13 @@ final class ConfiguredTargetFunction implements SkyFunction {
     // appear in the same order) as the input.
     ListMultimap<Attribute, Dependency> result = ArrayListMultimap.create();
     for (Map.Entry<Attribute, Dependency> depsEntry : originalDeps.entries()) {
-      Collection<Dependency> trimmedAttrDeps = trimmedDeps.get(
-          new AttributeAndLabel(depsEntry.getKey(), depsEntry.getValue().getLabel()));
-      Verify.verify(!trimmedAttrDeps.isEmpty());
-      result.putAll(depsEntry.getKey(), trimmedAttrDeps);
+      Dependency trimmedDep = Verify.verifyNotNull(
+          trimmedDeps.get(
+              new AttributeAndLabel(depsEntry.getKey(), depsEntry.getValue().getLabel())));
+      result.put(depsEntry.getKey(), trimmedDep);
     }
     return result;
   }
-
-  /**
-   * Applies a dynamic configuration transition over a set of build options.
-   *
-   * @return the build options for the transitioned configuration. Contains the same fragment
-   *     options as the input.
-   */
-  private static Collection<BuildOptions> getDynamicTransitionOptions(BuildOptions fromOptions,
-      Attribute.Transition transition) {
-    if (transition == Attribute.ConfigurationTransition.NONE) {
-      return ImmutableList.<BuildOptions>of(fromOptions);
-    } else if (transition instanceof PatchTransition) {
-      // TODO(bazel-team): safety-check that this never mutates fromOptions.
-      return ImmutableList.<BuildOptions>of(((PatchTransition) transition).apply(fromOptions));
-    } else if (transition instanceof Attribute.SplitTransition) {
-      @SuppressWarnings("unchecked") // Attribute.java doesn't have the BuildOptions symbol.
-      List<BuildOptions> toOptions =
-          ((Attribute.SplitTransition<BuildOptions>) transition).split(fromOptions);
-      if (toOptions.isEmpty()) {
-        // When the split returns an empty list, it's signaling it doesn't apply to this instance.
-        // Check that it's safe to skip the transition and return the original options.
-        Verify.verify(transition.defaultsToSelf());
-        return ImmutableList.<BuildOptions>of(fromOptions);
-      } else {
-        return toOptions;
-      }
-    } else {
-      throw new IllegalStateException(String.format(
-          "unsupported dynamic transition type: %s", transition.getClass().getName()));
-    }
-  }
-
 
   /**
    * Diagnostic helper method for dynamic configurations: checks the config fragments required by
