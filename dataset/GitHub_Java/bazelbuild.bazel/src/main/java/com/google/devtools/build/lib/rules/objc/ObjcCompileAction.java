@@ -112,7 +112,7 @@ public class ObjcCompileAction extends SpawnAction {
   @Override
   public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext) {
     // We do not use include scanning for objc
-    return null;
+    return getInputs();
   }
 
   @Override
