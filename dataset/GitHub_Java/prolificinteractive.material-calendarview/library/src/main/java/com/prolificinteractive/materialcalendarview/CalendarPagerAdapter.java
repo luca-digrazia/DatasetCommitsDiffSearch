@@ -122,9 +122,9 @@ abstract class CalendarPagerAdapter<V extends CalendarPagerView> extends PagerAd
         if (!(isInstanceOfView(object))) {
             return POSITION_NONE;
         }
-        CalendarPagerView pagerView = (CalendarPagerView) object;
-        CalendarDay firstViewDay = pagerView.getFirstViewDay();
-        if (firstViewDay == null) {
+        MonthView monthView = (MonthView) object;
+        CalendarDay month = monthView.getMonth();
+        if (month == null) {
             return POSITION_NONE;
         }
         int index = indexOf((V) object);
@@ -137,6 +137,7 @@ abstract class CalendarPagerAdapter<V extends CalendarPagerView> extends PagerAd
     @Override
     public Object instantiateItem(ViewGroup container, int position) {
         V pagerView = createView(position);
+        pagerView.setContentDescription(mcv.getCalendarContentDescription());
         pagerView.setAlpha(0);
         pagerView.setSelectionEnabled(selectionEnabled);
 
