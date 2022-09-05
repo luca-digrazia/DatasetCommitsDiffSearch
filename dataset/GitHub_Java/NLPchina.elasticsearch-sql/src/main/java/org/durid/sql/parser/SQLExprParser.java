@@ -140,9 +140,6 @@ public class SQLExprParser extends SQLParser {
                     sqlExpr = listExpr;
                 }
                 accept(Token.RPAREN);
-                if (sqlExpr instanceof SQLIdentifierExpr) {
-                    ((SQLIdentifierExpr) sqlExpr).setWrappedInParens(true);
-                }
                 break;
             case LBRACE:
                 lexer.nextToken();
