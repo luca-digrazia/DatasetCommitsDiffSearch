@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.base.Optional;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -71,7 +72,7 @@ final class CompilationArtifacts {
       this.precompiledSrcs = Iterables.concat(this.precompiledSrcs, precompiledSrcs);
       return this;
     }
-
+    
     Builder setPchFile(Optional<Artifact> pchFile) {
       Preconditions.checkState(this.pchFile == null,
           "pchFile is already set to: %s", this.pchFile);
@@ -84,14 +85,6 @@ final class CompilationArtifacts {
           "intermediateArtifacts is already set to: %s", this.intermediateArtifacts);
       this.intermediateArtifacts = intermediateArtifacts;
       return this;
-    }
-
-    Builder addAllSources(CompilationArtifacts otherArtifacts) {
-      return this.addNonArcSrcs(otherArtifacts.getNonArcSrcs())
-          .addSrcs(otherArtifacts.getSrcs())
-          .addPrecompiledSrcs(otherArtifacts.getPrecompiledSrcs())
-          .addPrivateHdrs(otherArtifacts.getPrivateHdrs())
-          .addAdditionalHdrs(otherArtifacts.getAdditionalHdrs());
     }
 
     CompilationArtifacts build() {
@@ -113,6 +106,7 @@ final class CompilationArtifacts {
   private final Iterable<Artifact> privateHdrs;
   private final Iterable<Artifact> precompiledSrcs;
   private final Optional<Artifact> pchFile;
+  private final boolean hasSwiftSources;
 
   private CompilationArtifacts(
       Iterable<Artifact> srcs,
@@ -129,6 +123,12 @@ final class CompilationArtifacts {
     this.precompiledSrcs = Preconditions.checkNotNull(precompiledSrcs);
     this.archive = Preconditions.checkNotNull(archive);
     this.pchFile = Preconditions.checkNotNull(pchFile);
+    this.hasSwiftSources = Iterables.any(this.srcs, new Predicate<Artifact>() {
+      @Override
+      public boolean apply(Artifact artifact) {
+        return ObjcRuleClasses.SWIFT_SOURCES.matches(artifact.getExecPath());
+      }
+    });
   }
 
   public Iterable<Artifact> getSrcs() {
@@ -174,4 +174,10 @@ final class CompilationArtifacts {
     return pchFile;
   }
 
+  /**
+   * Returns true if any of this target's srcs are Swift source files.
+   */
+  public boolean hasSwiftSources() {
+    return hasSwiftSources;
+  }
 }
