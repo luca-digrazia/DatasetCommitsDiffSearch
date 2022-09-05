@@ -129,7 +129,6 @@ public final class BlazeRuntime {
   // For bazel query.
   private final QueryEnvironmentFactory queryEnvironmentFactory;
   private final ImmutableList<QueryFunction> queryFunctions;
-  private final ImmutableList<OutputFormatter> queryOutputFormatters;
 
   private final AtomicInteger storedExitCode = new AtomicInteger();
 
@@ -149,7 +148,6 @@ public final class BlazeRuntime {
   private BlazeRuntime(
       QueryEnvironmentFactory queryEnvironmentFactory,
       ImmutableList<QueryFunction> queryFunctions,
-      ImmutableList<OutputFormatter> queryOutputFormatters,
       PackageFactory pkgFactory,
       ConfiguredRuleClassProvider ruleClassProvider,
       ConfigurationFactory configurationFactory,
@@ -177,7 +175,6 @@ public final class BlazeRuntime {
     this.startupOptionsProvider = startupOptionsProvider;
     this.queryEnvironmentFactory = queryEnvironmentFactory;
     this.queryFunctions = queryFunctions;
-    this.queryOutputFormatters = queryOutputFormatters;
     this.eventBusExceptionHandler = eventBusExceptionHandler;
 
     this.defaultsPackageContent =
@@ -302,15 +299,21 @@ public final class BlazeRuntime {
     return queryFunctions;
   }
 
-  public ImmutableList<OutputFormatter> getQueryOutputFormatters() {
-    return queryOutputFormatters;
-  }
-
   /**
    * Returns the package factory.
    */
   public PackageFactory getPackageFactory() {
     return packageFactory;
+  }
+
+  public ImmutableList<OutputFormatter> getQueryOutputFormatters() {
+    ImmutableList.Builder<OutputFormatter> result = ImmutableList.builder();
+    result.addAll(OutputFormatter.getDefaultFormatters());
+    for (BlazeModule module : blazeModules) {
+      result.addAll(module.getQueryOutputFormatters());
+    }
+
+    return result.build();
   }
 
   /**
@@ -1063,7 +1066,6 @@ public final class BlazeRuntime {
             BlazeVersionInfo.instance(), instanceId, serverDirectories, clock);
       }
       ServerBuilder serverBuilder = new ServerBuilder();
-      serverBuilder.addQueryOutputFormatters(OutputFormatter.getDefaultFormatters());
       for (BlazeModule module : blazeModules) {
         module.serverInit(startupOptionsProvider, serverBuilder);
       }
@@ -1122,7 +1124,6 @@ public final class BlazeRuntime {
       return new BlazeRuntime(
           serverBuilder.getQueryEnvironmentFactory(),
           serverBuilder.getQueryFunctions(),
-          serverBuilder.getQueryOutputFormatters(),
           packageFactory,
           ruleClassProvider,
           configurationFactory,

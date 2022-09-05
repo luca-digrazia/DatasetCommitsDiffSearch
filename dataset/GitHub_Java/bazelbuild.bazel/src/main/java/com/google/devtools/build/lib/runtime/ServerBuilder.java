@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.QueryEnvironmentFactory;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
-import com.google.devtools.build.lib.query2.output.OutputFormatter;
 import com.google.devtools.build.lib.runtime.commands.InfoItem;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -38,8 +37,6 @@ public final class ServerBuilder {
   private final ImmutableList.Builder<BlazeCommand> commands = ImmutableList.builder();
   private final ImmutableMap.Builder<String, InfoItem> infoItems = ImmutableMap.builder();
   private final ImmutableList.Builder<QueryFunction> queryFunctions = ImmutableList.builder();
-  private final ImmutableList.Builder<OutputFormatter> queryOutputFormatters =
-      ImmutableList.builder();
 
   @VisibleForTesting
   public ServerBuilder() {}
@@ -66,10 +63,6 @@ public final class ServerBuilder {
 
   ImmutableList<QueryFunction> getQueryFunctions() {
     return queryFunctions.build();
-  }
-
-  ImmutableList<OutputFormatter> getQueryOutputFormatters() {
-    return queryOutputFormatters.build();
   }
 
   @VisibleForTesting
@@ -146,16 +139,6 @@ public final class ServerBuilder {
 
   public ServerBuilder addQueryFunctions(QueryFunction... functions) {
     this.queryFunctions.add(functions);
-    return this;
-  }
-
-  public ServerBuilder addQueryOutputFormatters(OutputFormatter... formatters) {
-    this.queryOutputFormatters.add(formatters);
-    return this;
-  }
-
-  public ServerBuilder addQueryOutputFormatters(Iterable<OutputFormatter> formatters) {
-    this.queryOutputFormatters.addAll(formatters);
     return this;
   }
 }
