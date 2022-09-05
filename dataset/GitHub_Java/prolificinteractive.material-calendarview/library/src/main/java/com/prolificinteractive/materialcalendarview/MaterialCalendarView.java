@@ -251,6 +251,8 @@ public class MaterialCalendarView extends ViewGroup {
             removeView(pager);
             MonthView monthView = new MonthView(context, currentMonth, getFirstDayOfWeek());
             monthView.setSelectionColor(getSelectionColor());
+//            monthView.setWeekDayFormatter(weekDayFormatter);
+//            monthView.setDayFormatter(dayFormatter);
             monthView.setDateTextAppearance(adapter.getDateTextAppearance());
             monthView.setWeekDayTextAppearance(adapter.getWeekDayTextAppearance());
             monthView.setShowOtherDates(getShowOtherDates());
@@ -746,12 +748,14 @@ public class MaterialCalendarView extends ViewGroup {
 
     @Override
     protected void dispatchSaveInstanceState(@NonNull SparseArray<Parcelable> container) {
-        dispatchFreezeSelfOnly(container);
+        //super.dispatchSaveInstanceState(container);
+        super.dispatchFreezeSelfOnly(container);
     }
 
     @Override
     protected void dispatchRestoreInstanceState(@NonNull SparseArray<Parcelable> container) {
-        dispatchThawSelfOnly(container);
+        //super.dispatchRestoreInstanceState(container);
+        super.dispatchThawSelfOnly(container);
     }
 
     private void setRangeDates(CalendarDay min, CalendarDay max) {
