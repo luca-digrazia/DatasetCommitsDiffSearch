@@ -17,6 +17,7 @@ import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
+import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
 
 /**
@@ -34,7 +35,7 @@ public class DirectoryListingStateFunction implements SkyFunction {
   }
 
   @Override
-  public DirectoryListingStateValue compute(SkyKey skyKey, Environment env)
+  public SkyValue compute(SkyKey skyKey, Environment env)
       throws DirectoryListingStateFunctionException, InterruptedException {
     RootedPath dirRootedPath = (RootedPath) skyKey.argument();
 
