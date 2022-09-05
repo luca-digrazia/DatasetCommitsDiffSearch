@@ -253,34 +253,31 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
     Collection<Artifact> privateHdrs =
         ImmutableSortedSet.copyOf(compilationArtifacts.getPrivateHdrs());
     Collection<Artifact> publicHdrs = ImmutableSortedSet.copyOf(attributes.hdrs());
-    CcLibraryHelper result =
-        new CcLibraryHelper(
-                ruleContext,
-                new ObjcCppSemantics(
-                    objcProvider, ruleContext.getFragment(ObjcConfiguration.class)),
-                getFeatureConfiguration(ruleContext),
-                CcLibraryHelper.SourceCategory.CC_AND_OBJC)
-            .addSources(arcSources, ImmutableMap.of("objc_arc", ""))
-            .addSources(nonArcSources, ImmutableMap.of("no_objc_arc", ""))
-            .addSources(privateHdrs)
-            .addDefines(objcProvider.get(DEFINE))
-            .enableCompileProviders()
-            .addPublicHeaders(publicHdrs)
-            .addPrecompiledFiles(precompiledFiles)
-            .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
-            .addCopts(getCompileRuleCopts())
-            .addIncludeDirs(objcProvider.get(INCLUDE))
-            .addCopts(ruleContext.getFragment(ObjcConfiguration.class).getCoptsForCompilationMode())
-            .addSystemIncludeDirs(objcProvider.get(INCLUDE_SYSTEM))
-            .setCppModuleMap(intermediateArtifacts.moduleMap())
-            .setPropagateModuleMapToCompileAction(false)
-            .addVariableExtension(extension);
-
     Artifact pchHdr = ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET);
-    if (pchHdr != null) {
-      result.addNonModuleMapHeader(pchHdr);
-    }
-    return result;
+    ImmutableList<Artifact> pchHdrList =
+        (pchHdr != null) ? ImmutableList.<Artifact>of(pchHdr) : ImmutableList.<Artifact>of();
+    return new CcLibraryHelper(
+            ruleContext,
+            new ObjcCppSemantics(
+                objcProvider, ruleContext.getFragment(ObjcConfiguration.class)),
+            getFeatureConfiguration(ruleContext),
+            CcLibraryHelper.SourceCategory.CC_AND_OBJC)
+        .addSources(arcSources, ImmutableMap.of("objc_arc", ""))
+        .addSources(nonArcSources, ImmutableMap.of("no_objc_arc", ""))
+        .addSources(privateHdrs)
+        .addDefines(objcProvider.get(DEFINE))
+        .enableCompileProviders()
+        .addPublicHeaders(publicHdrs)
+        .addPublicHeaders(pchHdrList)
+        .addPrecompiledFiles(precompiledFiles)
+        .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
+        .addCopts(getCompileRuleCopts())
+        .addIncludeDirs(objcProvider.get(INCLUDE))
+        .addCopts(ruleContext.getFragment(ObjcConfiguration.class).getCoptsForCompilationMode())
+        .addSystemIncludeDirs(objcProvider.get(INCLUDE_SYSTEM))
+        .setCppModuleMap(intermediateArtifacts.moduleMap())
+        .setPropagateModuleMapToCompileAction(false)
+        .addVariableExtension(extension);
   }
 
   private static FeatureConfiguration getFeatureConfiguration(RuleContext ruleContext) {
