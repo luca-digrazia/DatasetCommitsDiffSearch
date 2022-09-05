@@ -293,7 +293,6 @@ public final class CcLibraryHelper {
   private boolean propagateModuleMapToCompileAction = true;
 
   private final FeatureConfiguration featureConfiguration;
-  private CcToolchainProvider ccToolchain;
 
   /**
    * Creates a CcLibraryHelper.
@@ -302,19 +301,25 @@ public final class CcLibraryHelper {
    * @param semantics  CppSemantics for the build
    * @param featureConfiguration  activated features and action configs for the build
    * @param sourceCatagory  the candidate source types for the build
-   * @param ccToolchain the C++ toolchain provider for the build
    */
   public CcLibraryHelper(
       RuleContext ruleContext,
       CppSemantics semantics,
       FeatureConfiguration featureConfiguration,
-      SourceCategory sourceCatagory,
-      CcToolchainProvider ccToolchain) {
+      SourceCategory sourceCatagory) {
     this.ruleContext = Preconditions.checkNotNull(ruleContext);
     this.semantics = Preconditions.checkNotNull(semantics);
     this.featureConfiguration = Preconditions.checkNotNull(featureConfiguration);
     this.sourceCategory = Preconditions.checkNotNull(sourceCatagory);
-    this.ccToolchain = Preconditions.checkNotNull(ccToolchain);
+  }
+
+  public CcLibraryHelper(
+      RuleContext ruleContext, CppSemantics semantics, SourceCategory sourceCategory) {
+    this(
+        ruleContext,
+        semantics,
+        CcCommon.configureFeatures(ruleContext, sourceCategory),
+        sourceCategory);
   }
 
   /**
@@ -323,12 +328,10 @@ public final class CcLibraryHelper {
    * @param ruleContext the RuleContext for the rule being built
    * @param semantics CppSemantics for the build
    * @param featureConfiguration activated features and action configs for the build
-   * @param ccToolchain the C++ toolchain provider for the build
    */
   public CcLibraryHelper(
-      RuleContext ruleContext, CppSemantics semantics, FeatureConfiguration featureConfiguration,
-      CcToolchainProvider ccToolchain) {
-    this(ruleContext, semantics, featureConfiguration, SourceCategory.CC, ccToolchain);
+      RuleContext ruleContext, CppSemantics semantics, FeatureConfiguration featureConfiguration) {
+    this(ruleContext, semantics, featureConfiguration, SourceCategory.CC);
   }
 
   /** Sets fields that overlap for cc_library and cc_binary rules. */
@@ -1052,7 +1055,7 @@ public final class CcLibraryHelper {
    * Creates the C/C++ compilation action creator.
    */
   private CppModel initializeCppModel() {
-    return new CppModel(ruleContext, semantics, ccToolchain)
+    return new CppModel(ruleContext, semantics)
         .addCompilationUnitSources(compilationUnitSources)
         .addCopts(copts)
         .setLinkTargetType(linkType)
@@ -1227,7 +1230,7 @@ public final class CcLibraryHelper {
     contextBuilder.mergeDependentContexts(
         AnalysisUtils.getProviders(deps, CppCompilationContext.class));
     contextBuilder.mergeDependentContexts(depContexts);
-    CppHelper.mergeToolchainDependentContext(ruleContext, ccToolchain, contextBuilder);
+    CppHelper.mergeToolchainDependentContext(ruleContext, contextBuilder);
 
     // But defines come after those inherited from deps.
     contextBuilder.addDefines(defines);
@@ -1343,8 +1346,9 @@ public final class CcLibraryHelper {
       }
     }
 
-    if (ccToolchain != null) {
-      result.add(ccToolchain.getCppCompilationContext().getCppModuleMap());
+    CcToolchainProvider toolchain = CppHelper.getToolchain(ruleContext);
+    if (toolchain != null) {
+      result.add(toolchain.getCppCompilationContext().getCppModuleMap());
     }
     for (CppModuleMap additionalCppModuleMap : additionalCppModuleMaps) {
       result.add(additionalCppModuleMap);
