@@ -142,12 +142,9 @@ public final class AutoSize {
     public static void autoConvertDensity(Activity activity, float sizeInDp, boolean isBaseOnWidth) {
         Preconditions.checkNotNull(activity, "activity == null");
 
-        int screenSize = isBaseOnWidth ? AutoSizeConfig.getInstance().getScreenWidth()
-                : AutoSizeConfig.getInstance().getScreenHeight();
         String key = sizeInDp + "|" + isBaseOnWidth + "|"
                 + AutoSizeConfig.getInstance().isUseDeviceSize() + "|"
-                + AutoSizeConfig.getInstance().getInitScaledDensity() + "|"
-                + screenSize;
+                + AutoSizeConfig.getInstance().getInitScaledDensity();
 
         DisplayMetricsInfo displayMetricsInfo = mCache.get(key);
 
