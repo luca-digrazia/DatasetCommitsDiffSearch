@@ -16,7 +16,7 @@ package com.google.devtools.build.docgen;
 import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.ImmutableMap;
-import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -25,137 +25,83 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link RuleLinkExpander}. */
 @RunWith(JUnit4.class)
 public class RuleLinkExpanderTest {
-  private RuleLinkExpander multiPageExpander;
-  private RuleLinkExpander singlePageExpander;
+  private RuleLinkExpander expander;
 
   @Before public void setUp() {
-    Map<String, String> index = ImmutableMap.<String, String>builder()
+    expander = new RuleLinkExpander(ImmutableMap.<String, String>builder()
         .put("cc_library", "c-cpp")
         .put("cc_binary", "c-cpp")
         .put("java_binary", "java")
         .put("Fileset", "fileset")
         .put("proto_library", "protocol-buffer")
-        .build();
-    multiPageExpander = new RuleLinkExpander("product-name", index, false);
-    singlePageExpander = new RuleLinkExpander("product-name", index, true);
-  }
-
-  private void checkExpandSingle(String docs, String expected) {
-    assertEquals(expected, singlePageExpander.expand(docs));
-  }
-
-  private void checkExpandMulti(String docs, String expected) {
-    assertEquals(expected, multiPageExpander.expand(docs));
+        .build());
   }
 
   @Test public void testRule() {
-    checkExpandMulti(
-        "<a href=\"${link java_binary}\">java_binary rule</a>",
-        "<a href=\"java.html#java_binary\">java_binary rule</a>");
-    checkExpandSingle(
-        "<a href=\"${link java_binary}\">java_binary rule</a>",
-        "<a href=\"#java_binary\">java_binary rule</a>");
+    String docs = "<a href=\"${link java_binary}\">java_binary rule</a>";
+    String expected = "<a href=\"java.html#java_binary\">java_binary rule</a>";
+    assertEquals(expected, expander.expand(docs));
   }
 
   @Test public void testRuleAndAttribute() {
-    checkExpandMulti(
-        "<a href=\"${link java_binary.runtime_deps}\">runtime_deps attribute</a>",
-        "<a href=\"java.html#java_binary.runtime_deps\">runtime_deps attribute</a>");
-    checkExpandSingle(
-        "<a href=\"${link java_binary.runtime_deps}\">runtime_deps attribute</a>",
-        "<a href=\"#java_binary.runtime_deps\">runtime_deps attribute</a>");
+    String docs = "<a href=\"${link java_binary.runtime_deps}\">runtime_deps attribute</a>";
+    String expected = "<a href=\"java.html#java_binary.runtime_deps\">runtime_deps attribute</a>";
+    assertEquals(expected, expander.expand(docs));
   }
 
   @Test public void testUpperCaseRule() {
-    checkExpandMulti(
-        "<a href=\"${link Fileset.entries}\">entries</a>",
-        "<a href=\"fileset.html#Fileset.entries\">entries</a>");
-    checkExpandSingle(
-        "<a href=\"${link Fileset.entries}\">entries</a>",
-        "<a href=\"#Fileset.entries\">entries</a>");
+    String docs = "<a href=\"${link Fileset.entries}\">entries</a>";
+    String expected = "<a href=\"fileset.html#Fileset.entries\">entries</a>";
+    assertEquals(expected, expander.expand(docs));
   }
 
   @Test public void testRuleExamples() {
-    checkExpandMulti(
-        "<a href=\"${link cc_binary_examples}\">examples</a>",
-        "<a href=\"c-cpp.html#cc_binary_examples\">examples</a>");
-    checkExpandSingle(
-        "<a href=\"${link cc_binary_examples}\">examples</a>",
-        "<a href=\"#cc_binary_examples\">examples</a>");
+    String docs = "<a href=\"${link cc_binary_examples}\">examples</a>";
+    String expected = "<a href=\"c-cpp.html#cc_binary_examples\">examples</a>";
+    assertEquals(expected, expander.expand(docs));
   }
 
   @Test public void testRuleArgs() {
-    checkExpandMulti(
-        "<a href=\"${link cc_binary_args}\">args</a>",
-        "<a href=\"c-cpp.html#cc_binary_args\">args</a>");
-    checkExpandSingle(
-        "<a href=\"${link cc_binary_args}\">args</a>",
-        "<a href=\"#cc_binary_args\">args</a>");
+    String docs = "<a href=\"${link cc_binary_args}\">args</a>";
+    String expected = "<a href=\"c-cpp.html#cc_binary_args\">args</a>";
+    assertEquals(expected, expander.expand(docs));
   }
 
   @Test public void testRuleImplicitOutputsj() {
-    checkExpandMulti(
-        "<a href=\"${link cc_binary_implicit_outputs}\">args</a>",
-        "<a href=\"c-cpp.html#cc_binary_implicit_outputs\">args</a>");
-    checkExpandSingle(
-        "<a href=\"${link cc_binary_implicit_outputs}\">args</a>",
-        "<a href=\"#cc_binary_implicit_outputs\">args</a>");
+    String docs = "<a href=\"${link cc_binary_implicit_outputs}\">args</a>";
+    String expected = "<a href=\"c-cpp.html#cc_binary_implicit_outputs\">args</a>";
+    assertEquals(expected, expander.expand(docs));
   }
 
   @Test public void testStaticPageRef() {
-    checkExpandMulti(
-        "<a href=\"${link common-definitions}\">Common Definitions</a>",
-        "<a href=\"common-definitions.html\">Common Definitions</a>");
-    checkExpandSingle(
-        "<a href=\"${link common-definitions}\">Common Definitions</a>",
-        "<a href=\"#common-definitions\">Common Definitions</a>");
-  }
-
-  @Test public void testUserManualRefIncludesProductName() {
-    checkExpandMulti(
-        "<a href=\"${link user-manual#overview}\">Link</a>",
-        "<a href=\"product-name-user-manual.html#overview\">Link</a>");
-    checkExpandSingle(
-        "<a href=\"${link user-manual#overview}\">Link</a>",
-        "<a href=\"product-name-user-manual.html#overview\">Link</a>");
+    String docs = "<a href=\"${link common-definitions}\">Common Definitions</a>";
+    String expected = "<a href=\"common-definitions.html\">Common Definitions</a>";
+    assertEquals(expected, expander.expand(docs));
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void testRefNotFound() {
     String docs = "<a href=\"${link foo.bar}\">bar</a>";
-    multiPageExpander.expand(docs);
+    expander.expand(docs);
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void testIncorrectStaticPageHeadingLink() {
     String docs = "<a href=\"${link common-definitions.label-expansion}\">Label Expansion</a>";
-    multiPageExpander.expand(docs);
+    expander.expand(docs);
   }
 
   @Test public void testRuleHeadingLink() {
-    checkExpandMulti(
-        "<a href=\"${link cc_library#alwayslink_lib_example}\">examples</a>",
-        "<a href=\"c-cpp.html#alwayslink_lib_example\">examples</a>");
-    checkExpandSingle(
-        "<a href=\"${link cc_library#alwayslink_lib_example}\">examples</a>",
-        "<a href=\"#alwayslink_lib_example\">examples</a>");
+    String docs = "<a href=\"${link cc_library#alwayslink_lib_example}\">examples</a>";
+    String expected = "<a href=\"c-cpp.html#alwayslink_lib_example\">examples</a>";
+    assertEquals(expected, expander.expand(docs));
   }
 
   @Test public void testStaticPageHeadingLink() {
-    checkExpandMulti(
-        "<a href=\"${link make-variables#predefined_variables.genrule.cmd}\">genrule cmd</a>",
-        "<a href=\"make-variables.html#predefined_variables.genrule.cmd\">genrule cmd</a>");
-    checkExpandSingle(
-        "<a href=\"${link make-variables#predefined_variables.genrule.cmd}\">genrule cmd</a>",
-        "<a href=\"#predefined_variables.genrule.cmd\">genrule cmd</a>");
-  }
-
-  @Test public void testExpandRef() {
-    assertEquals(
-        "java.html#java_binary.runtime_deps",
-        multiPageExpander.expandRef("java_binary.runtime_deps"));
-    assertEquals(
-        "#java_binary.runtime_deps",
-        singlePageExpander.expandRef("java_binary.runtime_deps"));
+    String docs =
+        "<a href=\"${link make-variables#predefined_variables.genrule.cmd}\">genrule cmd</a>";
+    String expected =
+        "<a href=\"make-variables.html#predefined_variables.genrule.cmd\">genrule cmd</a>";
+    assertEquals(expected, expander.expand(docs));
   }
 }
