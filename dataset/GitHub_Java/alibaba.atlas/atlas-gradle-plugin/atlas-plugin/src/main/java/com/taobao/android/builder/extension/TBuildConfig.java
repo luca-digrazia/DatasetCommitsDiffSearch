@@ -247,16 +247,6 @@ public class TBuildConfig {
 
     private Boolean allBundlesToMdex = false;
 
-    public Boolean getConsumerProguardEnabled() {
-        return consumerProguardEnabled;
-    }
-
-    public void setConsumerProguardEnabled(Boolean consumerProguardEnabled) {
-        this.consumerProguardEnabled = consumerProguardEnabled;
-    }
-
-    private Boolean consumerProguardEnabled = false;
-
     public Boolean getMergeBundlesDex() {
         return mergeBundlesDex;
     }
@@ -367,17 +357,6 @@ public class TBuildConfig {
     @Deprecated
     private Boolean resV4Enabled = true;
 
-
-    public Boolean getDisabledBundleDependency() {
-        return disabledBundleDependency;
-    }
-
-    public void setDisabledBundleDependency(Boolean disabledBundleDependency) {
-        this.disabledBundleDependency = disabledBundleDependency;
-    }
-
-    private Boolean disabledBundleDependency = false;
-
     @Config(message = "classInjection before proguard", advance = true, order = 12, group = "atlas")
     private Boolean injectBeforeProguard = false;
 
@@ -430,7 +409,7 @@ public class TBuildConfig {
         this.injectSerialVersionUID = injectSerialVersionUID;
     }
 
-    private boolean injectSerialVersionUID = false;
+    private boolean injectSerialVersionUID = true;
 
     @Config(message = "Whether to use fast proguard", order = 16, advance = true, group = "atlas")
     private boolean fastProguard = false;
@@ -754,37 +733,5 @@ public class TBuildConfig {
 
     private boolean patchConstructors = false;
 
-    public boolean isPatchEachMethod() {
-        return patchEachMethod;
-    }
 
-    public void setPatchEachMethod(boolean patchEachMethod) {
-        this.patchEachMethod = patchEachMethod;
-    }
-
-    private boolean patchEachMethod = false;
-
-
-
-    public int getPatchSuperMethodCount() {
-        return patchSuperMethodCount;
-    }
-
-    public void setPatchSuperMethodCount(int patchSuperMethodCount) {
-        this.patchSuperMethodCount = patchSuperMethodCount;
-    }
-
-    private int patchSuperMethodCount = 100;
-
-    public void setSupportAddCallSuper(boolean supportAddCallSuper) {
-        this.supportAddCallSuper = supportAddCallSuper;
-    }
-
-    private boolean supportAddCallSuper = false;
-
-
-
-    public boolean isSupportAddCallSuper() {
-        return supportAddCallSuper;
-    }
 }

@@ -108,8 +108,7 @@ public class TBIncrementalSupportVisitor extends IncrementalVisitor {
 
         if (hasIncompatibleChange || disableRedirectionForClass
                 || !isAccessCompatibleWithInstantRun(access)
-                || name.equals(ByteCodeUtils.CLASS_INITIALIZER)
-                || (name.startsWith("access$")&&((access&Opcodes.ACC_SYNTHETIC)!=0))) {
+                || name.equals(ByteCodeUtils.CLASS_INITIALIZER)) {
             return defaultVisitor;
         } else {
             ArrayList<Type> args = new ArrayList<>(Arrays.asList(Type.getArgumentTypes(desc)));
@@ -516,8 +515,8 @@ public class TBIncrementalSupportVisitor extends IncrementalVisitor {
 
             @Override
             void visitDefault() {
-//                mv.visitInsn(Opcodes.RETURN);
-                writeMissingMessageWithHash(mv, visitedClassName);
+                mv.visitInsn(Opcodes.RETURN);
+//                writeMissingMessageWithHash(mv, visitedClassName);
             }
 
             @Override
@@ -659,10 +658,6 @@ public class TBIncrementalSupportVisitor extends IncrementalVisitor {
             ClassNode instrumentedClass,
             ClassNode superClass,
             Map<String, MethodReference> methods) {
-
-        if (superClass.name.equals("java/lang/Object")){
-            return;
-        }
         //noinspection unchecked
         for (MethodNode method : (List<MethodNode>) superClass.methods) {
             if (method.name.equals(ByteCodeUtils.CONSTRUCTOR) || method.name.equals("<clinit>")) {
