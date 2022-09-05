@@ -23,12 +23,11 @@ import javax.annotation.Nullable;
  * A graph that exposes its entries and structure, for use by classes that must traverse it.
  */
 @ThreadSafe
-public interface QueryableGraph extends ThinNodeQueryableGraph {
+public interface QueryableGraph {
   /**
    * Returns the node with the given name, or {@code null} if the node does not exist.
    */
   @Nullable
-  @Override
   NodeEntry get(SkyKey key);
 
   /**
@@ -36,6 +35,5 @@ public interface QueryableGraph extends ThinNodeQueryableGraph {
    * {@code keys}, {@code m.get(k).equals(e)} iff {@code get(k) == e} and {@code e != null}, and
    * {@code !m.containsKey(k)} iff {@code get(k) == null}.
    */
-  @Override
   Map<SkyKey, NodeEntry> getBatch(Iterable<SkyKey> keys);
 }
