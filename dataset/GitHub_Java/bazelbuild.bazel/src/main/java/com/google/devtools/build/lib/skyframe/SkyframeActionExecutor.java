@@ -67,6 +67,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.protobuf.ByteString;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
@@ -352,6 +353,10 @@ public final class SkyframeActionExecutor {
     this.executorEngine = null;
   }
 
+  File getExecRoot() {
+    return executorEngine.getExecRoot().getPathFile();
+  }
+
   boolean probeActionExecution(Action action) {
     return buildActionMap.containsKey(action.getPrimaryOutput());
   }
@@ -362,7 +367,7 @@ public final class SkyframeActionExecutor {
    *
    * <p>For use from {@link ArtifactFunction} only.
    */
-  ActionExecutionValue executeAction(Action action, ActionMetadataHandler metadataHandler,
+  ActionExecutionValue executeAction(Action action, FileAndMetadataCache graphFileCache,
       long actionStartTime,
       ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
@@ -373,7 +378,7 @@ public final class SkyframeActionExecutor {
     }
     Artifact primaryOutput = action.getPrimaryOutput();
     FutureTask<ActionExecutionValue> actionTask =
-        new FutureTask<>(new ActionRunner(action, metadataHandler,
+        new FutureTask<>(new ActionRunner(action, graphFileCache,
             actionStartTime, actionExecutionContext));
     // Check to see if another action is already executing/has executed this value.
     Pair<Action, FutureTask<ActionExecutionValue>> oldAction =
@@ -413,40 +418,33 @@ public final class SkyframeActionExecutor {
     }
   }
 
-  private static class MiddlemanExpanderImpl implements MiddlemanExpander {
-    private final Map<Artifact, Collection<Artifact>> expandedInputMiddlemen;
-
-    private MiddlemanExpanderImpl(Map<Artifact, Collection<Artifact>> expandedInputMiddlemen) {
-      this.expandedInputMiddlemen = expandedInputMiddlemen;
-    }
-
-    @Override
-    public void expand(Artifact middlemanArtifact, Collection<? super Artifact> output) {
-      Preconditions.checkState(middlemanArtifact.isMiddlemanArtifact(), middlemanArtifact);
-      Collection<Artifact> result = expandedInputMiddlemen.get(middlemanArtifact);
-      // Note that result may be null for non-aggregating middlemen.
-      if (result != null) {
-        output.addAll(result);
-      }
-    }
-  }
-
   /**
    * Returns an ActionExecutionContext suitable for executing a particular action. The caller should
    * pass the returned context to {@link #executeAction}, and any other method that needs to execute
    * tasks related to that action.
    */
   ActionExecutionContext constructActionExecutionContext(
-      PerActionFileCache graphFileCache, MetadataHandler metadataHandler,
-      Map<Artifact, Collection<Artifact>> expandedInputMiddlemen) {
+      final FileAndMetadataCache graphFileCache) {
     // TODO(bazel-team): this should be closed explicitly somewhere.
     FileOutErr fileOutErr = actionLogBufferPathGenerator.generate();
     return new ActionExecutionContext(
         executorEngine,
         new DelegatingPairFileCache(graphFileCache, perBuildFileCache),
-        metadataHandler,
+        graphFileCache,
         fileOutErr,
-        new MiddlemanExpanderImpl(expandedInputMiddlemen));
+        new MiddlemanExpander() {
+          @Override
+          public void expand(Artifact middlemanArtifact,
+              Collection<? super Artifact> output) {
+            // Legacy code is more permissive regarding "mm" in that it expands any middleman,
+            // not just inputs of this action. Skyframe doesn't have access to a global action
+            // graph, therefore this implementation can't expand any middleman, only the
+            // inputs of this action.
+            // This is fine though: actions should only hold references to their input
+            // artifacts, otherwise hermeticity would be violated.
+            output.addAll(graphFileCache.expandInputMiddleman(middlemanArtifact));
+          }
+        });
   }
 
   /**
@@ -544,15 +542,15 @@ public final class SkyframeActionExecutor {
 
   private class ActionRunner implements Callable<ActionExecutionValue> {
     private final Action action;
-    private final ActionMetadataHandler metadataHandler;
+    private final FileAndMetadataCache graphFileCache;
     private long actionStartTime;
     private ActionExecutionContext actionExecutionContext;
 
-    ActionRunner(Action action, ActionMetadataHandler metadataHandler,
+    ActionRunner(Action action, FileAndMetadataCache graphFileCache,
         long actionStartTime,
         ActionExecutionContext actionExecutionContext) {
       this.action = action;
-      this.metadataHandler = metadataHandler;
+      this.graphFileCache = graphFileCache;
       this.actionStartTime = actionStartTime;
       this.actionExecutionContext = actionExecutionContext;
     }
@@ -582,7 +580,7 @@ public final class SkyframeActionExecutor {
 
         prepareScheduleExecuteAndCompleteAction(action, actionExecutionContext, actionStartTime);
         return new ActionExecutionValue(
-            metadataHandler.getOutputData(), metadataHandler.getAdditionalOutputData());
+            graphFileCache.getOutputData(), graphFileCache.getAdditionalOutputData());
       } finally {
         profiler.completeTask(ProfilerTask.ACTION);
       }
@@ -1056,18 +1054,9 @@ public final class SkyframeActionExecutor {
 
     @Nullable
     @Override
-    public ActionInput getInputFromDigest(ByteString digest) throws IOException {
-      ActionInput file = perActionCache.getInputFromDigest(digest);
-      return file != null ? file : perBuildFileCache.getInputFromDigest(digest);
-    }
-
-    @Override
-    public Path getInputPath(ActionInput input) {
-      if (input instanceof Artifact) {
-        return perActionCache.getInputPath(input);
-      } else {
-        return perBuildFileCache.getInputPath(input);
-      }
+    public File getFileFromDigest(ByteString digest) throws IOException {
+      File file = perActionCache.getFileFromDigest(digest);
+      return file != null ? file : perBuildFileCache.getFileFromDigest(digest);
     }
   }
 }

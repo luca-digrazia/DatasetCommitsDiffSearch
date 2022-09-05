@@ -278,28 +278,29 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       return skyframeActionExecutor.executeAction(action, null, -1, null);
     }
     // This may be recreated if we discover inputs.
-    ActionMetadataHandler metadataHandler = new ActionMetadataHandler(state.inputArtifactData,
-        action.getOutputs(), tsgm);
+    FileAndMetadataCache fileAndMetadataCache = new FileAndMetadataCache(
+          state.inputArtifactData,
+          state.expandedMiddlemen,
+          skyframeActionExecutor.getExecRoot(),
+          action.getOutputs(),
+        tsgm);
     long actionStartTime = System.nanoTime();
     // We only need to check the action cache if we haven't done it on a previous run.
     if (!state.hasCheckedActionCache()) {
-      state.token = skyframeActionExecutor.checkActionCache(action, metadataHandler,
+      state.token = skyframeActionExecutor.checkActionCache(action, fileAndMetadataCache,
           actionStartTime, state.allInputs.actionCacheInputs);
     }
 
     if (state.token == null) {
       // We got a hit from the action cache -- no need to execute.
       return new ActionExecutionValue(
-          metadataHandler.getOutputData(),
-          metadataHandler.getAdditionalOutputData());
+          fileAndMetadataCache.getOutputData(),
+          fileAndMetadataCache.getAdditionalOutputData());
     }
 
     // This may be recreated if we discover inputs.
-    PerActionFileCache perActionFileCache =
-        new PerActionFileCache(state.inputArtifactData, skyframeActionExecutor.getExecRoot());
     ActionExecutionContext actionExecutionContext =
-        skyframeActionExecutor.constructActionExecutionContext(perActionFileCache,
-            metadataHandler, state.expandedMiddlemen);
+        skyframeActionExecutor.constructActionExecutionContext(fileAndMetadataCache);
     boolean inputsDiscoveredDuringActionExecution = false;
     Map<Artifact, FileArtifactValue> metadataFoundDuringActionExecution = null;
     try {
@@ -323,18 +324,20 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
             return null;
           }
           state.inputArtifactData = inputArtifactData;
-          perActionFileCache =
-              new PerActionFileCache(state.inputArtifactData, skyframeActionExecutor.getExecRoot());
-          metadataHandler =
-              new ActionMetadataHandler(state.inputArtifactData, action.getOutputs(), tsgm);
+          fileAndMetadataCache = new FileAndMetadataCache(
+              state.inputArtifactData,
+              state.expandedMiddlemen,
+              skyframeActionExecutor.getExecRoot(),
+              action.getOutputs(),
+              tsgm
+          );
           actionExecutionContext =
-              skyframeActionExecutor.constructActionExecutionContext(perActionFileCache,
-                  metadataHandler, state.expandedMiddlemen);
+              skyframeActionExecutor.constructActionExecutionContext(fileAndMetadataCache);
         }
       }
       if (!state.hasExecutedAction()) {
         state.value = skyframeActionExecutor.executeAction(action,
-            metadataHandler, actionStartTime, actionExecutionContext);
+            fileAndMetadataCache, actionStartTime, actionExecutionContext);
       }
     } finally {
       try {
@@ -359,10 +362,15 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       inputArtifactData.putAll(state.inputArtifactData);
       inputArtifactData.putAll(metadataFoundDuringActionExecution);
       state.inputArtifactData = inputArtifactData;
-      metadataHandler =
-          new ActionMetadataHandler(state.inputArtifactData, action.getOutputs(), tsgm);
+      fileAndMetadataCache = new FileAndMetadataCache(
+          state.inputArtifactData,
+          state.expandedMiddlemen,
+          skyframeActionExecutor.getExecRoot(),
+          action.getOutputs(),
+          tsgm
+      );
     }
-    skyframeActionExecutor.afterExecution(action, metadataHandler, state.token);
+    skyframeActionExecutor.afterExecution(action, fileAndMetadataCache, state.token);
     return state.value;
   }
 
