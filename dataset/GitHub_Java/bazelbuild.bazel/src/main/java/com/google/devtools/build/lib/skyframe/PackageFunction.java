@@ -412,15 +412,25 @@ public class PackageFunction implements SkyFunction {
     RootedPath buildFileRootedPath = RootedPath.toRootedPath(packageLookupValue.getRoot(),
         buildFileFragment);
     FileValue buildFileValue = null;
-    Path buildFilePath = buildFileRootedPath.asPath();
-    String replacementContents = null;
+    try {
+      buildFileValue = (FileValue) env.getValueOrThrow(FileValue.key(buildFileRootedPath),
+          IOException.class, FileSymlinkException.class,
+          InconsistentFilesystemException.class);
+    } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
+      throw new IllegalStateException("Package lookup succeeded but encountered error when "
+          + "getting FileValue for BUILD file directly.", e);
+    }
+    if (buildFileValue == null) {
+      return null;
+    }
+    Preconditions.checkState(buildFileValue.exists(),
+        "Package lookup succeeded but BUILD file doesn't exist");
 
-    if (!isDefaultsPackage(packageId)) {
-      buildFileValue = getBuildFileValue(env, buildFileRootedPath);
-      if (buildFileValue == null) {
-        return null;
-      }
-    } else {
+    Path buildFilePath = buildFileRootedPath.asPath();
+
+    String replacementContents = null;
+    if (packageId.getPackageFragment().equals(DEFAULTS_PACKAGE_NAME)
+        && packageId.getRepository().isDefault()) {
       replacementContents = PrecomputedValue.DEFAULTS_PACKAGE_CONTENTS.get(env);
       if (replacementContents == null) {
         return null;
@@ -503,24 +513,6 @@ public class PackageFunction implements SkyFunction {
     packageFunctionCache.invalidate(packageId);
 
     return new PackageValue(pkg);
-  }
-
-  private FileValue getBuildFileValue(Environment env, RootedPath buildFileRootedPath) {
-    FileValue buildFileValue;
-    try {
-      buildFileValue = (FileValue) env.getValueOrThrow(FileValue.key(buildFileRootedPath),
-          IOException.class, FileSymlinkException.class,
-          InconsistentFilesystemException.class);
-    } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
-      throw new IllegalStateException("Package lookup succeeded but encountered error when "
-          + "getting FileValue for BUILD file directly.", e);
-    }
-    if (buildFileValue == null) {
-      return null;
-    }
-    Preconditions.checkState(buildFileValue.exists(),
-        "Package lookup succeeded but BUILD file doesn't exist");
-    return buildFileValue;
   }
 
   @Nullable
@@ -1000,10 +992,5 @@ public class PackageFunction implements SkyFunction {
       this.importMap = importMap;
       this.fileDependencies = fileDependencies;
     }
-  }
-
-  static boolean isDefaultsPackage(PackageIdentifier packageIdentifier) {
-    return packageIdentifier.getRepository().isDefault()
-        && packageIdentifier.getPackageFragment().equals(DEFAULTS_PACKAGE_NAME);
   }
 }
