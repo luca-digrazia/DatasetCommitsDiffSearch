@@ -69,8 +69,8 @@ import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.rules.SkylarkAttr.Descriptor;
-import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature.Param;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.BuiltinFunction;
 import com.google.devtools.build.lib.syntax.ClassObject;
@@ -287,7 +287,7 @@ public class SkylarkRuleClassFunctions {
         Object implicitOutputs, Boolean executable, Boolean outputToGenfiles, SkylarkList fragments,
         SkylarkList hostFragments, FuncallExpression ast, Environment funcallEnv)
         throws EvalException, ConversionException {
-      funcallEnv.checkLoadingOrWorkspacePhase("rule", ast.getLocation());
+      funcallEnv.checkLoadingPhase("rule", ast.getLocation());
       RuleClassType type = test ? RuleClassType.TEST : RuleClassType.NORMAL;
       RuleClass parent = test ? getTestBaseRule(funcallEnv.getToolsRepository())
           : (executable ? binaryBaseRule : baseRule);
