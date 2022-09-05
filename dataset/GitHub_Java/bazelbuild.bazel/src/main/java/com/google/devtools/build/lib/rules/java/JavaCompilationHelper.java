@@ -625,7 +625,7 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
         ruleContext.getTokenizedStringListAttr("javacopts")));
   }
 
-  public void setTranslations(Collection<Artifact> translations) {
+  public void addTranslations(Collection<Artifact> translations) {
     Preconditions.checkArgument(!translationsFrozen);
     this.translations.addAll(translations);
   }

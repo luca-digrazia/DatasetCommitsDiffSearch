@@ -74,7 +74,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     attributesBuilder.addClassPathResources(
         ruleContext.getPrerequisiteArtifacts("classpath_resources", Mode.TARGET).list());
 
-    List<String> userJvmFlags = JavaCommon.getJvmFlags(ruleContext);
+    List<String> userJvmFlags = common.getJvmFlags();
 
     ruleContext.checkSrcsSamePackage(true);
     boolean createExecutable = ruleContext.attributes().get("create_executable", Type.BOOLEAN);
@@ -83,7 +83,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         Lists.<TransitiveInfoCollection>newArrayList(
             common.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
     semantics.checkRule(ruleContext, common);
-    String mainClass = semantics.getMainClass(ruleContext, common.getSrcsArtifacts());
+    String mainClass = semantics.getMainClass(ruleContext, common);
     String originalMainClass = mainClass;
     if (ruleContext.hasErrors()) {
       return null;
@@ -168,8 +168,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
 
     Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
 
-    JavaCompilationArtifacts javaArtifacts = javaArtifactsBuilder.build();
-    common.setJavaCompilationArtifacts(javaArtifacts);
+    common.setJavaCompilationArtifacts(javaArtifactsBuilder.build());
 
     Artifact manifestProtoOutput = helper.createManifestProtoOutput(classJar);
 
@@ -188,7 +187,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     helper.createSourceJarAction(srcJar, genSourceJar);
 
     common.setClassPathFragment(new ClasspathConfiguredFragment(
-        javaArtifacts, attributes, false));
+        common.getJavaCompilationArtifacts(), attributes, false));
 
     // Collect the action inputs for the runfiles collector here because we need to access the
     // analysis environment, and that may no longer be safe when the runfiles collector runs.
@@ -204,7 +203,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     if (createExecutable) {
       // Create a shell stub for a Java application
       semantics.createStubAction(ruleContext, common, jvmFlags, executable, mainClass,
-          JavaCommon.getJavaBinSubstitution(ruleContext, launcher));
+          common.getJavaBinSubstitution(launcher));
     }
 
     NestedSet<Artifact> transitiveSourceJars = collectTransitiveSourceJars(common, srcJar);
@@ -217,10 +216,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
 
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext);
-    builder.add(
-        JavaPrimaryClassProvider.class,
-        new JavaPrimaryClassProvider(
-            semantics.getPrimaryClass(ruleContext, common.getSrcsArtifacts())));
+
     semantics.addProviders(ruleContext, common, jvmFlags, classJar, srcJar,
             genClassJar, genSourceJar, ImmutableMap.<Artifact, Artifact>of(),
             filesBuilder, builder);
@@ -235,8 +231,8 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     // Need not include normal runtime classpath in runfiles if Proguard is used because _deploy.jar
     // is used as classpath instead.  Keeping runfiles unchanged has however the advantage that
     // manually running executable without --singlejar works (although it won't depend on Proguard).
-    collectDefaultRunfiles(runfilesBuilder, ruleContext, common, javaArtifacts, filesToBuild,
-        launcher, dynamicRuntimeActionInputs);
+    collectDefaultRunfiles(runfilesBuilder, ruleContext, common, filesToBuild, launcher,
+        dynamicRuntimeActionInputs);
     Runfiles defaultRunfiles = runfilesBuilder.build();
 
     RunfilesSupport runfilesSupport = null;
@@ -282,7 +278,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         .setJavaStartClass(mainClass)
         .setDeployManifestLines(deployManifestLines)
         .setAttributes(attributes)
-        .addRuntimeJars(javaArtifacts.getRuntimeJars())
+        .addRuntimeJars(common.getJavaCompilationArtifacts().getRuntimeJars())
         .setIncludeBuildData(true)
         .setRunfilesMiddleman(
             runProguard || runfilesSupport == null ? null : runfilesSupport.getRunfilesMiddleman())
@@ -298,7 +294,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
           .setJavaStartClass(mainClass)
           .setDeployManifestLines(deployManifestLines)
           .setAttributes(attributes)
-          .addRuntimeJars(javaArtifacts.getRuntimeJars())
+          .addRuntimeJars(common.getJavaCompilationArtifacts().getRuntimeJars())
           .setIncludeBuildData(true)
           .setRunfilesMiddleman(
               runfilesSupport == null ? null : runfilesSupport.getRunfilesMiddleman())
@@ -350,11 +346,11 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
   }
 
   private void collectDefaultRunfiles(Runfiles.Builder builder, RuleContext ruleContext,
-      JavaCommon common, JavaCompilationArtifacts javaArtifacts, NestedSet<Artifact> filesToBuild,
-      Artifact launcher, Iterable<Artifact> dynamicRuntimeActionInputs) {
+      JavaCommon common, NestedSet<Artifact> filesToBuild, Artifact launcher,
+      Iterable<Artifact> dynamicRuntimeActionInputs) {
     // Convert to iterable: filesToBuild has a different order.
     builder.addArtifacts((Iterable<Artifact>) filesToBuild);
-    builder.addArtifacts(javaArtifacts.getRuntimeJars());
+    builder.addArtifacts(common.getJavaCompilationArtifacts().getRuntimeJars());
     if (launcher != null) {
       final TransitiveInfoCollection defaultLauncher =
           JavaHelper.launcherForTarget(semantics, ruleContext);
@@ -399,7 +395,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     semantics.addDependenciesForRunfiles(ruleContext, builder);
 
     if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
-      Artifact instrumentedJar = javaArtifacts.getInstrumentedJar();
+      Artifact instrumentedJar = common.getJavaCompilationArtifacts().getInstrumentedJar();
       if (instrumentedJar != null) {
         builder.addArtifact(instrumentedJar);
       }
