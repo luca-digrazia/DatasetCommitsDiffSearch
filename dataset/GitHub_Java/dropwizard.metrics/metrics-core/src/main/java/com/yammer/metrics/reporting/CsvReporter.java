@@ -143,9 +143,8 @@ public class CsvReporter extends AbstractPollingReporter implements
 
     @Override
     public void run() {
-        final long time = TimeUnit.MILLISECONDS.toSeconds(clock.getTime() - startTime);
-        final Set<Entry<MetricName, Metric>> metrics = getMetricsRegistry().getAllMetrics().entrySet();
-        final MetricDispatcher dispatcher = new MetricDispatcher();
+        final long time = TimeUnit.MILLISECONDS.toSeconds(clock.time() - startTime);
+        final Set<Entry<MetricName, Metric>> metrics = getMetricsRegistry().allMetrics().entrySet();
         try {
             for (Entry<MetricName, Metric> entry : metrics) {
                 final MetricName metricName = entry.getKey();
@@ -161,7 +160,7 @@ public class CsvReporter extends AbstractPollingReporter implements
                         }
 
                     };
-                    dispatcher.dispatch(entry.getValue(), entry.getKey(), this, context);
+                    metric.processWith(this, entry.getKey(), context);
                 }
             }
         } catch (Exception e) {
@@ -174,11 +173,11 @@ public class CsvReporter extends AbstractPollingReporter implements
         final PrintStream stream = context.getStream(
                 "# time,count,1 min rate,mean rate,5 min rate,15 min rate");
         stream.append(new StringBuilder()
-                              .append(meter.getCount()).append(',')
-                              .append(meter.getOneMinuteRate()).append(',')
-                              .append(meter.getMeanRate()).append(',')
-                              .append(meter.getFiveMinuteRate()).append(',')
-                              .append(meter.getFifteenMinuteRate()).toString())
+                              .append(meter.count()).append(',')
+                              .append(meter.oneMinuteRate()).append(',')
+                              .append(meter.meanRate()).append(',')
+                              .append(meter.fiveMinuteRate()).append(',')
+                              .append(meter.fifteenMinuteRate()).toString())
               .println();
         stream.flush();
     }
@@ -186,7 +185,7 @@ public class CsvReporter extends AbstractPollingReporter implements
     @Override
     public void processCounter(MetricName name, Counter counter, Context context) throws IOException {
         final PrintStream stream = context.getStream("# time,count");
-        stream.println(counter.getCount());
+        stream.println(counter.count());
         stream.flush();
     }
 
@@ -195,11 +194,11 @@ public class CsvReporter extends AbstractPollingReporter implements
         final PrintStream stream = context.getStream("# time,min,max,mean,median,stddev,95%,99%,99.9%");
         final Snapshot snapshot = histogram.getSnapshot();
         stream.append(new StringBuilder()
-                              .append(histogram.getMin()).append(',')
-                              .append(histogram.getMax()).append(',')
-                              .append(histogram.getMean()).append(',')
+                              .append(histogram.min()).append(',')
+                              .append(histogram.max()).append(',')
+                              .append(histogram.mean()).append(',')
                               .append(snapshot.getMedian()).append(',')
-                              .append(histogram.getStdDev()).append(',')
+                              .append(histogram.stdDev()).append(',')
                               .append(snapshot.get95thPercentile()).append(',')
                               .append(snapshot.get99thPercentile()).append(',')
                               .append(snapshot.get999thPercentile()).toString())
@@ -213,11 +212,11 @@ public class CsvReporter extends AbstractPollingReporter implements
         final PrintStream stream = context.getStream("# time,min,max,mean,median,stddev,95%,99%,99.9%");
         final Snapshot snapshot = timer.getSnapshot();
         stream.append(new StringBuilder()
-                              .append(timer.getMin()).append(',')
-                              .append(timer.getMax()).append(',')
-                              .append(timer.getMean()).append(',')
+                              .append(timer.min()).append(',')
+                              .append(timer.max()).append(',')
+                              .append(timer.mean()).append(',')
                               .append(snapshot.getMedian()).append(',')
-                              .append(timer.getStdDev()).append(',')
+                              .append(timer.stdDev()).append(',')
                               .append(snapshot.get95thPercentile()).append(',')
                               .append(snapshot.get99thPercentile()).append(',')
                               .append(snapshot.get999thPercentile()).toString())
@@ -228,13 +227,13 @@ public class CsvReporter extends AbstractPollingReporter implements
     @Override
     public void processGauge(MetricName name, Gauge<?> gauge, Context context) throws IOException {
         final PrintStream stream = context.getStream("# time,value");
-        stream.println(gauge.getValue());
+        stream.println(gauge.value());
         stream.flush();
     }
 
     @Override
     public void start(long period, TimeUnit unit) {
-        this.startTime = clock.getTime();
+        this.startTime = clock.time();
         super.start(period, unit);
     }
 
