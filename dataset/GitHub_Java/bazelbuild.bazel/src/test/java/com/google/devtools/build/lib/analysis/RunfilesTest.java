@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,19 +14,14 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.events.EventKind;
-import com.google.devtools.build.lib.testutil.FoundationTestCaseForJunit4;
+import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.vfs.PathFragment;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,8 +29,7 @@ import java.util.Map;
 /**
  * Test for {@link Runfiles}.
  */
-@RunWith(JUnit4.class)
-public class RunfilesTest extends FoundationTestCaseForJunit4 {
+public class RunfilesTest extends FoundationTestCase {
 
   private void checkWarning() {
     assertContainsEvent("obscured by a -> /workspace/a");
@@ -44,7 +38,6 @@ public class RunfilesTest extends FoundationTestCaseForJunit4 {
     assertEquals(EventKind.WARNING, Iterables.getOnlyElement(eventCollector).getKind());
   }
 
-  @Test
   public void testFilterListForObscuringSymlinksCatchesBadObscurer() throws Exception {
     Map<PathFragment, Artifact> obscuringMap = new HashMap<>();
     PathFragment pathA = new PathFragment("a");
@@ -58,7 +51,6 @@ public class RunfilesTest extends FoundationTestCaseForJunit4 {
     checkWarning();
   }
 
-  @Test
   public void testFilterListForObscuringSymlinksCatchesBadGrandParentObscurer() throws Exception {
     Map<PathFragment, Artifact> obscuringMap = new HashMap<>();
     PathFragment pathA = new PathFragment("a");
@@ -73,7 +65,6 @@ public class RunfilesTest extends FoundationTestCaseForJunit4 {
     checkWarning();
   }
 
-  @Test
   public void testFilterListForObscuringSymlinksCatchesBadObscurerNoListener() throws Exception {
     Map<PathFragment, Artifact> obscuringMap = new HashMap<>();
     PathFragment pathA = new PathFragment("a");
@@ -87,7 +78,6 @@ public class RunfilesTest extends FoundationTestCaseForJunit4 {
         .containsExactly(Maps.immutableEntry(pathA, artifactA)).inOrder();
   }
 
-  @Test
   public void testFilterListForObscuringSymlinksIgnoresOkObscurer() throws Exception {
     Map<PathFragment, Artifact> obscuringMap = new HashMap<>();
     PathFragment pathA = new PathFragment("a");
@@ -103,7 +93,6 @@ public class RunfilesTest extends FoundationTestCaseForJunit4 {
     assertNoEvents();
   }
 
-  @Test
   public void testFilterListForObscuringSymlinksNoObscurers() throws Exception {
     Map<PathFragment, Artifact> obscuringMap = new HashMap<>();
     PathFragment pathA = new PathFragment("a");

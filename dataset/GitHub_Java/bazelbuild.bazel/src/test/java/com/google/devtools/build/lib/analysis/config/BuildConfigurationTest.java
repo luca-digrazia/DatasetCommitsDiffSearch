@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.analysis.config;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.util.ConfigurationTestCase;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
@@ -198,11 +197,6 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
       @Override
       public Class<? extends Fragment> creates() {
         return creates;
-      }
-
-      @Override
-      public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
-        return ImmutableSet.of();
       }
 
       @Override
