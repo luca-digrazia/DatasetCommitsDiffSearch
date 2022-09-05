@@ -15,7 +15,7 @@ public class WeekPagerAdapter extends CalendarPagerAdapter<WeekView> {
 
     @Override
     protected WeekView createView(int position) {
-        return new WeekView(mcv, getItem(position), mcv.getFirstDayOfWeek(), showWeekDays);
+        return new WeekView(mcv, getItem(position), mcv.getFirstDayOfWeek());
     }
 
     @Override
@@ -62,7 +62,7 @@ public class WeekPagerAdapter extends CalendarPagerAdapter<WeekView> {
                     position * DAYS_IN_WEEK,
                     TimeUnit.DAYS);
             long positionMillis = minMillis + millisOffset;
-            return CalendarDay.from(positionMillis);
+            return CalendarDay.from(new Date(positionMillis));
         }
 
         private int weekNumberDifference(@NonNull CalendarDay min, @NonNull CalendarDay max) {
@@ -77,7 +77,6 @@ public class WeekPagerAdapter extends CalendarPagerAdapter<WeekView> {
 
         /*
          * Necessary because of how Calendar handles getting the first day of week internally.
-         * TODO: WTF IS THIS
          */
         private CalendarDay getFirstDayOfWeek(@NonNull CalendarDay min, int wantedFirstDayOfWeek) {
             Calendar calendar = Calendar.getInstance();
