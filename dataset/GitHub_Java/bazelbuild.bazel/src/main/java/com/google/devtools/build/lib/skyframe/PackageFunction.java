@@ -95,7 +95,8 @@ public class PackageFunction implements SkyFunction {
   // Not final only for testing.
   @Nullable private SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining;
 
-  static final PathFragment DEFAULTS_PACKAGE_NAME = new PathFragment("tools/defaults");
+  static final String DEFAULTS_PACKAGE_NAME = "tools/defaults";
+  public static final String EXTERNAL_PACKAGE_NAME = "external";
 
   public PackageFunction(
       PackageFactory packageFactory,
@@ -411,33 +412,27 @@ public class PackageFunction implements SkyFunction {
           Transience.PERSISTENT);
     }
 
-    boolean isDefaultsPackage =  packageNameFragment.equals(DEFAULTS_PACKAGE_NAME)
-        && packageId.getRepository().isDefault();
-
     PathFragment buildFileFragment = packageNameFragment.getChild("BUILD");
     RootedPath buildFileRootedPath = RootedPath.toRootedPath(packageLookupValue.getRoot(),
         buildFileFragment);
-    FileValue buildFileValue = null;
-    if (!isDefaultsPackage) {
-      try {
-        buildFileValue = (FileValue) env.getValueOrThrow(FileValue.key(buildFileRootedPath),
-            IOException.class, FileSymlinkException.class,
-            InconsistentFilesystemException.class);
-      } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
-        throw new IllegalStateException("Package lookup succeeded but encountered error when "
-            + "getting FileValue for BUILD file directly.", e);
-      }
-      if (buildFileValue == null) {
-        return null;
-      }
-      Preconditions.checkState(buildFileValue.exists(),
-          "Package lookup succeeded but BUILD file doesn't exist");
+    FileValue buildFileValue;
+    try {
+      buildFileValue = (FileValue) env.getValueOrThrow(FileValue.key(buildFileRootedPath),
+          IOException.class, FileSymlinkException.class,
+          InconsistentFilesystemException.class);
+    } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
+      throw new IllegalStateException("Package lookup succeeded but encountered error when "
+          + "getting FileValue for BUILD file directly.", e);
     }
-
+    if (buildFileValue == null) {
+      return null;
+    }
+    Preconditions.checkState(buildFileValue.exists(),
+        "Package lookup succeeded but BUILD file doesn't exist");
     Path buildFilePath = buildFileRootedPath.asPath();
 
     String replacementContents = null;
-    if (isDefaultsPackage) {
+    if (packageName.equals(DEFAULTS_PACKAGE_NAME) && packageId.getRepository().isDefault()) {
       replacementContents = PrecomputedValue.DEFAULTS_PACKAGE_CONTENTS.get(env);
       if (replacementContents == null) {
         return null;
@@ -465,26 +460,22 @@ public class PackageFunction implements SkyFunction {
     List<Statement> preludeStatements = astLookupValue.getAST() == null
         ? ImmutableList.<Statement>of() : astLookupValue.getAST().getStatements();
 
+    // Load the BUILD file AST and handle Skylark dependencies. This way BUILD files are
+    // only loaded twice if there are unavailable Skylark or package dependencies or an
+    // IOException occurs. Note that the BUILD files are still parsed two times.
     ParserInputSource inputSource;
-    if (replacementContents != null) {
-      inputSource = ParserInputSource.create(replacementContents, buildFileFragment);
-    } else {
-      // Load the BUILD file AST and handle Skylark dependencies. This way BUILD files are
-      // only loaded twice if there are unavailable Skylark or package dependencies or an
-      // IOException occurs. Note that the BUILD files are still parsed two times.
-      try {
-        if (showLoadingProgress.get() && packageFunctionCache.getIfPresent(packageId) == null) {
-          // TODO(bazel-team): don't duplicate the loading message if there are unavailable
-          // Skylark dependencies.
-          env.getListener().handle(Event.progress("Loading package: " + packageName));
-        }
-        inputSource = ParserInputSource.create(buildFilePath, buildFileValue.getSize());
-      } catch (IOException e) {
-        env.getListener().handle(Event.error(Location.fromFile(buildFilePath), e.getMessage()));
-        // Note that we did this work, so we should conservatively report this error as transient.
-        throw new PackageFunctionException(new BuildFileContainsErrorsException(
-            packageId, e.getMessage()), Transience.TRANSIENT);
+    try {
+      if (showLoadingProgress.get() && packageFunctionCache.getIfPresent(packageId) == null) {
+        // TODO(bazel-team): don't duplicate the loading message if there are unavailable
+        // Skylark dependencies.
+        env.getListener().handle(Event.progress("Loading package: " + packageName));
       }
+      inputSource = ParserInputSource.create(buildFilePath, buildFileValue.getSize());
+    } catch (IOException e) {
+      env.getListener().handle(Event.error(Location.fromFile(buildFilePath), e.getMessage()));
+      // Note that we did this work, so we should conservatively report this error as transient.
+      throw new PackageFunctionException(new BuildFileContainsErrorsException(
+          packageId, e.getMessage()), Transience.TRANSIENT);
     }
 
     Package.LegacyBuilder legacyPkgBuilder =
