@@ -1,27 +1,20 @@
 package org.nlpcn.es4sql;
 
+import java.io.IOException;
+import java.util.Map;
+
+
 import org.elasticsearch.action.search.SearchRequestBuilder;
-import org.elasticsearch.common.joda.time.DateTime;
-import org.elasticsearch.common.joda.time.format.DateTimeFormat;
-import org.elasticsearch.common.joda.time.format.DateTimeFormatter;
+import org.elasticsearch.action.search.SearchResponse;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.*;
+import org.elasticsearch.common.inject.matcher.Matchers;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHitField;
 import org.elasticsearch.search.SearchHits;
 import org.junit.Assert;
 import org.junit.Test;
 import org.nlpcn.es4sql.exception.SqlParseException;
-
-import java.io.IOException;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Map;
-
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
-import static org.nlpcn.es4sql.TestsConstants.DATE_FORMAT;
-import static org.nlpcn.es4sql.TestsConstants.TEST_INDEX;
 
 
 public class QueryTest {
@@ -30,7 +23,7 @@ public class QueryTest {
 
 	@Test
 	public void equallityTest() throws SqlParseException {
-		SearchHits response = query(String.format("select * from %s where city = 'Nogal' LIMIT 1000", TEST_INDEX));
+		SearchHits response = query(String.format("select * from %s where city = 'Nogal' LIMIT 1000", MainTestSuite.TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
 		// assert the results is correct according to accounts.json data.
@@ -42,7 +35,7 @@ public class QueryTest {
 	// TODO search 'quick fox' still matching 'quick fox brown' this is wrong behavior.
 	@Test
 	public void equallityTest_phrase() throws SqlParseException {
-		SearchHits response = query(String.format("SELECT * FROM %s WHERE phrase = 'quick fox here' LIMIT 1000", TEST_INDEX));
+		SearchHits response = query(String.format("SELECT * FROM %s WHERE phrase = 'quick fox here' LIMIT 1000", MainTestSuite.TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
 		// assert the results is correct according to accounts.json data.
@@ -54,7 +47,7 @@ public class QueryTest {
 	@Test
 	public void greaterThanTest() throws IOException, SqlParseException {
 		int someAge = 25;
-		SearchHits response = query(String.format("SELECT * FROM %s WHERE age > %s LIMIT 1000", TEST_INDEX, someAge));
+		SearchHits response = query(String.format("SELECT * FROM %s WHERE age > %s LIMIT 1000", MainTestSuite.TEST_INDEX, someAge));
 		SearchHit[] hits = response.getHits();
 		for(SearchHit hit : hits) {
 			int age = (int) hit.getSource().get("age");
@@ -65,7 +58,7 @@ public class QueryTest {
 	@Test
 	public void greaterThanOrEqualTest() throws IOException, SqlParseException {
 		int someAge = 25;
-		SearchHits response = query(String.format("SELECT * FROM %s WHERE age >= %s LIMIT 1000", TEST_INDEX, someAge));
+		SearchHits response = query(String.format("SELECT * FROM %s WHERE age >= %s LIMIT 1000", MainTestSuite.TEST_INDEX, someAge));
 		SearchHit[] hits = response.getHits();
 
 		boolean isEqualFound = false;
@@ -84,7 +77,7 @@ public class QueryTest {
 	@Test
 	public void lessThanTest() throws IOException, SqlParseException {
 		int someAge = 25;
-		SearchHits response = query(String.format("SELECT * FROM %s WHERE age < %s LIMIT 1000", TEST_INDEX, someAge));
+		SearchHits response = query(String.format("SELECT * FROM %s WHERE age < %s LIMIT 1000", MainTestSuite.TEST_INDEX, someAge));
 		SearchHit[] hits = response.getHits();
 		for(SearchHit hit : hits) {
 			int age = (int) hit.getSource().get("age");
@@ -95,7 +88,7 @@ public class QueryTest {
 	@Test
 	public void lessThanOrEqualTest() throws IOException, SqlParseException {
 		int someAge = 25;
-		SearchHits response = query(String.format("SELECT * FROM %s WHERE age <= %s LIMIT 1000", TEST_INDEX, someAge));
+		SearchHits response = query(String.format("SELECT * FROM %s WHERE age <= %s LIMIT 1000", MainTestSuite.TEST_INDEX, someAge));
 		SearchHit[] hits = response.getHits();
 
 		boolean isEqualFound = false;
@@ -114,7 +107,7 @@ public class QueryTest {
 
 	@Test
 	public void orTest() throws IOException, SqlParseException {
-		SearchHits response = query(String.format("SELECT * FROM %s WHERE gender='F' OR gender='M' LIMIT 1000", TEST_INDEX));
+		SearchHits response = query(String.format("SELECT * FROM %s WHERE gender='F' OR gender='M' LIMIT 1000", MainTestSuite.TEST_INDEX));
 		// Assert all documents from accounts.json is returned.
 		Assert.assertEquals(1000, response.getTotalHits());
 	}
@@ -122,7 +115,7 @@ public class QueryTest {
 
 	@Test
 	public void andTest() throws IOException, SqlParseException {
-		SearchHits response = query(String.format("SELECT * FROM %s WHERE age=32 AND gender='M' LIMIT 1000", TEST_INDEX));
+		SearchHits response = query(String.format("SELECT * FROM %s WHERE age=32 AND gender='M' LIMIT 1000", MainTestSuite.TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 		for(SearchHit hit : hits) {
 			Assert.assertEquals(32, hit.getSource().get("age"));
@@ -134,7 +127,7 @@ public class QueryTest {
 
 	@Test
 	public void likeTest() throws IOException, SqlParseException {
-		SearchHits response = query(String.format("SELECT * FROM %s WHERE firstname LIKE 'amb%%' LIMIT 1000", TEST_INDEX));
+		SearchHits response = query(String.format("SELECT * FROM %s WHERE firstname LIKE 'amb%%' LIMIT 1000", MainTestSuite.TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
 		// assert the results is correct according to accounts.json data.
@@ -145,7 +138,7 @@ public class QueryTest {
 
 	@Test
 	public void limitTest() throws IOException, SqlParseException {
-		SearchHits response = query(String.format("SELECT * FROM %s LIMIT 30", TEST_INDEX));
+		SearchHits response = query(String.format("SELECT * FROM %s LIMIT 30", MainTestSuite.TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
 		// assert the results is correct according to accounts.json data.
@@ -156,7 +149,7 @@ public class QueryTest {
 	public void betweenTest() throws IOException, SqlParseException {
 		int min = 27;
 		int max = 30;
-		SearchHits response = query(String.format("SELECT * FROM %s WHERE age BETWEEN %s AND %s LIMIT 1000", TEST_INDEX, min, max));
+		SearchHits response = query(String.format("SELECT * FROM %s WHERE age BETWEEN %s AND %s LIMIT 1000", MainTestSuite.TEST_INDEX, min, max));
 		SearchHit[] hits = response.getHits();
 		for(SearchHit hit : hits) {
 			int age = (int) hit.getSource().get("age");
@@ -173,7 +166,7 @@ public class QueryTest {
 	public void notBetweenTest() throws IOException, SqlParseException {
 		int min = 20;
 		int max = 37;
-		SearchHits response = query(String.format("SELECT * FROM %s WHERE age NOT BETWEEN %s AND %s LIMIT 1000", TEST_INDEX, min, max));
+		SearchHits response = query(String.format("SELECT * FROM %s WHERE age NOT BETWEEN %s AND %s LIMIT 1000", MainTestSuite.TEST_INDEX, min, max));
 		SearchHit[] hits = response.getHits();
 		for(SearchHit hit : hits) {
 			Map<String, Object> source = hit.getSource();
@@ -188,22 +181,11 @@ public class QueryTest {
 	
 	@Test
 	public void inTest() throws IOException, SqlParseException{
-		SearchHits response = query(String.format("SELECT age FROM %s WHERE age IN (20, 22) LIMIT 1000", TEST_INDEX));
+		SearchHits response = query(String.format("SELECT age FROM %s WHERE age IN (20, 22) LIMIT 1000", MainTestSuite.TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 		for(SearchHit hit : hits) {
 			int age = (int) hit.field("age").getValue();
 			assertThat(age, isOneOf(20, 22));
-		}
-	}
-
-	@Test
-	public void inTestWithStrings() throws IOException, SqlParseException{
-		SearchHits response = query(String.format("SELECT phrase FROM %s WHERE phrase IN ('quick fox here', 'fox brown') LIMIT 1000", TEST_INDEX));
-		SearchHit[] hits = response.getHits();
-		Assert.assertEquals(2, response.getTotalHits());
-		for(SearchHit hit : hits) {
-			String phrase = hit.field("phrase").getValue();
-			assertThat(phrase, isOneOf("quick fox here", "fox brown"));
 		}
 	}
 
@@ -213,7 +195,7 @@ public class QueryTest {
 	*/
 	@Test
 	public void notInTest() throws IOException, SqlParseException{
-		SearchHits response = query(String.format("SELECT age FROM %s WHERE age NOT IN (20, 22) LIMIT 1000", TEST_INDEX));
+		SearchHits response = query(String.format("SELECT age FROM %s WHERE age NOT IN (20, 22) LIMIT 1000", MainTestSuite.TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 		for(SearchHit hit : hits) {
 			Map<String, SearchHitField> fields = hit.fields();
@@ -228,40 +210,15 @@ public class QueryTest {
 	
 	
 	@Test
-	public void dateSearch() throws IOException, SqlParseException, ParseException {
-		DateTimeFormatter formatter = DateTimeFormat.forPattern(DATE_FORMAT);
-		DateTime dateToCompare = new DateTime(2014, 8, 18, 0, 0, 0);
-
-		SearchHits response = query(String.format("SELECT insert_time FROM %s/online WHERE insert_time < '2014-08-18'", TEST_INDEX));
-		SearchHit[] hits = response.getHits();
-		for(SearchHit hit : hits) {
-			Map<String, SearchHitField> fields = hit.fields();
-			DateTime insertTime = formatter.parseDateTime((String) fields.get("insert_time").getValue());
-
-			String errorMessage = String.format("insert_time must be smaller then 2014-08-18. found: %s", insertTime);
-			Assert.assertTrue(errorMessage, insertTime.isBefore(dateToCompare));
-		}
+	public void dateSearch() throws IOException, SqlParseException{
+		SearchRequestBuilder select = searchDao.explan("select insert_time from online where insert_time<'2014-08-18' limit 3");
+		System.out.println(select);
 	}
 	
 	@Test
-	public void dateBetweenSearch() throws IOException, SqlParseException {
-		DateTimeFormatter formatter = DateTimeFormat.forPattern(DATE_FORMAT);
-
-		DateTime dateLimit1 = new DateTime(2014, 8, 18, 0, 0, 0);
-		DateTime dateLimit2 = new DateTime(2014, 8, 21, 0, 0, 0);
-
-		SearchHits response = query(String.format("SELECT insert_time FROM %s/online WHERE insert_time BETWEEN '2014-08-18' AND '2014-08-21' LIMIT 3", TEST_INDEX));
-		SearchHit[] hits = response.getHits();
-		for(SearchHit hit : hits) {
-			Map<String, SearchHitField> fields = hit.fields();
-			DateTime insertTime = formatter.parseDateTime((String) fields.get("insert_time").getValue());
-
-			boolean isBetween =
-					(insertTime.isAfter(dateLimit1) || insertTime.isEqual(dateLimit1)) &&
-					(insertTime.isBefore(dateLimit2) || insertTime.isEqual(dateLimit2));
-
-			Assert.assertTrue("insert_time must be between 2014-08-18 and 2014-08-21", isBetween);
-		}
+	public void dateBetweenSearch() throws IOException, SqlParseException{
+		SearchRequestBuilder select = searchDao.explan("select insert_time from online where insert_time between '2014-08-18' and '2014-08-21' limit 3");
+		System.out.println(select);
 	}
 	
 	/**
