@@ -24,6 +24,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -42,13 +43,18 @@ public final class OutputGroupProviderTest {
   @Test
   public void testDetermineOutputGroupsAddsToDefaults() throws Exception {
     Set<String> outputGroups = determineOutputGroups(ImmutableSet.of("x", "y", "z"), asList("+a"));
-    assertThat(outputGroups).containsExactly("x", "y", "z", "a");
+    Set<String> expected = new HashSet<>(ImmutableSet.of("x", "y", "z"));
+    expected.add("a");
+    assertThat(outputGroups).containsExactlyElementsIn(expected);
   }
 
   @Test
   public void testDetermineOutputGroupsRemovesFromDefaults() throws Exception {
     Set<String> outputGroups = determineOutputGroups(ImmutableSet.of("x", "y", "z"), asList("-y"));
-    assertThat(outputGroups).containsExactly("x", "z");
+
+    Set<String> expected = new HashSet<>(ImmutableSet.of("x", "y", "z"));
+    expected.remove("y");
+    assertThat(outputGroups).containsExactlyElementsIn(expected);
   }
 
   @Test
@@ -64,17 +70,19 @@ public final class OutputGroupProviderTest {
     Set<String> outputGroups =
         determineOutputGroups(ImmutableSet.of("x", "y", "z"), asList("-foo"));
     // "foo" doesn't exist, but that shouldn't be a problem.
-    assertThat(outputGroups).containsExactly("x", "y", "z");
+    assertThat(outputGroups).containsExactlyElementsIn(ImmutableSet.of("x", "y", "z"));
   }
 
   @Test
   public void testDetermineOutputGroupsRemovesPreviouslyAddedGroup() throws Exception {
     Set<String> outputGroups;
     outputGroups = determineOutputGroups(ImmutableSet.of("x", "y", "z"), asList("+a", "-a"));
-    assertThat(outputGroups).containsExactly("x", "y", "z");
+    assertThat(outputGroups).containsExactlyElementsIn(ImmutableSet.of("x", "y", "z"));
 
     // Order matters here.
     outputGroups = determineOutputGroups(ImmutableSet.of("x", "y", "z"), asList("-a", "+a"));
-    assertThat(outputGroups).containsExactly("x", "y", "z", "a");
+    Set<String> expected = new HashSet<>(ImmutableSet.of("x", "y", "z"));
+    expected.add("a");
+    assertThat(outputGroups).containsExactlyElementsIn(expected);
   }
 }

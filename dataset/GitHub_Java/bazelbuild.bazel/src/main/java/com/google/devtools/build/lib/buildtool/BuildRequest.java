@@ -242,8 +242,7 @@ public class BuildRequest implements OptionsClassProvider {
                 + "the --cpu option is ignored.")
     public List<String> multiCpus;
 
-    @Option(name = "output_tree_tracking",
-            oldName =  "experimental_output_tree_tracking",
+    @Option(name = "experimental_output_tree_tracking",
             defaultValue = "false",
             category = "undocumented",
             help = "If set, tell the output service (if any) to track when files in the output "
