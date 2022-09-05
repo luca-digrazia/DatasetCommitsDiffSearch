@@ -18,7 +18,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
-import com.google.devtools.build.lib.cmdline.Label;
+
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -26,11 +26,8 @@ import java.io.InputStream;
  * Bazel implementation of {@link MockCcSupport}
  */
 public final class BazelMockCcSupport extends MockCcSupport {
+
   public static final BazelMockCcSupport INSTANCE = new BazelMockCcSupport();
-
-  private static final String MOCK_CROSSTOOL_PATH =
-      "com/google/devtools/build/lib/analysis/mock/MOCK_CROSSTOOL";
-
   /** Filter to remove implicit dependencies of C/C++ rules. */
   private static final Predicate<String> CC_LABEL_NAME_FILTER =
       new Predicate<String>() {
@@ -81,16 +78,10 @@ public final class BazelMockCcSupport extends MockCcSupport {
         "/bazel_tools_workspace/tools/cpp/BUILD",
         "cc_library(name = 'stl')",
         "cc_library(name = 'malloc')",
-        "cc_toolchain_suite(",
-        "    name = 'toolchain',",
-        "    toolchains = {",
-        "      'local|compiler': ':cc-compiler-local',",
-        "      'k8|compiler': ':cc-compiler-k8',",
-        "      'piii|compiler': ':cc-compiler-piii',",
-        "      'darwin|compiler': ':cc-compiler-darwin',",
-        "      'armeabi-v7a|compiler': ':cc-compiler-armeabi-v7a',",
-        "      'x64_windows|compiler': ':cc-compiler-x64_windows',",
-        "    })",
+        "filegroup(name = 'toolchain', ",
+        "    srcs = [':cc-compiler-local', ':cc-compiler-darwin', ':cc-compiler-piii',",
+        "            ':cc-compiler-armeabi-v7a', ':empty'],",
+        ")",
         "cc_toolchain(name = 'cc-compiler-k8', all_files = ':empty', compiler_files = ':empty',",
         "    cpu = 'local', dwp_files = ':empty', dynamic_runtime_libs = [':empty'], ",
         "    linker_files = ':empty',",
@@ -116,35 +107,24 @@ public final class BazelMockCcSupport extends MockCcSupport {
         "    linker_files = ':empty',",
         "    module_map = 'crosstool.cppmap', supports_header_parsing = 1,",
         "    objcopy_files = ':empty', static_runtime_libs = [':empty'], strip_files = ':empty',",
-        ")",
-        "cc_toolchain(name = 'cc-compiler-x64_windows', all_files = ':empty', ",
-        "    compiler_files = ':empty',",
-        "    cpu = 'local', dwp_files = ':empty', dynamic_runtime_libs = [':empty'], ",
-        "    linker_files = ':empty',",
-        "    module_map = 'crosstool.cppmap', supports_header_parsing = 1,",
-        "    objcopy_files = ':empty', static_runtime_libs = [':empty'], strip_files = ':empty',",
         ")");
 
     config.create(
-        "/bazel_tools_workspace/tools/cpp/CROSSTOOL", readFromResources(MOCK_CROSSTOOL_PATH));
+        "/bazel_tools_workspace/tools/cpp/CROSSTOOL",
+        readFromResources("com/google/devtools/build/lib/MOCK_CROSSTOOL"));
     config.create(
         "/bazel_tools_workspace/tools/objc/BUILD",
         "xcode_config(name = 'host_xcodes')");
   }
 
   @Override
-  public String getMockCrosstoolVersion() {
+  protected String getMockCrosstoolVersion() {
     return "gcc-4.4.0-glibc-2.3.6";
   }
 
   @Override
-  public Label getMockCrosstoolLabel() {
-    return Label.parseAbsoluteUnchecked("@bazel_tools//tools/cpp:toolchain");
-  }
-
-  @Override
-  public String readCrosstoolFile() throws IOException {
-    return readFromResources(MOCK_CROSSTOOL_PATH);
+  protected String readCrosstoolFile() throws IOException {
+    return readFromResources("com/google/devtools/build/lib/MOCK_CROSSTOOL");
   }
 
   public static String readFromResources(String filename) throws IOException {

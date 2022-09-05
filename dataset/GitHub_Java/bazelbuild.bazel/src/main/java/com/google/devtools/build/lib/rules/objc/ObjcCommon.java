@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.ASSET_CATALOG;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.BREAKPAD_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.BUNDLE_FILE;
@@ -34,7 +33,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.HEADER;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE_SYSTEM;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.J2OBJC_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LINKED_BINARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LINKOPT;
@@ -556,7 +554,7 @@ public final class ObjcCommon {
             .addAll(STORYBOARD, attributes.storyboards());
       }
 
-      if (useLaunchStoryboard(context)) {
+      if (ObjcRuleClasses.useLaunchStoryboard(context)) {
         Artifact launchStoryboard =
             context.getPrerequisiteArtifact("launch_storyboard", Mode.TARGET);
         objcProvider.add(GENERAL_RESOURCE_FILE, launchStoryboard);
@@ -576,11 +574,6 @@ public final class ObjcCommon {
             .addAll(HEADER, artifacts.getAdditionalHdrs())
             .addAll(LIBRARY, artifacts.getArchive().asSet())
             .addAll(SOURCE, allSources);
-
-        if (artifacts.getArchive().isPresent()
-            && J2ObjcLibrary.J2OBJC_SUPPORTED_RULES.contains(context.getRule().getRuleClass())) {
-          objcProvider.addAll(J2OBJC_LIBRARY, artifacts.getArchive().asSet());
-        }
 
         boolean usesCpp = false;
         boolean usesSwift = false;
@@ -625,18 +618,6 @@ public final class ObjcCommon {
           .addAll(BREAKPAD_FILE, breakpadFile.asSet());
 
       return new ObjcCommon(objcProvider.build(), compilationArtifacts);
-    }
-
-    /**
-     * Returns {@code true} if the given rule context has a launch storyboard set.
-     */
-    private static boolean useLaunchStoryboard(RuleContext ruleContext) {
-      if (!ruleContext.attributes().has("launch_storyboard", LABEL)) {
-        return false;
-      }
-      Artifact launchStoryboard =
-          ruleContext.getPrerequisiteArtifact("launch_storyboard", Mode.TARGET);
-      return launchStoryboard != null;
     }
 
   }
