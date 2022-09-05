@@ -65,7 +65,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -76,6 +75,7 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleVisibility;
@@ -363,10 +363,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   protected SkyFunction newGlobFunction() {
     return new GlobFunction(/*alwaysUseDirListing=*/false);
-  }
-
-  protected PerBuildSyscallCache newPerBuildSyscallCache() {
-    return PerBuildSyscallCache.newUnboundedCache();
   }
 
  @ThreadCompatible
@@ -852,7 +848,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     setupDefaultPackage(defaultsPackageContents);
     setPackageLocator(pkgLocator);
 
-    syscalls.set(newPerBuildSyscallCache());
+    syscalls.set(new PerBuildSyscallCache());
     this.pkgFactory.setGlobbingThreads(globbingThreads);
     checkPreprocessorFactory();
     emittedEventState.clear();

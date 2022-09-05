@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
 import com.google.devtools.build.lib.concurrent.Sharder;
 import com.google.devtools.build.lib.concurrent.ThrowableRecordingRunnableWrapper;
-import com.google.devtools.build.lib.profiler.AutoProfiler;
-import com.google.devtools.build.lib.profiler.AutoProfiler.ElapsedTimeReceiver;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker.DirtyResult;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Pair;
@@ -50,7 +48,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -296,46 +293,27 @@ class FilesystemValueChecker {
     final BatchDirtyResult batchResult = new BatchDirtyResult();
     ThrowableRecordingRunnableWrapper wrapper =
         new ThrowableRecordingRunnableWrapper("FilesystemValueChecker#getDirtyValues");
-    final AtomicInteger numKeysScanned = new AtomicInteger(0);
-    final AtomicInteger numKeysChecked = new AtomicInteger(0);
-    ElapsedTimeReceiver elapsedTimeReceiver = new ElapsedTimeReceiver() {
-        @Override
-        public void accept(long elapsedTimeNanos) {
-          if (elapsedTimeNanos > 0) {
-            LOG.info(String.format("Spent %d ms checking %d filesystem nodes (%d scanned)",
-                TimeUnit.MILLISECONDS.convert(elapsedTimeNanos, TimeUnit.NANOSECONDS),
-                numKeysChecked.get(),
-                numKeysScanned.get()));
-          }
-        }
-    };
-    try (AutoProfiler prof = AutoProfiler.create(elapsedTimeReceiver)) {
-      for (final SkyKey key : values) {
-        final SkyValue value = valuesSupplier.get().get(key);
-        executor.execute(
-            wrapper.wrap(
-                new Runnable() {
-                  @Override
-                  public void run() {
-                    if (value != null || checkMissingValues) {
-                      numKeysScanned.incrementAndGet();
-                      DirtyResult result = checker.maybeCheck(key, value, tsgm);
-                      if (result != null) {
-                        numKeysChecked.incrementAndGet();
-                        if (result.isDirty()) {
-                          batchResult.add(key, value, result.getNewValue());
-                        }
-                      }
+    for (final SkyKey key : values) {
+      final SkyValue value = valuesSupplier.get().get(key);
+      executor.execute(
+          wrapper.wrap(
+              new Runnable() {
+                @Override
+                public void run() {
+                  if (value != null || checkMissingValues) {
+                    DirtyResult result = checker.maybeCheck(key, value, tsgm);
+                    if (result != null && result.isDirty()) {
+                      batchResult.add(key, value, result.getNewValue());
                     }
                   }
-                }));
-      }
+                }
+              }));
+    }
 
-      boolean interrupted = ExecutorUtil.interruptibleShutdown(executor);
-      Throwables.propagateIfPossible(wrapper.getFirstThrownError());
-      if (interrupted) {
-        throw new InterruptedException();
-      }
+    boolean interrupted = ExecutorUtil.interruptibleShutdown(executor);
+    Throwables.propagateIfPossible(wrapper.getFirstThrownError());
+    if (interrupted) {
+      throw new InterruptedException();
     }
     return batchResult;
   }
