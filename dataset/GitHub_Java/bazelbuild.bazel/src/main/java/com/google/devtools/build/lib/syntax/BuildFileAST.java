@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.events.Event;
@@ -38,7 +37,7 @@ public class BuildFileAST extends ASTNode {
 
   private final ImmutableList<Comment> comments;
 
-  private ImmutableMap<Location, PathFragment> loads;
+  private ImmutableSet<PathFragment> loads;
 
   private ImmutableSet<Label> includes;
 
@@ -106,12 +105,12 @@ public class BuildFileAST extends ASTNode {
   }
 
   /** Collects paths from all load statements */
-  private ImmutableMap<Location, PathFragment> fetchLoads(List<Statement> stmts) {
-    ImmutableMap.Builder<Location, PathFragment> loads = ImmutableMap.builder();
+  private ImmutableSet<PathFragment> fetchLoads(List<Statement> stmts) {
+    ImmutableSet.Builder<PathFragment> loads = new ImmutableSet.Builder<>();
     for (Statement stmt : stmts) {
       if (stmt instanceof LoadStatement) {
         LoadStatement imp = (LoadStatement) stmt;
-        loads.put(imp.getLocation(), imp.getImportPath());
+        loads.add(imp.getImportPath());
       }
     }
     return loads.build();
@@ -143,7 +142,7 @@ public class BuildFileAST extends ASTNode {
   /**
    * Returns a set of loads in this BUILD file.
    */
-  public synchronized ImmutableMap<Location, PathFragment> getImports() {
+  public synchronized ImmutableSet<PathFragment> getImports() {
     if (loads == null) {
       loads = fetchLoads(stmts);
     }
@@ -218,14 +217,7 @@ public class BuildFileAST extends ASTNode {
   public static BuildFileAST parseBuildFile(Path buildFile, EventHandler eventHandler,
                                             CachingPackageLocator locator, boolean parsePython)
       throws IOException {
-    return parseBuildFile(buildFile, buildFile.getFileSize(), eventHandler, locator, parsePython);
-  }
-
-  public static BuildFileAST parseBuildFile(Path buildFile, long fileSize,
-                                            EventHandler eventHandler,
-                                            CachingPackageLocator locator, boolean parsePython)
-      throws IOException {
-    ParserInputSource inputSource = ParserInputSource.create(buildFile, fileSize);
+    ParserInputSource inputSource = ParserInputSource.create(buildFile);
     return parseBuildFile(inputSource, eventHandler, locator, parsePython);
   }
 
@@ -268,14 +260,7 @@ public class BuildFileAST extends ASTNode {
   public static BuildFileAST parseSkylarkFile(Path file, EventHandler eventHandler,
       CachingPackageLocator locator, ValidationEnvironment validationEnvironment)
           throws IOException {
-    return parseSkylarkFile(file, file.getFileSize(), eventHandler, locator,
-        validationEnvironment);
-  }
-
-  public static BuildFileAST parseSkylarkFile(Path file, long fileSize, EventHandler eventHandler,
-      CachingPackageLocator locator, ValidationEnvironment validationEnvironment)
-          throws IOException {
-    ParserInputSource input = ParserInputSource.create(file, fileSize);
+    ParserInputSource input = ParserInputSource.create(file);
     Lexer lexer = new Lexer(input, eventHandler, false);
     Parser.ParseResult result =
         Parser.parseFileForSkylark(lexer, eventHandler, locator, validationEnvironment);
