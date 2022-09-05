@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.rules.proto;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
@@ -33,13 +33,11 @@ public final class BazelProtoLibraryRule implements RuleDefinition {
   public RuleClass build(Builder builder, final RuleDefinitionEnvironment env) {
 
     return builder
-        // This rule works, but does nothing, in open-source Bazel, due to the
-        // lack of protoc support. Users can theoretically write their own Skylark rules,
-        // but these are still 'experimental' according to the documentation.
         .setUndocumented()
         .setOutputToGenfiles()
         /* <!-- #BLAZE_RULE(proto_library).ATTRIBUTE(deps) -->
-        The list of other <code>proto_library</code> rules that the target depends upon.
+        The list of other <code>proto_library</code>
+        rules that the target depends upon.
         ${SYNOPSIS}
         A <code>proto_library</code> may only depend on other
         <code>proto_library</code> targets.
@@ -75,9 +73,13 @@ public final class BazelProtoLibraryRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = proto_library, TYPE = LIBRARY, FAMILY = Protocol Buffer) -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>Use <code>proto_library</code> to define libraries of protocol buffers
    which may be used from multiple languages. A <code>proto_library</code> may be listed
    in the <code>deps</code> clause of supported rules, such as <code>objc_proto_library</code>.
 </p>
+
+${ATTRIBUTE_DEFINITION}
 
 <!-- #END_BLAZE_RULE -->*/
