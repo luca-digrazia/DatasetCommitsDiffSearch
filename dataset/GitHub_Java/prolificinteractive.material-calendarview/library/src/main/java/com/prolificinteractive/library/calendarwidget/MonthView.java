@@ -12,7 +12,8 @@ import static java.util.Calendar.DAY_OF_WEEK;
 import static java.util.Calendar.SUNDAY;
 
 /**
- * Display a month of days
+ * Display a month of {@linkplain com.prolificinteractive.library.calendarwidget.DayView}s and
+ * seven {@linkplain com.prolificinteractive.library.calendarwidget.WeekDayView}s.
  */
 class MonthView extends GridLayout implements View.OnClickListener {
 
@@ -30,9 +31,11 @@ class MonthView extends GridLayout implements View.OnClickListener {
     private final CalendarWrapper tempWorkingCalendar = CalendarWrapper.getInstance();
     private int firstDayOfWeek = SUNDAY;
 
-    private CalendarDay selection = new CalendarDay(calendarOfRecord);
+    private CalendarDay selection = null;
     private CalendarDay minDate = null;
     private CalendarDay maxDate = null;
+
+    private boolean showOtherMonths = false;
 
     public MonthView(Context context) {
         this(context, null);
@@ -43,6 +46,9 @@ class MonthView extends GridLayout implements View.OnClickListener {
 
         setColumnCount(7);
         setRowCount(7);
+
+        setClipChildren(false);
+        setClipToPadding(false);
     }
 
     @Override
@@ -63,9 +69,30 @@ class MonthView extends GridLayout implements View.OnClickListener {
         setSelectedDate(new CalendarDay());
     }
 
-    public void setColor(int color) {
+    public void setWeekDayTextAppearance(int taId) {
+        for(WeekDayView weekDayView : weekDayViews) {
+            weekDayView.setTextAppearance(getContext(), taId);
+        }
+    }
+
+    public void setDateTextAppearance(int taId) {
         for(DayView dayView : monthDayViews) {
-            dayView.setColor(color);
+            dayView.setTextAppearance(getContext(), taId);
+        }
+    }
+
+    public void setShowOtherMonths(boolean showOtherMonths) {
+        this.showOtherMonths = showOtherMonths;
+        updateUi();
+    }
+
+    public boolean getShowOtherMonths() {
+        return showOtherMonths;
+    }
+
+    public void setSelectionColor(int color) {
+        for(DayView dayView : monthDayViews) {
+            dayView.setSelectionColor(color);
         }
     }
 
@@ -109,7 +136,7 @@ class MonthView extends GridLayout implements View.OnClickListener {
 
 
     public void setSelectedDate(CalendarWrapper cal) {
-        setSelectedDate(new CalendarDay(cal));
+        setSelectedDate(cal == null ? null : new CalendarDay(cal));
     }
 
     public void setSelectedDate(CalendarDay cal) {
@@ -123,7 +150,7 @@ class MonthView extends GridLayout implements View.OnClickListener {
         for(DayView dayView : monthDayViews) {
             CalendarDay day = new CalendarDay(calendar);
             dayView.setDay(day);
-            dayView.setEnabled(day.isInRange(minDate, maxDate) && day.getMonth() == ourMonth);
+            dayView.setupSelection(showOtherMonths, day.isInRange(minDate, maxDate), day.getMonth() == ourMonth);
             dayView.setChecked(day.equals(selection));
             calendar.add(DATE, 1);
         }
