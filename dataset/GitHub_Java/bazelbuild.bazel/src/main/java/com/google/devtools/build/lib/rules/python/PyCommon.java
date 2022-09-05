@@ -374,12 +374,10 @@ public final class PyCommon {
    * Utility function to compile multiple .py files to .pyc files.
    */
   public Collection<Artifact> createPycFiles(
-      Iterable<Artifact> sources, PathFragment pythonBinary,
-      String pythonPrecompileAttribute, String hostPython2RuntimeAttribute) {
+      Iterable<Artifact> sources, PathFragment pythonBinary) {
     List<Artifact> pycFiles = new ArrayList<>();
     for (Artifact source : sources) {
-      Artifact pycFile = createPycFile(source, pythonBinary, pythonPrecompileAttribute,
-          hostPython2RuntimeAttribute);
+      Artifact pycFile = createPycFile(source, pythonBinary);
       pycFiles.add(pycFile);
     }
     return ImmutableList.copyOf(pycFiles);
@@ -387,12 +385,9 @@ public final class PyCommon {
 
   /**
    * Given a single .py source artifact generate a .pyc file.
-   * @param pythonPrecompileAttribute e.g., "$python_precompile".
-   * @param hostPython2RuntimeAttribute e.g., ":host_python2_runtime".
    */
   public Artifact createPycFile(
-      Artifact source, PathFragment pythonBinary,
-      String pythonPrecompileAttribute, String hostPython2RuntimeAttribute) {
+      Artifact source, PathFragment pythonBinary) {
     Artifact output =
         ruleContext.getRelatedArtifact(source.getRootRelativePath(), ".pyc");
 
@@ -404,11 +399,11 @@ public final class PyCommon {
         .setExecutable(pythonBinary)
         .setProgressMessage("Compiling Python")
         .addInputArgument(
-            ruleContext.getPrerequisiteArtifact(pythonPrecompileAttribute, Mode.HOST))
+            ruleContext.getPrerequisiteArtifact("$python_precompile", Mode.HOST))
         .setMnemonic("PyCompile");
 
     TransitiveInfoCollection pythonTarget =
-        ruleContext.getPrerequisite(hostPython2RuntimeAttribute, Mode.HOST);
+        ruleContext.getPrerequisite(":host_python2_runtime", Mode.HOST);
     if (pythonTarget != null) {
       builder.addInputs(pythonTarget
           .getProvider(FileProvider.class)
