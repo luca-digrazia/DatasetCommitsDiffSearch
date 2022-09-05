@@ -14,15 +14,15 @@
 
 package com.google.devtools.build.lib.buildtool;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
-import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.util.ExitCode;
+import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.Collection;
 import java.util.Collections;
+
 import javax.annotation.Nullable;
 
 /**
@@ -42,8 +42,6 @@ public final class BuildResult {
   private Collection<ConfiguredTarget> actualTargets;
   private Collection<ConfiguredTarget> testTargets;
   private Collection<ConfiguredTarget> successfulTargets;
-  private Collection<ConfiguredTarget> skippedTargets;
-  private Collection<AspectValue> successfulAspects;
 
   public BuildResult(long startTimeMillis) {
     this.startTimeMillis = startTimeMillis;
@@ -196,49 +194,17 @@ public final class BuildResult {
     this.successfulTargets = successfulTargets;
   }
 
-  /** @see #getSuccessfulAspects */
-  void setSuccessfulAspects(Collection<AspectValue> successfulAspects) {
-    this.successfulAspects = successfulAspects;
-  }
-
   /**
-   * Returns the set of targets that were successfully built. This value is set at the end of the
-   * build, after the target patterns have been parsed and resolved and after attempting to build
-   * the targets. If --keep_going is specified, this set may exclude targets that could not be found
-   * or successfully analyzed, or could not be built. It may be examined after the build. May be
-   * null if the execution phase was not attempted, as may happen if there are errors in the loading
-   * phase, for example.
+   * Returns the set of targets which successfully built.  This value
+   * is set at the end of the build, after the target patterns have been parsed
+   * and resolved and after attempting to build the targets.  If --keep_going
+   * is specified, this set may exclude targets that could not be found or
+   * successfully analyzed, or could not be built.  It may be examined after
+   * the build.  May be null if the execution phase was not attempted, as
+   * may happen if there are errors in the loading phase, for example.
    */
   public Collection<ConfiguredTarget> getSuccessfulTargets() {
     return successfulTargets;
-  }
-
-  /**
-   * Returns the set of aspects that were successfully built. This value is set at the end of the
-   * build, after the target patterns have been parsed and resolved and after attempting to build
-   * the targets. If --keep_going is specified, this set may exclude targets that could not be found
-   * or successfully analyzed, or could not be built. It may be examined after the build. May be
-   * null if the execution phase was not attempted, as may happen if there are errors in the loading
-   * phase, for example.
-   */
-  public Collection<AspectValue> getSuccessfulAspects() {
-    return successfulAspects;
-  }
-
-  /**
-   * See {@link #getSkippedTargets()}.
-   */
-  void setSkippedTargets(Collection<ConfiguredTarget> skippedTargets) {
-    this.skippedTargets = skippedTargets;
-  }
-
-  /**
-   * Returns the set of targets which were skipped (Blaze didn't attempt to execute them)
-   * because they're not compatible with the build's target platform.
-   */
-  @VisibleForTesting
-  public Collection<ConfiguredTarget> getSkippedTargets() {
-    return skippedTargets;
   }
 
   /** For debugging. */
