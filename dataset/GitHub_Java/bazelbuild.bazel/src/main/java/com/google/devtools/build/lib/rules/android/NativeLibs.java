@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -151,13 +151,8 @@ public final class NativeLibs {
             .addRootSymlinks(symlinks)
             .build());
     Artifact outputManifest = AndroidBinary.getDxArtifact(ruleContext, "native_symlinks/MANIFEST");
-    Artifact nativeLibsMiddleman =
-        ruleContext.getAnalysisEnvironment().getMiddlemanFactory().createRunfilesMiddleman(
-            ruleContext.getActionOwner(), null, symlinks.values(),
-            ruleContext.getConfiguration().getMiddlemanDirectory(), "android_native_libs");
-
     ruleContext.registerAction(new SymlinkTreeAction(
-        ruleContext.getActionOwner(), inputManifest, nativeLibsMiddleman, outputManifest, false));
+        ruleContext.getActionOwner(), inputManifest, outputManifest, false));
     return outputManifest;
   }
 

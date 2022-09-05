@@ -1287,7 +1287,6 @@ public class Package implements Serializable {
           allTests.add(rule.getLabel());
         }
       }
-      Collections.sort(allTests);
       for (Rule rule : rules) {
         AttributeMap attributes = NonconfigurableAttributeMapper.of(rule);
         if (rule.getRuleClass().equals("test_suite")
