@@ -1,6 +1,5 @@
 package org.nlpcn.es4sql;
 
-import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.common.joda.time.DateTime;
@@ -204,17 +203,6 @@ public class QueryTest {
 		Assert.assertEquals("Amber", hits[0].getSource().get("firstname"));
 	}
 
-	@Test
-	public void notLikeTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
-		SearchHits response = query(String.format("SELECT * FROM %s/account WHERE firstname NOT LIKE 'amb%%'", TEST_INDEX));
-		SearchHit[] hits = response.getHits();
-
-		// assert we got hits
-		Assert.assertNotEquals(0, response.getTotalHits());
-		for (SearchHit hit : hits) {
-			Assert.assertFalse(hit.getSource().get("firstname").toString().toLowerCase().startsWith("amb"));
-		}
-	}
 
 	@Test
 	public void limitTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
@@ -404,24 +392,6 @@ public class QueryTest {
 		}
 	}
 
-	@Test
-	public void complexNotConditionQuery() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
-		String errorMessage = "Result does not exist to the condition NOT (gender='m' AND NOT (age > 25 OR account_number > 5)) OR (NOT gender='f' AND NOT (age > 30 OR account_number < 8))";
-
-		SearchHits response = query(String.format("SELECT * FROM %s/account WHERE NOT (gender='m' AND NOT (age > 25 OR account_number > 5)) OR (NOT gender='f' AND NOT (age > 30 OR account_number < 8))", TEST_INDEX));
-		SearchHit[] hits = response.getHits();
-
-		Assert.assertNotEquals(hits.length, 0);
-
-		for (SearchHit hit : hits) {
-			Map<String, Object> source = hit.getSource();
-			String gender = ((String) source.get("gender")).toLowerCase();
-			int age = (int) source.get("age");
-			int account_number = (int) source.get("account_number");
-
-			Assert.assertTrue(errorMessage, !(gender.equals("m") && !(age > 25 || account_number > 5)) || (!gender.equals("f") && !(age > 30 || account_number < 8)));
-		}
-	}
 
 	@Test
 	public void orderByAscTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
@@ -490,7 +460,7 @@ public class QueryTest {
 
     @Test
     public void filterPolygonTest() throws SQLFeatureNotSupportedException, SqlParseException, InterruptedException {
-        SearchHits results = query(String.format("SELECT * FROM %s/location WHERE GEO_INTERSECTS(place,'POLYGON ((102 2, 103 2, 103 3, 102 3, 102 2))')", TEST_INDEX));
+        SearchHits results = query(String.format("SELECT * FROM %s WHERE GEO_INTERSECTS(place,'POLYGON ((102 2, 103 2, 103 3, 102 3, 102 2))')", TEST_INDEX));
         org.junit.Assert.assertEquals(1,results.getTotalHits());
         SearchHit result = results.getAt(0);
         Assert.assertEquals("bigSquare",result.getSource().get("description"));
@@ -498,14 +468,14 @@ public class QueryTest {
 
     @Test
     public void boundingBox() throws SQLFeatureNotSupportedException, SqlParseException, InterruptedException {
-        SearchHits results = query(String.format("SELECT * FROM %s/location WHERE GEO_BOUNDING_BOX(center,100.0,1.0,101,0.0)", TEST_INDEX));
+        SearchHits results = query(String.format("SELECT * FROM %s WHERE GEO_BOUNDING_BOX(center,100.0,1.0,101,0.0)", TEST_INDEX));
         org.junit.Assert.assertEquals(1,results.getTotalHits());
         SearchHit result = results.getAt(0);
         Assert.assertEquals("square",result.getSource().get("description"));
     }
     @Test
     public void geoDistance() throws SQLFeatureNotSupportedException, SqlParseException, InterruptedException {
-        SearchHits results = query(String.format("SELECT * FROM %s/location WHERE GEO_DISTANCE(center,'1km',100.5,0.500001)", TEST_INDEX));
+        SearchHits results = query(String.format("SELECT * FROM %s WHERE GEO_DISTANCE(center,'1km',100.5,0.500001)", TEST_INDEX));
         org.junit.Assert.assertEquals(1,results.getTotalHits());
         SearchHit result = results.getAt(0);
         Assert.assertEquals("square",result.getSource().get("description"));
@@ -513,7 +483,7 @@ public class QueryTest {
 
     @Test
     public void geoDistanceRange() throws SQLFeatureNotSupportedException, SqlParseException, InterruptedException {
-        SearchHits results = query(String.format("SELECT * FROM %s/location WHERE GEO_DISTANCE_RANGE(center,'1m','1km',100.5,0.50001)", TEST_INDEX));
+        SearchHits results = query(String.format("SELECT * FROM %s WHERE GEO_DISTANCE_RANGE(center,'1m','1km',100.5,0.50001)", TEST_INDEX));
         org.junit.Assert.assertEquals(1,results.getTotalHits());
         SearchHit result = results.getAt(0);
         Assert.assertEquals("square",result.getSource().get("description"));
@@ -521,7 +491,7 @@ public class QueryTest {
 
     @Test
     public void geoCell() throws SQLFeatureNotSupportedException, SqlParseException, InterruptedException {
-        SearchHits results = query(String.format("SELECT * FROM %s/location WHERE GEO_CELL(center,100.5,0.50001,7)", TEST_INDEX));
+        SearchHits results = query(String.format("SELECT * FROM %s WHERE GEO_CELL(center,100.5,0.50001,7)", TEST_INDEX));
         org.junit.Assert.assertEquals(1,results.getTotalHits());
         SearchHit result = results.getAt(0);
         Assert.assertEquals("square",result.getSource().get("description"));
@@ -529,7 +499,7 @@ public class QueryTest {
 
     @Test
     public void geoPolygon() throws SQLFeatureNotSupportedException, SqlParseException, InterruptedException {
-        SearchHits results = query(String.format("SELECT * FROM %s/location WHERE GEO_POLYGON(center,100,0,100.5,2,101.0,0)", TEST_INDEX));
+        SearchHits results = query(String.format("SELECT * FROM %s WHERE GEO_POLYGON(center,100,0,100.5,2,101.0,0)", TEST_INDEX));
         org.junit.Assert.assertEquals(1,results.getTotalHits());
         SearchHit result = results.getAt(0);
         Assert.assertEquals("square",result.getSource().get("description"));
@@ -555,14 +525,6 @@ public class QueryTest {
         Assert.assertEquals("Eddard",((HashMap<String,Object>)sourceAsMap.get("parents")).get("father"));
     }
 
-    @Test
-    public void queryWithATfieldOnWhere() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT * FROM %s/gotCharacters where @wolf = 'Summer' LIMIT 1000", TEST_INDEX));
-        Assert.assertEquals(1, response.getTotalHits());
-        Map<String, Object> sourceAsMap = response.getHits()[0].sourceAsMap();
-        Assert.assertEquals("Summer",sourceAsMap.get("@wolf"));
-        Assert.assertEquals("Brandon",((HashMap<String,Object>)sourceAsMap.get("name")).get("firstname"));
-    }
 
     @Test
     public void notLikeTests() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
@@ -576,46 +538,9 @@ public class QueryTest {
         }
     }
 
-    @Test
-    public void isNullTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query("SELECT name FROM " +TEST_INDEX + "/gotCharacters where nickname IS NULL LIMIT 1000");
-        Assert.assertEquals(3, response.getTotalHits());
-    }
-
-    @Test
-    public void isNotNullTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query("SELECT name FROM " +TEST_INDEX + "/gotCharacters where nickname IS NOT NULL LIMIT 1000");
-        Assert.assertEquals(1, response.getTotalHits());
-    }
-
-
-    @Test
-    public void useScrollNoParams() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchResponse response = getSearchResponse(String.format("SELECT /*! USE_SCROLL*/ age,gender,firstname,balance FROM  %s/account LIMIT 2000", TEST_INDEX, TEST_INDEX));
-        Assert.assertNotNull(response.getScrollId());
-        SearchHits hits = response.getHits();
-        Assert.assertEquals(0,hits.getHits().length);
-        Assert.assertEquals(1000,hits.getTotalHits());
-    }
-
-    @Test
-    public void useScrollWithParams() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchResponse response = getSearchResponse(String.format("SELECT /*! USE_SCROLL(10,5000)*/ age,gender,firstname,balance FROM  %s/account ", TEST_INDEX, TEST_INDEX));
-        Assert.assertNotNull(response.getScrollId());
-        SearchHits hits = response.getHits();
-        Assert.assertEquals(0,hits.getHits().length);
-        Assert.assertEquals(1000,hits.getTotalHits());
-    }
-
     private SearchHits query(String query) throws SqlParseException, SQLFeatureNotSupportedException, SQLFeatureNotSupportedException {
         SearchDao searchDao = MainTestSuite.getSearchDao();
         SqlElasticSearchRequestBuilder select = (SqlElasticSearchRequestBuilder) searchDao.explain(query);
         return ((SearchResponse)select.get()).getHits();
-    }
-
-    private SearchResponse getSearchResponse(String query) throws SqlParseException, SQLFeatureNotSupportedException, SQLFeatureNotSupportedException {
-        SearchDao searchDao = MainTestSuite.getSearchDao();
-        SqlElasticSearchRequestBuilder select = (SqlElasticSearchRequestBuilder) searchDao.explain(query);
-        return ((SearchResponse)select.get());
     }
 }
