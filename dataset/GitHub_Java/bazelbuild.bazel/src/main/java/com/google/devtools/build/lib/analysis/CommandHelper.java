@@ -122,7 +122,7 @@ public final class CommandHelper {
         }
       } else {
         // Map all depArtifacts to the respective label using the multimaps.
-        mapGet(tempLabelMap, label).addAll(files);
+        Iterables.addAll(mapGet(tempLabelMap, label), files);
       }
     }
 
