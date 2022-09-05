@@ -20,6 +20,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Range;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
@@ -103,10 +104,11 @@ public final class CommandEnvironment {
     }
   }
 
-  public CommandEnvironment(BlazeRuntime runtime, UUID commandId, EventBus eventBus) {
+  public CommandEnvironment(BlazeRuntime runtime, UUID commandId, Reporter reporter,
+      EventBus eventBus) {
     this.runtime = runtime;
     this.commandId = commandId;
-    this.reporter = new Reporter();
+    this.reporter = reporter == null ? new Reporter() : reporter;
     this.eventBus = eventBus;
     this.blazeModuleEnvironment = new BlazeModuleEnvironment();
 

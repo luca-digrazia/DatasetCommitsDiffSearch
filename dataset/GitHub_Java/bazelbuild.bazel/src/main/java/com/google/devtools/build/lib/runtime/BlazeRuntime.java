@@ -154,6 +154,8 @@ public final class BlazeRuntime {
   private final Map<String, BlazeCommand> commandMap = new LinkedHashMap<>();
   private final Clock clock;
 
+  // Always null in production! Only non-null when tests inject a custom reporter.
+  private final Reporter reporter;
   private final PackageFactory packageFactory;
   private final ConfigurationFactory configurationFactory;
   private final ConfiguredRuleClassProvider ruleClassProvider;
@@ -178,7 +180,7 @@ public final class BlazeRuntime {
   @Nullable
   private Range<Long> lastExecutionRange = null;
 
-  private BlazeRuntime(BlazeDirectories directories,
+  private BlazeRuntime(BlazeDirectories directories, Reporter reporter,
       WorkspaceStatusAction.Factory workspaceStatusActionFactory,
       final SkyframeExecutor skyframeExecutor,
       PackageFactory pkgFactory, ConfiguredRuleClassProvider ruleClassProvider,
@@ -193,6 +195,7 @@ public final class BlazeRuntime {
     overrideCommands(commands);
 
     this.workspaceStatusActionFactory = workspaceStatusActionFactory;
+    this.reporter = reporter;
     this.packageFactory = pkgFactory;
     this.binTools = binTools;
     this.projectFileProvider = projectFileProvider;
@@ -257,7 +260,7 @@ public final class BlazeRuntime {
     EventBus eventBus = new EventBus(eventBusExceptionHandler);
     skyframeExecutor.setEventBus(eventBus);
     UUID commandId = UUID.randomUUID();
-    return new CommandEnvironment(this, commandId, eventBus);
+    return new CommandEnvironment(this, commandId, reporter, eventBus);
   }
 
   private void clearEventBus() {
@@ -1276,6 +1279,7 @@ public final class BlazeRuntime {
   public static class Builder {
 
     private BlazeDirectories directories;
+    private Reporter reporter;
     private ConfigurationFactory configurationFactory;
     private Clock clock;
     private OptionsProvider startupOptionsProvider;
@@ -1443,7 +1447,7 @@ public final class BlazeRuntime {
         }
       }
 
-      return new BlazeRuntime(directories, workspaceStatusActionFactory, skyframeExecutor,
+      return new BlazeRuntime(directories, reporter, workspaceStatusActionFactory, skyframeExecutor,
           pkgFactory, ruleClassProvider, configurationFactory,
           clock, startupOptionsProvider, ImmutableList.copyOf(blazeModules),
           timestampMonitor, eventBusExceptionHandler, binTools, projectFileProvider, commands);
@@ -1466,6 +1470,11 @@ public final class BlazeRuntime {
     public Builder setDirectories(Path installBase, Path outputBase,
         Path workspace) {
       this.directories = new BlazeDirectories(installBase, outputBase, workspace);
+      return this;
+    }
+
+    public Builder setReporter(Reporter reporter) {
+      this.reporter = reporter;
       return this;
     }
 
