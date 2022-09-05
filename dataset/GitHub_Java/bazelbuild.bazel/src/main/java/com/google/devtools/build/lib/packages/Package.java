@@ -397,10 +397,7 @@ public class Package {
   public Map<String, String> getAllMakeVariables(String platform) {
     ImmutableMap.Builder<String, String> map = ImmutableMap.builder();
     for (String var : makeEnv.getBindings().keySet()) {
-      String value = makeEnv.lookup(var, platform);
-      if (value != null) {
-        map.put(var, value);
-      }
+      map.put(var, makeEnv.lookup(var, platform));
     }
     return map.build();
   }
