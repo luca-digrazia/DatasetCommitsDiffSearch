@@ -28,7 +28,6 @@ import org.springframework.core.type.classreading.SimpleMetadataReaderFactory;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -146,27 +145,23 @@ public class EasyormRepositoryRegistrar implements ImportBeanDefinitionRegistrar
 
         }
 
-        RootBeanDefinition definition = new RootBeanDefinition();
-        definition.setTargetType(AutoDDLProcessor.class);
-        definition.setBeanClass(AutoDDLProcessor.class);
-        definition.setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE);
-        definition.getPropertyValues().add("entities", entityInfos);
-        definition.getPropertyValues().add("reactive", reactive);
-        definition.setRole(BeanDefinition.ROLE_INFRASTRUCTURE);
-        definition.setSynthetic(true);
-        registry.registerBeanDefinition(AutoDDLProcessor.class.getName() + "_" + count.incrementAndGet(), definition);
 
-//        try {
-//            BeanDefinition definition = registry.getBeanDefinition(AutoDDLProcessor.class.getName());
-//            Set<EntityInfo> infos = (Set) definition.getPropertyValues().get("entities");
-//            infos.addAll(entityInfos);
-//        } catch (NoSuchBeanDefinitionException e) {
-//
-//        }
+        try {
+            BeanDefinition definition = registry.getBeanDefinition(AutoDDLProcessor.class.getName());
+            Set<EntityInfo> infos = (Set) definition.getPropertyValues().get("entities");
+            infos.addAll(entityInfos);
+        } catch (NoSuchBeanDefinitionException e) {
+            RootBeanDefinition definition = new RootBeanDefinition();
+            definition.setTargetType(AutoDDLProcessor.class);
+            definition.setBeanClass(AutoDDLProcessor.class);
+            definition.setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE);
+            definition.getPropertyValues().add("entities", entityInfos);
+            definition.getPropertyValues().add("reactive", reactive);
+            registry.registerBeanDefinition(AutoDDLProcessor.class.getName(), definition);
+        }
 
 
     }
 
-    static AtomicInteger count = new AtomicInteger();
 
 }
