@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -111,12 +111,6 @@ public interface SkyFunction {
         SkyValue getValueOrThrow(SkyKey depKey, Class<E1> exceptionClass1,
         Class<E2> exceptionClass2, Class<E3> exceptionClass3, Class<E4> exceptionClass4)
             throws E1, E2, E3, E4;
-    @Nullable
-    <E1 extends Exception, E2 extends Exception, E3 extends Exception, E4 extends Exception,
-     E5 extends Exception>
-        SkyValue getValueOrThrow(SkyKey depKey, Class<E1> exceptionClass1,
-        Class<E2> exceptionClass2, Class<E3> exceptionClass3, Class<E4> exceptionClass4,
-        Class<E5> exceptionClass5) throws E1, E2, E3, E4, E5;
 
     /**
      * Requests {@code depKeys} "in parallel", independent of each others' values. These keys may be
@@ -197,11 +191,6 @@ public interface SkyFunction {
     Map<SkyKey, ValueOrException4<E1, E2, E3, E4>> getValuesOrThrow(Iterable<SkyKey> depKeys,
         Class<E1> exceptionClass1, Class<E2> exceptionClass2, Class<E3> exceptionClass3,
         Class<E4> exceptionClass4);
-    <E1 extends Exception, E2 extends Exception, E3 extends Exception, E4 extends Exception,
-     E5 extends Exception>
-    Map<SkyKey, ValueOrException5<E1, E2, E3, E4, E5>> getValuesOrThrow(Iterable<SkyKey> depKeys,
-        Class<E1> exceptionClass1, Class<E2> exceptionClass2, Class<E3> exceptionClass3,
-        Class<E4> exceptionClass4, Class<E5> exceptionClass5);
 
     /**
      * Returns whether there was a previous getValue[s][OrThrow] that indicated a missing
