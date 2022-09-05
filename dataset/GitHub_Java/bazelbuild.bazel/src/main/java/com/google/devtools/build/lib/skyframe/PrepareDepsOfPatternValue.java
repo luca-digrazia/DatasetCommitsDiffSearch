@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -142,8 +142,7 @@ public class PrepareDepsOfPatternValue implements SkyValue {
         TargetPattern laterParsedPattern = laterTargetPatternKey.getParsedPattern();
         if (laterTargetPatternKey.isNegative()
             && targetPatternKey.getParsedPattern().containsBelowDirectory(laterParsedPattern)) {
-          excludedDirectoriesBuilder.add(
-              laterParsedPattern.getDirectory().getPackageFragment().getPathString());
+          excludedDirectoriesBuilder.add(laterParsedPattern.getDirectory());
         }
       }
     }

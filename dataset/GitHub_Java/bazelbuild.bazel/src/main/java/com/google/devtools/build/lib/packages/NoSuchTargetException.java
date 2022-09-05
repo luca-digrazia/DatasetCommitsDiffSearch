@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,7 @@
 
 package com.google.devtools.build.lib.packages;
 
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.syntax.Label;
 
 import java.util.Objects;
 
@@ -38,15 +37,14 @@ public class NoSuchTargetException extends NoSuchThingException {
     this((label != null ? "no such target '" + label + "': " : "") + message, label, null, null);
   }
 
-  public NoSuchTargetException(Target targetInError, PackageIdentifier packageInError) {
+  public NoSuchTargetException(Target targetInError, NoSuchPackageException nspe) {
     this(String.format("Target '%s' contains an error and its package is in error",
-        targetInError.getLabel()), targetInError.getLabel(), targetInError, packageInError);
+        targetInError.getLabel()), targetInError.getLabel(), targetInError, nspe);
   }
 
   private NoSuchTargetException(String message, @Nullable Label label, @Nullable Target target,
-      @Nullable PackageIdentifier packageInError) {
-    super(message,
-        packageInError == null ? null : new BuildFileContainsErrorsException(packageInError));
+      @Nullable NoSuchPackageException nspe) {
+    super(message, nspe);
     this.label = label;
     this.hasTarget = (target != null);
   }
