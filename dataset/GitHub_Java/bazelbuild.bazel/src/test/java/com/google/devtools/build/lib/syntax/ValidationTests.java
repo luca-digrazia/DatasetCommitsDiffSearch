@@ -624,19 +624,22 @@ public class ValidationTests extends AbstractParserTestCase {
 
   @Test
   public void testModulesReadOnlyInFuncDefBody() {
-    parse("def func():",
+    checkError("Variable cmd_helper is read only",
+        "def func():",
         "  cmd_helper = set()");
   }
 
   @Test
   public void testBuiltinGlobalFunctionsReadOnlyInFuncDefBody() {
-    parse("def func():",
+    checkError("Variable rule is read only",
+        "def func():",
         "  rule = 'abc'");
   }
 
   @Test
   public void testBuiltinGlobalFunctionsReadOnlyAsFuncDefArg() {
-    parse("def func(rule):",
+    checkError("Variable rule is read only",
+        "def func(rule):",
         "  return rule");
   }
 
