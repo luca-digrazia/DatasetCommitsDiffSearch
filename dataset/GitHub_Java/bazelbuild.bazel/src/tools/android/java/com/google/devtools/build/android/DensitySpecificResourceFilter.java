@@ -27,6 +27,7 @@ import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Ordering;
+
 import java.io.IOException;
 import java.nio.file.FileVisitOption;
 import java.nio.file.FileVisitResult;
@@ -178,7 +179,7 @@ public class DensitySpecificResourceFilter {
 
     for (String density : densities) {
       if (!DENSITY_MAP.containsKey(density)) {
-        throw MergingException.withMessage(density + " is not a known density qualifier.").build();
+        throw new MergingException(density + " is not a known density qualifier.");
       }
     }
   }
