@@ -357,93 +357,37 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testForUpdateList() throws Exception {
+    // Check that modifying the list within the loop doesn't affect what gets iterated over.
+    // TODO(brandjon): When we support in-place assignment to a list index, also test that
+    // as a modification here.
     new SkylarkTest().setUp("def foo():",
-        "  xs = [1, 2, 3]",
+        "  xs = ['a', 'b', 'c']",
+        "  s = ''",
         "  for x in xs:",
-        "    if x == 1:",
-        "      xs.append(10)"
-        ).testIfErrorContains("trying to mutate a locked object", "foo()");
+        "    s = s + x",
+        "    if x == 'a':",
+        "      xs.pop(0)",
+        "      xs.pop(1)",
+        "    elif x == 'c':",
+        "      xs.append('d')",
+        "  return s",
+        "s = foo()").testLookup("s", "abc");
   }
 
   @Test
   public void testForUpdateDict() throws Exception {
+    // Check that modifying the dict within the loop doesn't affect what gets iterated over.
     new SkylarkTest().setUp("def foo():",
         "  d = {'a': 1, 'b': 2, 'c': 3}",
+        "  s = ''",
         "  for k in d:",
-        "    d[k] *= 2"
-        ).testIfErrorContains("trying to mutate a locked object", "foo()");
-  }
-
-  @Test
-  public void testForUnlockedAfterBreak() throws Exception {
-    new SkylarkTest().setUp("def foo():",
-        "  xs = [1, 2]",
-        "  for x in xs:",
-        "    break",
-        "  xs.append(3)",
-        "  return xs"
-        ).testEval("foo()", "[1, 2, 3]");
-  }
-
-  @Test
-  public void testForNestedOnSameListStillLocked() throws Exception {
-    new SkylarkTest().setUp("def foo():",
-        "  xs = [1, 2]",
-        "  ys = []",
-        "  for x1 in xs:",
-        "    for x2 in xs:",
-        "      ys.append(x1 * x2)",
-        "    xs.append(4)",
-        "  return ys"
-        ).testIfErrorContains("trying to mutate a locked object", "foo()");
-  }
-
-  @Test
-  public void testForNestedOnSameListErrorMessage() throws Exception {
-    new SkylarkTest().setUp("def foo():",
-        "  xs = [1, 2]",
-        "  ys = []",
-        "  for x1 in xs:",
-        "    for x2 in xs:",
-        "      ys.append(x1 * x2)",
-        "      xs.append(4)",
-        "  return ys"
-        // No file name in message, due to how test is set up.
-        ).testIfErrorContains("Object locked at the following locations: 4:3, 5:5", "foo()");
-  }
-
-  @Test
-  public void testForNestedOnSameListUnlockedAtEnd() throws Exception {
-    new SkylarkTest().setUp("def foo():",
-        "  xs = [1, 2]",
-        "  ys = []",
-        "  for x1 in xs:",
-        "    for x2 in xs:",
-        "      ys.append(x1 * x2)",
-        "  xs.append(4)",
-        "  return ys"
-        ).testEval("foo()", "[1, 2, 2, 4]");
-  }
-
-  @Test
-  public void testForNestedWithListCompGood() throws Exception {
-    new SkylarkTest().setUp("def foo():",
-        "  xs = [1, 2]",
-        "  ys = []",
-        "  for x in xs:",
-        "    zs = [None for x in xs for y in (ys.append(x) or ys)]",
-        "  return ys"
-        ).testEval("foo()", "[1, 2, 1, 2]");
-  }
-  @Test
-  public void testForNestedWithListCompBad() throws Exception {
-    new SkylarkTest().setUp("def foo():",
-        "  xs = [1, 2, 3]",
-        "  ys = []",
-        "  for x in xs:",
-        "    zs = [None for x in xs for y in (xs.append(x) or ys)]",
-        "  return ys"
-        ).testIfErrorContains("trying to mutate a locked object", "foo()");
+        "    s = s + k",
+        "    if k == 'a':",
+        "      d.pop('a')",
+        "      d.pop('b')",
+        "    d.update({'d': 4})",
+        "  return s",
+        "s = foo()").testLookup("s", "abc");
   }
 
   @Test
@@ -731,14 +675,12 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "Parameter 'named' has no default value (in function with_params(int, bool) of Mock).",
-            "mock.with_params(1, True)");
+            "Type Mock has no function with_params(int, bool)", "mock.with_params(1, True)");
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "Parameter 'named' has no default value (in function with_params(int, bool, bool) "
-                + "of Mock).",
+            "Type Mock has no function with_params(int, bool, bool)",
             "mock.with_params(1, True, True)");
     new SkylarkTest()
         .update("mock", new Mock())
@@ -756,15 +698,14 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "Too many arguments (in function with_params(int, bool, bool named, "
-                + "bool posOrNamed, int n) of Mock).",
+            "Type Mock has no function with_params(int, bool, bool named, bool posOrNamed, int n)",
             "mock.with_params(1, True, named=True, posOrNamed=True, n=2)");
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "Parameter 'nonNoneable' cannot be None (in function with_params(int, bool, bool, "
-                + "bool named, bool optionalNamed, NoneType nonNoneable) of Mock).",
+            "Type Mock has no function with_params(int, bool, bool, bool named, bool optionalNamed,"
+                + " NoneType nonNoneable)",
             "mock.with_params(1, True, True, named=True, optionalNamed=False, nonNoneable=None)");
   }
 
