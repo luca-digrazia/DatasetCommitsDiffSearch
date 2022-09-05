@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,6 +52,11 @@ public class PseudoAction<InfoType extends MessageLite> extends AbstractAction {
     this.info = info;
   }
 
+ @Override
+  public String describeStrategy(Executor executor) {
+    return null;
+  }
+
   @Override
   public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException {
@@ -83,8 +88,9 @@ public class PseudoAction<InfoType extends MessageLite> extends AbstractAction {
   }
 
   public static Artifact getDummyOutput(RuleContext ruleContext) {
-    return ruleContext.getPackageRelativeArtifact(
-        ruleContext.getLabel().getName() + ".extra_action_dummy",
+    return ruleContext.getAnalysisEnvironment().getDerivedArtifact(
+        ruleContext.getLabel().toPathFragment().replaceName(
+            ruleContext.getLabel().getName() + ".extra_action_dummy"),
         ruleContext.getConfiguration().getGenfilesDirectory());
   }
 }
