@@ -1232,8 +1232,9 @@ public final class ParallelEvaluator implements Evaluator {
     Preconditions.checkState(entry.isReady(), "%s %s %s", skyKey, entry, env.newlyRequestedDeps);
   }
 
-  private void informProgressReceiverThatValueIsDone(SkyKey key, NodeEntry entry) {
+  private void informProgressReceiverThatValueIsDone(SkyKey key) {
     if (progressReceiver != null) {
+      NodeEntry entry = graph.get(key);
       Preconditions.checkState(entry.isDone(), entry);
       SkyValue value = entry.getValue();
       Version valueVersion = entry.getVersion();
@@ -1268,7 +1269,7 @@ public final class ParallelEvaluator implements Evaluator {
     }
     if (allAreDone) {
       for (SkyKey skyKey : skyKeySet) {
-        informProgressReceiverThatValueIsDone(skyKey, batch.get(skyKey));
+        informProgressReceiverThatValueIsDone(skyKey);
       }
       // Note that the 'catastrophe' parameter doesn't really matter here (it's only used for
       // sanity checking).
@@ -1283,7 +1284,7 @@ public final class ParallelEvaluator implements Evaluator {
           continue;
         }
         if (entry.isDone() && entry.getErrorInfo() != null) {
-          informProgressReceiverThatValueIsDone(skyKey, entry);
+          informProgressReceiverThatValueIsDone(skyKey);
           cachedErrorKeys.add(skyKey);
         }
       }
@@ -1340,7 +1341,7 @@ public final class ParallelEvaluator implements Evaluator {
           visitor.enqueueEvaluation(skyKey);
           break;
         case DONE:
-          informProgressReceiverThatValueIsDone(skyKey, entry);
+          informProgressReceiverThatValueIsDone(skyKey);
           break;
         case ALREADY_EVALUATING:
           break;
