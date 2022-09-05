@@ -646,8 +646,7 @@ public class JavaCompileAction extends AbstractAction {
       Label label = getTargetName(jar);
       builder.add(label.getPackageIdentifier().getRepository().isDefault()
           ? label.toString()
-          // Escape '@' prefix for .params file.
-          : "@" + label.toString());
+          : label.toPathFragment().toString());
     }
     return builder.build();
   }
@@ -723,7 +722,6 @@ public class JavaCompileAction extends AbstractAction {
     private final Collection<Artifact> directJars = new ArrayList<>();
     private final Collection<Artifact> compileTimeDependencyArtifacts = new ArrayList<>();
     private List<String> javacOpts = new ArrayList<>();
-    private ImmutableList<String> javacJvmOpts = ImmutableList.of();
     private boolean compressJar;
     private NestedSet<Artifact> classpathEntries =
         NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
@@ -857,7 +855,7 @@ public class JavaCompileAction extends AbstractAction {
           langtoolsJar,
           instrumentationJars,
           paramFile,
-          javacJvmOpts,
+          javaConfiguration.getDefaultJavaBuilderJvmFlags(),
           semantics.getJavaBuilderMainClass(),
           configuration.getHostPathSeparator());
 
@@ -976,11 +974,6 @@ public class JavaCompileAction extends AbstractAction {
 
     public Builder setJavacOpts(Iterable<String> copts) {
       this.javacOpts = ImmutableList.copyOf(copts);
-      return this;
-    }
-
-    public Builder setJavacJvmOpts(ImmutableList<String> opts) {
-      this.javacJvmOpts = opts;
       return this;
     }
 

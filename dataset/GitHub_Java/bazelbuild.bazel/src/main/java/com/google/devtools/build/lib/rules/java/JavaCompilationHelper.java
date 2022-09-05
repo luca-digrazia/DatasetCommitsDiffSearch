@@ -48,7 +48,6 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
   private JavaTargetAttributes.Builder attributes;
   private JavaTargetAttributes builtAttributes;
   private final ImmutableList<String> customJavacOpts;
-  private final ImmutableList<String> customJavacJvmOpts;
   private final List<Artifact> translations = new ArrayList<>();
   private boolean translationsFrozen = false;
   private final JavaSemantics semantics;
@@ -58,8 +57,6 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
     super(ruleContext);
     this.attributes = attributes;
     this.customJavacOpts = javacOpts;
-    this.customJavacJvmOpts =
-        ImmutableList.copyOf(JavaToolchainProvider.getDefaultJavacJvmOptions(ruleContext));
     this.semantics = semantics;
   }
 
@@ -88,6 +85,7 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
   public void createCompileAction(Artifact outputJar, @Nullable Artifact gensrcOutputJar,
       @Nullable Artifact outputDepsProto, @Nullable Artifact outputMetadata) {
     JavaTargetAttributes attributes = getAttributes();
+    List<String> javacOpts = getJavacOpts();
     JavaCompileAction.Builder builder = createJavaCompileActionBuilder(semantics);
     builder.setClasspathEntries(attributes.getCompileTimeClassPath());
     builder.addResources(attributes.getResources());
@@ -108,8 +106,7 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
     builder.setInstrumentationJars(getInstrumentationJars(semantics));
     builder.addSourceFiles(attributes.getSourceFiles());
     builder.addSourceJars(attributes.getSourceJars());
-    builder.setJavacOpts(customJavacOpts);
-    builder.setJavacJvmOpts(customJavacJvmOpts);
+    builder.setJavacOpts(javacOpts);
     builder.setCompressJar(true);
     builder.setClassDirectory(outputDir(outputJar));
     builder.setSourceGenDirectory(sourceGenDir(outputJar));
@@ -246,11 +243,6 @@ public class JavaCompilationHelper extends BaseJavaCompilationHelper {
     builder.setClassDirectory(outputDir(resourceJar));
     builder.setTempDirectory(tempDir(resourceJar));
     builder.setJavaBuilderJar(getJavaBuilderJar());
-    builder.setJavacOpts(getDefaultJavacOptsFromRule(getRuleContext()));
-    builder.setJavacJvmOpts(
-        ImmutableList.copyOf(JavaToolchainProvider.getDefaultJavacOptions(getRuleContext())));
-    builder.setJavacJvmOpts(
-        ImmutableList.copyOf(JavaToolchainProvider.getDefaultJavacJvmOptions(getRuleContext())));
     getAnalysisEnvironment().registerAction(builder.build());
     return resourceJar;
   }
