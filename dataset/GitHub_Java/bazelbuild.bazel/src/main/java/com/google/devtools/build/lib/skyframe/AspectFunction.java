@@ -76,27 +76,21 @@ public final class AspectFunction implements SkyFunction {
   @Nullable
   public static SkylarkAspect loadSkylarkAspect(
       Environment env, Label extensionLabel, String skylarkValueName)
-          throws AspectCreationException {
+      throws ConversionException, SkylarkImportFailedException {
     SkyKey importFileKey = SkylarkImportLookupValue.key(extensionLabel, false);
-    try {
-      SkylarkImportLookupValue skylarkImportLookupValue =
-          (SkylarkImportLookupValue) env.getValueOrThrow(
-              importFileKey, SkylarkImportFailedException.class);
-      if (skylarkImportLookupValue == null) {
-        return null;
-      }
-  
-      Object skylarkValue = skylarkImportLookupValue.getEnvironmentExtension()
-          .get(skylarkValueName);
-      if (!(skylarkValue instanceof SkylarkAspect)) {
-        throw new ConversionException(
-            skylarkValueName + " from " + extensionLabel.toString() + " is not an aspect");
-      }
-      return (SkylarkAspect) skylarkValue;
-    } catch (SkylarkImportFailedException | ConversionException e) {
-      env.getListener().handle(Event.error(e.getMessage()));
-      throw new AspectCreationException(e.getMessage());
+    SkylarkImportLookupValue skylarkImportLookupValue =
+        (SkylarkImportLookupValue) env.getValueOrThrow(
+            importFileKey, SkylarkImportFailedException.class);
+    if (skylarkImportLookupValue == null) {
+      return null;
     }
+
+    Object skylarkValue = skylarkImportLookupValue.getEnvironmentExtension().get(skylarkValueName);
+    if (!(skylarkValue instanceof SkylarkAspect)) {
+      throw new ConversionException(
+          skylarkValueName + " from " + extensionLabel.toString() + " is not an aspect");
+    }
+    return (SkylarkAspect) skylarkValue;
   }
 
   @Nullable
@@ -117,8 +111,12 @@ public final class AspectFunction implements SkyFunction {
         skylarkAspect =
             loadSkylarkAspect(
                 env, skylarkAspectClass.getExtensionLabel(), skylarkAspectClass.getExportedName());
-      } catch (AspectCreationException e) {
-        throw new AspectFunctionException(e);
+      } catch (SkylarkImportFailedException e) {
+        env.getListener().handle(Event.error(e.getMessage()));
+        throw new AspectFunctionException(new AspectCreationException(e.getMessage()));
+      } catch (ConversionException e) {
+        env.getListener().handle(Event.error(e.getMessage()));
+        throw new AspectFunctionException(new AspectCreationException(e.getMessage()));
       }
       if (skylarkAspect == null) {
         return null;
