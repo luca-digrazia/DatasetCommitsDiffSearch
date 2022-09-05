@@ -28,13 +28,7 @@ import javax.annotation.Nullable;
  */
 // Documentation can be found at ctx.fragments
 @Immutable
-@SkylarkModule(name = "fragments", doc = "Possible fields are "
-    + "<a href=\"apple.html\">apple</a>, <a href=\"cpp.html\">cpp</a>, "
-    + "<a href=\"java.html\">java</a>, <a href=\"jvm.html\">jvm</a> and "
-    + "<a href=\"objc.html\">objc</a>. "
-    + "Access a specific fragment by its field name ex:</p><code>ctx.fragments.apple</code></p>"
-    + "Note that rules have to declare their required fragments in order to access them "
-    + "(see <a href=\"../rules.md#fragments\">here</a>).")
+@SkylarkModule(name = "fragments", documented = false, doc = "")
 public class FragmentCollection implements ClassObject {
   private final RuleContext ruleContext;
   private final ConfigurationTransition config;
