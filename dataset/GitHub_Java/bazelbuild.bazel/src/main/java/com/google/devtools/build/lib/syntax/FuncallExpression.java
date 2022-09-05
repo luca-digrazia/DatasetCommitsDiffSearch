@@ -832,13 +832,15 @@ public final class FuncallExpression extends Expression {
 
   @Override
   void validate(ValidationEnvironment env) throws EvalException {
-    if (obj != null) {
-      obj.validate(env);
-    } else {
-      func.validate(env);
-    }
     for (Argument.Passed arg : args) {
       arg.getValue().validate(env);
+    }
+
+    if (obj != null) {
+      obj.validate(env);
+    } else if (!env.hasSymbolInEnvironment(func.getName())) {
+      throw new EvalException(getLocation(),
+          String.format("function '%s' does not exist", func.getName()));
     }
   }
 

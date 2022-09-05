@@ -26,8 +26,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
-import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Runfiles;
@@ -534,15 +532,13 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testResolveCommandInputs() throws Exception {
     evalRuleContextCode(
         createRuleContext("//foo:resolve_me"),
-        "inputs, argv, input_manifests = ruleContext.resolve_command(",
+        "inputs, argv, manifests = ruleContext.resolve_command(",
         "   tools=ruleContext.attr.tools)");
     @SuppressWarnings("unchecked")
     List<Artifact> inputs = (List<Artifact>) (List<?>) (MutableList) lookup("inputs");
     assertArtifactFilenames(inputs, "mytool.sh", "mytool", "foo_Smytool-runfiles", "t.exe");
-    @SuppressWarnings("unchecked")
-    CompositeRunfilesSupplier runfilesSupplier =
-        new CompositeRunfilesSupplier((List<RunfilesSupplier>) lookup("input_manifests"));
-    assertThat(runfilesSupplier.getMappings()).hasSize(1);
+    Map<?, ?> manifests = (Map<?, ?>) lookup("manifests");
+    assertThat(manifests).hasSize(1);
   }
 
   @Test
@@ -680,7 +676,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testRunfilesBadSetGenericType() throws Exception {
     checkErrorContains(
         "expected depset of Files or NoneType for 'transitive_files' while calling runfiles "
-            + "but got depset of ints instead: depset([1, 2, 3])",
+            + "but got depset of ints instead: set([1, 2, 3])",
         "ruleContext.runfiles(transitive_files=depset([1, 2, 3]))");
   }
 
