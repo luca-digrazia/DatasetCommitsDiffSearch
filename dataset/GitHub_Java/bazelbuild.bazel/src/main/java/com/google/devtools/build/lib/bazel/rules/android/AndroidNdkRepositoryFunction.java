@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.bazel.rules.android;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.AndroidNdkCrosstools;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.AndroidNdkCrosstools.NdkCrosstoolsException;
@@ -26,7 +25,6 @@ import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpls;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.skyframe.FileSymlinkException;
 import com.google.devtools.build.lib.skyframe.FileValue;
@@ -70,16 +68,15 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
   }
 
   @Override
-  public boolean isLocal(Rule rule) {
+  public boolean isLocal() {
     return true;
   }
 
   @Override
-  public SkyValue fetch(
-      Rule rule, Path outputDirectory, BlazeDirectories directories, Environment env)
-          throws SkyFunctionException {
+  public SkyValue fetch(Rule rule, Path outputDirectory, Environment env)
+      throws SkyFunctionException {
     prepareLocalRepositorySymlinkTree(rule, outputDirectory);
-    PathFragment pathFragment = getTargetPath(rule, directories.getWorkspace());
+    PathFragment pathFragment = getTargetPath(rule, getWorkspace());
     Path ndkSymlinkTreeDirectory = outputDirectory.getRelative("ndk");
     try {
       ndkSymlinkTreeDirectory.createDirectory();
@@ -87,8 +84,8 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
 
-    if (!symlinkLocalRepositoryContents(ndkSymlinkTreeDirectory,
-        directories.getOutputBase().getFileSystem().getPath(pathFragment))) {
+    if (!symlinkLocalRepositoryContents(
+        ndkSymlinkTreeDirectory, getOutputBase().getFileSystem().getPath(pathFragment))) {
       return null;
     }
 
@@ -127,8 +124,7 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
     }
 
     String buildFile = createBuildFile(ruleName, crosstoolsAndStls.build());
-    writeBuildFile(outputDirectory, buildFile);
-    return RepositoryDirectoryValue.create(outputDirectory);
+    return writeBuildFile(outputDirectory, buildFile);
   }
 
   @Override

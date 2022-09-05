@@ -137,7 +137,7 @@ public final class BinTools {
   public Artifact getEmbeddedArtifact(String embedPath, ArtifactFactory artifactFactory) {
     PathFragment path = getExecPath(embedPath);
     Preconditions.checkNotNull(path, embedPath + " not found in embedded tools");
-    return artifactFactory.getDerivedArtifact(path, binDir.getParentDirectory());
+    return artifactFactory.getDerivedArtifact(path);
   }
 
   public ImmutableList<Artifact> getAllEmbeddedArtifacts(ArtifactFactory artifactFactory) {

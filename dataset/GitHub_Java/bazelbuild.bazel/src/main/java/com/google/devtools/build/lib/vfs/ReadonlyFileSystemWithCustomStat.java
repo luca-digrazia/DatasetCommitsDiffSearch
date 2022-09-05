@@ -61,11 +61,6 @@ public abstract class ReadonlyFileSystemWithCustomStat extends AbstractFileSyste
   }
 
   @Override
-  public boolean isFilePathCaseSensitive() {
-    return true;
-  }
-
-  @Override
   protected boolean createDirectory(Path path) throws IOException {
     throw modificationException();
   }

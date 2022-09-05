@@ -337,7 +337,7 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
     }
   }
 
-  protected boolean fileIsSymbolicLink(File file) {
+  private boolean fileIsSymbolicLink(File file) {
     return Files.isSymbolicLink(file.toPath());
   }
 

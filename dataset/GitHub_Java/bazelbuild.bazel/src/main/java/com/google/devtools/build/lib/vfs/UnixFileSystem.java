@@ -21,9 +21,9 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.unix.ErrnoFileStatus;
-import com.google.devtools.build.lib.unix.NativePosixFiles;
-import com.google.devtools.build.lib.unix.NativePosixFiles.Dirents;
-import com.google.devtools.build.lib.unix.NativePosixFiles.ReadTypes;
+import com.google.devtools.build.lib.unix.FilesystemUtils;
+import com.google.devtools.build.lib.unix.FilesystemUtils.Dirents;
+import com.google.devtools.build.lib.unix.FilesystemUtils.ReadTypes;
 import com.google.devtools.build.lib.util.Preconditions;
 
 import java.io.IOException;
@@ -60,29 +60,6 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     /**
      * Write a log message for symlinks that won't be compatible with how we are planning to pretend
      * that they exist on Windows.
-     *
-     * <p>The current plan for emulating symlinks on Windows is that in order to create a "symlink",
-     * the target needs to exist, that is, we don't do dangling symlinks. Then:
-     * </p>
-     *
-     * <ul>
-     *   <li>If the target is a directory, we create a junction. This is good because we don't need
-     *   write access to the target and it Just Works. The link and its target can be on different
-     *   file systems, which is important, because contrary to the popular belief, *can* do a
-     *   mount() on Windows
-     *   </li>
-     *   <li>If the target is a file in the source tree or under the output base, we use a hard
-     *   link. Hard links only work within the same file system and you need write access to the
-     *   target. We assume that the source tree is writable, and we know that the output base is.
-     *   </li>
-     *   <li>If the target is a file not in one of these locations, we raise an error. The only
-     *   places where we need to do this is in the implementation of local repository rules,
-     *   which will be special-cased.</li>
-     * </ul>
-     *
-     * <p>What does <b>not</b> work is using symbolic links: they need local administrator rights,
-     * which would make Bazel only usable as local admin.
-     * </p>
      */
     WINDOWS_COMPATIBLE,
   }
@@ -183,7 +160,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     String[] entries;
     long startTime = Profiler.nanoTimeMaybe();
     try {
-      entries = NativePosixFiles.readdir(name);
+      entries = FilesystemUtils.readdir(name);
     } finally {
       profiler.logSimpleTask(startTime, ProfilerTask.VFS_DIR, name);
     }
@@ -204,7 +181,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   /**
-   * Converts from {@link NativePosixFiles.Dirents.Type} to
+   * Converts from {@link com.google.devtools.build.lib.unix.FilesystemUtils.Dirents.Type} to
    * {@link com.google.devtools.build.lib.vfs.Dirent.Type}.
    */
   private static Dirent.Type convertToDirentType(Dirents.Type type) {
@@ -227,7 +204,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     String name = path.getPathString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
-      Dirents unixDirents = NativePosixFiles.readdir(name,
+      Dirents unixDirents = FilesystemUtils.readdir(name,
           followSymlinks ? ReadTypes.FOLLOW : ReadTypes.NOFOLLOW);
       Preconditions.checkState(unixDirents.hasTypes());
       List<Dirent> dirents = Lists.newArrayListWithCapacity(unixDirents.size());
@@ -252,8 +229,8 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     long startTime = Profiler.nanoTimeMaybe();
     try {
       return new UnixFileStatus(followSymlinks
-                                      ? NativePosixFiles.stat(name)
-                                      : NativePosixFiles.lstat(name));
+                                      ? FilesystemUtils.stat(name)
+                                      : FilesystemUtils.lstat(name));
     } finally {
       profiler.logSimpleTask(startTime, ProfilerTask.VFS_STAT, name);
     }
@@ -268,8 +245,8 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     long startTime = Profiler.nanoTimeMaybe();
     try {
       ErrnoFileStatus stat = followSymlinks
-          ? NativePosixFiles.errnoStat(name)
-          : NativePosixFiles.errnoLstat(name);
+          ? FilesystemUtils.errnoStat(name)
+          : FilesystemUtils.errnoLstat(name);
       return stat.hasError() ? null : new UnixFileStatus(stat);
     } finally {
       profiler.logSimpleTask(startTime, ProfilerTask.VFS_STAT, name);
@@ -291,8 +268,8 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     long startTime = Profiler.nanoTimeMaybe();
     try {
       ErrnoFileStatus stat = followSymlinks
-          ? NativePosixFiles.errnoStat(name)
-          : NativePosixFiles.errnoLstat(name);
+          ? FilesystemUtils.errnoStat(name)
+          : FilesystemUtils.errnoLstat(name);
       if (!stat.hasError()) {
         return new UnixFileStatus(stat);
       }
@@ -338,7 +315,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     synchronized (path) {
       int oldMode = statInternal(path, true).getPermissions();
       int newMode = add ? (oldMode | permissionBits) : (oldMode & ~permissionBits);
-      NativePosixFiles.chmod(path.toString(), newMode);
+      FilesystemUtils.chmod(path.toString(), newMode);
     }
   }
 
@@ -360,7 +337,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   @Override
   protected void chmod(Path path, int mode) throws IOException {
     synchronized (path) {
-      NativePosixFiles.chmod(path.toString(), mode);
+      FilesystemUtils.chmod(path.toString(), mode);
     }
   }
 
@@ -379,7 +356,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     synchronized (path) {
       // Note: UNIX mkdir(2), FilesystemUtils.mkdir() and createDirectory all
       // have different ways of representing failure!
-      if (NativePosixFiles.mkdir(path.toString(), 0777)) {
+      if (FilesystemUtils.mkdir(path.toString(), 0777)) {
         return true; // successfully created
       }
 
@@ -398,13 +375,13 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     SymlinkImplementation strategy = computeSymlinkImplementation(linkPath, targetFragment);
     switch (strategy) {
       case HARDLINK:
-        NativePosixFiles.link(targetFragment.toString(), linkPath.toString());
+        FilesystemUtils.link(targetFragment.toString(), linkPath.toString());
         break;
 
       case JUNCTION:  // Junctions are emulated on Linux with symlinks, fall through
       case SYMLINK:
         synchronized (linkPath) {
-          NativePosixFiles.symlink(targetFragment.toString(), linkPath.toString());
+          FilesystemUtils.symlink(targetFragment.toString(), linkPath.toString());
         }
         break;
 
@@ -529,7 +506,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     String name = path.toString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
-      return new PathFragment(NativePosixFiles.readlink(name));
+      return new PathFragment(FilesystemUtils.readlink(name));
     } catch (IOException e) {
       // EINVAL => not a symbolic link.  Anything else is a real error.
       throw e.getMessage().endsWith("(Invalid argument)") ? new NotASymlinkException(path) : e;
@@ -541,7 +518,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   @Override
   protected void renameTo(Path sourcePath, Path targetPath) throws IOException {
     synchronized (sourcePath) {
-      NativePosixFiles.rename(sourcePath.toString(), targetPath.toString());
+      FilesystemUtils.rename(sourcePath.toString(), targetPath.toString());
     }
   }
 
@@ -556,7 +533,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     long startTime = Profiler.nanoTimeMaybe();
     synchronized (path) {
       try {
-        return NativePosixFiles.remove(name);
+        return FilesystemUtils.remove(name);
       } finally {
         profiler.logSimpleTask(startTime, ProfilerTask.VFS_DELETE, name);
       }
@@ -572,11 +549,11 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   protected void setLastModifiedTime(Path path, long newTime) throws IOException {
     synchronized (path) {
       if (newTime == -1L) { // "now"
-        NativePosixFiles.utime(path.toString(), true, 0);
+        FilesystemUtils.utime(path.toString(), true, 0);
       } else {
         // newTime > MAX_INT => -ve unixTime
         int unixTime = (int) (newTime / 1000);
-        NativePosixFiles.utime(path.toString(), false, unixTime);
+        FilesystemUtils.utime(path.toString(), false, unixTime);
       }
     }
   }
@@ -586,7 +563,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     String pathName = path.toString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
-      return NativePosixFiles.getxattr(pathName, name);
+      return FilesystemUtils.getxattr(pathName, name);
     } catch (UnsupportedOperationException e) {
       // getxattr() syscall is not supported by the underlying filesystem (it returned ENOTSUP).
       // Per method contract, treat this as ENODATA.
@@ -601,7 +578,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     String name = path.toString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
-      return NativePosixFiles.md5sum(name).asBytes();
+      return FilesystemUtils.md5sum(name).asBytes();
     } finally {
       profiler.logSimpleTask(startTime, ProfilerTask.VFS_MD5, name);
     }

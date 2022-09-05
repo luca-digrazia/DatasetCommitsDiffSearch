@@ -19,10 +19,8 @@ import com.google.common.base.Stopwatch;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Multimap;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Table;
 import com.google.devtools.build.lib.Constants;
@@ -180,7 +178,6 @@ public class ExecutionTool {
     this.runtime = env.getRuntime();
     this.request = request;
 
-
     // Create tools before getting the strategies from the modules as some of them need tools to
     // determine whether the host actually supports certain strategies (e.g. sandboxing).
     createToolsSymlinks();
@@ -207,8 +204,8 @@ public class ExecutionTool {
               }
 
               @Override
-              public Multimap<Class<? extends ActionContext>, String> getActionContexts() {
-                return ImmutableMultimap.<Class<? extends ActionContext>, String>builder()
+              public Map<Class<? extends ActionContext>, String> getActionContexts() {
+                return ImmutableMap.<Class<? extends ActionContext>, String>builder()
                     .put(FilesetActionContext.class, "")
                     .put(WorkspaceStatusAction.Context.class, "")
                     .put(SymlinkTreeActionContext.class, "")
@@ -234,7 +231,7 @@ public class ExecutionTool {
       }
 
       for (Map.Entry<Class<? extends ActionContext>, String> entry :
-          consumer.getActionContexts().entries()) {
+          consumer.getActionContexts().entrySet()) {
         ActionContext context = strategyConverter.getStrategy(entry.getKey(), entry.getValue());
         if (context == null) {
           throw makeExceptionForInvalidStrategyValue(

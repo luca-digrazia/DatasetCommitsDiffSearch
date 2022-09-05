@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.vfs;
 
 import static com.google.common.truth.Truth.assertThat;
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -24,20 +23,20 @@ import static org.junit.Assert.fail;
 
 import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.testutil.TestUtils;
-import com.google.devtools.build.lib.unix.NativePosixFiles;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Preconditions;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.file.FileAlreadyExistsException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
 
 /**
  * This class handles the generic tests that any filesystem must pass.
@@ -50,7 +49,6 @@ public abstract class FileSystemTest {
   private long savedTime;
   protected FileSystem testFS;
   protected boolean supportsSymlinks;
-  protected boolean supportsHardlinks;
   protected Path workingDir;
 
   // Some useful examples of various kinds of files (mnemonic: "x" = "eXample")
@@ -68,7 +66,6 @@ public abstract class FileSystemTest {
     workingDir = testFS.getPath(getTestTmpDir());
     cleanUpWorkingDirectory(workingDir);
     supportsSymlinks = testFS.supportsSymbolicLinksNatively();
-    supportsHardlinks = testFS.supportsHardLinksNatively();
 
     // % ls -lR
     // -rw-rw-r-- xFile
@@ -105,15 +102,15 @@ public abstract class FileSystemTest {
   protected abstract FileSystem getFreshFileSystem() throws IOException;
 
   protected boolean isSymbolicLink(File file) {
-    return NativePosixFiles.isSymbolicLink(file);
+    return com.google.devtools.build.lib.unix.FilesystemUtils.isSymbolicLink(file);
   }
 
   protected void setWritable(File file) throws IOException {
-    NativePosixFiles.setWritable(file);
+    com.google.devtools.build.lib.unix.FilesystemUtils.setWritable(file);
   }
 
   protected void setExecutable(File file) throws IOException {
-    NativePosixFiles.setExecutable(file);
+    com.google.devtools.build.lib.unix.FilesystemUtils.setExecutable(file);
   }
 
   private static final Pattern STAT_SUBDIR_ERROR = Pattern.compile("(.*) \\(Not a directory\\)");
@@ -306,7 +303,7 @@ public abstract class FileSystemTest {
   @Test
   public void testCreatePathRelativeToWorkingDirectory() {
     Path relativeCreatedPath = absolutize("some-file");
-    Path expectedResult = workingDir.getRelative(PathFragment.create("some-file"));
+    Path expectedResult = workingDir.getRelative(new PathFragment("some-file"));
 
     assertEquals(expectedResult, relativeCreatedPath);
   }
@@ -1091,7 +1088,7 @@ public abstract class FileSystemTest {
   @Test
   public void testGetPathOnlyAcceptsAbsolutePathFragment() {
     try {
-      testFS.getPath(PathFragment.create("not-absolute"));
+      testFS.getPath(new PathFragment("not-absolute"));
       fail("The expected Exception was not thrown.");
     } catch (IllegalArgumentException ex) {
       assertThat(ex).hasMessage("not-absolute (not an absolute path)");
@@ -1205,7 +1202,7 @@ public abstract class FileSystemTest {
   public void testWritingToReadOnlyFileThrowsException() throws Exception {
     xFile.setWritable(false);
     try {
-      FileSystemUtils.writeContent(xFile, "hello, world!".getBytes(UTF_8));
+      FileSystemUtils.writeContent(xFile, "hello, world!".getBytes());
       fail("No exception thrown.");
     } catch (IOException e) {
       assertThat(e).hasMessage(xFile + " (Permission denied)");
@@ -1214,7 +1211,7 @@ public abstract class FileSystemTest {
 
   @Test
   public void testReadingFromUnreadableFileThrowsException() throws Exception {
-    FileSystemUtils.writeContent(xFile, "hello, world!".getBytes(UTF_8));
+    FileSystemUtils.writeContent(xFile, "hello, world!".getBytes());
     xFile.setReadable(false);
     try {
       FileSystemUtils.readContent(xFile);
@@ -1369,79 +1366,4 @@ public abstract class FileSystemTest {
     }
   }
 
-  @Test
-  public void testCreateHardLink_Success() throws Exception {
-    if (!supportsHardlinks) {
-      return;
-    }
-    xFile.createHardLink(xLink);
-    assertTrue(xFile.exists());
-    assertTrue(xLink.exists());
-    assertTrue(xFile.isFile());
-    assertTrue(xLink.isFile());
-    assertTrue(isHardLinked(xFile, xLink));
-  }
-
-  @Test
-  public void testCreateHardLink_NeitherOriginalNorLinkExists() throws Exception {
-    if (!supportsHardlinks) {
-      return;
-    }
-
-    /* Neither original file nor link file exists */
-    xFile.delete();
-    try {
-      xFile.createHardLink(xLink);
-      fail("expected FileNotFoundException: File \"xFile\" linked from \"xLink\" does not exist");
-    } catch (FileNotFoundException expected) {
-      assertThat(expected).hasMessage("File \"xFile\" linked from \"xLink\" does not exist");
-    }
-    assertFalse(xFile.exists());
-    assertFalse(xLink.exists());
-  }
-
-  @Test
-  public void testCreateHardLink_OriginalDoesNotExistAndLinkExists() throws Exception {
-
-    if (!supportsHardlinks) {
-      return;
-    }
-
-    /* link file exists and original file does not exist */
-    xFile.delete();
-    FileSystemUtils.createEmptyFile(xLink);
-
-    try {
-      xFile.createHardLink(xLink);
-      fail("expected FileNotFoundException: File \"xFile\" linked from \"xLink\" does not exist");
-    } catch (FileNotFoundException expected) {
-      assertThat(expected).hasMessage("File \"xFile\" linked from \"xLink\" does not exist");
-    }
-    assertFalse(xFile.exists());
-    assertTrue(xLink.exists());
-  }
-
-  @Test
-  public void testCreateHardLink_BothOriginalAndLinkExist() throws Exception {
-
-    if (!supportsHardlinks) {
-      return;
-    }
-    /* Both original file and link file exist */
-    FileSystemUtils.createEmptyFile(xLink);
-
-    try {
-      xFile.createHardLink(xLink);
-      fail("expected FileAlreadyExistsException: New link file \"xLink\" already exists");
-    } catch (FileAlreadyExistsException expected) {
-      assertThat(expected).hasMessage("New link file \"xLink\" already exists");
-    }
-    assertTrue(xFile.exists());
-    assertTrue(xLink.exists());
-    assertFalse(isHardLinked(xFile, xLink));
-  }
-
-  protected boolean isHardLinked(Path a, Path b) throws IOException {
-    return testFS.stat(a, false).getNodeId() == testFS.stat(b, false).getNodeId();
-  }
 }

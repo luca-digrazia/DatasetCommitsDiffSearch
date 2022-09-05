@@ -13,12 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.bazel.rules.android;
 
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
@@ -35,19 +33,18 @@ import java.io.IOException;
  */
 public class AndroidSdkRepositoryFunction extends RepositoryFunction {
   @Override
-  public boolean isLocal(Rule rule) {
+  public boolean isLocal() {
     return true;
   }
 
   @Override
-  public SkyValue fetch(
-      Rule rule, Path outputDirectory, BlazeDirectories directories, Environment env)
-          throws SkyFunctionException {
+  public SkyValue fetch(Rule rule, Path outputDirectory, Environment env)
+      throws SkyFunctionException {
     prepareLocalRepositorySymlinkTree(rule, outputDirectory);
-    PathFragment pathFragment = getTargetPath(rule, directories.getWorkspace());
+    PathFragment pathFragment = getTargetPath(rule, getWorkspace());
 
     if (!symlinkLocalRepositoryContents(
-        outputDirectory, directories.getOutputBase().getFileSystem().getPath(pathFragment))) {
+        outputDirectory, getOutputBase().getFileSystem().getPath(pathFragment))) {
       return null;
     }
 
@@ -55,28 +52,24 @@ public class AndroidSdkRepositoryFunction extends RepositoryFunction {
     String buildToolsVersion = attributes.get("build_tools_version", Type.STRING);
     Integer apiLevel = attributes.get("api_level", Type.INTEGER);
 
-    String template = getStringResource("android_sdk_repository_template.txt");
+    String template;
+    try {
+      template = ResourceFileLoader.loadResource(
+        AndroidSdkRepositoryFunction.class, "android_sdk_repository_template.txt");
+    } catch (IOException e) {
+      throw new IllegalStateException(e);
+    }
 
     String buildFile = template
         .replaceAll("%repository_name%", rule.getName())
         .replaceAll("%build_tools_version%", buildToolsVersion)
         .replaceAll("%api_level%", apiLevel.toString());
 
-    writeBuildFile(outputDirectory, buildFile);
-    return RepositoryDirectoryValue.create(outputDirectory);
+    return writeBuildFile(outputDirectory, buildFile);
   }
 
   @Override
   public Class<? extends RuleDefinition> getRuleDefinition() {
     return AndroidSdkRepositoryRule.class;
-  }
-
-  private static String getStringResource(String name) {
-    try {
-      return ResourceFileLoader.loadResource(
-          AndroidSdkRepositoryFunction.class, name);
-    } catch (IOException e) {
-      throw new IllegalStateException(e);
-    }
   }
 }

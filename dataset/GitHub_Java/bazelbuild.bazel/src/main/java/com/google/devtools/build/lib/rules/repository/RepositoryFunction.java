@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
+import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
@@ -30,12 +31,13 @@ import com.google.devtools.build.lib.packages.RuleSerializer;
 import com.google.devtools.build.lib.skyframe.FileSymlinkException;
 import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.skyframe.InconsistentFilesystemException;
-import com.google.devtools.build.lib.skyframe.PackageLookupValue;
-import com.google.devtools.build.lib.skyframe.WorkspaceFileValue;
+import com.google.devtools.build.lib.skyframe.PackageValue;
+import com.google.devtools.build.lib.skyframe.RepositoryValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -75,11 +77,11 @@ import javax.annotation.Nullable;
  * repository has never been fetched, Bazel errors out for lack of a better option. This is
  * implemented using
  * {@link com.google.devtools.build.lib.bazel.BazelRepositoryModule#REPOSITORY_VALUE_CHECKER} and
- * a flag in {@link RepositoryDirectoryValue} that tells Bazel whether the value in Skyframe is
- * stale according to the value of {@code --nofetch} or not.
+ * a flag in {@link RepositoryValue} that tells Bazel whether the value in Skyframe is stale
+ * according to the value of {@code --nofetch} or not.
  *
- * <p>When a rule in the WORKSPACE file is changed, the corresponding
- * {@link RepositoryDirectoryValue} is invalidated using the usual Skyframe route.
+ * <p>When a rule in the WORKSPACE file is changed, the corresponding {@link RepositoryValue} is
+ * invalidated using the usual Skyframe route.
  */
 public abstract class RepositoryFunction {
   /**
@@ -242,7 +244,7 @@ public abstract class RepositoryFunction {
     }
   }
 
-  protected RepositoryDirectoryValue writeBuildFile(Path repositoryDirectory, String contents)
+  protected RepositoryValue writeBuildFile(Path repositoryDirectory, String contents)
       throws RepositoryFunctionException {
     Path buildFilePath = repositoryDirectory.getRelative("BUILD");
     try {
@@ -251,7 +253,7 @@ public abstract class RepositoryFunction {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
 
-    return RepositoryDirectoryValue.create(repositoryDirectory);
+    return RepositoryValue.create(repositoryDirectory);
   }
 
   protected FileValue getBuildFileValue(Rule rule, Environment env)
@@ -305,11 +307,11 @@ public abstract class RepositoryFunction {
    * @throws RepositoryFunctionException if the BUILD file specified does not exist or cannot be
    *         linked.
    */
-  protected RepositoryDirectoryValue symlinkBuildFile(
-      FileValue buildFileValue, Path outputDirectory) throws RepositoryFunctionException {
+  protected RepositoryValue symlinkBuildFile(FileValue buildFileValue, Path outputDirectory)
+      throws RepositoryFunctionException {
     Path buildFilePath = outputDirectory.getRelative("BUILD");
     createSymbolicLink(buildFilePath, buildFileValue.realRootedPath().asPath());
-    return RepositoryDirectoryValue.create(outputDirectory);
+    return RepositoryValue.create(outputDirectory);
   }
 
   @VisibleForTesting
@@ -339,6 +341,7 @@ public abstract class RepositoryFunction {
       throws RepositoryFunctionException {
     try {
       FileSystemUtils.createDirectoryAndParents(repositoryDirectory);
+      FileSystem fs = repositoryDirectory.getFileSystem();
       if (repositoryDirectory.getFileSystem().supportsSymbolicLinksNatively()) {
         for (Path target : targetDirectory.getDirectoryEntries()) {
           Path symlinkPath =
@@ -378,37 +381,33 @@ public abstract class RepositoryFunction {
   @Nullable
   public static Rule getRule(String repository, Environment env)
       throws RepositoryFunctionException {
-
-    SkyKey packageLookupKey = PackageLookupValue.key(Label.EXTERNAL_PACKAGE_IDENTIFIER);
-    PackageLookupValue packageLookupValue;
-    packageLookupValue = (PackageLookupValue) env.getValue(packageLookupKey);
-    if (packageLookupValue == null) {
+    SkyKey packageKey = PackageValue.key(Label.EXTERNAL_PACKAGE_IDENTIFIER);
+    PackageValue packageValue;
+    try {
+      packageValue = (PackageValue) env.getValueOrThrow(packageKey,
+          NoSuchPackageException.class);
+    } catch (NoSuchPackageException e) {
+      throw new RepositoryFunctionException(
+          new BuildFileNotFoundException(
+              Label.EXTERNAL_PACKAGE_IDENTIFIER, "Could not load //external package"),
+          Transience.PERSISTENT);
+    }
+    if (packageValue == null) {
       return null;
     }
-    RootedPath workspacePath =
-        RootedPath.toRootedPath(packageLookupValue.getRoot(), new PathFragment("WORKSPACE"));
 
-    SkyKey workspaceKey = WorkspaceFileValue.key(workspacePath);
-    do {
-      WorkspaceFileValue value = (WorkspaceFileValue) env.getValue(workspaceKey);
-      if (value == null) {
-        return null;
-      }
-      // TODO(dmarting): stop at cycle and report a more intelligible error than cycle reporting.
-      Package externalPackage = value.getPackage();
-      if (externalPackage.containsErrors()) {
-        throw new RepositoryFunctionException(
-            new BuildFileContainsErrorsException(
-                Label.EXTERNAL_PACKAGE_IDENTIFIER, "Could not load //external package"),
-            Transience.PERSISTENT);
-      }
-      Rule rule = externalPackage.getRule(repository);
-      if (rule != null) {
-        return rule;
-      }
-      workspaceKey = value.next();
-    } while (workspaceKey != null);
-    throw new RepositoryNotFoundException(repository);
+    Package externalPackage = packageValue.getPackage();
+    if (externalPackage.containsErrors()) {
+      throw new RepositoryFunctionException(
+          new BuildFileContainsErrorsException(
+              Label.EXTERNAL_PACKAGE_IDENTIFIER, "Could not load //external package"),
+          Transience.PERSISTENT);
+    }
+    Rule rule = externalPackage.getRule(repository);
+    if (rule == null) {
+      throw new RepositoryNotFoundException(repository);
+    }
+    return rule;
   }
 
   @Nullable

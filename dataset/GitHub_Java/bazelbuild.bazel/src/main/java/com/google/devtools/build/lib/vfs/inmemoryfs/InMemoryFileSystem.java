@@ -654,11 +654,6 @@ public class InMemoryFileSystem extends ScopeEscapableFileSystem {
     return true;
   }
 
-  @Override
-  public boolean isFilePathCaseSensitive() {
-    return true;
-  }
-
   /**
    * Constructs a new inode.  Provided so that subclasses of InMemoryFileSystem
    * can inject subclasses of FileInfo properly.

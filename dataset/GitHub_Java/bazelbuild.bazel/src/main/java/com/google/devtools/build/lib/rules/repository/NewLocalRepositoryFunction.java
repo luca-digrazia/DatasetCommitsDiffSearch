@@ -14,9 +14,9 @@
 
 package com.google.devtools.build.lib.rules.repository;
 
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
@@ -27,35 +27,29 @@ import com.google.devtools.build.skyframe.SkyValue;
  * Create a repository from a directory on the local filesystem.
  */
 public class NewLocalRepositoryFunction extends RepositoryFunction {
-
   @Override
-  public boolean isLocal(Rule rule) {
+  public boolean isLocal() {
     return true;
   }
 
   @Override
-  public SkyValue fetch(
-      Rule rule, Path outputDirectory, BlazeDirectories directories, Environment env)
-          throws SkyFunctionException {
-
-    NewRepositoryBuildFileHandler buildFileHandler =
-        new NewRepositoryBuildFileHandler(directories.getWorkspace());
-    if (!buildFileHandler.prepareBuildFile(rule, env)) {
+  public SkyValue fetch(Rule rule, Path outputDirectory, Environment env)
+      throws SkyFunctionException {
+    FileValue buildFileValue = getBuildFileValue(rule, env);
+    if (env.valuesMissing()) {
       return null;
     }
-
     prepareLocalRepositorySymlinkTree(rule, outputDirectory);
-    PathFragment pathFragment = getTargetPath(rule, directories.getWorkspace());
-
+    PathFragment pathFragment = getTargetPath(rule, getWorkspace());
+    
     // Link x/y/z to /some/path/to/y/z.
     if (!symlinkLocalRepositoryContents(
-        outputDirectory, directories.getOutputBase().getFileSystem().getPath(pathFragment))) {
+        outputDirectory, getOutputBase().getFileSystem().getPath(pathFragment))) {
       return null;
     }
 
-    buildFileHandler.finishBuildFile(outputDirectory);
-    
-    return RepositoryDirectoryValue.create(outputDirectory);
+    // Link x/BUILD to <build_root>/x.BUILD.
+    return symlinkBuildFile(buildFileValue, outputDirectory);
   }
 
   @Override

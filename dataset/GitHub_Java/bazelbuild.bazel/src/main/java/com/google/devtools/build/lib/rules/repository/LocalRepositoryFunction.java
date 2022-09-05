@@ -18,7 +18,10 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.skyframe.FileValue;
+import com.google.devtools.build.lib.skyframe.RepositoryValue;
 import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.vfs.FileSystem;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
@@ -43,11 +46,18 @@ public class LocalRepositoryFunction extends RepositoryFunction {
     AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
     PathFragment pathFragment = new PathFragment(mapper.get("path", Type.STRING));
     try {
-      outputDirectory.createSymbolicLink(pathFragment);
+      FileSystem fs = outputDirectory.getFileSystem();
+      if (fs.supportsSymbolicLinksNatively()) {
+        outputDirectory.createSymbolicLink(pathFragment);
+      } else {
+        FileSystemUtils.createDirectoryAndParents(outputDirectory);
+        FileSystemUtils.copyTreesBelow(
+            fs.getPath(getTargetPath(rule, getWorkspace())), outputDirectory);
+      }
     } catch (IOException e) {
       throw new RepositoryFunctionException(
           new IOException("Could not create symlink to repository " + pathFragment + ": "
-              + e.getMessage(), e), Transience.TRANSIENT);
+              + e.getMessage()), Transience.TRANSIENT);
     }
     FileValue repositoryValue = getRepositoryDirectory(outputDirectory, env);
     if (repositoryValue == null) {
@@ -61,7 +71,7 @@ public class LocalRepositoryFunction extends RepositoryFunction {
           new IOException(rule + " must specify an existing directory"), Transience.TRANSIENT);
     }
 
-    return RepositoryDirectoryValue.create(outputDirectory);
+    return RepositoryValue.create(outputDirectory);
   }
 
   @Override
