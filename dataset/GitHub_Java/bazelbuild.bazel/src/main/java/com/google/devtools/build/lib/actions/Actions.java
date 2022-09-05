@@ -29,9 +29,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.SortedMap;
-import java.util.TreeMap;
-
-import javax.annotation.Nullable;
 
 /**
  * Helper class for actions.
@@ -54,46 +51,24 @@ public final class Actions {
    * <p>This method implements an equivalence relationship across actions, based on the action
    * class, the key, and the list of inputs and outputs.
    */
-  public static boolean canBeShared(ActionAnalysisMetadata a, ActionAnalysisMetadata b) {
+  public static boolean canBeShared(Action a, Action b) {
     if (!a.getMnemonic().equals(b.getMnemonic())) {
       return false;
     }
-
-    // Non-Actions cannot be shared.
-    if (!(a instanceof Action) || !(b instanceof Action)) {
-      return false;
-    }
-
-    Action actionA = (Action) a;
-    Action actionB = (Action) b;
-    if (!actionA.getKey().equals(actionB.getKey())) {
+    if (!a.getKey().equals(b.getKey())) {
       return false;
     }
     // Don't bother to check input and output counts first; the expected result for these tests is
     // to always be true (i.e., that this method returns true).
-    if (!Iterables.elementsEqual(actionA.getMandatoryInputs(), actionB.getMandatoryInputs())) {
+    if (!Iterables.elementsEqual(a.getMandatoryInputs(), b.getMandatoryInputs())) {
       return false;
     }
-    if (!Iterables.elementsEqual(actionA.getOutputs(), actionB.getOutputs())) {
+    if (!Iterables.elementsEqual(a.getOutputs(), b.getOutputs())) {
       return false;
     }
     return true;
   }
 
-  /**
-   * Finds action conflicts. An action conflict happens if two actions generate the same output
-   * artifact. Shared actions are tolerated. See {@link #canBeShared} for details.
-   *
-   * @param actions a list of actions to check for action conflicts
-   * @return a map between generated artifacts and their associated generating actions. If there is
-   *     more than one action generating the same output artifact, only one action is chosen.
-   * @throws ActionConflictException iff there are two actions generate the same output
-   */
-  public static Map<Artifact, ActionAnalysisMetadata> findAndThrowActionConflict(
-      Iterable<ActionAnalysisMetadata> actions) throws ActionConflictException {
-    return Actions.maybeFilterSharedActionsAndThrowIfConflict(
-        actions, /*allowSharedAction=*/ false);
-  }
 
   /**
    * Finds action conflicts. An action conflict happens if two actions generate the same output
@@ -105,19 +80,18 @@ public final class Actions {
    * @throws ActionConflictException iff there are two unshareable actions generating the same
    *     output
    */
-  public static Map<Artifact, ActionAnalysisMetadata> filterSharedActionsAndThrowActionConflict(
-      Iterable<? extends ActionAnalysisMetadata> actions) throws ActionConflictException {
+  public static Map<Artifact, Action> filterSharedActionsAndThrowActionConflict(
+      Iterable<Action> actions) throws ActionConflictException {
     return Actions.maybeFilterSharedActionsAndThrowIfConflict(
         actions, /*allowSharedAction=*/ true);
   }
 
-  private static Map<Artifact, ActionAnalysisMetadata> maybeFilterSharedActionsAndThrowIfConflict(
-      Iterable<? extends ActionAnalysisMetadata> actions, boolean allowSharedAction)
-      throws ActionConflictException {
-    Map<Artifact, ActionAnalysisMetadata> generatingActions = new HashMap<>();
-    for (ActionAnalysisMetadata action : actions) {
+  private static Map<Artifact, Action> maybeFilterSharedActionsAndThrowIfConflict(
+      Iterable<Action> actions, boolean allowSharedAction) throws ActionConflictException {
+    Map<Artifact, Action> generatingActions = new HashMap<>();
+    for (Action action : actions) {
       for (Artifact artifact : action.getOutputs()) {
-        ActionAnalysisMetadata previousAction = generatingActions.put(artifact, action);
+        Action previousAction = generatingActions.put(artifact, action);
         if (previousAction != null && previousAction != action) {
           if (!allowSharedAction || !Actions.canBeShared(previousAction, action)) {
             throw new ActionConflictException(artifact, previousAction, action);
@@ -133,43 +107,21 @@ public final class Actions {
    * happens if one action generates an artifact whose path is a prefix of another artifact's path.
    * Those two artifacts cannot exist simultaneously in the output tree.
    *
-   * @param generatingActions a map between generated artifacts and their associated generating
-   *     actions.
-   * @return a map between actions that generated the conflicting artifacts and their associated
-   *     {@link ArtifactPrefixConflictException}.
-   */
-  public static Map<ActionAnalysisMetadata, ArtifactPrefixConflictException>
-      findArtifactPrefixConflicts(Map<Artifact, ActionAnalysisMetadata> generatingActions) {
-    TreeMap<PathFragment, Artifact> artifactPathMap = new TreeMap();
-    for (Artifact artifact : generatingActions.keySet()) {
-      artifactPathMap.put(artifact.getExecPath(), artifact);
-    }
-
-    return findArtifactPrefixConflicts(
-        new MapBasedImmutableActionGraph(generatingActions), artifactPathMap);
-  }
-
-  /**
-   * Finds Artifact prefix conflicts between generated artifacts. An artifact prefix conflict
-   * happens if one action generates an artifact whose path is a prefix of another artifact's path.
-   * Those two artifacts cannot exist simultaneously in the output tree.
-   *
    * @param actionGraph the {@link ActionGraph} to query for artifact conflicts
    * @param artifactPathMap a map mapping generated artifacts to their exec paths
    * @return A map between actions that generated the conflicting artifacts and their associated
    *     {@link ArtifactPrefixConflictException}.
    */
-  public static Map<ActionAnalysisMetadata, ArtifactPrefixConflictException>
-      findArtifactPrefixConflicts(ActionGraph actionGraph,
-      SortedMap<PathFragment, Artifact> artifactPathMap) {
+  public static Map<Action, ArtifactPrefixConflictException> findArtifactPrefixConflicts(
+      ActionGraph actionGraph, SortedMap<PathFragment, Artifact> artifactPathMap) {
     // No actions in graph -- currently happens only in tests. Special-cased because .next() call
     // below is unconditional.
     if (artifactPathMap.isEmpty()) {
-      return ImmutableMap.<ActionAnalysisMetadata, ArtifactPrefixConflictException>of();
+      return ImmutableMap.<Action, ArtifactPrefixConflictException>of();
     }
 
     // Keep deterministic ordering of bad actions.
-    Map<ActionAnalysisMetadata, ArtifactPrefixConflictException> badActions = new LinkedHashMap();
+    Map<Action, ArtifactPrefixConflictException> badActions = new LinkedHashMap();
     Iterator<PathFragment> iter = artifactPathMap.keySet().iterator();
 
     // Report an error for every derived artifact which is a prefix of another.
@@ -188,9 +140,9 @@ public final class Actions {
         if (pathJ.startsWith(pathI)) { // prefix conflict.
           Artifact artifactI = Preconditions.checkNotNull(artifactPathMap.get(pathI), pathI);
           Artifact artifactJ = Preconditions.checkNotNull(artifactPathMap.get(pathJ), pathJ);
-          ActionAnalysisMetadata actionI =
+          Action actionI =
               Preconditions.checkNotNull(actionGraph.getGeneratingAction(artifactI), artifactI);
-          ActionAnalysisMetadata actionJ =
+          Action actionJ =
               Preconditions.checkNotNull(actionGraph.getGeneratingAction(artifactJ), artifactJ);
           if (actionI.shouldReportPathPrefixConflict(actionJ)) {
             ArtifactPrefixConflictException exception = new ArtifactPrefixConflictException(pathI,
@@ -222,19 +174,5 @@ public final class Actions {
    */
   public static String escapeLabel(Label label) {
     return PATH_ESCAPER.escape(label.getPackageName() + ":" + label.getName());
-  }
-
-  private static class MapBasedImmutableActionGraph implements ActionGraph {
-    private final Map<Artifact, ActionAnalysisMetadata> generatingActions;
-
-    MapBasedImmutableActionGraph(
-        Map<Artifact, ActionAnalysisMetadata> generatingActions) {
-      this.generatingActions = ImmutableMap.copyOf(generatingActions);
-    }
-
-    @Nullable
-    public ActionAnalysisMetadata getGeneratingAction(Artifact artifact) {
-      return generatingActions.get(artifact);
-    }
   }
 }

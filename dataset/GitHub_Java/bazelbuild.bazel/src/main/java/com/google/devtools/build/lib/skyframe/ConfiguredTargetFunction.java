@@ -17,13 +17,13 @@ import com.google.common.base.Function;
 import com.google.common.base.Verify;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
@@ -33,7 +33,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.LabelAndConfiguration;
-import com.google.devtools.build.lib.analysis.MergedConfiguredTarget;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -54,6 +54,7 @@ import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
@@ -75,9 +76,9 @@ import com.google.devtools.build.skyframe.ValueOrException;
 import com.google.devtools.build.skyframe.ValueOrException2;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -87,17 +88,12 @@ import javax.annotation.Nullable;
 
 /**
  * SkyFunction for {@link ConfiguredTargetValue}s.
- *
- * This class, together with {@link AspectFunction} drives the analysis phase. For more information,
- * see {@link com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory}.
- *
- * @see com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory
  */
 final class ConfiguredTargetFunction implements SkyFunction {
   // This construction is a bit funky, but guarantees that the Object reference here is globally
   // unique.
-  static final ImmutableMap<Label, ConfigMatchingProvider> NO_CONFIG_CONDITIONS =
-      ImmutableMap.<Label, ConfigMatchingProvider>of();
+  static final Set<ConfigMatchingProvider> NO_CONFIG_CONDITIONS =
+      Collections.unmodifiableSet(ImmutableSet.<ConfigMatchingProvider>of());
 
   /**
    * Exception class that signals an error during the evaluation of a dependency.
@@ -163,7 +159,13 @@ final class ConfiguredTargetFunction implements SkyFunction {
           new ConfiguredValueCreationException(e.getMessage()));
     }
     if (pkg.containsErrors()) {
-      transitiveLoadingRootCauses.add(lc.getLabel());
+      if (target == null) {
+        throw new ConfiguredTargetFunctionException(new ConfiguredValueCreationException(
+            new BuildFileContainsErrorsException(
+                lc.getLabel().getPackageIdentifier()).getMessage()));
+      } else {
+        transitiveLoadingRootCauses.add(lc.getLabel());
+      }
     }
     transitivePackages.add(pkg);
     // TODO(bazel-team): This is problematic - we create the right key, but then end up with a value
@@ -178,7 +180,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
     SkyframeDependencyResolver resolver = view.createDependencyResolver(env);
     try {
       // Get the configuration targets that trigger this rule's configurable attributes.
-      ImmutableMap<Label, ConfigMatchingProvider> configConditions = getConfigConditions(
+      Set<ConfigMatchingProvider> configConditions = getConfigConditions(
           ctgValue.getTarget(), env, resolver, ctgValue, transitivePackages,
           transitiveLoadingRootCauses);
       if (env.valuesMissing()) {
@@ -263,7 +265,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
       SkyframeDependencyResolver resolver,
       TargetAndConfiguration ctgValue,
       Aspect aspect,
-      ImmutableMap<Label, ConfigMatchingProvider> configConditions,
+      Set<ConfigMatchingProvider> configConditions,
       RuleClassProvider ruleClassProvider,
       BuildConfiguration hostConfiguration,
       NestedSetBuilder<Package> transitivePackages,
@@ -577,7 +579,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
       SkyKey depKey = TO_KEYS.apply(dep);
       ConfiguredTarget depConfiguredTarget = depConfiguredTargetMap.get(depKey);
       result.put(entry.getKey(),
-          MergedConfiguredTarget.of(depConfiguredTarget, depAspectMap.get(depKey)));
+          RuleConfiguredTarget.mergeAspects(depConfiguredTarget, depAspectMap.get(depKey)));
     }
 
     return result;
@@ -684,8 +686,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
    * dependency resolver, returns null.
    */
   @Nullable
-  static ImmutableMap<Label, ConfigMatchingProvider> getConfigConditions(Target target,
-      Environment env, SkyframeDependencyResolver resolver, TargetAndConfiguration ctgValue,
+  static Set<ConfigMatchingProvider> getConfigConditions(Target target, Environment env,
+      SkyframeDependencyResolver resolver, TargetAndConfiguration ctgValue,
       NestedSetBuilder<Package> transitivePackages,
       NestedSetBuilder<Label> transitiveLoadingRootCauses)
       throws DependencyEvaluationException {
@@ -693,7 +695,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
       return NO_CONFIG_CONDITIONS;
     }
 
-    Map<Label, ConfigMatchingProvider> configConditions = new LinkedHashMap<>();
+    ImmutableSet.Builder<ConfigMatchingProvider> configConditions = ImmutableSet.builder();
 
     // Collect the labels of the configured targets we need to resolve.
     ListMultimap<Attribute, LabelAndConfiguration> configLabelMap = ArrayListMultimap.create();
@@ -715,10 +717,6 @@ final class ConfiguredTargetFunction implements SkyFunction {
     // been computed yet.
     Collection<Dependency> configValueNames = resolver.resolveRuleLabels(
         ctgValue, configLabelMap, transitiveLoadingRootCauses);
-    if (env.valuesMissing()) {
-      return null;
-    }
-
 
     // No need to get new configs from Skyframe - config_setting rules always use the current
     // target's config.
@@ -746,7 +744,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
       // The code above guarantees that value is non-null here.
       ConfigMatchingProvider provider = value.getProvider(ConfigMatchingProvider.class);
       if (provider != null) {
-        configConditions.put(entry.getLabel(), provider);
+        configConditions.add(provider);
       } else {
         // Not a valid provider for configuration conditions.
         String message =
@@ -757,7 +755,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
       }
     }
 
-    return ImmutableMap.copyOf(configConditions);
+    return configConditions.build();
   }
 
   /***
@@ -815,7 +813,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
   private ConfiguredTargetValue createConfiguredTarget(SkyframeBuildView view,
       Environment env, Target target, BuildConfiguration configuration,
       ListMultimap<Attribute, ConfiguredTarget> depValueMap,
-      ImmutableMap<Label, ConfigMatchingProvider> configConditions,
+      Set<ConfigMatchingProvider> configConditions,
       NestedSetBuilder<Package> transitivePackages)
       throws ConfiguredTargetFunctionException, InterruptedException {
     StoredEventHandler events = new StoredEventHandler();
@@ -848,7 +846,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
     analysisEnvironment.disable(target);
     Preconditions.checkNotNull(configuredTarget, target);
 
-    Map<Artifact, ActionAnalysisMetadata> generatingActions;
+    Map<Artifact, Action> generatingActions;
     // Check for conflicting actions within this configured target (that indicates a bug in the
     // rule implementation).
     try {
