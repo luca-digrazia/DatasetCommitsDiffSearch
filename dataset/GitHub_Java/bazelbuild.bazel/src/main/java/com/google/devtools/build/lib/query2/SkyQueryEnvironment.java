@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
@@ -86,13 +87,6 @@ import javax.annotation.Nullable;
  * even if the full closure isn't needed.
  */
 public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
-
-  private static final Predicate<Exception> NON_NULL_EXCEPTION = new Predicate<Exception>() {
-    @Override
-    public boolean apply(@Nullable Exception e) {
-      return e != null;
-    }
-  };
   private WalkableGraph graph;
 
   private ImmutableList<TargetPatternKey> universeTargetPatternKeys;
@@ -392,7 +386,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
 
   private Set<Target> filterTargetsNotInGraph(Set<Target> targets) {
     Map<Target, SkyKey> map = Maps.toMap(targets, TARGET_TO_SKY_KEY);
-    Set<SkyKey> present = graph.getSuccessfulValues(map.values()).keySet();
+    Set<SkyKey> present = graph.getDoneValues(map.values()).keySet();
     if (present.size() == targets.size()) {
       // Optimize for case of all targets being in graph.
       return targets;
@@ -499,7 +493,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
       }
     }
     ImmutableMap.Builder<E, Target> result = ImmutableMap.builder();
-    Map<SkyKey, SkyValue> packageMap = graph.getSuccessfulValues(packageKeyToTargetKeyMap.keySet());
+    Map<SkyKey, SkyValue> packageMap = graph.getDoneValues(packageKeyToTargetKeyMap.keySet());
     for (Map.Entry<SkyKey, SkyValue> entry : packageMap.entrySet()) {
       for (E targetKey : packageKeyToTargetKeyMap.get(entry.getKey())) {
         try {
@@ -548,7 +542,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
             PackageLookupValue.key(PackageIdentifier.createInDefaultRepo(pathFragment)),
             pathFragment);
       }
-      Map<SkyKey, SkyValue> lookupValues = graph.getSuccessfulValues(keys.keySet());
+      Map<SkyKey, SkyValue> lookupValues = graph.getDoneValues(keys.keySet());
       for (Map.Entry<SkyKey, SkyValue> entry : lookupValues.entrySet()) {
         PackageLookupValue packageLookupValue = (PackageLookupValue) entry.getValue();
         if (packageLookupValue.packageExists()) {
@@ -581,7 +575,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
   @Nullable
   Set<Target> getRBuildFiles(Collection<PathFragment> fileIdentifiers) {
     Collection<SkyKey> files = getSkyKeysForFileFragments(fileIdentifiers);
-    Collection<SkyKey> current = graph.getSuccessfulValues(files).keySet();
+    Collection<SkyKey> current = graph.getDoneValues(files).keySet();
     Set<SkyKey> resultKeys = CompactHashSet.create();
     while (!current.isEmpty()) {
       Collection<Iterable<SkyKey>> reverseDeps = graph.getReverseDeps(current).values();
@@ -595,7 +589,11 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
         }
       }
     }
-    Map<SkyKey, SkyValue> packageValues = graph.getSuccessfulValues(resultKeys);
+    Map<SkyKey, SkyValue> packageValues = graph.getDoneValues(resultKeys);
+    if (packageValues.size() != resultKeys.size()) {
+      throw new IllegalStateException(
+          "Missing values: " + Sets.difference(resultKeys, packageValues.keySet()));
+    }
     ImmutableSet.Builder<Target> result = ImmutableSet.builder();
     for (SkyValue value : packageValues.values()) {
       result.add(((PackageValue) value).getPackage().getBuildFile());
