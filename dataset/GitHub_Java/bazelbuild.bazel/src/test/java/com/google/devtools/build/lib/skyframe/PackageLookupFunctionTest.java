@@ -71,13 +71,12 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
   private MemoizingEvaluator evaluator;
   private SequentialBuildDriver driver;
   private RecordingDifferencer differencer;
-  private Path emptyPackagePath;
 
   protected abstract CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy();
 
   @Before
   public final void setUp() throws Exception {
-    emptyPackagePath = rootDirectory.getRelative("somewhere/else");
+    Path emptyPackagePath = rootDirectory.getRelative("somewhere/else");
     scratch.file("parentpackage/BUILD");
 
     AnalysisMock analysisMock = AnalysisMock.get();
@@ -93,10 +92,7 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
     Map<SkyFunctionName, SkyFunction> skyFunctions = new HashMap<>();
     skyFunctions.put(
         SkyFunctions.PACKAGE_LOOKUP,
-        new PackageLookupFunction(
-            deletedPackages,
-            crossRepositoryLabelViolationStrategy(),
-            ImmutableList.of(BuildFileName.BUILD_DOT_BAZEL, BuildFileName.BUILD)));
+        new PackageLookupFunction(deletedPackages, crossRepositoryLabelViolationStrategy()));
     skyFunctions.put(
         SkyFunctions.PACKAGE,
         new PackageFunction(null, null, null, null, null, null, null));
@@ -199,7 +195,7 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
     scratch.file("blacklisted/subdir/BUILD");
     scratch.file("blacklisted/BUILD");
     PrecomputedValue.BLACKLISTED_PACKAGE_PREFIXES_FILE.set(differencer,
-        PathFragment.create("config/blacklisted.txt"));
+        new PathFragment("config/blacklisted.txt"));
     Path blacklist = scratch.file("config/blacklisted.txt", "blacklisted");
 
     ImmutableSet<String> pkgs = ImmutableSet.of("blacklisted/subdir", "blacklisted");
@@ -213,7 +209,7 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
     scratch.overwriteFile("config/blacklisted.txt", "not_blacklisted");
     RootedPath rootedBlacklist = RootedPath.toRootedPath(
         blacklist.getParentDirectory().getParentDirectory(),
-        PathFragment.create("config/blacklisted.txt"));
+        new PathFragment("config/blacklisted.txt"));
     differencer.invalidate(ImmutableSet.of(FileStateValue.key(rootedBlacklist)));
     for (String pkg : pkgs) {
       PackageLookupValue packageLookupValue = lookupPackage(pkg);
@@ -242,42 +238,11 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
   }
 
   @Test
-  public void testEverythingIsGood_BUILD() throws Exception {
+  public void testEverythingIsGood() throws Exception {
     scratch.file("parentpackage/everythinggood/BUILD");
     PackageLookupValue packageLookupValue = lookupPackage("parentpackage/everythinggood");
     assertTrue(packageLookupValue.packageExists());
     assertEquals(rootDirectory, packageLookupValue.getRoot());
-    assertEquals(BuildFileName.BUILD, packageLookupValue.getBuildFileName());
-  }
-
-  @Test
-  public void testEverythingIsGood_BUILD_bazel() throws Exception {
-    scratch.file("parentpackage/everythinggood/BUILD.bazel");
-    PackageLookupValue packageLookupValue = lookupPackage("parentpackage/everythinggood");
-    assertTrue(packageLookupValue.packageExists());
-    assertEquals(rootDirectory, packageLookupValue.getRoot());
-    assertEquals(BuildFileName.BUILD_DOT_BAZEL, packageLookupValue.getBuildFileName());
-  }
-
-  @Test
-  public void testEverythingIsGood_both() throws Exception {
-    scratch.file("parentpackage/everythinggood/BUILD");
-    scratch.file("parentpackage/everythinggood/BUILD.bazel");
-    PackageLookupValue packageLookupValue = lookupPackage("parentpackage/everythinggood");
-    assertTrue(packageLookupValue.packageExists());
-    assertEquals(rootDirectory, packageLookupValue.getRoot());
-    assertEquals(BuildFileName.BUILD_DOT_BAZEL, packageLookupValue.getBuildFileName());
-  }
-
-  @Test
-  public void testBuildFilesInMultiplePackagePaths() throws Exception {
-    scratch.file(emptyPackagePath.getPathString() + "/foo/BUILD");
-    scratch.file("foo/BUILD.bazel");
-
-    // BUILD file in the first package path should be preferred to BUILD.bazel in the second.
-    PackageLookupValue packageLookupValue = lookupPackage("foo");
-    assertTrue(packageLookupValue.packageExists());
-    assertEquals(emptyPackagePath, packageLookupValue.getRoot());
     assertEquals(BuildFileName.BUILD, packageLookupValue.getBuildFileName());
   }
 

@@ -98,7 +98,7 @@ public class WorkspaceResolver {
    */
   public void resolveTransitiveDependencies(Package externalPackage) {
     Location location = Location.fromFile(externalPackage.getFilename());
-    for (Target target : externalPackage.getTargets().values()) {
+    for (Target target : externalPackage.getTargets()) {
       // Targets are //external:foo.
       if (target.getTargetKind().startsWith("maven_jar ")) {
         RepositoryName repositoryName;
