@@ -16,7 +16,6 @@ import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.*;
 
@@ -54,14 +53,13 @@ public class SimpleDatabaseManagerServiceTest extends SimpleWebApplicationTests 
             new Thread(() -> {
                 try {
                     databaseManagerService.execute(id, request);
-                    Thread.sleep(100);
                 } catch (Exception e) {
-                    throw new RuntimeException(e);
+                    throw new RuntimeException();
                 }
                 countDownLatch.countDown();
             }).start();
         }
-        countDownLatch.await(30, TimeUnit.SECONDS);
+        countDownLatch.await();
 
         sqlInfo = new SqlInfo();
         sqlInfo.setSql("select *,name as \"NAME\",1 as \"\" from t_test ");
@@ -73,9 +71,10 @@ public class SimpleDatabaseManagerServiceTest extends SimpleWebApplicationTests 
 
 //        System.out.println(JSON.toJSONString(results));
 
-        Assert.assertTrue(sqlExecutor.list("select * from t_test").isEmpty());
+       Assert.assertTrue(sqlExecutor.list("select * from t_test").isEmpty());
 
         databaseManagerService.rollback(id);
+        Thread.sleep(2000);
         Assert.assertTrue(sqlExecutor.list("select * from t_test").isEmpty());
 
 
