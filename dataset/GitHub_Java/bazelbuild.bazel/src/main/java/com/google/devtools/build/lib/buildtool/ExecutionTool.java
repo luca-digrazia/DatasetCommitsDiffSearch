@@ -101,6 +101,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -189,7 +190,7 @@ public class ExecutionTool {
     for (BlazeModule module : runtime.getBlazeModules()) {
       builder.addAll(module.getActionContextConsumers());
     }
-    builder.add(extraConsumers);
+    builder.addAll(Arrays.asList(extraConsumers));
     return builder.build();
   }
 
@@ -199,17 +200,13 @@ public class ExecutionTool {
     for (BlazeModule module : runtime.getBlazeModules()) {
       builder.addAll(module.getActionContextProviders());
     }
-    builder.add(extraProviders);
+    builder.addAll(Arrays.asList(extraProviders));
     return builder.build();
   }
 
   ExecutionTool(final BlazeRuntime runtime, BuildRequest request) throws ExecutorInitException {
     this.runtime = runtime;
     this.request = request;
-
-    // Create tools before getting the strategies from the modules as some of them need tools to
-    // determine whether the host actually supports certain strategies (e.g. sandboxing).
-    createToolsSymlinks();
 
     this.actionContextProviders =
         getActionContextProvidersFromModules(
@@ -317,6 +314,7 @@ public class ExecutionTool {
   }
 
   void init() throws ExecutorInitException {
+    createToolsSymlinks();
     getExecutor();
   }
 
