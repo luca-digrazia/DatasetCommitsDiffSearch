@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class ExponentiallyDecayingReservoirTest {
     @Test
-    public void aReservoirOf100OutOf1000Elements() {
+    public void aReservoirOf100OutOf1000Elements() throws Exception {
         final ExponentiallyDecayingReservoir reservoir = new ExponentiallyDecayingReservoir(100, 0.99);
         for (int i = 0; i < 1000; i++) {
             reservoir.update(i);
@@ -29,7 +29,7 @@ public class ExponentiallyDecayingReservoirTest {
     }
 
     @Test
-    public void aReservoirOf100OutOf10Elements() {
+    public void aReservoirOf100OutOf10Elements() throws Exception {
         final ExponentiallyDecayingReservoir reservoir = new ExponentiallyDecayingReservoir(100, 0.99);
         for (int i = 0; i < 10; i++) {
             reservoir.update(i);
