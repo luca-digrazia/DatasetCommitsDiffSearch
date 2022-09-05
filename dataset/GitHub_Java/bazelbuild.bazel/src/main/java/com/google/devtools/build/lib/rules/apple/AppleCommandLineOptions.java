@@ -47,7 +47,8 @@ public class AppleCommandLineOptions extends FragmentOptions {
 
   @Option(
     name = "ios_sdk_version",
-    defaultValue = "null",
+    // TODO(bazel-team): Make this flag optional, and infer SDKROOT based on executor default.
+    defaultValue = DEFAULT_IOS_SDK_VERSION,
     converter = DottedVersionConverter.class,
     category = "build",
     help = "Specifies the version of the iOS SDK to use to build iOS applications."
@@ -56,7 +57,8 @@ public class AppleCommandLineOptions extends FragmentOptions {
 
   @Option(
     name = "watchos_sdk_version",
-    defaultValue = "null",
+    // TODO(bazel-team): Make this flag optional, and infer SDKROOT based on executor default.
+    defaultValue = DEFAULT_WATCHOS_SDK_VERSION,
     converter = DottedVersionConverter.class,
     category = "build",
     help = "Specifies the version of the WatchOS SDK to use to build WatchOS applications."
@@ -65,7 +67,8 @@ public class AppleCommandLineOptions extends FragmentOptions {
 
   @Option(
     name = "tvos_sdk_version",
-    defaultValue = "null",
+    // TODO(bazel-team): Make this flag optional, and infer SDKROOT based on executor default.
+    defaultValue = DEFAULT_APPLETVOS_SDK_VERSION,
     converter = DottedVersionConverter.class,
     category = "build",
     help = "Specifies the version of the AppleTVOS SDK to use to build AppleTVOS applications."
@@ -74,7 +77,8 @@ public class AppleCommandLineOptions extends FragmentOptions {
 
   @Option(
     name = "macosx_sdk_version",
-    defaultValue = "null",
+    // TODO(bazel-team): Make this flag optional, and infer SDKROOT based on executor default.
+    defaultValue = DEFAULT_MACOSX_SDK_VERSION,
     converter = DottedVersionConverter.class,
     category = "build",
     help = "Specifies the version of the Mac OS X SDK to use to build Mac OS X applications."
@@ -225,10 +229,6 @@ public class AppleCommandLineOptions extends FragmentOptions {
     // Set options needed in the host configuration.
     host.xcodeVersionConfig = xcodeVersionConfig;
     host.xcodeVersion = xcodeVersion;
-    host.iosSdkVersion = iosSdkVersion;
-    host.watchOsSdkVersion = watchOsSdkVersion;
-    host.tvOsSdkVersion = tvOsSdkVersion;
-    host.macOsXSdkVersion = macOsXSdkVersion;
     host.appleBitcodeMode = appleBitcodeMode;
 
     return host;
