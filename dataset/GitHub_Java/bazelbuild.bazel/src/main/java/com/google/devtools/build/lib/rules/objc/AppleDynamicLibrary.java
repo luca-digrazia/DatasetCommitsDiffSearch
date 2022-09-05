@@ -18,6 +18,7 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MULTI_ARCH_D
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.DylibDependingRule.DYLIBS_ATTR_NAME;
 
 import com.google.common.collect.ImmutableListMultimap;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -32,6 +33,7 @@ import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
+
 import java.util.Map;
 import java.util.Set;
 
@@ -54,26 +56,38 @@ public class AppleDynamicLibrary implements RuleConfiguredTargetFactory {
         ruleContext.getPrerequisitesByConfiguration("deps", Mode.SPLIT);
     Iterable<ObjcProvider> dylibProviders =
         ruleContext.getPrerequisites(DYLIBS_ATTR_NAME, Mode.TARGET, ObjcProvider.class);
+    Iterable<ObjcProtoProvider> dylibProtoProviders =
+        ruleContext.getPrerequisites(DYLIBS_ATTR_NAME, Mode.TARGET, ObjcProtoProvider.class);
     Set<BuildConfiguration> childConfigurations = getChildConfigurations(ruleContext);
     Artifact outputArtifact =
         ObjcRuleClasses.intermediateArtifacts(ruleContext).combinedArchitectureDylib();
 
     MultiArchBinarySupport multiArchBinarySupport = new MultiArchBinarySupport(ruleContext);
-    Map<BuildConfiguration, ObjcCommon> objcCommonByDepConfiguration =
-        multiArchBinarySupport.objcCommonByDepConfiguration(childConfigurations,
-            configToDepsCollectionMap, configurationToNonPropagatedObjcMap, dylibProviders);
-    multiArchBinarySupport.registerActions(platform, new ExtraLinkArgs("-dynamiclib"),
-        objcCommonByDepConfiguration, configToDepsCollectionMap, outputArtifact);
+
+    Map<BuildConfiguration, ObjcProvider> objcProviderByDepConfiguration =
+        multiArchBinarySupport.objcProviderByDepConfiguration(
+            childConfigurations,
+            configToDepsCollectionMap,
+            configurationToNonPropagatedObjcMap,
+            dylibProviders,
+            dylibProtoProviders);
+
+    multiArchBinarySupport.registerActions(
+        platform,
+        new ExtraLinkArgs("-dynamiclib"),
+        objcProviderByDepConfiguration,
+        ImmutableSet.<Artifact>of(),
+        configToDepsCollectionMap,
+        outputArtifact);
 
     NestedSetBuilder<Artifact> filesToBuild =
-        NestedSetBuilder.<Artifact>stableOrder()
-            .add(outputArtifact);
+        NestedSetBuilder.<Artifact>stableOrder().add(outputArtifact);
     RuleConfiguredTargetBuilder targetBuilder =
         ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build());
 
     ObjcProvider.Builder objcProviderBuilder = new ObjcProvider.Builder();
-    for (ObjcCommon objcCommon : objcCommonByDepConfiguration.values()) {
-      objcProviderBuilder.addTransitiveAndPropagate(objcCommon.getObjcProvider());
+    for (ObjcProvider objcProvider : objcProviderByDepConfiguration.values()) {
+      objcProviderBuilder.addTransitiveAndPropagate(objcProvider);
     }
     objcProviderBuilder.add(MULTI_ARCH_DYNAMIC_LIBRARIES, outputArtifact);
 

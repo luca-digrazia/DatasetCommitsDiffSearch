@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplic
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 
 /**
  * Rule definition for apple_binary.
@@ -88,8 +87,7 @@ public class AppleBinaryRule implements RuleDefinition {
         new MultiArchSplitTransitionProvider();
     return builder
         .requiresConfigurationFragments(
-            ObjcConfiguration.class, J2ObjcConfiguration.class, AppleConfiguration.class,
-            CppConfiguration.class)
+            ObjcConfiguration.class, J2ObjcConfiguration.class, AppleConfiguration.class)
         .add(
             attr("$is_executable", BOOLEAN)
                 .value(true)

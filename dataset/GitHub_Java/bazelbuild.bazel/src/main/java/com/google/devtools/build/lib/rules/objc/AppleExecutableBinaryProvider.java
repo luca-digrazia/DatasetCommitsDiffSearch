@@ -22,38 +22,24 @@ import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
 
 /**
  * Provider containing the executable binary output that was built using an apple_binary target with
- * the 'executable' type.  This provider contains:
- * <ul>
- *   <li>'binary': The dylib artifact output by apple_binary</li>
- *   <li>'objc': An {@link ObjcProvider} which contains information about the transitive
- *     dependencies linked into the binary, (intended so that bundle loaders depending on this
- *     executable may avoid relinking symbols included in the loadable binary</li>
- * </ul> 
+ * the 'executable' type.
  */
 public final class AppleExecutableBinaryProvider extends SkylarkClassObject
     implements TransitiveInfoProvider {
 
-  /** Skylark name for the AppleExecutableBinaryProvider. */
-  public static final String SKYLARK_NAME = "AppleExecutableBinary";
-
  /** Skylark constructor and identifier for AppleExecutableBinaryProvider. */
   public static final SkylarkClassObjectConstructor SKYLARK_CONSTRUCTOR =
-      SkylarkClassObjectConstructor.createNative(SKYLARK_NAME);
+      SkylarkClassObjectConstructor.createNative("AppleExecutableBinary");
 
   private final Artifact appleExecutableBinary;
-  private final ObjcProvider depsObjcProvider;
 
   /**
    * Creates a new AppleExecutableBinaryProvider provider that propagates the given apple_binary
    * configured as an executable.
    */
-  public AppleExecutableBinaryProvider(Artifact appleExecutableBinary,
-      ObjcProvider depsObjcProvider) {
-    super(SKYLARK_CONSTRUCTOR, ImmutableMap.<String, Object>of(
-        "binary", appleExecutableBinary,
-        "objc", depsObjcProvider));
+  public AppleExecutableBinaryProvider(Artifact appleExecutableBinary) {
+    super(SKYLARK_CONSTRUCTOR, ImmutableMap.<String, Object>of("binary", appleExecutableBinary));
     this.appleExecutableBinary = appleExecutableBinary;
-    this.depsObjcProvider = depsObjcProvider;
   }
 
   /**
@@ -61,13 +47,5 @@ public final class AppleExecutableBinaryProvider extends SkylarkClassObject
    */
   public Artifact getAppleExecutableBinary() {
     return appleExecutableBinary;
-  }
-
-  /**
-   * Returns the {@link ObjcProvider} which contains information about the transitive dependencies
-   * linked into the dylib.
-   */
-  public ObjcProvider getDepsObjcProvider() {
-    return depsObjcProvider;
   }
 }
