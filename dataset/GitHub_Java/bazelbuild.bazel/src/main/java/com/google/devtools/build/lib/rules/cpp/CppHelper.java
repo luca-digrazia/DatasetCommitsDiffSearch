@@ -418,17 +418,17 @@ public class CppHelper {
     return (dep != null) ? dep.getProvider(LipoContextProvider.class) : null;
   }
 
-  /**
-   * Creates a CppModuleMap object for pure c++ builds.  The module map artifact becomes a
-   * candidate input to a CppCompileAction.
-   */
-  public static CppModuleMap createDefaultCppModuleMap(RuleContext ruleContext) {
+  // Creates CppModuleMap object, and adds it to C++ compilation context.
+  public static CppModuleMap addCppModuleMapToContext(RuleContext ruleContext,
+      CppCompilationContext.Builder contextBuilder) {
     // Create the module map artifact as a genfile.
     Artifact mapFile = ruleContext.getPackageRelativeArtifact(
         ruleContext.getLabel().getName()
             + Iterables.getOnlyElement(CppFileTypes.CPP_MODULE_MAP.getExtensions()),
         ruleContext.getConfiguration().getGenfilesDirectory());
-    return new CppModuleMap(mapFile, ruleContext.getLabel().toString());
+        CppModuleMap moduleMap = new CppModuleMap(mapFile, ruleContext.getLabel().toString());
+    contextBuilder.setCppModuleMap(moduleMap);
+    return moduleMap;
   }
 
   /**
