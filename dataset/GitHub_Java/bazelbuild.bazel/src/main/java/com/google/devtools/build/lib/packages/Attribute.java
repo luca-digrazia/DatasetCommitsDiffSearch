@@ -90,8 +90,8 @@ public final class Attribute implements Comparable<Attribute> {
    */
   @SkylarkModule(name = "ConfigurationTransition", doc =
       "Declares how the configuration should change when following a dependency. "
-    + "It can be either <a href=\"globals.html#DATA_CFG\">DATA_CFG</a> or "
-    + "<a href=\"globals.html#HOST_CFG\">HOST_CFG</a>.")
+    + "It can be either <a href=\"#modules._top_level.DATA_CFG\">DATA_CFG</a> or "
+    + "<a href=\"#modules._top_level.HOST_CFG\">HOST_CFG</a>.")
   public enum ConfigurationTransition implements Transition {
     /** No transition, i.e., the same configuration as the current. */
     NONE,
@@ -1061,20 +1061,6 @@ public final class Attribute implements Comparable<Attribute> {
    * Returns the name of this attribute.
    */
   public String getName() {
-    return name;
-  }
-
-  /**
-   * Returns the public name of this attribute. This is the name we use in Skylark code
-   * and we can use it to display to the end-user.
-   * Implicit and late-bound attributes start with '_' (instead of '$' or ':').
-   */
-  public String getPublicName() {
-    String name = getName();
-    // latebound and implicit attributes have a one-character prefix we want to drop
-    if (isLateBound() || isImplicit()) {
-      return "_" + name.substring(1);
-    }
     return name;
   }
 
