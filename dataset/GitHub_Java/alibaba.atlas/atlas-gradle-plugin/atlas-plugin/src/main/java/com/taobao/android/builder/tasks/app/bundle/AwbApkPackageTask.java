@@ -31,10 +31,6 @@ import com.google.common.collect.Maps;
 import com.google.common.io.ByteStreams;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.model.AwbBundle;
-import com.taobao.android.builder.tools.MD5Util;
-import com.taobao.android.builder.tools.zip.BetterZip;
-import com.taobao.android.builder.tools.zip.ZipUtils;
-import org.apache.commons.lang.StringUtils;
 import org.gradle.api.file.FileCollection;
 
 import java.io.*;
@@ -80,15 +76,15 @@ public class AwbApkPackageTask {
     Collection<String> aaptOptionsNoCompress;
     private DefaultGradlePackagingScope packagingScope;
 
-    public AwbApkPackageTask(FileCollection resourceFiles, VariantContext variantContext, AwbBundle awbBundle, AppVariantOutputContext appVariantOutputContext, FileCollection dexFolders,
-                             FileCollection javaResouresFiles, FileCollection assets, FileCollection jniFolders, FileCollection awbManifestFolder, AndroidBuilder androidBuilder,
-                             int miniSdkVersion, String taskName) {
+    public AwbApkPackageTask(FileCollection resourceFiles, VariantContext variantContext, AwbBundle awbBundle, AppVariantOutputContext appVariantOutputContext,FileCollection dexFolders,
+                             FileCollection javaResouresFiles,FileCollection assets,FileCollection jniFolders,FileCollection awbManifestFolder,AndroidBuilder androidBuilder,
+                             int miniSdkVersion,String taskName) {
         this.packagingScope = new DefaultGradlePackagingScope(variantContext.getScope());
-        this.resourceFiles = resourceFiles;
+        this.resourceFiles  = resourceFiles;
         this.outputScope = variantContext.getScope().getOutputScope();
-        this.awbBundle = awbBundle;
+        this.awbBundle =awbBundle;
         this.appVariantOutputContext = appVariantOutputContext;
-        this.outputDirectory = ((AppVariantContext) variantContext).getAwbApkOutputDir();
+        this.outputDirectory = ((AppVariantContext)variantContext).getAwbApkOutputDir();
         this.dexFolders = dexFolders;
         this.javaResouresFiles = javaResouresFiles;
         this.assets = assets;
@@ -108,18 +104,12 @@ public class AwbApkPackageTask {
     }
 
     public void doFullTaskAction() throws IOException {
-        ApkData apkData = appVariantOutputContext.getScope().getOutputScope().getApkDatas().get(0);
-        if (dexFolders.getSingleFile().exists() && awbBundle.getMergedManifest().exists()) {
-            File[] dexFile = dexFolders.getSingleFile().listFiles((dir, name) -> name.equals("classes.dex"));
-            if (dexFile != null) {
-                File file = AtlasBuildContext.atlasApkProcessor.securitySignApk(dexFile[0], awbBundle.getMergedManifest(),appVariantOutputContext.getVariantContext().getBuildType(),true);
-                if (file!= null && file.exists()) {
-                    BetterZip.addFile(getAndroidResources(apkData, resourceFiles.getSingleFile()).iterator().next(), "res/drawable/".concat(file.getName()), file);
-                }
-            }
-        }
-        splitFullAction(apkData, resourceFiles.getSingleFile());
-        outputScope.save(VariantScope.TaskOutputType.APK, outputDirectory);
+//        Collection<BuildOutput> mergedResources =
+//                BuildOutputs.load(VariantScope.TaskOutputType.PROCESSED_RES, resourceFiles);
+        splitFullAction(appVariantOutputContext.getScope().getOutputScope().getApkDatas().get(0),resourceFiles.getSingleFile());
+//        outputScope.parallelForEachOutput(
+//                mergedResources, VariantScope.TaskOutputType.PROCESSED_RES, VariantScope.TaskOutputType.PROCESSED_RES, this::splitFullAction);
+      outputScope.save(VariantScope.TaskOutputType.APK, outputDirectory);
     }
 
 
@@ -195,18 +185,11 @@ public class AwbApkPackageTask {
 
 //        if (packagingScope.getMultiOutputPolicy() == MultiOutputPolicy.MULTI_APK) {
 
-        String url = AtlasBuildContext.atlasApkProcessor.uploadBundle(appVariantOutputContext.getVariantContext().getProject(),outputFile,awbBundle,appVariantOutputContext.getVariantContext().getBuildType());
-        if (StringUtils.isNotEmpty(url)) {
-            awbBundle.bundleInfo.setUrl(url);
-        }
-        awbBundle.bundleInfo.setMd5(MD5Util.getFileMD5(outputFile));
-        awbBundle.bundleInfo.setSize(outputFile.length());
-                        AtlasBuildContext.atlasApkProcessor.removeBundle(appVariantOutputContext, awbBundle, outputFile);
-        if (!awbBundle.isRemote)
-        FileUtils.copyFileToDirectory(outputFile, new File(packagingScope.getJniFolders().getSingleFile(), "lib/armeabi"));
+            FileUtils.copyFileToDirectory(outputFile, new File(packagingScope.getJniFolders().getSingleFile(), "lib/armeabi"));
 
 //        }
 //        recordMetrics(outputFile, processedResources);
+
 
 
         return outputFile;
@@ -266,7 +249,7 @@ public class AwbApkPackageTask {
                              // reparsing
                              // these manifest files.
                              .withNativeLibraryPackagingMode(
-                                     PackagingUtils.getNativeLibrariesLibrariesPackagingMode(manifestForSplit == null ? awbManifestFolder.getSingleFile() :
+                                     PackagingUtils.getNativeLibrariesLibrariesPackagingMode(manifestForSplit == null? awbManifestFolder.getSingleFile():
                                              manifestForSplit.getOutputFile()))
                              .withNoCompressPredicate(
                                      PackagingUtils.getNoCompressPredicate(
@@ -339,9 +322,9 @@ public class AwbApkPackageTask {
 //            File manifestFile = manifestOutput.getOutputFile();
 //            return ImmutableSet.of(generateEmptyAndroidResourcesForInstantRun(manifestFile));
 //        } else {
-        return processedResources != null
-                ? ImmutableSet.of(processedResources)
-                : ImmutableSet.of();
+            return processedResources != null
+                    ? ImmutableSet.of(processedResources)
+                    : ImmutableSet.of();
 //        }
     }
 
@@ -383,7 +366,7 @@ public class AwbApkPackageTask {
 
     private File getIncrementalFolder(AwbBundle awbBundle) {
 
-        return new File(packagingScope.getIncrementalDir(taskName), awbBundle.getName());
+        return  new File(packagingScope.getIncrementalDir(taskName),awbBundle.getName());
 
 
     }

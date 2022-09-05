@@ -304,7 +304,6 @@ public class ApBuildTask extends DefaultAndroidTask {
         addFile(appBuildInfo.getBuildInfoFile());
         addFile(appBuildInfo.getVersionPropertiesFile());
         addFile(new File(this.getProject().getBuildDir(),"outputs/atlasFrameworkProperties.json"));
-        addFile(new File(this.getProject().getBuildDir(), "outputs/public.txt"));
         //addFile( appBuildInfo.getBundleInfoFile());
 
         for (File file : appBuildInfo.getOtherFiles()) {
@@ -321,7 +320,6 @@ public class ApBuildTask extends DefaultAndroidTask {
             addFile(getApkFiles(APFile.getParentFile().getParentFile(), appVariantContext),
                     ApContext.APK_FILE_LIST);
         }catch (Throwable e){
-            throw new RuntimeException(e);
 
         }
 
@@ -390,7 +388,7 @@ public class ApBuildTask extends DefaultAndroidTask {
      */
     public static class ConfigAction extends MtlBaseTaskAction<ApBuildTask> {
 
-        private final AppVariantContext appVariantContext;
+        private AppVariantContext appVariantContext;
 
         public ConfigAction(AppVariantContext appVariantContext,
                             BaseVariantOutput baseVariantOutputData) {
