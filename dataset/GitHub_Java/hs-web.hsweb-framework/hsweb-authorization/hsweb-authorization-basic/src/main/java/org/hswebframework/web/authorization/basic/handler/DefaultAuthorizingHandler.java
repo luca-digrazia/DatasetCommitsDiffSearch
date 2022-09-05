@@ -13,7 +13,7 @@ import org.hswebframework.web.authorization.define.AuthorizeDefinition;
 import org.hswebframework.web.authorization.define.AuthorizingContext;
 import org.hswebframework.web.authorization.define.HandleType;
 import org.hswebframework.web.authorization.exception.AccessDenyException;
-import org.hswebframework.web.authorization.listener.event.AuthorizingHandleBeforeEvent;
+import org.hswebframework.web.authorization.listener.event.AuthorizationHandleBeforeEvent;
 import org.hswebframework.web.boost.aop.context.MethodInterceptorContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,14 +58,14 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
             return;
         }
         //进行rdac权限控制
-        handleRBAC(context.getAuthentication(), context.getDefinition());
+        handleRdac(context.getAuthentication(), context.getDefinition());
         //表达式权限控制
         handleExpression(context.getAuthentication(), context.getDefinition(), context.getParamContext());
 
     }
     private boolean handleEvent(AuthorizingContext context,HandleType type){
         if(null!=eventPublisher) {
-            AuthorizingHandleBeforeEvent event = new AuthorizingHandleBeforeEvent(context, type);
+            AuthorizationHandleBeforeEvent event = new AuthorizationHandleBeforeEvent(context, type);
             eventPublisher.publishEvent(event);
             if (!event.isExecute()) {
                 if (event.isAllow()) {
@@ -78,7 +78,9 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
         return false;
     }
     public void handleDataAccess(AuthorizingContext context) {
-
+        if(handleEvent(context,HandleType.DATA)){
+            return;
+        }
         if (dataAccessController == null) {
             logger.warn("dataAccessController is null,skip result access control!");
             return;
@@ -86,10 +88,6 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
         if(context.getDefinition().getDataAccessDefinition()==null){
             return;
         }
-        if(handleEvent(context,HandleType.DATA)){
-            return;
-        }
-
         List<Permission> permission = context.getAuthentication().getPermissions()
                 .stream()
                 .filter(per -> context.getDefinition().getPermissions().contains(per.getId()))
@@ -142,7 +140,7 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
         }
     }
 
-    protected void handleRBAC(Authentication authentication, AuthorizeDefinition definition) {
+    protected void handleRdac(Authentication authentication, AuthorizeDefinition definition) {
         boolean access = true;
         //多个设置时的判断逻辑
         Logical logical = definition.getLogical() == Logical.DEFAULT ? Logical.OR : definition.getLogical();
