@@ -240,7 +240,7 @@ public class TPatchDiffApkBuildTask extends BaseTask {
     @TaskAction
     public void doApkBuild() throws Exception {
 
-        //TODO Merge 2 zip packages
+        //TODO 合并2个zip包
         apkFile = getApkFile();
         diffAPkFile = getDiffAPkFile();
 

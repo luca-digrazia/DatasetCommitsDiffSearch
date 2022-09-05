@@ -274,8 +274,6 @@ public class PatchConfig {
 
     private boolean tpatchWriteBuildInfo = true;
 
-    private boolean fullResValues;
-
     private List<String> patchVersions = new ArrayList<>();
 
     public PatchConfig(String name) {
@@ -467,13 +465,5 @@ public class PatchConfig {
 
     public void setPatchVersions(List<String> patchVersions) {
         this.patchVersions = patchVersions;
-    }
-
-    public boolean isFullResValues() {
-        return fullResValues;
-    }
-
-    public void setFullResValues(boolean fullResValues) {
-        this.fullResValues = fullResValues;
     }
 }

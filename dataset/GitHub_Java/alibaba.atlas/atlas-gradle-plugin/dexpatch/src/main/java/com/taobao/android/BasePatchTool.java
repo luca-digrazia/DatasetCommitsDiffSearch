@@ -281,7 +281,7 @@ public class BasePatchTool {
     }
 
     /**
-     * set only diff modify bundle, default is true
+     * 设置是否只包含变化的bundle信息，对于主bundle，不管是否设置都会进行对比
      *
      * @param onlyIncludeModifyBundle
      */
@@ -290,7 +290,7 @@ public class BasePatchTool {
     }
 
     /**
-     * judge if bundle has changes
+     * 判断当前bundle是否有变化
      *
      * @param bundleSoFileName
      * @return
@@ -349,7 +349,7 @@ public class BasePatchTool {
     }
 
     /**
-     * unzip 2 apk file
+     * 解压二个apk文件
      *
      * @param outPatchDir
      */
@@ -404,7 +404,7 @@ public class BasePatchTool {
     }
 
     /**
-     * http download
+     * http下载
      */
     private void downloadFile(String httpUrl, File saveFile) throws IOException {
         // 下载网络文件

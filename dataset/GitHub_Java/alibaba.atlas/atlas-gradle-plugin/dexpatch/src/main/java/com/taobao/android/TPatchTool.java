@@ -208,7 +208,14 @@ package com.taobao.android;
  *
  */
 
-import java.io.*;
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.sql.Date;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -401,7 +408,6 @@ public class TPatchTool extends BasePatchTool {
         Profiler.enter("prepare");
         isTpatch = true;
         pName = productName;
-        File hisPatchJsonFile = new File(outPatchJson.getParentFile(),"patchs-"+newApkBO.getVersionName()+".json");
         hisTpatchFolder = new File(outPatchDir.getParentFile().getParentFile().getParentFile().getParentFile(),
                                    "hisTpatch");
         final File diffTxtFile = new File(outPatchDir, "diff.json");
@@ -520,17 +526,6 @@ public class TPatchTool extends BasePatchTool {
 
         if (createPatchJson) {
             FileUtils.writeStringToFile(outPatchJson, JSON.toJSONString(buildPatchInfos));
-            BuildPatchInfos testForBuildPatchInfos = new BuildPatchInfos();
-            testForBuildPatchInfos.setBaseVersion(buildPatchInfos.getBaseVersion());
-            List<PatchInfo>patchInfos = new ArrayList<>();
-            testForBuildPatchInfos.setPatches(patchInfos);
-            testForBuildPatchInfos.setDiffBundleDex(buildPatchInfos.isDiffBundleDex());
-            for(PatchInfo patchInfo:buildPatchInfos.getPatches()){
-                if (patchInfo.getPatchVersion().equals(buildPatchInfos.getBaseVersion())){
-                    patchInfos.add(patchInfo);
-                }
-            }
-            FileUtils.writeStringToFile(hisPatchJsonFile, JSON.toJSONString(testForBuildPatchInfos));
         }
 
         for (PatchInfo patchInfo : buildPatchInfos.getPatches()) {
@@ -672,8 +667,6 @@ public class TPatchTool extends BasePatchTool {
 
         DiffType modifyType = getModifyType(newBundleFile.getName());
 
-        long startTime = System.currentTimeMillis();
-
         logger.warning(">>> start to process bundle for patch " + bundleName + " >> difftype " + modifyType.toString() + " createALl:" + createAll);
 
         if (modifyType == DiffType.ADD) {
@@ -696,8 +689,6 @@ public class TPatchTool extends BasePatchTool {
                               baseBundleUnzipFolder);
             }
         }
-
-        logger.warning(">>> fininsh to process bundle for patch " + bundleName + " >> difftype " + modifyType.toString() + " consume:" + (System.currentTimeMillis() - startTime));
     }
 
     private void doBundlePatch(File newBundleFile, File baseBundleFile, File patchTmpDir, String bundleName,
@@ -987,18 +978,15 @@ public class TPatchTool extends BasePatchTool {
                 "&productIdentifier=" +
                 productionName;
             response = HttpClientUtils.getUrl(patchHisUrl);
-            historyBuildPatchInfos = JSON.parseObject(response, BuildPatchInfos.class);
+
         } else {
-            File[] files = hisTpatchFolder.listFiles(new FilenameFilter() {
-                @Override
-                public boolean accept(File dir, String filename) {
-                    return filename.startsWith("patchs-") && filename.endsWith(".json");
-                }
-            });
-            if (files != null && files.length > 0) {
-                historyBuildPatchInfos = mergeHisPatchInfo(files);
+            File localPatchInfo = new File(hisTpatchFolder, "patchs.json");
+            if (localPatchInfo.exists()) {
+                response = FileUtils.readFileToString(localPatchInfo);
             }
+
         }
+        historyBuildPatchInfos = JSON.parseObject(response, BuildPatchInfos.class);
         if (historyBuildPatchInfos == null) {
             return new BuildPatchInfos();
         }
@@ -1013,26 +1001,18 @@ public class TPatchTool extends BasePatchTool {
         Map<String, File> awbBundleMap = new HashMap<String, File>();
         for (ArtifactBundleInfo artifactBundleInfo : artifactBundleInfos) {
             String bundleFileSoName = "lib" +
-                    artifactBundleInfo.getPkgName().replace('.', '_') +
-                    ".so";
+                artifactBundleInfo.getPkgName().replace('.', '_') +
+                ".so";
             File bundleFile = new File(newApkUnzipFolder,
-                    "lib" +
-                            "/" +
-                            "armeabi" +
-                            "/" +
-                            bundleFileSoName);
+                                       "lib" +
+                                           "/" +
+                                           "armeabi" +
+                                           "/" +
+                                           bundleFileSoName);
             if (bundleFile.exists()) {
                 awbBundleMap.put(artifactBundleInfo.getArtifactId(), bundleFile);
             }
         }
-        if (splitDiffBundle != null) {
-            for (Pair<BundleBO, BundleBO> bundle : splitDiffBundle) {
-                awbBundleMap.put(bundle.getSecond().getBundleName(), bundle.getSecond().getBundleFile());
-
-            }
-        }
-
-
         PatchFileBuilder patchFileBuilder = new PatchFileBuilder(historyBuildPatchInfos,
                                                                  curTPatchFile,
                                                                  curPatchInfo,
@@ -1043,24 +1023,6 @@ public class TPatchTool extends BasePatchTool {
         patchFileBuilder.setHistroyVersionList(versionList);
 
         return patchFileBuilder.createHistoryTPatches(diffBundleDex, logger);
-    }
-
-    private BuildPatchInfos mergeHisPatchInfo(File[] files) {
-        BuildPatchInfos mergeBuildPatchInfo = new BuildPatchInfos();
-        List<PatchInfo>patchInfos = new ArrayList<>();
-        mergeBuildPatchInfo.setPatches(patchInfos);
-        try {
-            for (File localPatchInfo:files) {
-                String response = FileUtils.readFileToString(localPatchInfo);
-                BuildPatchInfos historyBuildPatchInfos = JSON.parseObject(response, BuildPatchInfos.class);
-                patchInfos.addAll(historyBuildPatchInfos.getPatches());
-                mergeBuildPatchInfo.setBaseVersion(historyBuildPatchInfos.getBaseVersion());
-                mergeBuildPatchInfo.setDiffBundleDex(true);
-             }
-        } catch (IOException e) {
-                e.printStackTrace();
-            }
-        return mergeBuildPatchInfo;
     }
 
     /**
