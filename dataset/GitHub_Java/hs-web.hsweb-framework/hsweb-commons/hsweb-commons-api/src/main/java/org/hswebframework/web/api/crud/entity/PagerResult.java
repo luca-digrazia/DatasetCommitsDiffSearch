@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2020 http://www.hswebframework.org
+ *  * Copyright 2019 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import org.hswebframework.ezorm.core.param.QueryParam;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 @Getter
 @Setter
@@ -34,20 +33,15 @@ public class PagerResult<E> {
     private static final long serialVersionUID = -6171751136953308027L;
 
     public static <E> PagerResult<E> empty() {
-        return of(0, new ArrayList<>());
+        return new PagerResult<>(0, new ArrayList<>());
     }
 
-    @SuppressWarnings("all")
     public static <E> PagerResult<E> of(int total, List<E> list) {
-        PagerResult<E> result;
-        result = EntityFactoryHolder.newInstance(PagerResult.class, PagerResult::new);
-        result.setTotal(total);
-        result.setData(list);
-        return result;
+        return new PagerResult<>(total, list);
     }
 
     public static <E> PagerResult<E> of(int total, List<E> list, QueryParam entity) {
-        PagerResult<E> pagerResult = of(total, list);
+        PagerResult<E> pagerResult = new PagerResult<>(total, list);
         pagerResult.setPageIndex(entity.getThinkPageIndex());
         pagerResult.setPageSize(entity.getPageSize());
         return pagerResult;
