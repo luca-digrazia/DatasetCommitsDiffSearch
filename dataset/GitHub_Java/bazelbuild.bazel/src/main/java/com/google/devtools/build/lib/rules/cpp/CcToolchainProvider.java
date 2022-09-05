@@ -231,22 +231,15 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
   /**
    * Returns the configured features of the toolchain.
    */
-  @Nullable
   public CcToolchainFeatures getFeatures() {
-    return cppConfiguration == null ? null : cppConfiguration.getFeatures();
+    return cppConfiguration.getFeatures();
   }
   
   /**
    * Returns the compilation mode.
    */
-  @Nullable
   public CompilationMode getCompilationMode() {
-    return cppConfiguration == null ? null : cppConfiguration.getCompilationMode();
-  }
-
-  @Nullable
-  public CppConfiguration getCppConfiguration() {
-    return cppConfiguration;
+    return cppConfiguration.getCompilationMode();
   }
   
   /**

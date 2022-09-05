@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection.Transitions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -70,6 +71,7 @@ import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.TriState;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -167,6 +169,18 @@ public final class BuildConfiguration {
     }
 
     /**
+     * The fragment may use this hook to perform I/O and read data into memory that is used during
+     * analysis. During the analysis phase disk I/O operations are disallowed.
+     *
+     * <p>This hook is called for all configurations after the loading phase is complete.
+     *
+     * <p>Do not use this method to change your fragment's state.
+     */
+    @SuppressWarnings("unused")
+    public void prepareHook(Path execPath) throws ViewCreationFailedException {
+    }
+
+    /**
      * Adds all the roots from this fragment.
      */
     @SuppressWarnings("unused")
@@ -230,6 +244,14 @@ public final class BuildConfiguration {
      */
     public boolean performsStaticLink() {
       return false;
+    }
+
+    /**
+     * Fragments should delete temporary directories they create for their inner mechanisms.
+     * This is only called for target configuration.
+     */
+    @SuppressWarnings("unused")
+    public void prepareForExecutionPhase() throws IOException {
     }
 
     /**
@@ -461,8 +483,6 @@ public final class BuildConfiguration {
                 return "piii";
               case X86_64:
                 return "k8";
-              case PPC:
-                return "ppc";
               case ARM:
                 return "arm";
             }
@@ -2310,6 +2330,21 @@ public final class BuildConfiguration {
   }
 
   /**
+   * Prepare the fdo support. It reads data into memory that is used during analysis. The analysis
+   * phase is generally not allowed to perform disk I/O. This code is here because it is
+   * conceptually part of the analysis phase, and it needs to happen when the loading phase is
+   * complete.
+   *
+   * <p>C++ also requires this to resolve artifacts that are unconditionally included in every
+   * compilation.</p>
+   */
+  public void prepareToBuild(Path execRoot) throws ViewCreationFailedException {
+    for (Fragment fragment : fragments.values()) {
+      fragment.prepareHook(execRoot);
+    }
+  }
+
+  /**
    * Declares dependencies on any relevant Skyframe values (for example, relevant FileValues).
    */
   public void declareSkyframeDependencies(SkyFunction.Environment env) {
@@ -2357,6 +2392,16 @@ public final class BuildConfiguration {
       }
     }
     return false;
+  }
+
+  /**
+   * Deletes temporary directories before execution phase. This is only called for
+   * target configuration.
+   */
+  public void prepareForExecutionPhase() throws IOException {
+    for (Fragment fragment : fragments.values()) {
+      fragment.prepareForExecutionPhase();
+    }
   }
 
   /**

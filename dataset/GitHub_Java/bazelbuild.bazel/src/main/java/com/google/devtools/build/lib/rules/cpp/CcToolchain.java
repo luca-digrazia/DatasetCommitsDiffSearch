@@ -33,21 +33,15 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
-import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoException;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.skyframe.SkyFunction;
-import com.google.devtools.build.skyframe.SkyKey;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -63,30 +57,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext) {
-    CppConfiguration cppConfiguration =
-        Preconditions.checkNotNull(ruleContext.getFragment(CppConfiguration.class));
-    Path fdoZip = ruleContext.getConfiguration().getCompilationMode() == CompilationMode.OPT
-        ? cppConfiguration.getFdoZip()
-        : null;
-    SkyKey fdoKey = FdoSupportValue.key(
-        cppConfiguration.getLipoMode(),
-        fdoZip,
-        cppConfiguration.getFdoInstrument());
-
-    SkyFunction.Environment skyframeEnv = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
-    FdoSupportValue fdoSupport;
-    try {
-      fdoSupport = (FdoSupportValue) skyframeEnv.getValueOrThrow(
-          fdoKey, FdoException.class, IOException.class);
-    } catch (FdoException | IOException e) {
-      ruleContext.ruleError("cannot initialize FDO: " + e.getMessage());
-      return null;
-    }
-
-    if (skyframeEnv.valuesMissing()) {
-      return null;
-    }
-
     final Label label = ruleContext.getLabel();
     final NestedSet<Artifact> crosstool = ruleContext.getPrerequisite("all_files", Mode.HOST)
         .getProvider(FileProvider.class).getFilesToBuild();
@@ -102,6 +72,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     final PathFragment runtimeSolibDir = ruleContext.getConfiguration()
         .getBinFragment().getRelative(runtimeSolibDirBase);
 
+    CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     // Static runtime inputs.
     TransitiveInfoCollection staticRuntimeLibDep = selectDep(ruleContext, "static_runtime_libs",
         cppConfiguration.getStaticRuntimeLibsLabel());
@@ -180,7 +151,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
         ruleContext.attributes().get("supports_header_parsing", BOOLEAN);
     CcToolchainProvider provider =
         new CcToolchainProvider(
-            cppConfiguration,
+            Preconditions.checkNotNull(ruleContext.getFragment(CppConfiguration.class)),
             crosstool,
             fullInputsForCrosstool(ruleContext, crosstoolMiddleman),
             compile,
@@ -202,7 +173,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
             .add(CcToolchainProvider.class, provider)
-            .add(FdoSupportProvider.class, new FdoSupportProvider(fdoSupport.getFdoSupport()))
             .setFilesToBuild(new NestedSetBuilder<Artifact>(Order.STABLE_ORDER).build())
             .add(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY));
 

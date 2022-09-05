@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -153,14 +154,12 @@ public interface IncludeScanner {
       // Collect inputs and output
       List<Artifact> inputs = new ArrayList<>();
       for (Artifact included : includes) {
-        // Check for absolute includes -- we assign the file system root as
-        // the root path for such includes
-        if (included.getRoot().getRoot().isAbsolute()) {
-          if (FileSystemUtils.startsWithAny(
-              included.getPath().asFragment(), absoluteBuiltInIncludeDirs)) {
-            // Skip include files found in absolute include directories.
-            continue;
-          }
+        if (FileSystemUtils.startsWithAny(included.getPath().asFragment(),
+            absoluteBuiltInIncludeDirs)) {
+          // Skip include files found in absolute include directories.
+          continue;
+        }
+        if (included.getRoot().getPath().getParentDirectory() == null) {
           throw new UserExecException(
               "illegal absolute path to include file: " + included.getPath());
         }

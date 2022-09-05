@@ -238,8 +238,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       boolean usePic,
       RuleContext ruleContext) {
     super(owner,
-          createInputs(ruleContext,
-              mandatoryInputs, context.getCompilationPrerequisites(), optionalSourceFile),
+          createInputs(mandatoryInputs, context.getCompilationPrerequisites(), optionalSourceFile),
           CollectionUtils.asListWithoutNulls(outputFile,
               (dotdFile == null ? null : dotdFile.artifact()),
               gcnoFile, dwoFile));
@@ -313,16 +312,13 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   }
 
   private static NestedSet<Artifact> createInputs(
-      RuleContext ruleContext,
       NestedSet<Artifact> mandatoryInputs,
-      Set<Artifact> prerequisites,
-      Artifact optionalSourceFile) {
+      Set<Artifact> prerequisites, Artifact optionalSourceFile) {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
     if (optionalSourceFile != null) {
       builder.add(optionalSourceFile);
     }
     builder.addAll(prerequisites);
-    builder.addAll(CppHelper.getToolchain(ruleContext).getBuiltinIncludeFiles());
     builder.addTransitive(mandatoryInputs);
     return builder.build();
   }
@@ -1112,6 +1108,10 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     f.addPaths(getDeclaredIncludeSrcsInStableOrder());
     f.addPaths(getExtraSystemIncludePrefixes());
     f.addPaths(Artifact.asSortedPathFragments(getMandatoryInputs()));
+    // I'm not sure if getBuiltInIncludeFiles() is necessary here, since before an action cache hit
+    // is reported, include scanning needs to be run, and thus the changed set of files would be
+    // noticed. Better be safe than sorry.
+    f.addPaths(Artifact.asSortedPathFragments(getBuiltInIncludeFiles()));
     return f.hexDigestAndReset();
   }
 
