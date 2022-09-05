@@ -81,7 +81,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         return null;
       }
       resourceApk = applicationManifest.packWithDataAndResources(
-          null, /* resourceApk -- not needed for library */
+          ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK),
           ruleContext,
           true, /* isLibrary */
           ResourceDependencies.fromRuleDeps(ruleContext, JavaCommon.isNeverLink(ruleContext)),
@@ -148,12 +148,14 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       aar = null;
       ApplicationManifest applicationManifest = ApplicationManifest.generatedManifest(ruleContext);
 
+      Artifact apk = ruleContext.getImplicitOutputArtifact(
+          AndroidRuleClasses.ANDROID_RESOURCES_APK);
+
       String javaPackage = AndroidCommon.getJavaPackage(ruleContext);
 
       ResourceContainer resourceContainer = new ResourceContainer(ruleContext.getLabel(),
           javaPackage, null /* renameManifestPackage */, false /* inlinedConstants */,
-          null /* resourceApk -- not needed for library */,
-          applicationManifest.getManifest(),
+          apk, applicationManifest.getManifest(),
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR),
           ImmutableList.<Artifact>of(), ImmutableList.<Artifact>of(),
           ImmutableList.<PathFragment>of(), ImmutableList.<PathFragment>of(),
@@ -162,6 +164,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
 
       primaryResources = new AndroidResourcesProcessorBuilder(ruleContext)
           .setLibrary(true)
+          .setApkOut(apk)
           .setRTxtOut(resourceContainer.getRTxt())
           .setManifestOut(ruleContext.getImplicitOutputArtifact(
               AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST))

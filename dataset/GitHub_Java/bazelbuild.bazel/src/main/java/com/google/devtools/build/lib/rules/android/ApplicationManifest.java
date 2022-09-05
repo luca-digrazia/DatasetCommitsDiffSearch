@@ -237,9 +237,11 @@ public final class ApplicationManifest {
         null /* Artifact mergedResources */);
   }
 
-  /** Packages up the manifest with resource and assets from the rule and dependent resources. */
+  /** Packages up the manifest with resource and assets from the rule and dependent resources.
+   * @param manifestOut TODO(corysmith):
+   * @throws InterruptedException */
   public ResourceApk packWithDataAndResources(
-      @Nullable Artifact resourceApk,
+      Artifact resourceApk,
       RuleContext ruleContext,
       boolean isLibrary,
       ResourceDependencies resourceDeps,
@@ -294,8 +296,7 @@ public final class ApplicationManifest {
         mergedResources);
   }
 
-  private ResourceApk createApk(
-      @Nullable Artifact resourceApk,
+  private ResourceApk createApk(Artifact resourceApk,
       RuleContext ruleContext,
       boolean isLibrary,
       ResourceDependencies resourceDeps,
