@@ -47,11 +47,11 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
     // asset catalogs compilation (actool).
     new BundleSupport(ruleContext, ImmutableSet.of(TargetDeviceFamily.IPHONE), bundling)
         .registerActions(common.getObjcProvider())
-        .validateResources(common.getObjcProvider())
         .addXcodeSettings(xcodeProviderBuilder);
 
     new ResourceSupport(ruleContext)
         .validateAttributes()
+        .registerActions(common.getStoryboards())
         .addXcodeSettings(xcodeProviderBuilder);
 
     new XcodeSupport(ruleContext)
@@ -88,8 +88,7 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
         .setBundleDirFormat("%s.bundle")
         .setObjcProvider(common.getObjcProvider())
         .setInfoplistMerging(
-            BundleSupport.infoPlistMerging(ruleContext, common.getObjcProvider(), optionsProvider,
-                new BundleSupport.ExtraMergePlists()))
+            BundleSupport.infoPlistMerging(ruleContext, common.getObjcProvider(), optionsProvider))
         .setIntermediateArtifacts(intermediateArtifacts)
         .build();
   }

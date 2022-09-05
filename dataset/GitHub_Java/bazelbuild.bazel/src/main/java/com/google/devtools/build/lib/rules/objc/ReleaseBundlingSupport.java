@@ -197,17 +197,6 @@ public final class ReleaseBundlingSupport {
   }
 
   /**
-   * Validates that resources defined in this rule and its dependencies and written to this bundle
-   * are legal.
-   *
-   * @return this release bundling support
-   */
-  ReleaseBundlingSupport validateResources() {
-    bundleSupport.validateResources(objcProvider);
-    return this;
-  }
-
-  /**
    * Registers actions required to build an application. This includes any
    * {@link BundleSupport#registerActions(ObjcProvider) bundle} and bundle merge actions, signing
    * this application if appropriate and combining several single-architecture binaries into one
@@ -224,7 +213,7 @@ public final class ReleaseBundlingSupport {
     Artifact ipaOutput = ruleContext.getImplicitOutputArtifact(IPA);
 
     Artifact maybeSignedIpa;
-    if (objcConfiguration.getBundlingPlatform() == Platform.SIMULATOR) {
+    if (objcConfiguration.getPlatform() == Platform.SIMULATOR) {
       maybeSignedIpa = ipaOutput;
     } else if (attributes.provisioningProfile() == null) {
       throw new IllegalStateException(DEVICE_NO_PROVISIONING_PROFILE);
@@ -242,8 +231,8 @@ public final class ReleaseBundlingSupport {
 
   private Artifact registerBundleSigningActions(Artifact ipaOutput) {
     PathFragment entitlementsDirectory = ruleContext.getUniqueDirectory("entitlements");
-    Artifact teamPrefixFile =
-        ruleContext.getRelatedArtifact(entitlementsDirectory, ".team_prefix_file");
+    Artifact teamPrefixFile = ruleContext.getRelatedArtifact(
+        entitlementsDirectory, ".team_prefix_file");
     registerExtractTeamPrefixAction(teamPrefixFile);
 
     Artifact entitlementsNeedingSubstitution = attributes.entitlements();
@@ -252,8 +241,8 @@ public final class ReleaseBundlingSupport {
           entitlementsDirectory, ".entitlements_with_variables");
       registerExtractEntitlementsAction(entitlementsNeedingSubstitution);
     }
-    Artifact entitlements =
-        ruleContext.getRelatedArtifact(entitlementsDirectory, ".entitlements");
+    Artifact entitlements = ruleContext.getRelatedArtifact(
+        entitlementsDirectory, ".entitlements");
     registerEntitlementsVariableSubstitutionAction(
         entitlementsNeedingSubstitution, entitlements, teamPrefixFile);
     Artifact ipaUnsigned = ObjcRuleClasses.artifactByAppendingToRootRelativePath(
@@ -371,7 +360,7 @@ public final class ReleaseBundlingSupport {
       String bundleDirFormat) {
     ImmutableList<BundleableFile> extraBundleFiles;
     ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
-    if (objcConfiguration.getBundlingPlatform() == Platform.DEVICE) {
+    if (objcConfiguration.getPlatform() == Platform.DEVICE) {
       extraBundleFiles = ImmutableList.of(new BundleableFile(
           new Attributes(ruleContext).provisioningProfile(),
           PROVISIONING_PROFILE_BUNDLE_FILE));
@@ -393,7 +382,7 @@ public final class ReleaseBundlingSupport {
         // Architecture that determines which nested bundles are kept.
         .setArchitecture(objcConfiguration.getDependencySingleArchitecture())
         .setBundleDirFormat(bundleDirFormat)
-        .addExtraBundleFiles(extraBundleFiles)
+        .setExtraBundleFiles(extraBundleFiles)
         .setObjcProvider(objcProvider)
         .setInfoplistMerging(
             BundleSupport.infoPlistMerging(ruleContext, objcProvider, optionsProvider))
