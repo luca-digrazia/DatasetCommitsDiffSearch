@@ -822,17 +822,11 @@ public class CppLinkActionBuilder {
     return this;
   }
 
-  /** Adds a variables extension to template the toolchain for this link action. */
-  public CppLinkActionBuilder addVariablesExtension(VariablesExtension variablesExtension) {
-    this.variablesExtensions.add(variablesExtension);
-    return this;
-  }
-
-  /** Adds variables extensions to template the toolchain for this link action. */
-  public CppLinkActionBuilder addVariablesExtensions(List<VariablesExtension> variablesExtensions) {
-    for (VariablesExtension variablesExtension : variablesExtensions) {
-      addVariablesExtension(variablesExtension);
-    }
+  /**
+   * Adds variables extensions to template the toolchain for this link action.
+   */
+   public CppLinkActionBuilder addVariablesExtension(List<VariablesExtension> variablesExtensions) {
+     this.variablesExtensions.addAll(variablesExtensions);
      return this;
    }
   
