@@ -17,17 +17,19 @@ import static com.google.devtools.build.lib.skyframe.SkyFunctions.DIRECTORY_LIST
 import static com.google.devtools.build.lib.skyframe.SkyFunctions.FILE_STATE;
 
 import com.google.common.base.Objects;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.FileType;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.io.IOException;
 import java.util.EnumSet;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /** Utilities for checking dirtiness of keys (mainly filesystem keys) in the graph. */
@@ -46,7 +48,7 @@ public class DirtinessCheckerUtils {
       RootedPath rootedPath = (RootedPath) key.argument();
       try {
         return FileStateValue.create(rootedPath, tsgm);
-      } catch (IOException e) {
+      } catch (InconsistentFilesystemException | IOException e) {
         // TODO(bazel-team): An IOException indicates a failure to get a file digest or a symlink
         // target, not a missing file. Such a failure really shouldn't happen, so failing early
         // may be better here.

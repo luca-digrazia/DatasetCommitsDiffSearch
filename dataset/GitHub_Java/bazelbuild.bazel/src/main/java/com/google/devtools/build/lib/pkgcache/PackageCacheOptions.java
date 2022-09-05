@@ -18,6 +18,7 @@ import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
@@ -27,12 +28,32 @@ import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingException;
+
 import java.util.List;
 
 /**
  * Options for configuring the PackageCache.
  */
 public class PackageCacheOptions extends OptionsBase {
+  /**
+   * A converter for package path that defaults to {@code Constants.DEFAULT_PACKAGE_PATH} if the
+   * option is not given.
+   *
+   * <p>Required because you cannot specify a non-constant value in annotation attributes.
+   */
+  public static class PackagePathConverter implements Converter<List<String>> {
+    @Override
+    public List<String> convert(String input) throws OptionsParsingException {
+      return input.isEmpty()
+          ? Constants.DEFAULT_PACKAGE_PATH
+          : new Converters.ColonSeparatedOptionListConverter().convert(input);
+    }
+
+    @Override
+    public String getTypeDescription() {
+      return "a string";
+    }
+  }
 
   /**
    * Converter for the {@code --default_visibility} option.
@@ -57,9 +78,9 @@ public class PackageCacheOptions extends OptionsBase {
   }
 
   @Option(name = "package_path",
-          defaultValue = "%workspace%",
+          defaultValue = "",
           category = "package loading",
-          converter = Converters.ColonSeparatedOptionListConverter.class,
+          converter = PackagePathConverter.class,
           help = "A colon-separated list of where to look for packages. "
           +  "Elements beginning with '%workspace%' are relative to the enclosing "
           +  "workspace. If omitted or empty, the default is the output of "
@@ -109,6 +130,26 @@ public class PackageCacheOptions extends OptionsBase {
       category = "undocumented",
       help = "Number of threads to use for glob evaluation.")
   public int globbingThreads;
+
+  @Option(name = "min_pkg_count_for_ct_node_eviction",
+      defaultValue = "3700",
+      // Why is the default value 3700? As of December 2013, a medium target loads about this many
+      // packages, uses ~310MB RAM to only load [1] or ~990MB to load and analyze [2,3]. So we
+      // can likely load and analyze this many packages without worrying about Blaze OOM'ing.
+      //
+      // If the total number of unique packages so far [4] is higher than the value of this flag,
+      // then we evict CT nodes [5] from the Skyframe graph.
+      //
+      // [1] blaze -x build --nobuild --noanalyze //medium:target
+      // [2] blaze -x build --nobuild //medium:target
+      // [3] according to "blaze info used-heap-size"
+      // [4] this means the number of unique packages loaded by builds, including the current one,
+      //     since the last CT node eviction [5]
+      // [5] "CT node eviction" means clearing those nodes from the Skyframe graph that correspond
+      //     to ConfiguredTargets; this is done using SkyframeExecutor.resetConfiguredTargets
+      category = "undocumented",
+      help = "Threshold for number of loaded packages before skyframe-m1 cache eviction kicks in")
+  public int minLoadedPkgCountForCtNodeEviction;
 
   @Option(name = "fetch",
       defaultValue = "true",

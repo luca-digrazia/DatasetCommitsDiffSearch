@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
@@ -21,16 +20,16 @@ import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
-import java.io.IOException;
+
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Common utilities for dealing with files outside the package roots. */
 public class ExternalFilesHelper {
   private final AtomicReference<PathPackageLocator> pkgLocator;
   private final ExternalFileAction externalFileAction;
-  private final BlazeDirectories directories;
 
   // These variables are set to true from multiple threads, but only read in the main thread.
   // So volatility or an AtomicBoolean is not needed.
@@ -43,22 +42,18 @@ public class ExternalFilesHelper {
    * @param errorOnExternalFiles If files outside of package paths should be allowed.
    */
   public ExternalFilesHelper(
-      AtomicReference<PathPackageLocator> pkgLocator, boolean errorOnExternalFiles,
-      BlazeDirectories directories) {
+      AtomicReference<PathPackageLocator> pkgLocator, boolean errorOnExternalFiles) {
     this(
         pkgLocator,
         errorOnExternalFiles
             ? ExternalFileAction.ERROR_OUT
-            : ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_FILES,
-        directories);
+            : ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_FILES);
   }
 
   private ExternalFilesHelper(AtomicReference<PathPackageLocator> pkgLocator,
-      ExternalFileAction externalFileAction,
-      BlazeDirectories directories) {
+      ExternalFileAction externalFileAction) {
     this.pkgLocator = pkgLocator;
     this.externalFileAction = externalFileAction;
-    this.directories = directories;
   }
 
   private enum ExternalFileAction {
@@ -81,12 +76,12 @@ public class ExternalFilesHelper {
      * external repository). Such files are theoretically mutable, but certain Blaze flags may tell
      * Blaze to assume these files are immutable.
      *
-     * <p>Note that {@link ExternalFilesHelper#maybeHandleExternalFile} is only used for {@link
-     * FileStateValue} and {@link DirectoryListingStateValue}, and also note that output files do
-     * not normally have corresponding {@link FileValue} instances (and thus also {@link
-     * FileStateValue} instances) in the Skyframe graph ({@link ArtifactFunction} only uses {@link
-     * FileValue}s for source files). But {@link FileStateValue}s for output files can still make
-     * their way into the Skyframe graph if e.g. a source file is a symlink to an output file.
+     * Note that {@link ExternalFilesHelper#maybeHandleExternalFile} is only used for
+     * {@link FileStateValue} and {@link DirectoryStateValue}, and also note that output files do
+     * not normally have corresponding {@link FileValue} instances (and thus also
+     * {@link FileStateValue} instances) in the Skyframe graph ({@link ArtifactFunction} only uses
+     * {@link FileValue}s for source files). But {@link FileStateValue}s for output files can still
+     * make their way into the Skyframe graph if e.g. a source file is a symlink to an output file.
      */
     // TODO(nharmata): Consider an alternative design where we have an OutputFileDiffAwareness. This
     // could work but would first require that we clean up all RootedPath usage.
@@ -122,7 +117,7 @@ public class ExternalFilesHelper {
   }
 
   ExternalFilesHelper cloneWithFreshExternalFilesKnowledge() {
-    return new ExternalFilesHelper(pkgLocator, externalFileAction, directories);
+    return new ExternalFilesHelper(pkgLocator, externalFileAction);
   }
 
   FileType getAndNoteFileType(RootedPath rootedPath) {
@@ -137,7 +132,7 @@ public class ExternalFilesHelper {
       return FileType.EXTERNAL_MUTABLE;
     }
     if (rootedPath.asPath().startsWith(outputBase)) {
-      Path externalRepoDir = outputBase.getRelative(Label.EXTERNAL_PACKAGE_NAME);
+      Path externalRepoDir = outputBase.getRelative(Label.EXTERNAL_PATH_PREFIX);
       if (rootedPath.asPath().startsWith(externalRepoDir)) {
         anyNonOutputExternalFilesSeen = true;
         return FileType.EXTERNAL_REPO;
@@ -156,8 +151,8 @@ public class ExternalFilesHelper {
    * ERROR_OUT, it will throw an error instead.
    */
   @ThreadSafe
-  void maybeHandleExternalFile(RootedPath rootedPath, SkyFunction.Environment env)
-      throws IOException, InterruptedException {
+  public void maybeHandleExternalFile(RootedPath rootedPath, SkyFunction.Environment env)
+      throws FileOutsidePackageRootsException {
     FileType fileType = getAndNoteFileType(rootedPath);
     if (fileType == FileType.INTERNAL) {
       return;
@@ -171,6 +166,39 @@ public class ExternalFilesHelper {
     Preconditions.checkState(
         externalFileAction == ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_FILES,
         externalFileAction);
-    RepositoryFunction.addExternalFilesDependencies(rootedPath, directories, env);
+
+    // For files that are under $OUTPUT_BASE/external, add a dependency on the corresponding rule
+    // so that if the WORKSPACE file changes, the File/DirectoryStateValue will be re-evaluated.
+    //
+    // Note that:
+    // - We don't add a dependency on the parent directory at the package root boundary, so
+    // the only transitive dependencies from files inside the package roots to external files
+    // are through symlinks. So the upwards transitive closure of external files is small.
+    // - The only way other than external repositories for external source files to get into the
+    // skyframe graph in the first place is through symlinks outside the package roots, which we
+    // neither want to encourage nor optimize for since it is not common. So the set of external
+    // files is small.
+
+    Path externalRepoDir = pkgLocator.get().getOutputBase().getRelative(Label.EXTERNAL_PATH_PREFIX);
+    PathFragment repositoryPath = rootedPath.asPath().relativeTo(externalRepoDir);
+    if (repositoryPath.segmentCount() == 0) {
+      // We are the top of the repository path (<outputBase>/external), not in an actual external
+      // repository path.
+      return;
+    }
+    String repositoryName = repositoryPath.getSegment(0);
+
+    try {
+      RepositoryFunction.getRule(repositoryName, env);
+    } catch (RepositoryFunction.RepositoryNotFoundException ex) {
+      // The repository we are looking for does not exist so we should depend on the whole
+      // WORKSPACE file. In that case, the call to RepositoryFunction#getRule(String, Environment)
+      // already requested all repository functions from the WORKSPACE file from Skyframe as part of
+      // the resolution. Therefore we are safe to ignore that Exception.
+    } catch (RepositoryFunction.RepositoryFunctionException ex) {
+      // This should never happen.
+      throw new IllegalStateException(
+          "Repository " + repositoryName + " cannot be resolved for path " + rootedPath, ex);
+    }
   }
 }
