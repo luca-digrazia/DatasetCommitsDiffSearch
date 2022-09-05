@@ -37,17 +37,13 @@ public class QueryParam extends SqlParam<QueryParam> implements Serializable {
 
 
     public QueryParam orderBy(String sortField) {
+        orderBy(sortField, true);
+        return this;
+    }
+
+    public QueryParam orderBy(String sortField, boolean asc) {
         this.sortField.add(sortField);
-        return this;
-    }
-
-    public QueryParam asc() {
-        setSortOrder("asc");
-        return this;
-    }
-
-    public QueryParam desc() {
-        setSortOrder("desc");
+        setSortOrder(asc ? "asc" : "desc");
         return this;
     }
 
@@ -114,10 +110,6 @@ public class QueryParam extends SqlParam<QueryParam> implements Serializable {
         if (sortOrder.contains("desc") || sortOrder.contains("DESC"))
             sortOrder = "desc";
         this.sortOrder = sortOrder;
-    }
-
-    public static QueryParam newInstance() {
-        return new QueryParam();
     }
 
 }
