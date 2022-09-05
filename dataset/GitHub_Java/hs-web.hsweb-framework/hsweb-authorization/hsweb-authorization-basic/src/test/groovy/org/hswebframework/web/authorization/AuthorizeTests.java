@@ -42,9 +42,6 @@ public class AuthorizeTests {
     private MethodInterceptorContext handleRole;
 
     @Mock
-    private MethodInterceptorContext handleEmpty;
-
-    @Mock
     private Authentication authentication;
 
     AopMethodAuthorizeDefinitionParser parser = new DefaultAopMethodAuthorizeDefinitionParser();
@@ -80,10 +77,6 @@ public class AuthorizeTests {
         when(handleRole.getParams()).thenReturn(Collections.singletonMap("paramEntity", entity));
         when(handleRole.getParameter("paramEntity")).thenReturn(Optional.of(entity));
 
-
-        //mock MethodInterceptorContext
-        when(handleEmpty.getMethod()).thenReturn(TestClass.class.getMethod("handleEmpty"));
-        when(handleEmpty.getTarget()).thenReturn(testClass);
 
         //过滤字段
         AbstractDataAccessConfig fieldFilter = new SimpleFieldFilterDataAccessConfig("password", "salt");
@@ -127,7 +120,12 @@ public class AuthorizeTests {
         authorizingContext.setDefinition(definition);
         authorizingContext.setParamContext(queryById);
 
-        handler.handRBAC(authorizingContext);
+        try {
+            handler.handRBAC(authorizingContext);
+            Assert.fail("role access handle fail");
+        } catch (AccessDenyException ignore) {
+
+        }
     }
 
     @Test
@@ -141,26 +139,8 @@ public class AuthorizeTests {
         authorizingContext.setDefinition(definition);
         authorizingContext.setParamContext(handleRole);
 
-        try {
-            handler.handRBAC(authorizingContext);
-            Assert.fail("role access handle fail");
-        } catch (AccessDenyException ignore) {
-
-        }
-    }
-    @Test
-    public void testIssue164Empty() {
-        DefaultAuthorizingHandler handler = new DefaultAuthorizingHandler();
-
-        AuthorizeDefinition definition = parser.parse(handleEmpty.getTarget().getClass(), handleEmpty.getMethod());
-
-        AuthorizingContext authorizingContext = new AuthorizingContext();
-        authorizingContext.setAuthentication(authentication);
-        authorizingContext.setDefinition(definition);
-        authorizingContext.setParamContext(handleRole);
         handler.handRBAC(authorizingContext);
     }
-
 
     /**
      * 测试数据权限控制s
@@ -238,14 +218,9 @@ public class AuthorizeTests {
         }
 
 
-        @Authorize(role = "admin",merge = false)
+        @Authorize(role = "admin")
         public void handleRoleDeny(QueryParamEntity paramEntity) {
             System.out.println(JSON.toJSON(paramEntity));
-        }
-
-        @Authorize(merge = false)
-        public void handleEmpty() {
-
         }
 
     }
