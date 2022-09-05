@@ -339,11 +339,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   public void testPackageBoundaryError_ExternalRepository() throws Exception {
     scratch.file("/r/BUILD", "cc_library(name = 'cclib',", "  srcs = ['sub/my_sub_lib.h'])");
     scratch.file("/r/sub/BUILD", "cc_library(name = 'my_sub_lib', srcs = ['my_sub_lib.h'])");
-    scratch.overwriteFile("WORKSPACE",
-        new ImmutableList.Builder<String>()
-            .addAll(analysisMock.getWorkspaceContents(mockToolsConfig))
-            .add("local_repository(name='r', path='/r')")
-            .build());
+    scratch.overwriteFile("WORKSPACE", "local_repository(name='r', path='/r')");
     invalidatePackages(/*alsoConfigs=*/false); // Repository shuffling messes with toolchain labels.
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("@r//:cclib");
@@ -531,41 +527,48 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         "consume_rule(name = 'c_str', s = [cdict['kind'], cdict['name'], cdict['x']])");
 
     SkylarkRuleContext allContext = createRuleContext("//test/getrule:all_str");
-    List<String> result = (List<String>) evalRuleContextCode(allContext, "ruleContext.attr.s");
-    assertThat(result).containsExactly("genrule", "a", "nop_rule", "c");
+    Object result = evalRuleContextCode(allContext, "ruleContext.attr.s");
+    assertEquals(
+        SkylarkList.createImmutable(ImmutableList.<String>of("genrule", "a", "nop_rule", "c")),
+        result);
 
-    result = (List<String>) evalRuleContextCode(
-        createRuleContext("//test/getrule:a_str"), "ruleContext.attr.s");
-    assertThat(result).containsExactly("genrule", "a", ":a.txt", "//test:bla");
+    result = evalRuleContextCode(createRuleContext("//test/getrule:a_str"), "ruleContext.attr.s");
+    assertEquals(
+        SkylarkList.createImmutable(
+            ImmutableList.<String>of("genrule", "a", ":a.txt", "//test:bla")),
+        result);
 
-    result = (List<String>) evalRuleContextCode(
-        createRuleContext("//test/getrule:c_str"), "ruleContext.attr.s");
-    assertThat(result).containsExactly("nop_rule", "c", ":a");
+    result = evalRuleContextCode(createRuleContext("//test/getrule:c_str"), "ruleContext.attr.s");
+    assertEquals(
+        SkylarkList.createImmutable(ImmutableList.<String>of("nop_rule", "c", ":a")), result);
 
-    result = (List<String>) evalRuleContextCode(
-        createRuleContext("//test/getrule:genrule_attr"), "ruleContext.attr.s");
-    assertThat(result).containsExactly(
-        "name",
-        "visibility",
-        "tags",
-        "generator_name",
-        "generator_function",
-        "generator_location",
-        "features",
-        "compatible_with",
-        "restricted_to",
-        "srcs",
-        "tools",
-        "toolchains",
-        "outs",
-        "cmd",
-        "output_to_bindir",
-        "local",
-        "message",
-        "executable",
-        "stamp",
-        "heuristic_label_expansion",
-        "kind");
+    result =
+        evalRuleContextCode(createRuleContext("//test/getrule:genrule_attr"), "ruleContext.attr.s");
+    assertEquals(
+        SkylarkList.createImmutable(
+            ImmutableList.<String>of(
+                "name",
+                "visibility",
+                "tags",
+                "generator_name",
+                "generator_function",
+                "generator_location",
+                "features",
+                "compatible_with",
+                "restricted_to",
+                "srcs",
+                "tools",
+                "toolchains",
+                "outs",
+                "cmd",
+                "output_to_bindir",
+                "local",
+                "message",
+                "executable",
+                "stamp",
+                "heuristic_label_expansion",
+                "kind")),
+        result);
   }
 
   @Test
@@ -829,10 +832,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         "external_rule(name='r')");
 
     scratch.overwriteFile("WORKSPACE",
-        new ImmutableList.Builder<String>()
-            .addAll(analysisMock.getWorkspaceContents(mockToolsConfig))
-            .add("local_repository(name='r', path='/r')")
-            .build());
+        "local_repository(name='r', path='/r')");
 
     invalidatePackages(/*alsoConfigs=*/false); // Repository shuffling messes with toolchain labels.
     SkylarkRuleContext context = createRuleContext("@r//a:r");
@@ -863,10 +863,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         "external_rule(name='r')");
 
     scratch.overwriteFile("WORKSPACE",
-        new ImmutableList.Builder<String>()
-            .addAll(analysisMock.getWorkspaceContents(mockToolsConfig))
-            .add("local_repository(name='r', path='/r')")
-            .build());
+        "local_repository(name='r', path='/r')");
 
     invalidatePackages(/*alsoConfigs=*/false); // Repository shuffling messes with toolchain labels.
     SkylarkRuleContext context = createRuleContext("@r//a:r");
@@ -895,19 +892,15 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         "  print(name + ': ' + path)"
     );
     scratch.file("BUILD");
-
-    scratch.overwriteFile("WORKSPACE",
-        new ImmutableList.Builder<String>()
-            .addAll(analysisMock.getWorkspaceContents(mockToolsConfig))
-            .add("local_repository(name='r2', path='/r2')")
-            .add("load('@r2//:test.bzl', 'macro')")
-            .add("macro('r1', '/r1')")
-            .add("NEXT_NAME = 'r3'")
-            // We can still refer to r2 in other chunks:
-            .add("load('@r2//:other_test.bzl', 'other_macro')")
-            .add("macro(NEXT_NAME, '/r2')") // and we can still use macro outside of its chunk.
-            .build());
-
+    scratch.overwriteFile(
+        "WORKSPACE",
+        "local_repository(name='r2', path='/r2')",
+        "load('@r2//:test.bzl', 'macro')",
+        "macro('r1', '/r1')",
+        "NEXT_NAME = 'r3'",
+        "load('@r2//:other_test.bzl', 'other_macro')",  // We can still refer to r2 in other chunks.
+        "macro(NEXT_NAME, '/r2')"  // and we can still use macro outside of its chunk.
+    );
     invalidatePackages(/*alsoConfigs=*/false); // Repository shuffling messes with toolchain labels.
     assertThat(getConfiguredTarget("@r1//:test")).isNotNull();
   }
@@ -922,13 +915,10 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     scratch.file("/baz/WORKSPACE");
     scratch.file("/baz/baz.txt");
     scratch.file("/baz/BUILD", "filegroup(name = 'baz', srcs = ['baz.txt'])");
-    scratch.overwriteFile("WORKSPACE",
-        new ImmutableList.Builder<String>()
-            .addAll(analysisMock.getWorkspaceContents(mockToolsConfig))
-            .add("local_repository(name = 'foo', path = '/bar')")
-            .add("local_repository(name = 'foo', path = '/baz')")
-            .build());
-
+    scratch.overwriteFile(
+        "WORKSPACE",
+        "local_repository(name = 'foo', path = '/bar')",
+        "local_repository(name = 'foo', path = '/baz')");
     invalidatePackages(/*alsoConfigs=*/false); // Repository shuffling messes with toolchain labels.
     assertThat(
             (List<Label>)
@@ -941,23 +931,19 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
 
     scratch.overwriteFile("BUILD");
     scratch.overwriteFile("bar.bzl", "dummy = 1");
-
-    scratch.overwriteFile("WORKSPACE",
-        new ImmutableList.Builder<String>()
-            .addAll(analysisMock.getWorkspaceContents(mockToolsConfig))
-            .add("local_repository(name = 'foo', path = '/bar')")
-            .add("load('//:bar.bzl', 'dummy')")
-            .add("local_repository(name = 'foo', path = '/baz')")
-            .build());
-
+    scratch.overwriteFile(
+        "WORKSPACE",
+        "local_repository(name = 'foo', path = '/bar')",
+        "load('//:bar.bzl', 'dummy')",
+        "local_repository(name = 'foo', path = '/baz')");
     try {
       invalidatePackages(/*alsoConfigs=*/false); // Repository shuffling messes with toolchains.
       createRuleContext("@foo//:baz");
       fail("Should have failed because repository 'foo' is overloading after a load!");
     } catch (Exception ex) {
       assertContainsEvent(
-          "Cannot redefine repository after any load statement in the WORKSPACE file "
-              + "(for repository 'foo')");
+          "ERROR /workspace/WORKSPACE:3:1: Cannot redefine repository after any load statement "
+              + "in the WORKSPACE file (for repository 'foo')");
     }
   }
 
