@@ -39,8 +39,6 @@ public interface ReverseDepsUtil<T> {
 
   void removeReverseDep(T container, SkyKey reverseDep);
 
-  void consolidateReverseDeps(T container);
-
   ImmutableSet<SkyKey> getReverseDeps(T container);
 
   String toString(T container);

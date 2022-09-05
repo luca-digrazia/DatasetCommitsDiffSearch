@@ -221,8 +221,8 @@ public class InMemoryNodeEntry implements NodeEntry {
     // Get reverse deps that need to be signaled.
     ImmutableSet<SkyKey> reverseDepsToSignal = buildingState.getReverseDepsToSignal();
     getReverseDepsUtil().addReverseDeps(this, reverseDepsToSignal);
-    // Force consistency check and consolidate rdeps changes.
-    getReverseDepsUtil().consolidateReverseDeps(this);
+    // Force consistency check.
+    getReverseDepsUtil().getReverseDeps(this);
     this.directDeps = buildingState.getFinishedDirectDeps().compress();
 
     markDone();

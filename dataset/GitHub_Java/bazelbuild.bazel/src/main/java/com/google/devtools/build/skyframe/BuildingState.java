@@ -153,12 +153,6 @@ public class BuildingState {
         List<Object> getDataToConsolidate(BuildingState container) {
           return container.reverseDepsDataToConsolidate;
         }
-
-        @Override
-        public void consolidateReverseDeps(BuildingState container) {
-          // #consolidateReverseDeps is only supported for node entries, not building states.
-          throw new UnsupportedOperationException();
-        }
       };
 
   // Below are fields that are used for dirty nodes.
