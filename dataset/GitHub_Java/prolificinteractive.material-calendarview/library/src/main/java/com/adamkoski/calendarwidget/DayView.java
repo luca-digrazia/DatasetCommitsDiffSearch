@@ -18,12 +18,16 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.widget.CheckedTextView;
 
+import java.util.Calendar;
+
+import static java.util.Calendar.DATE;
+
 /**
  * Display one day
  */
 class DayView extends CheckedTextView {
 
-    private CalendarDay date = new CalendarDay();
+    private Calendar date = Calendar.getInstance();
 
     public DayView(Context context) {
         super(context);
@@ -61,9 +65,9 @@ class DayView extends CheckedTextView {
         }
     }
 
-    public void setDay(CalendarDay date) {
-        this.date = date;
-        setText(String.valueOf(date.getDay()));
+    public void setDay(Calendar date) {
+        CalendarUtils.copyDateTo(date, this.date);
+        setText(String.valueOf(date.get(DATE)));
     }
 
     private Rect bounds = new Rect();
@@ -96,7 +100,7 @@ class DayView extends CheckedTextView {
         return drawable;
     }
 
-    public CalendarDay getDate() {
-        return date;
+    public Calendar getDate() {
+        return CalendarUtils.copy(date);
     }
 }

@@ -28,7 +28,7 @@ public class CalendarWidget extends LinearLayout implements View.OnClickListener
     private DirectionButton buttonFuture;
     private MonthView monthView;
 
-    private Calendar calendar = CalendarUtils.copy(Calendar.getInstance());
+    private Calendar calendar;
 
     private OnDateChangedListener listener;
 
@@ -54,6 +54,8 @@ public class CalendarWidget extends LinearLayout implements View.OnClickListener
     }
 
     private void init() {
+
+        calendar = Calendar.getInstance();
 
         setOrientation(VERTICAL);
 
@@ -93,21 +95,21 @@ public class CalendarWidget extends LinearLayout implements View.OnClickListener
         this.listener = listener;
     }
 
-    public CalendarDay getSelectedDate() {
-        return new CalendarDay(calendar);
+    public Calendar getSelectedDate() {
+        return CalendarUtils.copy(calendar);
     }
 
     @Override
-    public void onDateChanged(CalendarDay date) {
+    public void onDateChanged(Calendar date) {
         int prevMonth = calendar.get(MONTH);
-        date.copyTo(calendar);
+        CalendarUtils.copyDateTo(date, calendar);
         int month = calendar.get(MONTH);
         if(prevMonth != month) {
             updateUi();
         }
 
         if(listener != null) {
-            listener.onDateChanged(this, date);
+            listener.onDateChanged(this, CalendarUtils.copy(calendar));
         }
     }
 }
