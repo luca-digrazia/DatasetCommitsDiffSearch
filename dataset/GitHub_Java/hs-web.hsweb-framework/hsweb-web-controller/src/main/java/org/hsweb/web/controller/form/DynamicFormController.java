@@ -3,9 +3,7 @@ package org.hsweb.web.controller.form;
 import org.hsweb.web.bean.common.InsertMapParam;
 import org.hsweb.web.bean.common.QueryParam;
 import org.hsweb.web.bean.common.UpdateMapParam;
-import org.hsweb.web.bean.po.form.Form;
 import org.hsweb.web.core.authorize.annotation.Authorize;
-import org.hsweb.web.core.exception.BusinessException;
 import org.hsweb.web.core.logger.annotation.AccessLogger;
 import org.hsweb.web.core.message.ResponseMessage;
 import org.hsweb.web.service.form.DynamicFormService;
@@ -38,23 +36,14 @@ public class DynamicFormController {
     private FileService fileService;
 
     @RequestMapping(value = "/deployed/{name}", method = RequestMethod.GET)
-    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,#paramsMap,'R')")
+    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,'R')")
     public ResponseMessage deployed(@PathVariable("name") String name) throws Exception {
         return ResponseMessage.ok(formService.selectDeployed(name));
     }
 
-    @RequestMapping(value = "/{name}/v/{version}", method = RequestMethod.GET)
-    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,#paramsMap,'R')")
-    public ResponseMessage latest(@PathVariable(value = "name") String name,
-                                  @PathVariable(value = "version") Integer version) throws Exception {
-        Form form = formService.selectByVersion(name, version);
-        if (form == null) throw new BusinessException("表单不存在", 404);
-        return ResponseMessage.ok(form);
-    }
-
     @RequestMapping(value = "/{name}", method = RequestMethod.GET)
     @AccessLogger("查看列表")
-    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,#paramsMap,'R')")
+    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,'R')")
     public ResponseMessage list(@PathVariable("name") String name,
                                 QueryParam param) throws Exception {
         // 获取条件查询
@@ -69,7 +58,7 @@ public class DynamicFormController {
 
     @RequestMapping(value = "/{name}/{primaryKey}", method = RequestMethod.GET)
     @AccessLogger("按主键查询")
-    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,#paramsMap,'R')")
+    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,'R')")
     public ResponseMessage info(@PathVariable("name") String name,
                                 @PathVariable("primaryKey") String primaryKey) throws Exception {
         Map<String, Object> data = dynamicFormService.selectByPk(name, primaryKey);
@@ -78,16 +67,16 @@ public class DynamicFormController {
 
     @RequestMapping(value = "/{name}", method = RequestMethod.POST)
     @AccessLogger("新增数据")
-    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,#paramsMap,'C')")
+    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,'C')")
     public ResponseMessage insert(@PathVariable("name") String name,
                                   @RequestBody(required = true) Map<String, Object> data) throws Exception {
-        String pk = dynamicFormService.insert(name, data);
+        String pk = dynamicFormService.insert(name, new InsertMapParam(data));
         return ResponseMessage.ok(pk);
     }
 
     @RequestMapping(value = "/{name}/{primaryKey}", method = RequestMethod.PUT)
     @AccessLogger("更新数据")
-    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,#paramsMap,'U')")
+    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,'U')")
     public ResponseMessage update(@PathVariable("name") String name,
                                   @PathVariable("primaryKey") String primaryKey,
                                   @RequestBody(required = true) Map<String, Object> data) throws Exception {
@@ -97,7 +86,7 @@ public class DynamicFormController {
 
     @RequestMapping(value = "/{name}/{primaryKey}", method = RequestMethod.DELETE)
     @AccessLogger("删除数据")
-    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,#paramsMap,'D')")
+    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,'D')")
     public ResponseMessage delete(@PathVariable("name") String name,
                                   @PathVariable("primaryKey") String primaryKey) throws Exception {
         dynamicFormService.deleteByPk(name, primaryKey);
@@ -106,7 +95,7 @@ public class DynamicFormController {
 
     @RequestMapping(value = "/{name}/export/{fileName:.+}", method = RequestMethod.GET)
     @AccessLogger("导出excel")
-    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,#paramsMap,'export')")
+    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,'export')")
     public void exportExcel(@PathVariable("name") String name,
                             @PathVariable("fileName") String fileName,
                             QueryParam queryParam,
@@ -118,7 +107,7 @@ public class DynamicFormController {
 
     @RequestMapping(value = "/{name}/import/{fileId:.+}", method = {RequestMethod.PATCH})
     @AccessLogger("导入为excel")
-    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,#paramsMap,'import')")
+    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,'import')")
     public ResponseMessage importExcel(@PathVariable("name") String name,
                                        @PathVariable("fileId") String fileId) throws Exception {
         String[] ids = fileId.split("[,]");
