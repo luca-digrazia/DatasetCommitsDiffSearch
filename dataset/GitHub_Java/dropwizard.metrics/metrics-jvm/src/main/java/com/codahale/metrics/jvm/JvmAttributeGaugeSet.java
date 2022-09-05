@@ -34,7 +34,7 @@ public class JvmAttributeGaugeSet implements MetricSet {
 
     @Override
     public Map<String, Metric> getMetrics() {
-        final Map<String, Metric> gauges = new HashMap<>();
+        final Map<String, Metric> gauges = new HashMap<String, Metric>();
 
         gauges.put("name", (Gauge<String>) runtime::getName);
         gauges.put("vendor", (Gauge<String>) () -> String.format(Locale.US,
