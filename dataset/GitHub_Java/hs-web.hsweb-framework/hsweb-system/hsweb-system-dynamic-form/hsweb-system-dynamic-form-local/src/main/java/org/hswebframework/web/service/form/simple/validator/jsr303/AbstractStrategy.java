@@ -10,17 +10,13 @@ import org.hswebframework.web.service.form.simple.validator.JSR303AnnotationInfo
 import org.hswebframework.web.service.form.simple.validator.JSR303AnnotationParserStrategy;
 import org.hswebframework.web.validator.group.CreateGroup;
 import org.hswebframework.web.validator.group.UpdateGroup;
-import org.springframework.util.ClassUtils;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.lang.annotation.Annotation;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * @author zhouhao
@@ -108,7 +104,7 @@ public abstract class AbstractStrategy implements JSR303AnnotationParserStrategy
                     return UpdateGroup.class;
                 } else {
                     try {
-                        return ClassUtils.forName(String.valueOf(obj), null);
+                        return Class.forName(String.valueOf(obj));
                     } catch (ClassNotFoundException e) {
                         return CreateGroup.class;
                     }
