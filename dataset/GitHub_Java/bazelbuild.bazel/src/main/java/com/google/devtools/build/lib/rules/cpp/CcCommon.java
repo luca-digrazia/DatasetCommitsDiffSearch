@@ -234,8 +234,17 @@ public final class CcCommon {
   }
 
   private boolean shouldProcessHeaders() {
-    return featureConfiguration.isEnabled(CppRuleClasses.PREPROCESS_HEADERS)
-        || featureConfiguration.isEnabled(CppRuleClasses.PARSE_HEADERS);
+    if (featureConfiguration.isEnabled(CppRuleClasses.PREPROCESS_HEADERS)
+        || featureConfiguration.isEnabled(CppRuleClasses.PARSE_HEADERS)) {
+      return true;
+    }
+    // TODO(bazel-team): Remove once header processing is configured via the feature configuration
+    // in all toolchains.
+    boolean crosstoolSupportsHeaderParsing =
+        CppHelper.getToolchain(ruleContext).supportsHeaderParsing();
+    return crosstoolSupportsHeaderParsing && (
+        ruleContext.getFeatures().contains(CppRuleClasses.PREPROCESS_HEADERS)
+        || ruleContext.getFeatures().contains(CppRuleClasses.PARSE_HEADERS));
   }
 
   private ImmutableList<Pair<Artifact, Label>> collectCAndCppSources() {
@@ -661,18 +670,9 @@ public final class CcCommon {
       Set<String> ruleSpecificRequestedFeatures,
       Set<String> ruleSpecificUnsupportedFeatures) {
     CcToolchainProvider toolchain = CppHelper.getToolchain(ruleContext);    
-    ImmutableSet.Builder<String> unsupportedFeaturesBuilder = ImmutableSet.builder();
-    unsupportedFeaturesBuilder.addAll(ruleSpecificUnsupportedFeatures);
-    if (!toolchain.supportsHeaderParsing()) {
-      // TODO(bazel-team): Remove once supports_header_parsing has been removed from the
-      // cc_toolchain rule.
-      unsupportedFeaturesBuilder.add(CppRuleClasses.PARSE_HEADERS);
-      unsupportedFeaturesBuilder.add(CppRuleClasses.PREPROCESS_HEADERS);
-    }
-    Set<String> unsupportedFeatures = unsupportedFeaturesBuilder.build();
     ImmutableSet.Builder<String> requestedFeatures = ImmutableSet.builder();
     for (String feature : Iterables.concat(DEFAULT_FEATURES, ruleContext.getFeatures())) {
-      if (!unsupportedFeatures.contains(feature)) {
+      if (!ruleSpecificUnsupportedFeatures.contains(feature)) {
         requestedFeatures.add(feature);
       }
     }
