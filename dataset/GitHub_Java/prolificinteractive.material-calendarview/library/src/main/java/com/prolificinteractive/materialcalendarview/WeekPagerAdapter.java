@@ -6,7 +6,6 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
-@Experimental
 public class WeekPagerAdapter extends CalendarPagerAdapter<WeekView> {
 
     public WeekPagerAdapter(MaterialCalendarView mcv) {
@@ -42,7 +41,7 @@ public class WeekPagerAdapter extends CalendarPagerAdapter<WeekView> {
 
         public Weekly(@NonNull CalendarDay min, @NonNull CalendarDay max, int firstDayOfWeek) {
             this.min = getFirstDayOfWeek(min, firstDayOfWeek);
-            this.count = weekNumberDifference(this.min, max) + 1;
+            this.count = weekNumberDifference(min, max) + 1;
         }
 
         @Override

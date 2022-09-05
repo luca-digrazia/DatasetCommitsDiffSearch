@@ -498,6 +498,7 @@ public class MaterialCalendarView extends ViewGroup {
             adapter = adapter.migrateStateAndReturn(newAdapter);
         }
         pager.setAdapter(adapter);
+        setRangeDates(minDate, maxDate);
         calendarMode = mode;
 
         // Reset height params after mode change
@@ -1249,7 +1250,7 @@ public class MaterialCalendarView extends ViewGroup {
 
     /**
      * Sets the first day of the week.
-     * <p>
+     * <p/>
      * Uses the java.util.Calendar day constants.
      *
      * @param day The first day of the week as a java.util.Calendar day constant.
@@ -1277,6 +1278,7 @@ public class MaterialCalendarView extends ViewGroup {
             adapter = adapter.migrateStateAndReturn(newAdapter);
         }
         pager.setAdapter(adapter);
+        setRangeDates(minDate, maxDate);
 
         setCurrentDate(
                 selectionMode == SELECTION_MODE_SINGLE && !adapter.getSelectedDates().isEmpty()
@@ -1296,7 +1298,7 @@ public class MaterialCalendarView extends ViewGroup {
     /**
      * By default, the calendar will take up all the space needed to show any month (6 rows).
      * By enabling dynamic height, the view will change height dependant on the visible month.
-     * <p>
+     * <p/>
      * This means months that only need 5 or 4 rows to show the entire month will only take up
      * that many rows, and will grow and shrink as necessary.
      *
@@ -1456,16 +1458,12 @@ public class MaterialCalendarView extends ViewGroup {
         final int currentMonth = getCurrentDate().getMonth();
         final int selectedMonth = dayView.getDate().getMonth();
 
-        if (calendarMode == CalendarMode.MONTHS) {
-            if (allowClickDaysOutsideCurrentMonth || currentMonth == selectedMonth) {
-                if (currentMonth > selectedMonth) {
-                    goToPrevious();
-                } else if (currentMonth < selectedMonth) {
-                    goToNext();
-                }
-                onDateClicked(dayView.getDate(), !dayView.isChecked());
+        if (allowClickDaysOutsideCurrentMonth || currentMonth == selectedMonth) {
+            if (currentMonth > selectedMonth) {
+                goToPrevious();
+            } else if (currentMonth < selectedMonth) {
+                goToNext();
             }
-        } else {
             onDateClicked(dayView.getDate(), !dayView.isChecked());
         }
     }
