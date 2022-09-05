@@ -23,30 +23,27 @@ import org.apache.shiro.authz.UnauthenticatedException;
 import org.apache.shiro.cache.CacheManager;
 import org.apache.shiro.cache.MemoryConstrainedCacheManager;
 import org.apache.shiro.mgt.DefaultSecurityManager;
-import org.apache.shiro.mgt.RememberMeManager;
 import org.apache.shiro.mgt.SecurityManager;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.session.mgt.DefaultSessionManager;
 import org.apache.shiro.spring.LifecycleBeanPostProcessor;
 import org.apache.shiro.spring.web.ShiroFilterFactoryBean;
-import org.apache.shiro.web.mgt.CookieRememberMeManager;
 import org.apache.shiro.web.mgt.DefaultWebSecurityManager;
+import org.apache.shiro.web.mgt.WebSecurityManager;
 import org.hswebframework.web.authorization.AuthenticationHolder;
 import org.hswebframework.web.authorization.AuthenticationManager;
 import org.hswebframework.web.authorization.AuthenticationSupplier;
 import org.hswebframework.web.authorization.access.DataAccessController;
 import org.hswebframework.web.authorization.access.DataAccessHandler;
-import org.hswebframework.web.authorization.access.FieldAccessController;
 import org.hswebframework.web.authorization.shiro.boost.BoostAuthorizationAttributeSourceAdvisor;
 import org.hswebframework.web.authorization.shiro.boost.DefaultDataAccessController;
-import org.hswebframework.web.authorization.shiro.boost.DefaultFieldAccessController;
 import org.hswebframework.web.authorization.shiro.cache.SpringCacheManagerWrapper;
 import org.hswebframework.web.authorization.shiro.remember.SimpleRememberMeManager;
 import org.hswebframework.web.controller.message.ResponseMessage;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnNotWebApplication;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.boot.autoconfigure.condition.*;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -63,22 +60,14 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * TODO 完成注释
- *
  * @author zhouhao
  */
 @Configuration
-@EnableConfigurationProperties(ShiroProperties.class)
+@Order(Ordered.LOWEST_PRECEDENCE)
 public class ShiroAutoConfiguration {
 
     @Autowired(required = false)
     private org.springframework.cache.CacheManager cacheManager;
-
-    @Autowired
-    private ShiroProperties shiroProperties;
-
-    @Autowired(required = false)
-    private List<DataAccessHandler> dataAccessHandlers;
 
     @Bean
     public CacheManager shiroCacheManager() {
@@ -91,11 +80,17 @@ public class ShiroAutoConfiguration {
 
     @Bean
     @Order(Ordered.LOWEST_PRECEDENCE)
-    public ListenerAuthorizingRealm listenerAuthorizingRealm(CacheManager cacheManager,
-                                                             AuthenticationManager authenticationManager) {
-        ListenerAuthorizingRealm realm = new ListenerAuthorizingRealm(authenticationManager);
+    public ListenerAuthorizingRealm listenerAuthorizingRealm(CacheManager cacheManager) {
+        ListenerAuthorizingRealm realm = new ListenerAuthorizingRealm();
         realm.setCacheManager(cacheManager);
         return realm;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AutoSyncAuthenticationSupplier authorizationSupplier(AuthenticationManager authenticationManager) {
+        AutoSyncAuthenticationSupplier syncAuthenticationSupplier = new AutoSyncAuthenticationSupplier(authenticationManager);
+        return syncAuthenticationSupplier;
     }
 
     @Bean
@@ -106,6 +101,24 @@ public class ShiroAutoConfiguration {
     @Bean(name = "lifecycleBeanPostProcessor")
     public LifecycleBeanPostProcessor getLifecycleBeanPostProcessor() {
         return new LifecycleBeanPostProcessor();
+    }
+
+    @Bean
+    public BeanPostProcessor authenticationSupplierBeanPostProcessor() {
+        return new BeanPostProcessor() {
+            @Override
+            public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+                return bean;
+            }
+
+            @Override
+            public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+                if (bean instanceof AuthenticationSupplier) {
+                    AuthenticationHolder.addSupplier(((AuthenticationSupplier) bean));
+                }
+                return bean;
+            }
+        };
     }
 
     @Bean(name = "securityManager")
@@ -135,46 +148,58 @@ public class ShiroAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public DefaultDataAccessController defaultDataAccessController() {
-        DefaultDataAccessController accessController = new DefaultDataAccessController();
-        if (dataAccessHandlers != null) {
-            dataAccessHandlers.forEach(accessController::addHandler);
-        }
-        return accessController;
+        return new DefaultDataAccessController();
     }
 
     @Bean
-    @ConditionalOnMissingBean
-    public DefaultFieldAccessController defaultFieldAccessController() {
-        return new DefaultFieldAccessController();
+    @ConditionalOnBean(DefaultDataAccessController.class)
+    public BeanPostProcessor dataAccessControllerProcessor(DefaultDataAccessController defaultDataAccessController) {
+        return new BeanPostProcessor() {
+            @Override
+            public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+                return bean;
+            }
+
+            @Override
+            public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+                if (bean instanceof DataAccessHandler) {
+                    defaultDataAccessController.addHandler(((DataAccessHandler) bean));
+                }
+                return bean;
+            }
+        };
     }
+
 
     @Bean
     public BoostAuthorizationAttributeSourceAdvisor authorizationAttributeSourceAdvisor(SecurityManager securityManager,
-                                                                                        DataAccessController dataAccessController,
-                                                                                        FieldAccessController fieldAccessController) {
-        BoostAuthorizationAttributeSourceAdvisor advisor = new BoostAuthorizationAttributeSourceAdvisor(dataAccessController, fieldAccessController);
+                                                                                        DataAccessController dataAccessController) {
+        BoostAuthorizationAttributeSourceAdvisor advisor = new BoostAuthorizationAttributeSourceAdvisor(dataAccessController);
         advisor.setSecurityManager(securityManager);
         return advisor;
     }
 
-    @Bean
-    @ConditionalOnMissingBean
-    public AuthenticationSupplier authorizationSupplier(AuthenticationManager authenticationManager) {
-        AutoSyncAuthenticationSupplier syncAuthenticationSupplier = new AutoSyncAuthenticationSupplier(authenticationManager);
-        AuthenticationHolder.setSupplier(syncAuthenticationSupplier);
-        return syncAuthenticationSupplier;
-    }
+    @Configuration
+    @EnableConfigurationProperties(ShiroProperties.class)
+    @ConditionalOnProperty(prefix = "hsweb.authorize", name = "enable", havingValue = "true", matchIfMissing = true)
+    static class FilterConfiguration {
+        @Autowired
+        private ShiroProperties shiroProperties;
 
-    @Bean(name = "shiroFilter")
-    public ShiroFilterFactoryBean shiroFilterFactoryBean(DefaultWebSecurityManager securityManager) {
-        ShiroFilterFactoryBean shiroFilterFactoryBean = new ShiroFilterFactoryBean();
-        // 必须设置 SecurityManager
-        shiroFilterFactoryBean.setSecurityManager(securityManager);
-        if (null != shiroProperties)
-            shiroFilterFactoryBean.setFilterChainDefinitionMap(shiroProperties.getFilters());
-        else
-            shiroFilterFactoryBean.setFilterChainDefinitionMap(Collections.emptyMap());
-        return shiroFilterFactoryBean;
+        @Bean(name = "shiroFilter")
+        public ShiroFilterFactoryBean shiroFilterFactoryBean(WebSecurityManager securityManager) {
+            ShiroFilterFactoryBean shiroFilterFactoryBean = new ShiroFilterFactoryBean();
+            // 必须设置 SecurityManager
+            shiroFilterFactoryBean.setSecurityManager(securityManager);
+            if (null != shiroProperties)
+                shiroFilterFactoryBean.setFilterChainDefinitionMap(shiroProperties.getFilters());
+            else
+                shiroFilterFactoryBean.setFilterChainDefinitionMap(Collections.emptyMap());
+            shiroFilterFactoryBean.setSuccessUrl(shiroProperties.getSuccessUrl());
+            shiroFilterFactoryBean.setLoginUrl(shiroProperties.getLoginUrl());
+            shiroFilterFactoryBean.setUnauthorizedUrl(shiroProperties.getUnauthorizedUrl());
+            return shiroFilterFactoryBean;
+        }
     }
 
     @RestControllerAdvice
