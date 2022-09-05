@@ -300,9 +300,6 @@ public class BuildingState {
    */
   boolean unchangedFromLastBuild(SkyValue newValue) {
     checkFinishedBuildingWhenAboutToSetValue();
-    if (newValue instanceof NotComparableSkyValue) {
-      return false;
-    }
     return getLastBuildValue().equals(newValue) && lastBuildDirectDeps.equals(directDeps);
   }
 
