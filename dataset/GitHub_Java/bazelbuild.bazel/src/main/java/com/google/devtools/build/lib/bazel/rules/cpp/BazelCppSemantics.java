@@ -65,11 +65,6 @@ public class BazelCppSemantics implements CppSemantics {
   }
 
   @Override
-  public boolean needsDotdInputPruning() {
-    return true;
-  }
-  
-  @Override
   public void validateAttributes(RuleContext ruleContext) {
   }
 
