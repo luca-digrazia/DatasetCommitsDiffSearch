@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.runtime;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 import com.google.devtools.common.options.OptionsBase;
@@ -105,14 +106,12 @@ public class BlazeCommandUtils {
    *        descriptions, passed to {@link OptionsParser#describeOptions}.
    * @param helpVerbosity a tri-state verbosity option selecting between just
    *        names, names and syntax, and full description.
-   * @param productName the product name
    */
   public static final String expandHelpTopic(String topic, String help,
                                       Class<? extends BlazeCommand> commandClass,
                                       Collection<Class<? extends OptionsBase>> options,
                                       Map<String, String> categoryDescriptions,
-                                      OptionsParser.HelpVerbosity helpVerbosity,
-                                      String productName) {
+                                      OptionsParser.HelpVerbosity helpVerbosity) {
     OptionsParser parser = OptionsParser.newOptionsParser(options);
 
     String template;
@@ -135,9 +134,9 @@ public class BlazeCommandUtils {
     String optionStr =
         parser
             .describeOptions(categoryDescriptions, helpVerbosity)
-            .replace("%{product}", productName);
+            .replace("%{product}", Constants.PRODUCT_NAME);
     return template
-            .replace("%{product}", productName)
+            .replace("%{product}", Constants.PRODUCT_NAME)
             .replace("%{command}", topic)
             .replace("%{options}", optionStr)
             .trim()
@@ -160,8 +159,7 @@ public class BlazeCommandUtils {
       Map<String, String> categoryDescriptions,
       OptionsParser.HelpVerbosity verbosity,
       Iterable<BlazeModule> blazeModules,
-      ConfiguredRuleClassProvider ruleClassProvider,
-      String productName) {
+      ConfiguredRuleClassProvider ruleClassProvider) {
     Command commandAnnotation = commandClass.getAnnotation(Command.class);
     return BlazeCommandUtils.expandHelpTopic(
         commandAnnotation.name(),
@@ -169,7 +167,6 @@ public class BlazeCommandUtils {
         commandClass,
         BlazeCommandUtils.getOptions(commandClass, blazeModules, ruleClassProvider),
         categoryDescriptions,
-        verbosity,
-        productName);
+        verbosity);
   }
 }
