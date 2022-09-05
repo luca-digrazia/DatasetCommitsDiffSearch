@@ -16,7 +16,9 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -26,7 +28,9 @@ import com.google.devtools.build.lib.syntax.SkylarkImports.SkylarkImportSyntaxEx
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
@@ -38,7 +42,7 @@ public class BuildFileAST extends ASTNode {
 
   private final ImmutableList<Comment> comments;
 
-  @Nullable private final ImmutableList<SkylarkImport> imports;
+  @Nullable private final Map<String, SkylarkImport> imports;
 
   /**
    * Whether any errors were encountered during scanning or parsing.
@@ -53,7 +57,7 @@ public class BuildFileAST extends ASTNode {
       String contentHashCode,
       Location location,
       ImmutableList<Comment> comments,
-      @Nullable ImmutableList<SkylarkImport> imports) {
+      @Nullable Map<String, SkylarkImport> imports) {
     this.stmts = stmts;
     this.containsErrors = containsErrors;
     this.contentHashCode = contentHashCode;
@@ -74,7 +78,7 @@ public class BuildFileAST extends ASTNode {
             .build();
 
     boolean containsErrors = result.containsErrors;
-    Pair<Boolean, ImmutableList<SkylarkImport>> skylarkImports = fetchLoads(stmts, eventHandler);
+    Pair<Boolean, Map<String, SkylarkImport>> skylarkImports = fetchLoads(stmts, eventHandler);
     containsErrors |= skylarkImports.first;
     return new BuildFileAST(
         stmts,
@@ -91,16 +95,14 @@ public class BuildFileAST extends ASTNode {
    */
   public BuildFileAST subTree(int firstStatement, int lastStatement) {
     ImmutableList<Statement> stmts = this.stmts.subList(firstStatement, lastStatement);
-    ImmutableList.Builder<SkylarkImport> imports = ImmutableList.builder();
+    ImmutableMap.Builder<String, SkylarkImport> imports = ImmutableBiMap.builder();
     for (Statement stmt : stmts) {
       if (stmt instanceof LoadStatement) {
-        String str = ((LoadStatement) stmt).getImport().getValue();
-        try {
-          imports.add(SkylarkImports.create(str));
-        } catch (SkylarkImportSyntaxException e) {
-          throw new IllegalStateException(
-              "Cannot create SkylarImport for '" + str + "'. This is an internal error.");
-        }
+        String str = ((LoadStatement) stmt).getImport();
+        imports.put(
+            str,
+            Preconditions.checkNotNull(
+                this.imports.get(str), "%s cannot be found. This is an internal error.", str));
       }
     }
     return new BuildFileAST(
@@ -117,22 +119,23 @@ public class BuildFileAST extends ASTNode {
    * imports that could be resolved.
    */
   @VisibleForTesting
-  static Pair<Boolean, ImmutableList<SkylarkImport>> fetchLoads(
+  static Pair<Boolean, Map<String, SkylarkImport>> fetchLoads(
       List<Statement> stmts, EventHandler eventHandler) {
-    ImmutableList.Builder<SkylarkImport> imports = ImmutableList.builder();
+    Map<String, SkylarkImport> imports = new HashMap<>();
     boolean error = false;
     for (Statement stmt : stmts) {
       if (stmt instanceof LoadStatement) {
-        String importString = ((LoadStatement) stmt).getImport().getValue();
+        String importString = ((LoadStatement) stmt).getImport();
         try {
-          imports.add(SkylarkImports.create(importString));
+          SkylarkImport imp = SkylarkImports.create(importString);
+          imports.put(importString, imp);
         } catch (SkylarkImportSyntaxException e) {
           eventHandler.handle(Event.error(stmt.getLocation(), e.getMessage()));
           error = true;
         }
       }
     }
-    return Pair.of(error, imports.build());
+    return Pair.of(error, imports);
   }
 
   /**
@@ -161,12 +164,13 @@ public class BuildFileAST extends ASTNode {
   /** Returns a list of loads in this BUILD file. */
   public ImmutableList<SkylarkImport> getImports() {
     Preconditions.checkNotNull(imports, "computeImports Should be called in parse* methods");
-    return imports;
+    return ImmutableList.copyOf(imports.values());
   }
 
   /** Returns a list of loads as strings in this BUILD file. */
-  public ImmutableList<StringLiteral> getRawImports() {
-    ImmutableList.Builder<StringLiteral> imports = ImmutableList.builder();
+  public synchronized ImmutableList<String> getRawImports() {
+    ImmutableList.Builder<String> imports = ImmutableList.builder();
+
     for (Statement stmt : stmts) {
       if (stmt instanceof LoadStatement) {
         imports.add(((LoadStatement) stmt).getImport());
@@ -227,6 +231,19 @@ public class BuildFileAST extends ASTNode {
   /**
    * Parse the specified build file, returning its AST. All errors during
    * scanning or parsing will be reported to the reporter.
+   *
+   * @throws IOException if the file cannot not be read.
+   */
+  public static BuildFileAST parseBuildFile(Path buildFile, long fileSize,
+                                            EventHandler eventHandler)
+      throws IOException {
+    ParserInputSource inputSource = ParserInputSource.create(buildFile, fileSize);
+    return parseBuildFile(inputSource, eventHandler);
+  }
+
+  /**
+   * Parse the specified build file, returning its AST. All errors during
+   * scanning or parsing will be reported to the reporter.
    */
   public static BuildFileAST parseBuildFile(ParserInputSource input,
                                             List<Statement> preludeStatements,
@@ -257,7 +274,7 @@ public class BuildFileAST extends ASTNode {
     Parser.ParseResult result = Parser.parseFileForSkylark(input, eventHandler);
     return create(
         ImmutableList.<Statement>of(), result,
-        HashCode.fromBytes(file.getDigest()).toString(), eventHandler);
+        HashCode.fromBytes(file.getMD5Digest()).toString(), eventHandler);
   }
 
   /**

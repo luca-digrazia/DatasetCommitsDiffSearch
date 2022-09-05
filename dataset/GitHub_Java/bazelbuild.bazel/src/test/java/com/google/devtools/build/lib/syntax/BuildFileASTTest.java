@@ -48,8 +48,7 @@ public class BuildFileASTTest extends EvaluationTestCase {
    */
   private BuildFileAST parseBuildFile(String... lines) throws IOException {
     Path file = scratch.file("/a/build/file/BUILD", lines);
-    ParserInputSource inputSource = ParserInputSource.create(file, file.getFileSize());
-    return BuildFileAST.parseBuildFile(inputSource, getEventHandler());
+    return BuildFileAST.parseBuildFile(file, file.getFileSize(), getEventHandler());
   }
 
   @Test
