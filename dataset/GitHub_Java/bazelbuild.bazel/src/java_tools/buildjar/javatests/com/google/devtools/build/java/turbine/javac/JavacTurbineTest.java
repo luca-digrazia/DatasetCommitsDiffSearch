@@ -24,11 +24,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.io.ByteStreams;
-import com.google.devtools.build.buildjar.JarOwner;
 import com.google.devtools.build.java.turbine.TurbineOptions;
 import com.google.devtools.build.java.turbine.javac.JavacTurbine.Result;
 import com.google.devtools.build.lib.view.proto.Deps;
 import com.google.devtools.build.lib.view.proto.Deps.Dependency;
+
 import com.sun.source.tree.LiteralTree;
 import com.sun.source.util.JavacTask;
 import com.sun.source.util.TaskEvent;
@@ -39,6 +39,17 @@ import com.sun.tools.javac.api.ClientCodeWrapper.Trusted;
 import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.file.JavacFileManager;
 import com.sun.tools.javac.util.Context;
+
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.util.Textifier;
+import org.objectweb.asm.util.TraceClassVisitor;
+
 import java.io.BufferedInputStream;
 import java.io.IOError;
 import java.io.IOException;
@@ -64,6 +75,7 @@ import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
+
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
@@ -76,15 +88,6 @@ import javax.tools.JavaFileManager;
 import javax.tools.JavaFileObject;
 import javax.tools.SimpleJavaFileObject;
 import javax.tools.StandardLocation;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.util.Textifier;
-import org.objectweb.asm.util.TraceClassVisitor;
 
 /** Unit tests for {@link JavacTurbine}. */
 @RunWith(JUnit4.class)
@@ -347,6 +350,29 @@ public class JavacTurbineTest {
       };
 
   @Test
+  public void filterJavacopts() {
+    ImmutableList.Builder<String> output = ImmutableList.builder();
+    JavacTurbine.filterJavacopts(
+        output,
+        Arrays.asList(
+            "-g",
+            "-source",
+            "6",
+            "-target",
+            "6",
+            "-Xlint:all",
+            "-source",
+            "7",
+            "-target",
+            "7",
+            "-Xep:GuardedBy:ERROR"));
+    assertThat(output.build())
+        .containsExactly(
+            "-g", "-source", "6", "-target", "6", "-Xlint:all", "-source", "7", "-target", "7")
+        .inOrder();
+  }
+
+  @Test
   public void jdeps() throws Exception {
 
     Path libC = temp.newFile("libc.jar").toPath();
@@ -382,9 +408,9 @@ public class JavacTurbineTest {
     optionsBuilder.addClassPathEntries(
         ImmutableList.of(libA.toString(), libB.toString(), libC.toString()));
     optionsBuilder.addAllDepsArtifacts(ImmutableList.of(depsA.toString()));
-    optionsBuilder.addDirectJarToTarget(libA.toString(), JarOwner.create("//lib:a"));
-    optionsBuilder.addDirectJarToTarget(libB.toString(), JarOwner.create("//lib:b"));
-    optionsBuilder.addIndirectJarToTarget(libC.toString(), JarOwner.create("//lib:c"));
+    optionsBuilder.addDirectJarToTarget(libA.toString(), "//lib:a");
+    optionsBuilder.addDirectJarToTarget(libB.toString(), "//lib:b");
+    optionsBuilder.addIndirectJarToTarget(libC.toString(), "//lib:c");
     optionsBuilder.setTargetLabel("//my:target");
 
     addSourceLines(
@@ -517,10 +543,10 @@ public class JavacTurbineTest {
     optionsBuilder.addClassPathEntries(
         ImmutableList.of(libA.toString(), libB.toString(), libC.toString(), libD.toString()));
     optionsBuilder.addAllDepsArtifacts(ImmutableList.of(depsA.toString()));
-    optionsBuilder.addDirectJarToTarget(libA.toString(), JarOwner.create("//lib:a"));
-    optionsBuilder.addIndirectJarToTarget(libB.toString(), JarOwner.create("//lib:b"));
-    optionsBuilder.addIndirectJarToTarget(libC.toString(), JarOwner.create("//lib:c"));
-    optionsBuilder.addIndirectJarToTarget(libD.toString(), JarOwner.create("//lib:d"));
+    optionsBuilder.addDirectJarToTarget(libA.toString(), "//lib:a");
+    optionsBuilder.addIndirectJarToTarget(libB.toString(), "//lib:b");
+    optionsBuilder.addIndirectJarToTarget(libC.toString(), "//lib:c");
+    optionsBuilder.addIndirectJarToTarget(libD.toString(), "//lib:d");
     optionsBuilder.setTargetLabel("//my:target");
 
     addSourceLines(
@@ -609,10 +635,10 @@ public class JavacTurbineTest {
     optionsBuilder.addClassPathEntries(
         ImmutableList.of(libA.toString(), libB.toString(), libC.toString(), libD.toString()));
     optionsBuilder.addAllDepsArtifacts(ImmutableList.of(depsA.toString()));
-    optionsBuilder.addDirectJarToTarget(libA.toString(), JarOwner.create("//lib:a"));
-    optionsBuilder.addIndirectJarToTarget(libB.toString(), JarOwner.create("//lib:b"));
-    optionsBuilder.addIndirectJarToTarget(libC.toString(), JarOwner.create("//lib:c"));
-    optionsBuilder.addIndirectJarToTarget(libD.toString(), JarOwner.create("//lib:d"));
+    optionsBuilder.addDirectJarToTarget(libA.toString(), "//lib:a");
+    optionsBuilder.addIndirectJarToTarget(libB.toString(), "//lib:b");
+    optionsBuilder.addIndirectJarToTarget(libC.toString(), "//lib:c");
+    optionsBuilder.addIndirectJarToTarget(libD.toString(), "//lib:d");
     optionsBuilder.setTargetLabel("//my:target");
 
     addSourceLines(
@@ -740,6 +766,9 @@ public class JavacTurbineTest {
       "",
       "  // access flags 0x9",
       "  public static valueOf(Ljava/lang/String;)LTheEnum;",
+      "",
+      "  // access flags 0x8",
+      "  static <clinit>()V",
       "}",
       ""
     };
@@ -988,7 +1017,12 @@ public class JavacTurbineTest {
 
   @Test
   public void privateMembers() throws Exception {
-    addSourceLines("Hello.java", "class Hello {", "  private void f() {}", "  private int x;", "}");
+    addSourceLines(
+        "Hello.java",
+        "class Hello {",
+        "  private void f() {}",
+        "  private int x;",
+        "}");
 
     compile();
 
@@ -1197,7 +1231,7 @@ public class JavacTurbineTest {
         "}");
 
     optionsBuilder.addClassPathEntries(Collections.singleton(deps.toString()));
-    optionsBuilder.addDirectJarToTarget(deps.toString(), JarOwner.create("//deps"));
+    optionsBuilder.addDirectJarToTarget(deps.toString(), "//deps");
 
     compile();
     Map<String, byte[]> outputs = collectOutputs();
@@ -1209,12 +1243,16 @@ public class JavacTurbineTest {
   @Test
   public void ignoreStrictDepsErrors() throws Exception {
 
-    Path lib = createClassJar("deps.jar", JavacTurbineTest.class, Lib.class);
+    Path lib = createClassJar("deps.jar",
+        JavacTurbineTest.class,
+        Lib.class);
 
     addSourceLines(
-        "Hello.java", "import " + Lib.class.getCanonicalName() + ";", "class Hello extends Lib {}");
+        "Hello.java",
+        "import " + Lib.class.getCanonicalName() + ";",
+        "class Hello extends Lib {}");
 
-    optionsBuilder.addIndirectJarToTarget(lib.toString(), JarOwner.create("//lib"));
+    optionsBuilder.addIndirectJarToTarget(lib.toString(), "//lib");
     optionsBuilder.addClassPathEntries(ImmutableList.of(lib.toString()));
 
     optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
@@ -1227,43 +1265,5 @@ public class JavacTurbineTest {
     }
     assertThat(errOutput.toString()).contains("warning: [strict]");
     assertThat(result).isNotEqualTo(Result.OK_WITH_REDUCED_CLASSPATH);
-  }
-
-  @Test
-  public void clinit() throws Exception {
-    addSourceLines(
-        "Hello.java",
-        "class Hello {",
-        "  public static int x;",
-        "  static {",
-        "    x = 42;",
-        "  }",
-        "}");
-
-    compile();
-
-    Map<String, byte[]> outputs = collectOutputs();
-
-    assertThat(outputs.keySet()).containsExactly("Hello.class");
-
-    String text = textify(outputs.get("Hello.class"));
-    System.err.println(">>>");
-    System.err.println(text);
-    System.err.println(">>>");
-    String[] expected = {
-      "// class version 51.0 (51)",
-      "// access flags 0x20",
-      "class Hello {",
-      "",
-      "",
-      "  // access flags 0x9",
-      "  public static I x",
-      "",
-      "  // access flags 0x0",
-      "  <init>()V",
-      "}",
-      ""
-    };
-    assertThat(text).isEqualTo(Joiner.on('\n').join(expected));
   }
 }
