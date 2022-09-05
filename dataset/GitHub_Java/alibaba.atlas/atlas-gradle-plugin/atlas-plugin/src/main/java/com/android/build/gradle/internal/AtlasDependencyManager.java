@@ -209,34 +209,35 @@
 
 package com.android.build.gradle.internal;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import com.alibaba.fastjson.JSON;
+
 import com.android.annotations.NonNull;
-import com.android.build.gradle.internal.api.AppVariantContext;
+import com.android.annotations.Nullable;
 import com.android.build.gradle.internal.dependency.VariantDependencies;
 import com.android.builder.dependency.level2.AndroidDependency;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.AtlasDependencyTree;
-import com.taobao.android.builder.dependency.ap.ApDependency;
-import com.taobao.android.builder.dependency.model.AwbBundle;
 import com.taobao.android.builder.dependency.parser.AtlasDepTreeParser;
 import com.taobao.android.builder.extension.AtlasExtension;
 import com.taobao.android.builder.extension.TBuildType;
+import com.taobao.android.builder.tasks.incremental.ApDependencies;
 import com.taobao.android.builder.tools.PluginTypeUtils;
 import org.gradle.api.Project;
-import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.ModuleVersionIdentifier;
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
+import org.gradle.api.artifacts.result.ResolvedComponentResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.HashSet;
-import java.util.Set;
-import java.util.function.Predicate;
 
 /**
  * A manager to resolve configuration dependencies.
  *
  * @author wuzhong
  */
-public class AtlasDependencyManager {
+public class AtlasDependencyManager extends DependencyManager {
 
     private static final Logger sLogger = LoggerFactory.getLogger(AtlasDependencyManager.class);
 
@@ -244,19 +245,13 @@ public class AtlasDependencyManager {
 
     private final ExtraModelInfo extraModelInfo;
 
-    private ApDependency apDependency;
+    private ApDependencies apDependencies;
 
-    private Set<String>awbs = new HashSet<>();
-
-
-    public AtlasDependencyManager(@NonNull Project project, @NonNull ExtraModelInfo extraModelInfo) {
-        this(project,extraModelInfo,new HashSet<>());
-    }
-
-    public AtlasDependencyManager(Project project, ExtraModelInfo extraModelInfo, Set<String> awbs) {
+    public AtlasDependencyManager(@NonNull Project project, @NonNull ExtraModelInfo extraModelInfo,
+                                  @NonNull SdkHandler sdkHandler) {
+        super(project, extraModelInfo, sdkHandler);
         this.project = project;
         this.extraModelInfo = extraModelInfo;
-        this.awbs = awbs;
     }
 
     /**
@@ -267,9 +262,12 @@ public class AtlasDependencyManager {
      * <p>
      * 2.  parse to AtlasDependencyTree
      */
-    public Set<AndroidDependency> resolveDependencies(@NonNull VariantDependencies variantDeps) {
-        this.apDependency = resolveApDependencies(variantDeps);
-        AtlasDependencyTree atlasDependencyTree = new AtlasDepTreeParser(project, extraModelInfo,awbs)
+    @Override
+    public Set<AndroidDependency> resolveDependencies(@NonNull VariantDependencies variantDeps,
+                                                      @Nullable String testedProjectPath) {
+        this.apDependencies = resolveApDependencies(variantDeps);
+
+        AtlasDependencyTree atlasDependencyTree = new AtlasDepTreeParser(project, extraModelInfo, this.apDependencies)
             .parseDependencyTree(variantDeps);
 
         sLogger.info("[dependencyTree" + variantDeps.getName() + "] {}",
@@ -281,15 +279,12 @@ public class AtlasDependencyManager {
             AtlasBuildContext.libDependencyTrees.put(variantDeps.getName(), atlasDependencyTree);
         }
 
-
-
-
-//        Set<AndroidDependency> libsToExplode = super.resolveDependencies(variantDeps, testedProjectPath);
+        Set<AndroidDependency> libsToExplode = super.resolveDependencies(variantDeps, testedProjectPath);
         //return libsToExplode;
         return new HashSet<>(0);
     }
 
-    private ApDependency resolveApDependencies(@NonNull VariantDependencies variantDeps) {
+    private ApDependencies resolveApDependencies(@NonNull VariantDependencies variantDeps) {
         AtlasExtension atlasExtension = project.getExtensions().getByType(AtlasExtension.class);
         if (!atlasExtension.getTBuildConfig().isIncremental()) {
             return null;
@@ -300,9 +295,15 @@ public class AtlasDependencyManager {
             return null;
         }
 
-        return new ApDependency(project, tBuildType);
+        return new ApDependencies(project, tBuildType);
     }
 
-
-
+    @Override
+    protected boolean checkForExclusion(@NonNull VariantDependencies configDependencies,
+                                        ModuleVersionIdentifier moduleVersion,
+                                        ResolvedComponentResult resolvedComponentResult) {
+        return super.checkForExclusion(configDependencies, moduleVersion, resolvedComponentResult) || (
+            apDependencies != null && apDependencies.hasSameResolvedDependency(moduleVersion)
+            && !(resolvedComponentResult.getId() instanceof ProjectComponentIdentifier));
+    }
 }
