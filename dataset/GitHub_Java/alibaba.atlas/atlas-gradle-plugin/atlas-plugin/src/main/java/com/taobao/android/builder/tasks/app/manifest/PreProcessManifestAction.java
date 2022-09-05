@@ -239,7 +239,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Set the awb The bundle of depend on
+ * 设置awb 的bundle依赖
  *
  * @author wuzhong
  */
@@ -292,7 +292,7 @@ public class PreProcessManifestAction implements Action<Task> {
             //    }
             //}
 
-            // Without this step, each time getLibraries It's going to be recomputed from the mapping
+            // 不加这一步,每次的getLibraries 都会从mapping里去重新计算
             mergeManifests.setProviders(allManifest);
         }
     }
@@ -309,7 +309,7 @@ public class PreProcessManifestAction implements Action<Task> {
                 }
             });
             if (baseVariantOutputData instanceof ApkVariantOutputData) {
-                // TODO Improve performance
+                // TODO 提升性能
                 ApkVariantOutputData variantOutputData = (ApkVariantOutputData)baseVariantOutputData;
                 DefaultManifestParser manifestParser = new DefaultManifestParser(baseManifest);
                 String versionNameOverride = variantOutputData.getVersionNameOverride();
