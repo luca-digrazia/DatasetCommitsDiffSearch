@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.java;
 import static com.google.devtools.build.lib.util.Preconditions.checkNotNull;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -53,7 +52,6 @@ public final class JavaToolchainProvider implements TransitiveInfoProvider {
   @Nullable private final Artifact singleJar;
   private final Artifact genClass;
   private final FilesToRunProvider ijar;
-  private final ImmutableMap<String, ImmutableList<String>> compatibleJavacOptions;
 
   public JavaToolchainProvider(
       JavaToolchainData data,
@@ -65,8 +63,7 @@ public final class JavaToolchainProvider implements TransitiveInfoProvider {
       @Nullable Artifact headerCompiler,
       Artifact singleJar,
       Artifact genClass,
-      FilesToRunProvider ijar,
-      ImmutableMap<String, ImmutableList<String>> compatibleJavacOptions) {
+      FilesToRunProvider ijar) {
     this.sourceVersion = checkNotNull(data.getSourceVersion(), "sourceVersion must not be null");
     this.targetVersion = checkNotNull(data.getTargetVersion(), "targetVersion must not be null");
     this.bootclasspath = checkNotNull(bootclasspath, "bootclasspath must not be null");
@@ -78,8 +75,6 @@ public final class JavaToolchainProvider implements TransitiveInfoProvider {
     this.singleJar = checkNotNull(singleJar, "singleJar must not be null");
     this.genClass = checkNotNull(genClass, "genClass must not be null");
     this.ijar = checkNotNull(ijar, "ijar must not be null");
-    this.compatibleJavacOptions =
-        checkNotNull(compatibleJavacOptions, "compatible javac options must not be null");
 
     // merges the defaultJavacFlags from
     // {@link JavaConfiguration} with the flags from the {@code java_toolchain} rule.
@@ -161,16 +156,5 @@ public final class JavaToolchainProvider implements TransitiveInfoProvider {
   @Nullable
   public FilesToRunProvider getIjar() {
     return ijar;
-  }
-
-  /** @return the map of target environment-specific javacopts. */
-  public ImmutableList<String> getCompatibleJavacOptions(String key) {
-    return getCompatibleJavacOptions(key, ImmutableList.<String>of());
-  }
-
-  /** @return the map of target environment-specific javacopts. */
-  public ImmutableList<String> getCompatibleJavacOptions(
-      String key, ImmutableList<String> defaultValue) {
-    return compatibleJavacOptions.containsKey(key) ? compatibleJavacOptions.get(key) : defaultValue;
   }
 }
