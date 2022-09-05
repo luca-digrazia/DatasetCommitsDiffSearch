@@ -38,7 +38,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -247,7 +246,6 @@ public class StubApplication extends Application {
     }
   }
 
-  @SuppressWarnings("unchecked")
   private void monkeyPatchExistingResources() {
     if (externalResourceFile == null) {
       return;
@@ -275,41 +273,19 @@ public class StubApplication extends Application {
       mGetInstance.setAccessible(true);
       Object resourcesManager = mGetInstance.invoke(null);
 
-      // Get all known Resources objects
-      Collection<WeakReference<Resources>> references;
-      try {
-        // Pre-N
-        Field fMActiveResources = clazz.getDeclaredField("mActiveResources");
-        fMActiveResources.setAccessible(true);
-        ArrayMap<?, WeakReference<Resources>> arrayMap =
-            (ArrayMap<?, WeakReference<Resources>>) fMActiveResources.get(resourcesManager);
-        references = arrayMap.values();
-      } catch (NoSuchFieldException e) {
-        // N moved the resources to mResourceReferences
-        Field mResourceReferences = clazz.getDeclaredField("mResourceReferences");
-        mResourceReferences.setAccessible(true);
-        references =
-            (Collection<WeakReference<Resources>>) mResourceReferences.get(resourcesManager);
-      }
+      Field mAssets = Resources.class.getDeclaredField("mAssets");
+      mAssets.setAccessible(true);
 
       // Iterate over all known Resources objects
-      for (WeakReference<Resources> wr : references) {
+      Field fMActiveResources = clazz.getDeclaredField("mActiveResources");
+      fMActiveResources.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      ArrayMap<?, WeakReference<Resources>> arrayMap =
+          (ArrayMap<?, WeakReference<Resources>>) fMActiveResources.get(resourcesManager);
+      for (WeakReference<Resources> wr : arrayMap.values()) {
         Resources resources = wr.get();
         // Set the AssetManager of the Resources instance to our brand new one
-        try {
-          // Pre-N
-          Field mAssets = Resources.class.getDeclaredField("mAssets");
-          mAssets.setAccessible(true);
-          mAssets.set(resources, newAssetManager);
-        } catch (NoSuchFieldException e) {
-          // N moved the mAssets inside an mResourcesImpl field
-          Field mResourcesImplField = Resources.class.getDeclaredField("mResourcesImpl");
-          mResourcesImplField.setAccessible(true);
-          Object mResourceImpl = mResourcesImplField.get(resources);
-          Field implAssets = mResourceImpl.getClass().getDeclaredField("mAssets");
-          implAssets.setAccessible(true);
-          implAssets.set(mResourceImpl, newAssetManager);
-        }
+        mAssets.set(resources, newAssetManager);
         resources.updateConfiguration(resources.getConfiguration(), resources.getDisplayMetrics());
       }
     } catch (IllegalAccessException | NoSuchFieldException | NoSuchMethodException |
