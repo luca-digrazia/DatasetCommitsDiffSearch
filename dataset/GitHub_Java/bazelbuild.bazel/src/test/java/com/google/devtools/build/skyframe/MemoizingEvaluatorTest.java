@@ -33,7 +33,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Predicates;
-import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -988,7 +987,7 @@ public class MemoizingEvaluatorTest {
             new SkyFunction() {
               @Nullable
               @Override
-              public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
+              public SkyValue compute(SkyKey skyKey, Environment env) {
                 env.getValues(ImmutableList.of(leafKey, bKey));
                 return null;
               }
@@ -1230,20 +1229,17 @@ public class MemoizingEvaluatorTest {
     tester.set(dep2, new StringValue("dep2"));
     // otherTop should request the deps one at a time, so that it can be in the CHECK_DEPENDENCIES
     // state even after one dep is re-evaluated.
-    tester
-        .getOrCreate(otherTop)
-        .setBuilder(
-            new NoExtractorFunction() {
-              @Override
-              public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
-                env.getValue(dep1);
-                if (env.valuesMissing()) {
-                  return null;
-                }
-                env.getValue(dep2);
-                return env.valuesMissing() ? null : new StringValue("otherTop");
-              }
-            });
+    tester.getOrCreate(otherTop).setBuilder(new NoExtractorFunction() {
+      @Override
+      public SkyValue compute(SkyKey skyKey, Environment env) {
+        env.getValue(dep1);
+        if (env.valuesMissing()) {
+          return null;
+        }
+        env.getValue(dep2);
+        return env.valuesMissing() ? null : new StringValue("otherTop");
+      }
+    });
     // Prime the graph with otherTop, so we can dirty it next build.
     assertEquals(new StringValue("otherTop"), tester.evalAndGet(/*keepGoing=*/false, otherTop));
     // Mark dep1 changed, so otherTop will be dirty and request re-evaluation of dep1.
@@ -1791,28 +1787,23 @@ public class MemoizingEvaluatorTest {
     tester.set(groupDepA, new StringValue("depC"));
     tester.set(groupDepB, new StringValue(""));
     tester.getOrCreate(depC).setHasError(true);
-    tester
-        .getOrCreate(topKey)
-        .setBuilder(
-            new NoExtractorFunction() {
-              @Override
-              public SkyValue compute(SkyKey skyKey, Environment env)
-                  throws SkyFunctionException, InterruptedException {
-                StringValue val =
-                    ((StringValue)
-                        env.getValues(ImmutableList.of(groupDepA, groupDepB)).get(groupDepA));
-                if (env.valuesMissing()) {
-                  return null;
-                }
-                String nextDep = val.getValue();
-                try {
-                  env.getValueOrThrow(GraphTester.toSkyKey(nextDep), SomeErrorException.class);
-                } catch (SomeErrorException e) {
-                  throw new GenericFunctionException(e, Transience.PERSISTENT);
-                }
-                return env.valuesMissing() ? null : new StringValue("top");
-              }
-            });
+    tester.getOrCreate(topKey).setBuilder(new NoExtractorFunction() {
+      @Override
+      public SkyValue compute(SkyKey skyKey, Environment env) throws SkyFunctionException {
+        StringValue val = ((StringValue) env.getValues(
+            ImmutableList.of(groupDepA, groupDepB)).get(groupDepA));
+        if (env.valuesMissing()) {
+          return null;
+        }
+        String nextDep = val.getValue();
+        try {
+          env.getValueOrThrow(GraphTester.toSkyKey(nextDep), SomeErrorException.class);
+        } catch (SomeErrorException e) {
+          throw new GenericFunctionException(e, Transience.PERSISTENT);
+        }
+        return env.valuesMissing() ? null : new StringValue("top");
+      }
+    });
 
     EvaluationResult<StringValue> evaluationResult = tester.eval(
         /*keepGoing=*/true, groupDepA, depC);
@@ -1901,25 +1892,20 @@ public class MemoizingEvaluatorTest {
     tester.set(firstKey, new StringValue("biding"));
     tester.set(slowAddingDep, new StringValue("dep"));
     final AtomicInteger numTopInvocations = new AtomicInteger(0);
-    tester
-        .getOrCreate(top)
-        .setBuilder(
-            new NoExtractorFunction() {
-              @Override
-              public SkyValue compute(SkyKey key, SkyFunction.Environment env)
-                  throws InterruptedException {
-                numTopInvocations.incrementAndGet();
-                if (delayTopSignaling.get()) {
-                  // The reporter will be given firstKey's warning to emit when it is requested as a dep
-                  // below, if firstKey is already built, so we release the reporter's latch beforehand.
-                  topRestartedBuild.countDown();
-                }
-                // top's builder just requests both deps in a group.
-                env.getValuesOrThrow(
-                    ImmutableList.of(firstKey, slowAddingDep), SomeErrorException.class);
-                return env.valuesMissing() ? null : new StringValue("top");
-              }
-            });
+    tester.getOrCreate(top).setBuilder(new NoExtractorFunction() {
+      @Override
+      public SkyValue compute(SkyKey key, SkyFunction.Environment env) {
+        numTopInvocations.incrementAndGet();
+        if (delayTopSignaling.get()) {
+          // The reporter will be given firstKey's warning to emit when it is requested as a dep
+          // below, if firstKey is already built, so we release the reporter's latch beforehand.
+          topRestartedBuild.countDown();
+        }
+        // top's builder just requests both deps in a group.
+        env.getValuesOrThrow(ImmutableList.of(firstKey, slowAddingDep), SomeErrorException.class);
+        return env.valuesMissing() ? null : new StringValue("top");
+      }
+    });
     reporter =
         new DelegatingEventHandler(reporter) {
           @Override
@@ -2595,7 +2581,7 @@ public class MemoizingEvaluatorTest {
         .setBuilder(
             new SkyFunction() {
               @Override
-              public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
+              public SkyValue compute(SkyKey skyKey, Environment env) {
                 topEvaluated.set(true);
                 return env.getValue(leaf) == null ? null : fixedTopValue;
               }
@@ -2650,7 +2636,7 @@ public class MemoizingEvaluatorTest {
         .setBuilder(
             new SkyFunction() {
               @Override
-              public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
+              public SkyValue compute(SkyKey skyKey, Environment env) {
                 topEvaluated.set(true);
 
                 return env.getValue(other) == null || env.getValue(leaf) == null
@@ -2696,29 +2682,27 @@ public class MemoizingEvaluatorTest {
   public void changedChildChangesDepOfParent() throws Exception {
     initializeTester();
     final SkyKey buildFile = GraphTester.toSkyKey("buildFile");
-    ValueComputer authorDrink =
-        new ValueComputer() {
-          @Override
-          public SkyValue compute(Map<SkyKey, SkyValue> deps, SkyFunction.Environment env)
-              throws InterruptedException {
-            String author = ((StringValue) deps.get(buildFile)).getValue();
-            StringValue beverage;
-            switch (author) {
-              case "hemingway":
-                beverage = (StringValue) env.getValue(GraphTester.toSkyKey("absinthe"));
-                break;
-              case "joyce":
-                beverage = (StringValue) env.getValue(GraphTester.toSkyKey("whiskey"));
-                break;
-              default:
-                throw new IllegalStateException(author);
-            }
-            if (beverage == null) {
-              return null;
-            }
-            return new StringValue(author + " drank " + beverage.getValue());
-          }
-        };
+    ValueComputer authorDrink = new ValueComputer() {
+      @Override
+      public SkyValue compute(Map<SkyKey, SkyValue> deps, SkyFunction.Environment env) {
+        String author = ((StringValue) deps.get(buildFile)).getValue();
+        StringValue beverage;
+        switch (author) {
+          case "hemingway":
+            beverage = (StringValue) env.getValue(GraphTester.toSkyKey("absinthe"));
+            break;
+          case "joyce":
+            beverage = (StringValue) env.getValue(GraphTester.toSkyKey("whiskey"));
+            break;
+          default:
+              throw new IllegalStateException(author);
+        }
+        if (beverage == null) {
+          return null;
+        }
+        return new StringValue(author + " drank " + beverage.getValue());
+      }
+    };
 
     tester.set(buildFile, new StringValue("hemingway"));
     SkyKey absinthe = GraphTester.toSkyKey("absinthe");
@@ -3283,8 +3267,7 @@ public class MemoizingEvaluatorTest {
         .setBuilder(
             new SkyFunction() {
               @Override
-              public SkyValue compute(SkyKey skyKey, Environment env)
-                  throws SkyFunctionException, InterruptedException {
+              public SkyValue compute(SkyKey skyKey, Environment env) throws SkyFunctionException {
                 otherStarted.countDown();
                 int invocations = numOtherInvocations.incrementAndGet();
                 // And given that otherErrorKey waits for errorKey's error to be committed before
@@ -3882,15 +3865,6 @@ public class MemoizingEvaluatorTest {
    */
   @Test
   public void shutDownBuildOnCachedError_Verified() throws Exception {
-    // TrackingInvalidationReceiver does unnecessary examination of node values.
-    initializeTester(
-        new TrackingInvalidationReceiver() {
-          @Override
-          public void evaluated(
-              SkyKey skyKey, Supplier<SkyValue> skyValueSupplier, EvaluationState state) {
-            evaluated.add(skyKey);
-          }
-        });
     // errorKey will be invalidated due to its dependence on invalidatedKey, but later revalidated
     // since invalidatedKey re-evaluates to the same value on a subsequent build.
     SkyKey errorKey = GraphTester.toSkyKey("error");
@@ -3977,7 +3951,7 @@ public class MemoizingEvaluatorTest {
               public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
                 shutdownAwaiterStarted.countDown();
                 TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
-                    ((SkyFunctionEnvironment) env).getExceptionLatchForTesting(),
+                    ((ParallelEvaluator.SkyFunctionEnvironment) env).getExceptionLatchForTesting(),
                     "exception not thrown");
                 // Threadpool is shutting down. Don't try to synchronize anything in the future
                 // during error bubbling.
@@ -4017,15 +3991,6 @@ public class MemoizingEvaluatorTest {
    */
   @Test
   public void cachedErrorCausesRestart() throws Exception {
-    // TrackingInvalidationReceiver does unnecessary examination of node values.
-    initializeTester(
-        new TrackingInvalidationReceiver() {
-          @Override
-          public void evaluated(
-              SkyKey skyKey, Supplier<SkyValue> skyValueSupplier, EvaluationState state) {
-            evaluated.add(skyKey);
-          }
-        });
     final SkyKey errorKey = GraphTester.toSkyKey("error");
     SkyKey invalidatedKey = GraphTester.toSkyKey("invalidated");
     final SkyKey topKey = GraphTester.toSkyKey("top");
@@ -4109,23 +4074,22 @@ public class MemoizingEvaluatorTest {
     SkyKey parent2Key = GraphTester.toSkyKey("parent2");
     final SkyKey errorKey = GraphTester.toSkyKey("error");
     final SkyKey otherKey = GraphTester.toSkyKey("other");
-    SkyFunction parentBuilder =
-        new SkyFunction() {
-          @Override
-          public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
-            env.getValue(errorKey);
-            env.getValue(otherKey);
-            if (env.valuesMissing()) {
-              return null;
-            }
-            return new StringValue("parent");
-          }
+    SkyFunction parentBuilder = new SkyFunction() {
+      @Override
+      public SkyValue compute(SkyKey skyKey, Environment env) {
+        env.getValue(errorKey);
+        env.getValue(otherKey);
+        if (env.valuesMissing()) {
+          return null;
+        }
+        return new StringValue("parent");
+      }
 
-          @Override
-          public String extractTag(SkyKey skyKey) {
-            return null;
-          }
-        };
+      @Override
+      public String extractTag(SkyKey skyKey) {
+        return null;
+      }
+    };
     tester.getOrCreate(parent1Key).setBuilder(parentBuilder);
     tester.getOrCreate(parent2Key).setBuilder(parentBuilder);
     tester.getOrCreate(errorKey).setConstantValue(new StringValue("no error yet"));
@@ -4436,12 +4400,12 @@ public class MemoizingEvaluatorTest {
     }
 
     @Nullable
-    public SkyValue getExistingValue(SkyKey key) throws InterruptedException {
+    public SkyValue getExistingValue(SkyKey key) {
       return driver.getExistingValueForTesting(key);
     }
 
     @Nullable
-    public SkyValue getExistingValue(String key) throws InterruptedException {
+    public SkyValue getExistingValue(String key) {
       return getExistingValue(toSkyKey(key));
     }
   }
