@@ -97,8 +97,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       Iterable<Artifact> fakeLinkerInputs,
       boolean fake,
       ImmutableList<Pair<Artifact, Label>> cAndCppSources) {
-    Runfiles.Builder builder = new Runfiles.Builder(
-        context.getWorkspaceName(), context.getConfiguration().legacyExternalRunfiles());
+    Runfiles.Builder builder = new Runfiles.Builder(context.getWorkspaceName());
     Function<TransitiveInfoCollection, Runfiles> runfilesMapping =
         CppRunfilesProvider.runfilesFunction(linkStaticness != LinkStaticness.DYNAMIC);
     boolean linkshared = isLinkShared(context);
@@ -187,17 +186,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         new PathFragment(ruleContext.getTarget().getName() + OsUtils.executableExtension());
     Artifact binary = ruleContext.getPackageRelativeArtifact(
         binaryPath, ruleContext.getConfiguration().getBinDirectory());
-    CppLinkAction.Builder linkActionBuilder =
-        determineLinkerArguments(
-            ruleContext,
-            common,
-            precompiledFiles,
-            ccCompilationOutputs,
-            cppCompilationContext.getTransitiveCompilationPrerequisites(),
-            fake,
-            binary,
-            linkStaticness,
-            linkopts);
+    CppLinkAction.Builder linkActionBuilder = determineLinkerArguments(
+        ruleContext, common, precompiledFiles, ccCompilationOutputs,
+        cppCompilationContext.getCompilationPrerequisites(), fake, binary, linkStaticness,
+        linkopts);
     linkActionBuilder.setUseTestOnlyFlags(useTestOnlyFlags);
     linkActionBuilder.addNonLibraryInputs(ccCompilationOutputs.getHeaderTokenFiles());
 
