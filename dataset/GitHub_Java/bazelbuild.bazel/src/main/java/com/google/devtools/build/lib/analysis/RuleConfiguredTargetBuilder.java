@@ -59,8 +59,8 @@ import java.util.TreeMap;
  */
 public final class RuleConfiguredTargetBuilder {
   private final RuleContext ruleContext;
-  private final TransitiveInfoProviderMap.Builder providersBuilder =
-      TransitiveInfoProviderMap.builder();
+  private final Map<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> providers =
+      new LinkedHashMap<>();
   private final ImmutableMap.Builder<String, Object> skylarkProviders = ImmutableMap.builder();
   private final ImmutableMap.Builder<SkylarkClassObjectConstructor.Key, SkylarkClassObject>
       skylarkDeclaredProviders = ImmutableMap.builder();
@@ -91,15 +91,15 @@ public final class RuleConfiguredTargetBuilder {
 
     FilesToRunProvider filesToRunProvider = new FilesToRunProvider(
         getFilesToRun(runfilesSupport, filesToBuild), runfilesSupport, executable);
-    addProvider(new FileProvider(filesToBuild));
-    addProvider(filesToRunProvider);
+    add(FileProvider.class, new FileProvider(filesToBuild));
+    add(FilesToRunProvider.class, filesToRunProvider);
     addSkylarkTransitiveInfo(FilesToRunProvider.SKYLARK_NAME, filesToRunProvider);
 
     if (runfilesSupport != null) {
       // If a binary is built, build its runfiles, too
       addOutputGroup(
           OutputGroupProvider.HIDDEN_TOP_LEVEL, runfilesSupport.getRunfilesMiddleman());
-    } else if (providersBuilder.contains(RunfilesProvider.class)) {
+    } else if (providers.get(RunfilesProvider.class) != null) {
       // If we don't have a RunfilesSupport (probably because this is not a binary rule), we still
       // want to build the files this rule contributes to runfiles of dependent rules so that we
       // report an error if one of these is broken.
@@ -107,12 +107,9 @@ public final class RuleConfiguredTargetBuilder {
       // Note that this is a best-effort thing: there is .getDataRunfiles() and all the language-
       // specific *RunfilesProvider classes, which we don't add here for reasons that are lost in
       // the mists of time.
-      addOutputGroup(
-          OutputGroupProvider.HIDDEN_TOP_LEVEL,
-          providersBuilder
-              .getProvider(RunfilesProvider.class)
-              .getDefaultRunfiles()
-              .getAllArtifacts());
+      addOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL,
+          ((RunfilesProvider) providers.get(RunfilesProvider.class))
+              .getDefaultRunfiles().getAllArtifacts());
     }
 
     // Create test action and artifacts if target was successfully initialized
@@ -135,19 +132,20 @@ public final class RuleConfiguredTargetBuilder {
       add(OutputGroupProvider.class, new OutputGroupProvider(outputGroups.build()));
     }
 
-    TransitiveInfoProviderMap providers = providersBuilder.build();
-    addRegisteredProvidersToSkylarkProviders(providers);
-
+    addRegisteredProvidersToSkylarkProviders();
+      
     return new RuleConfiguredTarget(
         ruleContext,
         providers,
         new SkylarkProviders(skylarkProviders.build(), skylarkDeclaredProviders.build()));
   }
-
-  /** Adds skylark providers from a skylark provider registry, and checks for collisions. */
-  private void addRegisteredProvidersToSkylarkProviders(TransitiveInfoProviderMap providers) {
+  
+  /**
+   * Adds skylark providers from a skylark provider registry, and checks for collisions.
+   */
+  private void addRegisteredProvidersToSkylarkProviders() {
     Map<String, Object> nativeSkylarkProviders = new HashMap<>();
-    for (Map.Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> entry :
+    for (Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> entry :
         providers.entrySet()) {
       if (ruleContext.getSkylarkProviderRegistry().containsValue(entry.getKey())) {
         String skylarkName = ruleContext.getSkylarkProviderRegistry().inverse().get(entry.getKey());
@@ -212,62 +210,56 @@ public final class RuleConfiguredTargetBuilder {
     }
     TestActionBuilder testActionBuilder =
         new TestActionBuilder(ruleContext)
-            .setInstrumentedFiles(providersBuilder.getProvider(InstrumentedFilesProvider.class));
+            .setInstrumentedFiles(findProvider(InstrumentedFilesProvider.class));
 
-    TestEnvironmentProvider environmentProvider =
-        providersBuilder.getProvider(TestEnvironmentProvider.class);
+    TestEnvironmentProvider environmentProvider = findProvider(TestEnvironmentProvider.class);
     if (environmentProvider != null) {
       testActionBuilder.addExtraEnv(environmentProvider.getEnvironment());
     }
 
-    TestParams testParams =
+    final TestParams testParams =
         testActionBuilder
             .setFilesToRunProvider(filesToRunProvider)
-            .setExecutionRequirements(providersBuilder.getProvider(ExecutionInfoProvider.class))
+            .setExecutionRequirements(findProvider(ExecutionInfoProvider.class))
             .setShardCount(explicitShardCount)
             .build();
-    ImmutableList<String> testTags = ImmutableList.copyOf(ruleContext.getRule().getRuleTags());
+    final ImmutableList<String> testTags =
+        ImmutableList.copyOf(ruleContext.getRule().getRuleTags());
     return new TestProvider(testParams, testTags);
   }
 
-  /** Add a specific provider. */
-  public <T extends TransitiveInfoProvider> RuleConfiguredTargetBuilder addProvider(
-      TransitiveInfoProvider provider) {
-    providersBuilder.add(provider);
-    return this;
+  private <T extends TransitiveInfoProvider> T findProvider(Class<T> clazz) {
+    return clazz.cast(providers.get(clazz));
   }
-
-  /** Add a collection of specific providers. */
-  public <T extends TransitiveInfoProvider> RuleConfiguredTargetBuilder addProviders(
-      Iterable<TransitiveInfoProvider> providers) {
-    providersBuilder.addAll(providers);
-    return this;
-  }
-
-  /** Add a collection of specific providers. */
-  public <T extends TransitiveInfoProvider> RuleConfiguredTargetBuilder addProviders(
-      TransitiveInfoProviderMap providers) {
-    providersBuilder.addAll(providers);
-    return this;
-  }
-
 
   /**
    * Add a specific provider with a given value.
-   *
-   * @deprecated use {@link addProvider}
    */
-  @Deprecated
   public <T extends TransitiveInfoProvider> RuleConfiguredTargetBuilder add(Class<T> key, T value) {
     return addProvider(key, value);
   }
 
-  /** Add a specific provider with a given value. */
-  public <T extends TransitiveInfoProvider> RuleConfiguredTargetBuilder addProvider(
-      Class<? extends T> key, T value) {
+  /**
+   * Add a specific provider with a given value.
+   */
+  public RuleConfiguredTargetBuilder addProvider(
+      Class<? extends TransitiveInfoProvider> key, TransitiveInfoProvider value) {
     Preconditions.checkNotNull(key);
     Preconditions.checkNotNull(value);
-    providersBuilder.put(key, value);
+    AnalysisUtils.checkProvider(key);
+    providers.put(key, value);
+    return this;
+  }
+
+  /**
+   * Add multiple providers with given values.
+   */
+  public RuleConfiguredTargetBuilder addProviders(
+      Map<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> providers) {
+    for (Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> provider :
+        providers.entrySet()) {
+      addProvider(provider.getKey(), provider.getValue());
+    }
     return this;
   }
 
@@ -279,6 +271,7 @@ public final class RuleConfiguredTargetBuilder {
    */
   public RuleConfiguredTargetBuilder addSkylarkTransitiveInfo(
       String name, Object value, Location loc) throws EvalException {
+
     SkylarkProviderValidationUtil.validateAndThrowEvalException(name, value, loc);
     skylarkProviders.put(name, value);
     return this;

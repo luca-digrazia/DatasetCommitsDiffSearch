@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.MergedConfiguredTarget.DuplicateException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
@@ -108,8 +107,7 @@ public final class SkylarkProviders implements TransitiveInfoProvider {
    *
    * @param providers providers to merge {@code this} with.
    */
-  public static SkylarkProviders merge(List<SkylarkProviders> providers)
-      throws DuplicateException {
+  public static SkylarkProviders merge(List<SkylarkProviders> providers) {
     if (providers.size() == 0) {
       return null;
     }
@@ -126,8 +124,7 @@ public final class SkylarkProviders implements TransitiveInfoProvider {
   }
 
   private static <K, V> ImmutableMap<K, V> mergeMaps(List<SkylarkProviders> providers,
-      Function<SkylarkProviders, Map<K, V>> mapGetter)
-      throws DuplicateException {
+      Function<SkylarkProviders, Map<K, V>> mapGetter) {
     ImmutableMap.Builder<K, V> resultBuilder = new ImmutableMap.Builder<>();
     Set<K> seenKeys = new HashSet<>();
     for (SkylarkProviders provider : providers) {
@@ -135,7 +132,7 @@ public final class SkylarkProviders implements TransitiveInfoProvider {
       for (K key : map.keySet()) {
         if (!seenKeys.add(key)) {
           // TODO(dslomov): add better diagnostics.
-          throw new DuplicateException("Provider " + key + " provided twice");
+          throw new IllegalStateException("Skylark provider " + key + " provided twice");
         }
 
         resultBuilder.put(key, map.get(key));

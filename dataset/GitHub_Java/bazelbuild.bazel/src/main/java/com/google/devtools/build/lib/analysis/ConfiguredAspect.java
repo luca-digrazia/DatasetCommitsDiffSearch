@@ -30,7 +30,7 @@ import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor.Key;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.Preconditions;
-import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
 import javax.annotation.Nullable;
@@ -54,9 +54,12 @@ import javax.annotation.Nullable;
 @Immutable
 public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> {
   private final String name;
-  private final TransitiveInfoProviderMap providers;
+  private final ImmutableMap<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>
+      providers;
 
-  private ConfiguredAspect(String name, TransitiveInfoProviderMap providers) {
+  private ConfiguredAspect(
+      String name,
+      ImmutableMap<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> providers) {
     this.name = name;
     this.providers = providers;
   }
@@ -68,15 +71,21 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
     return name;
   }
 
-  /** Returns the providers created by the aspect. */
-  public TransitiveInfoProviderMap getProviders() {
+  /**
+   * Returns the providers created by the aspect.
+   */
+  public ImmutableMap<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>
+      getProviders() {
     return providers;
   }
+
 
   @Nullable
   @VisibleForTesting
   public <P extends TransitiveInfoProvider> P getProvider(Class<P> providerClass) {
-    return providers.getProvider(providerClass);
+    AnalysisUtils.checkProvider(providerClass);
+
+    return providerClass.cast(providers.get(providerClass));
   }
 
   @Override
@@ -92,7 +101,8 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
    * Builder for {@link ConfiguredAspect}.
    */
   public static class Builder {
-    private final TransitiveInfoProviderMap.Builder providers = TransitiveInfoProviderMap.builder();
+    private final Map<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>
+        providers = new LinkedHashMap<>();
     private final Map<String, NestedSetBuilder<Artifact>> outputGroupBuilders = new TreeMap<>();
     private final ImmutableMap.Builder<String, Object> skylarkProviderBuilder =
         ImmutableMap.builder();
@@ -104,46 +114,26 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
       this.ruleContext = ruleContext;
     }
 
-    public <T extends TransitiveInfoProvider> Builder addProvider(
-        Class<? extends T> providerClass, T provider) {
-      Preconditions.checkNotNull(provider);
-      checkProviderClass(providerClass);
-      providers.put(providerClass, provider);
-      return this;
-    }
-
-    /** Adds a provider to the aspect. */
-    public Builder addProvider(TransitiveInfoProvider provider) {
-      Preconditions.checkNotNull(provider);
-      addProvider(TransitiveInfoProviderMap.getEffectiveProviderClass(provider), provider);
-      return this;
-    }
-
-    private void checkProviderClass(Class<? extends TransitiveInfoProvider> providerClass) {
-      Preconditions.checkNotNull(providerClass);
-      Preconditions.checkArgument(
-          !SkylarkProviders.class.equals(providerClass),
+    /**
+     * Adds a provider to the aspect.
+     */
+    public Builder addProvider(
+        Class<? extends TransitiveInfoProvider> key, TransitiveInfoProvider value) {
+      Preconditions.checkNotNull(key);
+      Preconditions.checkNotNull(value);
+      AnalysisUtils.checkProvider(key);
+      Preconditions.checkState(!providers.containsKey(key));
+      Preconditions.checkArgument(!SkylarkProviders.class.equals(key),
           "Do not provide SkylarkProviders directly");
-    }
-
-    /** Adds providers to the aspect. */
-    public Builder addProviders(TransitiveInfoProviderMap providers) {
-      for (Map.Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> entry :
-          providers.entrySet()) {
-        addProvider(entry.getKey(), entry.getKey().cast(entry.getValue()));
-      }
+      providers.put(key, value);
       return this;
     }
 
-    /** Adds providers to the aspect. */
-    public Builder addProviders(TransitiveInfoProvider... providers) {
-      return addProviders(Arrays.asList(providers));
-    }
-
-    /** Adds providers to the aspect. */
-    public Builder addProviders(Iterable<TransitiveInfoProvider> providers) {
-      for (TransitiveInfoProvider provider : providers) {
-        addProvider(provider);
+    public Builder addProviders(
+        Map<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> providers) {
+      for (Map.Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> provider :
+          providers.entrySet()) {
+        addProvider(provider.getKey(), provider.getValue());
       }
       return this;
     }
@@ -175,25 +165,26 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
           outputGroups.put(entry.getKey(), entry.getValue().build());
         }
 
-        if (providers.contains(OutputGroupProvider.class)) {
+        if (providers.containsKey(OutputGroupProvider.class)) {
           throw new IllegalStateException(
               "OutputGroupProvider was provided explicitly; do not use addOutputGroup");
         }
-        addProvider(new OutputGroupProvider(outputGroups.build()));
+        addProvider(OutputGroupProvider.class, new OutputGroupProvider(outputGroups.build()));
       }
 
       ImmutableMap<String, Object> skylarkProvidersMap = skylarkProviderBuilder.build();
       if (!skylarkProvidersMap.isEmpty()) {
-        providers.add(
-            new SkylarkProviders(skylarkProvidersMap, ImmutableMap.<Key, SkylarkClassObject>of()));
+        providers.put(SkylarkProviders.class, new SkylarkProviders(skylarkProvidersMap,
+            ImmutableMap.<Key, SkylarkClassObject>of()));
       }
 
       addProvider(
+          ExtraActionArtifactsProvider.class,
           createExtraActionProvider(
               ImmutableSet.<ActionAnalysisMetadata>of() /* actionsWithoutExtraAction */,
               ruleContext));
 
-      return new ConfiguredAspect(name, providers.build());
+      return new ConfiguredAspect(name, ImmutableMap.copyOf(providers));
     }
   }
 }

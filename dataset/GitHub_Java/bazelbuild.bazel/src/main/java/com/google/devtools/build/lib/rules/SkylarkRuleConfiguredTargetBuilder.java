@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.ActionsProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -157,8 +156,7 @@ public final class SkylarkRuleConfiguredTargetBuilder {
       filesToBuild.add(executable);
     }
     builder.setFilesToBuild(filesToBuild.build());
-    return addStructFieldsAndBuild(
-        ruleContext, builder, target, executable, registeredProviderTypes);
+    return addStructFields(ruleContext, builder, target, executable, registeredProviderTypes);
   }
 
   private static Artifact getExecutable(RuleContext ruleContext, Object target)
@@ -222,7 +220,7 @@ public final class SkylarkRuleConfiguredTargetBuilder {
     }
   }
 
-  private static ConfiguredTarget addStructFieldsAndBuild(
+  private static ConfiguredTarget addStructFields(
       RuleContext ruleContext,
       RuleConfiguredTargetBuilder builder,
       Object target,
@@ -345,13 +343,6 @@ public final class SkylarkRuleConfiguredTargetBuilder {
           ? null : RunfilesSupport.withExecutable(ruleContext, computedDefaultRunfiles, executable);
       builder.setRunfilesSupport(runfilesSupport, executable);
     }
-
-    if (ruleContext.getRule().getRuleClassObject().isSkylarkTestable()) {
-      SkylarkClassObject actions = ActionsProvider.create(
-          ruleContext.getAnalysisEnvironment().getRegisteredActions());
-      builder.addSkylarkDeclaredProvider(actions, loc);
-    }
-
     try {
       return builder.build();
     } catch (IllegalArgumentException e) {

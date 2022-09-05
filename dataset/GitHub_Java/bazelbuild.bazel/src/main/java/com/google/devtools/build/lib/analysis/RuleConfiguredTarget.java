@@ -22,14 +22,15 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.util.Preconditions;
-import javax.annotation.Nullable;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * A {@link ConfiguredTarget} that is produced by a rule.
  *
  * <p>Created by {@link RuleConfiguredTargetBuilder}. There is an instance of this class for every
- * analyzed rule. For more information about how analysis works, see {@link
- * com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory}.
+ * analyzed rule. For more information about how analysis works, see
+ * {@link com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory}.
  */
 public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   /**
@@ -44,26 +45,26 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     DONT_CHECK
   }
 
-  private final TransitiveInfoProviderMap providers;
+  private final ImmutableMap<Class<? extends TransitiveInfoProvider>, Object> providers;
   private final ImmutableMap<Label, ConfigMatchingProvider> configConditions;
 
-  RuleConfiguredTarget(
-      RuleContext ruleContext,
-      TransitiveInfoProviderMap providers,
+  RuleConfiguredTarget(RuleContext ruleContext,
+      Map<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> providers,
       SkylarkProviders skylarkProviders1) {
     super(ruleContext);
     // We don't use ImmutableMap.Builder here to allow augmenting the initial list of 'default'
     // providers by passing them in.
-    TransitiveInfoProviderMap.Builder providerBuilder = providers.toBuilder();
-    Preconditions.checkState(providerBuilder.contains(RunfilesProvider.class));
-    Preconditions.checkState(providerBuilder.contains(FileProvider.class));
-    Preconditions.checkState(providerBuilder.contains(FilesToRunProvider.class));
+    Map<Class<? extends TransitiveInfoProvider>, Object> providerBuilder = new LinkedHashMap<>();
+    providerBuilder.putAll(providers);
+    Preconditions.checkState(providerBuilder.containsKey(RunfilesProvider.class));
+    Preconditions.checkState(providerBuilder.containsKey(FileProvider.class));
+    Preconditions.checkState(providerBuilder.containsKey(FilesToRunProvider.class));
 
     // Initialize every SkylarkApiProvider
     skylarkProviders1.init(this);
-    providerBuilder.add(skylarkProviders1);
+    providerBuilder.put(SkylarkProviders.class, skylarkProviders1);
 
-    this.providers = providerBuilder.build();
+    this.providers = ImmutableMap.copyOf(providerBuilder);
     this.configConditions = ruleContext.getConfigConditions();
 
     // If this rule is the run_under target, then check that we have an executable; note that
@@ -92,12 +93,17 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     return configConditions;
   }
 
-  @Nullable
   @Override
   public <P extends TransitiveInfoProvider> P getProvider(Class<P> providerClass) {
+    AnalysisUtils.checkProvider(providerClass);
     // TODO(bazel-team): Should aspects be allowed to override providers on the configured target
     // class?
-    return providers.getProvider(providerClass);
+    Object provider = providers.get(providerClass);
+    if (provider == null) {
+      return null;
+    } else {
+      return providerClass.cast(provider);
+    }
   }
 
   /**
