@@ -571,16 +571,6 @@ public class CppOptions extends FragmentOptions {
   public boolean pruneCppModules;
 
   @Option(
-    name = "parse_headers_verifies_modules",
-    defaultValue = "false",
-    category = "strategy",
-    help =
-        "If enabled, the parse_headers feature verifies that a header module can be built for the "
-            + "target in question instead of doing a separate compile of the header."
-  )
-  public boolean parseHeadersVerifiesModules;
-
-  @Option(
     name = "experimental_omitfp",
     defaultValue = "false",
     category = "semantics",

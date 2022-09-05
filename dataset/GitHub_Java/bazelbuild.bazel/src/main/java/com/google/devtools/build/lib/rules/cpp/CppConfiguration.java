@@ -1769,8 +1769,12 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     return cppOptions.inmemoryDotdFiles;
   }
 
-  public boolean getPruneCppModules() {
-    return cppOptions.pruneCppModules;
+  public boolean getSkipUnusedModules() {
+    return cppOptions.skipUnusedModules;
+  }
+
+  public boolean getPruneMoreModules() {
+    return cppOptions.pruneMoreModules;
   }
 
   public LibcTop getLibcTop() {
