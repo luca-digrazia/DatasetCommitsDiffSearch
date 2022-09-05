@@ -75,8 +75,6 @@ public class AndroidResourcesProcessorBuilder {
   private String versionName;
   private Artifact symbolsTxt;
 
-  private Artifact manifestOut;
-
   /**
    * @param ruleContext The RuleContext that was used to create the SpawnAction.Builder.
    */
@@ -148,11 +146,6 @@ public class AndroidResourcesProcessorBuilder {
 
   public AndroidResourcesProcessorBuilder setAssetsToIgnore(List<String> assetsToIgnore) {
     this.assetsToIgnore = assetsToIgnore;
-    return this;
-  }
-
-  public AndroidResourcesProcessorBuilder setManifestOut(Artifact manifestOut) {
-    this.manifestOut = manifestOut;
     return this;
   }
 
@@ -285,12 +278,6 @@ public class AndroidResourcesProcessorBuilder {
       builder.addExecPath("--proguardOutput", proguardOut);
       outs.add(proguardOut);
     }
-    
-    if (manifestOut != null) {
-      builder.addExecPath("--manifestOutput", manifestOut);
-      outs.add(manifestOut);
-    }
-    
     if (apkOut != null) {
       builder.addExecPath("--packagePath", apkOut);
       outs.add(apkOut);
@@ -352,8 +339,7 @@ public class AndroidResourcesProcessorBuilder {
         // for this resource processing action (in case of just creating an R.txt or
         // proguard merging), reuse the primary resource from the dependencies.
         apkOut != null ? apkOut : primary.getApk(),
-        manifestOut != null ? manifestOut : primary.getManifest(),
-        sourceJarOut,
+        primary.getManifest(), sourceJarOut,
         primary.getArtifacts(ResourceType.ASSETS),
         primary.getArtifacts(ResourceType.RESOURCES),
         primary.getRoots(ResourceType.ASSETS),
