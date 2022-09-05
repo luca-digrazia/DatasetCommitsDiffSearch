@@ -55,7 +55,6 @@ import com.google.devtools.build.skyframe.NotifyingInMemoryGraph.Listener;
 import com.google.devtools.build.skyframe.NotifyingInMemoryGraph.Order;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -95,11 +94,6 @@ public class MemoizingEvaluatorTest {
   @Before
   public void initializeTester() {
     initializeTester(null);
-  }
-
-  @After
-  public void assertNoTrackedErrors() {
-    TrackingAwaiter.INSTANCE.assertNoErrors();
   }
 
   public void initializeTester(@Nullable TrackingInvalidationReceiver customInvalidationReceiver) {
@@ -550,35 +544,34 @@ public class MemoizingEvaluatorTest {
   public void alreadyAnalyzedBadTarget() throws Exception {
     final SkyKey mid = GraphTester.toSkyKey("mid");
     final CountDownLatch valueSet = new CountDownLatch(1);
-    setGraphForTesting(
-        new NotifyingInMemoryGraph(
-            new Listener() {
-              @Override
-              public void accept(SkyKey key, EventType type, Order order, Object context) {
-                if (!key.equals(mid)) {
-                  return;
-                }
-                switch (type) {
-                  case ADD_REVERSE_DEP:
-                    if (context == null) {
-                      // Context is null when we are enqueuing this value as a top-level job.
-                      TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
-                          valueSet, "value not set");
-                    }
-                    break;
-                  case SET_VALUE:
-                    valueSet.countDown();
-                    break;
-                  default:
-                    break;
-                }
-              }
-            }));
+    final TrackingAwaiter trackingAwaiter = new TrackingAwaiter();
+    setGraphForTesting(new NotifyingInMemoryGraph(new Listener() {
+      @Override
+      public void accept(SkyKey key, EventType type, Order order, Object context) {
+        if (!key.equals(mid)) {
+          return;
+        }
+        switch (type) {
+          case ADD_REVERSE_DEP:
+            if (context == null) {
+              // Context is null when we are enqueuing this value as a top-level job.
+              trackingAwaiter.awaitLatchAndTrackExceptions(valueSet, "value not set");
+            }
+            break;
+          case SET_VALUE:
+            valueSet.countDown();
+            break;
+          default:
+            break;
+        }
+      }
+    }));
     SkyKey top = GraphTester.skyKey("top");
     tester.getOrCreate(top).addDependency(mid).setComputedValue(CONCATENATE);
     tester.getOrCreate(mid).setHasError(true);
     tester.eval(/*keepGoing=*/false, top, mid);
     assertEquals(0L, valueSet.getCount());
+    trackingAwaiter.assertNoErrors();
     assertThat(tester.invalidationReceiver.evaluated).containsExactly(mid);
   }
 
@@ -899,25 +892,22 @@ public class MemoizingEvaluatorTest {
     final CountDownLatch errorThrown = new CountDownLatch(1);
     // We don't do anything on the first build.
     final AtomicBoolean secondBuild = new AtomicBoolean(false);
-    setGraphForTesting(
-        new DeterministicInMemoryGraph(
-            new Listener() {
-              @Override
-              public void accept(SkyKey key, EventType type, Order order, Object context) {
-                if (!secondBuild.get()) {
-                  return;
-                }
-                if (key.equals(otherTop) && type == EventType.SIGNAL) {
-                  // otherTop is being signaled that dep1 is done. Tell the error value that it is
-                  // ready, then wait until the error is thrown, so that otherTop's builder is not
-                  // re-entered.
-                  valuesReady.countDown();
-                  TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
-                      errorThrown, "error not thrown");
-                  return;
-                }
-              }
-            }));
+    final TrackingAwaiter trackingAwaiter = new TrackingAwaiter();
+    setGraphForTesting(new DeterministicInMemoryGraph(new Listener() {
+      @Override
+      public void accept(SkyKey key, EventType type, Order order, Object context) {
+        if (!secondBuild.get()) {
+          return;
+        }
+        if (key.equals(otherTop) && type == EventType.SIGNAL) {
+          // otherTop is being signaled that dep1 is done. Tell the error value that it is ready,
+          // then wait until the error is thrown, so that otherTop's builder is not re-entered.
+          valuesReady.countDown();
+          trackingAwaiter.awaitLatchAndTrackExceptions(errorThrown, "error not thrown");
+          return;
+        }
+      }
+    }));
     final SkyKey dep1 = GraphTester.toSkyKey("dep1");
     tester.set(dep1, new StringValue("dep1"));
     final SkyKey dep2 = GraphTester.toSkyKey("dep2");
@@ -967,6 +957,7 @@ public class MemoizingEvaluatorTest {
     // they appear here.
     EvaluationResult<StringValue> result =
         tester.eval(/*keepGoing=*/false, otherTop, topKey, exceptionMarker);
+    trackingAwaiter.assertNoErrors();
     assertThat(result.errorMap().keySet()).containsExactly(topKey);
     Iterable<CycleInfo> cycleInfos = result.getError(topKey).getCycleInfo();
     assertWithMessage(result.toString()).that(cycleInfos).isNotEmpty();
@@ -1462,32 +1453,29 @@ public class MemoizingEvaluatorTest {
     final AtomicBoolean delayTopSignaling = new AtomicBoolean(false);
     final CountDownLatch topSignaled = new CountDownLatch(1);
     final CountDownLatch topRestartedBuild = new CountDownLatch(1);
-    setGraphForTesting(
-        new DeterministicInMemoryGraph(
-            new Listener() {
-              @Override
-              public void accept(SkyKey key, EventType type, Order order, Object context) {
-                if (!delayTopSignaling.get()) {
-                  return;
-                }
-                if (key.equals(top) && type == EventType.SIGNAL && order == Order.AFTER) {
-                  // top is signaled by firstKey (since slowAddingDep is blocking), so slowAddingDep
-                  // is now free to acknowledge top as a parent.
-                  topSignaled.countDown();
-                  return;
-                }
-                if (key.equals(slowAddingDep)
-                    && type == EventType.ADD_REVERSE_DEP
-                    && context.equals(top)
-                    && order == Order.BEFORE) {
-                  // If top is trying to declare a dep on slowAddingDep, wait until firstKey has
-                  // signaled top. Then this add dep will return DONE and top will be signaled,
-                  // making it ready, so it will be enqueued.
-                  TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
-                      topSignaled, "first key didn't signal top in time");
-                }
-              }
-            }));
+    final TrackingAwaiter trackingAwaiter = new TrackingAwaiter();
+    setGraphForTesting(new DeterministicInMemoryGraph(new Listener() {
+      @Override
+      public void accept(SkyKey key, EventType type, Order order, Object context) {
+        if (!delayTopSignaling.get()) {
+          return;
+        }
+        if (key.equals(top) && type == EventType.SIGNAL && order == Order.AFTER) {
+          // top is signaled by firstKey (since slowAddingDep is blocking), so slowAddingDep is now
+          // free to acknowledge top as a parent.
+          topSignaled.countDown();
+          return;
+        }
+        if (key.equals(slowAddingDep) && type == EventType.ADD_REVERSE_DEP
+            && context.equals(top) && order == Order.BEFORE) {
+          // If top is trying to declare a dep on slowAddingDep, wait until firstKey has signaled
+          // top. Then this add dep will return DONE and top will be signaled, making it ready, so
+          // it will be enqueued.
+          trackingAwaiter.awaitLatchAndTrackExceptions(topSignaled,
+              "first key didn't signal top in time");
+        }
+      }
+    }));
     // Value that is modified on the second build. Its thread won't finish until it signals top,
     // which will wait for the signal before it enqueues its next dep. We prevent the thread from
     // finishing by having the listener to which it reports its warning block until top's builder
@@ -1510,19 +1498,18 @@ public class MemoizingEvaluatorTest {
         return env.valuesMissing() ? null : new StringValue("top");
       }
     });
-    reporter =
-        new DelegatingEventHandler(reporter) {
-          @Override
-          public void handle(Event e) {
-            super.handle(e);
-            if (e.getKind() == EventKind.WARNING) {
-              if (!throwError) {
-                TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
-                    topRestartedBuild, "top's builder did not start in time");
-              }
-            }
+    reporter = new DelegatingEventHandler(reporter) {
+      @Override
+      public void handle(Event e) {
+        super.handle(e);
+        if (e.getKind() == EventKind.WARNING) {
+          if (!throwError) {
+            trackingAwaiter.awaitLatchAndTrackExceptions(topRestartedBuild,
+                "top's builder did not start in time");
           }
-        };
+        }
+      }
+    };
     // First build : just prime the graph.
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, top);
     assertFalse(result.hasError());
@@ -1535,6 +1522,7 @@ public class MemoizingEvaluatorTest {
     tester.invalidate();
     delayTopSignaling.set(true);
     result = tester.eval(/*keepGoing=*/false, top);
+    trackingAwaiter.assertNoErrors();
     if (throwError) {
       assertTrue(result.hasError());
       assertThat(result.keyNames()).isEmpty(); // No successfully evaluated values.
@@ -1675,39 +1663,38 @@ public class MemoizingEvaluatorTest {
     // changed thread checks value entry once (to see if it is changed). dirty thread checks twice,
     // to see if it is changed, and if it is dirty.
     final CountDownLatch threadsStarted = new CountDownLatch(3);
-    setGraphForTesting(
-        new NotifyingInMemoryGraph(
-            new Listener() {
-              @Override
-              public void accept(SkyKey key, EventType type, Order order, Object context) {
-                if (!blockingEnabled.get()) {
-                  return;
-                }
-                if (!key.equals(parent)) {
-                  return;
-                }
-                if (type == EventType.IS_CHANGED && order == Order.BEFORE) {
-                  threadsStarted.countDown();
-                }
-                // Dirtiness only checked by dirty thread.
-                if (type == EventType.IS_DIRTY && order == Order.BEFORE) {
-                  threadsStarted.countDown();
-                }
-                if (type == EventType.MARK_DIRTY) {
-                  TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
-                      threadsStarted, "Both threads did not query if value isChanged in time");
-                  boolean isChanged = (Boolean) context;
-                  if (order == Order.BEFORE && !isChanged) {
-                    TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
-                        waitForChanged, "'changed' thread did not mark value changed in time");
-                    return;
-                  }
-                  if (order == Order.AFTER && isChanged) {
-                    waitForChanged.countDown();
-                  }
-                }
-              }
-            }));
+    final TrackingAwaiter trackingAwaiter = new TrackingAwaiter();
+    setGraphForTesting(new NotifyingInMemoryGraph(new Listener() {
+      @Override
+      public void accept(SkyKey key, EventType type, Order order, Object context) {
+        if (!blockingEnabled.get()) {
+          return;
+        }
+        if (!key.equals(parent)) {
+          return;
+        }
+        if (type == EventType.IS_CHANGED && order == Order.BEFORE) {
+          threadsStarted.countDown();
+        }
+        // Dirtiness only checked by dirty thread.
+        if (type == EventType.IS_DIRTY && order == Order.BEFORE) {
+          threadsStarted.countDown();
+        }
+        if (type == EventType.MARK_DIRTY) {
+          trackingAwaiter.awaitLatchAndTrackExceptions(threadsStarted,
+              "Both threads did not query if value isChanged in time");
+          boolean isChanged = (Boolean) context;
+          if (order == Order.BEFORE && !isChanged) {
+            trackingAwaiter.awaitLatchAndTrackExceptions(waitForChanged,
+                "'changed' thread did not mark value changed in time");
+            return;
+          }
+          if (order == Order.AFTER && isChanged) {
+            waitForChanged.countDown();
+          }
+        }
+      }
+    }));
     SkyKey leaf = GraphTester.toSkyKey("leaf");
     tester.set(leaf, new StringValue("leaf"));
     tester.getOrCreate(parent).addDependency(leaf).setComputedValue(CONCATENATE);
@@ -1725,6 +1712,7 @@ public class MemoizingEvaluatorTest {
     blockingEnabled.set(true);
     result = tester.eval(/*keepGoing=*/false, parent);
     assertEquals("leafother2", result.get(parent).getValue());
+    trackingAwaiter.assertNoErrors();
     assertEquals(0, waitForChanged.getCount());
     assertEquals(0, threadsStarted.getCount());
   }
@@ -2989,6 +2977,7 @@ public class MemoizingEvaluatorTest {
     // Keep track of any exceptions thrown during evaluation.
     final AtomicReference<Pair<SkyKey, ? extends Exception>> unexpectedException =
         new AtomicReference<>();
+    final TrackingAwaiter trackingAwaiter = new TrackingAwaiter();
     setGraphForTesting(
         new DeterministicInMemoryGraph(
             new Listener() {
@@ -3001,7 +2990,7 @@ public class MemoizingEvaluatorTest {
                     || type != EventType.SIGNAL) {
                   return;
                 }
-                TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
+                trackingAwaiter.awaitLatchAndTrackExceptions(
                     shutdownAwaiterStarted, "shutdown awaiter not started");
                 if (key.equals(uncachedParentKey)) {
                   // When the uncached parent is first signaled by its changed dep, make sure that
@@ -3073,10 +3062,15 @@ public class MemoizingEvaluatorTest {
             new SkyFunction() {
               @Override
               public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
-                shutdownAwaiterStarted.countDown();
-                TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
-                    ((ParallelEvaluator.SkyFunctionEnvironment) env).getExceptionLatchForTesting(),
-                    "exception not thrown");
+                try {
+                  shutdownAwaiterStarted.countDown();
+                  TrackingAwaiter.waitAndMaybeThrowInterrupt(
+                      ((ParallelEvaluator.SkyFunctionEnvironment) env)
+                          .getExceptionLatchForTesting(),
+                      "");
+                } catch (InterruptedException e) {
+                  unexpectedException.set(Pair.of(skyKey, e));
+                }
                 // Threadpool is shutting down. Don't try to synchronize anything in the future
                 // during error bubbling.
                 synchronizeThreads.set(false);
@@ -3095,6 +3089,7 @@ public class MemoizingEvaluatorTest {
       throw new AssertionError(unexpected.first + ", " + unexpected.second + ", "
           + Arrays.toString(unexpected.second.getStackTrace()));
     }
+    trackingAwaiter.assertNoErrors();
   }
 
   @Test
