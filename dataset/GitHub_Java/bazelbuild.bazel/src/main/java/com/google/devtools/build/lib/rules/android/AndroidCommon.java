@@ -593,9 +593,6 @@ public class AndroidCommon {
     if (ruleContext.hasErrors()) {
       return null;
     }
-    if (generatedExtensionRegistryProvider != null) {
-      jarsProducedForRuntime.add(generatedExtensionRegistryProvider.getClassJar());
-    }
     this.jarsProducedForRuntime = jarsProducedForRuntime.add(classJar).build();
     return helper.getAttributes();
   }

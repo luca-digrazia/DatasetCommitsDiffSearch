@@ -16,12 +16,9 @@ package com.google.devtools.build.lib.runtime.commands;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.BuildResult;
 import com.google.devtools.build.lib.buildtool.BuildTool;
-import com.google.devtools.build.lib.buildtool.InstrumentationFilterSupport;
-import com.google.devtools.build.lib.buildtool.buildevent.TestingCompleteEvent;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.TestStrategy;
@@ -36,6 +33,7 @@ import com.google.devtools.build.lib.runtime.TerminalTestResultNotifier;
 import com.google.devtools.build.lib.runtime.TerminalTestResultNotifier.TestSummaryOptions;
 import com.google.devtools.build.lib.runtime.TestResultAnalyzer;
 import com.google.devtools.build.lib.runtime.TestResultNotifier;
+import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.AnsiTerminalPrinter;
 import com.google.devtools.common.options.OptionPriority;
@@ -66,7 +64,8 @@ public class TestCommand implements BlazeCommand {
   }
 
   @Override
-  public void editOptions(CommandEnvironment env, OptionsParser optionsParser) {
+  public void editOptions(CommandEnvironment env, OptionsParser optionsParser)
+      throws AbruptExitException {
     TestOutputFormat testOutput = optionsParser.getOptions(ExecutionOptions.class).testOutput;
 
     try {
@@ -86,6 +85,7 @@ public class TestCommand implements BlazeCommand {
   @Override
   public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
     TestResultAnalyzer resultAnalyzer = new TestResultAnalyzer(
+        env.getDirectories().getExecRoot(),
         options.getOptions(TestSummaryOptions.class),
         options.getOptions(ExecutionOptions.class),
         env.getEventBus());
@@ -112,11 +112,6 @@ public class TestCommand implements BlazeCommand {
         runtime.getStartupOptionsProvider(), targets,
         env.getReporter().getOutErr(), env.getCommandId(), env.getCommandStartTime());
     request.setRunTests();
-    if (options.getOptions(BuildConfiguration.Options.class).collectCodeCoverage
-        && !options.containsExplicitOption(
-            InstrumentationFilterSupport.INSTRUMENTATION_FILTER_FLAG)) {
-      request.setNeedsInstrumentationFilter(true);
-    }
 
     BuildResult buildResult = new BuildTool(env).processRequest(request, null);
 
@@ -148,11 +143,9 @@ public class TestCommand implements BlazeCommand {
           + AnsiTerminalPrinter.Mode.DEFAULT);
     }
 
-    ExitCode exitCode = buildSuccess
-        ? (testSuccess ? ExitCode.SUCCESS : ExitCode.TESTS_FAILED)
-        : buildResult.getExitCondition();
-    env.getEventBus().post(new TestingCompleteEvent(exitCode, buildResult.getStopTime()));
-    return exitCode;
+    return buildSuccess ?
+           (testSuccess ? ExitCode.SUCCESS : ExitCode.TESTS_FAILED)
+           : buildResult.getExitCondition();
   }
 
   /**
