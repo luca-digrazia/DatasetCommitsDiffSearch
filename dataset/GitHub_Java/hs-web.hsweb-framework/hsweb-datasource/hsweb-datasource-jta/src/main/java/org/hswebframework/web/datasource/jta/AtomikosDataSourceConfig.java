@@ -43,7 +43,7 @@ public class AtomikosDataSourceConfig extends DynamicDataSourceConfig {
             xaProperties.entrySet().forEach(entry -> entry.setValue(String.valueOf(entry.getValue())));
         }
         //fix #87
-        XADataSource dataSource = (XADataSource) ClassUtils.forName(getXaDataSourceClassName(),null).newInstance();
+        XADataSource dataSource = (XADataSource) ClassUtils.forName(getXaDataSourceClassName(), null).newInstance();
         FastBeanCopier.copy(xaProperties, dataSource);
         atomikosDataSourceBean.setXaDataSource(dataSource);
 

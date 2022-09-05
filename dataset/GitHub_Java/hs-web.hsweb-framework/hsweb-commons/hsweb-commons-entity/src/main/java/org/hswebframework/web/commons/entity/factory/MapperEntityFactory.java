@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2016 http://www.hswebframework.org
+ *  * Copyright 2020 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -13,28 +13,60 @@
  *  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  * See the License for the specific language governing permissions and
  *  * limitations under the License.
- *  
+ *
  */
 
 package org.hswebframework.web.commons.entity.factory;
 
-import org.apache.commons.beanutils.BeanUtils;
+import lombok.SneakyThrows;
+import org.hswebframework.utils.ClassUtils;
 import org.hswebframework.web.NotFoundException;
+import org.hswebframework.web.bean.BeanFactory;
+import org.hswebframework.web.bean.FastBeanCopier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
  * @author zhouhao
  * @since 3.0
  */
-public class MapperEntityFactory implements EntityFactory {
-    private Map<Class, Mapper> realTypeMapper = new HashMap<>();
-    private Logger             logger         = LoggerFactory.getLogger(this.getClass());
+@SuppressWarnings("unchecked")
+public class MapperEntityFactory implements EntityFactory, BeanFactory {
+    private Map<Class, Mapper>          realTypeMapper = new HashMap<>();
+    private Logger                      logger         = LoggerFactory.getLogger(this.getClass());
+    private Map<String, PropertyCopier> copierCache    = new HashMap<>();
+
+    private static final DefaultMapperFactory DEFAULT_MAPPER_FACTORY = clazz -> {
+        String simpleClassName = clazz.getPackage().getName().concat(".Simple").concat(clazz.getSimpleName());
+        try {
+            return defaultMapper(org.springframework.util.ClassUtils.forName(simpleClassName, null));
+        } catch (ClassNotFoundException ignore) {
+            // throw new NotFoundException(e.getMessage());
+        }
+        return null;
+    };
+
+    /**
+     * 默认的属性复制器
+     */
+    private static final DefaultPropertyCopier DEFAULT_PROPERTY_COPIER = FastBeanCopier::copy;
+
+    private DefaultMapperFactory defaultMapperFactory = DEFAULT_MAPPER_FACTORY;
+
+    private DefaultPropertyCopier defaultPropertyCopier = DEFAULT_PROPERTY_COPIER;
+
 
     public MapperEntityFactory() {
     }
@@ -43,48 +75,108 @@ public class MapperEntityFactory implements EntityFactory {
         this.realTypeMapper.putAll(realTypeMapper);
     }
 
-    public <T> MapperEntityFactory addMapping(Class<T> target, Mapper<T> mapper) {
+    public <T> MapperEntityFactory addMapping(Class<T> target, Mapper<? extends T> mapper) {
         realTypeMapper.put(target, mapper);
         return this;
     }
 
+    public MapperEntityFactory addCopier(PropertyCopier copier) {
+        Class source = ClassUtils.getGenericType(copier.getClass(), 0);
+        Class target = ClassUtils.getGenericType(copier.getClass(), 1);
+        if (source == null || source == Object.class) {
+            throw new UnsupportedOperationException("generic type " + source + " not support");
+        }
+        if (target == null || target == Object.class) {
+            throw new UnsupportedOperationException("generic type " + target + " not support");
+        }
+        addCopier(source, target, copier);
+        return this;
+    }
+
+    public <S, T> MapperEntityFactory addCopier(Class<S> source, Class<T> target, PropertyCopier<S, T> copier) {
+        copierCache.put(getCopierCacheKey(source, target), copier);
+        return this;
+    }
+
+    private String getCopierCacheKey(Class source, Class target) {
+        return source.getName().concat("->").concat(target.getName());
+    }
+
     @Override
     public <S, T> T copyProperties(S source, T target) {
+        Objects.requireNonNull(source);
+        Objects.requireNonNull(target);
         try {
-            // TODO: 17-3-30 应该设计为可自定义
-            BeanUtils.copyProperties(target, source);
+            PropertyCopier<S, T> copier = copierCache.<S, T>get(getCopierCacheKey(source.getClass(), target.getClass()));
+            if (null != copier) {
+                return copier.copyProperties(source, target);
+            }
+
+            return (T) defaultPropertyCopier.copyProperties(source, target);
         } catch (Exception e) {
             logger.warn("copy properties error", e);
         }
         return target;
     }
 
-    @Override
-    @SuppressWarnings("unchecked")
-    public <T> T newInstance(Class<T> beanClass) {
-        if (beanClass == null) return null;
-        Mapper<T> mapper = realTypeMapper.get(beanClass);
-        if (mapper != null) return mapper.getInstanceGetter().get();
-        synchronized (beanClass) {
-            mapper = realTypeMapper.get(beanClass);
-            if (mapper != null) return mapper.getInstanceGetter().get();
-            Class<T> realType = null;
-            if (!Modifier.isInterface(beanClass.getModifiers()) && !Modifier.isAbstract(beanClass.getModifiers())) {
-                realType = beanClass;
-            }
-            //尝试使用 Simple类，如: package.SimpleUserBean
-            if (realType == null) {
-                String simpleClassName = beanClass.getPackage().getName().concat(".Simple").concat(beanClass.getSimpleName());
-                try {
-                    realType = (Class<T>) Class.forName(simpleClassName);
-                    mapper = new Mapper<>(realType, new DefaultInstanceGetter(realType));
-                    realTypeMapper.put(beanClass, mapper);
-                    return mapper.getInstanceGetter().get();
-                } catch (ClassNotFoundException e) {
-                    throw new NotFoundException(e.getMessage());
-                }
-            }
+    protected <T> Mapper<T> initCache(Class<T> beanClass) {
+        Mapper<T> mapper = null;
+        Class<T> realType = null;
+        ServiceLoader<T> serviceLoader = ServiceLoader.load(beanClass, this.getClass().getClassLoader());
+        Iterator<T> iterator = serviceLoader.iterator();
+        if (iterator.hasNext()) {
+            realType = (Class<T>) iterator.next().getClass();
         }
+        //尝试使用 Simple类，如: package.SimpleUserBean
+        if (realType == null) {
+            mapper = defaultMapperFactory.apply(beanClass);
+        }
+        if (!Modifier.isInterface(beanClass.getModifiers()) && !Modifier.isAbstract(beanClass.getModifiers())) {
+            realType = beanClass;
+        }
+        if (mapper == null && realType != null) {
+            if (logger.isDebugEnabled() && realType != beanClass) {
+                logger.debug("use instance {} for {}", realType, beanClass);
+            }
+            mapper = new Mapper<>(realType, new DefaultInstanceGetter(realType));
+        }
+        if (mapper != null) {
+            realTypeMapper.put(beanClass, mapper);
+        }
+        return mapper;
+    }
+
+    @Override
+    public <T> T newInstance(Class<T> beanClass) {
+        return newInstance(beanClass, null);
+    }
+
+    @Override
+    public <T> T newInstance(Class<T> beanClass, Class<? extends T> defaultClass) {
+        if (beanClass == null) {
+            return null;
+        }
+        Mapper<T> mapper = realTypeMapper.get(beanClass);
+        if (mapper != null) {
+            return mapper.getInstanceGetter().get();
+        }
+        mapper = initCache(beanClass);
+        if (mapper != null) {
+            return mapper.getInstanceGetter().get();
+        }
+        if (defaultClass != null) {
+            return newInstance(defaultClass);
+        }
+        if (Map.class == beanClass) {
+            return (T) new HashMap<>();
+        }
+        if (List.class == beanClass) {
+            return (T) new ArrayList<>();
+        }
+        if (Set.class == beanClass) {
+            return (T) new HashSet<>();
+        }
+
         throw new NotFoundException("can't create instance for " + beanClass);
     }
 
@@ -95,7 +187,23 @@ public class MapperEntityFactory implements EntityFactory {
         if (null != mapper) {
             return mapper.getTarget();
         }
-        return null;
+        mapper = initCache(beanClass);
+        if (mapper != null) {
+            return mapper.getTarget();
+        }
+
+        return Modifier.isAbstract(beanClass.getModifiers())
+                || Modifier.isInterface(beanClass.getModifiers())
+                ? null : beanClass;
+    }
+
+    public void setDefaultMapperFactory(DefaultMapperFactory defaultMapperFactory) {
+        Objects.requireNonNull(defaultMapperFactory);
+        this.defaultMapperFactory = defaultMapperFactory;
+    }
+
+    public void setDefaultPropertyCopier(DefaultPropertyCopier defaultPropertyCopier) {
+        this.defaultPropertyCopier = defaultPropertyCopier;
     }
 
     public static class Mapper<T> {
@@ -132,12 +240,9 @@ public class MapperEntityFactory implements EntityFactory {
         }
 
         @Override
+        @SneakyThrows
         public T get() {
-            try {
-                return type.newInstance();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+            return type.newInstance();
         }
     }
 }
