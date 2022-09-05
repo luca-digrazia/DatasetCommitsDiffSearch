@@ -210,16 +210,12 @@ package android.taobao.atlas.startup.patch;
 
 import android.app.Application;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.os.Build;
 import android.taobao.atlas.startup.KernalVersionManager;
-import android.taobao.atlas.startup.NClassLoader;
-import android.taobao.atlas.util.IOUtil;
 import android.text.TextUtils;
 import android.util.Log;
 import dalvik.system.DexFile;
-import dalvik.system.PathClassLoader;
 import java.io.*;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
@@ -241,20 +237,18 @@ public class KernalBundle{
      * the bundle archive file.
      */
     KernalBundleArchive archive;
-    private Class FrameworkPropertiesClazz ;
 
     public static String KERNAL_BUNDLE_NAME = "com.taobao.maindex";
 
     public static KernalBundle kernalBundle = null;
 
-    public static boolean checkloadKernalBundle(Application application,String currentProcessName) {
+    public static boolean checkloadKernalBundle(Application application,String containerVersion,String currentProcessName) {
         File storageDir = new File(KernalConstants.baseContext.getFilesDir(),"storage");
         final File kernalDir = new File(storageDir, KERNAL_BUNDLE_NAME);
         if (kernalDir.exists()) {
             try {
-                kernalBundle = new KernalBundle(kernalDir,KernalVersionManager.instance().getBaseBundleVersion(KERNAL_BUNDLE_NAME),currentProcessName);
+                kernalBundle = new KernalBundle(kernalDir,currentProcessName,containerVersion);
                 kernalBundle.patchKernalDex();
-                kernalBundle.replacePathClassLoaderIfNeed(application);
                 kernalBundle.patchKernalResource(application);
                 return true;
             } catch (Exception e) {
@@ -268,7 +262,7 @@ public class KernalBundle{
     }
 
     public static boolean hasKernalPatch(){
-        return KernalVersionManager.instance().isUpdated(KERNAL_BUNDLE_NAME) || KernalVersionManager.instance().isDexPatched(KERNAL_BUNDLE_NAME);
+        return KernalVersionManager.instance().isChanged("com.taobao.maindex");
     }
 
     public static void clear(){
@@ -279,12 +273,15 @@ public class KernalBundle{
         }
     }
 
-    //create
+    public static boolean downgradeRevision(File bundleDir,boolean forceDelete) throws IOException {
+        return KernalBundleArchive.downgradeRevision(bundleDir,forceDelete);
+    }
+
     public KernalBundle(final File bundleDir,
-                        final File file,String version,long dexPatchVersion) throws Exception {
+                        final File file,String containerVersion,long dexPatchVersion) throws Exception {
         this.bundleDir = bundleDir;
         try {
-            archive = new KernalBundleArchive(bundleDir, file,version,dexPatchVersion);
+            archive = new KernalBundleArchive(bundleDir, file,containerVersion,dexPatchVersion);
         } catch (IOException e) {
             e.printStackTrace();
             if (bundleDir.exists()) {
@@ -294,13 +291,56 @@ public class KernalBundle{
         }
     }
 
-    //reload
-    public KernalBundle(final File bundleDir,String version,String process) throws Exception {
+    public KernalBundle(final File bundleDir,String process,String installedVersion) throws Exception {
         KernalFileLock.getInstance().LockExclusive(bundleDir);
         this.bundleDir = bundleDir;
-        long dexPatchVersion = KernalVersionManager.instance().getDexPatchBundleVersion(KERNAL_BUNDLE_NAME);
+        File metaFile = new File(bundleDir, "meta");
+        String metaRevision  = "";
         try {
-            archive = new KernalBundleArchive(KernalConstants.baseContext,bundleDir,version,dexPatchVersion,process);
+            if(KernalVersionManager.instance().DEXPATCH_VERSION>0 && KernalVersionManager.instance().isDexPatched("com.taobao.maindex")){
+                archive = new KernalBundleArchive(KernalConstants.baseContext,bundleDir,"",process,installedVersion,KernalVersionManager.instance().DEXPATCH_VERSION);
+            }else {
+                if (shouldSyncUpdateInThisProcess(process)) {
+                    archive = new KernalBundleArchive(KernalConstants.baseContext,bundleDir, "",process, installedVersion,-1);
+                    File revisionDir = archive.getRevisionDir();
+                    if (!metaFile.exists()) {
+                        int retry = 3;
+                        do {
+                            metaFile.createNewFile();
+                            if (metaFile.exists()) {
+                                break;
+                            } else {
+                                retry--;
+                            }
+                        } while (!metaFile.exists() && retry > 3);
+                    } else {
+                        DataInputStream in = new DataInputStream(new FileInputStream(metaFile));
+                        metaRevision = in.readUTF();
+                        quietClose(in);
+                    }
+                    if (!metaRevision.equals(revisionDir.getAbsolutePath())) {
+                        FileOutputStream fos = new FileOutputStream(metaFile);
+                        DataOutputStream out = new DataOutputStream(fos);
+                        out.writeUTF(revisionDir.getAbsolutePath());
+                        out.flush();
+                        fos.getFD().sync(); //this may be time-consuming
+                        quietClose(out);
+                    }
+                } else {
+                    if (metaFile.exists()) {
+                        DataInputStream in = new DataInputStream(new FileInputStream(metaFile));
+                        metaRevision = in.readUTF();
+                        quietClose(in);
+                        if (metaRevision != null && new File(metaRevision).exists()) {
+                            archive = new KernalBundleArchive(KernalConstants.baseContext,bundleDir, metaRevision, process,installedVersion,-1);
+                        } else {
+                            throw new IOException("can not find valid revision");
+                        }
+                    } else {
+                        throw new IOException("can not find kernal meta");
+                    }
+                }
+            }
         } catch (IOException e) {
             e.printStackTrace();
             throw new IOException("resolve kernal Bundlele fail ", e);
@@ -313,11 +353,7 @@ public class KernalBundle{
         DexFile[] dexFile = archive.getOdexFile();
         if ((dexFile != null&&dexFile.length>0) || archive.getLibraryDirectory().exists()) {
             installKernalBundle(KernalConstants.baseContext.getClassLoader(),archive);
-            FrameworkPropertiesClazz = archive.getOdexFile()[dexFile.length-1].loadClass("android.taobao.atlas.framework.FrameworkProperties",ClassLoader.getSystemClassLoader());
-            if(FrameworkPropertiesClazz==null && isDeubgMode()){
-                Log.e("KernalBundle","main dex is not match, library awo test?");
-                return;
-            }
+            Class FrameworkPropertiesClazz = archive.getOdexFile()[dexFile.length-1].loadClass("android.taobao.atlas.framework.FrameworkProperties",ClassLoader.getSystemClassLoader());
             Field versionField = FrameworkPropertiesClazz.getDeclaredField("version");
             versionField.setAccessible(true);
             String version = (String)versionField.get(FrameworkPropertiesClazz.newInstance());
@@ -328,57 +364,42 @@ public class KernalBundle{
                     throw new RuntimeException("maindex version is not mismatch");
                 }
             }
-        }
-    }
 
-    public void replacePathClassLoaderIfNeed(Application application){
-        ClassLoader originalClassLoader = null;
-        if(Build.VERSION.SDK_INT>=24) {
-            originalClassLoader = application.getClassLoader();
-            ClassLoader loader = getClass().getClassLoader();
-
-            boolean needReplace = false;
-            do{
-                if(loader.getClass().getName().equals(PathClassLoader.class.getName())){
-                    needReplace = true;
-                    break;
-                }
-            }
-            while((loader=loader.getParent())!=null);
-            if(needReplace){
-                try {
-                    NClassLoader.replacePathClassLoader(KernalConstants.baseContext,KernalBundle.class.getClassLoader());
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
-
-        try {
-            Class RuntimeVariablesClass = application.getClassLoader().loadClass("android.taobao.atlas.runtime.RuntimeVariables");
-            if(originalClassLoader!=null) {
-                RuntimeVariablesClass.getDeclaredField("sRawClassLoader").set(RuntimeVariablesClass, originalClassLoader);
-            }
-            if(FrameworkPropertiesClazz!=null){
-                RuntimeVariablesClass.getDeclaredField("FrameworkPropertiesClazz").set(RuntimeVariablesClass, FrameworkPropertiesClazz);
-            }else if(!isDeubgMode()){
-                throw new RuntimeException("FrameworkPropertiesClazz find error,will be rollback!");
-            }
-            RuntimeVariablesClass.getDeclaredField("androidApplication").set(RuntimeVariablesClass,application);
-            RuntimeVariablesClass.getDeclaredField("delegateResources").set(RuntimeVariablesClass,KernalConstants.baseContext.getResources());
-        } catch (Throwable e) {
-            e.printStackTrace();
         }
     }
 
     public void patchKernalResource(Application application) throws Exception{
-        Class DelegateResourcesClazz = application.getClassLoader().loadClass("android.taobao.atlas.runtime.DelegateResources");
-        DelegateResourcesClazz.getDeclaredMethod("addApkpatchResources", String.class)
-                .invoke(DelegateResourcesClazz, archive.getArchiveFile().getAbsolutePath());
+        if(archive.hasResources()){
+            Class RuntimeVariablesClazz = application.getClassLoader().loadClass("android.taobao.atlas.runtime.RuntimeVariables");
+            RuntimeVariablesClazz.getDeclaredField("androidApplication").set(RuntimeVariablesClazz,application);
+            RuntimeVariablesClazz.getDeclaredField("delegateResources").set(RuntimeVariablesClazz,KernalConstants.baseContext.getResources());
+            Class DelegateResourcesClazz = application.getClassLoader().loadClass("android.taobao.atlas.runtime.DelegateResources");
+            DelegateResourcesClazz.getDeclaredMethod("addApkpatchResources", String.class)
+                    .invoke(DelegateResourcesClazz, archive.getArchiveFile().getAbsolutePath());
+        }
     }
 
     public int getState() {
         return 0;
+    }
+
+    public void update(File file,String version,long dexPatchVersion) throws IOException {
+        try {
+            archive.newRevision(file,version,dexPatchVersion);
+        } catch (Exception e) {
+            throw new IOException("Could not update bundle " + toString(), e);
+        }
+    }
+
+    private static boolean isDebug(Context context){
+        try {
+            final ApplicationInfo app_info = context.getApplicationInfo();
+            boolean debug = (app_info.flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+            return debug;
+        }catch (Throwable throwable){
+            return false;
+        }
+
     }
     /**
      * 安装so库
@@ -672,15 +693,58 @@ public class KernalBundle{
             if (DEBUG) {
                 return true;
             }
-            SharedPreferences sharedPreferences = KernalConstants.baseContext.getSharedPreferences("dynamic_test",Context.MODE_PRIVATE);
-            boolean dynamic_test_flag = sharedPreferences.getBoolean("dynamic_test_key",false);
-            if(dynamic_test_flag){
-                return true;
-            }
         } catch (final Exception e) {
             return false;
         }
         return false;
     }
+
+//    public static void installExternalDexs(Context context){
+//        String externalDexDir = context.getFilesDir()+File.separator+"external_dexs";
+//        File dexDir = new File(externalDexDir);
+//        if(dexDir.exists()) {
+//            File[] dexFiles = dexDir.listFiles(new FilenameFilter() {
+//                @Override
+//                public boolean accept(File dir, String filename) {
+//                    if (filename.endsWith(".dex")) {
+//                        return true;
+//                    } else {
+//                        return false;
+//                    }
+//                }
+//            });
+//            if(dexFiles!=null && dexFiles.length>0){
+//                File odex ;
+//                Object[] element = null;
+//                DexFile[]dexFiles1 = new DexFile[dexFiles.length];
+//                for(int x=0;x<dexFiles.length;x++){
+//                    odex = new File(dexFiles[x].getAbsolutePath()+".odex");
+//                    try {
+//                        DexFile dexFile = DexFile.loadDex(dexFiles[x].getAbsolutePath(), odex.getAbsolutePath(), 0);
+//                        dexFiles1[x] = dexFile;
+//                    } catch (Throwable e) {
+//                        e.printStackTrace();
+//                    }
+//                    try {
+//                        element = makeDexElement(null, dexFiles1);
+//                        if (element != null && element.length > 0) {
+//                            ClassLoader loader = KernalBundle.class.getClassLoader();
+//                            Field pathListField = findField(loader, "pathList");
+//                            Object dexPathList = pathListField.get(loader);
+//                            expandFieldArray(dexPathList, "dexElements", element);
+//                        }
+//                    } catch (IOException e) {
+//                        e.printStackTrace();
+//                    } catch (IllegalAccessException e) {
+//                        e.printStackTrace();
+//                    } catch (NoSuchFieldException e) {
+//                        e.printStackTrace();
+//                    }
+//
+//                }
+//            }
+//        }
+//    }
+
 
 }

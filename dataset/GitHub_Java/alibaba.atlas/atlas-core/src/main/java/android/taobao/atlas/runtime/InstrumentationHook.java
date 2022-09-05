@@ -239,6 +239,7 @@ import android.taobao.atlas.framework.BundleImpl;
 import android.taobao.atlas.framework.Framework;
 import android.taobao.atlas.hack.AtlasHacks;
 import android.taobao.atlas.runtime.newcomponent.activity.ActivityBridge;
+import android.taobao.atlas.util.log.impl.AtlasMonitor;
 import android.taobao.atlas.util.FileUtils;
 import android.taobao.atlas.util.StringUtils;
 import android.text.TextUtils;
@@ -400,7 +401,7 @@ public class InstrumentationHook extends Instrumentation {
 		}
 
 		String bundleName = AtlasBundleInfoManager.instance().getBundleForComponet(componentName);
-		if(!TextUtils.isEmpty(bundleName) && !Atlas.isDisableBundle(bundleName)){
+		if(!TextUtils.isEmpty(bundleName)){
 			BundleImpl impl = (BundleImpl)Atlas.getInstance().getBundle(bundleName);
 			if(impl!=null&&impl.checkValidate()) {
 				return callback.execStartActivity();
@@ -455,6 +456,7 @@ public class InstrumentationHook extends Instrumentation {
 			@Override
 			public void run() {
 				Log.e("InstrumentationHook","async startActivity");
+//				if (current == ActivityTaskMgr.getInstance().peekTopActivity() || activitySize == ActivityTaskMgr.getInstance().sizeOfActivityStack()+1) {
 					if (context instanceof Activity) {
 						callback.execStartActivity();
 						((Activity)context).overridePendingTransition(0,0);
@@ -466,10 +468,8 @@ public class InstrumentationHook extends Instrumentation {
 
 				if (dialog != null && current != null && !current.isFinishing()) {
 					try {
-						if(dialog.isShowing()) {
-							dialog.show();
-							ActivityTaskMgr.getInstance().sReminderDialog = dialog;
-						}
+						if(dialog.isShowing())
+							dialog.dismiss();
 					}catch (Throwable e){}
 				}
 			}
@@ -479,14 +479,13 @@ public class InstrumentationHook extends Instrumentation {
 			public void run() {
 				if (current == ActivityTaskMgr.getInstance().peekTopActivity()) {
 					fallBackToClassNotFoundCallback(context, intent, component);
+//					Toast.makeText(RuntimeVariables.androidApplication, "install error", Toast.LENGTH_SHORT).show();
 				}
 
 				if (dialog != null && current != null && !current.isFinishing()) {
 					try {
-						if(dialog.isShowing()) {
+						if(dialog.isShowing())
 							dialog.dismiss();
-							ActivityTaskMgr.getInstance().sReminderDialog = null;
-						}
 					}catch(Throwable e){}
 				}
 			}
@@ -553,7 +552,8 @@ public class InstrumentationHook extends Instrumentation {
         Activity activity = null;
         try{
 	        if (intent!=null && intent.getAction()!=null&& intent.getAction().equals("android.intent.action.MAIN")){
-	        	intent.putExtra("android.taobao.atlas.mainAct.wait", false);
+	        	boolean needWait = Framework.getProperty("android.taobao.atlas.mainAct.wait", false);
+	        	intent.putExtra("android.taobao.atlas.mainAct.wait", needWait);
 	        }
         }catch (Exception e){
         }
@@ -561,12 +561,14 @@ public class InstrumentationHook extends Instrumentation {
         try {
             activity = mBase.newActivity(cl, className, intent);
         } catch (ClassNotFoundException e) {
-        	String launchActivityName = "";
-			Intent launchIntentForPackage = RuntimeVariables.androidApplication.getPackageManager().getLaunchIntentForPackage(RuntimeVariables.androidApplication.getPackageName());
-			if (launchIntentForPackage != null) {
-				ComponentName componentName = launchIntentForPackage.resolveActivity(RuntimeVariables.androidApplication.getPackageManager());
-				launchActivityName = componentName.getClassName();
-			}
+        	String launchActivityName = Framework.getProperty("android.taobao.atlas.welcome","");
+            if(TextUtils.isEmpty(launchActivityName)) {
+                Intent launchIntentForPackage = RuntimeVariables.androidApplication.getPackageManager().getLaunchIntentForPackage(RuntimeVariables.androidApplication.getPackageName());
+                if (launchIntentForPackage != null) {
+                    ComponentName componentName = launchIntentForPackage.resolveActivity(RuntimeVariables.androidApplication.getPackageManager());
+                    launchActivityName = componentName.getClassName();
+                }
+            }
             if (TextUtils.isEmpty(launchActivityName)) {
                 throw e;
             }
@@ -623,19 +625,15 @@ public class InstrumentationHook extends Instrumentation {
 				bundle.startBundle();
         }
 
-        String launchActivityName = "";
-		Intent launchIntentForPackage = RuntimeVariables.androidApplication.getPackageManager().getLaunchIntentForPackage(RuntimeVariables.androidApplication.getPackageName());
-		if (launchIntentForPackage != null) {
-			ComponentName componentName = launchIntentForPackage.resolveActivity(RuntimeVariables.androidApplication.getPackageManager());
-			launchActivityName = componentName.getClassName();
-		}
-        if(TextUtils.isEmpty(launchActivityName)){
-			launchActivityName = "com.taobao.tao.welcome.Welcome";
+        String welcomeClassName = Framework.getProperty("android.taobao.atlas.welcome","com.taobao.tao.welcome.Welcome");
+        if(TextUtils.isEmpty(welcomeClassName)){
+            welcomeClassName = "com.taobao.tao.welcome.Welcome";
         }
 		if(activity.getIntent()!=null){
 			activity.getIntent().setExtrasClassLoader(RuntimeVariables.delegateClassLoader);
 		}
-        if(activity.getClass().getName().equals(launchActivityName)){
+//        ensureResourcesInjected(activity);
+        if(activity.getClass().getName().equals(welcomeClassName)){
             mBase.callActivityOnCreate(activity, null);
         }else{
         	try{
