@@ -56,7 +56,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   private final DottedVersion iosSimulatorVersion;
   private final String iosSimulatorDevice;
   private final boolean generateDebugSymbols;
-  private final boolean generateLinkmap;
   private final boolean runMemleaks;
   private final ImmutableList<String> copts;
   private final CompilationMode compilationMode;
@@ -81,7 +80,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.iosSimulatorVersion =
         Preconditions.checkNotNull(objcOptions.iosSimulatorVersion, "iosSimulatorVersion");
     this.generateDebugSymbols = objcOptions.generateDebugSymbols;
-    this.generateLinkmap = objcOptions.generateLinkmap;
     this.runMemleaks = objcOptions.runMemleaks;
     this.copts = ImmutableList.copyOf(objcOptions.copts);
     this.compilationMode = Preconditions.checkNotNull(options.compilationMode, "compilationMode");
@@ -121,10 +119,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
 
   public boolean generateDebugSymbols() {
     return generateDebugSymbols;
-  }
-
-  public boolean generateLinkmap() {
-    return generateLinkmap;
   }
 
   public boolean runMemleaks() {

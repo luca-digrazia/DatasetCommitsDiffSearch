@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteSource;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -23,9 +22,11 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.xcode.plmerge.proto.PlMergeProtos;
 import com.google.devtools.build.xcode.plmerge.proto.PlMergeProtos.Control;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -40,7 +41,6 @@ public final class PlMergeControlBytes extends ByteSource {
   @Nullable private final Map<String, String> variableSubstitutions;
   @Nullable private final String executableName;
   private final Artifact mergedPlist;
-  private final OutputFormat outputFormat;
 
   /**
    * Creates a control based on the passed bundling's plists and values.
@@ -63,18 +63,14 @@ public final class PlMergeControlBytes extends ByteSource {
         bundling.getPrimaryBundleId(),
         bundling.getFallbackBundleId(),
         bundling.variableSubstitutions(),
-        bundling.getExecutableName(),
-        mergedPlist,
-        OutputFormat.BINARY);
+        bundling.getName(),
+        mergedPlist);
   }
 
   /**
    * Creates a control that merges the given plists into the merged plist.
    */
-  static PlMergeControlBytes fromPlists(
-      NestedSet<Artifact> inputPlists,
-      Artifact mergedPlist,
-      OutputFormat outputFormat) {
+  static PlMergeControlBytes fromPlists(NestedSet<Artifact> inputPlists, Artifact mergedPlist) {
     return new PlMergeControlBytes(
         inputPlists,
         NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
@@ -82,8 +78,7 @@ public final class PlMergeControlBytes extends ByteSource {
         null,
         ImmutableMap.<String, String>of(),
         null,
-        mergedPlist,
-        outputFormat);
+        mergedPlist);
   }
 
   private PlMergeControlBytes(
@@ -93,8 +88,7 @@ public final class PlMergeControlBytes extends ByteSource {
       @Nullable String fallbackBundleId,
       @Nullable Map<String, String> variableSubstitutions,
       @Nullable String executableName,
-      Artifact mergedPlist,
-      OutputFormat outputFormat) {
+      Artifact mergedPlist) {
     this.inputPlists = inputPlists;
     this.immutableInputPlists = immutableInputPlists;
     this.primaryBundleId = primaryBundleId;
@@ -102,7 +96,6 @@ public final class PlMergeControlBytes extends ByteSource {
     this.variableSubstitutions = variableSubstitutions;
     this.executableName = executableName;
     this.mergedPlist = mergedPlist;
-    this.outputFormat = Preconditions.checkNotNull(outputFormat);
   }
 
   @Override
@@ -130,26 +123,6 @@ public final class PlMergeControlBytes extends ByteSource {
       control.setExecutableName(executableName);
     }
 
-    control.setOutputFormat(outputFormat.getProtoOutputFormat());
-
     return control.build();
-  }
-
-  /**
-   * Plist output formats.
-   */
-  public enum OutputFormat {
-    BINARY(Control.OutputFormat.BINARY),
-    XML(Control.OutputFormat.XML);
-
-    private final Control.OutputFormat protoOutputFormat;
-
-    private OutputFormat(Control.OutputFormat protoOutputFormat) {
-      this.protoOutputFormat = protoOutputFormat;
-    }
-
-    Control.OutputFormat getProtoOutputFormat() {
-      return protoOutputFormat;
-    }
   }
 }
