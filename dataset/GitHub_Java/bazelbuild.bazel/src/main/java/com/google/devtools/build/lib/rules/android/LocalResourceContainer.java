@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -170,8 +170,7 @@ public final class LocalResourceContainer {
         PathFragment assetsDir, Iterable<FileProvider> targets) {
       for (FileProvider target : targets) {
         for (Artifact file : target.getFilesToBuild()) {
-          PathFragment packageFragment = file.getArtifactOwner().getLabel()
-              .getPackageIdentifier().getPathFragment();
+          PathFragment packageFragment = file.getArtifactOwner().getLabel().getPackageFragment();
           PathFragment packageRelativePath =
               file.getRootRelativePath().relativeTo(packageFragment);
           if (packageRelativePath.startsWith(assetsDir)) {
@@ -199,8 +198,7 @@ public final class LocalResourceContainer {
       Artifact lastFile = null;
       for (FileProvider target : targets) {
         for (Artifact file : target.getFilesToBuild()) {
-          PathFragment packageFragment = file.getArtifactOwner().getLabel()
-              .getPackageIdentifier().getPathFragment();
+          PathFragment packageFragment = file.getArtifactOwner().getLabel().getPackageFragment();
           PathFragment packageRelativePath =
               file.getRootRelativePath().relativeTo(packageFragment);
           PathFragment resourceDir = findResourceDir(file);
