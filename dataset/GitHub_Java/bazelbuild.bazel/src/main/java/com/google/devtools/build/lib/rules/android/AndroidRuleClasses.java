@@ -233,7 +233,6 @@ public final class AndroidRuleClasses {
             // getSplitPrerequisites() will complain if cpu is null after this transition,
             // so default to android_cpu.
             splitOptions.get(BuildConfiguration.Options.class).cpu = androidOptions.cpu;
-            splitOptions.get(CppOptions.class).dynamicMode = androidOptions.dynamicMode;
             setCrosstoolToAndroid(splitOptions, buildOptions);
             return ImmutableList.of(splitOptions);
           }
@@ -249,7 +248,6 @@ public final class AndroidRuleClasses {
             splitOptions.get(AndroidConfiguration.Options.class).cpu = cpu;
             splitOptions.get(BuildConfiguration.Options.class).cpu = cpu;
             splitOptions.get(CppOptions.class).cppCompiler = androidOptions.cppCompiler;
-            splitOptions.get(CppOptions.class).dynamicMode = androidOptions.dynamicMode;
             setCrosstoolToAndroid(splitOptions, buildOptions);
             result.add(splitOptions);
           }
@@ -544,8 +542,6 @@ public final class AndroidRuleClasses {
               .value(env.getToolsLabel("//third_party/java/jarjar:jarjar_bin")))
           .add(attr("$idlclass", LABEL).cfg(HOST).exec()
               .value(env.getToolsLabel("//tools/android:IdlClass")))
-          .add(attr("$desugar_java8_extra_bootclasspath", LABEL).cfg(HOST)
-              .value(env.getToolsLabel("//tools/android:desugar_java8_extra_bootclasspath")))
           .build();
     }
 
