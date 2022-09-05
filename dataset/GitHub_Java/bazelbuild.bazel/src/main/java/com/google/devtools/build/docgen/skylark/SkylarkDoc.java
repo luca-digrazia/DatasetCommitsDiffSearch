@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Abstract class for containing documentation for a Skylark syntactic entity.
@@ -39,7 +40,24 @@ abstract class SkylarkDoc {
   /**
    * Returns a string containing the formatted HTML documentation of the entity being documented.
    */
-  public abstract String getDocumentation();
+  public String getDocumentation() {
+    String doc = getEntityDocumentation();
+    if (doc == null || doc.length() == 0) {
+      return "";
+    }
+
+    // Check if valid punctiation is not present at the end of the documentation.
+    if (Pattern.matches(".+[^.?!]$", doc)) {
+      // Add a final period.
+      doc += ".";
+    }
+    return doc;
+  }
+
+  /**
+   * Returns a string containing the HTML documentation of the entity, before being post-processed.
+   */
+  protected abstract String getEntityDocumentation();
 
   protected String getTypeAnchor(Class<?> returnType, Class<?> generic1) {
     return getTypeAnchor(returnType) + " of " + getTypeAnchor(generic1) + "s";
