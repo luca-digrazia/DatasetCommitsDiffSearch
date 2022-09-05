@@ -1,7 +1,8 @@
 package com.prolificinteractive.materialcalendarview.sample;
 
+import android.graphics.Color;
 import android.os.Bundle;
-import android.support.v7.app.AppCompatActivity;
+import android.support.v7.app.ActionBarActivity;
 import android.widget.TextView;
 
 import com.prolificinteractive.materialcalendarview.CalendarDay;
@@ -19,11 +20,12 @@ import java.util.Calendar;
 /**
  * Shows off the most basic usage
  */
-public class BasicActivityDecorated extends AppCompatActivity implements OnDateChangedListener {
+public class BasicActivityDecorated extends ActionBarActivity implements OnDateChangedListener {
 
     private static final DateFormat FORMATTER = SimpleDateFormat.getDateInstance();
     private TextView textView;
-    private OneDayDecorator oneDayDecorator = new OneDayDecorator("★");
+    private OneDayDecorator oneDayDecorator;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,7 +64,6 @@ public class BasicActivityDecorated extends AppCompatActivity implements OnDateC
 
         widget.addDecorators(
                 new HighlightWeekendsDecorator(),
-                oneDayDecorator,
                 new TextDecorator("●", Arrays.asList(d1.getTime(), d2.getTime(), d3.getTime())),
                 new TextDecorator("✔", Arrays.asList(d4.getTime(), d5.getTime()))
         );
@@ -71,8 +72,15 @@ public class BasicActivityDecorated extends AppCompatActivity implements OnDateC
 
     @Override
     public void onDateChanged(MaterialCalendarView widget, CalendarDay date) {
-        oneDayDecorator.setDate(date.getDate());
-        widget.invalidateDecorators();
+
+        if(oneDayDecorator == null){
+            oneDayDecorator = new OneDayDecorator("★",date.getDate());
+            widget.addDecorators(oneDayDecorator);
+        }else{
+            oneDayDecorator.setDate(date.getDate());
+            widget.invalidateDecorators();
+        }
+
 
         textView.setText(FORMATTER.format(date.getDate()));
     }
