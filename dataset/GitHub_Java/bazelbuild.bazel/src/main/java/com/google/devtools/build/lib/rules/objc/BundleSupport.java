@@ -18,6 +18,7 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.ASSET_CATALO
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.BUNDLE_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STRINGS;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCASSETS_DIR;
+import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.XCRUN;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Verify;
@@ -31,8 +32,6 @@ import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.InvalidFamilyNameException;
 import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.RepeatedFamilyNameException;
@@ -130,16 +129,16 @@ final class BundleSupport {
   }
 
   private void validatePlatform() {
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     Platform platform = null;
-    for (String architecture : appleConfiguration.getIosMultiCpus()) {
+    for (String architecture : objcConfiguration.getIosMultiCpus()) {
       if (platform == null) {
-        platform = Platform.forIosArch(architecture);
-      } else if (platform != Platform.forIosArch(architecture)) {
+        platform = Platform.forArch(architecture);
+      } else if (platform != Platform.forArch(architecture)) {
         ruleContext.ruleError(
             String.format("In builds which require bundling, --ios_multi_cpus does not currently "
                 + "allow values for both simulator and device builds. Flag was %s",
-                appleConfiguration.getIosMultiCpus()));
+            objcConfiguration.getIosMultiCpus()));
       }
     }
   }
@@ -232,10 +231,9 @@ final class BundleSupport {
               .setCommandLine(ibActionsCommandLine(archiveRoot, zipOutput, storyboardInput))
               .addOutput(zipOutput)
               .addInput(storyboardInput)
-              // TODO(dmaclach): Adding realpath and xcrunwrapper should not be required once
+              // TODO(dmaclach): Adding realpath here should not be required once
               // https://github.com/bazelbuild/bazel/issues/285 is fixed.
               .addInput(attributes.realpath())
-              .addInput(CompilationSupport.xcrunwrapper(ruleContext).getExecutable())
               .build(ruleContext));
     }
   }
@@ -259,7 +257,7 @@ final class BundleSupport {
   }
 
   private void registerMomczipActions(ObjcProvider objcProvider) {
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     IntermediateArtifacts intermediateArtifacts =
         ObjcRuleClasses.intermediateArtifacts(ruleContext);
     Iterable<Xcdatamodel> xcdatamodels = Xcdatamodels.xcdatamodels(
@@ -272,17 +270,16 @@ final class BundleSupport {
               .setExecutable(attributes.momcWrapper())
               .addOutput(outputZip)
               .addInputs(datamodel.getInputs())
-              // TODO(dmaclach): Adding realpath and xcrunwrapper should not be required once
+              // TODO(dmaclach): Adding realpath here should not be required once
               // https://github.com/google/bazel/issues/285 is fixed.
               .addInput(attributes.realpath())
-              .addInput(CompilationSupport.xcrunwrapper(ruleContext).getExecutable())
-             .setCommandLine(CustomCommandLine.builder()
+              .setCommandLine(CustomCommandLine.builder()
                   .addPath(outputZip.getExecPath())
                   .add(datamodel.archiveRootForMomczip())
-                  .add("-XD_MOMC_SDKROOT=" + AppleToolchain.sdkDir())
+                  .add("-XD_MOMC_SDKROOT=" + IosSdkCommands.sdkDir(objcConfiguration))
                   .add("-XD_MOMC_IOS_TARGET_VERSION=" + bundling.getMinimumOsVersion())
                   .add("-MOMC_PLATFORMS")
-                  .add(appleConfiguration.getBundlingPlatform().getLowerCaseNameInPlist())
+                  .add(objcConfiguration.getBundlingPlatform().getLowerCaseNameInPlist())
                   .add("-XD_MOMC_TARGET_VERSION=10.6")
                   .add(datamodel.getContainer().getSafePathString())
                   .build())
@@ -305,10 +302,9 @@ final class BundleSupport {
               .setCommandLine(ibActionsCommandLine(archiveRoot, zipOutput, original))
               .addOutput(zipOutput)
               .addInput(original)
-              // TODO(dmaclach): Adding realpath and xcrunwrapper should not be required once
+              // TODO(dmaclach): Adding realpath here should not be required once
               // https://github.com/bazelbuild/bazel/issues/285 is fixed.
               .addInput(attributes.realpath())
-              .addInput(CompilationSupport.xcrunwrapper(ruleContext).getExecutable())
               .build(ruleContext));
     }
   }
@@ -328,7 +324,6 @@ final class BundleSupport {
               .addPath(strings.getExecPath())
               .build())
           .addInput(strings)
-          .addInput(CompilationSupport.xcrunwrapper(ruleContext).getExecutable())
           .addOutput(bundled)
           .build(ruleContext));
     }
@@ -390,10 +385,9 @@ final class BundleSupport {
             .addTransitiveInputs(objcProvider.get(ASSET_CATALOG))
             .addOutput(zipOutput)
             .addOutput(actoolPartialInfoplist)
-            // TODO(dmaclach): Adding realpath and xcrunwrapper should not be required once
+            // TODO(dmaclach): Adding realpath here should not be required once
             // https://github.com/google/bazel/issues/285 is fixed.
             .addInput(attributes.realpath())
-            .addInput(CompilationSupport.xcrunwrapper(ruleContext).getExecutable())
             .setCommandLine(actoolzipCommandLine(
                 objcProvider,
                 zipOutput,
@@ -403,11 +397,11 @@ final class BundleSupport {
 
   private CommandLine actoolzipCommandLine(ObjcProvider provider, Artifact zipOutput,
       Artifact partialInfoPlist) {
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     CustomCommandLine.Builder commandLine = CustomCommandLine.builder()
         // The next three arguments are positional, i.e. they don't have flags before them.
         .addPath(zipOutput.getExecPath())
-        .add("--platform").add(appleConfiguration.getBundlingPlatform().getLowerCaseNameInPlist())
+        .add("--platform").add(objcConfiguration.getBundlingPlatform().getLowerCaseNameInPlist())
         .addExecPath("--output-partial-info-plist", partialInfoPlist)
         .add("--minimum-deployment-target").add(bundling.getMinimumOsVersion());
 
