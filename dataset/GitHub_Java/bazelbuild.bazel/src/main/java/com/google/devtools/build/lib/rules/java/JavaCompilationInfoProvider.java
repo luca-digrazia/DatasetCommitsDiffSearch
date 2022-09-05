@@ -21,15 +21,13 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 
 /**
  * A class that provides compilation information in Java rules, for perusal of aspects and tools.
  */
 @SkylarkModule(
-  name = "java_compilation_info",
-  category = SkylarkModuleCategory.NONE,
-  doc = "Provides access to compilation information for Java rules."
+  name = "JavaCompilationInfo",
+  doc = "Provides access to compilation information for Java rules"
 )
 @Immutable
 public class JavaCompilationInfoProvider implements TransitiveInfoProvider {
@@ -73,7 +71,7 @@ public class JavaCompilationInfoProvider implements TransitiveInfoProvider {
     }
   }
 
-  @SkylarkCallable(name = "javac_options", structField = true, doc = "Options to java compiler.")
+  @SkylarkCallable(name = "javac_options", structField = true, doc = "Options to java compiler")
   public ImmutableList<String> getJavacOpts() {
     return javacOpts;
   }
@@ -81,7 +79,7 @@ public class JavaCompilationInfoProvider implements TransitiveInfoProvider {
   @SkylarkCallable(
     name = "runtime_classpath",
     structField = true,
-    doc = "Run-time classpath for this Java target."
+    doc = "Run-time classpath for this Java target"
   )
   public NestedSet<Artifact> getRuntimeClasspath() {
     return runtimeClasspath;
@@ -90,7 +88,7 @@ public class JavaCompilationInfoProvider implements TransitiveInfoProvider {
   @SkylarkCallable(
     name = "compilation_classpath",
     structField = true,
-    doc = "Compilation classpath for this Java target."
+    doc = "Compilation classpath for this Java target"
   )
   public NestedSet<Artifact> getCompilationClasspath() {
     return compilationClasspath;
@@ -99,7 +97,7 @@ public class JavaCompilationInfoProvider implements TransitiveInfoProvider {
   @SkylarkCallable(
     name = "boot_classpath",
     structField = true,
-    doc = "Boot classpath for this Java target."
+    doc = "Boot classpath for this Java target"
   )
   public ImmutableList<Artifact> getBootClasspath() {
     return bootClasspath;

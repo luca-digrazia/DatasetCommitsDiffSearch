@@ -15,17 +15,22 @@ package com.google.devtools.build.lib.ideinfo;
 
 import static com.google.common.collect.Iterables.transform;
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth.assertWithMessage;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.eventbus.EventBus;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.Aspect;
 import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
+import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.actions.BinaryFileWriteAction;
+import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.ArtifactLocation;
@@ -77,9 +82,11 @@ abstract class AndroidStudioInfoAspectTestBase extends BuildViewTestCase {
         }
       };
 
-  private AnalysisResult analysisResult;
-  private Aspect aspect;
+  protected ConfiguredAspect configuredAspect;
 
+  /**
+   * Constructs a string that matches OutputJar#toString for comparison testing.
+   */
   protected static String jarString(String base, String jar, String iJar, String sourceJar) {
     StringBuilder sb = new StringBuilder();
     if (jar != null) {
@@ -107,7 +114,7 @@ abstract class AndroidStudioInfoAspectTestBase extends BuildViewTestCase {
   }
 
   protected void buildTarget(String target) throws Exception {
-    this.analysisResult =
+    AnalysisResult analysisResult =
         update(
             ImmutableList.of(target),
             ImmutableList.of(AndroidStudioInfoAspect.NAME),
@@ -118,32 +125,49 @@ abstract class AndroidStudioInfoAspectTestBase extends BuildViewTestCase {
     Collection<AspectValue> aspects = analysisResult.getAspects();
     assertThat(aspects.size()).isEqualTo(1);
     AspectValue value = aspects.iterator().next();
-    this.aspect = value.getAspect();
-    assertThat(aspect.getName()).isEqualTo(AndroidStudioInfoAspect.NAME);
+    this.configuredAspect = value.getConfiguredAspect();
+    assertThat(configuredAspect.getName()).isEqualTo(AndroidStudioInfoAspect.NAME);
   }
 
+  /**
+   * Returns a map of (label as string) -> RuleIdeInfo for each rule in the transitive
+   * closure of the passed target.
+   */
   protected Map<String, RuleIdeInfo> buildRuleIdeInfo(String target) throws Exception {
     buildTarget(target);
     AndroidStudioInfoFilesProvider provider =
-        aspect.getProvider(AndroidStudioInfoFilesProvider.class);
+        configuredAspect.getProvider(AndroidStudioInfoFilesProvider.class);
     Iterable<Artifact> artifacts = provider.getIdeInfoFiles();
     ImmutableMap.Builder<String, RuleIdeInfo> builder = ImmutableMap.builder();
     for (Artifact artifact : artifacts) {
-      BinaryFileWriteAction generatingAction =
-          (BinaryFileWriteAction)  getGeneratingAction(artifact);
-      RuleIdeInfo ruleIdeInfo = RuleIdeInfo.parseFrom(generatingAction.getSource().openStream());
-      builder.put(ruleIdeInfo.getLabel(), ruleIdeInfo);
+      Action generatingAction = getGeneratingAction(artifact);
+      if (generatingAction instanceof BinaryFileWriteAction) {
+        BinaryFileWriteAction writeAction = (BinaryFileWriteAction) generatingAction;
+        RuleIdeInfo ruleIdeInfo = RuleIdeInfo.parseFrom(writeAction.getSource().openStream());
+        builder.put(ruleIdeInfo.getLabel(), ruleIdeInfo);
+      } else { 
+        verifyPackageManifestSpawnAction(generatingAction);
+      }
     }
     return builder.build();
   }
-
+  
+  protected final void verifyPackageManifestSpawnAction(Action genAction) {
+    assertEquals(genAction.getMnemonic(), "JavaPackageManifest");
+    SpawnAction action = (SpawnAction) genAction;
+    assertFalse(action.isShellCommand());
+  }
+  
   protected List<String> getOutputGroupResult(String outputGroup) {
-    OutputGroupProvider outputGroupProvider = this.aspect.getProvider(OutputGroupProvider.class);
+    OutputGroupProvider outputGroupProvider =
+        this.configuredAspect.getProvider(OutputGroupProvider.class);
     assert outputGroupProvider != null;
     NestedSet<Artifact> artifacts = outputGroupProvider.getOutputGroup(outputGroup);
 
     for (Artifact artifact : artifacts) {
-      assertThat(getGeneratingAction(artifact)).isNotNull();
+      assertWithMessage("Artifact %s has no generating action", artifact)
+          .that(getGeneratingAction(artifact))
+          .isNotNull();
     }
 
     List<String> artifactRelativePaths = Lists.newArrayList();

@@ -15,27 +15,19 @@
 package com.google.devtools.build.lib.rules.java;
 
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.SkylarkApiProvider;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 
 /**
- * A class that exposes the Java providers to Skylark. It is intended to provide a simple and stable
- * interface for Skylark users.
+ * A class that exposes the Java providers to Skylark. It is intended to provide a
+ * simple and stable interface for Skylark users.
  */
 @SkylarkModule(
-  name = "JavaSkylarkApiProvider",
-  title = "java",
-  category = SkylarkModuleCategory.PROVIDER,
-  doc =
-      "Provides access to information about Java rules. Every Java-related target provides "
-          + "this struct, accessible as a 'java' field on a Target struct."
-)
+    name = "JavaSkylarkApiProvider", doc = "Provides access to information about Java rules")
 public final class JavaSkylarkApiProvider extends SkylarkApiProvider {
   /** The name of the field in Skylark used to access this class. */
   public static final String NAME = "java";
@@ -55,9 +47,6 @@ public final class JavaSkylarkApiProvider extends SkylarkApiProvider {
       structField = true)
   public NestedSet<Artifact> getTransitiveDeps() {
     JavaCompilationArgsProvider args = getInfo().getProvider(JavaCompilationArgsProvider.class);
-    if (args == null) {
-      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-    }
     return args.getRecursiveJavaCompilationArgs().getCompileTimeJars();
   }
 
@@ -67,9 +56,6 @@ public final class JavaSkylarkApiProvider extends SkylarkApiProvider {
       structField = true)
   public NestedSet<Artifact> getTransitiveRuntimeDeps() {
     JavaCompilationArgsProvider args = getInfo().getProvider(JavaCompilationArgsProvider.class);
-    if (args == null) {
-      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-    }
     return args.getRecursiveJavaCompilationArgs().getRuntimeJars();
   }
 
@@ -91,20 +77,6 @@ public final class JavaSkylarkApiProvider extends SkylarkApiProvider {
   )
   public JavaRuleOutputJarsProvider getOutputJars() {
     return getInfo().getProvider(JavaRuleOutputJarsProvider.class);
-  }
-
-  @SkylarkCallable(
-    name = "transitive_exports",
-    structField = true,
-    doc = "Returns transitive set of labels that are being exported from this rule."
-  )
-  public NestedSet<Label> getTransitiveExports() {
-    JavaExportsProvider provider = getInfo().getProvider(JavaExportsProvider.class);
-    if (provider != null) {
-      return provider.getTransitiveExports();
-    } else {
-      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-    }
   }
 
   @SkylarkCallable(
