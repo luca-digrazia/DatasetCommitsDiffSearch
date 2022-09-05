@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -75,7 +76,8 @@ public final class J2ObjcEntryClassProvider implements TransitiveInfoProvider {
      */
     public Builder addTransitive(RuleContext ruleContext) {
       if (ruleContext.attributes().has("deps", BuildType.LABEL_LIST)) {
-        addTransitive(ruleContext.getPrerequisites("deps", J2ObjcEntryClassProvider.class));
+        addTransitive(
+            ruleContext.getPrerequisites("deps", Mode.TARGET, J2ObjcEntryClassProvider.class));
       }
 
       return this;

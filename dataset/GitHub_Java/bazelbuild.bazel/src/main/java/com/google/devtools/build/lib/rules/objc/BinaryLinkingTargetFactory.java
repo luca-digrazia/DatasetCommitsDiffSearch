@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.Platform;
@@ -72,12 +71,14 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
       "At least one library dependency or source file is required.";
 
   @Override
-  public final ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException {
+  public final ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
     ObjcCommon common = common(ruleContext);
 
     ObjcProvider objcProvider = common.getObjcProvider();
-    assertLibraryOrSources(objcProvider, ruleContext);
+    if (!hasLibraryOrSources(objcProvider)) {
+      ruleContext.ruleError(REQUIRES_AT_LEAST_ONE_LIBRARY_OR_SOURCE_FILE);
+      return null;
+    }
 
     IntermediateArtifacts intermediateArtifacts =
         ObjcRuleClasses.intermediateArtifacts(ruleContext);
@@ -91,7 +92,9 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
         .validateAttributes()
         .addXcodeSettings(xcodeProviderBuilder);
 
-    ruleContext.assertNoErrors();
+    if (ruleContext.hasErrors()) {
+      return null;
+    }
 
     J2ObjcMappingFileProvider j2ObjcMappingFileProvider = J2ObjcMappingFileProvider.union(
         ruleContext.getPrerequisites("deps", Mode.TARGET, J2ObjcMappingFileProvider.class));
@@ -111,6 +114,10 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
                 ImmutableList.<Artifact>of(),
                 DsymOutputType.APP)
             .validateAttributes();
+
+    if (ruleContext.hasErrors()) {
+      return null;
+    }
 
     Optional<XcTestAppProvider> xcTestAppProvider;
     Optional<RunfilesSupport> maybeRunfilesSupport = Optional.absent();
@@ -184,12 +191,9 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
     return targetBuilder.build();
   }
 
-  private void assertLibraryOrSources(ObjcProvider objcProvider, RuleContext ruleContext)
-      throws RuleErrorException {
-    if (Iterables.isEmpty(objcProvider.get(LIBRARY)) // Includes sources from this target.
-        && Iterables.isEmpty(objcProvider.get(IMPORTED_LIBRARY))) {
-      ruleContext.throwWithRuleError(REQUIRES_AT_LEAST_ONE_LIBRARY_OR_SOURCE_FILE);
-    }
+  private boolean hasLibraryOrSources(ObjcProvider objcProvider) {
+    return !Iterables.isEmpty(objcProvider.get(LIBRARY)) // Includes sources from this target.
+        || !Iterables.isEmpty(objcProvider.get(IMPORTED_LIBRARY));
   }
 
   private ObjcCommon common(RuleContext ruleContext) {
