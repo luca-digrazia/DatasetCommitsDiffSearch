@@ -5,31 +5,27 @@ import java.util.concurrent.TimeUnit;
 /**
  * A timing context.
  *
- * @see Timer#time()
+ * @see com.yammer.metrics.core.TimerMetric#time()
  */
 public class TimerContext {
-    private final Timer timer;
-    private final Clock clock;
+    private final TimerMetric timer;
     private final long startTime;
 
     /**
      * Creates a new {@link TimerContext} with the current time as its starting value and with the
-     * given {@link Timer}.
+     * given {@link com.yammer.metrics.core.TimerMetric}.
      *
-     * @param timer the {@link Timer} to report the elapsed time to
+     * @param timer the {@link com.yammer.metrics.core.TimerMetric} to report the elapsed time to
      */
-    TimerContext(Timer timer, Clock clock) {
+    TimerContext(TimerMetric timer) {
         this.timer = timer;
-        this.clock = clock;
-        this.startTime = clock.getTick();
+        this.startTime = System.nanoTime();
     }
 
     /**
-     * Stops recording the elapsed time, updates the timer and returns the elapsed time
+     * Stops recording the elapsed time and updates the timer.
      */
-    public long stop() {
-        final long elapsedNanos = clock.getTick() - startTime;
-        timer.update(elapsedNanos, TimeUnit.NANOSECONDS);
-        return elapsedNanos;
+    public void stop() {
+        timer.update(System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
     }
 }
