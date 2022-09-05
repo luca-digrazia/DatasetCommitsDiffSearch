@@ -20,6 +20,11 @@ import static com.android.SdkConstants.ATTR_NAME;
 import static com.android.SdkConstants.ATTR_PARENT;
 import static com.android.SdkConstants.ATTR_TYPE;
 import static com.android.SdkConstants.DOT_CLASS;
+import static com.android.SdkConstants.DOT_GIF;
+import static com.android.SdkConstants.DOT_JPEG;
+import static com.android.SdkConstants.DOT_JPG;
+import static com.android.SdkConstants.DOT_PNG;
+import static com.android.SdkConstants.DOT_SVG;
 import static com.android.SdkConstants.DOT_XML;
 import static com.android.SdkConstants.FD_RES_VALUES;
 import static com.android.SdkConstants.PREFIX_ANDROID;
@@ -27,6 +32,7 @@ import static com.android.SdkConstants.STYLE_RESOURCE_PREFIX;
 import static com.android.SdkConstants.TAG_ITEM;
 import static com.android.SdkConstants.TAG_RESOURCES;
 import static com.android.SdkConstants.TAG_STYLE;
+import static com.android.utils.SdkUtils.endsWith;
 import static com.android.utils.SdkUtils.endsWithIgnoreCase;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -279,7 +285,7 @@ public class ResourceShrinker {
   }
 
   /**
-   * Write stub values for IDs to values.xml to match those available in public.xml.
+   * Write stub values for IDs to values.xml to match those available in public.xml. 
    */
   private void createStubIds(File values, Map<File, String> rewritten)
       throws IOException, ParserConfigurationException, SAXException {
@@ -304,7 +310,7 @@ public class ResourceShrinker {
   }
 
   /**
-   * Remove public definitions of unused resources.
+   * Remove public definitions of unused resources. 
    */
   private void trimPublicResources(File publicXml, Set<Resource> deleted,
       Map<File, String> rewritten) throws IOException, ParserConfigurationException, SAXException {
@@ -634,16 +640,19 @@ public class ResourceShrinker {
         boolean isXml = endsWithIgnoreCase(path, DOT_XML);
         Resource from = null;
         // Record resource for the whole file
-        if (folderType != ResourceFolderType.VALUES) {
+        if (folderType != ResourceFolderType.VALUES
+            && (isXml
+            || endsWith(path, DOT_PNG) //also true for endsWith(name, DOT_9PNG)
+            || endsWith(path, DOT_JPG)
+            || endsWith(path, DOT_GIF)
+            || endsWith(path, DOT_JPEG)
+            || endsWith(path, DOT_SVG))) {
           List<ResourceType> types = FolderTypeRelationship.getRelatedResourceTypes(
               folderType);
           ResourceType type = types.get(0);
           assert type != ResourceType.ID : folderType;
           String name = file.getName();
-          int extension = name.indexOf('.');
-          if (extension > 0) {
-            name = name.substring(0, extension);
-          }
+          name = name.substring(0, name.indexOf('.'));
           Resource resource = getResource(type, name);
           if (resource != null) {
             resource.addLocation(file);
