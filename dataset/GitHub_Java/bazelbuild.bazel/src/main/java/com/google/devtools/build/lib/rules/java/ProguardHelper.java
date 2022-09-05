@@ -242,7 +242,6 @@ public abstract class ProguardHelper {
       Artifact proguardOutputJar,
       boolean mappingRequested,
       @Nullable Integer optimizationPasses) throws InterruptedException {
-
     JavaOptimizationMode optMode = getJavaOptimizationMode(ruleContext);
     Preconditions.checkArgument(optMode != JavaOptimizationMode.NOOP);
     Preconditions.checkArgument(optMode != JavaOptimizationMode.LEGACY || !proguardSpecs.isEmpty());
@@ -270,6 +269,10 @@ public abstract class ProguardHelper {
           .setProgressMessage("Trimming binary with Proguard")
           .addOutput(proguardOutputJar);
 
+      if (proguardOutputMap != null) {
+        builder.addOutput(proguardOutputMap);
+      }
+
       ruleContext.registerAction(builder.build(ruleContext));
     } else {
       // Optimization passes have been specified, so run proguard in multiple phases.
@@ -284,13 +287,13 @@ public abstract class ProguardHelper {
               proguardMapping,
               libraryJars,
               proguardOutputJar,
-              /* proguardOutputMap */ null)
+              proguardOutputMap)
               .setProgressMessage("Trimming binary with Proguard: Verification/Shrinking Pass")
               .addArgument("-runtype INITIAL")
+              .addOutput(lastStageOutput)
               .addArgument("-nextstageoutput")
-              .addOutputArgument(lastStageOutput)
+              .addArgument(lastStageOutput.getExecPathString())
               .build(ruleContext));
-
       for (int i = 0; i < optimizationPasses; i++) {
         Artifact optimizationOutput = getProguardTempArtifact(
             ruleContext, optMode.name().toLowerCase(), "proguard_optimization_" + (i + 1) + ".jar");
@@ -302,13 +305,15 @@ public abstract class ProguardHelper {
                 proguardMapping,
                 libraryJars,
                 proguardOutputJar,
-                /* proguardOutputMap */ null)
+                proguardOutputMap)
                 .setProgressMessage("Trimming binary with Proguard: Optimization Pass " + (i + 1))
                 .addArgument("-runtype OPTIMIZATION")
+                .addInput(lastStageOutput)
                 .addArgument("-laststageoutput")
-                .addInputArgument(lastStageOutput)
+                .addArgument(lastStageOutput.getExecPathString())
+                .addOutput(optimizationOutput)
                 .addArgument("-nextstageoutput")
-                .addOutputArgument(optimizationOutput)
+                .addArgument(optimizationOutput.getExecPathString())
                 .build(ruleContext));
         lastStageOutput = optimizationOutput;
       }
@@ -323,9 +328,14 @@ public abstract class ProguardHelper {
           proguardOutputMap)
           .setProgressMessage("Trimming binary with Proguard: Obfuscation and Final Ouput Pass")
           .addArgument("-runtype FINAL")
+          .addInput(lastStageOutput)
           .addArgument("-laststageoutput")
-          .addInputArgument(lastStageOutput)
+          .addArgument(lastStageOutput.getExecPathString())
           .addOutput(proguardOutputJar);
+
+      if (proguardOutputMap != null) {
+        builder.addOutput(proguardOutputMap);
+      }
 
       ruleContext.registerAction(builder.build(ruleContext));
     }
@@ -341,33 +351,29 @@ public abstract class ProguardHelper {
       Iterable<Artifact> libraryJars,
       Artifact proguardOutputJar,
       @Nullable Artifact proguardOutputMap) {
-
     Builder builder = new SpawnAction.Builder()
+        .addInput(programJar)
         .addInputs(libraryJars)
         .addInputs(proguardSpecs)
         .setExecutable(proguard)
         .setMnemonic("Proguard")
         .addArgument("-forceprocessing")
         .addArgument("-injars")
-        .addInputArgument(programJar)
+        .addArgument(programJar.getExecPathString())
         // This is handled by the build system there is no need for proguard to check if things are
         // up to date.
         .addArgument("-outjars")
-        // Don't register the output jar as an output of the action, because multiple proguard
-        // actions will be created for optimization runs which will overwrite the jar, and only
-        // the final proguard action will declare the output jar as an output.
         .addArgument(proguardOutputJar.getExecPathString());
 
     for (Artifact libraryJar : libraryJars) {
-      builder
-          .addArgument("-libraryjars")
+      builder.addArgument("-libraryjars")
           .addArgument(libraryJar.getExecPathString());
     }
 
     if (proguardMapping != null) {
-      builder
+      builder.addInput(proguardMapping)
           .addArgument("-applymapping")
-          .addInputArgument(proguardMapping);
+          .addArgument(proguardMapping.getExecPathString());
     }
 
     for (Artifact proguardSpec : proguardSpecs) {
@@ -377,7 +383,7 @@ public abstract class ProguardHelper {
     if (proguardOutputMap != null) {
       builder
           .addArgument("-printmapping")
-          .addOutputArgument(proguardOutputMap);
+          .addArgument(proguardOutputMap.getExecPathString());
     }
 
     return builder;
