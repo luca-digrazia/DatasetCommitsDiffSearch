@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.AspectClass;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -857,7 +856,7 @@ public class BuildView {
                 targetAndConfig.getLabel(),
                 Attribute.ConfigurationTransition.NONE,
                 // TODO(bazel-team): support top-level aspects
-                AspectCollection.EMPTY));
+                ImmutableSet.<AspectDescriptor>of()));
       }
     }
 
@@ -1003,7 +1002,7 @@ public class BuildView {
           Iterable<BuildOptions> buildOptions) {
         Preconditions.checkArgument(ct.getConfiguration().fragmentClasses().equals(fragments));
         Dependency asDep = Dependency.withTransitionAndAspects(ct.getLabel(),
-            Attribute.ConfigurationTransition.NONE, AspectCollection.EMPTY);
+            Attribute.ConfigurationTransition.NONE, ImmutableSet.<AspectDescriptor>of());
         ImmutableList.Builder<BuildConfiguration> builder = ImmutableList.builder();
         for (BuildOptions options : buildOptions) {
           builder.add(Iterables.getOnlyElement(
@@ -1106,7 +1105,8 @@ public class BuildView {
     return new RuleContext.Builder(
             env,
             (Rule) target.getTarget(),
-            ImmutableList.<AspectDescriptor>of(),
+            null,
+            null,
             targetConfig,
             configurations.getHostConfiguration(),
             ruleClassProvider.getPrerequisiteValidator(),

@@ -50,6 +50,7 @@ import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.PackageRootResolutionException;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.Root;
+import com.google.devtools.build.lib.analysis.AspectDescriptor;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView.Options;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
@@ -78,7 +79,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.OutputService;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -222,7 +222,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   private final AtomicReference<EventBus> eventBus = new AtomicReference<>();
   protected final AtomicReference<TimestampGranularityMonitor> tsgm =
       new AtomicReference<>();
-  protected final AtomicReference<Map<String, String>> clientEnv = new AtomicReference<>();
 
   private final ImmutableList<BuildInfoFactory> buildInfoFactories;
   // Under normal circumstances, the artifact factory persists for the life of a Blaze server, but
@@ -350,7 +349,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     // is inserted.
     ImmutableMap.Builder<SkyFunctionName, SkyFunction> map = ImmutableMap.builder();
     map.put(SkyFunctions.PRECOMPUTED, new PrecomputedFunction());
-    map.put(SkyFunctions.CLIENT_ENVIRONMENT_VARIABLE, new ClientEnvironmentFunction(clientEnv));
+    map.put(SkyFunctions.CLIENT_ENVIRONMENT_VARIABLE, new ClientEnvironmentFunction());
     map.put(SkyFunctions.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper));
     map.put(SkyFunctions.DIRECTORY_LISTING_STATE,
         new DirectoryListingStateFunction(externalFilesHelper));
@@ -728,6 +727,10 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     buildId.set(commandId);
   }
 
+  protected void setPrecomputedClientEnv(Map<String, String> clientEnv) {
+    PrecomputedValue.CLIENT_ENV.set(injectable(), clientEnv);
+  }
+
   /** Returns the build-info.txt and build-changelist.txt artifacts. */
   public Collection<Artifact> getWorkspaceStatusArtifacts(EventHandler eventHandler)
       throws InterruptedException {
@@ -949,7 +952,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.tsgm.set(tsgm);
     maybeInjectPrecomputedValuesForAnalysis();
     setCommandId(commandId);
-    this.clientEnv.set(clientEnv);
+    setPrecomputedClientEnv(clientEnv);
     setBlacklistedPackagePrefixesFile(getBlacklistedPackagePrefixesFile());
     setShowLoadingProgress(packageCacheOptions.showLoadingProgress);
     setDefaultVisibility(packageCacheOptions.defaultVisibility);
