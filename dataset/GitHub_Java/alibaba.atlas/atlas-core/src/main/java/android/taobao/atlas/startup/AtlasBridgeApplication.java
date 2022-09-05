@@ -479,6 +479,7 @@ public class AtlasBridgeApplication extends Application{
                 }
             }catch(Throwable e){
 //                throw new RuntimeException(e);
+                return false;
             }finally {
                 if(in!=null){
                     try {
