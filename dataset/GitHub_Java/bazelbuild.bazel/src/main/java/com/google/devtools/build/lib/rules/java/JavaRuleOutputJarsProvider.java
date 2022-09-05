@@ -14,35 +14,26 @@
 
 package com.google.devtools.build.lib.rules.java;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.util.Preconditions;
+
 import javax.annotation.Nullable;
 
-/** Provides information about jar files produced by a Java rule. */
+/**
+ * Provides information about jar files produced by a Java rule.
+ */
 @Immutable
-@SkylarkModule(
-  name = "java_output_jars",
-  category = SkylarkModuleCategory.NONE,
-  doc = "Information about outputs of a Java rule."
-)
 public final class JavaRuleOutputJarsProvider implements TransitiveInfoProvider {
 
   public static final JavaRuleOutputJarsProvider EMPTY =
-      new JavaRuleOutputJarsProvider(ImmutableList.<OutputJar>of(), null);
+      new JavaRuleOutputJarsProvider(ImmutableList.<OutputJar>of());
 
-  /** A collection of artifacts associated with a jar output. */
-  @SkylarkModule(
-    name = "java_output",
-    category = SkylarkModuleCategory.NONE,
-    doc = "Java classes jar, together with their associated source and interface archives."
-  )
-  @Immutable
+  /**
+   * A collection of artifacts associated with a jar output.
+   */
   public static class OutputJar {
     @Nullable private final Artifact classJar;
     @Nullable private final Artifact iJar;
@@ -56,62 +47,29 @@ public final class JavaRuleOutputJarsProvider implements TransitiveInfoProvider 
     }
 
     @Nullable
-    @SkylarkCallable(
-      name = "class_jar",
-      doc = "A classes jar file.",
-      allowReturnNones = true,
-      structField = true
-    )
     public Artifact getClassJar() {
       return classJar;
     }
 
     @Nullable
-    @SkylarkCallable(
-      name = "ijar",
-      doc = "A interface jar file.",
-      allowReturnNones = true,
-      structField = true
-    )
     public Artifact getIJar() {
       return iJar;
     }
 
     @Nullable
-    @SkylarkCallable(
-      name = "source_jar",
-      doc = "A sources archive file.",
-      allowReturnNones = true,
-      structField = true
-    )
     public Artifact getSrcJar() {
       return srcJar;
     }
   }
 
   final Iterable<OutputJar> outputJars;
-  @Nullable final Artifact jdeps;
 
-  private JavaRuleOutputJarsProvider(Iterable<OutputJar> outputJars,
-      @Nullable Artifact jdeps) {
+  private JavaRuleOutputJarsProvider(Iterable<OutputJar> outputJars) {
     this.outputJars = outputJars;
-    this.jdeps = jdeps;
   }
 
-  @SkylarkCallable(name = "jars", doc = "A list of jars the rule outputs.", structField = true)
   public Iterable<OutputJar> getOutputJars() {
     return outputJars;
-  }
-
-  @Nullable
-  @SkylarkCallable(
-    name = "jdeps",
-    doc = "The jdeps file for rule outputs.",
-    structField = true,
-    allowReturnNones = true
-  )
-  public Artifact getJdeps() {
-    return jdeps;
   }
 
   public static Builder builder() {
@@ -119,11 +77,10 @@ public final class JavaRuleOutputJarsProvider implements TransitiveInfoProvider 
   }
 
   /**
-   * Builder for {@link JavaRuleOutputJarsProvider}.
+   * Builderassociated.
    */
   public static class Builder {
     ImmutableList.Builder<OutputJar> outputJars = ImmutableList.builder();
-    Artifact jdeps;
 
     public Builder addOutputJar(
         @Nullable Artifact classJar,
@@ -139,13 +96,8 @@ public final class JavaRuleOutputJarsProvider implements TransitiveInfoProvider 
       return this;
     }
 
-    public Builder setJdeps(Artifact jdeps) {
-      this.jdeps = jdeps;
-      return this;
-    }
-
     public JavaRuleOutputJarsProvider build() {
-      return new JavaRuleOutputJarsProvider(outputJars.build(), jdeps);
+      return new JavaRuleOutputJarsProvider(outputJars.build());
     }
   }
 }
