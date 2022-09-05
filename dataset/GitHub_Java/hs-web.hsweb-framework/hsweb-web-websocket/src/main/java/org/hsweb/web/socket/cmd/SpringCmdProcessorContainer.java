@@ -1,12 +1,10 @@
 package org.hsweb.web.socket.cmd;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.InitBinder;
 
 import javax.annotation.PostConstruct;
-import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -19,10 +17,15 @@ import java.util.Map;
 @Component
 public class SpringCmdProcessorContainer implements CmdProcessorContainer {
 
-
+    /**
+     * 命令缓存
+     */
     private Map<String, CmdProcessor> cache = new HashMap<>();
 
-    @Resource
+    /**
+     * spring容器
+     */
+    @Autowired
     private ApplicationContext applicationContext;
 
     @Override
@@ -53,9 +56,7 @@ public class SpringCmdProcessorContainer implements CmdProcessorContainer {
     public void init() {
         Map<String, CmdProcessor> processorMap = applicationContext.getBeansOfType(CmdProcessor.class);
         if (processorMap != null) {
-            for (CmdProcessor cmdProcessor : processorMap.values()) {
-                registerCmdProcessor(cmdProcessor);
-            }
+            processorMap.values().forEach(this::registerCmdProcessor);
         }
     }
 }
