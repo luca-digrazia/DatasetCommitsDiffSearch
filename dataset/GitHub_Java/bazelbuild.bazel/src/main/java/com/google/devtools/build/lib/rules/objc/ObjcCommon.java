@@ -136,8 +136,7 @@ public final class ObjcCommon {
      */
     ImmutableList<PathFragment> headerSearchPaths() {
       ImmutableList.Builder<PathFragment> paths = new ImmutableList.Builder<>();
-      PathFragment packageFragment =
-          ruleContext.getLabel().getPackageIdentifier().getPathFragment();
+      PathFragment packageFragment = ruleContext.getLabel().getPackageFragment();
       List<PathFragment> rootFragments = ImmutableList.of(
           packageFragment,
           ruleContext.getConfiguration().getGenfilesFragment().getRelative(packageFragment));
@@ -356,8 +355,8 @@ public final class ObjcCommon {
             .addAll(SDK_FRAMEWORK, attributes.sdkFrameworks())
             .addAll(WEAK_SDK_FRAMEWORK, attributes.weakSdkFrameworks())
             .addAll(SDK_DYLIB, attributes.sdkDylibs());
-      }
-
+      } 
+      
       if (resourceAttributes.isPresent()) {
         ResourceAttributes attributes = resourceAttributes.get();
         objcProvider

@@ -300,7 +300,6 @@ public final class BuildConfiguration implements Serializable {
     }
   }
 
-  /** TODO(bazel-team): document this */
   public static class PluginOptionConverter implements Converter<Map.Entry<String, String>> {
     @Override
     public Map.Entry<String, String> convert(String input) throws OptionsParsingException {
@@ -319,7 +318,6 @@ public final class BuildConfiguration implements Serializable {
     }
   }
 
-  /** TODO(bazel-team): document this */
   public static class RunsPerTestConverter extends PerLabelOptions.PerLabelOptionsConverter {
     @Override
     public PerLabelOptions convert(String input) throws OptionsParsingException {
@@ -554,10 +552,6 @@ public final class BuildConfiguration implements Serializable {
         help = "Specifies a suffix to be added to the configuration directory.")
     public String platformSuffix;
 
-    // TODO(bazel-team): The test environment is actually computed in BlazeRuntime and this option
-    // is not read anywhere else. Thus, it should be in a different options class, preferably one
-    // specific to the "test" command or maybe in its own configuration fragment.
-    // BlazeRuntime, though.
     @Option(name = "test_env",
         converter = Converters.OptionalAssignmentConverter.class,
         allowMultiple = true,
@@ -906,7 +900,11 @@ public final class BuildConfiguration implements Serializable {
   private final String mnemonic;
   private final String platformName;
 
-  private final ImmutableMap<String, String> testEnvironment;
+  /**
+   * It is not fingerprinted because it should only be used to access
+   * variables that do not break the hermetism of build rules.
+   */
+  private final ImmutableMap<String, String> clientEnvironment;
 
   /**
    * Helper container for {@link #transitiveOptionsMap} below.
@@ -995,15 +993,16 @@ public final class BuildConfiguration implements Serializable {
   BuildConfiguration(BlazeDirectories directories,
                      Map<Class<? extends Fragment>, Fragment> fragmentsMap,
                      BuildOptions buildOptions,
-                     Map<String, String> testEnv,
+                     Map<String, String> clientEnv,
                      boolean actionsDisabled) {
     this.actionsEnabled = !actionsDisabled;
-    this.fragments = ImmutableMap.copyOf(fragmentsMap);
+    fragments = ImmutableMap.copyOf(fragmentsMap);
+
+    // This is a view that will be updated upon each client command.
+    this.clientEnvironment = ImmutableMap.copyOf(clientEnv);
 
     this.buildOptions = buildOptions;
     this.options = buildOptions.get(Options.class);
-
-    this.testEnvironment = ImmutableMap.copyOf(testEnv);
 
     this.mnemonic = buildMnemonic();
     String outputDirName = (options.shortName != null) ? options.shortName : mnemonic;
@@ -1054,7 +1053,7 @@ public final class BuildConfiguration implements Serializable {
     globalMakeEnv = globalMakeEnvBuilder.build();
 
     cacheKey = computeCacheKey(
-        directories, fragmentsMap, this.buildOptions, this.testEnvironment);
+        directories, fragmentsMap, this.buildOptions, this.clientEnvironment);
     shortCacheKey = shortName + "-" + Fingerprint.md5Digest(cacheKey);
   }
 
@@ -1309,6 +1308,18 @@ public final class BuildConfiguration implements Serializable {
       }
     }
     return result;
+  }
+
+  /**
+   * Avoid this method. The client environment is not part of the configuration's signature, so
+   * calls to this method introduce a non-hermetic access to data that is not visible to Skyframe.
+   *
+   * @return an unmodifiable view of the bazel client's environment
+   *         upon its most recent request.
+   */
+  // TODO(bazel-team): Remove this.
+  public Map<String, String> getClientEnv() {
+    return clientEnvironment;
   }
 
   /**
@@ -1629,7 +1640,7 @@ public final class BuildConfiguration implements Serializable {
   /**
    * Returns a configuration fragment instances of the given class.
    */
-  @SkylarkCallable(name = "fragment", documented = false,
+  @SkylarkCallable(name = "fragment", hidden = true,
       doc = "Returns a configuration fragment using the key.")
   public <T extends Fragment> T getFragment(Class<T> clazz) {
     return clazz.cast(fragments.get(clazz));
@@ -1692,7 +1703,30 @@ public final class BuildConfiguration implements Serializable {
    * set by the --test_env options.
    */
   public Map<String, String> getTestEnv() {
-    return testEnvironment;
+    return getTestEnv(options.testEnvironment, clientEnvironment);
+  }
+
+  /**
+   * Returns user-specified test environment variables and their values, as
+   * set by the --test_env options.
+   *
+   * @param envOverrides The --test_env flag values.
+   * @param clientEnvironment The full client environment.
+   */
+  public static Map<String, String> getTestEnv(List<Map.Entry<String, String>> envOverrides,
+                                        Map<String, String> clientEnvironment) {
+    Map<String, String> testEnv = new HashMap<>();
+    for (Map.Entry<String, String> var : envOverrides) {
+      if (var.getValue() != null) {
+        testEnv.put(var.getKey(), var.getValue());
+      } else {
+        String value = clientEnvironment.get(var.getKey());
+        if (value != null) {
+          testEnv.put(var.getKey(), value);
+        }
+      }
+    }
+    return testEnv;
   }
 
   public TriState cacheTestResults() {
@@ -1774,7 +1808,7 @@ public final class BuildConfiguration implements Serializable {
    */
   static String computeCacheKey(BlazeDirectories directories,
       Map<Class<? extends Fragment>, Fragment> fragments,
-      BuildOptions buildOptions, Map<String, String> testEnvironment) {
+      BuildOptions buildOptions, Map<String, String> clientEnv) {
 
     // Creates a full fingerprint of all constructor parameters, used for
     // canonicalization.
@@ -1794,7 +1828,8 @@ public final class BuildConfiguration implements Serializable {
     keys.add(buildOptions.computeCacheKey());
     // This is needed so that if we have --test_env=VAR, the configuration key is updated if the
     // environment variable VAR is updated.
-    keys.add(testEnvironment.toString());
+    keys.add(BuildConfiguration.getTestEnv(
+        buildOptions.get(Options.class).testEnvironment, clientEnv).toString());
     keys.add(directories.getWorkspace().toString());
 
     for (Fragment fragment : fragments.values()) {
