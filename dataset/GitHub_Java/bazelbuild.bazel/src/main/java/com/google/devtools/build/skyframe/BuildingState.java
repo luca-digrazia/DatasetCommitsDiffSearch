@@ -219,7 +219,7 @@ public class BuildingState {
    */
   boolean isReady() {
     int directDepsSize = directDeps.size();
-    Preconditions.checkState(signaledDeps <= directDepsSize, "%s %s", directDeps, this);
+    Preconditions.checkState(signaledDeps <= directDepsSize, "%s %s", directDepsSize, this);
     return signaledDeps == directDepsSize;
   }
 

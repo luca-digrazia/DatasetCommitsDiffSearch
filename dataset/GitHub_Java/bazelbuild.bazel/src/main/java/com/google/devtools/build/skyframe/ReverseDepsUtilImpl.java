@@ -14,6 +14,7 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.base.MoreObjects;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Interner;
@@ -21,7 +22,6 @@ import com.google.common.collect.Interners;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.collect.CompactHashSet;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -50,9 +50,13 @@ public abstract class ReverseDepsUtilImpl<T> implements ReverseDepsUtil<T> {
 
   abstract void setReverseDepsObject(T container, Object object);
 
+  abstract void setSingleReverseDep(T container, boolean singleObject);
+
   abstract void setDataToConsolidate(T container, @Nullable List<Object> dataToConsolidate);
 
   abstract Object getReverseDepsObject(T container);
+
+  abstract boolean isSingleReverseDep(T container);
 
   abstract List<Object> getDataToConsolidate(T container);
 
@@ -167,10 +171,6 @@ public abstract class ReverseDepsUtilImpl<T> implements ReverseDepsUtil<T> {
     if (consolidations.size() == currentReverseDepSize) {
       consolidateData(container);
     }
-  }
-
-  private boolean isSingleReverseDep(T container) {
-    return !(getReverseDepsObject(container) instanceof List);
   }
 
   /**
@@ -389,9 +389,11 @@ public abstract class ReverseDepsUtilImpl<T> implements ReverseDepsUtil<T> {
 
   private void overwriteReverseDepsWithObject(T container, SkyKey newObject) {
     setReverseDepsObject(container, newObject);
+    setSingleReverseDep(container, true);
   }
 
   private void overwriteReverseDepsList(T container, List<SkyKey> list) {
     setReverseDepsObject(container, list);
+    setSingleReverseDep(container, false);
   }
 }
