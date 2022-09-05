@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.testutil.TestMode;
 import org.junit.Before;
@@ -62,13 +61,6 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     }
   }
 
-  @SkylarkSignature(name = "foobar", returnType = String.class, documented = false)
-  static BuiltinFunction foobar = new BuiltinFunction("foobar") {
-    public String invoke() throws EvalException {
-      return "foobar";
-    }
-  };
-
   @SkylarkModule(name = "Mock", doc = "")
   static class Mock {
     @SkylarkCallable(doc = "")
@@ -87,10 +79,6 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     @SkylarkCallable(name = "struct_field", doc = "", structField = true)
     public String structField() {
       return "a";
-    }
-    @SkylarkCallable(name = "struct_field_callable", doc = "", structField = true)
-    public BuiltinFunction structFieldCallable() {
-      return foobar;
     }
     @SkylarkCallable(name = "function", doc = "", structField = false)
     public String function() {
@@ -803,19 +791,10 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
-  public void testStructAccessAsFuncallNonCallable() throws Exception {
-    new SkylarkTest()
-        .update("mock", new Mock())
-        .testIfExactError("'string' object is not callable", "v = mock.struct_field()");
-  }
-
-  @Test
   public void testStructAccessAsFuncall() throws Exception {
-    foobar.configure(getClass().getDeclaredField("foobar").getAnnotation(SkylarkSignature.class));
     new SkylarkTest()
         .update("mock", new Mock())
-        .setUp("v = mock.struct_field_callable()")
-        .testLookup("v", "foobar");
+        .testIfExactError("Type Mock has no function struct_field()", "v = mock.struct_field()");
   }
 
   @Test
@@ -919,7 +898,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         "  for a in d:",
         "    s += a",
         "  return s",
-        "s = foo()").testLookup("s", "cab");
+        "s = foo()").testLookup("s", "abc");
   }
 
   @Test
@@ -1117,7 +1096,6 @@ public class SkylarkEvaluationTest extends EvaluationTest {
             "string",
             "string_list",
             "struct_field",
-            "struct_field_callable",
             "value_of",
             "voidfunc",
             "with_params");

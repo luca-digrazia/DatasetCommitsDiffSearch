@@ -85,49 +85,35 @@ public class SkylarkInterfaceUtilsTest {
   public static class MockClassZ {
   }
 
-  // The tests for getSkylarkModule() double as tests for getParentWithSkylarkModule(),
-  // since they share an implementation.
-
   @Test
   public void testGetSkylarkModuleBasic() throws Exception {
     // Normal case.
     SkylarkModule ann = SkylarkInterfaceUtils.getSkylarkModule(MockClassA.class);
-    Class<?> cls = SkylarkInterfaceUtils.getParentWithSkylarkModule(MockClassA.class);
     assertThat(ann).isNotNull();
     assertThat(ann.doc()).isEqualTo("MockClassA");
-    assertThat(cls).isNotNull();
-    assertThat(cls).isEqualTo(MockClassA.class);
   }
 
   @Test
   public void testGetSkylarkModuleSubclass() throws Exception {
     // Subclass's annotation is used.
     SkylarkModule ann = SkylarkInterfaceUtils.getSkylarkModule(MockClassC.class);
-    Class<?> cls = SkylarkInterfaceUtils.getParentWithSkylarkModule(MockClassC.class);
     assertThat(ann).isNotNull();
     assertThat(ann.doc()).isEqualTo("MockClassC");
-    assertThat(cls).isNotNull();
-    assertThat(cls).isEqualTo(MockClassC.class);
   }
 
   @Test
   public void testGetSkylarkModuleSubclassNoSubannotation() throws Exception {
     // Falls back on superclass's annotation.
     SkylarkModule ann = SkylarkInterfaceUtils.getSkylarkModule(MockClassD.class);
-    Class<?> cls = SkylarkInterfaceUtils.getParentWithSkylarkModule(MockClassD.class);
     assertThat(ann).isNotNull();
     assertThat(ann.doc()).isEqualTo("MockClassC");
-    assertThat(cls).isNotNull();
-    assertThat(cls).isEqualTo(MockClassC.class);
   }
 
   @Test
   public void testGetSkylarkModuleNotFound() throws Exception {
     // Doesn't exist.
     SkylarkModule ann = SkylarkInterfaceUtils.getSkylarkModule(MockClassZ.class);
-    Class<?> cls = SkylarkInterfaceUtils.getParentWithSkylarkModule(MockClassZ.class);
     assertThat(ann).isNull();
-    assertThat(cls).isNull();
   }
 
   @Test
@@ -200,5 +186,15 @@ public class SkylarkInterfaceUtilsTest {
     ann = SkylarkInterfaceUtils.getSkylarkCallable(method);
     assertThat(ann).isNotNull();
     assertThat(ann.doc()).isEqualTo("MockInterfaceB2#qux");
+  }
+
+  @Test
+  public void testGetSkylarkCallableIgnoreNonModules() throws Exception {
+    // Don't return SkylarkCallable annotations in classes and interfaces
+    // not marked @SkylarkModule.
+    Method method = MockClassD.class.getMethod("foo");
+    SkylarkCallable ann = SkylarkInterfaceUtils.getSkylarkCallable(method);
+    assertThat(ann).isNotNull();
+    assertThat(ann.doc()).isEqualTo("MockClassC#foo");
   }
 }

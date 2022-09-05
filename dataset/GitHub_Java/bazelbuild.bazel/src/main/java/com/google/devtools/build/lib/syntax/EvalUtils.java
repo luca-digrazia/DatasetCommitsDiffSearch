@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -72,9 +73,6 @@ public final class EvalUtils {
       o1 = SkylarkType.convertToSkylark(o1, /*env=*/ null);
       o2 = SkylarkType.convertToSkylark(o2, /*env=*/ null);
 
-      if (o1 instanceof SkylarkNestedSet && o2 instanceof SkylarkNestedSet) {
-        throw new ComparisonException("Cannot compare sets");
-      }
       if (o1 instanceof SkylarkList && o2 instanceof SkylarkList
           && ((SkylarkList) o1).isTuple() == ((SkylarkList) o2).isTuple()) {
         return compareLists((SkylarkList) o1, (SkylarkList) o2);
@@ -157,6 +155,31 @@ public final class EvalUtils {
         || c.equals(PathFragment.class); // other known class
   }
 
+  /**
+   * Returns a transitive superclass or interface implemented by c which is annotated
+   * with SkylarkModule. Returns null if no such class or interface exists.
+   */
+  @VisibleForTesting
+  static Class<?> getParentWithSkylarkModule(Class<?> c) {
+    if (c == null) {
+      return null;
+    }
+    if (c.isAnnotationPresent(SkylarkModule.class)) {
+      return c;
+    }
+    Class<?> parent = getParentWithSkylarkModule(c.getSuperclass());
+    if (parent != null) {
+      return parent;
+    }
+    for (Class<?> ifparent : c.getInterfaces()) {
+      ifparent = getParentWithSkylarkModule(ifparent);
+      if (ifparent != null) {
+        return ifparent;
+      }
+    }
+    return null;
+  }
+
   // TODO(bazel-team): move the following few type-related functions to SkylarkType
   /**
    * Return the Skylark-type of {@code c}
@@ -182,7 +205,10 @@ public final class EvalUtils {
     }
     // TODO(bazel-team): also unify all implementations of ClassObject,
     // that we used to all print the same as "struct"?
-    Class<?> parent = SkylarkInterfaceUtils.getParentWithSkylarkModule(c);
+    //
+    // Check if one of the superclasses or implemented interfaces has the SkylarkModule
+    // annotation. If yes return that class.
+    Class<?> parent = getParentWithSkylarkModule(c);
     if (parent != null) {
       return parent;
     }
