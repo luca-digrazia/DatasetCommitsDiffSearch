@@ -1,451 +1,48 @@
-/*
- *
- *
- *                                  Apache License
- *                            Version 2.0, January 2004
- *                         http://www.apache.org/licenses/
- *
- *    TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
- *
- *    1. Definitions.
- *
- *       "License" shall mean the terms and conditions for use, reproduction,
- *       and distribution as defined by Sections 1 through 9 of this document.
- *
- *       "Licensor" shall mean the copyright owner or entity authorized by
- *       the copyright owner that is granting the License.
- *
- *       "Legal Entity" shall mean the union of the acting entity and all
- *       other entities that control, are controlled by, or are under common
- *       control with that entity. For the purposes of this definition,
- *       "control" means (i) the power, direct or indirect, to cause the
- *       direction or management of such entity, whether by contract or
- *       otherwise, or (ii) ownership of fifty percent (50%) or more of the
- *       outstanding shares, or (iii) beneficial ownership of such entity.
- *
- *       "You" (or "Your") shall mean an individual or Legal Entity
- *       exercising permissions granted by this License.
- *
- *       "Source" form shall mean the preferred form for making modifications,
- *       including but not limited to software source code, documentation
- *       source, and configuration files.
- *
- *       "Object" form shall mean any form resulting from mechanical
- *       transformation or translation of a Source form, including but
- *       not limited to compiled object code, generated documentation,
- *       and conversions to other media types.
- *
- *       "Work" shall mean the work of authorship, whether in Source or
- *       Object form, made available under the License, as indicated by a
- *       copyright notice that is included in or attached to the work
- *       (an example is provided in the Appendix below).
- *
- *       "Derivative Works" shall mean any work, whether in Source or Object
- *       form, that is based on (or derived from) the Work and for which the
- *       editorial revisions, annotations, elaborations, or other modifications
- *       represent, as a whole, an original work of authorship. For the purposes
- *       of this License, Derivative Works shall not include works that remain
- *       separable from, or merely link (or bind by name) to the interfaces of,
- *       the Work and Derivative Works thereof.
- *
- *       "Contribution" shall mean any work of authorship, including
- *       the original version of the Work and any modifications or additions
- *       to that Work or Derivative Works thereof, that is intentionally
- *       submitted to Licensor for inclusion in the Work by the copyright owner
- *       or by an individual or Legal Entity authorized to submit on behalf of
- *       the copyright owner. For the purposes of this definition, "submitted"
- *       means any form of electronic, verbal, or written communication sent
- *       to the Licensor or its representatives, including but not limited to
- *       communication on electronic mailing lists, source code control systems,
- *       and issue tracking systems that are managed by, or on behalf of, the
- *       Licensor for the purpose of discussing and improving the Work, but
- *       excluding communication that is conspicuously marked or otherwise
- *       designated in writing by the copyright owner as "Not a Contribution."
- *
- *       "Contributor" shall mean Licensor and any individual or Legal Entity
- *       on behalf of whom a Contribution has been received by Licensor and
- *       subsequently incorporated within the Work.
- *
- *    2. Grant of Copyright License. Subject to the terms and conditions of
- *       this License, each Contributor hereby grants to You a perpetual,
- *       worldwide, non-exclusive, no-charge, royalty-free, irrevocable
- *       copyright license to reproduce, prepare Derivative Works of,
- *       publicly display, publicly perform, sublicense, and distribute the
- *       Work and such Derivative Works in Source or Object form.
- *
- *    3. Grant of Patent License. Subject to the terms and conditions of
- *       this License, each Contributor hereby grants to You a perpetual,
- *       worldwide, non-exclusive, no-charge, royalty-free, irrevocable
- *       (except as stated in this section) patent license to make, have made,
- *       use, offer to sell, sell, import, and otherwise transfer the Work,
- *       where such license applies only to those patent claims licensable
- *       by such Contributor that are necessarily infringed by their
- *       Contribution(s) alone or by combination of their Contribution(s)
- *       with the Work to which such Contribution(s) was submitted. If You
- *       institute patent litigation against any entity (including a
- *       cross-claim or counterclaim in a lawsuit) alleging that the Work
- *       or a Contribution incorporated within the Work constitutes direct
- *       or contributory patent infringement, then any patent licenses
- *       granted to You under this License for that Work shall terminate
- *       as of the date such litigation is filed.
- *
- *    4. Redistribution. You may reproduce and distribute copies of the
- *       Work or Derivative Works thereof in any medium, with or without
- *       modifications, and in Source or Object form, provided that You
- *       meet the following conditions:
- *
- *       (a) You must give any other recipients of the Work or
- *           Derivative Works a copy of this License; and
- *
- *       (b) You must cause any modified files to carry prominent notices
- *           stating that You changed the files; and
- *
- *       (c) You must retain, in the Source form of any Derivative Works
- *           that You distribute, all copyright, patent, trademark, and
- *           attribution notices from the Source form of the Work,
- *           excluding those notices that do not pertain to any part of
- *           the Derivative Works; and
- *
- *       (d) If the Work includes a "NOTICE" text file as part of its
- *           distribution, then any Derivative Works that You distribute must
- *           include a readable copy of the attribution notices contained
- *           within such NOTICE file, excluding those notices that do not
- *           pertain to any part of the Derivative Works, in at least one
- *           of the following places: within a NOTICE text file distributed
- *           as part of the Derivative Works; within the Source form or
- *           documentation, if provided along with the Derivative Works; or,
- *           within a display generated by the Derivative Works, if and
- *           wherever such third-party notices normally appear. The contents
- *           of the NOTICE file are for informational purposes only and
- *           do not modify the License. You may add Your own attribution
- *           notices within Derivative Works that You distribute, alongside
- *           or as an addendum to the NOTICE text from the Work, provided
- *           that such additional attribution notices cannot be construed
- *           as modifying the License.
- *
- *       You may add Your own copyright statement to Your modifications and
- *       may provide additional or different license terms and conditions
- *       for use, reproduction, or distribution of Your modifications, or
- *       for any such Derivative Works as a whole, provided Your use,
- *       reproduction, and distribution of the Work otherwise complies with
- *       the conditions stated in this License.
- *
- *    5. Submission of Contributions. Unless You explicitly state otherwise,
- *       any Contribution intentionally submitted for inclusion in the Work
- *       by You to the Licensor shall be under the terms and conditions of
- *       this License, without any additional terms or conditions.
- *       Notwithstanding the above, nothing herein shall supersede or modify
- *       the terms of any separate license agreement you may have executed
- *       with Licensor regarding such Contributions.
- *
- *    6. Trademarks. This License does not grant permission to use the trade
- *       names, trademarks, service marks, or product names of the Licensor,
- *       except as required for reasonable and customary use in describing the
- *       origin of the Work and reproducing the content of the NOTICE file.
- *
- *    7. Disclaimer of Warranty. Unless required by applicable law or
- *       agreed to in writing, Licensor provides the Work (and each
- *       Contributor provides its Contributions) on an "AS IS" BASIS,
- *       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
- *       implied, including, without limitation, any warranties or conditions
- *       of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
- *       PARTICULAR PURPOSE. You are solely responsible for determining the
- *       appropriateness of using or redistributing the Work and assume any
- *       risks associated with Your exercise of permissions under this License.
- *
- *    8. Limitation of Liability. In no event and under no legal theory,
- *       whether in tort (including negligence), contract, or otherwise,
- *       unless required by applicable law (such as deliberate and grossly
- *       negligent acts) or agreed to in writing, shall any Contributor be
- *       liable to You for damages, including any direct, indirect, special,
- *       incidental, or consequential damages of any character arising as a
- *       result of this License or out of the use or inability to use the
- *       Work (including but not limited to damages for loss of goodwill,
- *       work stoppage, computer failure or malfunction, or any and all
- *       other commercial damages or losses), even if such Contributor
- *       has been advised of the possibility of such damages.
- *
- *    9. Accepting Warranty or Additional Liability. While redistributing
- *       the Work or Derivative Works thereof, You may choose to offer,
- *       and charge a fee for, acceptance of support, warranty, indemnity,
- *       or other liability obligations and/or rights consistent with this
- *       License. However, in accepting such obligations, You may act only
- *       on Your own behalf and on Your sole responsibility, not on behalf
- *       of any other Contributor, and only if You agree to indemnify,
- *       defend, and hold each Contributor harmless for any liability
- *       incurred by, or claims asserted against, such Contributor by reason
- *       of your accepting any such warranty or additional liability.
- *
- *    END OF TERMS AND CONDITIONS
- *
- *    APPENDIX: How to apply the Apache License to your work.
- *
- *       To apply the Apache License to your work, attach the following
- *       boilerplate notice, with the fields enclosed by brackets "[]"
- *       replaced with your own identifying information. (Don't include
- *       the brackets!)  The text should be enclosed in the appropriate
- *       comment syntax for the file format. We also recommend that a
- *       file or class name and description of purpose be included on the
- *       same "printed page" as the copyright notice for easier
- *       identification within third-party archives.
- *
- *    Copyright 2016 Alibaba Group
- *
- *    Licensed under the Apache License, Version 2.0 (the "License");
- *    you may not use this file except in compliance with the License.
- *    You may obtain a copy of the License at
- *
- *        http://www.apache.org/licenses/LICENSE-2.0
- *
- *    Unless required by applicable law or agreed to in writing, software
- *    distributed under the License is distributed on an "AS IS" BASIS,
- *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *    See the License for the specific language governing permissions and
- *    limitations under the License.
- *
- *
- */
 package com.taobao.android.tpatch.builder;
-/*
- *
- *
- *                                  Apache License
- *                            Version 2.0, January 2004
- *                         http://www.apache.org/licenses/
- *
- *    TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
- *
- *    1. Definitions.
- *
- *       "License" shall mean the terms and conditions for use, reproduction,
- *       and distribution as defined by Sections 1 through 9 of this document.
- *
- *       "Licensor" shall mean the copyright owner or entity authorized by
- *       the copyright owner that is granting the License.
- *
- *       "Legal Entity" shall mean the union of the acting entity and all
- *       other entities that control, are controlled by, or are under common
- *       control with that entity. For the purposes of this definition,
- *       "control" means (i) the power, direct or indirect, to cause the
- *       direction or management of such entity, whether by contract or
- *       otherwise, or (ii) ownership of fifty percent (50%) or more of the
- *       outstanding shares, or (iii) beneficial ownership of such entity.
- *
- *       "You" (or "Your") shall mean an individual or Legal Entity
- *       exercising permissions granted by this License.
- *
- *       "Source" form shall mean the preferred form for making modifications,
- *       including but not limited to software source code, documentation
- *       source, and configuration files.
- *
- *       "Object" form shall mean any form resulting from mechanical
- *       transformation or translation of a Source form, including but
- *       not limited to compiled object code, generated documentation,
- *       and conversions to other media types.
- *
- *       "Work" shall mean the work of authorship, whether in Source or
- *       Object form, made available under the License, as indicated by a
- *       copyright notice that is included in or attached to the work
- *       (an example is provided in the Appendix below).
- *
- *       "Derivative Works" shall mean any work, whether in Source or Object
- *       form, that is based on (or derived from) the Work and for which the
- *       editorial revisions, annotations, elaborations, or other modifications
- *       represent, as a whole, an original work of authorship. For the purposes
- *       of this License, Derivative Works shall not include works that remain
- *       separable from, or merely link (or bind by name) to the interfaces of,
- *       the Work and Derivative Works thereof.
- *
- *       "Contribution" shall mean any work of authorship, including
- *       the original version of the Work and any modifications or additions
- *       to that Work or Derivative Works thereof, that is intentionally
- *       submitted to Licensor for inclusion in the Work by the copyright owner
- *       or by an individual or Legal Entity authorized to submit on behalf of
- *       the copyright owner. For the purposes of this definition, "submitted"
- *       means any form of electronic, verbal, or written communication sent
- *       to the Licensor or its representatives, including but not limited to
- *       communication on electronic mailing lists, source code control systems,
- *       and issue tracking systems that are managed by, or on behalf of, the
- *       Licensor for the purpose of discussing and improving the Work, but
- *       excluding communication that is conspicuously marked or otherwise
- *       designated in writing by the copyright owner as "Not a Contribution."
- *
- *       "Contributor" shall mean Licensor and any individual or Legal Entity
- *       on behalf of whom a Contribution has been received by Licensor and
- *       subsequently incorporated within the Work.
- *
- *    2. Grant of Copyright License. Subject to the terms and conditions of
- *       this License, each Contributor hereby grants to You a perpetual,
- *       worldwide, non-exclusive, no-charge, royalty-free, irrevocable
- *       copyright license to reproduce, prepare Derivative Works of,
- *       publicly display, publicly perform, sublicense, and distribute the
- *       Work and such Derivative Works in Source or Object form.
- *
- *    3. Grant of Patent License. Subject to the terms and conditions of
- *       this License, each Contributor hereby grants to You a perpetual,
- *       worldwide, non-exclusive, no-charge, royalty-free, irrevocable
- *       (except as stated in this section) patent license to make, have made,
- *       use, offer to sell, sell, import, and otherwise transfer the Work,
- *       where such license applies only to those patent claims licensable
- *       by such Contributor that are necessarily infringed by their
- *       Contribution(s) alone or by combination of their Contribution(s)
- *       with the Work to which such Contribution(s) was submitted. If You
- *       institute patent litigation against any entity (including a
- *       cross-claim or counterclaim in a lawsuit) alleging that the Work
- *       or a Contribution incorporated within the Work constitutes direct
- *       or contributory patent infringement, then any patent licenses
- *       granted to You under this License for that Work shall terminate
- *       as of the date such litigation is filed.
- *
- *    4. Redistribution. You may reproduce and distribute copies of the
- *       Work or Derivative Works thereof in any medium, with or without
- *       modifications, and in Source or Object form, provided that You
- *       meet the following conditions:
- *
- *       (a) You must give any other recipients of the Work or
- *           Derivative Works a copy of this License; and
- *
- *       (b) You must cause any modified files to carry prominent notices
- *           stating that You changed the files; and
- *
- *       (c) You must retain, in the Source form of any Derivative Works
- *           that You distribute, all copyright, patent, trademark, and
- *           attribution notices from the Source form of the Work,
- *           excluding those notices that do not pertain to any part of
- *           the Derivative Works; and
- *
- *       (d) If the Work includes a "NOTICE" text file as part of its
- *           distribution, then any Derivative Works that You distribute must
- *           include a readable copy of the attribution notices contained
- *           within such NOTICE file, excluding those notices that do not
- *           pertain to any part of the Derivative Works, in at least one
- *           of the following places: within a NOTICE text file distributed
- *           as part of the Derivative Works; within the Source form or
- *           documentation, if provided along with the Derivative Works; or,
- *           within a display generated by the Derivative Works, if and
- *           wherever such third-party notices normally appear. The contents
- *           of the NOTICE file are for informational purposes only and
- *           do not modify the License. You may add Your own attribution
- *           notices within Derivative Works that You distribute, alongside
- *           or as an addendum to the NOTICE text from the Work, provided
- *           that such additional attribution notices cannot be construed
- *           as modifying the License.
- *
- *       You may add Your own copyright statement to Your modifications and
- *       may provide additional or different license terms and conditions
- *       for use, reproduction, or distribution of Your modifications, or
- *       for any such Derivative Works as a whole, provided Your use,
- *       reproduction, and distribution of the Work otherwise complies with
- *       the conditions stated in this License.
- *
- *    5. Submission of Contributions. Unless You explicitly state otherwise,
- *       any Contribution intentionally submitted for inclusion in the Work
- *       by You to the Licensor shall be under the terms and conditions of
- *       this License, without any additional terms or conditions.
- *       Notwithstanding the above, nothing herein shall supersede or modify
- *       the terms of any separate license agreement you may have executed
- *       with Licensor regarding such Contributions.
- *
- *    6. Trademarks. This License does not grant permission to use the trade
- *       names, trademarks, service marks, or product names of the Licensor,
- *       except as required for reasonable and customary use in describing the
- *       origin of the Work and reproducing the content of the NOTICE file.
- *
- *    7. Disclaimer of Warranty. Unless required by applicable law or
- *       agreed to in writing, Licensor provides the Work (and each
- *       Contributor provides its Contributions) on an "AS IS" BASIS,
- *       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
- *       implied, including, without limitation, any warranties or conditions
- *       of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
- *       PARTICULAR PURPOSE. You are solely responsible for determining the
- *       appropriateness of using or redistributing the Work and assume any
- *       risks associated with Your exercise of permissions under this License.
- *
- *    8. Limitation of Liability. In no event and under no legal theory,
- *       whether in tort (including negligence), contract, or otherwise,
- *       unless required by applicable law (such as deliberate and grossly
- *       negligent acts) or agreed to in writing, shall any Contributor be
- *       liable to You for damages, including any direct, indirect, special,
- *       incidental, or consequential damages of any character arising as a
- *       result of this License or out of the use or inability to use the
- *       Work (including but not limited to damages for loss of goodwill,
- *       work stoppage, computer failure or malfunction, or any and all
- *       other commercial damages or losses), even if such Contributor
- *       has been advised of the possibility of such damages.
- *
- *    9. Accepting Warranty or Additional Liability. While redistributing
- *       the Work or Derivative Works thereof, You may choose to offer,
- *       and charge a fee for, acceptance of support, warranty, indemnity,
- *       or other liability obligations and/or rights consistent with this
- *       License. However, in accepting such obligations, You may act only
- *       on Your own behalf and on Your sole responsibility, not on behalf
- *       of any other Contributor, and only if You agree to indemnify,
- *       defend, and hold each Contributor harmless for any liability
- *       incurred by, or claims asserted against, such Contributor by reason
- *       of your accepting any such warranty or additional liability.
- *
- *    END OF TERMS AND CONDITIONS
- *
- *    APPENDIX: How to apply the Apache License to your work.
- *
- *       To apply the Apache License to your work, attach the following
- *       boilerplate notice, with the fields enclosed by brackets "[]"
- *       replaced with your own identifying information. (Don't include
- *       the brackets!)  The text should be enclosed in the appropriate
- *       comment syntax for the file format. We also recommend that a
- *       file or class name and description of purpose be included on the
- *       same "printed page" as the copyright notice for easier
- *       identification within third-party archives.
- *
- *    Copyright 2016 Alibaba Group
- *
- *    Licensed under the Apache License, Version 2.0 (the "License");
- *    you may not use this file except in compliance with the License.
- *    You may obtain a copy of the License at
- *
- *        http://www.apache.org/licenses/LICENSE-2.0
- *
- *    Unless required by applicable law or agreed to in writing, software
- *    distributed under the License is distributed on an "AS IS" BASIS,
- *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *    See the License for the specific language governing permissions and
- *    limitations under the License.
- *
- *
- */
 
-import com.android.utils.ILogger;
-import com.taobao.android.TPatchTool;
-import com.taobao.android.differ.dex.PatchException;
-import com.taobao.android.object.BuildPatchInfos;
-import com.taobao.android.object.PatchBundleInfo;
-import com.taobao.android.object.PatchInfo;
-import com.taobao.android.task.ExecutorServicesHelper;
-import com.taobao.android.tpatch.utils.JarSplitUtils;
-import com.taobao.android.tpatch.utils.MD5Util;
-import com.taobao.android.tpatch.utils.PathUtils;
-import com.taobao.android.utils.ZipUtils;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.io.filefilter.TrueFileFilter;
-
-import java.io.*;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
 import java.sql.Date;
-import java.util.*;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Consumer;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 
-/**
- * 增量patch文件生成的工具类
- * Created by shenghua.nish on 2015-12-21 下午3:40.
- */
+import com.android.utils.ILogger;
+import com.taobao.android.object.SoFileDef;
+import com.taobao.android.tools.TPatchTool;
+import com.taobao.android.differ.dex.PatchException;
+import com.taobao.android.object.BuildPatchInfos;
+import com.taobao.android.object.PatchBundleInfo;
+import com.taobao.android.object.PatchInfo;
+import com.taobao.android.reader.*;
+import com.taobao.android.tpatch.utils.JarSplitUtils;
+import com.taobao.android.tpatch.utils.MD5Util;
+import com.taobao.android.tpatch.utils.PathUtils;
+import com.taobao.android.utils.CommandUtils;
+import com.taobao.android.utils.SoDiffUtils;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.filefilter.TrueFileFilter;
+import org.apache.commons.lang3.StringUtils;
+import org.gradle.api.GradleException;
+
 public class PatchFileBuilder {
 
     private static final String ROLLBACK_VERSION = "-1";
@@ -457,6 +54,7 @@ public class PatchFileBuilder {
     private final File tPatchTmpFolder;
     private Map<String, File> awbMaps;
     private Map<String, PatchInfo> hisPatchInfos = new HashMap<String, PatchInfo>();
+    private List<String> versionList = new ArrayList<>();
     private final File patchsFolder;
 
     private List<String> noPatchBundles;
@@ -482,48 +80,41 @@ public class PatchFileBuilder {
     }
 
     /**
-     * 创建历史版本的tpatch
+     * create history tpatch
      */
     public BuildPatchInfos createHistoryTPatches(boolean diffBundleDex, final ILogger logger) throws PatchException {
         final BuildPatchInfos buildPatchInfos = new BuildPatchInfos();
-        buildPatchInfos.setBaseVersion(baseVersion);
         List<PatchInfo> patchInfos = historyBuildPatchInfos.getPatches();
-        String taskName = "CreateHisPatch";
-        ExecutorServicesHelper executorServicesHelper = new ExecutorServicesHelper();
-        for (final PatchInfo patchInfo : patchInfos) {
-            if (patchInfo.getPatchVersion().split("\\.").length > 3&& TPatchTool.pName.equals("taobao4android")){
-                continue;
-            }
-            executorServicesHelper.submitTask(taskName, new Callable<Boolean>() {
-                @Override
-                public Boolean call() throws Exception {
-                    if (null != logger) {
-                        logger.info("[CreateHisPatch]" + patchInfo.getPatchVersion() + "....");
-                    }
-                    try {
-                        hisPatchInfos.put(patchInfo.getPatchVersion(), patchInfo);
-                        PatchInfo newPatchInfo = createHisTPatch(patchInfo.getPatchVersion(), logger);
-                        buildPatchInfos.getPatches().add(newPatchInfo);
-                    } catch (IOException e) {
-                        throw new PatchException(e.getMessage(), e);
-                    }
-                    return true;
 
+        patchInfos.parallelStream().filter(new java.util.function.Predicate<PatchInfo>() {
+            @Override
+            public boolean test(PatchInfo patchInfo) {
+                if (!versionList.isEmpty() && !versionList.contains(patchInfo.getPatchVersion())) {
+                    return false;
                 }
-            });
-        }
+                return true;
+            }
+        }).forEach(new Consumer<PatchInfo>() {
+            @Override
+            public void accept(PatchInfo patchInfo) {
+                if (null != logger) {
+                    logger.info("[CreateHisPatch]" + patchInfo.getPatchVersion() + "....");
+                }
+                hisPatchInfos.put(patchInfo.getPatchVersion(), patchInfo);
+                PatchInfo newPatchInfo = null;
+                try {
+                    newPatchInfo = createHisTPatch(patchInfo.getPatchVersion(), logger);
+                } catch (Exception e) {
+                    throw new GradleException(e.getMessage(), e);
+                }
 
-        try {
-            executorServicesHelper.waitTaskCompleted(taskName);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
-        }
-        executorServicesHelper.stop();
+                synchronized (buildPatchInfos) {
+                    buildPatchInfos.getPatches().add(newPatchInfo);
+                }
 
-        buildPatchInfos.getPatches().add(currentBuildPatchInfo);
-        buildPatchInfos.setDiffBundleDex(diffBundleDex);
+            }
+        });
+
         return buildPatchInfos;
     }
 
@@ -538,7 +129,7 @@ public class PatchFileBuilder {
     }
 
     /**
-     * 创建指定版本的patch文件
+     * create patch for target version
      *
      * @param targetVersion
      */
@@ -547,14 +138,15 @@ public class PatchFileBuilder {
         String patchName = "patch-" + currentBuildPatchInfo.getPatchVersion() + "@" + hisPatchInfo.getPatchVersion();
         File destTPathTmpFolder = new File(tPatchTmpFolder, patchName);
         destTPathTmpFolder.mkdirs();
+        File infoFile = new File(destTPathTmpFolder, "patchInfo");
+        FileUtils.writeStringToFile(infoFile, patchName);
         File curTPatchUnzipFolder = unzipCurTPatchFolder(patchName);
         // 处理awb的更新
         List<BundlePatch> bundlePatches = diffPatch(hisPatchInfo, currentBuildPatchInfo);
-        PatchInfo newPatchInfo = processBundlePatch(hisPatchInfo, bundlePatches,curTPatchUnzipFolder);
+        PatchInfo newPatchInfo = processBundlePatch(hisPatchInfo, bundlePatches, curTPatchUnzipFolder);
 
         // 比对主bundle的信息
         PatchBundleInfo curMainBundleInfo = getMainBundleInfo(currentBuildPatchInfo);
-        PatchBundleInfo hisMainBundleInfo = getMainBundleInfo(hisPatchInfo);
         PatchBundleInfo mainBundleInfo = new PatchBundleInfo();
         mainBundleInfo.setMainBundle(true);
         mainBundleInfo.setNewBundle(false);
@@ -564,6 +156,8 @@ public class PatchFileBuilder {
             mainBundleInfo.setVersion(curMainBundleInfo.getVersion());
             mainBundleInfo.setPkgName(curMainBundleInfo.getPkgName());
             mainBundleInfo.setBaseVersion(curMainBundleInfo.getBaseVersion());
+            mainBundleInfo.setUnitTag(curMainBundleInfo.getUnitTag());
+            mainBundleInfo.setSrcUnitTag(curMainBundleInfo.getSrcUnitTag());
             mainBundleInfo.setName(curMainBundleInfo.getName());
             mainBundleInfo.setPkgName(curMainBundleInfo.getPkgName());
             mainBundleInfo.setApplicationName(curMainBundleInfo.getApplicationName());
@@ -572,19 +166,23 @@ public class PatchFileBuilder {
 
         // 生成tpatch文件
         for (PatchBundleInfo bundleInfo : newPatchInfo.getBundles()) {
-            if (bundleInfo.getMainBundle() || bundleInfo.getNewBundle() || noPatchBundles.contains(bundleInfo.getPkgName())) {
+            if (bundleInfo.getMainBundle() || bundleInfo.getNewBundle() || noPatchBundles.contains(
+                    bundleInfo.getPkgName())) {
                 File bundleFolder = new File(destTPathTmpFolder, bundleInfo.getName());
                 File soFile = new File(destTPathTmpFolder, bundleInfo.getName() + ".so");
                 if (soFile.exists() || bundleInfo.getVersion().equals(ROLLBACK_VERSION)) {
                     continue;
                 }
-                zipBunldeSo(bundleFolder, soFile);
+                CommandUtils.exec(bundleFolder, "zip -r " + soFile.getAbsolutePath() + " . -x */ -x .*");
+                //                zipBunldeSo(bundleFolder, soFile);
                 FileUtils.deleteDirectory(bundleFolder);
             }
         }
         File tPatchFile = new File(patchsFolder, newPatchInfo.getFileName());
-        if (tPatchFile.exists()) FileUtils.deleteQuietly(tPatchFile);
-        zipBunldeSo(destTPathTmpFolder, tPatchFile);
+        if (tPatchFile.exists()) {
+            FileUtils.deleteQuietly(tPatchFile);
+        }
+        CommandUtils.exec(destTPathTmpFolder, "zip -r " + tPatchFile.getAbsolutePath() + " . -x */ -x .*");
         if (null != logger) {
             logger.info("[TPatchFile]" + tPatchFile.getAbsolutePath());
         }
@@ -592,7 +190,7 @@ public class PatchFileBuilder {
     }
 
     /**
-     * 生成主dex的so
+     * generate main dex so
      *
      * @param bundleFolder
      * @param soOutputFile
@@ -603,7 +201,7 @@ public class PatchFileBuilder {
             FileOutputStream fileOutputStream = new FileOutputStream(soOutputFile);
             JarOutputStream jos = new JarOutputStream(new BufferedOutputStream(fileOutputStream), manifest);
             // Add ZIP entry to output stream.
-//            jos.setComment(patchVersion+"@"+targetVersion);
+            //            jos.setComment(patchVersion+"@"+targetVersion);
             File[] files = bundleFolder.listFiles();
             for (File file : files) {
                 if (file.isDirectory()) {
@@ -613,14 +211,16 @@ public class PatchFileBuilder {
                 }
             }
             IOUtils.closeQuietly(jos);
-            if (null != fileOutputStream) IOUtils.closeQuietly(fileOutputStream);
+            if (null != fileOutputStream) {
+                IOUtils.closeQuietly(fileOutputStream);
+            }
         } catch (IOException e) {
             throw new PatchException(e.getMessage(), e);
         }
     }
 
     /**
-     * 比较2个patch版本之间的差异
+     * compare two patch
      *
      * @param hisPatchInfo
      * @param currentPatchInfo
@@ -638,16 +238,26 @@ public class PatchFileBuilder {
             bundlePatch.dependency = curBundleInfo.getDependency();
             bundlePatch.pkgName = curBundleInfo.getPkgName();
             bundlePatch.artifactId = curBundleInfo.getArtifactId();
+            bundlePatch.unitTag = curBundleInfo.getUnitTag();
             bundlePatch.version = curBundleInfo.getVersion();
+            //            bundlePatch.srcUnitTag = curBundleInfo.getSrcUnitTag();
             bundlePatch.newBundle = curBundleInfo.getNewBundle();
             bundlePatch.hisPatchUrl = hisPatchInfo.getDownloadUrl();
             bundlePatch.mainBundle = curBundleInfo.getMainBundle();
-            bundlePatch.baseVersion = curBundleInfo.getBaseVersion();
+            //            bundlePatch.baseVersion = curBundleInfo.getBaseVersion();
             if (hisBundles.containsKey(bundleName)) { // 如果之前的patch版本也包含这个bundle的patch
+                bundlePatch.newBundle = false;
                 PatchBundleInfo hisBundleInfo = hisBundles.get(bundleName);
                 bundlePatch.baseVersion = hisBundleInfo.getVersion();
+                bundlePatch.srcUnitTag = hisBundleInfo.getUnitTag();
                 if (curBundleInfo.getVersion().equalsIgnoreCase(hisBundleInfo.getVersion())) { // 如果2个patch版本没变化
                     // 说明:为了防止虽然版本号没变化但是文件内容也有变化的情况，直接也做merge操作
+
+                    if (curBundleInfo.getNewBundle()) {
+                        hisBundles.remove(bundleName);
+                        continue;
+                    }
+
                     bundlePatch.bundlePolicy = BundlePolicy.MERGE;
                 } else {// 如果版本有变化，进行merge操作
                     bundlePatch.bundlePolicy = BundlePolicy.MERGE;
@@ -655,6 +265,7 @@ public class PatchFileBuilder {
                 hisBundles.remove(bundleName);
             } else { // 如果历史的patch中没有包含该bundle
                 bundlePatch.bundlePolicy = BundlePolicy.ADD;
+                bundlePatch.srcUnitTag = curBundleInfo.getSrcUnitTag();
             }
             list.add(bundlePatch);
         }
@@ -664,11 +275,14 @@ public class PatchFileBuilder {
             PatchBundleInfo hisBundleInfo = entry.getValue();
             BundlePatch bundlePatch = new BundlePatch();
             bundlePatch.name = hisBundleInfo.getName();
+            bundlePatch.unitTag = hisBundleInfo.getUnitTag();
+            bundlePatch.srcUnitTag = hisBundleInfo.getSrcUnitTag();
             bundlePatch.dependency = hisBundleInfo.getDependency();
             bundlePatch.pkgName = hisBundleInfo.getPkgName();
             bundlePatch.artifactId = hisBundleInfo.getArtifactId();
             bundlePatch.bundlePolicy = BundlePolicy.ROLLBACK;
             bundlePatch.version = ROLLBACK_VERSION;
+            bundlePatch.reset = true;
             bundlePatch.baseVersion = hisBundleInfo.getVersion();
             list.add(bundlePatch);
         }
@@ -686,14 +300,19 @@ public class PatchFileBuilder {
                 return curTPatchUnzipFolder;
             }
             curTPatchUnzipFolder.mkdirs();
-            ZipUtils.unzip(currentPatchFile, curTPatchUnzipFolder.getAbsolutePath());
+            CommandUtils.exec(tPatchTmpFolder,
+                    "unzip " + currentPatchFile.getAbsolutePath() + " -d " + curTPatchUnzipFolder
+                            .getAbsolutePath());
+            //            ZipUtils.unzip(currentPatchFile, curTPatchUnzipFolder.getAbsolutePath());
             File[] libs = curTPatchUnzipFolder.listFiles();
             if (libs != null && libs.length > 0) {
                 for (File lib : libs) {
                     if (lib.isFile() && lib.getName().endsWith(".so")) {
                         File destFolder = new File(lib.getParentFile(), FilenameUtils.getBaseName(lib.getName()));
                         System.out.println(lib.getAbsolutePath());
-                        ZipUtils.unzip(lib, destFolder.getAbsolutePath());
+                        CommandUtils.exec(tPatchTmpFolder,
+                                "unzip " + lib.getAbsolutePath() + " -d " + destFolder.getAbsolutePath());
+                        //                        ZipUtils.unzip(lib, destFolder.getAbsolutePath());
                     }
                 }
             }
@@ -703,12 +322,13 @@ public class PatchFileBuilder {
     }
 
     /**
-     * 处理各自bundle的patch文件
+     * process so file
      *
      * @param hisPatchInfo
      * @param bundlePatchs
      */
-    private PatchInfo processBundlePatch(PatchInfo hisPatchInfo, List<BundlePatch> bundlePatchs,File curTPatchUnzipFolder) throws IOException,
+    private PatchInfo processBundlePatch(PatchInfo hisPatchInfo, List<BundlePatch> bundlePatchs,
+                                         File curTPatchUnzipFolder) throws IOException,
             PatchException {
         String patchName = "patch-" + currentBuildPatchInfo.getPatchVersion() + "@" + hisPatchInfo.getPatchVersion();
         PatchInfo patchInfo = new PatchInfo();
@@ -721,13 +341,18 @@ public class PatchFileBuilder {
         if (!destTPathTmpFolder.exists()) {
             destTPathTmpFolder.mkdirs();
         }
+        File infoFile = new File(destTPathTmpFolder, "patchInfo");
+        FileUtils.writeStringToFile(infoFile, patchName);
+
         for (BundlePatch bundlePatch : bundlePatchs) {
             boolean addToPatch = true;
             String bundleName = "lib" + bundlePatch.pkgName.replace('.', '_');
             if (bundlePatch.mainBundle) {
+
                 continue;
             } else if (noPatchBundles.contains(bundlePatch.pkgName)) {
-                File currentBundle = new File(curTPatchUnzipFolder, "lib" + bundlePatch.pkgName.replace(".", "_") + ".so");
+                File currentBundle = new File(curTPatchUnzipFolder,
+                        "lib" + bundlePatch.pkgName.replace(".", "_") + ".so");
                 if (!currentBundle.exists()) {
                     continue;
                 }
@@ -736,6 +361,8 @@ public class PatchFileBuilder {
                 patchBundleInfo.setApplicationName(bundlePatch.applicationName);
                 patchBundleInfo.setArtifactId(bundlePatch.artifactId);
                 patchBundleInfo.setMainBundle(false);
+                patchBundleInfo.setSrcUnitTag(bundlePatch.srcUnitTag);
+                patchBundleInfo.setUnitTag(bundlePatch.unitTag);
                 patchBundleInfo.setNewBundle(bundlePatch.newBundle);
                 patchBundleInfo.setName(bundleName);
                 patchBundleInfo.setPkgName(bundlePatch.pkgName);
@@ -751,7 +378,10 @@ public class PatchFileBuilder {
             PatchBundleInfo patchBundleInfo = new PatchBundleInfo();
             patchBundleInfo.setApplicationName(bundlePatch.applicationName);
             patchBundleInfo.setArtifactId(bundlePatch.artifactId);
+            patchBundleInfo.setSrcUnitTag(bundlePatch.srcUnitTag);
             patchBundleInfo.setMainBundle(false);
+            patchBundleInfo.setUnitTag(bundlePatch.unitTag);
+            patchBundleInfo.setReset(bundlePatch.reset);
             patchBundleInfo.setNewBundle(bundlePatch.newBundle);
             patchBundleInfo.setName(bundleName);
             patchBundleInfo.setPkgName(bundlePatch.pkgName);
@@ -760,8 +390,15 @@ public class PatchFileBuilder {
             patchBundleInfo.setDependency(bundlePatch.dependency);
             switch (bundlePatch.bundlePolicy) {
                 case ADD:
-                    bundleDestFolder.mkdirs();
-                    FileUtils.copyDirectory(curBundleFolder, bundleDestFolder);
+                    if (bundlePatch.newBundle){
+                        File currentBundle = new File(curTPatchUnzipFolder,
+                                "lib" + bundlePatch.pkgName.replace(".", "_") + ".so");
+                        FileUtils.copyFileToDirectory(currentBundle, tPatchTmpFolder);
+
+                    }else {
+                        bundleDestFolder.mkdirs();
+                        FileUtils.copyDirectory(curBundleFolder, bundleDestFolder);
+                    }
                     break;
                 case REMOVE:
                     addToPatch = false;
@@ -769,23 +406,75 @@ public class PatchFileBuilder {
                 case ROLLBACK:// donothing
                     break;
                 case MERGE:
-                    downloadTPathAndUnzip(hisPatchInfo.getDownloadUrl(), hisTPatchFile, hisTPatchUnzipFolder);
                     File hisBundleFolder = new File(hisTPatchUnzipFolder, bundleName);
-                    if (!hisBundleFolder.exists()) { //如果历史的文件不存在,就直接覆盖
-                        throw new PatchException("The bundle:" + bundleName + " does not existed in tpatch:"
-                                + hisPatchInfo.getDownloadUrl());
-//                        bundleDestFolder.mkdirs();
-//                        FileUtils.copyDirectory(curBundleFolder, bundleDestFolder);
+                    File hisBundle = new File(hisTPatchUnzipFolder, "lib" + bundlePatch.pkgName.replace(".", "_") + ".so"));
+
+                    if (!hisTPatchFile.exists()) {
+                        if (StringUtils.isBlank(hisPatchInfo.getDownloadUrl()) && new File(TPatchTool.hisTpatchFolder,
+                                hisPatchInfo.getFileName())
+                                .exists()) {
+                            File hisPatchFile = new File(TPatchTool.hisTpatchFolder, hisPatchInfo.getFileName());
+                            System.out.println("hisPatchFile:" + hisPatchFile.getAbsolutePath());
+                            if (hisPatchFile.exists()) {
+                                FileUtils.copyFile(new File(TPatchTool.hisTpatchFolder, hisPatchInfo.getFileName()),
+                                        hisTPatchFile);
+                                CommandUtils.exec(tPatchTmpFolder,
+                                        "unzip " + hisPatchFile + " -d " + hisTPatchUnzipFolder
+                                                .getAbsolutePath());
+                                //                            ZipUtils.unzip(hisTPatchFile, hisTPatchUnzipFolder
+                                // .getAbsolutePath());
+                            }
+                        } else {
+                            downloadTPathAndUnzip(hisPatchInfo.getDownloadUrl(), hisTPatchFile, hisTPatchUnzipFolder);
+//                            File mainDexFile = new File(hisTPatchUnzipFolder,"libcom_taobao_maindex.so");
+//                            if (mainDexFile.exists()){
+//                                try {
+//                                    System.out.println("start put bundleInfos for version:"+hisPatchInfo.getPatchVersion()+"......");
+//                                    TPatchTool.bundleInfos.put(hisPatchInfo.getPatchVersion(),new AtlasFrameworkPropertiesReader(
+//                                                                                                new MethodReader(
+//                                                                                                new ClassReader(
+//                                                                                                new DexReader(mainDexFile))),TPatchTool.bundleInfos.get(currentBuildPatchInfo.getPatchVersion())).read("Landroid/taobao/atlas/framework/FrameworkProperties;","<clinit>"));
+//                                } catch (Exception e) {
+//                                    e.printStackTrace();
+//                                }
+//                            }
+                        }
+                    }
+                    if (!hisBundleFolder.exists() && !hisBundle.exists()) {
+                        throw new IOException(hisBundleFolder.getAbsolutePath() + " is not exist in history bundle!");
+                    } else if (hisBundle.exists() && bundlePatch.bundlePolicy == BundlePolicy.MERGE) {
+                        File currentBundle = new File(curTPatchUnzipFolder,
+                                "lib" + bundlePatch.pkgName.replace(".", "_") + ".so");
+                        if (currentBundle.exists() && awbMaps.get(bundlePatch.artifactId).exists()) {
+                            FileUtils.copyFileToDirectory(awbMaps.get(bundlePatch.artifactId), destTPathTmpFolder);
+                        }
                     } else {
                         File fullAwbFile = awbMaps.get(bundlePatch.artifactId);
-                        copyDiffFiles(fullAwbFile, curBundleFolder, hisBundleFolder, bundleDestFolder);
-                        if (!bundleDestFolder.exists()||bundleDestFolder.listFiles().length == 0){
-                            addToPatch = false;
+                        if (fullAwbFile == null) {
+                            System.out.println(bundlePatch.artifactId + " is not exits!");
+                            FileUtils.copyDirectory(curBundleFolder, bundleDestFolder);
+                            break;
+
+                        }
+                        copyDiffFiles(fullAwbFile, curBundleFolder, hisBundleFolder, bundleDestFolder, patchBundleInfo.getSrcUnitTag().equals(patchBundleInfo.getUnitTag()));
+                        if (!bundleDestFolder.exists() || FileUtils.listFiles(bundleDestFolder, null, true).size() == 0) {
+                            if (patchBundleInfo.getUnitTag().equals(patchBundleInfo.getSrcUnitTag())) {
+                                addToPatch = false;
+                            } else {
+//                                throw new PatchException(patchName+"patch中:"+patchBundleInfo.getPkgName()+"的srcunittag和unittag不一致,"+patchBundleInfo.getUnitTag()+","+patchBundleInfo.getSrcUnitTag()+"但是无任何变更,无法动态部署，请重新集成!");
+                                patchBundleInfo.setInherit(true);
+                            }
                         }
                     }
                     break;
             }
-            if (addToPatch) {
+
+            if (addToPatch && patchBundleInfo.getUnitTag().equals(patchBundleInfo.getSrcUnitTag())) {
+
+
+                throw new PatchException(patchName + patchBundleInfo.getPkgName() + " in patch srcunittag equals unittag," + patchBundleInfo.getUnitTag() + ",please upgrade bundle version and Reintegration!");
+
+            } else if (addToPatch) {
                 patchInfo.getBundles().add(patchBundleInfo);
             }
         }
@@ -799,9 +488,10 @@ public class PatchFileBuilder {
      * @param curBundleFolder
      * @param hisBundleFolder
      * @param destBundleFolder
+     * @param bundleName
      */
     private void copyDiffFiles(File fullLibFile, File curBundleFolder, File hisBundleFolder,
-                               File destBundleFolder) throws IOException, PatchException {
+                               File destBundleFolder, boolean equalUnitTag) throws IOException, PatchException {
         Map<String, FileDef> curBundleFileMap = getListFileMap(curBundleFolder);
         Map<String, FileDef> hisBundleFileMap = getListFileMap(hisBundleFolder);
         Set<String> rollbackFiles = new HashSet<String>();
@@ -809,11 +499,18 @@ public class PatchFileBuilder {
         for (Map.Entry<String, FileDef> entry : curBundleFileMap.entrySet()) {
             String curFilePath = entry.getKey();
             FileDef curFileDef = entry.getValue();
+            if (curFileDef.file.getName().endsWith("abc_wb_textfield_cdf.jpg") && equalUnitTag) {
+                hisBundleFileMap.remove(curFilePath);
+                continue;
+            }
+
             File destFile = new File(destBundleFolder, curFilePath);
             if (hisBundleFileMap.containsKey(curFilePath)) {
                 FileDef hisFileDef = hisBundleFileMap.get(curFilePath);
                 if (curFileDef.md5.equals(hisFileDef.md5)) {
                     // donothing
+                } else if (curFileDef.file.getName().endsWith(".patch")) {
+                    genHisSoPatch(hisFileDef, destFile);
                 } else {
                     FileUtils.copyFile(curFileDef.file, destFile);
                 }
@@ -830,6 +527,22 @@ public class PatchFileBuilder {
             JarSplitUtils.splitZipToFolder(fullLibFile, destBundleFolder, rollbackFiles);
         }
     }
+
+    private void genHisSoPatch(FileDef hisFileDef, File destFile) throws IOException {
+        if (TPatchTool.soFileDefs.size() > 0) {
+            for (SoFileDef soFileDef : TPatchTool.soFileDefs) {
+                if (soFileDef.patchFile.getName().equals(hisFileDef.file.getName())) {
+                    File hisFullSo = new File(destFile.getParentFile(), soFileDef.baseSoFile.getName());
+                    SoDiffUtils.patchSo(hisFileDef.file.getParentFile(), soFileDef.baseSoFile, hisFullSo, hisFileDef.file);
+                    SoDiffUtils.diffSo(destFile.getParentFile(), hisFullSo, soFileDef.newSoFile, destFile);
+                    FileUtils.deleteQuietly(hisFullSo);
+                }
+            }
+
+        }
+
+    }
+
 
     /**
      * 将指定文件夹下的文件转换为map
@@ -854,6 +567,11 @@ public class PatchFileBuilder {
         return map;
     }
 
+    public void setHistroyVersionList(List<String> versionList) {
+        this.versionList = versionList;
+
+    }
+
     // 简易文件定义
     class FileDef {
 
@@ -869,7 +587,7 @@ public class PatchFileBuilder {
     }
 
     /**
-     * 如果下载的文件不存在，则下载文件
+     * download file
      *
      * @param httpUrl
      * @param saveFile
@@ -880,7 +598,9 @@ public class PatchFileBuilder {
         if (!saveFile.exists() || !saveFile.isFile()) {
             downloadFile(httpUrl, saveFile);
         }
-        ZipUtils.unzip(saveFile, tmpUnzipFolder.getAbsolutePath());
+        //        ZipUtils.unzip(saveFile, tmpUnzipFolder.getAbsolutePath());
+        CommandUtils.exec(tPatchTmpFolder,
+                "unzip " + saveFile.getAbsolutePath() + " -d " + tmpUnzipFolder.getAbsolutePath());
     }
 
     /**
@@ -906,8 +626,6 @@ public class PatchFileBuilder {
     }
 
     /**
-     * 转换为map
-     *
      * @param bundles
      * @return
      */
@@ -920,8 +638,6 @@ public class PatchFileBuilder {
     }
 
     /**
-     * 创建Andfix的manifest信息
-     *
      * @return
      */
     private Manifest createManifest() {
@@ -934,8 +650,6 @@ public class PatchFileBuilder {
     }
 
     /**
-     * 往jar文件里增加文件
-     *
      * @param jos
      * @param file
      */
@@ -1009,13 +723,19 @@ public class PatchFileBuilder {
         String hisPatchUrl;
         boolean mainBundle;
         String baseVersion;
+        String unitTag;
+        String srcUnitTag;
+        boolean reset;
     }
 
     /**
      * 表示当前patch的bundle与之前patch版本的策略，包括合并,回滚,无变化
      */
     enum BundlePolicy {
-        ADD, MERGE, REMOVE, ROLLBACK;
+        ADD,
+        MERGE,
+        REMOVE,
+        ROLLBACK;
     }
 
 }
