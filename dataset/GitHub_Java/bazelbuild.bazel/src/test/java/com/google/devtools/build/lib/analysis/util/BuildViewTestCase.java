@@ -381,7 +381,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    *
    * @throws IllegalArgumentException
    */
-  protected void useConfiguration(String... args) throws Exception {
+  protected final void useConfiguration(String... args) throws Exception {
     String[] actualArgs;
     if (useDynamicConfigs) {
       actualArgs = Arrays.copyOf(args, args.length + 1);

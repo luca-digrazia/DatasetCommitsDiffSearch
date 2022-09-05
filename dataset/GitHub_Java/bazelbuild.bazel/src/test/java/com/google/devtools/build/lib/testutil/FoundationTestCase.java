@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.testutil;
 
 import static org.junit.Assert.fail;
 
-import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventCollector;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -76,7 +75,7 @@ public abstract class FoundationTestCase {
   @Before
   public final void initializeLogging() throws Exception {
     eventCollector = new EventCollector(EventKind.ERRORS_AND_WARNINGS);
-    reporter = new Reporter(new EventBus(), eventCollector);
+    reporter = new Reporter(eventCollector);
     reporter.addHandler(failFastHandler);
   }
 
