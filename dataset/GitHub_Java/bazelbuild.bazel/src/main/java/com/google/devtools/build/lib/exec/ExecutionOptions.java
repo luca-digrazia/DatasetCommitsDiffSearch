@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,23 +14,25 @@
 package com.google.devtools.build.lib.exec;
 
 import com.google.devtools.build.lib.actions.ResourceSet;
-import com.google.devtools.build.lib.exec.TestStrategy.TestOutputFormat;
-import com.google.devtools.build.lib.exec.TestStrategy.TestSummaryFormat;
 import com.google.devtools.build.lib.packages.TestTimeout;
+import com.google.devtools.build.lib.rules.test.TestStrategy;
+import com.google.devtools.build.lib.rules.test.TestStrategy.TestOutputFormat;
+import com.google.devtools.build.lib.rules.test.TestStrategy.TestSummaryFormat;
 import com.google.devtools.build.lib.util.OptionsUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsBase;
+
 import java.util.Map;
 
 /**
  * Options affecting the execution phase of a build.
  *
- * These options are interpreted by the BuildTool to choose an Executor to
+ * <p>These options are interpreted by the BuildTool to choose an Executor to
  * be used for the build.
  *
- * Note: from the user's point of view, the characteristic function of this
+ * <p>Note: from the user's point of view, the characteristic function of this
  * set of options is indistinguishable from that of the BuildRequestOptions:
  * they are all per-request.  The difference is only apparent in the
  * implementation: these options are used only by the lib.exec machinery, which
@@ -117,7 +119,7 @@ public class ExecutionOptions extends OptionsBase {
   public PathFragment testTmpDir;
 
   @Option(name = "test_output",
-      defaultValue = "summary",
+      defaultValue = "errors",
       category = "testing",
       converter = TestStrategy.TestOutputFormat.Converter.class,
       help = "Specifies desired output mode. Valid values are 'summary' to "
@@ -150,10 +152,15 @@ public class ExecutionOptions extends OptionsBase {
         + "to use its default timeouts for that category.")
   public Map<TestTimeout, Integer> testTimeout;
 
+
   @Option(name = "resource_autosense",
       defaultValue = "false",
       category = "strategy",
-      help = "This flag has no effect, and is deprecated")
+      help = "Periodically (every 3 seconds) poll system CPU load and available memory "
+      + "and allow execution of build commands if system has sufficient idle CPU and "
+      + "free RAM resources. By default this option is disabled, and Blaze will rely on "
+      + "approximation algorithms based on the total amount of available memory and number "
+      + "of CPU cores.")
   public boolean useResourceAutoSense;
 
   @Option(name = "ram_utilization_factor",
@@ -169,6 +176,7 @@ public class ExecutionOptions extends OptionsBase {
       + "higher or much lower than specified. "
       + "Note also that this option does not affect the amount of memory that the Blaze "
       + "server itself will use. "
+      + "Also, this option has no effect if --resource_autosense is enabled."
       )
   public int ramUtilizationPercentage;
 
@@ -180,7 +188,7 @@ public class ExecutionOptions extends OptionsBase {
       + "and number of CPU cores available for the locally executed build actions. It would also "
       + "assume default I/O capabilities of the local workstation (1.0). This options allows to "
       + "explicitly set all 3 values. Note, that if this option is used, Blaze will ignore "
-      + "--ram_utilization_factor.",
+      + "both --ram_utilization_factor and --resource_autosense values.",
       converter = ResourceSet.ResourceSetConverter.class
       )
   public ResourceSet availableResources;
