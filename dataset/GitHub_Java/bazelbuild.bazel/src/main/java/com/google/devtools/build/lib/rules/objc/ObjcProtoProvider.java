@@ -40,25 +40,27 @@ import com.google.devtools.build.lib.vfs.PathFragment;
  */
 public class ObjcProtoProvider implements TransitiveInfoProvider {
 
-  private final NestedSet<NestedSet<Artifact>> protoGroups;
+  private final NestedSet<Artifact> protoSources;
   private final NestedSet<Artifact> protobufHeaders;
   private final NestedSet<PathFragment> protobufHeaderSearchPaths;
   private final NestedSet<Artifact> portableProtoFilters;
 
   private ObjcProtoProvider(
-      NestedSet<NestedSet<Artifact>> protoGroups,
+      NestedSet<Artifact> protoSources,
       NestedSet<Artifact> portableProtoFilters,
       NestedSet<Artifact> protobufHeaders,
       NestedSet<PathFragment> protobufHeaderSearchPaths) {
-    this.protoGroups = Preconditions.checkNotNull(protoGroups);
+    this.protoSources = Preconditions.checkNotNull(protoSources);
     this.portableProtoFilters = Preconditions.checkNotNull(portableProtoFilters);
     this.protobufHeaders = Preconditions.checkNotNull(protobufHeaders);
     this.protobufHeaderSearchPaths = Preconditions.checkNotNull(protobufHeaderSearchPaths);
   }
 
-  /** Returns the set of all proto groups that the dependencies of this provider has seen. */
-  public NestedSet<NestedSet<Artifact>> getProtoGroups() {
-    return protoGroups;
+  /**
+   * Returns the set of all the protos that the dependencies of this provider has seen.
+   */
+  public NestedSet<Artifact> getProtoSources() {
+    return protoSources;
   }
 
   /** Returns the header artifacts provided by the Protobuf library. */
@@ -83,21 +85,17 @@ public class ObjcProtoProvider implements TransitiveInfoProvider {
    * several transitive dependencies.
    */
   public static final class Builder {
-    private final NestedSetBuilder<NestedSet<Artifact>> protoGroups =
-        NestedSetBuilder.stableOrder();
+    private final NestedSetBuilder<Artifact> protoSources = NestedSetBuilder.naiveLinkOrder();
     private final NestedSetBuilder<Artifact> portableProtoFilters = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<Artifact> protobufHeaders = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<PathFragment> protobufHeaderSearchPaths =
         NestedSetBuilder.linkOrder();
 
     /**
-     * Adds a proto group to be propagated. Each group represents a proto_library target and
-     * contains protos to be built along with their transitive dependencies. We propagate protos as
-     * groups because the grouping provides relationship information between the protos, which can
-     * be used to limit the number of inputs to each proto generation action.
+     * Adds all the protos to the set of dependencies.
      */
-    public Builder addProtoGroup(NestedSet<Artifact> protoGroup) {
-      this.protoGroups.add(protoGroup);
+    public Builder addProtoSources(NestedSet<Artifact> protoSources) {
+      this.protoSources.addTransitive(protoSources);
       return this;
     }
 
@@ -127,7 +125,7 @@ public class ObjcProtoProvider implements TransitiveInfoProvider {
      */
     public Builder addTransitive(Iterable<ObjcProtoProvider> providers) {
       for (ObjcProtoProvider provider : providers) {
-        this.protoGroups.addTransitive(provider.getProtoGroups());
+        this.protoSources.addTransitive(provider.getProtoSources());
         this.portableProtoFilters.addTransitive(provider.getPortableProtoFilters());
         this.protobufHeaders.addTransitive(provider.getProtobufHeaders());
         this.protobufHeaderSearchPaths.addTransitive(provider.getProtobufHeaderSearchPaths());
@@ -139,12 +137,12 @@ public class ObjcProtoProvider implements TransitiveInfoProvider {
      * Whether this provider has any protos or filters.
      */
     public boolean isEmpty() {
-      return protoGroups.isEmpty() && portableProtoFilters.isEmpty();
+      return protoSources.isEmpty() && portableProtoFilters.isEmpty();
     }
 
     public ObjcProtoProvider build() {
       return new ObjcProtoProvider(
-          protoGroups.build(),
+          protoSources.build(),
           portableProtoFilters.build(),
           protobufHeaders.build(),
           protobufHeaderSearchPaths.build());
