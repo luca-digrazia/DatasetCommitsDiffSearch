@@ -472,7 +472,9 @@ public class CppLinkActionBuilder {
     final LibraryToLink outputLibrary = linkType == LinkTargetType.EXECUTABLE
         ? null
         : LinkerInputs.newInputLibrary(output,
-            linkType.getLinkerOutput(),
+            linkType.staticness() == Staticness.STATIC
+                ? ArtifactCategory.STATIC_LIBRARY
+                : ArtifactCategory.DYNAMIC_LIBRARY,
             libraryIdentifier,
             objectArtifacts, this.ltoBitcodeFiles);
     final LibraryToLink interfaceOutputLibrary =
