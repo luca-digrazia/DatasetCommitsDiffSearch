@@ -133,7 +133,7 @@ public final class Rule implements Comparable<Rule> {
         HttpURLConnection connection = (HttpURLConnection) new URL(jarSha1Url).openConnection();
         connection.setInstanceFollowRedirects(true);
         connection.connect();
-        this.sha1 = CharStreams.toString(new InputStreamReader(connection.getInputStream())).trim();
+        this.sha1 = CharStreams.toString(new InputStreamReader(connection.getInputStream()));
       } catch (IOException e) {
         handler.handle(Event.warn("Failed to download the sha1 at " + jarSha1Url));
       }
