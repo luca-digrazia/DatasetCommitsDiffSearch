@@ -2,6 +2,7 @@ package com.yammer.metrics.reporting;
 
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.*;
+import com.yammer.metrics.util.NamedThreadFactory;
 import com.yammer.metrics.util.Utils;
 
 import java.io.PrintStream;
@@ -10,6 +11,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -20,7 +22,8 @@ import java.util.concurrent.TimeUnit;
  * @author coda
  */
 public class ConsoleReporter implements Runnable {
-    private static final ScheduledExecutorService TICK_THREAD = Utils.newScheduledThreadPool(1, "console-reporter");
+    private static final ScheduledExecutorService TICK_THREAD =
+            Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("metrics-console-reporter"));
     private final PrintStream out;
 
     /**

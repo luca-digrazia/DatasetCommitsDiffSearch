@@ -1,8 +1,9 @@
 package com.yammer.metrics.core;
 
 import com.yammer.metrics.stats.EWMA;
-import com.yammer.metrics.util.Utils;
+import com.yammer.metrics.util.NamedThreadFactory;
 
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -15,7 +16,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * @see <a href="http://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average">EMA</a>
  */
 public class MeterMetric implements Metered {
-    private static final ScheduledExecutorService TICK_THREAD = Utils.newScheduledThreadPool(2, "meter-tick");
+    private static final ScheduledExecutorService TICK_THREAD =
+            Executors.newScheduledThreadPool(2, new NamedThreadFactory("metrics-meter-tick"));
     private static final long INTERVAL = 5; // seconds
 
     /**

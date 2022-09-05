@@ -1,6 +1,6 @@
 package com.yammer.metrics.core;
 
-import com.yammer.metrics.util.Utils;
+import com.yammer.metrics.util.NamedThreadFactory;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -12,6 +12,7 @@ import java.lang.management.*;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -102,7 +103,8 @@ public class VirtualMachineMetrics {
         }
     }
 
-    private static final ScheduledExecutorService MONITOR_THREAD = Utils.newScheduledThreadPool(1, "gc-monitor");
+    private static final ScheduledExecutorService MONITOR_THREAD =
+            Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("gc-monitor"));
     private static final GcMonitor GC_MONITOR = initializeGcMonitor();
     private static GcMonitor initializeGcMonitor() {
         try {
