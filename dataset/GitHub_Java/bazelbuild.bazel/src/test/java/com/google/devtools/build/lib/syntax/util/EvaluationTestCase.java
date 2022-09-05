@@ -25,14 +25,12 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.syntax.Environment;
-import com.google.devtools.build.lib.syntax.Environment.Phase;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Parser;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.Statement;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestMode;
 
 import org.junit.Before;
@@ -71,8 +69,7 @@ public class EvaluationTestCase {
     return Environment.builder(mutability)
         .setGlobals(Environment.BUILD)
         .setEventHandler(getEventHandler())
-        .setToolsRepository(TestConstants.TOOLS_REPOSITORY)
-        .setPhase(Phase.LOADING)
+        .setLoadingPhase()
         .build();
   }
 

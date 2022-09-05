@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.rules.SkylarkRuleContext;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -49,7 +50,7 @@ public class SkylarkFileHelperTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result =
         evalRuleContextCode(ruleContext, "FileType(['.img']).filter(ruleContext.files.srcs)");
-    assertEquals("b.img", ActionsTestUtil.baseNamesOf((Iterable<Artifact>) result));
+    assertEquals(ActionsTestUtil.baseNamesOf((Iterable<Artifact>) result), "b.img");
   }
 
   @Test

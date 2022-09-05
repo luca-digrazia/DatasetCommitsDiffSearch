@@ -14,20 +14,23 @@
 package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.TreeMap;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.util.Arrays;
+import java.util.Map;
+import java.util.TreeMap;
+
 /**
- * Tests for {@link BaseFunction}. This tests the argument processing by BaseFunction between the
- * outer call(posargs, kwargs, ast, env) and the inner call(args, ast, env).
+ * Tests for {@link BaseFunction}.
+ * This tests the argument processing by BaseFunction
+ * between the outer call(posargs, kwargs, ast, env) and the inner call(args, ast, env).
  */
 @RunWith(JUnit4.class)
 public class BaseFunctionTest extends EvaluationTestCase {
@@ -53,18 +56,16 @@ public class BaseFunctionTest extends EvaluationTestCase {
     update(func.getName(), func);
 
     if (expectedOutput.charAt(0) == '[') { // a tuple => expected to pass
-      assertWithMessage("Wrong output for " + callExpression)
-          .that(eval(callExpression).toString())
-          .isEqualTo(expectedOutput);
+      assertEquals("Wrong output for " + callExpression,
+          expectedOutput, eval(callExpression).toString());
 
     } else { // expected to fail with an exception
       try {
         eval(callExpression);
         fail();
       } catch (EvalException e) {
-        assertWithMessage("Wrong exception for " + callExpression)
-            .that(e.getMessage())
-            .isEqualTo(expectedOutput);
+        assertEquals("Wrong exception for " + callExpression,
+            expectedOutput, e.getMessage());
       }
     }
   }
@@ -134,38 +135,24 @@ public class BaseFunctionTest extends EvaluationTestCase {
   @SuppressWarnings("unchecked")
   @Test
   public void testKwParam() throws Exception {
-    eval(
-        "def foo(a, b, c=3, d=4, g=7, h=8, *args, **kwargs):\n"
-            + "  return (a, b, c, d, g, h, args, kwargs)\n"
-            + "v1 = foo(1, 2)\n"
-            + "v2 = foo(1, h=9, i=0, *['x', 'y', 'z', 't'])\n"
-            + "v3 = foo(1, i=0, *[2, 3, 4, 5, 6, 7, 8])\n"
-            + "def bar(**kwargs):\n"
-            + "  return kwargs\n"
-            + "b1 = bar(name='foo', type='jpg', version=42)\n"
-            + "b2 = bar()\n");
+    eval("def foo(a, b, c=3, d=4, *args, e, f, g=7, h=8, **kwargs):\n"
+        + "  return (a, b, c, d, e, f, g, h, args, kwargs)\n"
+        + "v1 = foo(1, 2, e=5, f=6)\n"
+        + "v2 = foo(1, *['x', 'y', 'z', 't'], h=9, e=5, f=6, i=0)\n"
+        + "def bar(**kwargs):\n"
+        + "  return kwargs\n"
+        + "b1 = bar(name='foo', type='jpg', version=42)\n"
+        + "b2 = bar()\n");
 
     assertThat(Printer.repr(lookup("v1")))
-        .isEqualTo("(1, 2, 3, 4, 7, 8, (), {})");
+        .isEqualTo("(1, 2, 3, 4, 5, 6, 7, 8, (), {})");
     assertThat(Printer.repr(lookup("v2")))
-        .isEqualTo("(1, \"x\", \"y\", \"z\", \"t\", 9, (), {\"i\": 0})");
-    assertThat(Printer.repr(lookup("v3")))
-        .isEqualTo("(1, 2, 3, 4, 5, 6, (7, 8), {\"i\": 0})");
+        .isEqualTo("(1, \"x\", \"y\", \"z\", 5, 6, 7, 9, (\"t\",), {\"i\": 0})");
 
     // NB: the conversion to a TreeMap below ensures the keys are sorted.
     assertThat(Printer.repr(
         new TreeMap<String, Object>((Map<String, Object>) lookup("b1"))))
         .isEqualTo("{\"name\": \"foo\", \"type\": \"jpg\", \"version\": 42}");
     assertThat(Printer.repr(lookup("b2"))).isEqualTo("{}");
-  }
-
-  @Test
-  public void testCommaAfterArgsAndKwargs() throws Exception {
-    // Test that commas are not allowed in function definitions and calls
-    // after last *args or **kwargs expressions.
-    checkEvalErrorContains("syntax error at ')': expected identifier", "def foo(*args,): pass");
-    checkEvalErrorContains("unexpected tokens after kwarg", "def foo(**kwargs,): pass");
-    checkEvalErrorContains("syntax error at ')': expected expression", "foo(*args,)");
-    checkEvalErrorContains("unexpected tokens after kwarg", "foo(**kwargs,)");
   }
 }
