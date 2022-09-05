@@ -282,19 +282,17 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
       if (!(obj instanceof RegularFile)) {
         return false;
       }
-      return this.type.equals(((RegularFile) obj).type)
-          && this.path.equals(((RegularFile) obj).path)
-          && this.metadata.equals(((RegularFile) obj).metadata);
+      return ResolvedFileUtils.areObjectsEqual(this, (RegularFile) obj);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(type, path, metadata);
+      return ResolvedFileUtils.hashCodeOf(this);
     }
 
     @Override
     public String toString() {
-      return String.format("RegularFile(path=%s)", path);
+      return String.format("RegularFile(%s)", ResolvedFileUtils.asString(this));
     }
 
     @Override
@@ -345,18 +343,17 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
       if (!(obj instanceof Directory)) {
         return false;
       }
-      return this.type.equals(((Directory) obj).type)
-          && this.path.equals(((Directory) obj).path);
+      return ResolvedFileUtils.areObjectsEqual(this, (Directory) obj);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(type, path);
+      return ResolvedFileUtils.hashCodeOf(this);
     }
 
     @Override
     public String toString() {
-      return String.format("Directory(path=%s)", path);
+      return String.format("Directory(%s)", ResolvedFileUtils.asString(this));
     }
 
     @Override
@@ -416,19 +413,18 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
       if (!(obj instanceof DanglingSymlink)) {
         return false;
       }
-      return this.type.equals(((DanglingSymlink) obj).type)
-          && this.metadata.equals(((DanglingSymlink) obj).metadata)
-          && this.symlink.equals(((DanglingSymlink) obj).symlink);
+      DanglingSymlink o = (DanglingSymlink) obj;
+      return ResolvedFileUtils.areObjectsEqual(this, o) && symlink.equals(o.symlink);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(type, metadata, symlink);
+      return Objects.hashCode(ResolvedFileUtils.hashCodeOf(this), symlink);
     }
 
     @Override
     public String toString() {
-      return String.format("DanglingSymlink(%s)", symlink);
+      return String.format("DanglingSymlink(%s, %s)", ResolvedFileUtils.asString(this), symlink);
     }
 
     @Override
@@ -498,20 +494,18 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
       if (!(obj instanceof SymlinkToFile)) {
         return false;
       }
-      return this.type.equals(((SymlinkToFile) obj).type)
-          && this.path.equals(((SymlinkToFile) obj).path)
-          && this.metadata.equals(((SymlinkToFile) obj).metadata)
-          && this.symlink.equals(((SymlinkToFile) obj).symlink);
+      SymlinkToFile o = (SymlinkToFile) obj;
+      return ResolvedFileUtils.areObjectsEqual(this, o) && symlink.equals(o.symlink);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(type, path, metadata, symlink);
+      return Objects.hashCode(ResolvedFileUtils.hashCodeOf(this), symlink);
     }
 
     @Override
     public String toString() {
-      return String.format("SymlinkToFile(target=%s, %s)", path, symlink);
+      return String.format("SymlinkToFile(%s, %s)", ResolvedFileUtils.asString(this), symlink);
     }
 
     @Override
@@ -574,20 +568,18 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
       if (!(obj instanceof SymlinkToDirectory)) {
         return false;
       }
-      return this.type.equals(((SymlinkToDirectory) obj).type)
-          && this.path.equals(((SymlinkToDirectory) obj).path)
-          && this.metadata.equals(((SymlinkToDirectory) obj).metadata)
-          && this.symlink.equals(((SymlinkToDirectory) obj).symlink);
+      SymlinkToDirectory o = (SymlinkToDirectory) obj;
+      return ResolvedFileUtils.areObjectsEqual(this, o) && symlink.equals(o.symlink);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(type, path, metadata, symlink);
+      return Objects.hashCode(ResolvedFileUtils.hashCodeOf(this), symlink);
     }
 
     @Override
     public String toString() {
-      return String.format("SymlinkToDirectory(target=%s, %s)", path, symlink);
+      return String.format("SymlinkToDirectory(%s, %s)", ResolvedFileUtils.asString(this), symlink);
     }
 
     @Override
@@ -630,6 +622,36 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
     public static ResolvedFile danglingSymlink(RootedPath linkNamePath, PathFragment linkValue,
         FileStateValue metadata) {
       return new DanglingSymlink(linkNamePath, linkValue, metadata);
+    }
+  }
+
+  private static final class ResolvedFileUtils {
+    private ResolvedFileUtils() {}
+
+    static boolean areObjectsEqual(ResolvedFile a, ResolvedFile b) {
+      if (a == b) {
+        return true;
+      }
+      if ((a == null) != (b == null)) {
+        return false;
+      }
+      return a.getType().equals(b.getType())
+          && a.getPath().equals(b.getPath())
+          && a.getMetadata().equals(b.getMetadata());
+    }
+
+    static int hashCodeOf(ResolvedFile f) {
+      return Objects.hashCode(f.getType(), f.getPath(), f.getMetadata());
+    }
+
+    static String asString(ResolvedFile f) {
+      return String.format(
+          "type=%s, path=%s, metadata=%s",
+          f.getType(),
+          f.getPath(),
+          f.getMetadata().isPresent()
+              ? Integer.toHexString(f.getMetadata().get().hashCode())
+              : "(stripped)");
     }
   }
 

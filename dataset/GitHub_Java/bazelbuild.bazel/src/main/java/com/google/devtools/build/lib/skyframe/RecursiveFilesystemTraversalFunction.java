@@ -380,7 +380,7 @@ public final class RecursiveFilesystemTraversalFunction implements SkyFunction {
               rootInfo.realPath,
               traversal.path,
               rootInfo.unresolvedSymlinkTarget,
-              Integer.valueOf(rootInfo.metadata.hashCode()));
+              rootInfo.metadata);
       paths.add(root);
     } else {
       root = ResolvedFileFactory.directory(rootInfo.realPath);
