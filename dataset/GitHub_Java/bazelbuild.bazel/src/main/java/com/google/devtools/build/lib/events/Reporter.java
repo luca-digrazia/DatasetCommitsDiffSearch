@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.events;
 
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.util.io.OutErr;
 
 import java.io.PrintStream;
@@ -119,7 +119,7 @@ public final class Reporter implements EventHandler, ExceptionListener {
    * progress indicator (if any) in the message may differ.
    */
   public void startTask(Location location, String message) {
-    handle(Event.of(EventKind.START, location, message));
+    handle(new Event(EventKind.START, location, message));
   }
 
   /**
@@ -130,12 +130,12 @@ public final class Reporter implements EventHandler, ExceptionListener {
    * progress indicator (if any) in the message may differ.
    */
   public void finishTask(Location location, String message) {
-    handle(Event.of(EventKind.FINISH, location, message));
+    handle(new Event(EventKind.FINISH, location, message));
   }
 
   @Override
   public void error(Location location, String message, Throwable error) {
-    handle(Event.error(location, message));
+    handle(new Event(EventKind.ERROR, location, message));
     error.printStackTrace(new PrintStream(getOutErr().getErrorStream()));
   }
 
@@ -178,4 +178,5 @@ public final class Reporter implements EventHandler, ExceptionListener {
       ansiAllowingHandlerRegistered = false;
     }
   }
+
 }

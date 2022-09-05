@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.common.options.OptionsParser;
@@ -60,7 +59,7 @@ import java.util.Set;
 public final class QueryCommand implements BlazeCommand {
 
   @Override
-  public void editOptions(CommandEnvironment env, OptionsParser optionsParser) { }
+  public void editOptions(BlazeRuntime runtime, OptionsParser optionsParser) { }
 
   /**
    * Exit codes:
@@ -71,8 +70,7 @@ public final class QueryCommand implements BlazeCommand {
    *        (only when --keep_going is in effect.)
    */
   @Override
-  public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
-    BlazeRuntime runtime = env.getRuntime();
+  public ExitCode exec(BlazeRuntime runtime, OptionsProvider options) {
     QueryOptions queryOptions = options.getOptions(QueryOptions.class);
 
     try {
@@ -80,15 +78,15 @@ public final class QueryCommand implements BlazeCommand {
           options.getOptions(PackageCacheOptions.class),
           runtime.getDefaultsPackageContent());
     } catch (InterruptedException e) {
-      env.getReporter().handle(Event.error("query interrupted"));
+      runtime.getReporter().handle(Event.error("query interrupted"));
       return ExitCode.INTERRUPTED;
     } catch (AbruptExitException e) {
-      env.getReporter().handle(Event.error(null, "Unknown error: " + e.getMessage()));
+      runtime.getReporter().handle(Event.error(null, "Unknown error: " + e.getMessage()));
       return e.getExitCode();
     }
 
     if (options.getResidue().isEmpty()) {
-      env.getReporter().handle(Event.error(String.format(
+      runtime.getReporter().handle(Event.error(String.format(
           "missing query expression. Type '%s help query' for syntax and help",
           Constants.PRODUCT_NAME)));
       return ExitCode.COMMAND_LINE_ERROR;
@@ -98,7 +96,7 @@ public final class QueryCommand implements BlazeCommand {
     OutputFormatter formatter =
         OutputFormatter.getFormatter(formatters, queryOptions.outputFormat);
     if (formatter == null) {
-      env.getReporter().handle(Event.error(
+      runtime.getReporter().handle(Event.error(
           String.format("Invalid output format '%s'. Valid values are: %s",
               queryOptions.outputFormat, OutputFormatter.formatterNames(formatters))));
       return ExitCode.COMMAND_LINE_ERROR;
@@ -107,7 +105,7 @@ public final class QueryCommand implements BlazeCommand {
     String query = Joiner.on(' ').join(options.getResidue());
 
     Set<Setting> settings = queryOptions.toSettings();
-    AbstractBlazeQueryEnvironment<Target> queryEnv = newQueryEnvironment(
+    AbstractBlazeQueryEnvironment<Target> env = newQueryEnvironment(
         runtime,
         queryOptions.keepGoing,
         QueryOutputUtils.orderResults(queryOptions, formatter),
@@ -117,9 +115,9 @@ public final class QueryCommand implements BlazeCommand {
     // 1. Parse query:
     QueryExpression expr;
     try {
-      expr = QueryExpression.parse(query, queryEnv);
+      expr = QueryExpression.parse(query, env);
     } catch (QueryException e) {
-      env.getReporter().handle(Event.error(
+      runtime.getReporter().handle(Event.error(
           null, "Error while parsing '" + query + "': " + e.getMessage()));
       return ExitCode.COMMAND_LINE_ERROR;
     }
@@ -127,34 +125,35 @@ public final class QueryCommand implements BlazeCommand {
     // 2. Evaluate expression:
     QueryEvalResult<Target> result;
     try {
-      result = queryEnv.evaluateQuery(expr);
+      result = env.evaluateQuery(expr);
     } catch (QueryException | InterruptedException e) {
       // Keep consistent with reportBuildFileError()
-      env.getReporter()
+      runtime
+          .getReporter()
           // TODO(bazel-team): this is a kludge to fix a bug observed in the wild. We should make
           // sure no null error messages ever get in.
           .handle(Event.error(e.getMessage() == null ? e.toString() : e.getMessage()));
       return ExitCode.ANALYSIS_FAILURE;
     }
 
-    env.getReporter().switchToAnsiAllowingHandler();
+    runtime.getReporter().switchToAnsiAllowingHandler();
     // 3. Output results:
-    PrintStream output = new PrintStream(env.getReporter().getOutErr().getOutputStream());
+    PrintStream output = new PrintStream(runtime.getReporter().getOutErr().getOutputStream());
     try {
       QueryOutputUtils.output(queryOptions, result, formatter, output,
           queryOptions.aspectDeps.createResolver(
-              runtime.getPackageManager(), env.getReporter()));
+              runtime.getPackageManager(), runtime.getReporter()));
     } catch (ClosedByInterruptException | InterruptedException e) {
-      env.getReporter().handle(Event.error("query interrupted"));
+      runtime.getReporter().handle(Event.error("query interrupted"));
       return ExitCode.INTERRUPTED;
     } catch (IOException e) {
-      env.getReporter().handle(Event.error("I/O error: " + e.getMessage()));
+      runtime.getReporter().handle(Event.error("I/O error: " + e.getMessage()));
       return ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
     } finally {
       output.flush();
     }
     if (result.getResultSet().isEmpty()) {
-      env.getReporter().handle(Event.info("Empty results"));
+      runtime.getReporter().handle(Event.info("Empty results"));
     }
 
     return result.getSuccess() ? ExitCode.SUCCESS : ExitCode.PARTIAL_ANALYSIS_FAILURE;
