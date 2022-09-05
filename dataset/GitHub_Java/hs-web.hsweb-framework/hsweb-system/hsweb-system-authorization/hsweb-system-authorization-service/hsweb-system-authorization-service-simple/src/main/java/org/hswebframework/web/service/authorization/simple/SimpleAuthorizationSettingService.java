@@ -16,7 +16,6 @@
  */
 package org.hswebframework.web.service.authorization.simple;
 
-import org.apache.commons.codec.digest.DigestUtils;
 import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.AuthenticationInitializeService;
 import org.hswebframework.web.authorization.Permission;
@@ -25,7 +24,6 @@ import org.hswebframework.web.authorization.simple.SimpleAuthentication;
 import org.hswebframework.web.authorization.simple.SimplePermission;
 import org.hswebframework.web.authorization.simple.SimpleRole;
 import org.hswebframework.web.authorization.simple.SimpleUser;
-import org.hswebframework.web.commons.entity.DataStatus;
 import org.hswebframework.web.commons.entity.TreeSupportEntity;
 import org.hswebframework.web.dao.authorization.AuthorizationSettingDao;
 import org.hswebframework.web.dao.authorization.AuthorizationSettingDetailDao;
@@ -36,11 +34,14 @@ import org.hswebframework.web.service.DefaultDSLQueryService;
 import org.hswebframework.web.service.GenericEntityService;
 import org.hswebframework.web.service.authorization.*;
 import org.hswebframework.web.service.authorization.AuthorizationSettingTypeSupplier.SettingInfo;
+import org.hswebframework.web.validator.group.CreateGroup;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.function.Function;
@@ -48,10 +49,15 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.hswebframework.web.entity.authorization.AuthorizationSettingDetailEntity.STATE_OK;
+import static org.apache.commons.collections.CollectionUtils.isEmpty;
+import static org.apache.commons.collections.CollectionUtils.isNotEmpty;
+import static org.hswebframework.web.commons.entity.DataStatus.STATUS_ENABLED;
+import static org.hswebframework.web.entity.authorization.AuthorizationSettingDetailEntity.*;
 import static org.hswebframework.web.entity.authorization.AuthorizationSettingEntity.settingFor;
 import static org.hswebframework.web.entity.authorization.AuthorizationSettingEntity.type;
+import static org.hswebframework.web.service.authorization.simple.CacheConstants.MENU_CACHE_NAME;
 import static org.hswebframework.web.service.authorization.simple.CacheConstants.USER_AUTH_CACHE_NAME;
+import static org.hswebframework.web.service.authorization.simple.CacheConstants.USER_MENU_CACHE_NAME;
 
 /**
  * 默认的服务实现
@@ -59,7 +65,6 @@ import static org.hswebframework.web.service.authorization.simple.CacheConstants
  * @author hsweb-generator-online
  */
 @Service("authorizationSettingService")
-@CacheConfig(cacheNames = USER_AUTH_CACHE_NAME)
 public class SimpleAuthorizationSettingService extends GenericEntityService<AuthorizationSettingEntity, String>
         implements AuthorizationSettingService, AuthenticationInitializeService, UserMenuManagerService {
 
@@ -72,6 +77,8 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
     private MenuService menuService;
 
     private UserService userService;
+
+    private PermissionService permissionService;
 
     private List<AuthorizationSettingTypeSupplier> authorizationSettingTypeSuppliers;
 
@@ -89,29 +96,43 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
 
     @Override
     public AuthorizationSettingEntity select(String type, String settingFor) {
+        tryValidateProperty(type != null, AuthorizationSettingEntity.type, "{can not be null}");
+        tryValidateProperty(settingFor != null, AuthorizationSettingEntity.settingFor, "{can not be null}");
         return createQuery().where(AuthorizationSettingEntity.type, type)
                 .and(AuthorizationSettingEntity.settingFor, settingFor)
                 .single();
     }
 
     @Override
-    @CacheEvict(allEntries = true)
+    @CacheEvict(cacheNames = {CacheConstants.USER_AUTH_CACHE_NAME, CacheConstants.USER_MENU_CACHE_NAME}, allEntries = true)
+    public String saveOrUpdate(AuthorizationSettingEntity entity) {
+        AuthorizationSettingEntity old = select(entity.getType(), entity.getSettingFor());
+        if (old != null) {
+            updateByPk(old.getId(), entity);
+            return old.getId();
+        }
+        return insert(entity);
+    }
+
+    @Override
+    @CacheEvict(cacheNames = {CacheConstants.USER_AUTH_CACHE_NAME, CacheConstants.USER_MENU_CACHE_NAME}, allEntries = true)
     public String insert(AuthorizationSettingEntity entity) {
-        entity.setStatus(DataStatus.STATUS_ENABLED);
+        tryValidateProperty(select(entity.getType(), entity.getSettingFor()) == null, AuthorizationSettingEntity.settingFor, "存在相同的配置!");
+        entity.setStatus(STATUS_ENABLED);
         String id = super.insert(entity);
         if (entity.getMenus() != null) {
             TreeSupportEntity.forEach(entity.getMenus(), menu -> {
-                menu.setStatus(DataStatus.STATUS_ENABLED);
+                menu.setStatus(STATUS_ENABLED);
                 menu.setSettingId(id);
             });
             authorizationSettingMenuService.insertBatch(entity.getMenus());
         }
         if (entity.getDetails() != null) {
             for (AuthorizationSettingDetailEntity detail : entity.getDetails()) {
-                tryValidate(detail);
                 detail.setId(getIDGenerator().generate());
                 detail.setSettingId(id);
-                detail.setStatus(DataStatus.STATUS_ENABLED);
+                detail.setStatus(STATUS_ENABLED);
+                tryValidate(detail, CreateGroup.class);
                 authorizationSettingDetailDao.insert(detail);
             }
         }
@@ -119,13 +140,13 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
     }
 
     @Override
-    @CacheEvict(allEntries = true)
+    @CacheEvict(cacheNames = {CacheConstants.USER_AUTH_CACHE_NAME, CacheConstants.USER_MENU_CACHE_NAME}, allEntries = true)
     public int updateByPk(String id, AuthorizationSettingEntity entity) {
         int size = super.updateByPk(id, entity);
         if (entity.getMenus() != null) {
             authorizationSettingMenuService.deleteBySettingId(id);
             TreeSupportEntity.forEach(entity.getMenus(), menu -> {
-                menu.setStatus(DataStatus.STATUS_ENABLED);
+                menu.setStatus(STATUS_ENABLED);
                 menu.setSettingId(id);
             });
             authorizationSettingMenuService.insertBatch(entity.getMenus());
@@ -133,11 +154,13 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
         if (entity.getDetails() != null) {
             DefaultDSLDeleteService
                     .createDelete(authorizationSettingDetailDao)
-                    .where(AuthorizationSettingDetailEntity.settingId, id)
+                    .where(settingId, id)
                     .exec();
             for (AuthorizationSettingDetailEntity detail : entity.getDetails()) {
+                detail.setId(getIDGenerator().generate());
                 detail.setSettingId(id);
-                detail.setStatus(DataStatus.STATUS_ENABLED);
+                detail.setStatus(STATUS_ENABLED);
+                tryValidate(detail, CreateGroup.class);
                 authorizationSettingDetailDao.insert(detail);
             }
         }
@@ -145,9 +168,12 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
     }
 
     @Override
-    @CacheEvict(allEntries = true)
+    @CacheEvict(cacheNames = {CacheConstants.USER_AUTH_CACHE_NAME, CacheConstants.USER_MENU_CACHE_NAME}, allEntries = true)
     public int deleteByPk(String id) {
+        Objects.requireNonNull(id, "id can not be null");
         authorizationSettingMenuService.deleteBySettingId(id);
+        DefaultDSLDeleteService.createDelete(authorizationSettingDetailDao)
+                .where(AuthorizationSettingDetailEntity.settingId, id).exec();
         return super.deleteByPk(id);
     }
 
@@ -159,8 +185,9 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
                         .collect(Collectors.groupingBy(SettingInfo::getType));
         Stream<Map.Entry<String, List<SettingInfo>>> settingInfoStream = settingInfo.entrySet().stream();
         //大于1 使用并行处理
-        if (settingInfo.size() > 1)
-            settingInfoStream.parallel();
+        if (settingInfo.size() > 1) {
+            settingInfoStream = settingInfoStream.parallel();
+        }
         return settingInfoStream
                 .map(entry ->
                         createQuery()
@@ -168,18 +195,25 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
                                 .where(type, entry.getKey())
                                 .and()
                                 .in(settingFor, entry.getValue().stream().map(SettingInfo::getSettingFor).collect(Collectors.toList()))
-                                .list())
+                                .listNoPaging())
                 .flatMap(List::stream)
                 .collect(Collectors.toList());
     }
 
     @Override
-    @Cacheable(key = "'user-menu-list:'+#userId")
+    @Cacheable(cacheNames = USER_MENU_CACHE_NAME, key = "'user-menu-list:'+#userId")
     public List<UserMenuEntity> getUserMenuAsList(String userId) {
-        if (null == userId) return null;
+        if (null == userId) {
+            return Collections.emptyList();
+        }
         UserEntity userEntity = userService.selectByPk(userId);
-        if (userEntity == null) return null;
+        if (userEntity == null) {
+            return Collections.emptyList();
+        }
         List<AuthorizationSettingEntity> entities = getUserSetting(userId);
+        if (entities.isEmpty()) {
+            return Collections.emptyList();
+        }
         //用户持有的权限设置id集合
         List<String> settingIdList = entities.stream()
                 .map(AuthorizationSettingEntity::getId)
@@ -192,51 +226,77 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
                 .map(AuthorizationSettingMenuEntity::getMenuId)
                 .distinct()
                 .collect(Collectors.toList());
+        if (menuIdList.isEmpty()) {
+            return new ArrayList<>();
+        }
         //获取全部菜单,并创建缓存备用
         Map<String, MenuEntity> menuCache = menuService
                 .selectByPk(menuIdList)
                 .stream()
                 .collect(Collectors.toMap(MenuEntity::getId, Function.identity()));
+
         //根据配置,重新构造菜单结构
         List<UserMenuEntity> reBuildMenu = new LinkedList<>();
-        for (AuthorizationSettingMenuEntity entity : menuEntities) {
-            MenuEntity cache = menuCache.get(entity.getId());
-            if (null != cache && cache.getStatus() == 1) {
-                UserMenuEntity menu = entityFactory.newInstance(UserMenuEntity.class, cache);
-                menu.setSortIndex(entity.getSortIndex());
-                menu.setLevel(entity.getLevel());
-                menu.setId(entity.getId());
-                menu.setParentId(entity.getParentId());
-                menu.setMenuId(cache.getId());
-                reBuildMenu.add(menu);
-            }
+        for (MenuEntity menuEntity : menuCache.values()) {
+            UserMenuEntity menu = entityFactory.newInstance(UserMenuEntity.class, menuEntity);
+            menu.setSortIndex(menuEntity.getSortIndex());
+            menu.setLevel(menuEntity.getLevel());
+            menu.setId(menuEntity.getId());
+            menu.setParentId(menuEntity.getParentId());
+            menu.setMenuId(menuEntity.getId());
+            reBuildMenu.add(menu);
         }
+
+//        for (AuthorizationSettingMenuEntity entity : menuEntities) {
+//            MenuEntity cache = menuCache.get(entity.getMenuId());
+//            if (null != cache && DataStatus.STATUS_ENABLED.equals(cache.getStatus())) {
+//                UserMenuEntity menu = entityFactory.newInstance(UserMenuEntity.class, cache);
+//                menu.setSortIndex(entity.getSortIndex());
+//                menu.setLevel(entity.getLevel());
+//                menu.setId(entity.getId());
+//                menu.setParentId(entity.getParentId());
+//                menu.setMenuId(cache.getId());
+//                reBuildMenu.add(menu);
+//            }
+//        }
+        Collections.sort(reBuildMenu);
         return reBuildMenu;
     }
 
     @Override
-    @Cacheable(key = "'menu-tree:'+#userId")
+    @Cacheable(cacheNames = USER_MENU_CACHE_NAME, key = "'menu-tree:'+#userId")
     public List<UserMenuEntity> getUserMenuAsTree(String userId) {
         return TreeSupportEntity.list2tree(getUserMenuAsList(userId), UserMenuEntity::setChildren,
                 (Predicate<UserMenuEntity>) menuEntity ->
                         // parentId为空或者为-1的菜单则认为是根菜单
-                        menuEntity.getParentId() == null || "-1".equals(menuEntity.getParentId()));
+                        StringUtils.isEmpty(menuEntity.getParentId()) || "-1".equals(menuEntity.getParentId()));
     }
 
     @Override
     public Authentication initUserAuthorization(String userId) {
-        if (null == userId) return null;
+        if (null == userId) {
+            return null;
+        }
         UserEntity userEntity = userService.selectByPk(userId);
-        if (userEntity == null) return null;
+        if (userEntity == null) {
+            return null;
+        }
         SimpleAuthentication authentication = new SimpleAuthentication();
         // 用户信息
-        authentication.setUser(new SimpleUser(userId, userEntity.getUsername(), userEntity.getName()));
+        authentication.setUser(SimpleUser.builder()
+                .id(userId)
+                .username(userEntity.getUsername())
+                .name(userEntity.getName())
+                .type("default")
+                .build());
         //角色
         authentication.setRoles(userService.getUserRole(userId)
-                .stream().map(role -> new SimpleRole(role.getId(), role.getName()))
+                .stream()
+                .map(role -> new SimpleRole(role.getId(), role.getName()))
                 .collect(Collectors.toList()));
 
-        List<String> settingIdList = getUserSetting(userId).stream()
+        List<String> settingIdList = getUserSetting(userId)
+                .stream()
                 .map(AuthorizationSettingEntity::getId)
                 .collect(Collectors.toList());
 
@@ -248,14 +308,63 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
         // where status=1 and setting_id in (?,?,?)
         List<AuthorizationSettingDetailEntity> detailList = DefaultDSLQueryService
                 .createQuery(authorizationSettingDetailDao)
-                .where(AuthorizationSettingDetailEntity.state, STATE_OK)
-                .and().in(AuthorizationSettingDetailEntity.settingId, settingIdList)
-                .list();
-        //权限
+                .where(status, STATE_OK)
+                .and().in(settingId, settingIdList)
+                .listNoPaging();
+        //权限id集合
+        List<String> permissionIds = detailList.stream()
+                .map(AuthorizationSettingDetailEntity::getPermissionId)
+                .distinct()
+                .collect(Collectors.toList());
+        //权限信息缓存
+        Map<String, PermissionEntity> permissionEntityCache =
+                permissionService.selectByPk(permissionIds)
+                        .stream()
+                        .collect(Collectors.toMap(PermissionEntity::getId, Function.identity()));
+
+        //防止越权
+        detailList = detailList.stream().filter(detail -> {
+            PermissionEntity entity = permissionEntityCache.get(detail.getPermissionId());
+            if (entity == null || !STATUS_ENABLED.equals(entity.getStatus())) {
+                return false;
+            }
+            List<String> allActions = entity.getActions().stream().map(ActionEntity::getAction).collect(Collectors.toList());
+
+            if (isNotEmpty(entity.getActions()) && isNotEmpty(detail.getActions())) {
+
+                detail.setActions(detail.getActions().stream().filter(allActions::contains).collect(Collectors.toSet()));
+            }
+            if (isEmpty(entity.getSupportDataAccessTypes())) {
+                detail.setDataAccesses(Collections.emptyList());
+            } else if (isNotEmpty(detail.getDataAccesses()) && !entity.getSupportDataAccessTypes().contains("*")) {
+                //重构为权限支持的数据权限控制方式,防止越权设置权限
+                detail.setDataAccesses(detail
+                        .getDataAccesses()
+                        .stream()
+                        .filter(access ->
+                                //以设置支持的权限开头就认为拥有该权限
+                                //比如支持的权限为CUSTOM_SCOPE_ORG_SCOPE
+                                //设置的权限为CUSTOM_SCOPE 则通过检验
+                                entity.getSupportDataAccessTypes().stream()
+                                        .anyMatch(type -> type.startsWith(access.getType())))
+                        .collect(Collectors.toList()));
+            }
+            return true;
+        }).collect(Collectors.toList());
+
+        //全部权限设置
         Map<String, List<AuthorizationSettingDetailEntity>> settings = detailList
                 .stream()
                 .collect(Collectors.groupingBy(AuthorizationSettingDetailEntity::getPermissionId));
+
         List<Permission> permissions = new ArrayList<>();
+        //获取关联的权限信息
+        Map<String, List<ParentPermission>> parentsPermissions = permissionEntityCache.values().stream()
+                .map(PermissionEntity::getParents)
+                .filter(Objects::nonNull)
+                .flatMap(Collection::stream)
+                .collect(Collectors.groupingBy(ParentPermission::getPermission));
+
         settings.forEach((permissionId, details) -> {
             SimplePermission permission = new SimplePermission();
             permission.setId(permissionId);
@@ -265,7 +374,7 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
             Collections.sort(details);
             for (AuthorizationSettingDetailEntity detail : details) {
                 //如果指定不合并相同的配置,则清空之前的配置
-                if (!Boolean.TRUE.equals(detail.isMerge())) {
+                if (Boolean.FALSE.equals(detail.getMerge())) {
                     actions.clear();
                     dataAccessConfigs.clear();
                 }
@@ -281,8 +390,30 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
                             .collect(Collectors.toSet()));
                 }
             }
+            //是否有其他权限关联了此权限
+            List<ParentPermission> parents = parentsPermissions.get(permissionId);
+            if (parents != null) {
+                actions.addAll(parents.stream()
+                        .map(ParentPermission::getActions)
+                        .filter(Objects::nonNull)
+                        .flatMap(Collection::stream)
+                        .collect(Collectors.toSet()));
+                parentsPermissions.remove(permissionId);
+            }
             permission.setActions(actions);
             permission.setDataAccesses(dataAccessConfigs);
+            permissions.add(permission);
+        });
+
+        //关联权限
+        parentsPermissions.forEach((per, all) -> {
+            SimplePermission permission = new SimplePermission();
+            permission.setId(per);
+            permission.setActions(all.stream()
+                    .map(ParentPermission::getActions)
+                    .filter(Objects::nonNull)
+                    .flatMap(Collection::stream)
+                    .collect(Collectors.toSet()));
             permissions.add(permission);
         });
         authentication.setPermissions(permissions);
@@ -323,5 +454,10 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
     @Autowired
     public void setMenuService(MenuService menuService) {
         this.menuService = menuService;
+    }
+
+    @Autowired
+    public void setPermissionService(PermissionService permissionService) {
+        this.permissionService = permissionService;
     }
 }
