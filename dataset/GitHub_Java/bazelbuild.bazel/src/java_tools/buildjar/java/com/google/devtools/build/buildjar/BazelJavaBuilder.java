@@ -1,4 +1,4 @@
-// Copyright 2007 The Bazel Authors. All rights reserved.
+// Copyright 2007-2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.buildjar;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.buildjar.javac.JavacOptions;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
@@ -121,8 +120,7 @@ public abstract class BazelJavaBuilder {
    *         file failed
    * @throws InvalidCommandLineException on any command line error
    */
-  @VisibleForTesting
-  public static JavaLibraryBuildRequest parse(List<String> args) throws IOException,
+  private static JavaLibraryBuildRequest parse(List<String> args) throws IOException,
       InvalidCommandLineException {
     ImmutableList<BlazeJavaCompilerPlugin> plugins =
         ImmutableList.<BlazeJavaCompilerPlugin>of(
