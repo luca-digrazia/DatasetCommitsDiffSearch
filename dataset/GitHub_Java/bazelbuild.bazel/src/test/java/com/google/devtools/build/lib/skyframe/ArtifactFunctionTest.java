@@ -263,7 +263,8 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     assertEquals(1L, value.getModifiedTime());
   }
 
-  // Empty files are the same as normal files -- mtime is not stored.
+  // Empty files need to store their mtimes, so touching an empty file
+  // can be used to trigger rebuilds.
   @Test
   public void testEmptyFile() throws Exception {
     Artifact artifact = createDerivedArtifact("empty");
@@ -272,6 +273,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     path.setLastModifiedTime(1L);
     FileArtifactValue value = create(artifact);
     assertArrayEquals(path.getMD5Digest(), value.getDigest());
+    assertEquals(1L, value.getModifiedTime());
     assertEquals(0L, value.getSize());
   }
 
@@ -320,7 +322,8 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     EqualsTester equalsTester = new EqualsTester();
     equalsTester
         .addEqualityGroup(create(artifact1), create(artifact2), create(diffMtime))
-        .addEqualityGroup(create(empty1), create(empty2), create(empty3))
+        .addEqualityGroup(create(empty1))
+        .addEqualityGroup(create(empty2), create(empty3))
         .addEqualityGroup(create(dir1))
         .addEqualityGroup(create(dir2), create(dir3))
         .testEquals();

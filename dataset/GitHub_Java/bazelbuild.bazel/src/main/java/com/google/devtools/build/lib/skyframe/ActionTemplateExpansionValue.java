@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.analysis.actions.ActionTemplate;
+import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skyframe.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -38,22 +38,22 @@ public final class ActionTemplateExpansionValue extends ActionLookupValue {
     return expandedActions;
   }
 
-  static SkyKey key(ActionTemplate<?> actionTemplate) {
+  static SkyKey key(SpawnActionTemplate actionTemplate) {
     return SkyKey.create(
         SkyFunctions.ACTION_TEMPLATE_EXPANSION,
         createActionTemplateExpansionKey(actionTemplate));
   }
 
   static ActionTemplateExpansionKey createActionTemplateExpansionKey(
-      ActionTemplate<?> actionTemplate) {
+      SpawnActionTemplate actionTemplate) {
     return new ActionTemplateExpansionKey(actionTemplate);
   }
 
 
   static final class ActionTemplateExpansionKey extends ActionLookupKey {
-    private final ActionTemplate<?> actionTemplate;
+    private final SpawnActionTemplate actionTemplate;
 
-    ActionTemplateExpansionKey(ActionTemplate<?> actionTemplate) {
+    ActionTemplateExpansionKey(SpawnActionTemplate actionTemplate) {
       Preconditions.checkNotNull(
           actionTemplate,
           "Passed in action template cannot be null: %s",
@@ -72,8 +72,8 @@ public final class ActionTemplateExpansionValue extends ActionLookupValue {
       return actionTemplate.getOwner().getLabel();
     }
 
-    /** Returns the associated {@link ActionTemplate} */
-    ActionTemplate<?> getActionTemplate() {
+    /** Returns the associated {@link SpawnActionTemplate} */
+    SpawnActionTemplate getActionTemplate() {
       return actionTemplate;
     }
 

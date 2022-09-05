@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.cache.Digest;
+import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.skyframe.TreeArtifactValue.TreeArtifactException;
@@ -36,6 +37,7 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.vfs.Symlinks;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Arrays;
@@ -45,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+
 import javax.annotation.Nullable;
 
 /**
@@ -135,10 +138,14 @@ public class ActionMetadataHandler implements MetadataHandler {
         || value == FileArtifactValue.OMITTED_FILE_MARKER) {
       throw new FileNotFoundException();
     }
-    // If the file is a directory, we need to return the mtime because the action cache uses mtime
-    // to determine if this artifact has changed. We want this code path to go away somehow
-    // for directories (maybe by implementing FileSet in Skyframe).
-    return value.isFile() ? new Metadata(value.getDigest()) : new Metadata(value.getModifiedTime());
+    // If the file is empty or a directory, we need to return the mtime because the action cache
+    // uses mtime to determine if this artifact has changed.  We do not optimize for this code
+    // path (by storing the mtime somewhere) because we eventually may be switching to use digests
+    // for empty files. We want this code path to go away somehow too for directories (maybe by
+    // implementing FileSet in Skyframe).
+    return value.getSize() > 0
+        ? new Metadata(value.getDigest())
+        : new Metadata(value.getModifiedTime());
   }
 
   @Override
@@ -246,9 +253,10 @@ public class ActionMetadataHandler implements MetadataHandler {
       throw new FileNotFoundException(artifact.prettyPrint() + " does not exist");
     }
     if (!artifact.hasParent()) {
-      // Artifacts may use either the "real" digest or the mtime, if the file is a directory.
+      // Artifacts may use either the "real" digest or the mtime, if the file is size 0.
       boolean isFile = data.isFile();
-      if (isFile && data.getDigest() != null) {
+      boolean useDigest = DigestUtils.useFileDigest(isFile, isFile ? data.getSize() : 0);
+      if (useDigest && data.getDigest() != null) {
         // We do not need to store the FileArtifactValue separately -- the digest is in the
         // file value and that is all that is needed for this file's metadata.
         return new Metadata(data.getDigest());
