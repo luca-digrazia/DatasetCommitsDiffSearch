@@ -28,6 +28,11 @@ import java.util.function.Function;
 public class AuthorizationFailedEvent extends AbstractAuthorizationEvent {
 
     private static final long serialVersionUID = -101792832265740828L;
+    /**
+     * 失败原因
+     */
+    @Deprecated//已弃用，请根据exception判断
+    private Reason reason;
 
     /**
      * 异常信息
@@ -36,8 +41,10 @@ public class AuthorizationFailedEvent extends AbstractAuthorizationEvent {
 
     public AuthorizationFailedEvent(String username,
                                     String password,
-                                    Function<String, Object> parameterGetter) {
+                                    Function<String, Object> parameterGetter,
+                                    Reason reason) {
         super(username, password, parameterGetter);
+        this.reason = reason;
     }
 
     public Throwable getException() {
@@ -48,4 +55,15 @@ public class AuthorizationFailedEvent extends AbstractAuthorizationEvent {
         this.exception = exception;
     }
 
+    public Reason getReason() {
+        return reason;
+    }
+
+    @Deprecated//已弃用，请根据exception判断
+    public enum Reason {
+        PASSWORD_ERROR,
+        USER_DISABLED,
+        USER_NOT_EXISTS,
+        OTHER
+    }
 }

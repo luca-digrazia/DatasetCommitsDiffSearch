@@ -17,9 +17,8 @@
 
 package org.hswebframework.web.authorization.basic.web;
 
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import lombok.SneakyThrows;
 import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.ReactiveAuthenticationManager;
@@ -30,6 +29,7 @@ import org.hswebframework.web.authorization.events.AuthorizationFailedEvent;
 import org.hswebframework.web.authorization.events.AuthorizationSuccessEvent;
 import org.hswebframework.web.authorization.exception.AuthenticationException;
 import org.hswebframework.web.authorization.exception.UnAuthorizedException;
+import org.hswebframework.web.authorization.simple.CompositeReactiveAuthenticationManager;
 import org.hswebframework.web.authorization.simple.PlainTextUsernamePasswordAuthenticationRequest;
 import org.hswebframework.web.logging.AccessLogger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,7 +47,6 @@ import java.util.function.Function;
  */
 @RestController
 @RequestMapping("${hsweb.web.mappings.authorize:authorize}")
-@Tag(name = "授权接口")
 public class AuthorizationController {
 
 
@@ -59,17 +58,17 @@ public class AuthorizationController {
 
     @GetMapping("/me")
     @Authorize
-    @Operation(summary = "当前登录用户权限信息")
+    @ApiOperation("当前登录用户权限信息")
     public Mono<Authentication> me() {
         return Authentication.currentReactive()
                 .switchIfEmpty(Mono.error(UnAuthorizedException::new));
     }
 
     @PostMapping(value = "/login", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ApiOperation("用户名密码登录,json方式")
     @Authorize(ignore = true)
     @AccessLogger(ignore = true)
-    @Operation(summary = "登录",description = "必要参数:username,password.根据配置不同,其他参数也不同,如:验证码等.")
-    public Mono<Map<String, Object>> authorizeByJson(@Parameter(example = "{\"username\":\"admin\",\"password\":\"admin\"}")
+    public Mono<Map<String, Object>> authorizeByJson(@ApiParam(example = "{\"username\":\"admin\",\"password\":\"admin\"}")
                                                      @RequestBody Mono<Map<String, Object>> parameter) {
         return doLogin(parameter);
     }
@@ -87,6 +86,7 @@ public class AuthorizationController {
             Assert.hasLength(username_, "用户名不能为空");
             Assert.hasLength(password_, "密码不能为空");
 
+            AuthorizationFailedEvent.Reason reason = AuthorizationFailedEvent.Reason.OTHER;
             Function<String, Object> parameterGetter = parameters::get;
             return Mono.defer(() -> {
                 AuthorizationDecodeEvent decodeEvent = new AuthorizationDecodeEvent(username_, password_, parameterGetter);
@@ -111,7 +111,7 @@ public class AuthorizationController {
                                             }));
                         }));
             }).onErrorResume(err -> {
-                AuthorizationFailedEvent failedEvent = new AuthorizationFailedEvent(username_, password_, parameterGetter);
+                AuthorizationFailedEvent failedEvent = new AuthorizationFailedEvent(username_, password_, parameterGetter, reason);
                 failedEvent.setException(err);
                 return failedEvent
                         .publish(eventPublisher)
