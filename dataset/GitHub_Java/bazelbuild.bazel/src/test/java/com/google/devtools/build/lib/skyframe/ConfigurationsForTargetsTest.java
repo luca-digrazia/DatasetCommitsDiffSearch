@@ -20,7 +20,6 @@ import static org.junit.Assert.fail;
 import com.google.common.base.VerifyException;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashMultimap;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
@@ -35,7 +34,6 @@ import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
@@ -120,7 +118,7 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
                 env,
                 new SkyframeDependencyResolver(env),
                 (TargetAndConfiguration) skyKey.argument(),
-                ImmutableList.<Aspect>of(),
+                null,
                 ImmutableMap.<Label, ConfigMatchingProvider>of(),
                 stateProvider.lateBoundRuleClassProvider(),
                 stateProvider.lateBoundHostConfig(),
