@@ -37,6 +37,7 @@ import static com.google.devtools.build.lib.packages.Type.TRISTATE;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.MakeEnvironment.Binding;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build;
@@ -58,7 +59,8 @@ import java.util.Map;
  */
 public class PackageSerializer {
 
-  public static final PackageSerializer DEFAULT = new PackageSerializer();
+  public static final PackageSerializer DEFAULT =
+      new PackageSerializer(/*serializefullLocations=*/true);
 
   /**
    * Get protocol buffer representation of the specified attribute.
@@ -66,11 +68,13 @@ public class PackageSerializer {
    * @param attr the attribute to add
    * @param values the possible values of the attribute (can be a multi-value list for
    *              configurable attributes)
+   * @param location the location of the attribute in the source file
    * @param explicitlySpecified whether the attribute was explicitly specified or not
+   * @param includeGlobs add glob expression for attributes that contain them
    */
   public static Build.Attribute getAttributeProto(Attribute attr, Iterable<Object> values,
-      Boolean explicitlySpecified) {
-    return DEFAULT.serializeAttribute(attr, values, explicitlySpecified, /*includeGlobs=*/ false);
+      Location location, Boolean explicitlySpecified, boolean includeGlobs) {
+    return DEFAULT.serializeAttribute(attr, values, location, explicitlySpecified, includeGlobs);
   }
 
   /**
@@ -91,6 +95,18 @@ public class PackageSerializer {
     }
 
     return values;
+  }
+
+  private final boolean serializeFullLocations;
+
+  /**
+   * Initialize with the specified configuration.
+   *
+   * @param serializeFullLocations if true will include start and end offset, line, and column
+   *    in serialized locations, if false will only include start and end offset
+   */
+  public PackageSerializer(boolean serializeFullLocations) {
+    this.serializeFullLocations = serializeFullLocations;
   }
 
   /**
@@ -175,13 +191,9 @@ public class PackageSerializer {
     emitTargets(pkg.getTargets(), out);
   }
 
-  /**
-   * Convert Attribute to proto representation. If {@code includeGlobs} is true then include
-   * globs expressions when present, omit otherwise.
-   */
   @SuppressWarnings("unchecked")
   private Build.Attribute serializeAttribute(Attribute attr, Iterable<Object> values,
-      Boolean explicitlySpecified, boolean includeGlobs) {
+      Location location, Boolean explicitlySpecified, boolean includeGlobs) {
     // Get the attribute type.  We need to convert and add appropriately
     com.google.devtools.build.lib.packages.Type<?> type = attr.getType();
 
@@ -190,6 +202,10 @@ public class PackageSerializer {
     // Set the type, name and source
     attrPb.setName(attr.getName());
     attrPb.setType(ProtoUtils.getDiscriminatorFromType(type));
+
+    if (location != null) {
+      attrPb.setParseableLocation(serializeLocation(location));
+    }
 
     if (explicitlySpecified != null) {
       attrPb.setExplicitlySpecified(explicitlySpecified);
@@ -411,16 +427,42 @@ public class PackageSerializer {
       builder.setLicense(serializeLicense(inputFile.getLicense()));
     }
 
+    builder.setParseableLocation(serializeLocation(inputFile.getLocation()));
+
     return Build.Target.newBuilder()
         .setType(Build.Target.Discriminator.SOURCE_FILE)
         .setSourceFile(builder.build())
         .build();
   }
 
+  private Build.Location serializeLocation(Location location) {
+    Build.Location.Builder result = Build.Location.newBuilder();
+
+    result.setStartOffset(location.getStartOffset());
+    result.setEndOffset(location.getEndOffset());
+
+    if (serializeFullLocations) {
+      Location.LineAndColumn startLineAndColumn = location.getStartLineAndColumn();
+      if (startLineAndColumn != null) {
+        result.setStartLine(startLineAndColumn.getLine());
+        result.setStartColumn(startLineAndColumn.getColumn());
+      }
+
+      Location.LineAndColumn endLineAndColumn = location.getEndLineAndColumn();
+      if (endLineAndColumn != null) {
+        result.setEndLine(endLineAndColumn.getLine());
+        result.setEndColumn(endLineAndColumn.getColumn());
+      }
+    }
+
+    return result.build();
+  }
+
   private Build.Target serializePackageGroup(PackageGroup packageGroup) {
     Build.PackageGroup.Builder builder = Build.PackageGroup.newBuilder();
 
     builder.setName(packageGroup.getLabel().toString());
+    builder.setParseableLocation(serializeLocation(packageGroup.getLocation()));
 
     for (PackageSpecification packageSpecification : packageGroup.getPackageSpecifications()) {
       builder.addContainedPackage(packageSpecification.toString());
@@ -440,11 +482,12 @@ public class PackageSerializer {
     Build.Rule.Builder builder = Build.Rule.newBuilder();
     builder.setName(rule.getLabel().toString());
     builder.setRuleClass(rule.getRuleClass());
+    builder.setParseableLocation(serializeLocation(rule.getLocation()));
     builder.setPublicByDefault(rule.getRuleClassObject().isPublicByDefault());
     for (Attribute attribute : rule.getAttributes()) {
-      builder.addAttribute(
-          serializeAttribute(attribute, getAttributeValues(rule, attribute),
-              rule.isAttributeValueExplicitlySpecified(attribute), /*includeGlobs=*/ true));
+      builder.addAttribute(serializeAttribute(attribute,
+          getAttributeValues(rule, attribute), rule.getAttributeLocation(attribute.getName()),
+          rule.isAttributeValueExplicitlySpecified(attribute), true));
     }
 
     return Build.Target.newBuilder()
@@ -488,8 +531,12 @@ public class PackageSerializer {
   private Build.Event serializeEvent(Event event) {
     Build.Event.Builder result = Build.Event.newBuilder();
     result.setMessage(event.getMessage());
+    if (event.getLocation() != null) {
+      result.setLocation(serializeLocation(event.getLocation()));
+    }
 
     Build.Event.EventKind kind;
+
     switch (event.getKind()) {
       case ERROR:
         kind = Build.Event.EventKind.ERROR;

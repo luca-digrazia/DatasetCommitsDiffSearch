@@ -761,10 +761,6 @@ public class Package implements Serializable {
   }
 
   static class Builder {
-    protected static Package newPackage(PackageIdentifier packageId) {
-      return new Package(packageId);
-    }
-
     /**
      * The output instance for this builder. Needs to be instantiated and
      * available with name info throughout initialization. All other settings
@@ -826,9 +822,10 @@ public class Package implements Serializable {
       }
     }
 
-    Builder(PackageIdentifier id) {
-      this(newPackage(id));
+    protected static Package newPackage(PackageIdentifier packageId) {
+      return new Package(packageId);
     }
+    Builder(PackageIdentifier id) { this(newPackage(id)); }
 
     protected PackageIdentifier getPackageIdentifier() {
       return pkg.getPackageIdentifier();
