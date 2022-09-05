@@ -121,7 +121,7 @@ public class DefaultReactiveAuthenticationInitializeService
                 SimplePermission permission = new SimplePermission();
                 permission.setId(permissionEntity.getId());
                 permission.setName(permissionEntity.getName());
-                Set<DataAccessConfig> configs = new HashSet<>();
+                Map<DataAccessType, DataAccessConfig> configs = new HashMap<>();
 
                 for (AuthorizationSettingEntity permissionSetting : permissionSettings) {
 
@@ -142,7 +142,7 @@ public class DefaultReactiveAuthenticationInitializeService
                                     return config;
                                 })
                                 .filter(Objects::nonNull)
-                                .forEach(configs::add);
+                                .forEach(access -> configs.put(access.getType(), access));
                     }
                     if (CollectionUtils.isNotEmpty(permissionSetting.getActions())) {
                         permission.getActions().addAll(permissionSetting.getActions());
@@ -150,7 +150,7 @@ public class DefaultReactiveAuthenticationInitializeService
 
                 }
                 allowed.put(permissionEntity.getId(), permission);
-                permission.setDataAccesses(configs);
+                permission.setDataAccesses(new HashSet<>(configs.values()));
             }
 
             //处理关联权限
