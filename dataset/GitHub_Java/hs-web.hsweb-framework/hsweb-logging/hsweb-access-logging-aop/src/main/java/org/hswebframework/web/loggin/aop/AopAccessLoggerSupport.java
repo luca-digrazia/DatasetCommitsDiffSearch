@@ -1,9 +1,11 @@
 package org.hswebframework.web.loggin.aop;
 
 import org.aopalliance.intercept.MethodInterceptor;
+import org.hswebframework.web.AopUtils;
 import org.hswebframework.web.WebUtil;
 import org.hswebframework.web.boost.aop.context.MethodInterceptorHolder;
 import org.hswebframework.web.id.IDGenerator;
+import org.hswebframework.web.logging.AccessLogger;
 import org.hswebframework.web.logging.AccessLoggerInfo;
 import org.hswebframework.web.logging.AccessLoggerListener;
 import org.hswebframework.web.logging.LoggerDefine;
@@ -13,12 +15,19 @@ import org.springframework.aop.support.StaticMethodMatcherPointcutAdvisor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.Ordered;
+import org.springframework.core.annotation.AnnotationUtils;
+import org.springframework.stereotype.Controller;
 import org.springframework.util.ClassUtils;
+import org.springframework.util.SimpleIdGenerator;
+import org.springframework.web.bind.annotation.RequestMapping;
 
 import javax.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.stream.Stream;
 
 /**
  * 使用AOP记录访问日志,并触发{@link AccessLoggerListener#onLogger(AccessLoggerInfo)}
@@ -106,6 +115,14 @@ public class AopAccessLoggerSupport extends StaticMethodMatcherPointcutAdvisor {
 
     @Override
     public boolean matches(Method method, Class<?> aClass) {
-        return loggerParsers.stream().anyMatch(parser->parser.support(aClass,method));
+        AccessLogger ann = AopUtils.findAnnotation(aClass, method, AccessLogger.class);
+        if (ann != null && ann.ignore()) {
+            return false;
+        }
+        RequestMapping mapping = AopUtils.findAnnotation(aClass, method, RequestMapping.class);
+        return mapping != null;
+
+//        //注解了并且未取消
+//        return null != ann && !ann.ignore();
     }
 }
