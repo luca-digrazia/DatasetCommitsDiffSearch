@@ -27,7 +27,10 @@ public class GraphiteTest {
     @Before
     public void setUp() throws Exception {
         when(socket.getOutputStream()).thenReturn(output);
-        when(socketFactory.createSocket(any(InetAddress.class), anyInt())).thenReturn(socket);
+
+        when(socketFactory.createSocket(any(InetAddress.class),
+                                        anyInt())).thenReturn(socket);
+
     }
 
     @Test

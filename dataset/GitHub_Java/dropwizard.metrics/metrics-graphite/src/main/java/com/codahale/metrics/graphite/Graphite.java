@@ -4,6 +4,7 @@ import javax.net.SocketFactory;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.UnknownHostException;
 import java.nio.charset.Charset;
 import java.util.regex.Pattern;
 
@@ -13,15 +14,15 @@ import java.util.regex.Pattern;
 public class Graphite implements Closeable {
     private static final Pattern WHITESPACE = Pattern.compile("[\\s]+");
     // this may be optimistic about Carbon/Graphite
-    static final Charset UTF_8 = Charset.forName("UTF-8");
+    private static final Charset UTF_8 = Charset.forName("UTF-8");
 
     private final InetSocketAddress address;
     private final SocketFactory socketFactory;
     private final Charset charset;
 
-    protected Socket socket;
-    protected Writer writer;
-    protected int failures;
+    private Socket socket;
+    private Writer writer;
+    private int failures;
 
     /**
      * Creates a new client which connects to the given address using the default
@@ -66,6 +67,9 @@ public class Graphite implements Closeable {
     public void connect() throws IllegalStateException, IOException {
         if (socket != null) {
             throw new IllegalStateException("Already connected");
+        }
+        if (address.getAddress() == null) {
+            throw new UnknownHostException(address.getHostName());
         }
 
         this.socket = socketFactory.createSocket(address.getAddress(), address.getPort());
