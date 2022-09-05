@@ -270,7 +270,7 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
-    return "build".equals(command.name())
+    return command.builds()
         ? ImmutableList.<Class<? extends OptionsBase>>of(WorkspaceStatusAction.Options.class)
         : ImmutableList.<Class<? extends OptionsBase>>of();
   }
