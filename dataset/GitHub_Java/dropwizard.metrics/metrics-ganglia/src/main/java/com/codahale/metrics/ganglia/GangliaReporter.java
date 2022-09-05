@@ -284,7 +284,7 @@ public class GangliaReporter extends ScheduledReporter {
         final Object obj = gauge.getValue();
         try {
             for(GMetric gmetric: gmetrics) {
-                gmetric.announce(name(prefix, escapeSlashes(name)), String.valueOf(obj), detectType(obj), "",
+                gmetric.announce(name(prefix, name), String.valueOf(obj), detectType(obj), "",
                     GMetricSlope.BOTH, tMax, dMax, group);
             }
         } catch (GangliaException e) {
@@ -292,7 +292,9 @@ public class GangliaReporter extends ScheduledReporter {
         }
     }
 
+    private static final double MIN_VAL = 1E-300;
     private void announce(String name, String group, double value, String units) throws GangliaException {
+        if (value < MIN_VAL) value = 0.0;
         for (GMetric gmetric: gmetrics) {
             gmetric.announce(name, Double.toString(value), GMetricType.DOUBLE, units, GMetricSlope.BOTH,
                 tMax, dMax, group);
@@ -333,11 +335,6 @@ public class GangliaReporter extends ScheduledReporter {
     }
 
     private String prefix(String name, String n) {
-        return name(prefix, escapeSlashes(name), n);
-    }
-
-    // ganglia metric names can't contain slashes.
-    private String escapeSlashes(String name) {
-        return name.replace("\\", "_");
+        return name(prefix, name, n);
     }
 }
