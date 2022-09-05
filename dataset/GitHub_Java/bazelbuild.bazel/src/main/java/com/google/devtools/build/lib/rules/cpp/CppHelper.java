@@ -293,7 +293,7 @@ public class CppHelper {
   private static Artifact getIncludesOutput(RuleContext ruleContext, Artifact src) {
     Root root = ruleContext.getFragment(CppConfiguration.class).getGreppedIncludesDirectory();
     PathFragment relOut = IncludeScanningUtil.getRootRelativeOutputPath(src.getExecPath());
-    return ruleContext.getShareableArtifact(relOut, root);
+    return ruleContext.getAnalysisEnvironment().getDerivedArtifact(relOut, root);
   }
 
   /**

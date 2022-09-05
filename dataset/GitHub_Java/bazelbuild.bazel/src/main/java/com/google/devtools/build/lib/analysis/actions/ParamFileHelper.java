@@ -72,9 +72,15 @@ public final class ParamFileHelper {
       return null;
     }
 
-    PathFragment paramFilePath =
-        ParameterFile.derivePath(Iterables.getFirst(outputs, null).getRootRelativePath());
+    return getParamsFile(analysisEnvironment, configuration, Iterables.getFirst(outputs, null));
+  }
 
+  /**
+   * Returns a params file for the specified output file.
+   */
+  public static Artifact getParamsFile(AnalysisEnvironment analysisEnvironment,
+      BuildConfiguration configuration, Artifact output) {
+    PathFragment paramFilePath = ParameterFile.derivePath(output.getRootRelativePath());
     return analysisEnvironment.getDerivedArtifact(paramFilePath, configuration.getBinDirectory());
   }
 

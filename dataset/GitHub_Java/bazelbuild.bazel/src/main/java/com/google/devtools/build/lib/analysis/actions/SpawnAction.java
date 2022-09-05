@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -839,7 +839,7 @@ public class SpawnAction extends AbstractAction {
     }
 
     /**
-     * Appends the argument both to the outputs and to the list of command-line
+     * Appends the argument both to the ouputs and to the list of command-line
      * arguments.
      */
     public Builder addOutputArgument(Artifact argument) {
