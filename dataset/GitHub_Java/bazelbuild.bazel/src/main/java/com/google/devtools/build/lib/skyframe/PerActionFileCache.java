@@ -96,12 +96,6 @@ class PerActionFileCache implements ActionInputFileCache {
   }
 
   @Override
-  public boolean isFile(Artifact input) {
-    // getInputArtifactValue always returns a value when supplied with an Artifact.
-    return getInputFileArtifactValue(input).isFile();
-  }
-
-  @Override
   public boolean contentsAvailableLocally(ByteString digest) {
     return reverseMap.containsKey(digest);
   }
