@@ -25,7 +25,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.android.Converters.ExistingPathConverter;
 import com.google.devtools.build.android.Converters.FullRevisionConverter;
-import com.google.devtools.common.options.Converters.ColonSeparatedOptionListConverter;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
@@ -170,14 +169,6 @@ public class AndroidResourceProcessor {
         category = "config",
         help = "A list of resource config filters to pass to aapt.")
     public List<String> resourceConfigs;
-
-    @Option(name = "splits",
-        defaultValue = "",
-        converter = ColonSeparatedOptionListConverter.class,
-        category = "config",
-        help = "A list of splits to pass to aapt, separated by colons."
-            + " Each split is a list of qualifiers separated by commas.")
-    public List<String> splits;
   }
 
   /**
@@ -335,7 +326,6 @@ public class AndroidResourceProcessor {
       String customPackageForR,
       AaptOptions aaptOptions,
       Collection<String> resourceConfigs,
-      Collection<String> splits,
       MergedAndroidData primaryData,
       List<DependencyAndroidData> dependencyData,
       Path sourceOut,
@@ -358,49 +348,43 @@ public class AndroidResourceProcessor {
     }
 
     AaptCommandBuilder commandBuilder =
-        new AaptCommandBuilder(aapt)
-        .forBuildToolsVersion(buildToolsVersion)
-        .forVariantType(variantType)
-        // first argument is the command to be executed, "package"
-        .add("package")
-        // If the logger is verbose, set aapt to be verbose
-        .when(stdLogger.getLevel() == StdLogger.Level.VERBOSE).thenAdd("-v")
+        new AaptCommandBuilder(aapt, buildToolsVersion, variantType, "package")
+            // If the logger is verbose, set aapt to be verbose
+        .maybeAdd("-v", stdLogger.getLevel() == StdLogger.Level.VERBOSE)
         // Overwrite existing files, if they exist.
         .add("-f")
         // Resources are precrunched in the merge process.
         .add("--no-crunch")
         // Do not automatically generate versioned copies of vector XML resources.
-        .whenVersionIsAtLeast(new FullRevision(23)).thenAdd("--no-version-vectors")
+        .maybeAdd("--no-version-vectors", new FullRevision(23))
         // Add the android.jar as a base input.
         .add("-I", androidJar)
         // Add the manifest for validation.
         .add("-M", androidManifest.toAbsolutePath())
         // Maybe add the resources if they exist
-        .when(Files.isDirectory(resourceDir)).thenAdd("-S", resourceDir)
+        .maybeAdd("-S", resourceDir, Files.isDirectory(resourceDir))
         // Maybe add the assets if they exist
-        .when(Files.isDirectory(assetsDir)).thenAdd("-A", assetsDir)
+        .maybeAdd("-A", assetsDir, Files.isDirectory(assetsDir))
         // Outputs
-        .when(sourceOut != null).thenAdd("-m")
-        .add("-J", prepareOutputPath(sourceOut))
-        .add("--output-text-symbols", prepareOutputPath(sourceOut))
-        .add("-F", packageOut)
+        .maybeAdd("-m", sourceOut != null)
+        .maybeAdd("-J", prepareOutputPath(sourceOut), sourceOut != null)
+        .maybeAdd("--output-text-symbols", prepareOutputPath(sourceOut), sourceOut != null)
+        .maybeAdd("-F", packageOut, packageOut != null)
         .add("-G", proguardOut)
-        .whenVersionIsAtLeast(new FullRevision(24)).thenAdd("-D", mainDexProguardOut)
+        .maybeAdd("-D", mainDexProguardOut, new FullRevision(24))
         .add("-P", publicResourcesOut)
-        .when(debug).thenAdd("--debug-mode")
+        .maybeAdd("--debug-mode", debug)
         .add("--custom-package", customPackageForR)
         // If it is a library, do not generate final java ids.
-        .whenVariantIs(VariantConfiguration.Type.LIBRARY).thenAdd("--non-constant-id")
+        .maybeAdd("--non-constant-id", VariantConfiguration.Type.LIBRARY)
         .add("--ignore-assets", aaptOptions.getIgnoreAssets())
-        .when(aaptOptions.getFailOnMissingConfigEntry()).thenAdd("--error-on-missing-config-entry")
+        .maybeAdd("--error-on-missing-config-entry", aaptOptions.getFailOnMissingConfigEntry())
         // Never compress apks.
         .add("-0", "apk")
         // Add custom no-compress extensions.
         .addRepeated("-0", aaptOptions.getNoCompress())
         // Filter by resource configuration type.
-        .add("-c", Joiner.on(',').join(resourceConfigs))
-        // Split APKs if any splits were specified.
-        .whenVersionIsAtLeast(new FullRevision(23)).thenAddRepeated("--split", splits);
+        .add("-c", Joiner.on(',').join(resourceConfigs));
 
     new CommandLineRunner(stdLogger).runCmdLine(commandBuilder.build(), null);
 
