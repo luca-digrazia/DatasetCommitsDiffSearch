@@ -1,19 +1,5 @@
 package com.yammer.metrics.reporting;
 
-import com.yammer.metrics.Metrics;
-import com.yammer.metrics.core.*;
-import com.yammer.metrics.core.VirtualMachineMetrics.*;
-import com.yammer.metrics.util.MetricPredicate;
-import com.yammer.metrics.util.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.net.*;
-import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
 import static com.yammer.metrics.core.VirtualMachineMetrics.daemonThreadCount;
 import static com.yammer.metrics.core.VirtualMachineMetrics.fileDescriptorUsage;
 import static com.yammer.metrics.core.VirtualMachineMetrics.garbageCollectors;
@@ -23,6 +9,32 @@ import static com.yammer.metrics.core.VirtualMachineMetrics.nonHeapUsage;
 import static com.yammer.metrics.core.VirtualMachineMetrics.threadCount;
 import static com.yammer.metrics.core.VirtualMachineMetrics.threadStatePercentages;
 import static com.yammer.metrics.core.VirtualMachineMetrics.uptime;
+
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.CounterMetric;
+import com.yammer.metrics.core.GaugeMetric;
+import com.yammer.metrics.core.HistogramMetric;
+import com.yammer.metrics.core.MeterMetric;
+import com.yammer.metrics.core.Metered;
+import com.yammer.metrics.core.Metric;
+import com.yammer.metrics.core.MetricsRegistry;
+import com.yammer.metrics.core.TimerMetric;
+import com.yammer.metrics.core.VirtualMachineMetrics.GarbageCollector;
+import com.yammer.metrics.util.MetricPredicate;
+import com.yammer.metrics.util.Utils;
 
 /**
  * A simple reporter which sends out application metrics to a
@@ -36,7 +48,7 @@ import static com.yammer.metrics.core.VirtualMachineMetrics.uptime;
  * which is based on <a ahref="http://search-hadoop.com/c/Hadoop:/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/metrics/ganglia/GangliaContext31.java">GangliaContext31</a>
  * from Hadoop.
  */
-public class GangliaReporter extends AbstractPollingReporter {
+public class GangliaReporter extends AbstractReporter {
     private static final Logger LOG = LoggerFactory.getLogger(GangliaReporter.class);
     private static final int BUFFER_SIZE = 1500;
     private static final int GANGLIA_TMAX = 60;
@@ -139,6 +151,16 @@ public class GangliaReporter extends AbstractPollingReporter {
         this.hostLabel = getHostLabel();
         this.predicate = predicate;
         socket = new DatagramSocket();
+    }
+
+    /**
+     * Starts sending output to ganglia server.
+     *
+     * @param period the period between successive displays
+     * @param unit   the time unit of {@code period}
+     */
+    public void start(long period, TimeUnit unit) {
+        tickThread.scheduleAtFixedRate(this, period, period, unit);
     }
 
     @Override
