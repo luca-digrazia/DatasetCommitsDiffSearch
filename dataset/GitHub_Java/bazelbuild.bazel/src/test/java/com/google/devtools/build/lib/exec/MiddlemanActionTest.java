@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 package com.google.devtools.build.lib.exec;
-
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_ACTION_OWNER;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -23,20 +24,18 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MiddlemanAction;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
-import com.google.devtools.build.lib.actions.OutputBaseSupplier;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestUtil;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
-import com.google.devtools.build.lib.vfs.FileSystem;
-import java.util.ArrayList;
-import java.util.Arrays;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.ArrayList;
+import java.util.Arrays;
 
 /**
  * A test for {@link MiddlemanAction}.
@@ -64,16 +63,15 @@ public class MiddlemanActionTest extends BuildViewTestCase {
     middle = middlemanFactory.createAggregatingMiddleman(
         NULL_ACTION_OWNER, "middleman_test",
         Arrays.asList(a, b),
-        targetConfig.getMiddlemanDirectory(RepositoryName.MAIN));
+        targetConfig.getMiddlemanDirectory());
     analysisEnvironment.registerWith(getMutableActionGraph());
   }
 
   @Test
   public void testActionIsAMiddleman() {
     Action middleman = getGeneratingAction(middle);
-    assertWithMessage("Encountered instance of " + middleman.getClass())
-        .that(middleman.getActionType().isMiddleman())
-        .isTrue();
+    assertTrue("Encountered instance of " + middleman.getClass(),
+        middleman.getActionType().isMiddleman());
   }
 
   @Test
@@ -90,24 +88,17 @@ public class MiddlemanActionTest extends BuildViewTestCase {
 
   @Test
   public void testMiddlemanIsNullForEmptyInputs() throws Exception {
-    assertThat(
-            middlemanFactory.createAggregatingMiddleman(
-                NULL_ACTION_OWNER,
-                "middleman_test",
-                new ArrayList<Artifact>(),
-                targetConfig.getMiddlemanDirectory(RepositoryName.MAIN)))
-        .isNull();
+    assertNull(middlemanFactory.createAggregatingMiddleman(NULL_ACTION_OWNER,
+        "middleman_test", new ArrayList<Artifact>(), targetConfig.getMiddlemanDirectory()));
   }
 
   @Test
   public void testMiddlemanIsIdentityForLonelyInput() throws Exception {
-    assertThat(
-            middlemanFactory.createAggregatingMiddleman(
-                NULL_ACTION_OWNER,
-                "middleman_test",
-                Lists.newArrayList(a),
-                targetConfig.getMiddlemanDirectory(RepositoryName.MAIN)))
-        .isEqualTo(a);
+    assertEquals(a,
+        middlemanFactory.createAggregatingMiddleman(
+            NULL_ACTION_OWNER, "middleman_test",
+            Lists.newArrayList(a),
+            targetConfig.getMiddlemanDirectory()));
   }
 
   @Test
@@ -121,12 +112,10 @@ public class MiddlemanActionTest extends BuildViewTestCase {
 
     analysisEnvironment.clear();
     Artifact middlemanForC = middlemanFactory.createRunfilesMiddleman(
-        NULL_ACTION_OWNER, c, Arrays.asList(c, common),
-        targetConfig.getMiddlemanDirectory(RepositoryName.MAIN),
+        NULL_ACTION_OWNER, c, Arrays.asList(c, common), targetConfig.getMiddlemanDirectory(),
         "runfiles");
     Artifact middlemanForD = middlemanFactory.createRunfilesMiddleman(
-        NULL_ACTION_OWNER, d, Arrays.asList(d, common),
-        targetConfig.getMiddlemanDirectory(RepositoryName.MAIN),
+        NULL_ACTION_OWNER, d, Arrays.asList(d, common), targetConfig.getMiddlemanDirectory(),
         "runfiles");
     analysisEnvironment.registerWith(getMutableActionGraph());
 
@@ -137,21 +126,5 @@ public class MiddlemanActionTest extends BuildViewTestCase {
         .isNotEqualTo(Sets.newHashSet(middlemanActionForC.getInputs()));
     assertThat(Sets.newHashSet(middlemanActionForD.getOutputs()))
         .isNotEqualTo(Sets.newHashSet(middlemanActionForC.getOutputs()));
-  }
-
-  @Test
-  public void testCodec() throws Exception {
-    new SerializationTester(getGeneratingAction(middle))
-        .addDependency(FileSystem.class, scratch.getFileSystem())
-        .addDependency(OutputBaseSupplier.class, () -> outputBase)
-        .setVerificationFunction(MiddlemanActionTest::verifyEquivalent)
-        .runTests();
-  }
-
-  private static void verifyEquivalent(MiddlemanAction first, MiddlemanAction second) {
-    assertThat(first.getActionType()).isEqualTo(second.getActionType());
-    assertThat(first.getInputs()).isEqualTo(second.getInputs());
-    assertThat(first.getOutputs()).isEqualTo(second.getOutputs());
-    assertThat(first.getOwner()).isEqualTo(second.getOwner());
   }
 }
