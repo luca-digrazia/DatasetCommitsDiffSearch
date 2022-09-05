@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -598,14 +597,12 @@ public abstract class EvalUtils {
   }
 
   @SuppressWarnings("unchecked")
-  public static Collection<?> toCollection(Object o, Location loc) throws EvalException {
+  public static Collection<Object> toCollection(Object o, Location loc) throws EvalException {
     if (o instanceof Collection) {
       return (Collection<Object>) o;
     } else if (o instanceof Map<?, ?>) {
-      Map<Comparable<?>, Object> dict = (Map<Comparable<?>, Object>) o;
       // For dictionaries we iterate through the keys only
-      // For determinism, we sort the keys.
-      return Ordering.natural().sortedCopy(dict.keySet());
+      return ((Map<Object, Object>) o).keySet();
     } else if (o instanceof SkylarkNestedSet) {
       return ((SkylarkNestedSet) o).toCollection();
     } else {
@@ -615,7 +612,7 @@ public abstract class EvalUtils {
   }
 
   @SuppressWarnings("unchecked")
-  public static Iterable<?> toIterable(Object o, Location loc) throws EvalException {
+  public static Iterable<Object> toIterable(Object o, Location loc) throws EvalException {
     if (o instanceof String) {
       // This is not as efficient as special casing String in for and dict and list comprehension
       // statements. However this is a more unified way.
@@ -625,7 +622,8 @@ public abstract class EvalUtils {
     } else if (o instanceof Iterable) {
       return (Iterable<Object>) o;
     } else if (o instanceof Map<?, ?>) {
-      return toCollection(o, loc);
+      // For dictionaries we iterate through the keys only
+      return ((Map<Object, Object>) o).keySet();
     } else {
       throw new EvalException(loc,
           "type '" + getDataTypeName(o) + "' is not an iterable");
