@@ -1314,7 +1314,12 @@ public class MethodLibrary {
             + "<code>popitem()</code> is useful to destructively iterate over a dictionary, "
             + "as often used in set algorithms. "
             + "If the dictionary is empty, calling <code>popitem()</code> fails. "
-            + "It is deterministic which pair is returned.",
+            + "Note that in Skylark, as opposed to Python, "
+            + "the dictionary keys are actually sorted, "
+            + "and it is deterministic which pair will returned: that with the first key, "
+            + "according to the builtin total order. "
+            + "Thus if keys are numbers, the smallest key is returned first; "
+            + "if they are lists or strings, they are compared lexicographically, etc.",
     parameters = {
       @Param(name = "self", type = SkylarkDict.class, doc = "This dict.")
     },
@@ -1427,9 +1432,9 @@ public class MethodLibrary {
     objectType = SkylarkDict.class,
     returnType = MutableList.class,
     doc =
-        "Returns the list of values:"
+        "Returns the list of values. Dictionaries are always sorted by their keys:"
             + "<pre class=\"language-python\">"
-            + "{2: \"a\", 4: \"b\", 1: \"c\"}.values() == [\"a\", \"b\", \"c\"]</pre>\n",
+            + "{2: \"a\", 4: \"b\", 1: \"c\"}.values() == [\"c\", \"a\", \"b\"]</pre>\n",
     parameters = {@Param(name = "self", type = SkylarkDict.class, doc = "This dict.")},
     useEnvironment = true
   )
@@ -1445,9 +1450,9 @@ public class MethodLibrary {
     objectType = SkylarkDict.class,
     returnType = MutableList.class,
     doc =
-        "Returns the list of key-value tuples:"
+        "Returns the list of key-value tuples. Dictionaries are always sorted by their keys:"
             + "<pre class=\"language-python\">"
-            + "{2: \"a\", 4: \"b\", 1: \"c\"}.items() == [(2, \"a\"), (4, \"b\"), (1, \"c\")]"
+            + "{2: \"a\", 4: \"b\", 1: \"c\"}.items() == [(1, \"c\"), (2, \"a\"), (4, \"b\")]"
             + "</pre>\n",
     parameters = {@Param(name = "self", type = SkylarkDict.class, doc = "This dict.")},
     useEnvironment = true
@@ -1465,8 +1470,8 @@ public class MethodLibrary {
 
   @SkylarkSignature(name = "keys", objectType = SkylarkDict.class,
       returnType = MutableList.class,
-      doc = "Returns the list of keys:"
-          + "<pre class=\"language-python\">{2: \"a\", 4: \"b\", 1: \"c\"}.keys() == [2, 4, 1]"
+      doc = "Returns the list of keys. Dictionaries are always sorted by their keys:"
+          + "<pre class=\"language-python\">{2: \"a\", 4: \"b\", 1: \"c\"}.keys() == [1, 2, 4]"
           + "</pre>\n",
       parameters = {
         @Param(name = "self", type = SkylarkDict.class, doc = "This dict.")},
@@ -1477,11 +1482,9 @@ public class MethodLibrary {
     @SuppressWarnings("unchecked")
     public MutableList<?> invoke(SkylarkDict<?, ?> self,
         Environment env) throws EvalException {
-      List<Object> list = Lists.newArrayListWithCapacity(self.size());
-      for (Map.Entry<?, ?> entries : self.entrySet()) {
-        list.add(entries.getKey());
-      }
-      return new MutableList(list, env);
+      return new MutableList(
+          Ordering.natural().sortedCopy((Set<Comparable<?>>) (Set<?>) self.keySet()),
+          env);
     }
   };
 
@@ -1675,7 +1678,8 @@ public class MethodLibrary {
     doc =
         "Creates a <a href=\"#modules.dict\">dictionary</a> from an optional positional "
             + "argument and an optional set of keyword arguments. Values from the keyword argument "
-            + "will overwrite values from the positional argument if a key appears multiple times.",
+            + "will overwrite values from the positional argument if a key appears multiple times. "
+            + "Dictionaries are always sorted by their keys",
     parameters = {
       @Param(
         name = "args",
