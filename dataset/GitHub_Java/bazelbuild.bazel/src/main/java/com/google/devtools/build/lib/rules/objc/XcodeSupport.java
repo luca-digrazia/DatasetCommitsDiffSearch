@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
-import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.objc.XcodeProvider.Builder;
 import com.google.devtools.build.lib.rules.objc.XcodeProvider.Project;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos;
@@ -272,7 +271,12 @@ public final class XcodeSupport {
       this.project = project;
       this.pbxproj = pbxproj;
       this.workspaceRoot = objcConfiguration.getXcodeWorkspaceRoot();
-      this.appleCpus = appleConfiguration.getArchitectures(PlatformType.IOS);
+      List<String> multiCpus = appleConfiguration.getIosMultiCpus();
+      if (multiCpus.isEmpty()) {
+        this.appleCpus = ImmutableList.of(appleConfiguration.getIosCpu());
+      } else {
+        this.appleCpus = multiCpus;
+      }
       this.minimumOs = objcConfiguration.getMinimumOs().toString();
       this.generateDebugSymbols =
           objcConfiguration.generateDebugSymbols() || objcConfiguration.generateDsym();
