@@ -17,7 +17,6 @@ package com.google.devtools.build.android;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.hash.Hashing;
 import com.google.devtools.build.android.Converters.DependencyAndroidDataListConverter;
 import com.google.devtools.build.android.Converters.ExistingPathConverter;
@@ -45,7 +44,6 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -310,14 +308,10 @@ public class AndroidResourceProcessingAction {
           new PackedResourceTarExpander(expandedOut, working),
           new FileDeDuplicator(Hashing.murmur3_128(), deduplicatedOut, working));
 
-      // Resources can appear in both the direct dependencies and transitive -- use a set to
-      // ensure depeduplication.
-      List<DependencyAndroidData> data =
-          ImmutableSet.<DependencyAndroidData>builder()
-              .addAll(options.directData)
-              .addAll(options.transitiveData)
-              .build()
-              .asList();
+      List<DependencyAndroidData> data = ImmutableList.<DependencyAndroidData>builder()
+          .addAll(options.directData)
+          .addAll(options.transitiveData)
+          .build();
       final AndroidBuilder builder = sdkTools.createAndroidBuilder();
 
       final MergedAndroidData mergedData = resourceProcessor.mergeData(
