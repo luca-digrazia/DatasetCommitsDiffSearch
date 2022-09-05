@@ -29,7 +29,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetVisitor;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
-import com.google.devtools.build.lib.concurrent.ExecutorUtil;
+import com.google.devtools.build.lib.concurrent.ExecutorShutdownUtil;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.concurrent.ThrowableRecordingRunnableWrapper;
 import com.google.devtools.build.lib.events.Event;
@@ -1063,7 +1063,7 @@ public final class ParallelEvaluator implements Evaluator {
     //
     // TODO(bazel-team): Come up with a better design for graph cleaning such that we can respond
     // to interrupts in constant time.
-    boolean newlyInterrupted = ExecutorUtil.uninterruptibleShutdown(executor);
+    boolean newlyInterrupted = ExecutorShutdownUtil.uninterruptibleShutdown(executor);
     Throwables.propagateIfPossible(wrapper.getFirstThrownError());
     if (newlyInterrupted || alreadyInterrupted) {
       throw new InterruptedException();
@@ -1356,7 +1356,7 @@ public final class ParallelEvaluator implements Evaluator {
    * ArrayDeque does not permit null elements.
    */
   private static final SkyKey CHILDREN_FINISHED =
-      new SkyKey(SkyFunctionName.create("MARKER"), "MARKER");
+      new SkyKey(new SkyFunctionName("MARKER", false), "MARKER");
 
   /** The max number of cycles we will report to the user for a given root, to avoid OOMing. */
   private static final int MAX_CYCLES = 20;

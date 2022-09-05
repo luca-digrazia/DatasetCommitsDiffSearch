@@ -14,6 +14,7 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.util.Pair;
 
 import java.util.Set;
 
@@ -107,9 +108,9 @@ public class NotifyingInMemoryGraph extends InMemoryGraph {
     }
 
     @Override
-    public Iterable<SkyKey> markDirty(boolean isChanged) {
+    public Pair<? extends Iterable<SkyKey>, ? extends SkyValue> markDirty(boolean isChanged) {
       graphListener.accept(myKey, EventType.MARK_DIRTY, Order.BEFORE, isChanged);
-      Iterable<SkyKey> result = super.markDirty(isChanged);
+      Pair<? extends Iterable<SkyKey>, ? extends SkyValue> result = super.markDirty(isChanged);
       graphListener.accept(myKey, EventType.MARK_DIRTY, Order.AFTER, isChanged);
       return result;
     }
