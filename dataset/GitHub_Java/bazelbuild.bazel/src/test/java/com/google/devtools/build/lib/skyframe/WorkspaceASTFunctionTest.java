@@ -27,14 +27,16 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
-import java.io.IOException;
-import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Matchers;
 import org.mockito.Mockito;
+
+import java.io.IOException;
+import java.util.List;
 
 /**
  * Test for WorkspaceASTFunction.
@@ -50,8 +52,7 @@ public class WorkspaceASTFunctionTest extends BuildViewTestCase {
     ConfiguredRuleClassProvider ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
     ConfiguredRuleClassProvider ruleClassProviderSpy = Mockito.spy(ruleClassProvider);
     // Prevent returning default workspace file.
-    Mockito.when(ruleClassProviderSpy.getDefaultWorkspacePrefix()).thenReturn("");
-    Mockito.when(ruleClassProviderSpy.getDefaultWorkspaceSuffix()).thenReturn("");
+    Mockito.when(ruleClassProviderSpy.getDefaultWorkspaceFile()).thenReturn("");
     astSkyFunc = new WorkspaceASTFunction(ruleClassProviderSpy);
     fakeWorkspaceFileValue = new FakeFileValue();
   }
@@ -60,10 +61,10 @@ public class WorkspaceASTFunctionTest extends BuildViewTestCase {
     Path workspacePath = scratch.overwriteFile("WORKSPACE", contents);
     fakeWorkspaceFileValue.setSize(workspacePath.getFileSize());
     return RootedPath.toRootedPath(
-        workspacePath.getParentDirectory(), PathFragment.create(workspacePath.getBaseName()));
+        workspacePath.getParentDirectory(), new PathFragment(workspacePath.getBaseName()));
   }
 
-  private SkyFunction.Environment getEnv() throws InterruptedException {
+  private SkyFunction.Environment getEnv() {
     SkyFunction.Environment env = Mockito.mock(SkyFunction.Environment.class);
     Mockito.when(env.getValue(Matchers.argThat(new SkyKeyMatchers(SkyFunctions.FILE))))
         .thenReturn(fakeWorkspaceFileValue);
