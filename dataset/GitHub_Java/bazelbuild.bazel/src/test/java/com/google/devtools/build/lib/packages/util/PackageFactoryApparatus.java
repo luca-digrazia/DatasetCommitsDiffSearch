@@ -18,8 +18,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.AttributeContainer;
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
@@ -33,12 +32,10 @@ import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
-import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.common.options.Options;
 import java.io.IOException;
 
 /**
@@ -46,19 +43,18 @@ import java.io.IOException;
  */
 public class PackageFactoryApparatus {
 
-  private final ExtendedEventHandler eventHandler;
+  private final EventHandler eventHandler;
   private final PackageFactory factory;
 
   public PackageFactoryApparatus(
-      ExtendedEventHandler eventHandler,
-      PackageFactory.EnvironmentExtension... environmentExtensions) {
+      EventHandler eventHandler, PackageFactory.EnvironmentExtension... environmentExtensions) {
     this.eventHandler = eventHandler;
     RuleClassProvider ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
     factory =
         new PackageFactory(
             ruleClassProvider,
             null,
-            AttributeContainer::new,
+            AttributeContainer.ATTRIBUTE_CONTAINER_FACTORY,
             ImmutableList.copyOf(environmentExtensions),
             "test",
             Package.Builder.DefaultHelper.INSTANCE);
@@ -89,9 +85,8 @@ public class PackageFactoryApparatus {
    * Parses and evaluates {@code buildFile} with custom {@code eventHandler} and returns the
    * resulting {@link Package} instance.
    */
-  public Package createPackage(
-      PackageIdentifier packageIdentifier, Path buildFile, ExtendedEventHandler reporter)
-      throws Exception {
+  public Package createPackage(PackageIdentifier packageIdentifier, Path buildFile,
+      EventHandler reporter) throws Exception {
     try {
       Package pkg =
           factory.createPackageForTesting(
@@ -134,15 +129,13 @@ public class PackageFactoryApparatus {
             .build();
     Builder resultBuilder =
         factory.evaluateBuildFile(
-            externalPkg.getWorkspaceName(),
+            externalPkg,
             packageId,
             buildFileAST,
             buildFile,
             globber,
             ImmutableList.<Event>of(),
-            ImmutableList.<Postable>of(),
             ConstantRuleVisibility.PUBLIC,
-            Options.getDefaults(SkylarkSemanticsOptions.class),
             false,
             new MakeEnvironment.Builder(),
             ImmutableMap.<String, Extension>of(),

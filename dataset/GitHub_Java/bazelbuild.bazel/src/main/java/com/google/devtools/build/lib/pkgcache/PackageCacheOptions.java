@@ -166,7 +166,7 @@ public class PackageCacheOptions extends OptionsBase {
   }
 
   public ImmutableSet<PackageIdentifier> getDeletedPackages() {
-    if (deletedPackages == null || deletedPackages.isEmpty()) {
+    if (deletedPackages == null) {
       return ImmutableSet.of();
     }
     ImmutableSet.Builder<PackageIdentifier> newDeletedPackages = ImmutableSet.builder();

@@ -14,7 +14,10 @@
 package com.google.devtools.build.lib.packages.util;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -22,12 +25,10 @@ import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.GlobCache;
-import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
@@ -61,10 +62,10 @@ public abstract class PackageFactoryTestBase {
   protected PackageFactoryApparatus packages = createPackageFactoryApparatus();
 
   protected com.google.devtools.build.lib.packages.Package expectEvalSuccess(String... content)
-      throws InterruptedException, IOException, NoSuchPackageException {
+      throws InterruptedException, IOException {
     Path file = scratch.file("/pkg/BUILD", content);
     Package pkg = packages.eval("pkg", file);
-    assertThat(pkg.containsErrors()).isFalse();
+    assertFalse(pkg.containsErrors());
     return pkg;
   }
 
@@ -72,9 +73,7 @@ public abstract class PackageFactoryTestBase {
     events.setFailFast(false);
     Path file = scratch.file("/pkg/BUILD", content);
     Package pkg = packages.eval("pkg", file);
-    assertWithMessage("Expected evaluation error, but none was not reported")
-        .that(pkg.containsErrors())
-        .isTrue();
+    assertTrue("Expected evaluation error, but none was not reported", pkg.containsErrors());
     events.assertContainsError(expectedError);
   }
 
@@ -91,9 +90,9 @@ public abstract class PackageFactoryTestBase {
     for (String outName : outNames) {
       OutputFile out = (OutputFile) pkg.getTarget(outName);
       assertThat(rule.getOutputFiles()).contains(out);
-      assertThat(out.getGeneratingRule()).isSameAs(rule);
-      assertThat(out.getName()).isEqualTo(outName);
-      assertThat(out.getTargetKind()).isEqualTo("generated file");
+      assertSame(rule, out.getGeneratingRule());
+      assertEquals(outName, out.getName());
+      assertEquals("generated file", out.getTargetKind());
     }
     assertThat(rule.getOutputFiles()).hasSize(outNames.size());
   }
@@ -162,7 +161,7 @@ public abstract class PackageFactoryTestBase {
     Package pkg = buildPackageWithGlob(globCallExpression);
 
     events.assertContainsError(expectedError);
-    assertThat(pkg.containsErrors()).isTrue();
+    assertTrue(pkg.containsErrors());
   }
 
   private Package buildPackageWithGlob(String globCallExpression) throws Exception {
@@ -209,11 +208,9 @@ public abstract class PackageFactoryTestBase {
     GlobCache globCache = evaluated.second;
 
     // Ensure all of the patterns are recorded against this package:
-    assertThat(globCache.getKeySet().containsAll(createGlobCacheKeys(includes, excludeDirs)))
-        .isTrue();
-    assertThat(globCache.getKeySet().containsAll(createGlobCacheKeys(excludes, excludeDirs)))
-        .isTrue();
-    assertThat(pkg.containsErrors()).isFalse();
+    assertTrue(globCache.getKeySet().containsAll(createGlobCacheKeys(includes, excludeDirs)));
+    assertTrue(globCache.getKeySet().containsAll(createGlobCacheKeys(excludes, excludeDirs)));
+    assertFalse(pkg.containsErrors());
   }
 
   /**
@@ -249,7 +246,7 @@ public abstract class PackageFactoryTestBase {
     events.setFailFast(false);
     Package pkg =
         evaluateGlob(ImmutableList.of(pattern), Collections.<String>emptyList(), false, "").first;
-    assertThat(pkg.containsErrors()).isEqualTo(errorExpected);
+    assertEquals(errorExpected, pkg.containsErrors());
     boolean foundError = false;
     for (Event event : events.collector()) {
       if (event.getMessage().contains("glob")) {
@@ -261,7 +258,7 @@ public abstract class PackageFactoryTestBase {
         break;
       }
     }
-    assertThat(foundError).isEqualTo(errorExpected);
+    assertEquals(errorExpected, foundError);
   }
 
   /** Runnable that asks for parsing of build file and synchronizes it with
@@ -272,11 +269,11 @@ public abstract class PackageFactoryTestBase {
   protected class ParsingTracker extends Handler implements Runnable {
     private final Semaphore parsingStarted;
     private final Semaphore errorReported;
-    private final ExtendedEventHandler eventHandler;
+    private final EventHandler eventHandler;
     private boolean first = true;
     private boolean parsedOK;
 
-    public ParsingTracker(Semaphore first, Semaphore second, ExtendedEventHandler eventHandler) {
+    public ParsingTracker(Semaphore first, Semaphore second, EventHandler eventHandler) {
       this.eventHandler = eventHandler;
       parsingStarted = first;
       errorReported = second;

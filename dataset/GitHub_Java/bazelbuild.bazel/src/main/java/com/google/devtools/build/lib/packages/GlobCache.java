@@ -138,8 +138,16 @@ public class GlobCache {
     Future<List<Path>> cached = globCache.get(Pair.of(pattern, excludeDirs));
     if (cached == null) {
       if (maxDirectoriesToEagerlyVisit > -1
-          && !globalStarted.getAndSet(true)) {
-        packageDirectory.prefetchPackageAsync(maxDirectoriesToEagerlyVisit);
+          && !globalStarted.getAndSet(true)
+          && !pattern.startsWith("**")) {
+        UnixGlob.forPath(packageDirectory)
+            .setMaxDirectoriesToEagerlyVisit(maxDirectoriesToEagerlyVisit)
+            .addPattern("**")
+            .setExcludeDirectories(true)
+            .setDirectoryFilter(childDirectoryPredicate)
+            .setThreadPool(globExecutor)
+            .setFilesystemCalls(syscalls)
+            .globAsync(true);
       }
       cached = safeGlobUnsorted(pattern, excludeDirs);
       setGlobPaths(pattern, excludeDirs, cached);

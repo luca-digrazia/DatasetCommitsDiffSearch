@@ -346,6 +346,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(
         SkyFunctions.SKYLARK_IMPORTS_LOOKUP,
         newSkylarkImportLookupFunction(ruleClassProvider, pkgFactory));
+    map.put(SkyFunctions.SKYLARK_IMPORT_CYCLE, new SkylarkImportUniqueCycleFunction());
     map.put(SkyFunctions.GLOB, newGlobFunction());
     map.put(SkyFunctions.TARGET_PATTERN, new TargetPatternFunction());
     map.put(SkyFunctions.PREPARE_DEPS_OF_PATTERNS, new PrepareDepsOfPatternsFunction());
@@ -353,7 +354,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(
         SkyFunctions.PREPARE_DEPS_OF_TARGETS_UNDER_DIRECTORY,
         new PrepareDepsOfTargetsUnderDirectoryFunction(directories));
-    map.put(SkyFunctions.COLLECT_TARGETS_IN_PACKAGE, new CollectTargetsInPackageFunction());
     map.put(
         SkyFunctions.COLLECT_PACKAGES_UNDER_DIRECTORY,
         new CollectPackagesUnderDirectoryFunction(directories));
@@ -1839,13 +1839,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       long time = timer.stop().elapsed(TimeUnit.MILLISECONDS);
 
       TargetPatternPhaseValue patternParsingValue = evalResult.get(key);
-      eventBus.post(
-          new TargetParsingCompleteEvent(
-              patternParsingValue.getOriginalTargets(),
-              patternParsingValue.getFilteredTargets(),
-              patternParsingValue.getTestFilteredTargets(),
-              time,
-              targetPatterns));
+      eventBus.post(new TargetParsingCompleteEvent(patternParsingValue.getOriginalTargets(),
+          patternParsingValue.getFilteredTargets(), patternParsingValue.getTestFilteredTargets(),
+          time));
       if (callback != null) {
         callback.notifyTargets(patternParsingValue.getTargets());
       }
