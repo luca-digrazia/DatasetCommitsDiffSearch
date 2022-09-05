@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 http://www.hswebframework.org
+ * Copyright 2016 http://www.hswebframework.org
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,111 +17,111 @@
 
 package org.hswebframework.web.authorization.basic.web;
 
+import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import lombok.SneakyThrows;
+import org.hswebframework.web.WebUtil;
 import org.hswebframework.web.authorization.Authentication;
-import org.hswebframework.web.authorization.ReactiveAuthenticationManager;
+import org.hswebframework.web.authorization.AuthenticationManager;
 import org.hswebframework.web.authorization.annotation.Authorize;
-import org.hswebframework.web.authorization.events.AuthorizationBeforeEvent;
-import org.hswebframework.web.authorization.events.AuthorizationDecodeEvent;
-import org.hswebframework.web.authorization.events.AuthorizationFailedEvent;
-import org.hswebframework.web.authorization.events.AuthorizationSuccessEvent;
-import org.hswebframework.web.authorization.exception.UnAuthorizedException;
-import org.hswebframework.web.authorization.simple.CompositeReactiveAuthenticationManager;
+import org.hswebframework.web.authorization.listener.event.*;
 import org.hswebframework.web.authorization.simple.PlainTextUsernamePasswordAuthenticationRequest;
+import org.hswebframework.web.controller.message.ResponseMessage;
+import org.hswebframework.web.logging.AccessLogger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.MediaType;
 import org.springframework.util.Assert;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Mono;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
+
+import static org.hswebframework.web.controller.message.ResponseMessage.ok;
 
 /**
  * @author zhouhao
  */
 @RestController
 @RequestMapping("${hsweb.web.mappings.authorize:authorize}")
+@AccessLogger("授权")
+@Api(tags = "权限-用户授权", value = "授权")
 public class AuthorizationController {
 
+    @Autowired
+    private AuthenticationManager authenticationManager;
 
     @Autowired
     private ApplicationEventPublisher eventPublisher;
 
-    @Autowired
-    private ReactiveAuthenticationManager authenticationManager;
+    @GetMapping({"/login-out", "/sign-out", "/exit"})
+    @Authorize
+    @ApiOperation("退出当前登录")
+    public ResponseMessage exit(@ApiParam(hidden = true) Authentication authentication) {
+        eventPublisher.publishEvent(new AuthorizationExitEvent(authentication));
+        return ok();
+    }
 
     @GetMapping("/me")
     @Authorize
     @ApiOperation("当前登录用户权限信息")
-    public Mono<Authentication> me() {
-        return Authentication.currentReactive()
-                .switchIfEmpty(Mono.error(UnAuthorizedException::new));
+    public ResponseMessage<Authentication> me(@ApiParam(hidden = true) Authentication authentication) {
+        return ok(authentication);
     }
+
 
     @PostMapping(value = "/login", consumes = MediaType.APPLICATION_JSON_VALUE)
     @ApiOperation("用户名密码登录,json方式")
-    @Authorize(ignore = true)
-    public Mono<Map<String, Object>> authorizeByJson(@ApiParam(example = "{\"username\":\"admin\",\"password\":\"admin\"}")
-                                                     @RequestBody Mono<Map<String, Object>> parameter) {
-        return doLogin(parameter);
+    public ResponseMessage<Map<String, Object>> authorize(@ApiParam(example = "{\"username\":\"admin\",\"password\":\"admin\"}")
+                                                          @RequestBody Map<String, String> parameter) {
+
+
+        return doLogin(parameter.get("username"), parameter.get("password"), parameter);
     }
 
     @PostMapping(value = "/login", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     @ApiOperation("用户名密码登录,参数方式")
-    @Authorize(ignore = true)
-    public Mono<Map<String, Object>> authorizeByUrlEncoded(@ApiParam(hidden = true) @RequestParam Map<String, Object> parameter) {
+    public ResponseMessage<Map<String, Object>> authorize(@RequestParam @ApiParam("用户名") String username,
+                                                          @RequestParam @ApiParam("密码") String password,
+                                                          @ApiParam(hidden = true) HttpServletRequest request) {
 
-        return doLogin(Mono.just(parameter));
+        return doLogin(username, password, WebUtil.getParameters(request));
     }
 
     /**
-     * <img src="https://raw.githubusercontent.com/hs-web/hsweb-framework/4.0.x/hsweb-authorization/hsweb-authorization-basic/img/autz-flow.png">
+     * <img src="https://raw.githubusercontent.com/hs-web/hsweb-framework/3.0.x/hsweb-authorization/hsweb-authorization-basic/img/autz-flow.png">
      */
     @SneakyThrows
-    private Mono<Map<String, Object>> doLogin(Mono<Map<String, Object>> parameter) {
+    protected ResponseMessage<Map<String, Object>> doLogin(String username, String password, Map<String, ?> parameter) {
+        Assert.hasLength(username, "用户名不能为空");
+        Assert.hasLength(password, "密码不能为空");
 
-        return parameter.flatMap(parameters -> {
-            String username_ = (String) parameters.get("username");
-            String password_ = (String) parameters.get("password");
+        AuthorizationFailedEvent.Reason reason = AuthorizationFailedEvent.Reason.OTHER;
+        Function<String, Object> parameterGetter = parameter::get;
+        try {
+            AuthorizationDecodeEvent decodeEvent = new AuthorizationDecodeEvent(username, password, parameterGetter);
+            eventPublisher.publishEvent(decodeEvent);
+            username = decodeEvent.getUsername();
+            password = decodeEvent.getPassword();
+            AuthorizationBeforeEvent beforeEvent = new AuthorizationBeforeEvent(username, password, parameterGetter);
+            eventPublisher.publishEvent(beforeEvent);
+            // 验证通过
+            Authentication authentication = authenticationManager.authenticate(new PlainTextUsernamePasswordAuthenticationRequest(username, password));
 
-            Assert.hasLength(username_, "用户名不能为空");
-            Assert.hasLength(password_, "密码不能为空");
-
-            AuthorizationFailedEvent.Reason reason = AuthorizationFailedEvent.Reason.OTHER;
-            Function<String, Object> parameterGetter = parameters::get;
-            return Mono.defer(() -> {
-                String username = username_;
-                String password = password_;
-
-                AuthorizationDecodeEvent decodeEvent = new AuthorizationDecodeEvent(username, password, parameterGetter);
-                eventPublisher.publishEvent(decodeEvent);
-                username = decodeEvent.getUsername();
-                password = decodeEvent.getPassword();
-                AuthorizationBeforeEvent beforeEvent = new AuthorizationBeforeEvent(username, password, parameterGetter);
-                eventPublisher.publishEvent(beforeEvent);
-                // 验证通过
-                return authenticationManager
-                        .authenticate(Mono.just(new PlainTextUsernamePasswordAuthenticationRequest(username, password)))
-                        .switchIfEmpty(Mono.error(() -> new IllegalArgumentException("密码错误")))
-                        .map(auth -> {
-                            //触发授权成功事件
-                            AuthorizationSuccessEvent event = new AuthorizationSuccessEvent(auth, parameterGetter);
-                            event.getResult().put("userId", auth.getUser().getId());
-                            eventPublisher.publishEvent(event);
-                            return event.getResult();
-                        });
-            }).onErrorResume(err -> {
-                AuthorizationFailedEvent failedEvent = new AuthorizationFailedEvent(username_, password_, parameterGetter, reason);
-                failedEvent.setException(err);
-                eventPublisher.publishEvent(failedEvent);
-                return Mono.error(failedEvent.getException());
-            });
-        });
-
+            //触发授权成功事件
+            AuthorizationSuccessEvent event = new AuthorizationSuccessEvent(authentication, parameterGetter);
+            event.getResult().put("userId", authentication.getUser().getId());
+            eventPublisher.publishEvent(event);
+            return ok(event.getResult());
+        } catch (Exception e) {
+            AuthorizationFailedEvent failedEvent = new AuthorizationFailedEvent(username, password, parameterGetter, reason);
+            failedEvent.setException(e);
+            eventPublisher.publishEvent(failedEvent);
+            throw failedEvent.getException();
+        }
     }
 
 }
