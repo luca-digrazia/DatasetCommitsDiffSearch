@@ -49,7 +49,7 @@ public class SyntaxTreeVisitorTest {
       }
 
       @Override
-      public void visit(Parameter<Expression, Expression> node) {
+      public void visit(Parameter<?, ?> node) {
         params.add(node.toString());
       }
     }

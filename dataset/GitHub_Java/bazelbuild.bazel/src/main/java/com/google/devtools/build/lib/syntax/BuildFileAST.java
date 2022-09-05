@@ -81,7 +81,7 @@ public class BuildFileAST extends ASTNode {
         containsErrors,
         null,
         stmts.get(firstStatement).getLocation(),
-        ImmutableList.<Comment>of());
+        ImmutableList.of());
   }
 
   /** Collects all load statements */
