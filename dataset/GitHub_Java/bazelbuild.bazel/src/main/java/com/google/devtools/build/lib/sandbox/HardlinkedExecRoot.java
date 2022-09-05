@@ -58,11 +58,11 @@ public class HardlinkedExecRoot implements SandboxExecRoot {
       if (errWriter != null) {
         errWriter.printf("createdir: %s\n", createDir.getPathString());
       }
-      FileSystemUtils.createDirectoryAndParentsWithCache(createdDirs, createDir);
+      FileSystemUtils.createDirectoryAndParents(createDir);
     }
 
     // Link all the inputs.
-    linkInputs(inputs, createdDirs);
+    linkInputs(inputs);
   }
 
   private void createDirectoriesForOutputs(Collection<PathFragment> outputs, Set<Path> createdDirs)
@@ -89,8 +89,7 @@ public class HardlinkedExecRoot implements SandboxExecRoot {
    * names (by following solib symlinks back) to modify the paths to the shared libraries in
    * cc_binaries.
    */
-  private void linkInputs(Map<PathFragment, Path> inputs, Set<Path> createdDirs)
-      throws IOException {
+  private void linkInputs(Map<PathFragment, Path> inputs) throws IOException {
     // Create directory for input files.
     Path inputsDir = sandboxPath.getRelative("inputs");
     if (!inputsDir.exists()) {
@@ -98,16 +97,6 @@ public class HardlinkedExecRoot implements SandboxExecRoot {
     }
 
     for (ImmutableMap.Entry<PathFragment, Path> entry : inputs.entrySet()) {
-      Path targetName = sandboxExecRoot.getRelative(entry.getKey());
-      FileSystemUtils.createDirectoryAndParentsWithCache(
-          createdDirs, targetName.getParentDirectory());
-
-      // The target is supposed to be an empty file.
-      if (entry.getValue() == null) {
-        FileSystemUtils.createEmptyFile(targetName);
-        continue;
-      }
-
       // Hardlink, resolve symlink here instead in finalizeLinks.
       Path target = entry.getValue().resolveSymbolicLinks();
       Path hardlinkName =
@@ -126,10 +115,12 @@ public class HardlinkedExecRoot implements SandboxExecRoot {
       }
 
       // symlink
+      Path symlinkName = sandboxExecRoot.getRelative(entry.getKey());
       if (errWriter != null) {
-        errWriter.printf("symlink: %s -> %s\n", targetName, hardlinkName);
+        errWriter.printf("symlink: %s -> %s\n", symlinkName, hardlinkName);
       }
-      targetName.createSymbolicLink(hardlinkName);
+      FileSystemUtils.createDirectoryAndParents(symlinkName.getParentDirectory());
+      symlinkName.createSymbolicLink(hardlinkName);
     }
   }
 
@@ -149,9 +140,6 @@ public class HardlinkedExecRoot implements SandboxExecRoot {
       java.nio.file.Files.createLink(targetNio, sourceNio);
       // Directory
     } else if (source.isDirectory()) {
-      // Eagerly create target directory in case source is an empty directory.
-      FileSystemUtils.createDirectoryAndParents(target);
-
       Collection<Path> subpaths = source.getDirectoryEntries();
       for (Path sourceSubpath : subpaths) {
         Path targetSubpath = target.getRelative(sourceSubpath.relativeTo(source));

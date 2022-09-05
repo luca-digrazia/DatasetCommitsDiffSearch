@@ -841,38 +841,6 @@ public class FileSystemUtils {
   }
 
   /**
-   * Updates the contents of the output file if they do not match the given array, thus maintaining
-   * the mtime and ctime in case of no updates. Follows symbolic links.
-   *
-   * <p>If the output file already exists but is unreadable, this tries to overwrite it with the new
-   * contents. In other words: unreadable or missing files are considered to be non-matching.
-   *
-   * @throws IOException if there was an error
-   */
-  public static void maybeUpdateContent(Path outputFile, byte[] newContent) throws IOException {
-    byte[] currentContent;
-    try {
-      currentContent = readContent(outputFile);
-    } catch (IOException e) {
-      // Ignore error per the rationale given in the docstring. Keep in mind that what we are doing
-      // here is for performance reasons only so we should only break if the real action (that is,
-      // the write) fails -- not any of the optimization steps.
-      currentContent = null;
-    }
-
-    if (currentContent == null) {
-      writeContent(outputFile, newContent);
-    } else {
-      if (!Arrays.equals(newContent, currentContent)) {
-        if (!outputFile.isWritable()) {
-          outputFile.delete();
-        }
-        writeContent(outputFile, newContent);
-      }
-    }
-  }
-
-  /**
    * Returns the entirety of the specified input stream and returns it as a char
    * array, decoding characters using ISO-8859-1 (Latin1).
    *
@@ -1042,19 +1010,19 @@ public class FileSystemUtils {
    */
   public static void createHardLink(Path linkPath, Path originalPath) throws IOException {
 
-    // Directory
-    if (originalPath.isDirectory()) {
-      for (Path originalSubpath : originalPath.getDirectoryEntries()) {
-        Path linkSubpath = linkPath.getRelative(originalSubpath.relativeTo(originalPath));
-        createHardLink(linkSubpath, originalSubpath);
-      }
-      // Other types of file
-    } else {
+    // Regular file
+    if (originalPath.isFile()) {
       Path parentDir = linkPath.getParentDirectory();
       if (!parentDir.exists()) {
         FileSystemUtils.createDirectoryAndParents(parentDir);
       }
       originalPath.createHardLink(linkPath);
+      // Directory
+    } else if (originalPath.isDirectory()) {
+      for (Path originalSubpath : originalPath.getDirectoryEntries()) {
+        Path linkSubpath = linkPath.getRelative(originalSubpath.relativeTo(originalPath));
+        createHardLink(linkSubpath, originalSubpath);
+      }
     }
   }
 }
