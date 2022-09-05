@@ -309,7 +309,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
           // Dependent aspect has either not been computed yet or is in error.
           return null;
         }
-        result.put(depKey, aspectValue.getAspect());
+        result.put(depKey, aspectValue.get());
       }
     }
 
@@ -320,7 +320,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
       Class<? extends ConfiguredAspectFactory> aspectFactory) {
     AspectDefinition aspectDefinition = AspectFactory.Util.create(aspectFactory).getDefinition();
     for (Class<?> provider : aspectDefinition.getRequiredProviders()) {
-      if (dep.getProvider(provider.asSubclass(TransitiveInfoProvider.class)) == null) {
+      if (dep.getProvider((Class<? extends TransitiveInfoProvider>) provider) == null) {
         return false;
       }
     }
