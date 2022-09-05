@@ -264,9 +264,13 @@ public class AtlasBridgeApplication extends Application{
         // *0 checkload kernalpatch
         boolean isUpdated = isUpdated(getBaseContext());
         Log.e("AtlasBridgeApplication", "attachBaseContext() - isUpdated = " + isUpdated);
+
         KernalConstants.baseContext = getBaseContext();
         KernalConstants.APK_PATH = getBaseContext().getApplicationInfo().sourceDir;
         KernalConstants.RAW_APPLICATION_NAME = getClass().getName();
+        DexLoadBooster dexBooster = new DexLoadBooster();
+        dexBooster.init(getBaseContext());
+        KernalConstants.dexBooster = dexBooster;
         boolean hasKernalPatched  = false;
         boolean isMainProcess = getBaseContext().getPackageName().equals(KernalConstants.PROCESS);
         if(isUpdated){
@@ -333,7 +337,7 @@ public class AtlasBridgeApplication extends Application{
             parTypes[7]= Object.class;
             Constructor<?> con = BridgeApplicationDelegateClazz.getConstructor(parTypes);
             mBridgeApplicationDelegate = con.newInstance(this,KernalConstants.PROCESS,KernalConstants.INSTALLED_VERSIONNAME,
-                    KernalConstants.INSTALLED_VERSIONCODE,KernalConstants.LASTUPDATETIME,KernalConstants.APK_PATH,isUpdated,null);
+                    KernalConstants.INSTALLED_VERSIONCODE,KernalConstants.LASTUPDATETIME,KernalConstants.APK_PATH,isUpdated,KernalConstants.dexBooster);
             Method method = BridgeApplicationDelegateClazz.getDeclaredMethod("attachBaseContext");
             method.invoke(mBridgeApplicationDelegate);
         } catch (Throwable e) {
@@ -469,19 +473,17 @@ public class AtlasBridgeApplication extends Application{
                 String storedVersionName = in.readUTF();
                 long   storedVersionCode = in.readLong();
                 long   storedLastUpdateTime = in.readLong();
-                String storedApkPath     = in.readUTF();
+                String storedApkPath = in.readUTF();
                 String fingerprint = in.readUTF();
-
-
 
                 System.setProperty("APP_VERSION_TAG",KernalConstants.INSTALLED_VERSIONNAME);
                 // 检测之前的版本记录
                 if(packageInfo.versionCode == storedVersionCode &&
                         TextUtils.equals(packageInfo.versionName, storedVersionName) &&
-                        packageInfo.lastUpdateTime == storedLastUpdateTime &&
-                        context.getApplicationInfo().sourceDir.equals(storedApkPath) &&
-                        !needRollback() &&
-                        (Build.FINGERPRINT + ""+  Build.VERSION.SDK_INT).equals(fingerprint)){
+                        packageInfo.lastUpdateTime == storedLastUpdateTime
+                        && context.getApplicationInfo().sourceDir.equals(storedApkPath)
+                        && !needRollback() && (Build.FINGERPRINT + ""
+                        + Build.VERSION.SDK_INT).equals(fingerprint)) {
                     return false;
                 }else {
                     if (!TextUtils.isEmpty(storedVersionName)){
