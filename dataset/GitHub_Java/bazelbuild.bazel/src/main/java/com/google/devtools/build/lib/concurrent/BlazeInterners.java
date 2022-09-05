@@ -27,10 +27,6 @@ public class BlazeInterners {
     CONCURRENCY_LEVEL = (val == null) ? DEFAULT_CONCURRENCY_LEVEL : Integer.parseInt(val);
   }
 
-  public static int concurrencyLevel() {
-    return CONCURRENCY_LEVEL;
-  }
-
   private static InternerBuilder setConcurrencyLevel(InternerBuilder builder) {
     return builder.concurrencyLevel(CONCURRENCY_LEVEL);
   }
