@@ -55,6 +55,7 @@ import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -337,8 +338,7 @@ public class SkylarkRuleImplementationFunctions {
       "Expands all <code>$(location ...)</code> templates in the given string by replacing "
       + "<code>$(location //x)</code> with the path of the output file of target //x. "
       + "Expansion only works for labels that point to direct dependencies of this rule or that "
-      + "are explicitly listed in the optional argument <code>targets</code>. "
-      + "<br/><br/>"
+      + "are explicitly listed in the optional argument <code>targets</code>.<br/>"
       + "<code>$(location ...)</code> will cause an error if the referenced target has multiple "
       + "outputs. In this case, please use <code>$(locations ...)</code> since it produces a space-"
       + "separated list of output paths. It can be safely used for a single output file, too.",
@@ -384,30 +384,23 @@ public class SkylarkRuleImplementationFunctions {
   }
 
   // TODO(bazel-team): improve this method to be more memory friendly
-  @SkylarkSignature(
-    name = "file_action",
-    doc = "Creates a file write action.",
-    objectType = SkylarkRuleContext.class,
-    returnType = Runtime.NoneType.class,
-    parameters = {
-      @Param(name = "self", type = SkylarkRuleContext.class, doc = "this context"),
-      @Param(name = "output", type = Artifact.class, doc = "the output file"),
-      @Param(name = "content", type = String.class, doc = "the contents of the file"),
-      @Param(
-        name = "executable",
-        type = Boolean.class,
-        defaultValue = "False",
-        doc = "whether the output file should be executable (default is False)"
-      )
-    }
-  )
+  @SkylarkSignature(name = "file_action",
+      doc = "Creates a file write action.",
+      objectType = SkylarkRuleContext.class,
+      returnType = Runtime.NoneType.class,
+      parameters = {
+        @Param(name = "self", type = SkylarkRuleContext.class, doc = "this context"),
+        @Param(name = "output", type = Artifact.class, doc = "the output file"),
+        @Param(name = "content", type = String.class, doc = "the contents of the file"),
+        @Param(name = "executable", type = Boolean.class, defaultValue = "False",
+            doc = "whether the output file should be executable (default is False)")})
   private static final BuiltinFunction createFileWriteAction =
       new BuiltinFunction("file_action") {
-        public Runtime.NoneType invoke(
-            SkylarkRuleContext ctx, Artifact output, String content, Boolean executable)
+        public Runtime.NoneType invoke(SkylarkRuleContext ctx,
+            Artifact output, String content, Boolean executable)
             throws EvalException, ConversionException {
-          FileWriteAction action =
-              FileWriteAction.create(ctx.getRuleContext(), output, content, executable);
+          FileWriteAction action = new FileWriteAction(
+              ctx.getRuleContext().getActionOwner(), output, content, executable);
           ctx.getRuleContext().registerAction(action);
           return Runtime.NONE;
         }
