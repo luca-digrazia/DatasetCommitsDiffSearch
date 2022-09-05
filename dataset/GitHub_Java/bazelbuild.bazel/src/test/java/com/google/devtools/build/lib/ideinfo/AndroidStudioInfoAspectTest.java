@@ -19,7 +19,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.ArtifactLocation;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.CRuleIdeInfo;
 import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.CToolchainIdeInfo;
@@ -29,13 +28,15 @@ import com.google.devtools.build.lib.ideinfo.androidstudio.AndroidStudioIdeInfo.
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.ProtocolStringList;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Tests for {@link AndroidStudioInfoAspect} validating proto's contents.
@@ -936,11 +937,9 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
         ArtifactLocation.newBuilder()
             .setRootPath(
                 testLegacyAswbPluginVersionCompatibility()
-                    ? targetConfig.getGenfilesDirectory(RepositoryName.MAIN).getPath()
-                        .getPathString()
-                    : "")
+                    ? targetConfig.getGenfilesDirectory().getPath().getPathString() : "")
             .setRootExecutionPathFragment(
-                targetConfig.getGenfilesDirectory(RepositoryName.MAIN).getExecPathString())
+                targetConfig.getGenfilesDirectory().getExecPathString())
             .setRelativePath("com/google/example/gen.java")
             .setIsSource(false)
             .build(),
@@ -1142,7 +1141,7 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
 
     assertThat(ruleIdeInfo.getJavaRuleIdeInfo().getJarsList()).isEmpty();
 
-    assertThat(getIdeResolveFiles()).containsExactly("com/google/example/simple/simple.h");
+    assertThat(getIdeResolveFiles()).isEmpty();
   }
 
   @Test
@@ -1361,10 +1360,6 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
 
     assertThat(ruleIdeInfo.getDependenciesList()).contains("//com/google/example:lib");
     assertThat(ruleIdeInfo.getDependenciesList()).hasSize(2);
-
-    assertThat(getIdeCompileFiles()).containsExactly(
-        "com/google/example/liblib.a",
-        "com/google/example/libsimple.a");
   }
 
   @Test
@@ -1618,35 +1613,6 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
     RuleIdeInfo ruleIdeInfo = getRuleInfoAndVerifyLabel(
         "//com/google/example:simple", ruleIdeInfos);
     assertThat(ruleIdeInfo.hasCRuleIdeInfo()).isFalse();
-  }
-
-  @Test
-  public void testAlias() throws Exception {
-    scratch.file(
-        "com/google/example/BUILD",
-        "java_library(",
-        "    name = 'test',",
-        "    srcs = ['Test.java'],",
-        "    deps = [':alias']",
-        ")",
-        "alias(",
-        "    name = 'alias',",
-        "    actual = ':alias2',",
-        ")",
-        "alias(",
-        "    name = 'alias2',",
-        "    actual = ':real',",
-        ")",
-        "java_library(",
-        "    name = 'real',",
-        "    srcs = ['Real.java'],",
-        ")");
-    Map<String, RuleIdeInfo> ruleIdeInfos = buildRuleIdeInfo("//com/google/example:test");
-    RuleIdeInfo testInfo = getRuleInfoAndVerifyLabel(
-        "//com/google/example:test", ruleIdeInfos);
-    assertThat(testInfo.getDependenciesList())
-        .contains("//com/google/example:real");
-    assertThat(getRuleInfoAndVerifyLabel("//com/google/example:real", ruleIdeInfos)).isNotNull();
   }
 
   /**

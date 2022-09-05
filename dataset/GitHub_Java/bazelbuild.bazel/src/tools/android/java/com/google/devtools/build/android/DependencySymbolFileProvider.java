@@ -13,8 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.android.builder.dependency.SymbolFileProvider;
 import com.google.common.base.Preconditions;
+
+import com.android.builder.dependency.SymbolFileProvider;
+
 import java.io.File;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
@@ -44,11 +46,6 @@ class DependencySymbolFileProvider implements SymbolFileProvider {
   @Override
   public File getSymbolFile() {
     return symbolFile;
-  }
-
-  @Override
-  public boolean isOptional() {
-    return false;
   }
 
   @Override
