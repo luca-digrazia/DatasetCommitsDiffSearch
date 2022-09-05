@@ -1,68 +1,34 @@
 package org.hsweb.web.bean.common;
 
+import com.alibaba.fastjson.JSON;
+import org.hsweb.ezorm.param.Term;
+import org.hsweb.ezorm.param.TermType;
+import org.webbuilder.utils.common.MapUtils;
+import org.webbuilder.utils.common.StringUtils;
+
 import java.util.*;
 
 /**
  * Created by zhouhao on 16-4-19.
  */
-public class SqlParam<R extends SqlParam> {
-    /**
-     * 执行条件
-     */
-    protected Map<String, Object> term = new HashMap<>();
+public class SqlParam<R extends SqlParam> extends org.hsweb.ezorm.param.SqlParam<R> {
 
-    /**
-     * 指定要处理的字段
-     */
-    protected Set<String> includes = new LinkedHashSet<>();
+    protected Map<String, Object> params = new HashMap<>();
 
-    /**
-     * 指定不处理的字段
-     */
-    protected Set<String> excludes = new LinkedHashSet<>();
-
-    public R includes(String... fields) {
-        includes.addAll(Arrays.asList(fields));
-        return (R) this;
+    public Map<String, Object> getParams() {
+        return params;
     }
 
-    public R excludes(String... fields) {
-        excludes.addAll(Arrays.asList(fields));
-        includes.removeAll(Arrays.asList(fields));
-        return (R) this;
+    public void setParams(Map<String, Object> params) {
+        this.params = params;
     }
 
-    public R where(String key, Object value) {
-        this.term.put(key, value);
-        return (R) this;
+    @Override
+    public String toString() {
+        return JSON.toJSONString(this);
     }
 
-    public R where(Map<String, Object> conditions) {
-        this.term.putAll(conditions);
-        return (R) this;
-    }
-
-    public Map<String, Object> getTerm() {
-        return term;
-    }
-
-    public Set<String> getIncludes() {
-        return includes;
-    }
-
-    public Set<String> getExcludes() {
-        return excludes;
-    }
-
-    public void setIncludes(Set<String> includes) {
-        this.includes = includes;
-    }
-
-    public void setExcludes(Set<String> excludes) {
-        this.excludes = excludes;
-    }
-
-    public void setTerm(Map<String, Object> term) {
-        this.term = term;
+    public static SqlParam build() {
+        return new SqlParam<>();
     }
 }
