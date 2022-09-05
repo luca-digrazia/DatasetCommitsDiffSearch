@@ -28,6 +28,8 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
 import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceType;
+import com.google.devtools.build.lib.rules.android.LocalResourceContainer.Builder.InvalidAssetPath;
+import com.google.devtools.build.lib.rules.android.LocalResourceContainer.Builder.InvalidResourcePath;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -38,8 +40,9 @@ public final class ApplicationManifest {
   public static ApplicationManifest fromResourcesRule(RuleContext ruleContext) {
     final AndroidResourcesProvider resources = AndroidCommon.getAndroidResources(ruleContext);
     if (resources == null) {
-      ruleContext.attributeError("manifest", "a resources or manifest attribute is mandatory.");
-      return null;
+      ruleContext.attributeError("manifest",
+          "a resources or manifest attribute is mandatory.");
+      throw new RuleConfigurationException();
     }
     return new ApplicationManifest(Iterables.getOnlyElement(
         resources.getDirectAndroidResources())
@@ -197,29 +200,34 @@ public final class ApplicationManifest {
       Artifact rTxt,
       boolean incremental,
       Artifact proguardCfg) throws InterruptedException {
-    LocalResourceContainer data = new LocalResourceContainer.Builder(ruleContext)
-        .withAssets(
-            AndroidCommon.getAssetDir(ruleContext),
-            ruleContext.getPrerequisites(
-                // TODO(bazel-team): Remove the ResourceType construct.
-                ResourceType.ASSETS.getAttribute(),
-                Mode.TARGET,
-                FileProvider.class)).build();
+    try {
+      LocalResourceContainer data = new LocalResourceContainer.Builder()
+          .withAssets(
+              AndroidCommon.getAssetDir(ruleContext),
+              ruleContext.getPrerequisites(
+                  // TODO(bazel-team): Remove the ResourceType construct.
+                  ResourceType.ASSETS.getAttribute(),
+                  Mode.TARGET,
+                  FileProvider.class)).build();
 
-    return createApk(resourceApk,
-        ruleContext,
-        resourceDeps,
-        rTxt,
-        null, /* configurationFilters */
-        ImmutableList.<String>of(), /* uncompressedExtensions */
-        ImmutableList.<String>of(), /* densities */
-        ImmutableList.<String>of(), /* String applicationId */
-        null, /* String versionCode */
-        null, /* String versionName */
-        null, /* Artifact symbolsTxt */
-        incremental,
-        data,
-        proguardCfg);
+      return createApk(resourceApk,
+          ruleContext,
+          resourceDeps,
+          rTxt,
+          null, /* configurationFilters */
+          ImmutableList.<String>of(), /* uncompressedExtensions */
+          ImmutableList.<String>of(), /* densities */
+          ImmutableList.<String>of(), /* String applicationId */
+          null, /* String versionCode */
+          null, /* String versionName */
+          null, /* Artifact symbolsTxt */ 
+          incremental,
+          data,
+          proguardCfg);
+    } catch (InvalidAssetPath e) {
+      ruleContext.attributeError(ResourceType.ASSETS.getAttribute(), e.getMessage());
+      throw new RuleConfigurationException();
+    }
   }
 
   /** Packages up the manifest with resource and assets from the rule and dependent resources. 
@@ -237,36 +245,42 @@ public final class ApplicationManifest {
       String versionCode,
       String versionName,
       boolean incremental, Artifact proguardCfg) throws InterruptedException {
-    LocalResourceContainer data = new LocalResourceContainer.Builder(ruleContext)
-        .withAssets(
-            AndroidCommon.getAssetDir(ruleContext),
-            ruleContext.getPrerequisites(
-                // TODO(bazel-team): Remove the ResourceType construct.
-                ResourceType.ASSETS.getAttribute(),
-                Mode.TARGET,
-                FileProvider.class))
-        .withResources(
-            ruleContext.getPrerequisites(
-                "resource_files",
-                Mode.TARGET,
-                FileProvider.class)).build();
-    if (ruleContext.hasErrors()) {
-      return null;
+    try {
+      LocalResourceContainer data = new LocalResourceContainer.Builder()
+          .withAssets(
+              AndroidCommon.getAssetDir(ruleContext),
+              ruleContext.getPrerequisites(
+                  // TODO(bazel-team): Remove the ResourceType construct.
+                  ResourceType.ASSETS.getAttribute(),
+                  Mode.TARGET,
+                  FileProvider.class))
+          .withResources(
+              ruleContext.getPrerequisites(
+                  "resource_files",
+                  Mode.TARGET,
+                  FileProvider.class)).build();
+
+      return createApk(resourceApk,
+          ruleContext,
+          resourceDeps,
+          rTxt,
+          symbolsTxt,
+          configurationFilters,
+          uncompressedExtensions,
+          densities,
+          applicationId,
+          versionCode,
+          versionName,
+          incremental,
+          data,
+          proguardCfg);
+    } catch (InvalidAssetPath e) {
+      ruleContext.attributeError(ResourceType.ASSETS.getAttribute(), e.getMessage());
+      throw new RuleConfigurationException();
+    } catch (InvalidResourcePath e) {
+      ruleContext.attributeError("resource_files", e.getMessage());
+      throw new RuleConfigurationException();
     }
-    return createApk(resourceApk,
-        ruleContext,
-        resourceDeps,
-        rTxt,
-        symbolsTxt,
-        configurationFilters,
-        uncompressedExtensions,
-        densities,
-        applicationId,
-        versionCode,
-        versionName,
-        incremental,
-        data,
-        proguardCfg);
   }
 
   private ResourceApk createApk(Artifact resourceApk,
@@ -294,9 +308,6 @@ public final class ApplicationManifest {
         // resources would check for inline resources, we can rely on the previous rule to have
         // checked its dependencies.
         ruleContext);
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
 
     AndroidResourcesProcessorBuilder builder =
         new AndroidResourcesProcessorBuilder(ruleContext)
@@ -337,7 +348,7 @@ public final class ApplicationManifest {
             + "library project, so the resources '"
             + AndroidCommon.getAndroidResources(ruleContext).getLabel()
             + "' should have the attribute inline_constants set to 0");
-        return null;
+        throw new RuleConfigurationException();
       }
     }
     return resourceContainer;
@@ -395,7 +406,7 @@ public final class ApplicationManifest {
         ruleContext.ruleError("This android_binary depends on an android_library, so the"
             + " resources '" + AndroidCommon.getAndroidResources(ruleContext).getLabel()
             + "' should have the attribute inline_constants set to 0");
-        return null;
+        throw new RuleConfigurationException();
       }
     }
 

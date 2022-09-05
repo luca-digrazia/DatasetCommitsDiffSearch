@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -20,7 +21,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.Objects;
@@ -103,15 +103,13 @@ public final class AndroidResourcesProvider implements TransitiveInfoProvider {
     private final boolean manifestExported;
     private final Artifact javaSourceJar;
     private final Artifact rTxt;
-    private final Artifact symbolsTxt;
+    private Artifact symbolsTxt;
 
     public ResourceContainer(Label label,
         String javaPackage,
         @Nullable String renameManifestPackage,
-        boolean constantsInlined,
-        @Nullable Artifact apk,
-        Artifact manifest,
-        Artifact javaSourceJar,
+        boolean constantsInlined, Artifact apk,
+        Artifact manifest, Artifact javaSourceJar,
         ImmutableList<Artifact> assets,
         ImmutableList<Artifact> resources,
         ImmutableList<PathFragment> assetsRoots,
@@ -125,7 +123,7 @@ public final class AndroidResourcesProvider implements TransitiveInfoProvider {
       this.javaPackage = Preconditions.checkNotNull(javaPackage);
       this.renameManifestPackage = renameManifestPackage;
       this.constantsInlined = constantsInlined;
-      this.apk = apk;
+      this.apk = Preconditions.checkNotNull(apk);
       this.manifest = Preconditions.checkNotNull(manifest);
       this.assets = Preconditions.checkNotNull(assets);
       this.resources = Preconditions.checkNotNull(resources);

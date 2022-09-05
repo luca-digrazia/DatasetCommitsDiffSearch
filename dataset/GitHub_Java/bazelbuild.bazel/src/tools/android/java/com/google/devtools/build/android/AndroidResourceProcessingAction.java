@@ -45,6 +45,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -355,16 +356,13 @@ public class AndroidResourceProcessingAction {
           options.proguardOutput);
       LOGGER.fine(String.format("appt finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
       if (options.srcJarOutput != null) {
-        resourceProcessor.createSrcJar(generatedSources, options.srcJarOutput,
-            VariantConfiguration.Type.LIBRARY == options.packageType);
+        resourceProcessor.createSrcJar(generatedSources, options.srcJarOutput);
       }
       if (options.rOutput != null) {
-        resourceProcessor.copyRToOutput(generatedSources, options.rOutput,
-            VariantConfiguration.Type.LIBRARY == options.packageType);
+        resourceProcessor.copyRToOutput(generatedSources, options.rOutput);
       }
       if (options.symbolsTxtOut != null) {
-        resourceProcessor.copyRToOutput(generatedSources, options.symbolsTxtOut,
-            VariantConfiguration.Type.LIBRARY == options.packageType);
+        resourceProcessor.copyRToOutput(generatedSources, options.symbolsTxtOut);
       }
       LOGGER.fine(String.format("Packaging finished at %sms",
           timer.elapsed(TimeUnit.MILLISECONDS)));
