@@ -696,8 +696,7 @@ public class ManifestFileUtils {
 
         //判断是否有application，需要删除掉
         if (null != applicationElement) {
-            applicationElement.addAttribute("tools:replace",
-                                            "android:name,android:icon,android:allowBackup,android:label,android:supportsRtl");
+            applicationElement.addAttribute("tools:node", "replace");
         }
 
         XmlHelper.saveDocument(document, modifyManifest);
