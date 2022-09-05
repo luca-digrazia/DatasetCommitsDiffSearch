@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -32,9 +33,6 @@ import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.GlobCache.BadGlobException;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.Preprocessor.AstAfterPreprocessing;
-import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature.Param;
 import com.google.devtools.build.lib.syntax.AssignmentStatement;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
@@ -55,14 +53,16 @@ import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.syntax.SkylarkSignature;
+import com.google.devtools.build.lib.syntax.SkylarkSignature.Param;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.UnixGlob;
 
 import java.io.IOException;
@@ -103,7 +103,7 @@ public final class PackageFactory {
 
     private void convertAndProcess(
         Package.LegacyBuilder pkgBuilder, Location location, Object value)
-        throws EvalException {
+        throws EvalException, ConversionException {
       T typedValue = type.convert(value, "'package' argument", pkgBuilder.getBuildFileLabel());
       process(pkgBuilder, location, typedValue);
     }
@@ -181,7 +181,7 @@ public final class PackageFactory {
     @Override
     protected void process(Package.LegacyBuilder pkgBuilder, Location location,
         List<Label> value) {
-      pkgBuilder.setDefaultVisibility(getVisibility(pkgBuilder.getBuildFileLabel(), value));
+      pkgBuilder.setDefaultVisibility(getVisibility(value));
     }
   }
 
@@ -390,7 +390,6 @@ public final class PackageFactory {
     this.environmentExtensions = ImmutableList.copyOf(environmentExtensions);
     this.packageArguments = createPackageArguments();
     this.nativeModule = newNativeModule();
-    this.workspaceNativeModule = WorkspaceFactory.newNativeModule(ruleClassProvider);
   }
 
   /**
@@ -699,7 +698,7 @@ public final class PackageFactory {
 
     RuleVisibility visibility = EvalUtils.isNullOrNone(visibilityO)
         ? ConstantRuleVisibility.PUBLIC
-        : getVisibility(pkgBuilder.getBuildFileLabel(), BuildType.LABEL_LIST.convert(
+        : getVisibility(BuildType.LABEL_LIST.convert(
               visibilityO,
               "'exports_files' operand",
               pkgBuilder.getBuildFileLabel()));
@@ -849,7 +848,7 @@ public final class PackageFactory {
     }
   }
 
-  public static RuleVisibility getVisibility(Label ruleLabel, List<Label> original) {
+  public static RuleVisibility getVisibility(List<Label> original) {
     RuleVisibility result;
 
     result = ConstantRuleVisibility.tryParse(original);
@@ -857,7 +856,7 @@ public final class PackageFactory {
       return result;
     }
 
-    result = PackageGroupsRuleVisibility.tryParse(ruleLabel, original);
+    result = PackageGroupsRuleVisibility.tryParse(original);
     return result;
   }
 
@@ -883,7 +882,7 @@ public final class PackageFactory {
     return new BaseFunction("package", FunctionSignature.namedOnly(0, argumentNames)) {
       @Override
       public Object call(Object[] arguments, FuncallExpression ast, Environment env)
-          throws EvalException {
+          throws EvalException, ConversionException {
 
         Package.LegacyBuilder pkgBuilder = getContext(env, ast).pkgBuilder;
 
@@ -924,8 +923,7 @@ public final class PackageFactory {
                               Environment env)
       throws RuleFactory.InvalidRuleException, Package.NameConflictException, InterruptedException {
     RuleClass ruleClass = getBuiltInRuleClass(ruleClassName, ruleFactory);
-    BuildLangTypedAttributeValuesMap attributeValues = new BuildLangTypedAttributeValuesMap(kwargs);
-    RuleFactory.createAndAddRule(context, ruleClass, attributeValues, ast, env);
+    RuleFactory.createAndAddRule(context, ruleClass, kwargs, ast, env);
   }
 
   private static RuleClass getBuiltInRuleClass(String ruleClassName, RuleFactory ruleFactory) {
@@ -999,7 +997,7 @@ public final class PackageFactory {
       Path buildFile,
       Preprocessor.Result preprocessingResult,
       List<Statement> preludeStatements,
-      Map<String, Extension> imports,
+      Map<PathFragment, Extension> imports,
       ImmutableList<Label> skylarkFileDependencies,
       RuleVisibility defaultVisibility,
       Globber globber) throws InterruptedException {
@@ -1036,7 +1034,7 @@ public final class PackageFactory {
       PackageIdentifier packageId,
       Path buildFile,
       Preprocessor.AstAfterPreprocessing astAfterPreprocessing,
-      Map<String, Extension> imports,
+      Map<PathFragment, Extension> imports,
       ImmutableList<Label> skylarkFileDependencies,
       RuleVisibility defaultVisibility,
       Globber globber) throws InterruptedException {
@@ -1121,7 +1119,7 @@ public final class PackageFactory {
                 buildFile,
                 preprocessingResult,
                 /*preludeStatements=*/ImmutableList.<Statement>of(),
-                /*imports=*/ImmutableMap.<String, Extension>of(),
+                /*imports=*/ImmutableMap.<PathFragment, Extension>of(),
                 /*skylarkFileDependencies=*/ImmutableList.<Label>of(),
                 /*defaultVisibility=*/ConstantRuleVisibility.PUBLIC,
                 globber)
@@ -1225,11 +1223,10 @@ public final class PackageFactory {
   }
 
   private final ClassObject nativeModule;
-  private final ClassObject workspaceNativeModule;
 
   /** @return the Skylark struct to bind to "native" */
-  public ClassObject getNativeModule(boolean workspace) {
-    return workspace ? workspaceNativeModule : nativeModule;
+  public ClassObject getNativeModule() {
+    return nativeModule;
   }
 
   /**
@@ -1308,7 +1305,7 @@ public final class PackageFactory {
       RuleVisibility defaultVisibility,
       boolean containsError,
       MakeEnvironment.Builder pkgMakeEnv,
-      Map<String, Extension> imports,
+      Map<PathFragment, Extension> imports,
       ImmutableList<Label> skylarkFileDependencies)
       throws InterruptedException {
     Package.LegacyBuilder pkgBuilder = new Package.LegacyBuilder(
