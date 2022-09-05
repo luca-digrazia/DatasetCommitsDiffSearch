@@ -66,14 +66,7 @@ public class ParameterFile {
    * Derives an path from a given path by appending <code>".params"</code>.
    */
   public static PathFragment derivePath(PathFragment original) {
-    return derivePath(original, "2");
-  }
-
-  /**
-   * Derives an path from a given path by appending <code>".params"</code>.
-   */
-  public static PathFragment derivePath(PathFragment original, String flavor) {
-    return original.replaceName(original.getBaseName() + "-" + flavor + ".params");
+    return original.replaceName(original.getBaseName() + "-2.params");
   }
 
 }

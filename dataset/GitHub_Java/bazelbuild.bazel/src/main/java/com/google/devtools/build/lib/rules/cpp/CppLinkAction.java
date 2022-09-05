@@ -445,8 +445,7 @@ public final class CppLinkAction extends AbstractAction {
    */
   public static class Builder {
     // Builder-only
-    // Null when invoked from tests (e.g. via createTestBuilder).
-    @Nullable private final RuleContext ruleContext;
+    private final RuleContext ruleContext;
     private final AnalysisEnvironment analysisEnvironment;
     private final PathFragment outputPath;
 
@@ -509,7 +508,7 @@ public final class CppLinkAction extends AbstractAction {
      * @param configuration the configuration used to determine the tool chain
      *        and the default link options
      */
-    private Builder(@Nullable RuleContext ruleContext, PathFragment outputPath,
+    private Builder(RuleContext ruleContext, PathFragment outputPath,
         BuildConfiguration configuration, AnalysisEnvironment analysisEnvironment,
         CcToolchainProvider toolchain) {
       this.ruleContext = ruleContext;
@@ -643,7 +642,7 @@ public final class CppLinkAction extends AbstractAction {
               : null;
 
       LinkCommandLine linkCommandLine =
-          new LinkCommandLine.Builder(configuration, getOwner(), ruleContext)
+          new LinkCommandLine.Builder(configuration, getOwner())
               .setOutput(outputLibrary.getArtifact())
               .setInterfaceOutput(interfaceOutput)
               .setSymbolCountsOutput(symbolCountOutput)
