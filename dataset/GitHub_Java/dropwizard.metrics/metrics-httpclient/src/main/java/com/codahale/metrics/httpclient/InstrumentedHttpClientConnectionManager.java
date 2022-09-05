@@ -83,7 +83,6 @@ public class InstrumentedHttpClientConnectionManager extends PoolingHttpClientCo
         super(httpClientConnectionOperator, connFactory, connTTL, connTTLTimeUnit);
         this.metricsRegistry = metricsRegistry;
         this.name = name;
-
         metricsRegistry.register(name(HttpClientConnectionManager.class, name, "available-connections"),
             (Gauge<Integer>) () -> {
                 // this acquires a lock on the connection pool; remove if contention sucks
