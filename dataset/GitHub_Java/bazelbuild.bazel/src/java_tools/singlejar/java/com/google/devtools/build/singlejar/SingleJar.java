@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.singlejar;
 
-import static com.google.devtools.build.singlejar.ZipCombiner.DOS_EPOCH;
-
 import com.google.devtools.build.singlejar.DefaultJarEntryFilter.PathFilter;
 import com.google.devtools.build.singlejar.ZipCombiner.OutputMode;
 import java.io.ByteArrayInputStream;
@@ -207,8 +205,7 @@ public class SingleJar {
 
       // Copy the resources into the jar file.
       for (String resource : resources) {
-        String from;
-        String to;
+        String from, to;
         int i = resource.indexOf(':');
         if (i < 0) {
           to = from = resource;
@@ -220,17 +217,6 @@ public class SingleJar {
           System.err.println("File " + from + " at " + to + " clashes with a previous file");
           continue;
         }
-
-        // Add parent directory entries.
-        int idx = to.indexOf('/');
-        while (idx != -1) {
-          String dir = to.substring(0, idx + 1);
-          if (!combiner.containsFile(dir)) {
-            combiner.addDirectory(dir, DOS_EPOCH);
-          }
-          idx = to.indexOf('/', idx + 1);
-        }
-
         combiner.addFile(to, date, fileSystem.getInputStream(from));
       }
 
