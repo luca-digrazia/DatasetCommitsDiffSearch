@@ -90,8 +90,7 @@ public class HealthCheckServletTest extends AbstractServletTest {
         assertThat(response.getStatus())
                 .isEqualTo(200);
         assertThat(response.getContent())
-                .startsWith("{\"fun\":{\"healthy\":true,\"message\":\"whee\",\"duration\":0,\"timestamp\":\"")
-                .endsWith("\"}}");
+                .contains("{\"fun\":{\"healthy\":true,\"message\":\"whee\",\"duration\":0}}");
         assertThat(response.get(HttpHeader.CONTENT_TYPE))
                 .isEqualTo("application/json");
     }
@@ -127,8 +126,7 @@ public class HealthCheckServletTest extends AbstractServletTest {
         assertThat(response.getStatus())
                 .isEqualTo(200);
         assertThat(response.getContent())
-                .startsWith("{\"fun\":{\"healthy\":true,\"message\":\"whee\",\"duration\":0,\"timestamp\":\"")
-                .endsWith("\"}}");
+                .contains("{\"fun\":{\"healthy\":true,\"message\":\"whee\",\"duration\":0}}");
         assertThat(response.get(HttpHeader.CONTENT_TYPE))
                 .isEqualTo("application/json");
     }
@@ -164,10 +162,7 @@ public class HealthCheckServletTest extends AbstractServletTest {
         assertThat(response.getStatus())
                 .isEqualTo(500);
         assertThat(response.getContent())
-                .contains(
-                        "{\"fun\":{\"healthy\":true,\"message\":\"whee\",\"duration\":0,\"timestamp\":\"",
-                        "\"},\"notFun\":{\"healthy\":false,\"message\":\"whee\",\"duration\":0,\"timestamp\":\"")
-                .endsWith("\"}}");
+                .contains("{\"fun\":{\"healthy\":true,\"message\":\"whee\",\"duration\":", "},\"notFun\":{\"healthy\":false,\"message\":\"whee\",\"duration\":0}}"); 
         assertThat(response.get(HttpHeader.CONTENT_TYPE))
                 .isEqualTo("application/json");
     }
@@ -192,13 +187,13 @@ public class HealthCheckServletTest extends AbstractServletTest {
         assertThat(response.getStatus())
                 .isEqualTo(200);
         assertThat(response.getContent())
-                .startsWith(String.format("{%n" +
+                .isEqualTo(String.format("{%n" +
                         "  \"fun\" : {%n" +
                         "    \"healthy\" : true,%n" +
                         "    \"message\" : \"whee\",%n" +
-                        "    \"duration\" : 0,%n" +
-                        "    \"timestamp\" : \""))
-                .endsWith(String.format("\"%n  }%n}"));
+                        "    \"duration\" : 0%n" +
+                        "  }%n" +
+                        "}"));
         assertThat(response.get(HttpHeader.CONTENT_TYPE))
                 .isEqualTo("application/json");
     }
