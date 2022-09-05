@@ -240,9 +240,16 @@ public abstract class CompareUtils {
     }
 
     public static boolean compare(Boolean bool, Object target) {
-        return bool.equals(target) || String.valueOf(bool).equals(target);
-    }
+        if (bool.equals(target)) {
+            return true;
+        }
 
+        if (bool && "true".equals(target)) {
+            return true;
+        }
+
+        return false;
+    }
 
     public static boolean compare(Date date, Object target) {
         if (date == target) {
