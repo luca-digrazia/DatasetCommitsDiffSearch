@@ -13,12 +13,19 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.collect.Streams;
+import com.google.common.base.Predicate;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.FuncallExpression.MethodDescriptor;
+import com.google.devtools.build.lib.syntax.compiler.ByteCodeUtils;
+import com.google.devtools.build.lib.syntax.compiler.DebugInfo;
+import com.google.devtools.build.lib.syntax.compiler.VariableScope;
 import com.google.devtools.build.lib.util.SpellChecker;
-import java.io.IOException;
-import java.util.Optional;
+import java.util.ArrayList;
+import java.util.List;
+import net.bytebuddy.implementation.bytecode.ByteCodeAppender;
+import net.bytebuddy.implementation.bytecode.Duplication;
+import net.bytebuddy.implementation.bytecode.constant.TextConstant;
 
 /** Syntax node for a dot expression. e.g. obj.field, but not obj.method() */
 public final class DotExpression extends Expression {
@@ -41,10 +48,8 @@ public final class DotExpression extends Expression {
   }
 
   @Override
-  public void prettyPrint(Appendable buffer) throws IOException {
-    obj.prettyPrint(buffer);
-    buffer.append('.');
-    field.prettyPrint(buffer);
+  public String toString() {
+    return obj + "." + field;
   }
 
   @Override
@@ -107,13 +112,20 @@ public final class DotExpression extends Expression {
             : FuncallExpression.getMethods(objValue.getClass(), name);
 
     if (methods != null) {
-      Optional<MethodDescriptor> method =
-          Streams.stream(methods)
-              .filter(methodDescriptor -> methodDescriptor.getAnnotation().structField())
-              .findFirst();
-      if (method.isPresent() && method.get().getAnnotation().structField()) {
-        return FuncallExpression.callMethod(
-            method.get(), name, objValue, new Object[] {}, loc, env);
+      methods =
+          Iterables.filter(
+              methods,
+              new Predicate<MethodDescriptor>() {
+                @Override
+                public boolean apply(MethodDescriptor methodDescriptor) {
+                  return methodDescriptor.getAnnotation().structField();
+                }
+              });
+      if (methods.iterator().hasNext()) {
+        MethodDescriptor method = Iterables.getOnlyElement(methods);
+        if (method.getAnnotation().structField()) {
+          return FuncallExpression.callMethod(method, name, objValue, new Object[] {}, loc, env);
+        }
       }
     }
 
@@ -128,5 +140,36 @@ public final class DotExpression extends Expression {
   @Override
   void validate(ValidationEnvironment env) throws EvalException {
     obj.validate(env);
+  }
+
+  @Override
+  ByteCodeAppender compile(VariableScope scope, DebugInfo debugInfo) throws EvalException {
+    List<ByteCodeAppender> code = new ArrayList<>();
+    code.add(obj.compile(scope, debugInfo));
+    TextConstant name = new TextConstant(field.getName());
+    ByteCodeUtils.append(
+        code,
+        Duplication.SINGLE,
+        name,
+        debugInfo.add(this).loadLocation,
+        scope.loadEnvironment(),
+        ByteCodeUtils.invoke(
+            DotExpression.class,
+            "eval",
+            Object.class,
+            String.class,
+            Location.class,
+            Environment.class),
+        // at this point we have the value of obj and the result of eval on the stack
+        name,
+        debugInfo.add(this).loadLocation,
+        ByteCodeUtils.invoke(
+            DotExpression.class,
+            "checkResult",
+            Object.class,
+            Object.class,
+            String.class,
+            Location.class));
+    return ByteCodeUtils.compoundAppender(code);
   }
 }

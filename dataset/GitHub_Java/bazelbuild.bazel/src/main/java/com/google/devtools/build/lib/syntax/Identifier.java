@@ -14,9 +14,13 @@
 
 package com.google.devtools.build.lib.syntax;
 
+import com.google.devtools.build.lib.syntax.compiler.DebugInfo;
+import com.google.devtools.build.lib.syntax.compiler.Variable.SkylarkVariable;
+import com.google.devtools.build.lib.syntax.compiler.VariableScope;
 import com.google.devtools.build.lib.util.SpellChecker;
 import java.util.Set;
 import javax.annotation.Nullable;
+import net.bytebuddy.implementation.bytecode.ByteCodeAppender;
 
 // TODO(bazel-team): for extra performance:
 // (1) intern the strings, so we can use == to compare, and have .equals use the assumption.
@@ -26,11 +30,7 @@ import javax.annotation.Nullable;
 // into array reference with a constant index. Variable lookups are currently a speed bottleneck,
 // as previously measured in an experiment.
 /**
- * Syntax node for an identifier.
- *
- * Unlike most {@link ASTNode} subclasses, this one supports {@link Object#equals} and {@link
- * Object#hashCode} (but note that these methods ignore location information). They are needed
- * because {@code Identifier}s are stored in maps when constructing {@link LoadStatement}.
+ *  Syntax node for an identifier.
  */
 public final class Identifier extends Expression {
 
@@ -97,5 +97,11 @@ public final class Identifier extends Expression {
     }
     String suggestion = SpellChecker.didYouMean(name, symbols);
     return new EvalException(getLocation(), "name '" + name + "' is not defined" + suggestion);
+  }
+
+  @Override
+  ByteCodeAppender compile(VariableScope scope, DebugInfo debugInfo) {
+    SkylarkVariable variable = scope.getVariable(this);
+    return variable.load(scope, debugInfo.add(this));
   }
 }
