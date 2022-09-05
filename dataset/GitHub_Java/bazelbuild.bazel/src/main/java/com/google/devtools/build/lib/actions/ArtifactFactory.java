@@ -320,19 +320,25 @@ public class ArtifactFactory implements ArtifactResolver, ArtifactSerializer, Ar
 
   @Nullable
   private Root findSourceRoot(
-      PathFragment execPath, @Nullable PathFragment baseExecPath, @Nullable Root baseRoot) {
-    // Probe the known packages to find the longest package prefix up until the base, or until the
-    // root directory if our execPath doesn't start with baseExecPath due to uplevel references.
-    PathFragment dir;
-    for (dir = execPath.getParentDirectory();
-        dir != null && !dir.equals(baseExecPath);
+      PathFragment execPath, PathFragment baseExecPath, @Nullable Root baseRoot) {
+    Preconditions.checkState(
+        baseExecPath == null
+            || (execPath.startsWith(baseExecPath) && !execPath.equals(baseExecPath)),
+        "%s %s %s",
+        execPath,
+        baseExecPath,
+        baseRoot);
+    // Probe the known packages to find the longest package prefix up until the base.
+    for (PathFragment dir = execPath.getParentDirectory();
+        !Objects.equals(dir, baseExecPath);
         dir = dir.getParentDirectory()) {
+      Preconditions.checkNotNull(dir, "%s %s %s", execPath, baseExecPath, baseRoot);
       Root sourceRoot = packageRoots.get(PackageIdentifier.createInDefaultRepo(dir));
       if (sourceRoot != null) {
         return sourceRoot;
       }
     }
-    return dir != null && dir.equals(baseExecPath) ? baseRoot : null;
+    return baseRoot;
   }
 
   @Override
