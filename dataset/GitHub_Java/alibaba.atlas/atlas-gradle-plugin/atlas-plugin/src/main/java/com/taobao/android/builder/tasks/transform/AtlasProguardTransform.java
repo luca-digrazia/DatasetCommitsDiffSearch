@@ -209,9 +209,7 @@
 
 package com.taobao.android.builder.tasks.transform;
 
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -229,7 +227,6 @@ import com.android.build.api.transform.QualifiedContent.ContentType;
 import com.android.build.api.transform.TransformException;
 import com.android.build.api.transform.TransformInput;
 import com.android.build.api.transform.TransformInvocation;
-import com.android.build.gradle.api.ApplicationVariant;
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.android.build.gradle.internal.api.AwbTransform;
 import com.android.build.gradle.internal.pipeline.TransformManager;
@@ -240,7 +237,6 @@ import com.android.build.gradle.internal.transforms.ProguardConfigurable;
 import com.android.build.gradle.internal.variant.BaseVariantOutputData;
 import com.google.common.collect.ImmutableList;
 import com.taobao.android.builder.AtlasBuildContext;
-import com.taobao.android.builder.dependency.AtlasDependencyTree;
 import com.taobao.android.builder.dependency.model.AwbBundle;
 import com.taobao.android.builder.extension.TBuildConfig;
 import com.taobao.android.builder.tools.FileNameUtils;
@@ -252,7 +248,6 @@ import com.taobao.android.builder.tools.proguard.BundleProguarder;
 import com.taobao.android.builder.tools.proguard.KeepOnlyConfigurationParser;
 import com.taobao.android.builder.tools.proguard.domain.Input;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
 import org.gradle.api.GradleException;
 import proguard.ClassPath;
 import proguard.Configuration;
@@ -293,31 +288,6 @@ public class AtlasProguardTransform extends ProGuardTransform {
 
     @Override
     public void transform(TransformInvocation invocation) throws TransformException {
-        List<AwbBundle> awbBundles= AtlasBuildContext.androidDependencyTrees.get(
-                appVariantContext.getScope().getVariantConfiguration().getFullName()).getAwbBundles();
-        if(awbBundles!=null && awbBundles.size()>0){
-            File bundleRKeepFile = new File(appVariantContext.getBaseVariantData().getScope().getGlobalScope().getIntermediatesDir(),"awb-progrard/bundleRKeep.cfg");
-            if(!bundleRKeepFile.getParentFile().exists()){
-                bundleRKeepFile.getParentFile().mkdirs();
-            }
-
-            StringBuilder keepRStr = new StringBuilder();
-            for(AwbBundle bundleItem : awbBundles){
-                keepRStr.append(String.format("-keep class %s.R{*;}\n",bundleItem.bundleInfo.getPkgName()));
-                keepRStr.append(String.format("-keep class %s.R$*{*;}\n",bundleItem.bundleInfo.getPkgName()));
-            }
-            try {
-                BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(bundleRKeepFile));
-                bufferedWriter.write(keepRStr.toString());
-                bufferedWriter.flush();
-                IOUtils.closeQuietly(bufferedWriter);
-                FileLogger.getInstance("proguard").log("R keep infos: "+keepRStr);
-            }catch (IOException e){
-                throw new RuntimeException("generate bundleRkeepFile failed",e);
-            }
-            appVariantContext.getBaseVariantData().getVariantConfiguration().getBuildType().getProguardFiles().add(bundleRKeepFile);
-            defaultProguardFiles.add(bundleRKeepFile);
-        }
 
         if (appVariantContext.getAtlasExtension().getTBuildConfig().isFastProguard()) {
             fastTransform(invocation);
@@ -349,7 +319,7 @@ public class AtlasProguardTransform extends ProGuardTransform {
         //apply bundle Inout
         AtlasProguardHelper.applyBundleInOutConfigration(appVariantContext, this);
 
-        //apply bundle's configuration, Switch control
+        //apply bundle's configuration, 做开关控制
         if (buildConfig.isBundleProguardConfigEnabled()) {
             AtlasProguardHelper.applyBundleProguardConfigration(appVariantContext, this);
         }
@@ -378,7 +348,7 @@ public class AtlasProguardTransform extends ProGuardTransform {
             }
 
             Profiler.enter("bundleproguard");
-            //Do the concurrent proguard for the bundle, and the cache first
+            //先做bundle的并发proguard，cache优先
             AtlasProguardHelper.doBundleProguard(appVariantContext, mainJars);
             Profiler.release();
 
@@ -413,7 +383,7 @@ public class AtlasProguardTransform extends ProGuardTransform {
         input.getAwbBundles().add(awbTransform);
 
         List<File> unProguardJars = new ArrayList<>();
-        //Enter the input
+        //输入input
         for (TransformInput transformInput : invocation.getInputs()) {
             for (JarInput jarInput : transformInput.getJarInputs()) {
                 File file = jarInput.getFile();
@@ -428,12 +398,12 @@ public class AtlasProguardTransform extends ProGuardTransform {
             }
         }
 
-        //inputting librarys
+        //输入 librarys
         input.getLibraries().addAll(
             appVariantContext.getScope().getGlobalScope().getAndroidBuilder().getBootClasspath(true));
         input.getLibraries().addAll(unProguardJars);
 
-        //The default proguard configuration
+        //默认proguard 配置
         input.getDefaultProguardFiles().addAll(defaultProguardFiles);
 
         //bundle keeps
