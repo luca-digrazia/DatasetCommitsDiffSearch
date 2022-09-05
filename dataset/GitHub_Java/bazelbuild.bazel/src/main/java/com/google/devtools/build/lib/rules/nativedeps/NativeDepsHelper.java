@@ -52,9 +52,8 @@ import java.util.Map;
  */
 public abstract class NativeDepsHelper {
   /**
-   * An implementation of {@link
-   * com.google.devtools.build.lib.rules.cpp.CppLinkAction.LinkArtifactFactory} that can create
-   * artifacts anywhere.
+   * An implementation of {@link CppLinkAction.LinkArtifactFactory} that can create artifacts
+   * anywhere.
    *
    * <p>Necessary because the actions of nativedeps libraries should be shareable, and thus cannot
    * be under the package directory.
@@ -116,15 +115,9 @@ public abstract class NativeDepsHelper {
     Artifact nativeDeps = ruleContext.getPackageRelativeArtifact(nativeDepsPath,
         configuration.getBinDirectory());
 
-    return createNativeDepsAction(
-        ruleContext,
-        linkParams,
-        extraLinkOpts,
-        configuration,
-        CppHelper.getToolchain(ruleContext),
-        nativeDeps,
-        ruleContext.getConfiguration().getBinDirectory(), /*useDynamicRuntime*/
-        true);
+    return createNativeDepsAction(ruleContext, linkParams, extraLinkOpts, configuration,
+        CppHelper.getToolchain(ruleContext), nativeDeps,
+        ruleContext.getConfiguration().getBinDirectory());
   }
 
   private static final String ANDROID_UNIQUE_DIR = "nativedeps";
@@ -160,30 +153,15 @@ public abstract class NativeDepsHelper {
         configuration.getBinDirectory());
 
     return createNativeDepsAction(
-            ruleContext,
-            linkParams, /** extraLinkOpts */
-            ImmutableList.<String>of(),
-            configuration,
-            toolchain,
-            nativeDeps,
-            configuration.getBinDirectory(),
-            /*useDynamicRuntime*/ false)
-        .getLibrary();
+        ruleContext, linkParams, /** extraLinkOpts */ImmutableList.<String>of(),
+        configuration, toolchain, nativeDeps, configuration.getBinDirectory()).getLibrary();
   }
 
-  private static NativeDepsRunfiles createNativeDepsAction(
-      final RuleContext ruleContext,
-      CcLinkParams linkParams,
-      Collection<String> extraLinkOpts,
-      BuildConfiguration configuration,
-      CcToolchainProvider toolchain,
-      Artifact nativeDeps,
-      Root bindirIfShared,
-      boolean useDynamicRuntime) {
-    Preconditions.checkState(
-        ruleContext.isLegalFragment(CppConfiguration.class),
-        "%s does not have access to CppConfiguration",
-        ruleContext.getRule().getRuleClass());
+  private static NativeDepsRunfiles createNativeDepsAction(final RuleContext ruleContext,
+      CcLinkParams linkParams, Collection<String> extraLinkOpts, BuildConfiguration configuration,
+      CcToolchainProvider toolchain, Artifact nativeDeps, Root bindirIfShared) {
+    Preconditions.checkState(ruleContext.isLegalFragment(CppConfiguration.class),
+        "%s does not have access to CppConfiguration", ruleContext.getRule().getRuleClass());
     List<String> linkopts = new ArrayList<>(extraLinkOpts);
     linkopts.addAll(linkParams.flattenedLinkopts());
 
@@ -204,49 +182,38 @@ public abstract class NativeDepsHelper {
         : nativeDeps;
     CppLinkAction.Builder builder = new CppLinkAction.Builder(
         ruleContext, sharedLibrary, configuration, toolchain);
-    if (useDynamicRuntime) {
-      builder.setRuntimeInputs(
-          toolchain.getDynamicRuntimeLinkMiddleman(), toolchain.getDynamicRuntimeLinkInputs());
-    } else {
-      builder.setRuntimeInputs(
-          toolchain.getStaticRuntimeLinkMiddleman(), toolchain.getStaticRuntimeLinkInputs());
-    }
-    CppLinkAction linkAction =
-        builder
-            .setLinkArtifactFactory(SHAREABLE_LINK_ARTIFACT_FACTORY)
-            .setCrosstoolInputs(toolchain.getLink())
-            .addLibraries(linkerInputs)
-            .setLinkType(LinkTargetType.DYNAMIC_LIBRARY)
-            .setLinkStaticness(LinkStaticness.MOSTLY_STATIC)
-            .addLinkopts(linkopts)
-            .setNativeDeps(true)
-            .addLinkstamps(linkstamps)
-            .build();
+    builder.setLinkArtifactFactory(SHAREABLE_LINK_ARTIFACT_FACTORY);
+    CppLinkAction linkAction = builder
+        .setCrosstoolInputs(toolchain.getLink())
+        .addLibraries(linkerInputs)
+        .setLinkType(LinkTargetType.DYNAMIC_LIBRARY)
+        .setLinkStaticness(LinkStaticness.MOSTLY_STATIC)
+        .addLinkopts(linkopts)
+        .setNativeDeps(true)
+        .setRuntimeInputs(
+            toolchain.getDynamicRuntimeLinkMiddleman(), toolchain.getDynamicRuntimeLinkInputs())
+        .addLinkstamps(linkstamps)
+        .build();
 
     ruleContext.registerAction(linkAction);
-    Artifact linkerOutput = linkAction.getPrimaryOutput();
+    final Artifact linkerOutput = linkAction.getPrimaryOutput();
+
+    List<Artifact> runtimeSymlinks = new LinkedList<>();
 
     if (shareNativeDeps) {
       // Collect dynamic-linker-resolvable symlinks for C++ runtime library dependencies.
       // Note we only need these symlinks when --share_native_deps is on, as shared native deps
       // mangle path names such that the library's conventional _solib RPATH entry
       // no longer resolves (because the target directory's relative depth gets lost).
-      List<Artifact> runtimeSymlinks;
-      if (useDynamicRuntime) {
-        runtimeSymlinks = new LinkedList<>();
-        for (final Artifact runtimeInput : toolchain.getDynamicRuntimeLinkInputs()) {
-          final Artifact runtimeSymlink =
-              ruleContext.getPackageRelativeArtifact(
-                  getRuntimeLibraryPath(ruleContext, runtimeInput), bindirIfShared);
-          // Since runtime library symlinks are underneath the target's output directory and
-          // multiple targets may share the same output directory, we need to make sure this
-          // symlink's generating action is only set once.
-          ruleContext.registerAction(
-              new SymlinkAction(ruleContext.getActionOwner(), runtimeInput, runtimeSymlink, null));
-          runtimeSymlinks.add(runtimeSymlink);
-        }
-      } else {
-        runtimeSymlinks = ImmutableList.of();
+      for (final Artifact runtimeInput : toolchain.getDynamicRuntimeLinkInputs()) {
+        final Artifact runtimeSymlink = ruleContext.getPackageRelativeArtifact(
+            getRuntimeLibraryPath(ruleContext, runtimeInput), bindirIfShared);
+        // Since runtime library symlinks are underneath the target's output directory and
+        // multiple targets may share the same output directory, we need to make sure this
+        // symlink's generating action is only set once.
+        ruleContext.registerAction(
+            new SymlinkAction(ruleContext.getActionOwner(), runtimeInput, runtimeSymlink, null));
+        runtimeSymlinks.add(runtimeSymlink);
       }
 
       ruleContext.registerAction(
@@ -254,7 +221,7 @@ public abstract class NativeDepsHelper {
       return new NativeDepsRunfiles(nativeDeps, runtimeSymlinks);
     }
 
-    return new NativeDepsRunfiles(linkerOutput, ImmutableList.<Artifact>of());
+    return new NativeDepsRunfiles(linkerOutput, runtimeSymlinks);
   }
 
   /**
