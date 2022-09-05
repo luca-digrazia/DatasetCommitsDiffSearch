@@ -273,7 +273,7 @@ public class DependencyResolver {
 
     public List<ResolvedDependencyInfo> resolve(List<DependencyResult> dependencyResults, boolean mainBundle) {
         Multimap<String, ResolvedDependencyInfo> dependenciesMap = LinkedHashMultimap.create();
-        // Instead of using the official flat dependency treatment, you can use your own tree dependence; For application dependencies, we only take compile dependencies
+        // 不使用官方的扁平化的依赖处理，改用自己处理树状的依赖关系;对于application的依赖，我们只取compile的依赖
         Set<ModuleVersionIdentifier> directDependencies = new HashSet<ModuleVersionIdentifier>();
         Set<String> resolveSets = new HashSet<>();
         for (DependencyResult dependencyResult : dependencyResults) {
@@ -312,7 +312,7 @@ public class DependencyResolver {
     }
 
     /**
-     * Analytical dependence
+     * 解析依赖
      *
      * @param parent
      * @param resolvedComponentResult
@@ -329,7 +329,7 @@ public class DependencyResolver {
                                    Set<String> resolvedDependencies) {
         ModuleVersionIdentifier moduleVersion = resolvedComponentResult.getModuleVersion();
 
-        if (checkForExclusion(configDependencies, moduleVersion, resolvedComponentResult)) { return; }
+        if (checkForExclusion(configDependencies, moduleVersion)) { return; }
 
         if (moduleVersion.getName().equals("support-annotations") && moduleVersion.getGroup().equals(
             "com.android.support")) {
@@ -343,7 +343,7 @@ public class DependencyResolver {
         String gradlePath = (id instanceof ProjectComponentIdentifier) ? ((ProjectComponentIdentifier)id)
             .getProjectPath() : null;
 
-        // If you can find multiple dependencies at the same time, you can't judge for the time being that it's really useful
+        // 如果同时找到多个依赖，暂时没法判断是那个真正有用
         if (null != moduleArtifacts) {
             for (ResolvedArtifact resolvedArtifact : moduleArtifacts) {
                 String key = moduleVersion.getGroup() + ":" + moduleVersion.getName();
@@ -424,24 +424,21 @@ public class DependencyResolver {
 
     }
 
-    private boolean checkForExclusion(VariantDependencies configDependencies, ModuleVersionIdentifier moduleVersion,
-                                      ResolvedComponentResult resolvedComponentResult) {
+    private boolean checkForExclusion(VariantDependencies configDependencies, ModuleVersionIdentifier moduleVersion) {
         if (configDependencies.getChecker().checkForExclusion(moduleVersion) || (apDependencies != null
                                                                                  && apDependencies
                                                                                      .hasSameResolvedDependency(
-                                                                                         moduleVersion)
-                                                                                 && !(resolvedComponentResult
-            .getId() instanceof ProjectComponentIdentifier))) {
+                                                                                         moduleVersion))) {
             return true;
         }
         return false;
     }
 
     /**
-     * Add the dependency
+     * 增加dependency
      *
      * @param resolvedDependencyInfo
-     * @param parent                 This parent is a primary dependency
+     * @param parent                 这个parent为一级依赖
      */
     private void addDependencyInfo(ResolvedDependencyInfo resolvedDependencyInfo, ResolvedDependencyInfo parent,
                                    Multimap<String, ResolvedDependencyInfo> dependenciesMap) {
@@ -461,14 +458,14 @@ public class DependencyResolver {
     }
 
     /**
-     * Relying on arbitration
+     * 进行依赖仲裁
      */
     private List<ResolvedDependencyInfo> resolveAllDependencies(
         Multimap<String, ResolvedDependencyInfo> dependenciesMap) {
 
         List<ResolvedDependencyInfo> allResolvedDependencyInfos = new ArrayList<>();
 
-        // The post-arbitration dependencies. The structure is the parent class - subclass
+        // 仲裁后的依赖关系.结构为父类-子类
         Multimap<ModuleVersionIdentifier, ResolvedDependencyInfo> resolvedDependenciesMap = LinkedHashMultimap.create();
         Map<ModuleVersionIdentifier, ResolvedDependencyInfo> directDependencies
             = new HashMap<ModuleVersionIdentifier, ResolvedDependencyInfo>();
@@ -483,23 +480,23 @@ public class DependencyResolver {
                 Collections.sort(resolvedDependencyInfos);
                 ResolvedDependencyInfo resolvedDependencyInfo = resolvedDependencyInfos.get(0);
                 ResolvedDependencyInfo parent = resolvedDependencyInfo.getParent();
-                //Children are not required to add information to the resolvedDependenciesMap
+                //对于放入resolvedDependenciesMap中的信息不需要加入children
                 resolvedDependencyInfo.setChildren(Lists.<ResolvedDependencyInfo>newArrayList());
                 if (null != parent) {
-                    //If the parent is dependent, then the current dependency is added to the dependency of the parent
+                    //如果存在的父依赖,就把当前依赖加入到父依赖的子依赖中
                     resolvedDependenciesMap.put(parent.getModuleVersionIdentifier(), resolvedDependencyInfo);
                 } else {
-                    //If there is no parent dependency, it is a primary dependency
+                    //如果没有父依赖,就是一级依赖
                     directDependencies.put(resolvedDependencyInfo.getModuleVersionIdentifier(), resolvedDependencyInfo);
                 }
             }
         }
 
-        // Start building the dependency tree
+        // 开始构建依赖树
 
         for (ModuleVersionIdentifier key : directDependencies.keySet()) {
             ResolvedDependencyInfo resolvedDependencyInfo = directDependencies.get(key);
-            //Empty the children
+            //清空children
             resolvedDependencyInfo.setChildren(Lists.<ResolvedDependencyInfo>newArrayList());
             addResolvedDependencyInfo(resolvedDependencyInfo, resolvedDependenciesMap);
             allResolvedDependencyInfos.add(resolvedDependencyInfo);
@@ -510,7 +507,7 @@ public class DependencyResolver {
     }
 
     /**
-     * A recursive approach to dependency resolution
+     * 通过递归的方式进行依赖的解析
      *
      * @param parentDependency
      * @param resolvedDependenciesMap

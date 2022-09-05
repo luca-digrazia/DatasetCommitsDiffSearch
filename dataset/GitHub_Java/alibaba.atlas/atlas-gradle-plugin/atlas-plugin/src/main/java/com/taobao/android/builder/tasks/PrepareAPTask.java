@@ -220,8 +220,10 @@ import javax.annotation.Nullable;
 
 import com.android.build.gradle.internal.api.ApContext;
 import com.android.build.gradle.internal.api.VariantContext;
+import com.android.build.gradle.internal.scope.TaskConfigAction;
 import com.android.build.gradle.internal.variant.BaseVariantOutputData;
 import com.android.utils.FileUtils;
+import com.android.utils.StringHelper;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.Iterables;
@@ -283,6 +285,65 @@ public class PrepareAPTask extends DefaultTask {
         ManifestFileUtils.updatePreProcessBaseManifestFile(
             FileUtils.join(explodedDir, "manifest-modify", ANDROID_MANIFEST_XML),
             new File(explodedDir, ANDROID_MANIFEST_XML));
+    }
+
+    public static class ExtractApConfigAction implements TaskConfigAction<PrepareAPTask> {
+
+        private final Project project;
+
+        private final String variantName;
+
+        private final TBuildType tBuildType;
+
+        public ExtractApConfigAction(Project project, String variantName, TBuildType tBuildType) {
+
+            this.project = project;
+            this.variantName = variantName;
+            this.tBuildType = tBuildType;
+        }
+
+        @Override
+        public String getName() {
+            return "prepare" + StringHelper.capitalize(variantName) + "AP2";
+        }
+
+        @Override
+        public Class<PrepareAPTask> getType() {
+            return PrepareAPTask.class;
+        }
+
+        @Override
+        public void execute(PrepareAPTask prepareAPTask) {
+            File apBaseFile;
+            File buildTypeBaseApFile = tBuildType.getBaseApFile();
+            if (null != buildTypeBaseApFile && buildTypeBaseApFile.exists()) {
+                apBaseFile = buildTypeBaseApFile;
+            } else if (!isNullOrEmpty(tBuildType.getBaseApDependency())) {
+                String apDependency = tBuildType.getBaseApDependency();
+                // Preconditions.checkNotNull(apDependency,
+                //                            "You have to specify the baseApFile property or the baseApDependency
+                // dependency");
+                Dependency dependency = project.getDependencies().create(apDependency);
+                Configuration configuration = project.getConfigurations().detachedConfiguration(dependency);
+                configuration.setTransitive(false);
+                apBaseFile = Iterables.getOnlyElement(
+                    Collections2.filter(configuration.getFiles(), new Predicate<File>() {
+                        @Override
+                        public boolean apply(@Nullable File file) {
+                            return file.getName().endsWith(".ap");
+                        }
+                    }));
+            } else {
+                prepareAPTask.setEnabled(false);
+                return;
+            }
+
+            checkState(apBaseFile.exists());
+            File explodedDir = project.file(
+                project.getBuildDir().getAbsolutePath() + "/" + FD_INTERMEDIATES + "/exploded-ap" + "/");
+            prepareAPTask.setApBaseFile(apBaseFile);
+            prepareAPTask.setExplodedDir(explodedDir);
+        }
     }
 
     public static class ConfigAction extends MtlBaseTaskAction<PrepareAPTask> {
