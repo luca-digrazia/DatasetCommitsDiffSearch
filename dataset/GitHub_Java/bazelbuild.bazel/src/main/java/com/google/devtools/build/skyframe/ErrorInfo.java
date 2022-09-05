@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@ package com.google.devtools.build.skyframe;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -33,37 +32,47 @@ import javax.annotation.Nullable;
  * <p>This is intended only for use in alternative {@code MemoizingEvaluator} implementations.
  */
 public class ErrorInfo implements Serializable {
+  /** The set of descendants of this value that failed to build. */
+  // Non-final only to allow for serialization.
+  private transient NestedSet<SkyKey> rootCauses;
 
-  /** Create an ErrorInfo from a {@link ReifiedSkyFunctionException}. */
-  public static ErrorInfo fromException(ReifiedSkyFunctionException skyFunctionException) {
-    SkyKey rootCauseSkyKey = skyFunctionException.getRootCauseSkyKey();
-    Exception rootCauseException = skyFunctionException.getCause();
-    return new ErrorInfo(
-        NestedSetBuilder.create(Order.STABLE_ORDER, rootCauseSkyKey),
-        Preconditions.checkNotNull(rootCauseException, "Cause null %s", rootCauseException),
-        rootCauseSkyKey,
-        /*cycles=*/ ImmutableList.<CycleInfo>of(),
-        skyFunctionException.isTransient(),
-        skyFunctionException.isCatastrophic());
+  /**
+   * An exception thrown upon a value's failure to build. The exception is used for reporting, and
+   * thus may ultimately be rethrown by the caller. As well, during a --nokeep_going evaluation, if
+   * an error value is encountered from an earlier --keep_going build, the exception to be thrown is
+   * taken from here.
+   */
+  @Nullable private final Exception exception;
+  private final SkyKey rootCauseOfException;
+
+  private final Iterable<CycleInfo> cycles;
+
+  private final boolean isTransient;
+  private final boolean isCatastrophic;
+
+  public ErrorInfo(ReifiedSkyFunctionException builderException) {
+    this.rootCauseOfException = builderException.getRootCauseSkyKey();
+    this.rootCauses = NestedSetBuilder.create(Order.STABLE_ORDER, rootCauseOfException);
+    this.exception = Preconditions.checkNotNull(builderException.getCause(), builderException);
+    this.cycles = ImmutableList.of();
+    this.isTransient = builderException.isTransient();
+    this.isCatastrophic = builderException.isCatastrophic();
   }
 
-  /** Create an ErrorInfo from a {@link CycleInfo}. */
-  static ErrorInfo fromCycle(CycleInfo cycleInfo) {
-    return new ErrorInfo(
-        /*rootCauses=*/ NestedSetBuilder.<SkyKey>emptySet(Order.STABLE_ORDER),
-        /*exception=*/ null,
-        /*rootCauseOfException=*/ null,
-        ImmutableList.of(cycleInfo),
-        /*isTransient=*/ false,
-        /*isCatostrophic=*/ false);
+  ErrorInfo(CycleInfo cycleInfo) {
+    this.rootCauses = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+    this.exception = null;
+    this.rootCauseOfException = null;
+    this.cycles = ImmutableList.of(cycleInfo);
+    this.isTransient = false;
+    this.isCatastrophic = false;
   }
 
-  /** Create an ErrorInfo from a collection of existing errors. */
-  public static ErrorInfo fromChildErrors(SkyKey currentValue, Collection<ErrorInfo> childErrors) {
-    Preconditions.checkNotNull(currentValue, "currentValue must not be null");
-    Preconditions.checkState(!childErrors.isEmpty(), "childErrors may not be empty");
-
-    NestedSetBuilder<SkyKey> rootCausesBuilder = NestedSetBuilder.stableOrder();
+  public ErrorInfo(SkyKey currentValue, Collection<ErrorInfo> childErrors) {
+    Preconditions.checkNotNull(currentValue);
+    Preconditions.checkState(!childErrors.isEmpty(),
+        "Error value %s with no exception must depend on another error value", currentValue);
+    NestedSetBuilder<SkyKey> builder = NestedSetBuilder.stableOrder();
     ImmutableList.Builder<CycleInfo> cycleBuilder = ImmutableList.builder();
     Exception firstException = null;
     SkyKey firstChildKey = null;
@@ -74,48 +83,18 @@ public class ErrorInfo implements Serializable {
         firstException = child.getException();
         firstChildKey = child.getRootCauseOfException();
       }
-      rootCausesBuilder.addTransitive(child.rootCauses);
+      builder.addTransitive(child.rootCauses);
       cycleBuilder.addAll(CycleInfo.prepareCycles(currentValue, child.cycles));
       isCatastrophic |= child.isCatastrophic();
     }
-
-    return new ErrorInfo(
-        rootCausesBuilder.build(),
-        firstException,
-        firstChildKey,
-        cycleBuilder.build(),
-        // Parent errors should not be transient -- we depend on the child's transience, if any, to
-        // force re-evaluation if necessary.
-        /*isTransient=*/ false,
-        isCatastrophic);
-  }
-
-  // Non-final only to allow for serialization.
-  private transient NestedSet<SkyKey> rootCauses;
-
-  @Nullable private final Exception exception;
-  private final SkyKey rootCauseOfException;
-
-  private final ImmutableList<CycleInfo> cycles;
-
-  private final boolean isTransient;
-  private final boolean isCatastrophic;
-
-  public ErrorInfo(NestedSet<SkyKey> rootCauses, @Nullable Exception exception,
-      SkyKey rootCauseOfException, ImmutableList<CycleInfo> cycles, boolean isTransient,
-      boolean isCatostrophic) {
-    Preconditions.checkState(exception != null || !Iterables.isEmpty(cycles),
-        "At least one of exception and cycles must be non-null/empty, respectively");
-    Preconditions.checkState((exception == null) == (rootCauseOfException == null),
-        "exception and rootCauseOfException must both be null or non-null, got %s  %s",
-        exception, rootCauseOfException);
-
-    this.rootCauses = rootCauses;
-    this.exception = exception;
-    this.rootCauseOfException = rootCauseOfException;
-    this.cycles = cycles;
-    this.isTransient = isTransient;
-    this.isCatastrophic = isCatostrophic;
+    this.rootCauses = builder.build();
+    this.exception = firstException;
+    this.rootCauseOfException = firstChildKey;
+    this.cycles = cycleBuilder.build();
+    // Parent errors should not be transient -- we depend on the child's transience, if any, to
+    // force re-evaluation if necessary.
+    this.isTransient = false;
+    this.isCatastrophic = isCatastrophic;
   }
 
   @Override
@@ -137,10 +116,6 @@ public class ErrorInfo implements Serializable {
   /**
    * The exception thrown when building a value. May be null if value's only error is depending
    * on a cycle.
-   *
-   * <p>The exception is used for reporting and thus may ultimately be rethrown by the caller.
-   * As well, during a --nokeep_going evaluation, if an error value is encountered from an earlier
-   * --keep_going build, the exception to be thrown is taken from here.
    */
   @Nullable public Exception getException() {
     return exception;
