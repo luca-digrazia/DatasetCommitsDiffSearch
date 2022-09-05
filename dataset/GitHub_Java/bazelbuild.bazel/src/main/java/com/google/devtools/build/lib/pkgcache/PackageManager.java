@@ -80,7 +80,7 @@ public interface PackageManager extends PackageProvider, CachingPackageLocator {
   /**
    * Retrieve a target pattern parser that works with this package manager.
    */
-  TargetPatternEvaluator newTargetPatternEvaluator();
+  TargetPatternEvaluator getTargetPatternEvaluator();
 
   /**
    * Construct a new {@link TransitivePackageLoader}.

@@ -18,27 +18,22 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.NoSuchPackageException;
-import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.pkgcache.PackageProvider;
+import com.google.devtools.build.lib.pkgcache.LoadedPackageProvider;
 import com.google.devtools.build.skyframe.CycleInfo;
 import com.google.devtools.build.skyframe.CyclesReporter;
 import com.google.devtools.build.skyframe.SkyKey;
 
-import java.util.concurrent.Callable;
-
 /** Reports cycles between skyframe values whose keys contains {@link Label}s. */
 abstract class AbstractLabelCycleReporter implements CyclesReporter.SingleCycleReporter {
 
-  private final PackageProvider packageProvider;
+  private final LoadedPackageProvider loadedPackageProvider;
 
-  AbstractLabelCycleReporter(PackageProvider packageProvider) {
-    this.packageProvider = packageProvider;
+  AbstractLabelCycleReporter(LoadedPackageProvider loadedPackageProvider) {
+    this.loadedPackageProvider = loadedPackageProvider;
   }
 
   /** Returns the String representation of the {@code SkyKey}. */
@@ -49,8 +44,7 @@ abstract class AbstractLabelCycleReporter implements CyclesReporter.SingleCycleR
 
   protected abstract boolean canReportCycle(SkyKey topLevelKey, CycleInfo cycleInfo);
 
-  protected String getAdditionalMessageAboutCycle(
-      EventHandler eventHandler, SkyKey topLevelKey, CycleInfo cycleInfo) {
+  protected String getAdditionalMessageAboutCycle(SkyKey topLevelKey, CycleInfo cycleInfo) {
     return "";
   }
 
@@ -64,7 +58,7 @@ abstract class AbstractLabelCycleReporter implements CyclesReporter.SingleCycleR
 
     if (alreadyReported) {
       Label label = getLabel(topLevelKey);
-      Target target = getTargetForLabel(eventHandler, label);
+      Target target = getTargetForLabel(label);
       eventHandler.handle(Event.error(target.getLocation(),
           "in " + target.getTargetKind() + " " + label +
               ": cycle in dependency graph: target depends on an already-reported cycle"));
@@ -84,10 +78,10 @@ abstract class AbstractLabelCycleReporter implements CyclesReporter.SingleCycleR
         }
       });
 
-      cycleMessage.append(getAdditionalMessageAboutCycle(eventHandler, topLevelKey, cycleInfo));
+      cycleMessage.append(getAdditionalMessageAboutCycle(topLevelKey, cycleInfo));
 
       Label label = getLabel(cycleValue);
-      Target target = getTargetForLabel(eventHandler, label);
+      Target target = getTargetForLabel(label);
       eventHandler.handle(Event.error(
           target.getLocation(),
           "in " + target.getTargetKind() + " " + label + ": " + cycleMessage));
@@ -123,21 +117,13 @@ abstract class AbstractLabelCycleReporter implements CyclesReporter.SingleCycleR
     return cycleValue;
   }
 
-  protected final Target getTargetForLabel(final EventHandler eventHandler, final Label label) {
+  protected final Target getTargetForLabel(Label label) {
     try {
-      return Uninterruptibles.callUninterruptibly(new Callable<Target>() {
-        @Override
-        public Target call()
-            throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
-          return packageProvider.getTarget(eventHandler, label);
-        }
-      });
+      return loadedPackageProvider.getLoadedTarget(label);
     } catch (NoSuchThingException e) {
       // This method is used for getting the target from a label in a circular dependency.
       // If we have a cycle that means that we need to have accessed the target (to get its
       // dependencies). So all the labels in a dependency cycle need to exist.
-      throw new IllegalStateException(e);
-    } catch (Exception e) {
       throw new IllegalStateException(e);
     }
   }

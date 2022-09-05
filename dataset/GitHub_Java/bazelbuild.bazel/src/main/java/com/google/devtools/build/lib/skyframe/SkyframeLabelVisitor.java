@@ -56,7 +56,7 @@ final class SkyframeLabelVisitor implements TransitivePackageLoader {
   private Set<PackageIdentifier> errorFreeVisitedPackages;
   private Set<Label> visitedTargets;
   private Set<TransitiveTargetValue> previousBuildTargetValueSet = null;
-  private boolean lastBuildKeepGoing;
+  private boolean lastBuildKeepGoing = false;
   private final Multimap<Label, Label> rootCauses = HashMultimap.create();
 
   SkyframeLabelVisitor(SkyframeTransitivePackageLoader transitivePackageLoader,
@@ -229,14 +229,15 @@ final class SkyframeLabelVisitor implements TransitivePackageLoader {
     previousBuildTargetValueSet = currentBuildTargetValueSet;
   }
 
+
   @Override
   public Set<PackageIdentifier> getVisitedPackageNames() {
     return allVisitedPackages;
   }
 
   @Override
-  public Set<Package> getErrorFreeVisitedPackages(EventHandler eventHandler) {
-    return transitivePackageLoader.retrievePackages(eventHandler, errorFreeVisitedPackages);
+  public Set<Package> getErrorFreeVisitedPackages() {
+    return transitivePackageLoader.retrievePackages(errorFreeVisitedPackages);
   }
 
   /**

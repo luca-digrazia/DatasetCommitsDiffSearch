@@ -18,10 +18,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.pkgcache.PackageProvider;
+import com.google.devtools.build.lib.pkgcache.LoadedPackageProvider;
 import com.google.devtools.build.skyframe.CycleInfo;
 import com.google.devtools.build.skyframe.SkyKey;
 
@@ -36,8 +35,8 @@ class TransitiveTargetCycleReporter extends AbstractLabelCycleReporter {
   private static final Predicate<SkyKey> IS_TRANSITIVE_TARGET_SKY_KEY =
       SkyFunctions.isSkyFunction(SkyFunctions.TRANSITIVE_TARGET);
 
-  TransitiveTargetCycleReporter(PackageProvider packageProvider) {
-    super(packageProvider);
+  TransitiveTargetCycleReporter(LoadedPackageProvider loadedPackageProvider) {
+    super(loadedPackageProvider);
   }
 
   @Override
@@ -58,9 +57,8 @@ class TransitiveTargetCycleReporter extends AbstractLabelCycleReporter {
   }
 
   @Override
-  protected String getAdditionalMessageAboutCycle(
-      EventHandler eventHandler, SkyKey topLevelKey, CycleInfo cycleInfo) {
-    Target currentTarget = getTargetForLabel(eventHandler, getLabel(topLevelKey));
+  protected String getAdditionalMessageAboutCycle(SkyKey topLevelKey, CycleInfo cycleInfo) {
+    Target currentTarget = getTargetForLabel(getLabel(topLevelKey));
     List<SkyKey> keys = Lists.newArrayList();
     if (!cycleInfo.getPathToCycle().isEmpty()) {
       keys.add(topLevelKey);
@@ -72,7 +70,7 @@ class TransitiveTargetCycleReporter extends AbstractLabelCycleReporter {
     keys.add(cycleInfo.getCycle().get(0));
     for (SkyKey nextKey : keys) {
       Label nextLabel = getLabel(nextKey);
-      Target nextTarget = getTargetForLabel(eventHandler, nextLabel);
+      Target nextTarget = getTargetForLabel(nextLabel);
       // This is inefficient but it's no big deal since we only do this when there's a cycle.
       if (currentTarget.getVisibility().getDependencyLabels().contains(nextLabel)
           && !nextTarget.getTargetKind().equals(PackageGroup.targetKind())) {

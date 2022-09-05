@@ -59,12 +59,12 @@ public interface ConfigurationEnvironment {
    * An implementation backed by a {@link PackageProvider} instance.
    */
   public static final class TargetProviderEnvironment implements ConfigurationEnvironment {
-    private final LoadedPackageProvider packageProvider;
+    private final LoadedPackageProvider.Bridge packageProvider;
     private final BlazeDirectories blazeDirectories;
 
     public TargetProviderEnvironment(PackageProvider packageProvider,
         EventHandler eventHandler, BlazeDirectories blazeDirectories) {
-      this.packageProvider = new LoadedPackageProvider(packageProvider, eventHandler);
+      this.packageProvider = new LoadedPackageProvider.Bridge(packageProvider, eventHandler);
       this.blazeDirectories = blazeDirectories;
     }
 
