@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -24,8 +23,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.cpp.CcLibraryHelper;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.Builder;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariablesExtension;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.PrecompiledFiles;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.CompilationAttributes;
@@ -37,22 +34,6 @@ import java.util.Collection;
  */
 public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
 
-  private static final String PCH_FILE_VARIABLE_NAME = "pch_file";
-  private static final Iterable<String> ACTIVATED_ACTIONS =
-      ImmutableList.of("objc-compile", "objc++-compile");
-  
-  private VariablesExtension variablesExtension(final RuleContext ruleContext) {
-    return new VariablesExtension() {
-      @Override
-      public void addVariables(Builder builder) {
-        if (ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET) != null) {
-          builder.addVariable(PCH_FILE_VARIABLE_NAME,
-              ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET).getExecPathString());
-        }
-      }
-    };
-  }
-  
   @Override
   public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
 
@@ -67,17 +48,8 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
         ruleContext
             .getPrerequisite(":cc_toolchain", Mode.TARGET)
             .getProvider(CcToolchainProvider.class);
+    FeatureConfiguration featureConfiguration = toolchain.getFeatures().getFeatureConfiguration();
 
-    ImmutableList.Builder<String> activatedCrosstoolSelectables =
-        ImmutableList.<String>builder().addAll(ACTIVATED_ACTIONS);
-    if (ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET) != null) {
-      activatedCrosstoolSelectables.add("pch");
-    }
-
-    FeatureConfiguration featureConfiguration =
-        toolchain.getFeatures().getFeatureConfiguration(activatedCrosstoolSelectables.build());
-   
-    
     Collection<Artifact> sources = Sets.newHashSet(compilationArtifacts.getSrcs());
     Collection<Artifact> privateHdrs = Sets.newHashSet(compilationArtifacts.getPrivateHdrs());
     Collection<Artifact> publicHdrs = Sets.newHashSet(compilationAttributes.hdrs());
@@ -93,8 +65,7 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
             .enableCompileProviders()
             .addPublicHeaders(publicHdrs)
             .addPrecompiledFiles(precompiledFiles)
-            .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
-            .addVariableExtension(variablesExtension(ruleContext));
+            .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET));
 
     CcLibraryHelper.Info info = helper.build();
 
