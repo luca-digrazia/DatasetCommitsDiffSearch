@@ -256,7 +256,12 @@ public class ScopeByUserHandler implements DataAccessHandler {
                 boolean children = config.isChildren();
                 Class controller = ClassUtils.getUserClass(context.getParamContext().getTarget().getClass());
                 Class entityClass = org.hswebframework.utils.ClassUtils.getGenericType(controller, 0);
-                if (OrgAttachEntity.class.isAssignableFrom(entityClass) && config.getScopeType().contains("ORG")) {
+                if (RecordCreationEntity.class.isAssignableFrom(entityClass)) {
+                    controllerCache.targetIdGetter = createGetter(RecordCreationEntity.class, RecordCreationEntity::getCreatorId);
+                    controllerCache.queryConsumer = (query, scopeInfo) -> {
+                        query.in(getControlProperty(entityClass, RecordCreationEntity::getCreatorIdProperty), scopeInfo.termType, scopeInfo.scope);
+                    };
+                } else if (OrgAttachEntity.class.isAssignableFrom(entityClass) && config.getScopeType().contains("ORG")) {
                     controllerCache.targetIdGetter = createGetter(OrgAttachEntity.class, OrgAttachEntity::getOrgId);
                     controllerCache.queryConsumer = (query, scopeInfo) -> {
                         query.and(getControlProperty(entityClass, OrgAttachEntity::getOrgIdProperty), children ? "org-child-in" : "in", scopeInfo.scope);
@@ -275,11 +280,6 @@ public class ScopeByUserHandler implements DataAccessHandler {
                     controllerCache.targetIdGetter = createGetter(DistrictAttachEntity.class, DistrictAttachEntity::getDistrictId);
                     controllerCache.queryConsumer = (query, scopeInfo) -> {
                         query.and(getControlProperty(entityClass, DistrictAttachEntity::getDistrictIdProperty), children ? "dist-child-in" : "in", scopeInfo.scope);
-                    };
-                } else if (RecordCreationEntity.class.isAssignableFrom(entityClass)) {
-                    controllerCache.targetIdGetter = createGetter(RecordCreationEntity.class, RecordCreationEntity::getCreatorId);
-                    controllerCache.queryConsumer = (query, scopeInfo) -> {
-                        query.and(getControlProperty(entityClass, RecordCreationEntity::getCreatorIdProperty), scopeInfo.termType, scopeInfo.scope);
                     };
                 } else {
                     String userIdField = getUserField(entityClass);
