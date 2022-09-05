@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
@@ -85,9 +86,7 @@ public class PackageCacheTest extends FoundationTestCase {
         TestConstants.PRODUCT_NAME);
     skyframeExecutor =
         SequencedSkyframeExecutor.create(
-            TestConstants.PACKAGE_FACTORY_FACTORY_FOR_TESTING.create(
-                ruleClassProvider,
-                scratch.getFileSystem()),
+            new PackageFactory(ruleClassProvider),
             directories,
             null, /* BinTools */
             null, /* workspaceStatusActionFactory */

@@ -52,7 +52,6 @@ import com.google.devtools.build.lib.util.CommandFailureUtils;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.OptionsUtils;
-import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.util.io.OutErr;
@@ -104,7 +103,7 @@ public class RunCommand implements BlazeCommand  {
   @VisibleForTesting
   public static final String NO_TARGET_MESSAGE = "No targets found to run";
 
-  private static final String PROCESS_WRAPPER = "process-wrapper" + OsUtils.executableExtension();
+  private static final String PROCESS_WRAPPER = "process-wrapper";
 
   // Value of --run_under as of the most recent command invocation.
   private RunUnder currentRunUnder;
@@ -358,12 +357,9 @@ public class RunCommand implements BlazeCommand  {
 
     Artifact manifest = runfilesSupport.getRunfilesManifest();
     PathFragment runfilesDir = runfilesSupport.getRunfilesDirectoryExecPath();
-    Path workingDir = env.getExecRoot().getRelative(runfilesDir);
-    // On Windows, runfiles tree is disabled.
-    // Workspace name directory doesn't exist, so don't add it.
-    if (target.getConfiguration().runfilesEnabled()) {
-      workingDir = workingDir.getRelative(runfilesSupport.getRunfiles().getSuffix());
-    }
+    Path workingDir = env.getExecRoot()
+        .getRelative(runfilesDir)
+        .getRelative(runfilesSupport.getRunfiles().getSuffix());
 
     // When runfiles are not generated, getManifest() returns the
     // .runfiles_manifest file, otherwise it returns the MANIFEST file. This is

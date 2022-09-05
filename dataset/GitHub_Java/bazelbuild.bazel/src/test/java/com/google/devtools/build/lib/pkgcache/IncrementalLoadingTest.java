@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
@@ -467,8 +468,7 @@ public class IncrementalLoadingTest {
 
       skyframeExecutor =
           SequencedSkyframeExecutor.create(
-              TestConstants.PACKAGE_FACTORY_FACTORY_FOR_TESTING.create(
-                  TestRuleClassProvider.getRuleClassProvider(), fs),
+              new PackageFactory(TestRuleClassProvider.getRuleClassProvider()),
               new BlazeDirectories(fs.getPath("/install"), fs.getPath("/output"), workspace,
                   TestConstants.PRODUCT_NAME),
               null, /* BinTools */

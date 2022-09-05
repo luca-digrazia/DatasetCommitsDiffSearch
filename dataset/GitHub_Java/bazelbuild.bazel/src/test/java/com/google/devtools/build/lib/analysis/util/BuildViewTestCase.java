@@ -178,7 +178,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected OptionsParser optionsParser;
   private PackageCacheOptions packageCacheOptions;
-  protected PackageFactory pkgFactory;
+  private PackageFactory pkgFactory;
 
   protected MockToolsConfig mockToolsConfig;
 
@@ -202,8 +202,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         new AnalysisTestUtil.DummyWorkspaceStatusActionFactory(directories);
     mutableActionGraph = new MapBasedActionGraph();
     ruleClassProvider = getRuleClassProvider();
-    pkgFactory = TestConstants.PACKAGE_FACTORY_FACTORY_FOR_TESTING.create(
-        ruleClassProvider, getEnvironmentExtensions(), scratch.getFileSystem());
+    pkgFactory = new PackageFactory(ruleClassProvider, getEnvironmentExtensions());
     tsgm = new TimestampGranularityMonitor(BlazeClock.instance());
     skyframeExecutor =
         SequencedSkyframeExecutor.create(

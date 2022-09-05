@@ -85,6 +85,7 @@ public class LinuxSandboxedStrategyTestCase {
 
     OptionsParser optionsParser =
         OptionsParser.newOptionsParser(ExecutionOptions.class, SandboxOptions.class);
+    optionsParser.parse("--verbose_failures", "--sandbox_debug");
 
     EventBus bus = new EventBus();
 
@@ -102,11 +103,12 @@ public class LinuxSandboxedStrategyTestCase {
             ImmutableMap.<String, SpawnActionContext>of(
                 "",
                 new LinuxSandboxedStrategy(
-                    optionsParser.getOptions(SandboxOptions.class),
                     ImmutableMap.<String, String>of(),
                     blazeDirs,
                     MoreExecutors.newDirectExecutorService(),
                     true,
+                    false,
+                    ImmutableList.<String>of(),
                     false,
                     TestConstants.PRODUCT_NAME)),
             ImmutableList.<ActionContextProvider>of());

@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.buildtool;
 
 import com.google.common.base.Joiner;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -70,11 +69,11 @@ public class OutputDirectoryLinksUtils {
 
     if (targetConfig != null) {
       createLink(workspace, symlinkPrefix + "bin",
-          targetConfig.getBinDirectory(RepositoryName.MAIN).getPath(), failures);
+          targetConfig.getBinDirectory().getPath(), failures);
       createLink(workspace, symlinkPrefix + "testlogs",
-          targetConfig.getTestLogsDirectory(RepositoryName.MAIN).getPath(), failures);
+          targetConfig.getTestLogsDirectory().getPath(), failures);
       createLink(workspace, symlinkPrefix + "genfiles",
-          targetConfig.getGenfilesDirectory(RepositoryName.MAIN).getPath(), failures);
+          targetConfig.getGenfilesDirectory().getPath(), failures);
     }
 
     if (!failures.isEmpty()) {
@@ -192,7 +191,7 @@ public class OutputDirectoryLinksUtils {
     Path link = base.getRelative(name);
     try {
       if (link.exists(Symlinks.NOFOLLOW)) {
-        ExecutionTool.log.finest("Removing " + link);
+        ExecutionTool.LOG.finest("Removing " + link);
         link.delete();
       }
       return true;

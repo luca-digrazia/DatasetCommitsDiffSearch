@@ -22,7 +22,8 @@ import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.OS;
-import java.io.IOException;
+
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 
 /**
@@ -33,44 +34,32 @@ public class SandboxActionContextProvider extends ActionContextProvider {
   @SuppressWarnings("unchecked")
   private final ImmutableList<ActionContext> strategies;
 
-  private SandboxActionContextProvider(ImmutableList<ActionContext> strategies) {
-    this.strategies = strategies;
-  }
-
-  public static SandboxActionContextProvider create(
-      CommandEnvironment env, BuildRequest buildRequest, ExecutorService backgroundWorkers)
-      throws IOException {
+  public SandboxActionContextProvider(
+      CommandEnvironment env, BuildRequest buildRequest, ExecutorService backgroundWorkers) {
     boolean verboseFailures = buildRequest.getOptions(ExecutionOptions.class).verboseFailures;
+    boolean sandboxDebug = buildRequest.getOptions(SandboxOptions.class).sandboxDebug;
     boolean unblockNetwork =
         buildRequest
             .getOptions(BuildConfiguration.Options.class)
             .testArguments
             .contains("--wrapper_script_flag=--debug");
+    List<String> sandboxAddPath = buildRequest.getOptions(SandboxOptions.class).sandboxAddPath;
     Builder<ActionContext> strategies = ImmutableList.builder();
 
     if (OS.getCurrent() == OS.LINUX) {
       strategies.add(
           new LinuxSandboxedStrategy(
-              buildRequest.getOptions(SandboxOptions.class),
               env.getClientEnv(),
               env.getDirectories(),
               backgroundWorkers,
               verboseFailures,
-              unblockNetwork,
-              env.getRuntime().getProductName()));
-    } else if (OS.getCurrent() == OS.DARWIN) {
-      strategies.add(
-          DarwinSandboxedStrategy.create(
-              buildRequest.getOptions(SandboxOptions.class),
-              env.getClientEnv(),
-              env.getDirectories(),
-              backgroundWorkers,
-              verboseFailures,
+              sandboxDebug,
+              sandboxAddPath,
               unblockNetwork,
               env.getRuntime().getProductName()));
     }
 
-    return new SandboxActionContextProvider(strategies.build());
+    this.strategies = strategies.build();
   }
 
   @Override

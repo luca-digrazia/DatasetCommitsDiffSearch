@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -76,11 +77,11 @@ public class StandaloneSpawnStrategy implements SpawnActionContext {
         .getEventBus()
         .post(ActionStatusMessage.runningStrategy(spawn.getResourceOwner(), "standalone"));
 
-    int timeoutSeconds = -1;
+    int timeout = -1;
     String timeoutStr = spawn.getExecutionInfo().get("timeout");
     if (timeoutStr != null) {
       try {
-        timeoutSeconds = Integer.parseInt(timeoutStr);
+        timeout = Integer.parseInt(timeoutStr);
       } catch (NumberFormatException e) {
         throw new UserExecException("could not parse timeout: ", e);
       }
@@ -96,7 +97,7 @@ public class StandaloneSpawnStrategy implements SpawnActionContext {
       // Disable it for now to make the setup easier and to avoid further PATH hacks.
       // Ideally we should have a native implementation of process-wrapper for Windows.
       args.add(processWrapper.getPathString());
-      args.add(Integer.toString(timeoutSeconds));
+      args.add(Integer.toString(timeout));
       args.add("5"); /* kill delay: give some time to print stacktraces and whatnot. */
 
       // TODO(bazel-team): use process-wrapper redirection so we don't have to
@@ -108,21 +109,19 @@ public class StandaloneSpawnStrategy implements SpawnActionContext {
 
     String cwd = executor.getExecRoot().getPathString();
     Command cmd = new Command(args.toArray(new String[]{}),
-        locallyDeterminedEnv(spawn.getEnvironment()), new File(cwd),
-        OS.getCurrent() == OS.WINDOWS && timeoutSeconds >= 0 ? timeoutSeconds * 1000 : -1);
+        locallyDeterminedEnv(spawn.getEnvironment()), new File(cwd));
 
     FileOutErr outErr = actionExecutionContext.getFileOutErr();
     try {
       cmd.execute(
-          /* stdin */ new byte[] {},
+          /* stdin */ new byte[]{},
           Command.NO_OBSERVER,
           outErr.getOutputStream(),
           outErr.getErrorStream(),
           /*killSubprocessOnInterrupt*/ true);
     } catch (AbnormalTerminationException e) {
       TerminationStatus status = e.getResult().getTerminationStatus();
-      boolean timedOut = !status.exited() && (
-          status.timedout() || status.getTerminatingSignal() == 14 /* SIGALRM */);
+      boolean timedOut = !status.exited() && (status.getTerminatingSignal() == 14 /* SIGALRM */);
       String message =
           CommandFailureUtils.describeCommandFailure(
               verboseFailures, spawn.getArguments(), spawn.getEnvironment(), cwd);
@@ -148,17 +147,18 @@ public class StandaloneSpawnStrategy implements SpawnActionContext {
    * Adds to the given environment all variables that are dependent on system state of the host
    * machine.
    *
-   * <p>Admittedly, hermeticity is "best effort" in such cases; these environment values should be
-   * as tied to configuration parameters as possible.
+   * <p> Admittedly, hermeticity is "best effort" in such cases; these environment values
+   * should be as tied to configuration parameters as possible.
    *
-   * <p>For example, underlying iOS toolchains require that SDKROOT resolve to an absolute system
-   * path, but, when selecting which SDK to resolve, the version number comes from build
-   * configuration.
+   * <p>For example, underlying iOS toolchains require that SDKROOT resolve to an absolute
+   * system path, but, when selecting which SDK to resolve, the version number comes from
+   * build configuration.
    *
    * @return the new environment, comprised of the old environment plus any new variables
-   * @throws UserExecException if any variables dependent on system state could not be resolved
+   * @throws UserExecException if any variables dependent on system state could not be
+   *     resolved
    */
-  public ImmutableMap<String, String> locallyDeterminedEnv(ImmutableMap<String, String> env)
+  private ImmutableMap<String, String> locallyDeterminedEnv(ImmutableMap<String, String> env)
       throws UserExecException {
     // TODO(bazel-team): Remove apple-specific logic from this class.
     ImmutableMap.Builder<String, String> newEnvBuilder = ImmutableMap.builder();

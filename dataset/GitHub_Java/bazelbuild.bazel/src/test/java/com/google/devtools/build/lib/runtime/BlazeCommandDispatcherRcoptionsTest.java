@@ -25,10 +25,12 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfigurationCollectionFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.LockingMode;
 import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.ShutdownBlazeServerException;
+import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -127,17 +129,17 @@ public class BlazeCommandDispatcherRcoptionsTest {
 
   @Before
   public final void initializeRuntime() throws Exception {
-    String productName = TestConstants.PRODUCT_NAME;
     BlazeDirectories directories =
         new BlazeDirectories(
             scratch.dir("install_base"), scratch.dir("output_base"), scratch.dir("pkg"),
-            productName);
+            TestConstants.PRODUCT_NAME);
     this.runtime =
         new BlazeRuntime.Builder()
-            .setProductName(productName)
             .setDirectories(directories)
             .setStartupOptionsProvider(
                 OptionsParser.newOptionsParser(BlazeServerStartupOptions.class))
+            .setConfigurationFactory(
+                new ConfigurationFactory(Mockito.mock(ConfigurationCollectionFactory.class)))
             .addBlazeModule(
                 new BlazeModule() {
                   @Override
@@ -148,10 +150,9 @@ public class BlazeCommandDispatcherRcoptionsTest {
                     builder.addConfigurationOptions(MockFragmentOptions.class);
                     // The tools repository is needed for createGlobals
                     builder.setToolsRepository(TestConstants.TOOLS_REPOSITORY);
-                    builder.setConfigurationCollectionFactory(
-                        Mockito.mock(ConfigurationCollectionFactory.class));
                   }
                 })
+            .setInvocationPolicy(InvocationPolicyOuterClass.InvocationPolicy.getDefaultInstance())
             .build();
   }
 

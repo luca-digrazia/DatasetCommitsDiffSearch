@@ -625,8 +625,7 @@ public class LoadingPhaseRunnerTest {
       AnalysisMock.get().setupMockClient(mockToolsConfig);
       FileSystemUtils.deleteTree(workspace.getRelative("base"));
 
-      PackageFactory pkgFactory = TestConstants.PACKAGE_FACTORY_FACTORY_FOR_TESTING.create(
-          TestRuleClassProvider.getRuleClassProvider(), fs);
+      PackageFactory pkgFactory = new PackageFactory(TestRuleClassProvider.getRuleClassProvider());
       PackageCacheOptions options = Options.getDefaults(PackageCacheOptions.class);
       storedErrors = new StoredEventHandler();
       BlazeDirectories directories =

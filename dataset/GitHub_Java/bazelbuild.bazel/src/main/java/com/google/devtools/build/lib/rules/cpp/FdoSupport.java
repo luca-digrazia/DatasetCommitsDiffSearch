@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.vfs.ZipFileSystem;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 import com.google.devtools.build.skyframe.SkyFunction;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.zip.ZipException;
@@ -232,14 +233,11 @@ public class FdoSupport {
     return fdoRoot;
   }
 
-  /** Creates an initialized {@link FdoSupport} instance. */
-  static FdoSupport create(
-      SkyFunction.Environment env,
-      PathFragment fdoInstrument,
-      Path fdoProfile,
-      LipoMode lipoMode,
-      Path execRoot)
-      throws IOException, FdoException, InterruptedException {
+  /**
+   * Creates an initialized {@link FdoSupport} instance.
+   */
+  static FdoSupport create(SkyFunction.Environment env, PathFragment fdoInstrument,
+      Path fdoProfile, LipoMode lipoMode, Path execRoot) throws IOException, FdoException {
     FdoMode fdoMode;
     if (fdoProfile != null && isAutoFdo(fdoProfile.getBaseName())) {
       fdoMode = FdoMode.AUTO_FDO;
@@ -259,7 +257,7 @@ public class FdoSupport {
         (fdoProfile == null)
             ? null
             : Root.asDerivedRoot(execRoot, execRoot.getRelative(
-                PrecomputedValue.PRODUCT_NAME.get(env) + "-fdo"), true);
+                PrecomputedValue.PRODUCT_NAME.get(env) + "-fdo"));
 
     PathFragment fdoRootExecPath = fdoProfile == null
         ? null
