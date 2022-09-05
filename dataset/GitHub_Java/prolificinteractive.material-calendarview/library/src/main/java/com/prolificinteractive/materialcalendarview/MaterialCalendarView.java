@@ -137,15 +137,8 @@ public class MaterialCalendarView extends ViewGroup {
     public MaterialCalendarView(Context context, AttributeSet attrs) {
         super(context, attrs);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            //If we're on good Android versions, turn off clipping for cool effects
-            setClipToPadding(false);
-            setClipChildren(false);
-        } else {
-            //Old Android does not like _not_ clipping view pagers, we need to clip
-            setClipChildren(true);
-            setClipToPadding(true);
-        }
+        setClipChildren(false);
+        setClipToPadding(false);
 
         buttonPast = new DirectionButton(getContext());
         title = new TextView(getContext());
