@@ -16,22 +16,22 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
+import static com.google.devtools.build.lib.packages.Type.LABEL;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundLabelList;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.FileType;
 
 import java.util.List;
@@ -95,7 +95,7 @@ public final class ExperimentalIosTestRule implements RuleDefinition {
                   return ImmutableList.of();
                 }
                 return ImmutableList.of(
-                    configuration.getFragment(ObjcConfiguration.class).getExperimentalGcovLabel());
+                    configuration.getFragment(ObjcConfiguration.class).getGcovLabel());
               }
             }))
         .build();
