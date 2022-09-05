@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,27 +28,18 @@ import java.util.List;
  */
 @Immutable
 public class JavaToolchainData {
-  
-  private final String sourceVersion;
-  private final String targetVersion;
-  private final String encoding;
   private final ImmutableList<String> options;
   private final ImmutableList<String> jvmOpts;
 
-  public JavaToolchainData(String sourceVersion, String targetVersion, String encoding,
+  public JavaToolchainData(String source, String target, String encoding,
       List<String> xlint, List<String> misc, List<String> jvmOpts) {
-    
-    this.sourceVersion = sourceVersion;
-    this.targetVersion = targetVersion;
-    this.encoding = encoding;
-    
     this.jvmOpts = ImmutableList.copyOf(jvmOpts);
     Builder<String> builder = ImmutableList.<String>builder();
-    if (!sourceVersion.isEmpty()) {
-      builder.add("-source", sourceVersion);
+    if (!source.isEmpty()) {
+      builder.add("-source", source);
     }
-    if (!targetVersion.isEmpty()) {
-      builder.add("-target", targetVersion);
+    if (!target.isEmpty()) {
+      builder.add("-target", target);
     }
     if (!encoding.isEmpty()) {
       builder.add("-encoding", encoding);
@@ -71,17 +62,5 @@ public class JavaToolchainData {
    */
   public ImmutableList<String> getJavacJvmOptions() {
     return jvmOpts;
-  }
-
-  public String getSourceVersion() {
-    return sourceVersion;
-  }
-
-  public String getTargetVersion() {
-    return targetVersion;
-  }
-
-  public String getEncoding() {
-    return encoding;
   }
 }
