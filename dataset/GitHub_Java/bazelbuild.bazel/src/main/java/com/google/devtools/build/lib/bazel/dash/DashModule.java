@@ -67,19 +67,17 @@ import java.util.concurrent.ThreadFactory;
  */
 public class DashModule extends BlazeModule {
   private static final int ONE_MB = 1024 * 1024;
-  private static final NoOpSender NO_OP_SENDER = new NoOpSender();
 
   private static final String DASH_SECRET_HEADER = "bazel-dash-secret";
 
-  private final ExecutorService executorService;
-
   private Sendable sender;
   private CommandEnvironment env;
+  private final ExecutorService executorService;
   private BuildData optionsBuildData;
 
   public DashModule() {
     // Make sure sender != null before we hop on the event bus.
-    sender = NO_OP_SENDER;
+    sender = new NoOpSender();
     executorService = Executors.newFixedThreadPool(5,
         new ThreadFactory() {
           @Override
@@ -98,13 +96,6 @@ public class DashModule extends BlazeModule {
   }
 
   @Override
-  public void afterCommand() {
-    this.sender = NO_OP_SENDER;
-    this.env = null;
-    this.optionsBuildData = null;
-  }
-
-  @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
     return (command.name().equals("build") || command.name().equals("test"))
         ? ImmutableList.<Class<? extends OptionsBase>>of(DashOptions.class)
@@ -116,11 +107,11 @@ public class DashModule extends BlazeModule {
     DashOptions options = optionsProvider.getOptions(DashOptions.class);
     try {
       sender = (options == null || !options.useDash)
-          ? NO_OP_SENDER
+          ? new NoOpSender()
           : new Sender(options.url, options.secret, env, executorService);
     } catch (SenderException e) {
       env.getReporter().handle(e.toEvent());
-      sender = NO_OP_SENDER;
+      sender = new NoOpSender();
     }
     if (optionsBuildData != null) {
       sender.send("options", optionsBuildData);
@@ -369,4 +360,5 @@ public class DashModule extends BlazeModule {
     public void send(String suffix, BuildData message) {
     }
   }
+
 }
