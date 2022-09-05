@@ -1,5 +1,6 @@
 package org.hswebframework.web.crud.service;
 
+import org.hswebframework.ezorm.core.param.QueryParam;
 import org.hswebframework.ezorm.rdb.mapping.defaults.SaveResult;
 import org.hswebframework.utils.RandomUtil;
 import org.hswebframework.web.api.crud.entity.QueryParamEntity;
@@ -12,8 +13,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.*;
-import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -31,17 +30,13 @@ public interface ReactiveTreeSortEntityService<E extends TreeSortSupportEntity<K
     default Mono<List<E>> queryResultToTree(QueryParamEntity paramEntity) {
         return query(paramEntity)
                 .collectList()
-                .map(list -> TreeSupportEntity.list2tree(list,
-                        this::setChildren,
-                        this::createRootNodePredicate));
+                .map(list -> TreeSupportEntity.list2tree(list, this::setChildren, this::isRootNode));
     }
 
     default Mono<List<E>> queryIncludeChildrenTree(QueryParamEntity paramEntity) {
         return queryIncludeChildren(paramEntity)
                 .collectList()
-                .map(list -> TreeSupportEntity.list2tree(list,
-                        this::setChildren,
-                        this::createRootNodePredicate));
+                .map(list -> TreeSupportEntity.list2tree(list, this::setChildren, this::isRootNode));
     }
 
     default Flux<E> queryIncludeChildren(Collection<K> idList) {
@@ -118,19 +113,6 @@ public interface ReactiveTreeSortEntityService<E extends TreeSortSupportEntity<K
 
     default List<E> getChildren(E entity) {
         return entity.getChildren();
-    }
-
-    default Predicate<E> createRootNodePredicate(TreeSupportEntity.TreeHelper<E, K> helper) {
-        return node -> {
-            if (isRootNode(node)) {
-                return true;
-            }
-            //有父节点,但是父节点不存在
-            if (!StringUtils.isEmpty(node.getParentId())) {
-                return helper.getNode(node.getParentId()) == null;
-            }
-            return false;
-        };
     }
 
     default boolean isRootNode(E entity) {
