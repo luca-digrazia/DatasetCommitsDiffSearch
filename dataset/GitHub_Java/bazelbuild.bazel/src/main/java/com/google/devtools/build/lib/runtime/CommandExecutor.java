@@ -13,15 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
-import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.LockingMode;
-import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.server.ServerCommand;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.OutErr;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.List;
-import java.util.Optional;
 import java.util.logging.Logger;
 
 /**
@@ -30,7 +26,7 @@ import java.util.logging.Logger;
  * <p>This is the common execution path between the gRPC server and the legacy AF_UNIX server.
  */
 public class CommandExecutor implements ServerCommand {
-  private static final Logger logger = Logger.getLogger(CommandExecutor.class.getName());
+  private static final Logger LOG = Logger.getLogger(CommandExecutor.class.getName());
 
   private boolean shutdown;
   private final BlazeRuntime runtime;
@@ -43,26 +39,12 @@ public class CommandExecutor implements ServerCommand {
   }
 
   @Override
-  public int exec(
-      InvocationPolicy invocationPolicy,
-      List<String> args,
-      OutErr outErr,
-      LockingMode lockingMode,
-      String clientDescription,
-      long firstContactTime,
-      Optional<List<Pair<String, String>>> startupOptionsTaggedWithBazelRc)
-      throws InterruptedException {
-    logger.info(BlazeRuntime.getRequestLogString(args));
+  public int exec(List<String> args, OutErr outErr, BlazeCommandDispatcher.LockingMode lockingMode,
+      String clientDescription, long firstContactTime) throws InterruptedException {
+    LOG.info(BlazeRuntime.getRequestLogString(args));
 
     try {
-      return dispatcher.exec(
-          invocationPolicy,
-          args,
-          outErr,
-          lockingMode,
-          clientDescription,
-          firstContactTime,
-          startupOptionsTaggedWithBazelRc);
+      return dispatcher.exec(args, outErr, lockingMode, clientDescription, firstContactTime);
     } catch (BlazeCommandDispatcher.ShutdownBlazeServerException e) {
       if (e.getCause() != null) {
         StringWriter message = new StringWriter();
@@ -70,7 +52,7 @@ public class CommandExecutor implements ServerCommand {
         PrintWriter writer = new PrintWriter(message, true);
         e.printStackTrace(writer);
         writer.flush();
-        logger.severe(message.toString());
+        LOG.severe(message.toString());
       }
       shutdown = true;
       runtime.shutdown();
