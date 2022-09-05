@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
+import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.fileset.FilesetActionContext;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -29,7 +30,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,10 +50,23 @@ public final class SpawnHelpers {
   public Map<PathFragment, Path> getMounts(Spawn spawn, ActionExecutionContext executionContext)
       throws IOException {
     Map<PathFragment, Path> mounts = new HashMap<>();
+    mountRunfilesFromManifests(mounts, spawn);
     mountRunfilesFromSuppliers(mounts, spawn);
     mountFilesFromFilesetManifests(mounts, spawn, executionContext);
     mountInputs(mounts, spawn, executionContext);
     return mounts;
+  }
+
+  /** Mount all runfiles that the spawn needs as specified in its runfiles manifests. */
+  void mountRunfilesFromManifests(Map<PathFragment, Path> mounts, Spawn spawn) throws IOException {
+    for (Map.Entry<PathFragment, Artifact> manifest : spawn.getRunfilesManifests().entrySet()) {
+      String manifestFilePath = manifest.getValue().getPath().getPathString();
+      Preconditions.checkState(!manifest.getKey().isAbsolute());
+      PathFragment targetDirectory = manifest.getKey();
+
+      parseManifestFile(
+          execRoot.getFileSystem(), mounts, targetDirectory, new File(manifestFilePath), false, "");
+    }
   }
 
   /** Mount all files that the spawn needs as specified in its fileset manifests. */
@@ -125,7 +138,7 @@ public final class SpawnHelpers {
       Path source;
       switch (fields.length) {
         case 1:
-          source = null;
+          source = fs.getPath("/dev/null");
           break;
         case 2:
           source = fs.getPath(fields[1]);
@@ -150,12 +163,12 @@ public final class SpawnHelpers {
       }
       for (Map.Entry<PathFragment, Artifact> mapping : rootAndMappings.getValue().entrySet()) {
         Artifact sourceArtifact = mapping.getValue();
-        Path source =
-            (sourceArtifact != null) ? execRoot.getRelative(sourceArtifact.getExecPath()) : null;
+        PathFragment source =
+            (sourceArtifact != null) ? sourceArtifact.getExecPath() : new PathFragment("/dev/null");
 
         Preconditions.checkArgument(!mapping.getKey().isAbsolute());
         PathFragment target = root.getRelative(mapping.getKey());
-        mounts.put(target, source);
+        mounts.put(target, execRoot.getRelative(source));
       }
     }
   }
@@ -167,20 +180,10 @@ public final class SpawnHelpers {
         ActionInputHelper.expandArtifacts(
             spawn.getInputFiles(), actionExecutionContext.getArtifactExpander());
 
-    // ActionInputHelper#expandArtifacts above expands empty TreeArtifacts into an empty list.
-    // However, actions that accept TreeArtifacts as inputs generally expect that the empty
-    // directory is created. So here we explicitly mount the directories of the TreeArtifacts as
-    // inputs.
-    for (ActionInput input : spawn.getInputFiles()) {
-      if (input instanceof Artifact && ((Artifact) input).isTreeArtifact()) {
-        List<Artifact> containedArtifacts = new ArrayList<>();
-        actionExecutionContext.getArtifactExpander().expand((Artifact) input, containedArtifacts);
-        // Attempting to mount a non-empty directory results in ERR_DIRECTORY_NOT_EMPTY, so we only
-        // mount empty TreeArtifacts as directories.
-        if (containedArtifacts.isEmpty()) {
-          PathFragment mount = new PathFragment(input.getExecPathString());
-          mounts.put(mount, execRoot.getRelative(mount));
-        }
+    if (spawn.getResourceOwner() instanceof CppCompileAction) {
+      CppCompileAction action = (CppCompileAction) spawn.getResourceOwner();
+      if (action.shouldScanIncludes()) {
+        inputs.addAll(action.getAdditionalInputs());
       }
     }
 

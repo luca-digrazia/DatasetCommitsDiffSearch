@@ -19,30 +19,22 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Tests for {@code LinuxSandboxedStrategy}. */
+/**
+ * Tests for {@code LinuxSandboxedStrategy}.
+ */
 @RunWith(JUnit4.class)
-public class LinuxSandboxedStrategyTest extends SandboxTestCase {
-  private Path workspaceDir;
-
-  @Before
-  public final void createWorkspaceDir() throws IOException {
-    workspaceDir = testRoot.getRelative("workspace");
-    workspaceDir.createDirectory();
-  }
-
+public class LinuxSandboxedStrategyTest extends LinuxSandboxedStrategyTestCase {
   @Test
   public void testParseManifestFile() throws Exception {
-    PathFragment targetDir = PathFragment.create("runfiles");
+    PathFragment targetDir = new PathFragment("runfiles");
 
     Path testFile = workspaceDir.getRelative("testfile");
     FileSystemUtils.createEmptyFile(testFile);
@@ -57,16 +49,18 @@ public class LinuxSandboxedStrategyTest extends SandboxTestCase {
     SpawnHelpers.parseManifestFile(
         fileSystem, mounts, targetDir, manifestFile.getPathFile(), false, "");
 
-    Map<PathFragment, Path> expected = new HashMap<>();
-    expected.put(PathFragment.create("runfiles/x/testfile"), testFile);
-    expected.put(PathFragment.create("runfiles/x/emptyfile"), null);
-
-    assertThat(mounts).isEqualTo(expected);
+    assertThat(mounts)
+        .isEqualTo(
+            ImmutableMap.of(
+                new PathFragment("runfiles/x/testfile"),
+                testFile,
+                new PathFragment("runfiles/x/emptyfile"),
+                fileSystem.getPath("/dev/null")));
   }
 
   @Test
   public void testParseFilesetManifestFile() throws Exception {
-    PathFragment targetDir = PathFragment.create("fileset");
+    PathFragment targetDir = new PathFragment("fileset");
 
     Path testFile = workspaceDir.getRelative("testfile");
     FileSystemUtils.createEmptyFile(testFile);
@@ -81,7 +75,6 @@ public class LinuxSandboxedStrategyTest extends SandboxTestCase {
     SpawnHelpers.parseManifestFile(
         fileSystem, mounts, targetDir, manifestFile.getPathFile(), true, "workspace");
 
-    assertThat(mounts).isEqualTo(
-        ImmutableMap.of(PathFragment.create("fileset/x/testfile"), testFile));
+    assertThat(mounts).isEqualTo(ImmutableMap.of(new PathFragment("fileset/x/testfile"), testFile));
   }
 }
