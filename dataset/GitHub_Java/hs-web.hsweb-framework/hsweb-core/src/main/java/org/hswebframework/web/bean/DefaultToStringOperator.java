@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.hswebframework.utils.time.DateFormatter;
 import org.springframework.beans.BeanUtils;
 import org.springframework.core.annotation.AnnotationUtils;
+import org.springframework.util.ReflectionUtils;
 
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.Field;
@@ -35,7 +36,8 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
 
     private Map<String, BiFunction<Object, ConvertConfig, Object>> converts;
 
-    private Function<Object, String> coverStringConvert = (o) -> coverString(String.valueOf(o), 50);
+    private Function<Object, String> coverStringConvert = (o) -> coverString(String.valueOf(o), 80);
+
 
     private Function<Class, BiFunction<Object, ConvertConfig, Object>> simpleConvertBuilder = type -> {
         if (Date.class.isAssignableFrom(type)) {
@@ -45,7 +47,7 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
         }
     };
 
-    Predicate<Class> simpleTypePredicate = ((Predicate<Class>) String.class::isAssignableFrom)
+    private Predicate<Class> simpleTypePredicate = ((Predicate<Class>) String.class::isAssignableFrom)
             .or(Class::isEnum)
             .or(Class::isPrimitive)
             .or(Date.class::isAssignableFrom)
@@ -96,7 +98,7 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
             defaultFeatures = ToString.DEFAULT_FEATURE;
         }
         defaultIgnoreProperties = classIgnore == null ?
-                new HashSet<>(Collections.emptySet())
+                new HashSet<>(new java.util.HashSet<>())
                 : new HashSet<>(Arrays.asList(classIgnore.value()));
 
         //是否打码
@@ -112,7 +114,7 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
             ToString.Ignore propertyIgnore = null;
             long propertyFeature = 0;
             try {
-                Field field = targetType.getDeclaredField(descriptor.getName());
+                Field field = ReflectionUtils.findField(targetType, descriptor.getName());
                 propertyIgnore = field.getAnnotation(ToString.Ignore.class);
                 features = AnnotationUtils.getAnnotation(field, ToString.Features.class);
                 if (propertyIgnore != null) {
@@ -123,9 +125,7 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
                 if (null != features && features.value().length > 0) {
                     propertyFeature = ToString.Feature.createFeatures(features.value());
                 }
-            } catch (NoSuchFieldException e) {
-                log.warn("无法获取字段{},该字段将不会被打码!", descriptor.getName());
-
+            } catch (Exception ignore) {
             }
             //是否设置了打码
             boolean cover = (propertyIgnore == null && defaultCover) || (propertyIgnore != null && propertyIgnore.cover());
@@ -229,7 +229,7 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
     }
 
     class ConvertConfig {
-        long        features;
+        long features;
         Set<String> ignoreProperty;
 
     }
@@ -300,9 +300,9 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
                     if (isSimpleType || propertyType == null) {
                         entry.setValue("");
                     } else if (propertyType.isArray() || Collection.class.isAssignableFrom(propertyType)) {
-                        entry.setValue(Collections.emptyList());
+                        entry.setValue(new java.util.ArrayList<>());
                     } else {
-                        entry.setValue(Collections.emptyMap());
+                        entry.setValue(new java.util.HashMap<>());
                     }
                 }
                 continue;
@@ -333,7 +333,9 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
         if (ToString.Feature.hasFeature(features, ToString.Feature.jsonFormat)) {
             return JSON.toJSONString(mapValue);
         }
-        StringJoiner joiner = new StringJoiner(", ", target.getClass().getSimpleName() + "(", ")");
+        boolean writeClassName = ToString.Feature.hasFeature(features, ToString.Feature.writeClassname);
+
+        StringJoiner joiner = new StringJoiner(", ", (writeClassName ? target.getClass().getSimpleName() : "") + "{", "}");
 
         mapValue.forEach((key, value) -> joiner.add(key.concat("=").concat(String.valueOf(value))));
 
