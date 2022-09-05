@@ -403,7 +403,7 @@ public abstract class ProguardHelper {
               output.getOutputJar(),
               /* proguardOutputMap */ null,
               /* proguardOutputProtoMap */ null,
-              output.getSeeds(),  // ProGuard only prints seeds during INITIAL and NORMAL runtypes.
+              /* proguardSeeds */ null,
               /* proguardUsage */ null,
               /* constantStringObfuscatedMapping */ null,
               /* proguardConfigOutput */ null)
@@ -449,7 +449,7 @@ public abstract class ProguardHelper {
           output.getOutputJar(),
           output.getMapping(),
           output.getProtoMapping(),
-          /* proguardSeeds */ null,  // runtype FINAL does not produce seeds.
+          output.getSeeds(),
           output.getUsage(),
           output.getConstantStringObfuscatedMapping(),
           output.getConfig())

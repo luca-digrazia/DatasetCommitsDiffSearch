@@ -102,8 +102,10 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     }
 
     NestedSetBuilder<Artifact> filesBuilder = NestedSetBuilder.stableOrder();
-    JavaCommon javaCommon =
-        AndroidCommon.createJavaCommonWithAndroidDataBinding(ruleContext, javaSemantics, false);
+    ImmutableList<TransitiveInfoCollection> deps = ImmutableList.<TransitiveInfoCollection>copyOf(
+        ruleContext.getPrerequisites("deps", Mode.TARGET));
+    JavaCommon javaCommon = new JavaCommon(
+        ruleContext, javaSemantics, deps, deps, deps);
     javaSemantics.checkRule(ruleContext, javaCommon);
     javaSemantics.checkForProtoLibraryAndJavaProtoLibraryOnSameProto(ruleContext, javaCommon);
 
@@ -223,8 +225,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
           ProguardHelper.getProguardConfigArtifact(ruleContext, ""),
           createMainDexProguardSpec(ruleContext),
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST),
-          ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP),
-          DataBinding.isEnabled(ruleContext) ? DataBinding.getLayoutInfoFile(ruleContext) : null);
+          ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP));
       ruleContext.assertNoErrors();
 
       incrementalResourceApk = applicationManifest
@@ -245,8 +246,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               ProguardHelper.getProguardConfigArtifact(ruleContext, "incremental"),
               null, /* mainDexProguardCfg */
               null, /* manifestOut */
-              null, /* mergedResourcesOut */
-              null /* dataBindingInfoZip */);
+              null /* mergedResourcesOut */);
       ruleContext.assertNoErrors();
 
       instantRunResourceApk = applicationManifest
@@ -266,8 +266,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               ProguardHelper.getProguardConfigArtifact(ruleContext, "instant_run"),
               null, /* mainDexProguardCfg */
               null, /* manifestOut */
-              null /* mergedResourcesOut */,
-              null /* dataBindingInfoZip */);
+              null /* mergedResourcesOut */);
       ruleContext.assertNoErrors();
 
       splitResourceApk = applicationManifest
@@ -287,8 +286,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               ProguardHelper.getProguardConfigArtifact(ruleContext, "incremental_split"),
               null, /* mainDexProguardCfg */
               null, /* manifestOut */
-              null /* mergedResourcesOut */,
-              null /* dataBindingInfoZip */);
+              null /* mergedResourcesOut */);
       ruleContext.assertNoErrors();
 
     } else {
@@ -1566,7 +1564,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     if (ruleContext.getFragment(AndroidConfiguration.class).useSingleJarForMultidex()) {
       ruleContext.registerAction(singleJarSpawnActionBuilder(ruleContext)
           .addArgument("--exclude_build_data")
-          .addArgument("--dont_change_compression")
           .addArgument("--sources")
           .addInputArgument(inputZip)
           .addArgument("--output")
