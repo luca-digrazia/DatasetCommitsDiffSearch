@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,10 +29,6 @@ import java.util.Set;
  * An apparatus for reporting / collecting events.
  */
 public class EventCollectionApparatus {
-  private EventCollector eventCollector;
-  private Reporter reporter;
-  private PrintingEventHandler printingEventHandler;
-
   /**
    * Determine which events the {@link #collector()} created by this apparatus
    * will collect. Default: {@link EventKind#ERRORS_AND_WARNINGS}.
@@ -50,9 +46,13 @@ public class EventCollectionApparatus {
     this(EventKind.ERRORS_AND_WARNINGS);
   }
 
-  public void clear() {
-    eventCollector.clear();
-  }
+  /* ---- Settings for the apparatus (configuration for creating state) ---- */
+
+  /* ---------- State that the apparatus initializes / operates on --------- */
+  private EventCollector eventCollector;
+  private Reporter reporter;
+  private PrintingEventHandler printingEventHandler;
+
 
   /**
    * Determine whether the {#link reporter()} created by this apparatus will
@@ -82,14 +82,6 @@ public class EventCollectionApparatus {
     return eventCollector;
   }
 
-  public Iterable<Event> errors() {
-    return eventCollector.filtered(EventKind.ERROR);
-  }
-
-  public Iterable<Event> warnings() {
-    return eventCollector.filtered(EventKind.WARNING);
-  }
-
   /**
    * Redirects all output to the specified OutErr stream pair.
    * Returns the previous OutErr.
@@ -111,26 +103,11 @@ public class EventCollectionApparatus {
 
   /**
    * Utility method: Assert that the {@link #collector()} has received an
-   * info message with the {@code expectedMessage}.
+   * event with the {@code expectedMessage}.
    */
-  public Event assertContainsInfo(String expectedMessage) {
-    return MoreAsserts.assertContainsEvent(eventCollector, expectedMessage, EventKind.INFO);
-  }
-
-  /**
-   * Utility method: Assert that the {@link #collector()} has received an
-   * error with the {@code expectedMessage}.
-   */
-  public Event assertContainsError(String expectedMessage) {
-    return MoreAsserts.assertContainsEvent(eventCollector, expectedMessage, EventKind.ERROR);
-  }
-
-  /**
-   * Utility method: Assert that the {@link #collector()} has received a
-   * warning with the {@code expectedMessage}.
-   */
-  public Event assertContainsWarning(String expectedMessage) {
-    return MoreAsserts.assertContainsEvent(eventCollector, expectedMessage, EventKind.WARNING);
+  public Event assertContainsEvent(String expectedMessage) {
+    return MoreAsserts.assertContainsEvent(eventCollector,
+                                              expectedMessage);
   }
 
   public List<Event> assertContainsEventWithFrequency(String expectedMessage,
@@ -147,9 +124,5 @@ public class EventCollectionApparatus {
   public Event assertContainsEventWithWordsInQuotes(String... words) {
     return MoreAsserts.assertContainsEventWithWordsInQuotes(
         eventCollector, words);
-  }
-
-  public void assertDoesNotContainEvent(String unexpectedEvent) {
-    MoreAsserts.assertDoesNotContainEvent(eventCollector, unexpectedEvent);
   }
 }
