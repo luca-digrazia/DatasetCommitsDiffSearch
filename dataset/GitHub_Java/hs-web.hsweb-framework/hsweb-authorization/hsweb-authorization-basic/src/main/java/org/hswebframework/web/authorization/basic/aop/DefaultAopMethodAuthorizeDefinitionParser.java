@@ -16,7 +16,6 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -49,13 +48,10 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
         if (!CollectionUtils.isEmpty(parserCustomers)) {
             definition = parserCustomers.stream()
                     .map(customer -> customer.parse(paramContext))
-                    .filter(Objects::nonNull)
                     .findAny().orElse(null);
             if (definition != null) {
-                if(definition instanceof EmptyAuthorizeDefinition)return null;
                 return definition;
             }
-
         }
 
         Authorize classAuth = AopUtils.findAnnotation(paramContext.getTarget().getClass(), Authorize.class);
