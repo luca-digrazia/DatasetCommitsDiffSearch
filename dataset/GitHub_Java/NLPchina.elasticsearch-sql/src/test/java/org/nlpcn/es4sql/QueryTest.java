@@ -1,22 +1,17 @@
 package org.nlpcn.es4sql;
 
-import com.alibaba.druid.sql.ast.SQLExpr;
-import com.alibaba.druid.sql.ast.expr.SQLQueryExpr;
-import org.elasticsearch.action.search.SearchRequest;
-import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.common.joda.time.DateTime;
-import org.elasticsearch.common.joda.time.format.DateTimeFormat;
-import org.elasticsearch.common.joda.time.format.DateTimeFormatter;
+
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
+import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 import org.junit.Assert;
 import org.junit.Test;
-import org.nlpcn.es4sql.domain.Select;
 import org.nlpcn.es4sql.exception.SqlParseException;
 import org.nlpcn.es4sql.query.SqlElasticSearchRequestBuilder;
 
-import javax.naming.directory.SearchControls;
 import java.io.IOException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.text.ParseException;
@@ -236,6 +231,9 @@ public class QueryTest {
 		for (SearchHit hit : response4.getHits()) {
 			Assert.assertEquals("m", hit.getSource().get("gender").toString().toLowerCase());
 		}
+
+		SearchHits response5 = query(String.format("SELECT * FROM %s/account WHERE NOT (gender = 'm' OR gender = 'f')", TEST_INDEX));
+		Assert.assertEquals(0, response5.getTotalHits());
 	}
 
 	@Test
@@ -306,18 +304,8 @@ public class QueryTest {
 	}
 
     @Test
-    public void inTermsTestWithIdentifiersTreatLikeStrings() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT name FROM %s/gotCharacters WHERE name.firstname = IN_TERMS(daenerys,eddard) LIMIT 1000", TEST_INDEX));
-        SearchHit[] hits = response.getHits();
-        Assert.assertEquals(2, response.getTotalHits());
-        for(SearchHit hit : hits) {
-            String firstname =  ((Map<String,Object>) hit.getSource().get("name")).get("firstname").toString();
-            assertThat(firstname, isOneOf("Daenerys", "Eddard"));
-        }
-    }
-    @Test
     public void inTermsTestWithStrings() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT name FROM %s/gotCharacters WHERE name.firstname = IN_TERMS('daenerys','eddard') LIMIT 1000", TEST_INDEX));
+        SearchHits response = query(String.format("SELECT name FROM %s/gotCharacters WHERE name.firstname = IN_TERMS(daenerys,eddard) LIMIT 1000", TEST_INDEX));
         SearchHit[] hits = response.getHits();
         Assert.assertEquals(2, response.getTotalHits());
         for(SearchHit hit : hits) {
@@ -398,11 +386,11 @@ public class QueryTest {
         DateTimeFormatter formatter = DateTimeFormat.forPattern(TS_DATE_FORMAT);
         DateTime dateToCompare = new DateTime(2015, 3, 15, 0, 0, 0);
 
-        SearchHits response = query(String.format("SELECT insert_time FROM %s/odbc WHERE insert_time < {ts '2015-03-15 00:00:00.000'}", TEST_INDEX));
+        SearchHits response = query(String.format("SELECT odbc_time FROM %s/odbc WHERE odbc_time < {ts '2015-03-15 00:00:00.000'}", TEST_INDEX));
         SearchHit[] hits = response.getHits();
         for(SearchHit hit : hits) {
             Map<String, Object> source = hit.getSource();
-			String insertTimeStr = (String) source.get("insert_time");
+			String insertTimeStr = (String) source.get("odbc_time");
 			insertTimeStr = insertTimeStr.replace("{ts '", "").replace("'}", "");
 
             DateTime insertTime = formatter.parseDateTime(insertTimeStr);
@@ -437,25 +425,25 @@ public class QueryTest {
 
 	@Test
 	public void missFilterSearch() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-		SearchHits response = query(String.format("SELECT * FROM %s/phrase WHERE insert_time IS missing", TEST_INDEX));
+		SearchHits response = query(String.format("SELECT * FROM %s/phrase WHERE insert_time2 IS missing", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
 		// should be 2 according to the data.
 		Assert.assertEquals(response.getTotalHits(), 2);
 		for(SearchHit hit : hits) {
-			assertThat(hit.getSource(), not(hasKey("insert_time")));
+			assertThat(hit.getSource(), not(hasKey("insert_time2")));
 		}
 	}
 
 	@Test
 	public void notMissFilterSearch() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-		SearchHits response = query(String.format("SELECT * FROM %s/phrase WHERE insert_time IS NOT missing", TEST_INDEX));
+		SearchHits response = query(String.format("SELECT * FROM %s/phrase WHERE insert_time2 IS NOT missing", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
 		// should be 2 according to the data.
 		Assert.assertEquals(response.getTotalHits(), 2);
 		for(SearchHit hit : hits) {
-			assertThat(hit.getSource(), hasKey("insert_time"));
+			assertThat(hit.getSource(), hasKey("insert_time2"));
 		}
 	}
 
@@ -681,19 +669,6 @@ public class QueryTest {
         Assert.assertEquals(1000,hits.getTotalHits());
     }
 
-
-    @Test
-    public void useScrollWithOrderByAndParams() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchResponse response = getSearchResponse(String.format("SELECT /*! USE_SCROLL(5,50000)*/ age,gender,firstname,balance FROM  %s/account order by age", TEST_INDEX, TEST_INDEX));
-        Assert.assertNotNull(response.getScrollId());
-        SearchHits hits = response.getHits();
-        Assert.assertEquals(5,hits.getHits().length);
-        Assert.assertEquals(1000,hits.getTotalHits());
-        for(SearchHit hit : hits){
-            Assert.assertEquals(20,hit.sourceAsMap().get("age"));
-        }
-    }
-
     @Test
     public void innerQueryTest() throws SqlParseException, SQLFeatureNotSupportedException {
         String query = String.format("select * from %s/dog where holdersName IN (select firstname from %s/account where firstname = 'Hattie')",TEST_INDEX,TEST_INDEX);
@@ -766,29 +741,7 @@ public class QueryTest {
 
     }
 
-    @Test
-    public void nestedEqualsTestFieldNormalField() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT * FROM %s/nestedType where nested(message.info)='b'", TEST_INDEX));
-        Assert.assertEquals(1, response.getTotalHits());
-    }
 
-    @Test
-    public void nestedEqualsTestFieldInsideArrays() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT * FROM %s/nestedType where nested(message.info) = 'a'", TEST_INDEX));
-        Assert.assertEquals(2, response.getTotalHits());
-    }
-
-    @Test
-    public void nestedOnInQuery() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT * FROM %s/nestedType where nested(message.info) in ('a','b')", TEST_INDEX));
-        Assert.assertEquals(3, response.getTotalHits());
-    }
-
-    @Test
-    public void nestedOnInTermsQuery() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT * FROM %s/nestedType where nested(message.info) = IN_TERMS(a,b)", TEST_INDEX));
-        Assert.assertEquals(3, response.getTotalHits());
-    }
 
     private SearchHits query(String query) throws SqlParseException, SQLFeatureNotSupportedException, SQLFeatureNotSupportedException {
         SearchDao searchDao = MainTestSuite.getSearchDao();
