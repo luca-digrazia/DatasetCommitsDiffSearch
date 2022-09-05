@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
@@ -980,7 +981,7 @@ public class CppCompileAction extends AbstractAction
    */
   private static CcToolchainFeatures.Variables getOverwrittenVariables(
       Iterable<Artifact> potentialModules) {
-    ImmutableList.Builder<String> usedModulePaths = ImmutableList.builder();
+    List<String> usedModulePaths = Lists.newArrayList();
     for (Artifact input : potentialModules) {
       if (CppFileTypes.CPP_MODULE.matches(input.getFilename())) {
         usedModulePaths.add(input.getExecPathString());
@@ -988,7 +989,7 @@ public class CppCompileAction extends AbstractAction
     }
     CcToolchainFeatures.Variables.Builder variableBuilder =
         new CcToolchainFeatures.Variables.Builder();
-    variableBuilder.addStringSequenceVariable("module_files", usedModulePaths.build());
+    variableBuilder.addSequenceVariable("module_files", usedModulePaths);
     return variableBuilder.build();
   }
 
@@ -1441,7 +1442,7 @@ public class CppCompileAction extends AbstractAction
         CcToolchainFeatures.Variables.Builder variablesBuilder =
             new CcToolchainFeatures.Variables.Builder();
         variablesBuilder.addAll(variables);
-        variablesBuilder.addAndOverwriteAll(overwrittenVariables);
+        variablesBuilder.addAll(overwrittenVariables);
         updatedVariables = variablesBuilder.build();
       }
       addFilteredOptions(
