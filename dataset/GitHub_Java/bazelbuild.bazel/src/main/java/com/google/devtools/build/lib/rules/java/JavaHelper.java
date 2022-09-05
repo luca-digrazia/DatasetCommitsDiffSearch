@@ -64,7 +64,7 @@ public abstract class JavaHelper {
     if (ruleContext.getRule().isAttrDefined("launcher", BuildType.LABEL)
         && ruleContext.attributes().get("launcher", BuildType.LABEL) != null) {
       if (ruleContext.attributes().get("launcher", BuildType.LABEL)
-          .equals(semantics.getJdkLauncherLabel())) {
+          .equals(JavaSemantics.JDK_LAUNCHER_LABEL)) {
         return null;
       }
       return "launcher";
@@ -73,7 +73,7 @@ public abstract class JavaHelper {
     JavaConfiguration javaConfig = ruleContext.getFragment(JavaConfiguration.class);
     if (ruleContext.getRule().isAttrDefined(":java_launcher", BuildType.LABEL)
         && ((javaConfig.getJavaLauncherLabel() != null
-                && !javaConfig.getJavaLauncherLabel().equals(semantics.getJdkLauncherLabel()))
+                && !javaConfig.getJavaLauncherLabel().equals(JavaSemantics.JDK_LAUNCHER_LABEL))
             || semantics.forceUseJavaLauncherTarget(ruleContext))) {
       return ":java_launcher";
     }
