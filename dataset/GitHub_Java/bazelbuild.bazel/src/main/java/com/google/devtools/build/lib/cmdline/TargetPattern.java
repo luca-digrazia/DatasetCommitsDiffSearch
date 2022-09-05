@@ -644,7 +644,7 @@ public abstract class TargetPattern implements Serializable {
       }
 
       if (repository == null) {
-        repository = RepositoryName.MAIN;
+        repository = PackageIdentifier.MAIN_REPOSITORY_NAME;
       }
 
       if (packagePart.endsWith("/...")) {
