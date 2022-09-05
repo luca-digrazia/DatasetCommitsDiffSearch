@@ -17,7 +17,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
@@ -106,7 +105,6 @@ public class SkylarkProviderValidationUtil {
         || type.equals(Integer.class)
         || type.equals(Boolean.class)
         || Artifact.class.isAssignableFrom(type)
-        || ActionAnalysisMetadata.class.isAssignableFrom(type)
         || type.equals(Label.class)
         || type.equals(com.google.devtools.build.lib.syntax.Runtime.NoneType.class);
   }

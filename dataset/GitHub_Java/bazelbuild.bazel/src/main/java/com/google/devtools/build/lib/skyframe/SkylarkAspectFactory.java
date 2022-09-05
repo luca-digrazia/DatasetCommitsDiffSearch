@@ -15,12 +15,13 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.ConfiguredAspect;
+import com.google.devtools.build.lib.analysis.Aspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.SkylarkProviderValidationUtil;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions.SkylarkAspect;
 import com.google.devtools.build.lib.rules.SkylarkRuleContext;
@@ -36,16 +37,15 @@ import com.google.devtools.build.lib.syntax.Mutability;
 public class SkylarkAspectFactory implements ConfiguredAspectFactory {
 
   private final String name;
-  private final SkylarkAspect skylarkAspect;
+  private final SkylarkAspect aspectFunction;
 
-  public SkylarkAspectFactory(String name, SkylarkAspect skylarkAspect) {
+  public SkylarkAspectFactory(String name, SkylarkAspect aspectFunction) {
     this.name = name;
-    this.skylarkAspect = skylarkAspect;
+    this.aspectFunction = aspectFunction;
   }
 
   @Override
-  public ConfiguredAspect create(
-      ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters)
+  public Aspect create(ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters)
       throws InterruptedException {
     try (Mutability mutability = Mutability.create("aspect")) {
       SkylarkRuleContext skylarkRuleContext;
@@ -58,14 +58,14 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
       Environment env =
           Environment.builder(mutability)
               .setSkylark()
-              .setGlobals(skylarkAspect.getFuncallEnv().getGlobals())
+              .setGlobals(aspectFunction.getFuncallEnv().getGlobals())
               .setEventHandler(ruleContext.getAnalysisEnvironment().getEventHandler())
               .build(); // NB: loading phase functions are not available: this is analysis already,
                         // so we do *not* setLoadingPhase().
       Object aspectSkylarkObject;
       try {
         aspectSkylarkObject =
-            skylarkAspect
+            aspectFunction
                 .getImplementation()
                 .call(
                     ImmutableList.<Object>of(base, skylarkRuleContext),
@@ -80,16 +80,16 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
           return null;
         }
 
-        ConfiguredAspect.Builder builder = new ConfiguredAspect.Builder(name, ruleContext);
+        Aspect.Builder builder = new Aspect.Builder(name);
 
         SkylarkClassObject struct = (SkylarkClassObject) aspectSkylarkObject;
         Location loc = struct.getCreationLoc();
         for (String key : struct.getKeys()) {
           builder.addSkylarkTransitiveInfo(key, struct.getValue(key), loc);
         }
-        ConfiguredAspect configuredAspect = builder.build();
+        Aspect aspect = builder.build();
         SkylarkProviderValidationUtil.checkOrphanArtifacts(ruleContext);
-        return configuredAspect;
+        return aspect;
       } catch (EvalException e) {
         addAspectToStackTrace(base, e);
         ruleContext.ruleError("\n" + e.print());
@@ -105,7 +105,12 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
           .registerPhantomFuncall(
               String.format("%s(...)", name),
               base.getTarget().getAssociatedRule().getLocation(),
-              skylarkAspect.getImplementation());
+              aspectFunction.getImplementation());
     }
+  }
+
+  @Override
+  public AspectDefinition getDefinition() {
+    return new AspectDefinition.Builder(name).build();
   }
 }
