@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -44,11 +43,7 @@ import java.util.Map;
  * deps that are needed for building Objective-C rules.
  */
 @Immutable
-@SkylarkModule(
-  name = "ObjcProvider",
-  category = SkylarkModuleCategory.PROVIDER,
-  doc = "A provider for compilation and linking of objc."
-)
+@SkylarkModule(name = "ObjcProvider", doc = "A provider for compilation and linking of objc.")
 public final class ObjcProvider extends SkylarkClassObject implements TransitiveInfoProvider {
 
   /**
@@ -383,8 +378,6 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
           INCLUDE,
           INCLUDE_SYSTEM,
           GENERAL_RESOURCE_DIR,
-          GENERAL_RESOURCE_FILE,
-          BUNDLE_FILE,
           BUNDLE_IMPORT_DIR,
           XCASSETS_DIR,
           FRAMEWORK_DIR);
