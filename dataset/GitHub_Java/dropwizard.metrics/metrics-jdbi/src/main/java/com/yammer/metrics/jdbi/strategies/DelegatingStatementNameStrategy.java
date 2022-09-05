@@ -1,28 +1,33 @@
 package com.yammer.metrics.jdbi.strategies;
 
-import com.yammer.metrics.core.MetricName;
-import org.skife.jdbi.v2.StatementContext;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public abstract class DelegatingStatementNameStrategy implements StatementNameStrategy {
+import org.skife.jdbi.v2.StatementContext;
+
+import com.yammer.metrics.core.MetricName;
+
+public abstract class DelegatingStatementNameStrategy implements StatementNameStrategy
+{
     private final List<StatementNameStrategy> strategies = new ArrayList<StatementNameStrategy>();
 
-    protected DelegatingStatementNameStrategy(StatementNameStrategy... strategies) {
+    protected DelegatingStatementNameStrategy(final StatementNameStrategy ... strategies)
+    {
         registerStrategies(strategies);
     }
 
-    protected void registerStrategies(StatementNameStrategy... strategies) {
+    protected void registerStrategies(final StatementNameStrategy ... strategies)
+    {
         this.strategies.addAll(Arrays.asList(strategies));
     }
 
     @Override
-    public MetricName getStatementName(StatementContext statementContext) {
+    public MetricName getStatementName(final StatementContext statementContext)
+    {
         if (strategies != null) {
             for (StatementNameStrategy strategy : strategies) {
-                final MetricName statementName = strategy.getStatementName(statementContext);
+                MetricName statementName = strategy.getStatementName(statementContext);
                 if (statementName != null) {
                     return statementName;
                 }
