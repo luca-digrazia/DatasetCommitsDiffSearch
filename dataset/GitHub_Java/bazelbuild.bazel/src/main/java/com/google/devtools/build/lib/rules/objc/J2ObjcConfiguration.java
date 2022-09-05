@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 
@@ -29,24 +28,25 @@ import java.util.Collections;
 import java.util.Set;
 
 /**
- * A J2ObjC transpiler configuration fragment containing J2ObjC translation flags.
- * This configuration fragment is used by Java rules that can be transpiled
- * (specifically, J2ObjCAspects thereof).
+ * A J2ObjC transpiler configuration containing J2ObjC translation flags.
  */
-@Immutable
 public class J2ObjcConfiguration extends Fragment {
   /**
    * Always-on flags for J2ObjC translation. These flags will always be used for invoking the J2ObjC
-   * transpiler. See http://j2objc.org/docs/j2objc.html for flag documentation.
+   * transpiler. See https://github.com/google/j2objc/wiki/j2objc for flag documentation.
    */
   private static final Set<String> J2OBJC_ALWAYS_ON_TRANSLATION_FLAGS = ImmutableSet.of(
       "-encoding",
       "UTF-8",
       "--doc-comments",
+      "--extract-unsequenced",
+      "--final-methods-as-functions",
+      "--hide-private-members",
+      "--segmented-headers",
       "-XcombineJars");
 
   /**
-   * Allowed flags for J2ObjC translation. See http://j2objc.org/docs/j2objc.html for flag
+   * Allowed flags for J2ObjC translation. See https://github.com/google/j2objc/wiki/j2objc for flag
    * documentation.
    */
   static final Set<String> J2OBJC_BLACKLISTED_TRANSLATION_FLAGS =
@@ -104,6 +104,16 @@ public class J2ObjcConfiguration extends Fragment {
    */
   public boolean removeDeadCode() {
     return removeDeadCode;
+  }
+
+  @Override
+  public String getName() {
+    return "J2ObjC";
+  }
+
+  @Override
+  public String cacheKey() {
+    return Joiner.on(" ").join(translationFlags) + "-" + String.valueOf(removeDeadCode);
   }
 
   @Override
