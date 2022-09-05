@@ -10,7 +10,6 @@ import org.elasticsearch.search.aggregations.AbstractAggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.ValuesSourceAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.geogrid.GeoHashGridBuilder;
 import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogram;
 import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramBuilder;
 import org.elasticsearch.search.aggregations.bucket.histogram.Histogram;
@@ -66,8 +65,6 @@ public class AggMaker {
 			return AggregationBuilders.min(field.getAlias()).field(field.getParams().get(0).toString());
 		case "AVG":
 			return AggregationBuilders.avg(field.getAlias()).field(field.getParams().get(0).toString());
-		case "STATS":
-			return AggregationBuilders.stats(field.getAlias()).field(field.getParams().get(0).toString());
 		case "TOPHITS":
 			return makeTopHitsAgg(field);
 		case "COUNT":
@@ -78,7 +75,7 @@ public class AggMaker {
 		}
 	}
 
-	private AggregationBuilder<?> makeRangeGroup(MethodField field) throws SqlParseException {
+	private ValuesSourceAggregationBuilder<?> makeRangeGroup(MethodField field) throws SqlParseException {
 		switch (field.getName().toLowerCase()) {
 		case "range":
 			return rangeBuilder(field);
@@ -90,40 +87,13 @@ public class AggMaker {
 			return dateRange(field);
 		case "histogram":
 			return histogram(field);
-        case "geohash_grid":
-            return geohashGrid(field);
 		default:
 			throw new SqlParseException("can define this method " + field);
 		}
 
 	}
 
-    private AggregationBuilder<?> geohashGrid(MethodField field) throws SqlParseException {
-        GeoHashGridBuilder geoHashGrid = AggregationBuilders.geohashGrid(field.getAlias());
-        String value = null;
-        for (KVValue kv : field.getParams()) {
-            value = kv.value.toString();
-            switch (kv.key.toLowerCase()) {
-                case "precision":
-                    geoHashGrid.precision(Integer.parseInt(value));
-                    break;
-                case "field":
-                    geoHashGrid.field(value);
-                    break;
-                case "size":
-                    geoHashGrid.size(Integer.parseInt(value));
-                    break;
-                case "shard_size":
-                    geoHashGrid.shardSize(Integer.parseInt(value));
-                    break;
-                default:
-                    throw new SqlParseException("geohash grid err or not define field " + kv.toString());
-            }
-        }
-        return geoHashGrid;
-    }
-
-    private static final String TIME_FARMAT = "yyyy-MM-dd HH:mm:ss";
+	private static final String TIME_FARMAT = "yyyy-MM-dd HH:mm:ss";
 
 	private ValuesSourceAggregationBuilder<?> dateRange(MethodField field) {
 		DateRangeBuilder dateRange = AggregationBuilders.dateRange(field.getAlias()).format(TIME_FARMAT);
