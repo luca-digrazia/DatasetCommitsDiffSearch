@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.util.SubincludePreprocessor;
-import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.testutil.ManualClock;
@@ -52,7 +51,6 @@ import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.RecordingDifferencer;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import com.google.devtools.common.options.Options;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
@@ -73,14 +71,12 @@ public class PackageFunctionTest extends BuildViewTestCase {
   private CustomInMemoryFs fs = new CustomInMemoryFs(new ManualClock());
 
   private void preparePackageLoading(Path... roots) {
-    PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
-    packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
-    packageCacheOptions.showLoadingProgress = true;
-    packageCacheOptions.globbingThreads = 7;
     getSkyframeExecutor()
         .preparePackageLoading(
             new PathPackageLocator(outputBase, ImmutableList.copyOf(roots)),
-            packageCacheOptions,
+            ConstantRuleVisibility.PUBLIC,
+            true,
+            7,
             "",
             UUID.randomUUID(),
             ImmutableMap.<String, String>of(),
@@ -445,14 +441,12 @@ public class PackageFunctionTest extends BuildViewTestCase {
             Label.parseAbsoluteUnchecked("//foo:b.txt"))
         .inOrder();
     getSkyframeExecutor().resetEvaluator();
-    PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
-    packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
-    packageCacheOptions.showLoadingProgress = true;
-    packageCacheOptions.globbingThreads = 7;
     getSkyframeExecutor()
         .preparePackageLoading(
             new PathPackageLocator(outputBase, ImmutableList.<Path>of(rootDirectory)),
-            packageCacheOptions,
+            ConstantRuleVisibility.PUBLIC,
+            true,
+            7,
             "",
             UUID.randomUUID(),
             ImmutableMap.<String, String>of(),

@@ -23,14 +23,12 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
-import com.google.devtools.common.options.Options;
 import java.util.Collection;
 import java.util.UUID;
 import org.junit.Before;
@@ -157,14 +155,12 @@ public class SkylarkFileContentHashTests extends BuildViewTestCase {
    * Asserts that the targets and it's Skylark dependencies were loaded properly.
    */
   private String getHash(String pkg, String name) throws Exception {
-    PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
-    packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
-    packageCacheOptions.showLoadingProgress = true;
-    packageCacheOptions.globbingThreads = 7;
     getSkyframeExecutor()
         .preparePackageLoading(
             new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
-            packageCacheOptions,
+            ConstantRuleVisibility.PUBLIC,
+            true,
+            7,
             "",
             UUID.randomUUID(),
             ImmutableMap.<String, String>of(),

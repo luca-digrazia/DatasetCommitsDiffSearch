@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
-import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.util.BlazeClock;
@@ -32,7 +31,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
-import com.google.devtools.common.options.Options;
 import java.util.UUID;
 import org.junit.Before;
 import org.junit.Test;
@@ -48,14 +46,12 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
   @Before
   public final void preparePackageLoading() throws Exception  {
     Path alternativeRoot = scratch.dir("/root_2");
-    PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
-    packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
-    packageCacheOptions.showLoadingProgress = true;
-    packageCacheOptions.globbingThreads = 7;
     getSkyframeExecutor()
         .preparePackageLoading(
             new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory, alternativeRoot)),
-            packageCacheOptions,
+            ConstantRuleVisibility.PUBLIC,
+            true,
+            7,
             "",
             UUID.randomUUID(),
             ImmutableMap.<String, String>of(),

@@ -218,7 +218,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     optionsParser.parse(new String[] {"--default_visibility=public" });
     optionsParser.parse(args);
     if (defaultFlags().contains(Flag.DYNAMIC_CONFIGURATIONS)) {
-      optionsParser.parse("--experimental_dynamic_configs=on");
+      optionsParser.parse("--experimental_dynamic_configs");
     }
 
     InvocationPolicyEnforcer optionsPolicyEnforcer = analysisMock.getInvocationPolicyEnforcer();
