@@ -15,14 +15,9 @@ package com.google.devtools.build.lib.analysis.util;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstArtifactEndingWith;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Splitter;
@@ -128,7 +123,6 @@ import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.FileType;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -139,8 +133,6 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
-
-import org.junit.Before;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -184,9 +176,11 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected WorkspaceStatusAction.Factory workspaceStatusActionFactory;
 
   private MutableActionGraph mutableActionGraph;
+  protected boolean enableLoading = true;
 
-  @Before
-  public final void initializeSkyframeExecutor() throws Exception {
+  @Override
+  protected void setUp() throws Exception {
+    super.setUp();
     AnalysisMock mock = getAnalysisMock();
     directories = new BlazeDirectories(outputBase, outputBase, rootDirectory);
     binTools = BinTools.forUnitTesting(directories, TestConstants.EMBEDDED_TOOLS);
@@ -209,6 +203,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             binTools,
             workspaceStatusActionFactory,
             ruleClassProvider.getBuildInfoFactories(),
+            ImmutableSet.<Path>of(),
             ImmutableList.<DiffAwareness.Factory>of(),
             Predicates.<PathFragment>alwaysFalse(),
             getPreprocessorFactorySupplier(),
@@ -299,7 +294,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   private void setUpSkyframe() {
     PathPackageLocator pkgLocator = PathPackageLocator.create(
-        outputBase, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
+        null, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
     skyframeExecutor.preparePackageLoading(pkgLocator,
         packageCacheOptions.defaultVisibility, true,
         7, ruleClassProvider.getDefaultsPackageContent(optionsParser),
@@ -387,7 +382,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * the action graph.
    */
   protected Iterable<ConfiguredTarget> getDirectPrerequisites(ConfiguredTarget target)
-      throws Exception {
+      throws InterruptedException {
     return view.getDirectPrerequisitesForTesting(reporter, target, masterConfig);
   }
 
@@ -400,7 +395,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   // requesting "//go:two" as a dependency. So the configured targets aren't considered "equal".
   // Once we apply dynamic configs to top-level targets this discrepancy will go away.
   protected void assertDirectPrerequisitesContain(ConfiguredTarget target, ConfiguredTarget dep)
-      throws Exception {
+      throws InterruptedException {
     Iterable<ConfiguredTarget> prereqs = getDirectPrerequisites(target);
     BuildConfiguration depConfig = dep.getConfiguration();
     for (ConfiguredTarget contained : prereqs) {
@@ -437,7 +432,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * Creates and returns a rule context that is equivalent to the one that was used to create the
    * given configured target.
    */
-  protected RuleContext getRuleContext(ConfiguredTarget target) throws Exception {
+  protected RuleContext getRuleContext(ConfiguredTarget target) throws InterruptedException {
     return view.getRuleContextForTesting(
         reporter, target, new StubAnalysisEnvironment(), masterConfig);
   }
@@ -447,7 +442,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * that was used to create the given configured target.
    */
   protected RuleContext getRuleContextForSkylark(ConfiguredTarget target)
-      throws Exception {
+      throws InterruptedException {
     // TODO(bazel-team): we need this horrible workaround because CachingAnalysisEnvironment
     // only works with StoredErrorEventListener despite the fact it accepts the interface
     // ErrorEventListener, so it's not possible to create it with reporter.
@@ -469,7 +464,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * the action graph.
    */
   protected List<? extends TransitiveInfoCollection> getPrerequisites(ConfiguredTarget target,
-      String attributeName) throws Exception {
+      String attributeName) throws InterruptedException {
     return getRuleContext(target).getConfiguredTargetMap().get(attributeName);
   }
 
@@ -480,7 +475,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * the action graph.
    */
   protected <C extends TransitiveInfoProvider> Iterable<C> getPrerequisites(ConfiguredTarget target,
-      String attributeName, Class<C> classType) throws Exception {
+      String attributeName, Class<C> classType) throws InterruptedException {
     return AnalysisUtils.getProviders(getPrerequisites(target, attributeName), classType);
   }
 
@@ -491,7 +486,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * the action graph.
    */
   protected ImmutableList<Artifact> getPrerequisiteArtifacts(
-      ConfiguredTarget target, String attributeName) throws Exception {
+      ConfiguredTarget target, String attributeName) throws InterruptedException {
     Set<Artifact> result = new LinkedHashSet<>();
     for (FileProvider provider : getPrerequisites(target, attributeName, FileProvider.class)) {
       Iterables.addAll(result, provider.getFilesToBuild());
@@ -679,12 +674,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected Rule scratchRule(String packageName, String ruleName, String... lines)
       throws Exception {
     String buildFilePathString = packageName + "/BUILD";
-    if (packageName.equals(Label.EXTERNAL_PATH_PREFIX)) {
-      buildFilePathString = "WORKSPACE";
-      scratch.overwriteFile(buildFilePathString, lines);
-    } else {
-      scratch.file(buildFilePathString, lines);
-    }
+    scratch.file(buildFilePathString, lines);
     skyframeExecutor.invalidateFilesUnderPathForTesting(
         reporter,
         new ModifiedFileSet.Builder().modify(new PathFragment(buildFilePathString)).build(),
@@ -1334,7 +1324,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         Collections.unmodifiableSet(ruleClassProvider.getRuleClassMap().keySet()));
     LoadingResult loadingResult = runner.execute(reporter, eventBus, targets, loadingOptions,
         getTargetConfiguration().getAllLabels(), viewOptions.keepGoing,
-        isLoadingEnabled(), /*determineTests=*/false, /*callback=*/null);
+        enableLoading, /*determineTests=*/false, /*callback=*/null);
     if (!doAnalysis) {
       // TODO(bazel-team): What's supposed to happen in this case?
       return null;
@@ -1347,7 +1337,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         AnalysisTestUtil.TOP_LEVEL_ARTIFACT_CONTEXT,
         reporter,
         eventBus,
-        isLoadingEnabled());
+        enableLoading);
   }
 
   protected static Predicate<Artifact> artifactNamed(final String name) {
@@ -1440,26 +1430,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected String getErrorMsgMandatoryProviderMissing(String offendingRule, String providerName) {
     return String.format("'%s' does not have mandatory provider '%s'", offendingRule, providerName);
-  }
-
-  /**
-   * Utility method for tests that result in errors early during
-   * package loading. Given the name of the package for the test,
-   * and the rules for the build file, create a scratch file, load
-   * the build file, and produce the package.
-   * @param packageName the name of the package for the build file
-   * @param lines the rules for the build file as an array of strings
-   * @return the loaded package from the populated package cache
-   * @throws Exception if there is an error creating the temporary files
-   *    for the test.
-   */
-  protected com.google.devtools.build.lib.packages.Package createScratchPackageForImplicitCycle(
-      String packageName, String... lines) throws Exception {
-    eventCollector.clear();
-    reporter.removeHandler(failFastHandler);
-    scratch.file("" + packageName + "/BUILD", lines);
-    return getPackageManager()
-        .getPackage(reporter, PackageIdentifier.createInDefaultRepo(packageName));
   }
 
   /**
@@ -1668,5 +1638,9 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     return result.build();
+  }
+
+  protected void disableLoading() {
+    enableLoading = false;
   }
 }
