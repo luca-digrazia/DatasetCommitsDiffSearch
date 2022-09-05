@@ -32,12 +32,7 @@ import javax.annotation.Nullable;
 /**
  * A Skylark value that is a result of an 'aspect(..)' function call.
  */
-@SkylarkModule(
-  name = "Aspect",
-  doc =
-      "For more information about Aspects, please consult the <a href=\"globals.html#aspect\">"
-          + "documentation of the aspect function</a> or the "
-          + "<a href=\"../aspects.md\">introduction to Aspects</a>.")
+@SkylarkModule(name = "aspect", doc = "", documented = false)
 public class SkylarkAspect implements SkylarkValue {
   private final BaseFunction implementation;
   private final ImmutableList<String> attributeAspects;

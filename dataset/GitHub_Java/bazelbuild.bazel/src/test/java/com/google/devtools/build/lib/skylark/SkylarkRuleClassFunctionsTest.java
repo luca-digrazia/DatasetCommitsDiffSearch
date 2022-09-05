@@ -161,16 +161,8 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testAttrAllowedFileTypesWrongType() throws Exception {
     checkErrorContains(
-        "allow_files should be a boolean or a string list",
-        "attr.label_list(allow_files = 18)");
-  }
-
-  @Test
-  public void testAttrWithList() throws Exception {
-    Attribute attr = evalAttributeDefinition("attr.label_list(allow_files = ['.xml'])")
-        .build("a1");
-    assertTrue(attr.getAllowedFileTypesPredicate().apply("a.xml"));
-    assertFalse(attr.getAllowedFileTypesPredicate().apply("a.txt"));
+        "allow_files should be a boolean or a filetype object.",
+        "attr.label_list(allow_files = ['.xml'])");
   }
 
   @Test

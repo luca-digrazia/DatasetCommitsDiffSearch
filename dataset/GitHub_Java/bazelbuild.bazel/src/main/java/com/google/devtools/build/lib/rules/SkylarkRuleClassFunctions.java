@@ -691,9 +691,8 @@ public class SkylarkRuleClassFunctions {
     };
 
   @SkylarkSignature(name = "FileType",
-      doc = "Deprecated. Creates a file filter from a list of strings. For example, to match "
-      + "files ending with .cc or .cpp, use: "
-      + "<pre class=language-python>FileType([\".cc\", \".cpp\"])</pre>",
+      doc = "Creates a file filter from a list of strings. For example, to match files ending "
+      + "with .cc or .cpp, use: <pre class=language-python>FileType([\".cc\", \".cpp\"])</pre>",
       returnType = SkylarkFileType.class,
       mandatoryPositionals = {
       @Param(name = "types", type = SkylarkList.class, generic1 = String.class, defaultValue = "[]",

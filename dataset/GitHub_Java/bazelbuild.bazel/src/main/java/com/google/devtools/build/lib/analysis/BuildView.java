@@ -83,7 +83,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -795,13 +794,13 @@ public class BuildView {
    * Returns ConfigMatchingProvider instances corresponding to the configurable attribute keys
    * present in this rule's attributes.
    */
-  private ImmutableMap<Label, ConfigMatchingProvider> getConfigurableAttributeKeysForTesting(
+  private Set<ConfigMatchingProvider> getConfigurableAttributeKeysForTesting(
       EventHandler eventHandler, TargetAndConfiguration ctg) {
     if (!(ctg.getTarget() instanceof Rule)) {
-      return ImmutableMap.of();
+      return ImmutableSet.of();
     }
     Rule rule = (Rule) ctg.getTarget();
-    Map<Label, ConfigMatchingProvider> keys = new LinkedHashMap<>();
+    ImmutableSet.Builder<ConfigMatchingProvider> keys = ImmutableSet.builder();
     RawAttributeMapper mapper = RawAttributeMapper.of(rule);
     for (Attribute attribute : rule.getAttributes()) {
       for (Label label : mapper.getConfigurabilityKeys(attribute.getName(), attribute.getType())) {
@@ -810,10 +809,10 @@ public class BuildView {
         }
         ConfiguredTarget ct = getConfiguredTargetForTesting(
             eventHandler, label, ctg.getConfiguration());
-        keys.put(label, Preconditions.checkNotNull(ct.getProvider(ConfigMatchingProvider.class)));
+        keys.add(Preconditions.checkNotNull(ct.getProvider(ConfigMatchingProvider.class)));
       }
     }
-    return ImmutableMap.copyOf(keys);
+    return keys.build();
   }
 
   private ListMultimap<Attribute, ConfiguredTarget> getPrerequisiteMapForTesting(
@@ -877,7 +876,7 @@ public class BuildView {
             .setVisibility(NestedSetBuilder.<PackageSpecification>create(
                 Order.STABLE_ORDER, PackageSpecification.EVERYTHING))
             .setPrerequisites(getPrerequisiteMapForTesting(eventHandler, target, configurations))
-            .setConfigConditions(ImmutableMap.<Label, ConfigMatchingProvider>of())
+            .setConfigConditions(ImmutableSet.<ConfigMatchingProvider>of())
             .setUniversalFragment(ruleClassProvider.getUniversalFragment())
             .build();
   }

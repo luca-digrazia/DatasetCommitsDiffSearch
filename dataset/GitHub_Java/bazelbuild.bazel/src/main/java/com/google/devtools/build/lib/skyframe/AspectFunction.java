@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
@@ -57,6 +56,8 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -173,10 +174,6 @@ public final class AspectFunction implements SkyFunction {
     }
     
     if (!(target instanceof Rule)) {
-      env.getListener().handle(Event.error(
-          target.getLocation(),
-          String.format("%s is attached to %s %s but aspects must be attached to rules",
-              aspect.getAspectClass().getName(), target.getTargetKind(), target.getName())));
       throw new AspectFunctionException(new AspectCreationException(
           "aspects must be attached to rules"));
     }
@@ -215,10 +212,9 @@ public final class AspectFunction implements SkyFunction {
         new TargetAndConfiguration(target, key.getAspectConfiguration());
     try {
       // Get the configuration targets that trigger this rule's configurable attributes.
-      ImmutableMap<Label, ConfigMatchingProvider> configConditions =
-          ConfiguredTargetFunction.getConfigConditions(
-              target, env, resolver, originalTargetAndAspectConfiguration,
-              transitivePackages, transitiveRootCauses);
+      Set<ConfigMatchingProvider> configConditions = ConfiguredTargetFunction.getConfigConditions(
+          target, env, resolver, originalTargetAndAspectConfiguration,
+          transitivePackages, transitiveRootCauses);
       if (configConditions == null) {
         // Those targets haven't yet been resolved.
         return null;
@@ -303,7 +299,7 @@ public final class AspectFunction implements SkyFunction {
       ConfiguredAspectFactory aspectFactory,
       RuleConfiguredTarget associatedTarget,
       BuildConfiguration aspectConfiguration,
-      ImmutableMap<Label, ConfigMatchingProvider> configConditions,
+      Set<ConfigMatchingProvider> configConditions,
       ListMultimap<Attribute, ConfiguredTarget> directDeps,
       NestedSetBuilder<Package> transitivePackages)
       throws AspectFunctionException, InterruptedException {

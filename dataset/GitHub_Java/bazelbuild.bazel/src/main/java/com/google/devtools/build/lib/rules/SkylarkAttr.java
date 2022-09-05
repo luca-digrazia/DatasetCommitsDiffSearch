@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.UserDefinedFunction;
-import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 import java.util.ArrayList;
@@ -66,8 +65,7 @@ public final class SkylarkAttr {
 
   private static final String ALLOW_FILES_ARG = "allow_files";
   private static final String ALLOW_FILES_DOC =
-      "whether File targets are allowed. Can be True, False (default), or a list of file "
-      + "extensions that are allowed (e.g. <code>[\".cc\", \".cpp\"]</code>).";
+      "whether File targets are allowed. Can be True, False (default), or a FileType filter.";
 
   private static final String ALLOW_RULES_ARG = "allow_rules";
   private static final String ALLOW_RULES_DOC =
@@ -166,16 +164,10 @@ public final class SkylarkAttr {
       } else if (fileTypesObj == Boolean.FALSE) {
         builder.allowedFileTypes(FileTypeSet.NO_FILE);
       } else if (fileTypesObj instanceof SkylarkFileType) {
-        // TODO(laurentlb): deprecated, to be removed
         builder.allowedFileTypes(((SkylarkFileType) fileTypesObj).getFileTypeSet());
-      } else if (fileTypesObj instanceof SkylarkList) {
-        List<String> arg =
-            SkylarkList.castSkylarkListOrNoneToList(
-                fileTypesObj, String.class, "allow_files argument");
-        builder.allowedFileTypes(FileType.of(arg));
       } else {
         throw new EvalException(
-            ast.getLocation(), "allow_files should be a boolean or a string list");
+            ast.getLocation(), "allow_files should be a boolean or a filetype object.");
       }
     } else if (type.equals(BuildType.LABEL) || type.equals(BuildType.LABEL_LIST)) {
       builder.allowedFileTypes(FileTypeSet.NO_FILE);
