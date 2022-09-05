@@ -125,8 +125,8 @@ public class RedisUserTokenManagerTest {
 
         tokenManager.touch("test-token_2")
                 .as(StepVerifier::create)
-                .expectComplete()
-                .verify();
+                .expectFusion()
+                .verifyComplete();
 
         Thread.sleep(2000);
         tokenManager.getByToken("test-token_2")
