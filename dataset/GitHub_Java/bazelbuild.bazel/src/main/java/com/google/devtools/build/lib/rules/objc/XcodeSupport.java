@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fromTemplates;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -55,18 +56,6 @@ public final class XcodeSupport {
   }
 
   /**
-   * Adds a dummy source file to the Xcode target. This is needed if the target does not have any
-   * source files but Xcode requires one.
-   *
-   * @return this xcode support
-   */
-  XcodeSupport addDummySource(XcodeProvider.Builder xcodeProviderBuilder) {
-    xcodeProviderBuilder.addAdditionalSources(
-        ruleContext.getPrerequisiteArtifact("$dummy_source", Mode.TARGET));
-    return this;
-  }
-
-  /**
    * Registers actions that generate the rule's Xcode project.
    *
    * @param xcodeProvider information about this rule's xcode settings and that of its dependencies
@@ -100,13 +89,16 @@ public final class XcodeSupport {
   }
 
   /**
-   * Adds dependencies to the given provider builder from the given attribute.
+   * Adds dependencies to the given provider builder from the {@code deps} and {@code bundles}
+   * attributes.
    *
    * @return this xcode support
    */
-  XcodeSupport addDependencies(XcodeProvider.Builder xcodeProviderBuilder, String attribute) {
-    xcodeProviderBuilder
-        .addDependencies(ruleContext.getPrerequisites(attribute, Mode.TARGET, XcodeProvider.class));
+  XcodeSupport addDependencies(XcodeProvider.Builder xcodeProviderBuilder) {
+    for (String attribute : ImmutableSet.of("deps", "non_propagated_deps", "bundles")) {
+      xcodeProviderBuilder.addDependencies(
+          ruleContext.getPrerequisites(attribute, Mode.TARGET, XcodeProvider.class));
+    }
     return this;
   }
 }
