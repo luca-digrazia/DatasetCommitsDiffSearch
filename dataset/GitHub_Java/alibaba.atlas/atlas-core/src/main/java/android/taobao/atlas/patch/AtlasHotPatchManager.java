@@ -10,18 +10,15 @@ import android.taobao.atlas.util.AtlasFileLock;
 import android.taobao.atlas.util.BundleLock;
 import android.taobao.atlas.util.IOUtil;
 import android.taobao.atlas.util.StringUtils;
-import android.text.TextUtils;
+import android.util.Log;
 import android.util.Pair;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleEvent;
 import org.osgi.framework.BundleListener;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileFilter;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,7 +27,6 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import dalvik.system.DexFile;
 
@@ -44,8 +40,8 @@ public class AtlasHotPatchManager implements BundleListener{
     private static final String HOTFIX_NAME_POSTFIX = ".dex";
 
     private File sCurrentVersionPatchDir;
-    private File meta;
-    private ConcurrentHashMap<String,Long> hotpatchBundles = new ConcurrentHashMap<>();
+    private String currentVersionName;
+    private HashMap<String,File> patchInfos = new HashMap<>();
     private HashMap<String,String> activePatchs = new HashMap<>();
     private OnPatchActivatedListener mPatchListener;
 
@@ -60,25 +56,39 @@ public class AtlasHotPatchManager implements BundleListener{
     private AtlasHotPatchManager(){
         try {
             String versionName = RuntimeVariables.androidApplication.getPackageManager().getPackageInfo(RuntimeVariables.androidApplication.getPackageName(),0).versionName;
+            currentVersionName = versionName;
             File sPatchDir = new File(Framework.STORAGE_LOCATION,"hotpatch/");
             if(RuntimeVariables.sCurrentProcessName.equals(RuntimeVariables.androidApplication.getPackageName())){
-                purgeOldPatchsByAppVersion(sPatchDir,versionName);
+                purgeOldCache(sPatchDir,versionName);
             }
             sCurrentVersionPatchDir = new File(sPatchDir,versionName);
             if(!sCurrentVersionPatchDir.exists()){
                 sCurrentVersionPatchDir.mkdirs();
             }
-            meta = new File(sCurrentVersionPatchDir,"meta");
-            if(meta.exists()) {
-                try {
-                    readPatchInfo();
-                } catch (IOException e) {
-                    e.printStackTrace();
+            if(sCurrentVersionPatchDir.exists()) {
+                AtlasFileLock.getInstance().unLock(sPatchDir);
+                File[] bundlePatchs = sCurrentVersionPatchDir.listFiles(new FileFilter() {
+                    @Override
+                    public boolean accept(File file) {
+                        return file.isDirectory();
+                    }
+                });
+                if(bundlePatchs!=null){
+                    for(File bundePatchDir : bundlePatchs){
+                        if(new File(bundePatchDir,"deprecated").exists()) {
+                            Framework.deleteDirectory(bundePatchDir);
+                        }else{
+                            patchInfos.put(bundePatchDir.getName(), bundePatchDir);
+                        }
+                    }
                 }
+
             }
             } catch (PackageManager.NameNotFoundException e) {
                 e.printStackTrace();
-            }
+            }finally {
+            AtlasFileLock.getInstance().unLock(sCurrentVersionPatchDir);
+        }
         patchMainDex();
     }
 
@@ -110,13 +120,9 @@ public class AtlasHotPatchManager implements BundleListener{
                 String lockKey = entry.getKey()+".patch";
                 try {
                     BundleLock.WriteLock(lockKey);
-                    if(entry.getValue().first<0){
-                        hotpatchBundles.remove(entry.getKey());
-                        continue;
-                    }
                     File hotFixFile = new File(patchBundleDir, entry.getValue().first+HOTFIX_NAME_POSTFIX);
                     installDex(entry.getValue().second, hotFixFile);
-                    hotpatchBundles.put(entry.getKey(),Long.valueOf(entry.getValue().first));
+                    patchInfos.put(entry.getKey(),hotFixFile);
                     BundleImpl bundle = (BundleImpl) Atlas.getInstance().getBundle(entry.getKey());
                     if(bundle!=null){
                         Patch p = new Patch(hotFixFile,bundle.getClassLoader());
@@ -129,96 +135,113 @@ public class AtlasHotPatchManager implements BundleListener{
                 }
             }
         }
-        storePatchInfo();
     }
 
     /**
      * @return <bundleName,patchVersion>
      */
     public Map<String,Long> getAllInstallPatch(){
-        return hotpatchBundles;
+        return new HashMap<>();
     }
 
     public void setPatchListener(OnPatchActivatedListener listener){
         mPatchListener = listener;
     }
 
-    public void storePatchInfo() throws IOException{
-        if(!meta.exists()){
-            meta.getParentFile().mkdirs();
-            meta.createNewFile();
-        }
-        if(meta.exists()) {
-            try {
-                AtlasFileLock.getInstance().LockExclusive(meta);
-                StringBuilder bundleList = new StringBuilder("");
-                for (Iterator iterator = hotpatchBundles.entrySet().iterator(); iterator.hasNext(); ) {
-                    Map.Entry entry = (java.util.Map.Entry) iterator.next();
-                    bundleList.append(entry.getKey());
-                    bundleList.append("@");
-                    bundleList.append(entry.getValue());
-                    bundleList.append(";");
+    private void patchMainDex(){
+        File maindexPatchFile = patchInfos.get("com.taobao.maindex");
+        if(maindexPatchFile.exists()){
+            File maindexPatchs[] = maindexPatchFile.listFiles(new FileFilter() {
+                @Override
+                public boolean accept(File patchFle) {
+                    return patchFle.getName().endsWith(HOTFIX_NAME_POSTFIX);
                 }
-                DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(meta)));
-                out.writeUTF(bundleList.toString());
-                out.flush();
-                IOUtil.quietClose(out);
-            }finally {
-                AtlasFileLock.getInstance().unLock(meta);
-            }
-        }
-    }
-
-    public void readPatchInfo() throws IOException{
-        try {
-            AtlasFileLock.getInstance().LockExclusive(meta);
-            DataInputStream input = new DataInputStream(new BufferedInputStream(new FileInputStream(meta)));
-            String bundleListStr = input.readUTF();
-            if (!TextUtils.isEmpty(bundleListStr)) {
-                String[] bundles = bundleListStr.split(";");
-                if (bundles != null && bundles.length > 0) {
-                    for (String bundleInfo : bundles) {
-                        String[] infoItems = bundleInfo.split("@");
-                        hotpatchBundles.put(infoItems[0], Long.parseLong(infoItems[1]));
+            });
+            Patch targetPatch = null;
+            Patch oldPatch = null;
+            if(maindexPatchs!=null && maindexPatchs.length>0) {
+                for (File patchFile : maindexPatchs) {
+                    Patch p = new Patch(patchFile,RuntimeVariables.androidApplication.getClassLoader());
+                    if(targetPatch==null){
+                        targetPatch = p;
+                    }else{
+                        if(targetPatch.compare(p)>0){
+                            oldPatch = p;
+                        }else{
+                            oldPatch = targetPatch;
+                            targetPatch = p;
+                        }
+                        if(oldPatch!=null){
+                            if(RuntimeVariables.sCurrentProcessName.equals(RuntimeVariables.androidApplication.getPackageName())){
+                                oldPatch.purge();
+                            }
+                        }
                     }
                 }
             }
-            IOUtil.quietClose(input);
-        }finally {
-            AtlasFileLock.getInstance().LockExclusive(meta);
+            if(targetPatch!=null){
+                activePatch("com.taobao.maindex",targetPatch);
+            }
         }
     }
 
-    private void patchMainDex(){
-        final long version  = hotpatchBundles.get("com.taobao.maindex");
-        File maindexPatchFile = new File(sCurrentVersionPatchDir,"com.taobao.maindex/"+version+HOTFIX_NAME_POSTFIX);
-        if(maindexPatchFile.exists()){
-            purgeOldPatchsOfBundle(maindexPatchFile,version);
-            activePatch("com.taobao.maindex",new Patch(maindexPatchFile,RuntimeVariables.androidApplication.getClassLoader()));
-        }
-    }
-
-    private void patchBundle(final Bundle bundle){
-        if(hotpatchBundles.get(bundle.getLocation())==null){
-            return;
-        }
+    private void patchBundle(Bundle bundle){
         String lockKey = bundle.getLocation() + ".patch";
         try {
             BundleLock.WriteLock(lockKey);
-            if (activePatchs.get(bundle.getLocation()) != null) {
+            if (activePatchs.get(bundle.getLocation()) != null && !new File(activePatchs.get(bundle.getLocation()),"deprecated").exists()) {
                 return;
             }
-            long version = hotpatchBundles.get(bundle.getLocation());
-            File bundlePatchFile = new File(sCurrentVersionPatchDir,String.format("%s/%s%s",
-                    bundle.getLocation(),version,HOTFIX_NAME_POSTFIX));
+            File bundlePatchFile = patchInfos.get(bundle.getLocation());
             if (bundlePatchFile.exists()) {
-                purgeOldPatchsOfBundle(bundlePatchFile,version);
-                activePatch(bundle.getLocation(),new Patch(bundlePatchFile,((BundleImpl)bundle).getClassLoader()));
+                File bundledexPatchs[] = bundlePatchFile.listFiles(new FileFilter() {
+                    @Override
+                    public boolean accept(File patchFle) {
+                        return patchFle.getName().endsWith(HOTFIX_NAME_POSTFIX);
+                    }
+                });
+                Patch targetPatch = null;
+                Patch oldPatch;
+                if (bundledexPatchs != null && bundledexPatchs.length > 0) {
+                    for (File patchFile : bundledexPatchs) {
+                        Patch p = new Patch(patchFile, ((BundleImpl) bundle).getClassLoader());
+                        if (targetPatch == null) {
+                            targetPatch = p;
+                        } else {
+                            if (targetPatch.compare(p) > 0) {
+                                oldPatch = p;
+                            } else {
+                                oldPatch = targetPatch;
+                                targetPatch = p;
+                            }
+                            if (oldPatch != null) {
+                                if (RuntimeVariables.sCurrentProcessName.equals(RuntimeVariables.androidApplication.getPackageName())) {
+                                    oldPatch.purge();
+                                }
+                            }
+                        }
+                    }
+                }
+                if (targetPatch != null) {
+                    activePatch(bundle.getLocation(),targetPatch);
+                }
             }
         }catch(Exception e){
             e.printStackTrace();
         }finally {
             BundleLock.WriteUnLock(lockKey);
+        }
+    }
+
+    public void disablePatch(String bundleName){
+        File bundlePatchDir = new File(sCurrentVersionPatchDir,bundleName);
+        if(bundlePatchDir.exists()){
+            try {
+                Log.e(TAG,"disable patch : "+bundleName);
+                new File(bundlePatchDir,"deprecated").createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -253,7 +276,7 @@ public class AtlasHotPatchManager implements BundleListener{
         IOUtil.quietClose(bi);
     }
 
-    private void purgeOldPatchsByAppVersion(File patchDir, final String currentVersion){
+    private void purgeOldCache(File patchDir, final String currentVersion){
         try {
             if (patchDir.exists()) {
                 File[] oldPatchDirs = patchDir.listFiles(new FileFilter() {
@@ -269,23 +292,6 @@ public class AtlasHotPatchManager implements BundleListener{
                 }
             }
         }catch(Throwable e){e.printStackTrace();}
-    }
-
-    private void purgeOldPatchsOfBundle(final File validPatchFile,final long version){
-        if(RuntimeVariables.sCurrentProcessName.equals(RuntimeVariables.androidApplication.getPackageName())) {
-            File oldpatchs[] = validPatchFile.getParentFile().listFiles(new FileFilter() {
-                @Override
-                public boolean accept(File patchFile) {
-                    return (patchFile.getName().endsWith(HOTFIX_NAME_POSTFIX) && !patchFile.getName().startsWith(version + ""));
-                }
-            });
-            if (oldpatchs != null && oldpatchs.length > 0) {
-                for (File patchFile : oldpatchs) {
-                    Patch p = new Patch(patchFile, null);
-                    p.purge();
-                }
-            }
-        }
     }
 
     @Override
@@ -377,6 +383,10 @@ public class AtlasHotPatchManager implements BundleListener{
             return false;
         }
 
+        public void install(){
+
+        }
+
         public void purge(){
             if(odexFile.exists()) {
                 odexFile.delete();
@@ -386,6 +396,9 @@ public class AtlasHotPatchManager implements BundleListener{
             }
         }
 
+        public int compare(Patch targetPatch){
+            return version > targetPatch.version ? 1 : 0;
+        }
     }
 
     private static class PatchClassLoader extends ClassLoader{
