@@ -48,7 +48,7 @@ public class ValidationTests extends EvaluationTestCase {
 
   @Test
   public void testTwoFunctionsWithTheSameName() throws Exception {
-    checkError("Variable foo is read only",
+    checkError("function foo already exists",
         "def foo():",
         "  return 1",
         "def foo(x, y):",

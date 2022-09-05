@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.syntax.SkylarkType.SkylarkFunctionType;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -78,7 +79,8 @@ public class FunctionDefStatement extends Statement {
 
   @Override
   void validate(final ValidationEnvironment env) throws EvalException {
-    ValidationEnvironment localEnv = new ValidationEnvironment(env);
+    SkylarkFunctionType type = SkylarkFunctionType.of(ident.getName());
+    ValidationEnvironment localEnv = new ValidationEnvironment(env, type);
     FunctionSignature sig = args.getSignature();
     FunctionSignature.Shape shape = sig.getShape();
     ImmutableList<String> names = sig.getNames();
@@ -106,6 +108,8 @@ public class FunctionDefStatement extends Statement {
     for (Statement stmts : statements) {
       stmts.validate(localEnv);
     }
-    env.declare(ident.getName(), getLocation());
+    env.updateFunction(ident.getName(), type, getLocation());
+    // Register a dummy return value with an incompatible type if there was no return statement.
+    type.setReturnType(SkylarkType.NONE, getLocation());
   }
 }

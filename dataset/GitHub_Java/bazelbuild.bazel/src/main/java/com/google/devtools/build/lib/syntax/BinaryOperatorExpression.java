@@ -187,9 +187,6 @@ public final class BinaryOperatorExpression extends Expression {
       case PERCENT: {
         // int % int
         if (lval instanceof Integer && rval instanceof Integer) {
-          if (rval.equals(0)) {
-            throw new EvalException(getLocation(), "integer modulo by zero");
-          }
           return ((Integer) lval).intValue() % ((Integer) rval).intValue();
         }
 

@@ -107,7 +107,7 @@ public final class ListLiteral extends Expression {
       }
       result.add(expr.eval(env));
     }
-    if (env.isSkylark()) {
+    if (env.isSkylarkEnabled()) {
       return isTuple()
           ? SkylarkList.tuple(result) : SkylarkList.list(result, getLocation());
     } else {

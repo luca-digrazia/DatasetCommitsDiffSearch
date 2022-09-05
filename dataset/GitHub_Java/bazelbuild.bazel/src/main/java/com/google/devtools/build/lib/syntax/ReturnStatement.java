@@ -63,7 +63,7 @@ public class ReturnStatement extends Statement {
 
   @Override
   void validate(ValidationEnvironment env) throws EvalException {
-    if (env.isTopLevel()) {
+    if (env.getCurrentFunction() == null) {
       throw new EvalException(getLocation(), "Return statements must be inside a function");
     }
     returnExpression.validate(env);

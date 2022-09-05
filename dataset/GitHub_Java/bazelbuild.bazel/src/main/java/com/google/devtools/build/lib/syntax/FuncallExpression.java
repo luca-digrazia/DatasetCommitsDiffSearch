@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -459,8 +458,7 @@ public final class FuncallExpression extends Expression {
     }
   }
 
-  @VisibleForTesting
-  public static boolean isNamespace(Class<?> classObject) {
+  static boolean isNamespace(Class<?> classObject) {
     return classObject.isAnnotationPresent(SkylarkModule.class)
         && classObject.getAnnotation(SkylarkModule.class).namespace();
   }
