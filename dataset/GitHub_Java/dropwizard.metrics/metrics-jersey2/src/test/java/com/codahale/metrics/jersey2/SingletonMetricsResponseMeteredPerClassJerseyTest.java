@@ -15,7 +15,6 @@ import java.util.logging.Logger;
 
 import static com.codahale.metrics.MetricRegistry.name;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.fail;
 
 /**
  * Tests registering {@link InstrumentedResourceMethodApplicationListener} as a singleton
@@ -112,7 +111,6 @@ public class SingletonMetricsResponseMeteredPerClassJerseyTest extends JerseyTes
             target("responseMeteredRuntimeExceptionPerClass")
                     .request()
                     .get();
-            fail("expected RuntimeException");
         } catch (Exception e) {
             assertThat(e.getCause()).isInstanceOf(RuntimeException.class);
         }
