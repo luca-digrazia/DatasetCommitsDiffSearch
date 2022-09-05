@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,15 +20,15 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor.SkyframeTransitivePackageLoader;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.skyframe.CycleInfo;
 import com.google.devtools.build.skyframe.CyclesReporter;
 import com.google.devtools.build.skyframe.ErrorInfo;
@@ -71,8 +71,8 @@ final class SkyframeLabelVisitor implements TransitivePackageLoader {
       throws InterruptedException {
     rootCauses.clear();
     lastBuildKeepGoing = false;
-    EvaluationResult<TransitiveTargetValue> result = transitivePackageLoader.loadTransitiveTargets(
-        eventHandler, targetsToVisit, labelsToVisit, keepGoing);
+    EvaluationResult<TransitiveTargetValue> result =
+        transitivePackageLoader.loadTransitiveTargets(targetsToVisit, labelsToVisit, keepGoing);
     updateVisitedValues(result.values());
     lastBuildKeepGoing = keepGoing;
 
