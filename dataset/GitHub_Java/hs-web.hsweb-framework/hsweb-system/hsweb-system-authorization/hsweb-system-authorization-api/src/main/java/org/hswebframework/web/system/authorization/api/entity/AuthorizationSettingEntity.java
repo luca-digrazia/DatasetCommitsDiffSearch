@@ -17,8 +17,7 @@ import java.util.List;
 import java.util.Set;
 
 @Table(name = "s_autz_setting_info", indexes = {
-        @Index(name = "idx_sasi_dss", columnList = "dimension_type,dimension_target,state desc"),
-        @Index(name = "idx_sasi_pdd", columnList = "permission,dimension_type,dimension_target",unique = true)
+        @Index(name = "idx_sasi_dss", columnList = "dimension_type,dimension_target,state desc")
 })
 @Getter
 @Setter

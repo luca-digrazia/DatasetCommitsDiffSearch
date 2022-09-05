@@ -62,11 +62,6 @@ public class AuthorizationServiceAutoConfiguration {
         public DefaultAuthorizationSettingService defaultAuthorizationSettingService(){
             return new DefaultAuthorizationSettingService();
         }
-
-        @Bean
-        public DefaultPermissionService defaultPermissionService(){
-            return new DefaultPermissionService();
-        }
     }
 
 

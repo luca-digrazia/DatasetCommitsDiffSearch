@@ -12,12 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.support.SimpleValueWrapper;
 import org.springframework.context.event.EventListener;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
 import reactor.core.publisher.Mono;
 
 @Slf4j
-@Order(100)
 public class DefaultReactiveAuthenticationManager implements ReactiveAuthenticationManagerProvider {
 
     @Autowired
@@ -29,21 +26,22 @@ public class DefaultReactiveAuthenticationManager implements ReactiveAuthenticat
     @Autowired(required = false)
     private ReactiveCacheManager cacheManager;
 
+
     @EventListener
     public void handleClearAuthCache(ClearUserAuthorizationCacheEvent event) {
         if (cacheManager != null) {
             if (event.isAll()) {
                 cacheManager.getCache("user-auth")
                         .clear()
-                        .doOnSuccess(nil -> log.info("clear all user authentication cache success"))
+                        .doOnSuccess(nil->log.info("clear all user authentication cache success"))
                         .doOnError(err -> log.error(err.getMessage(), err))
                         .subscribe();
             } else {
                 cacheManager.getCache("user-auth")
                         .evictAll(event.getUserId())
                         .doOnError(err -> log.error(err.getMessage(), err))
-                        .doOnSuccess(__ -> log.info("clear user {} authentication cache success", event.getUserId()))
-                        .subscribe();
+                        .doOnSuccess(__->log.info("clear user {} authentication cache success", event.getUserId()))
+                        .subscribe( );
             }
         }
     }
@@ -55,7 +53,7 @@ public class DefaultReactiveAuthenticationManager implements ReactiveAuthenticat
                 .switchIfEmpty(Mono.error(() -> new UnsupportedOperationException("不支持的请求类型")))
                 .map(PlainTextUsernamePasswordAuthenticationRequest.class::cast)
                 .flatMap(pwdRequest -> reactiveUserService.findByUsernameAndPassword(pwdRequest.getUsername(), pwdRequest.getPassword()))
-                .filter(user -> Byte.valueOf((byte) 1).equals(user.getStatus()))
+                .switchIfEmpty(Mono.error(() -> new AccessDenyException("密码错误")))
                 .map(UserEntity::getId)
                 .flatMap(this::getByUserId);
     }
@@ -67,6 +65,7 @@ public class DefaultReactiveAuthenticationManager implements ReactiveAuthenticat
                 .flatMap(_id -> Mono.justOrEmpty(cacheManager)
                         .map(cm -> cacheManager.<Authentication>getCache("user-auth"))
                         .flatMap(cache -> cache.mono(userId).onCacheMissResume(() -> initializeService.initUserAuthorization(userId)))
-                        .cast(Authentication.class));
+                        .cast(Authentication.class)
+                        .switchIfEmpty(initializeService.initUserAuthorization(userId)));
     }
 }
