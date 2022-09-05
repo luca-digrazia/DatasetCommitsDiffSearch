@@ -130,22 +130,18 @@ public class LinkBuildVariablesTest extends BuildViewTestCase {
 
     ConfiguredTarget target = getConfiguredTarget("//x:foo");
     Variables variables = getLinkBuildVariables(target, LinkTargetType.DYNAMIC_LIBRARY);
-    VariableValue librariesToLinkSequence =
-        variables.getVariable(CppLinkActionBuilder.LIBRARIES_TO_LINK_VARIABLE);
+    VariableValue librariesToLinkSequence = variables.getVariable("libraries_to_link");
     assertThat(librariesToLinkSequence).isNotNull();
     Iterable<? extends VariableValue> librariesToLink =
-        librariesToLinkSequence.getSequenceValue(CppLinkActionBuilder.LIBRARIES_TO_LINK_VARIABLE);
+        librariesToLinkSequence.getSequenceValue("libraries_to_link");
     assertThat(librariesToLink).hasSize(1);
-    VariableValue nameValue =
-        librariesToLink
-            .iterator()
-            .next()
-            .getFieldValue(
-                CppLinkActionBuilder.LIBRARIES_TO_LINK_VARIABLE,
-                LibraryToLinkValue.NAME_FIELD_NAME);
+    VariableValue nameValue = librariesToLink.iterator().next().getFieldValue(
+        "librariesToLink", LibraryToLinkValue.NAMES_FIELD_NAME);
     assertThat(nameValue).isNotNull();
-    String name = nameValue.getStringValue(LibraryToLinkValue.NAME_FIELD_NAME);
-    assertThat(name).matches(".*a\\..*o");
+    Iterable<? extends VariableValue> names = nameValue.getSequenceValue("names");
+    assertThat(names).isNotNull();
+    assertThat(names).hasSize(1);
+    assertThat(names.iterator().next().getStringValue("names")).matches(".*a\\..*o");
   }
 
   @Test
@@ -265,51 +261,5 @@ public class LinkBuildVariablesTest extends BuildViewTestCase {
 
     assertThat(binaryVariables.isAvailable(CppLinkActionBuilder.IS_CC_TEST_LINK_ACTION_VARIABLE))
         .isFalse();
-  }
-
-  @Test
-  public void testStripBinariesIsEnabledWhenStripModeIsAlwaysNoMatterWhat() throws Exception {
-    scratch.file("x/BUILD", "cc_binary(name = 'foo', srcs = ['a.cc'])");
-    scratch.file("x/a.cc");
-
-    assertStripBinaryVariableIsPresent("always", "opt", true);
-    assertStripBinaryVariableIsPresent("always", "fastbuild", true);
-    assertStripBinaryVariableIsPresent("always", "dbg", true);
-    assertStripBinaryVariableIsPresent("sometimes", "opt", false);
-    assertStripBinaryVariableIsPresent("sometimes", "fastbuild", true);
-    assertStripBinaryVariableIsPresent("sometimes", "dbg", false);
-    assertStripBinaryVariableIsPresent("never", "opt", false);
-    assertStripBinaryVariableIsPresent("never", "fastbuild", false);
-    assertStripBinaryVariableIsPresent("never", "dbg", false);
-  }
-
-  private void assertStripBinaryVariableIsPresent(
-      String stripMode, String compilationMode, boolean isEnabled) throws Exception {
-    useConfiguration("--strip=" + stripMode, "--compilation_mode=" + compilationMode);
-    ConfiguredTarget target = getConfiguredTarget("//x:foo");
-    Variables variables = getLinkBuildVariables(target, LinkTargetType.EXECUTABLE);
-    assertThat(variables.isAvailable(CppLinkActionBuilder.STRIP_DEBUG_SYMBOLS_VARIABLE))
-        .isEqualTo(isEnabled);
-  }
-
-  @Test
-  public void testIsUsingFissionVariable() throws Exception {
-    scratch.file("x/BUILD",
-        "cc_binary(name = 'foo', srcs = ['foo.cc'])");
-    scratch.file("x/foo.cc");
-
-    AnalysisMock.get()
-        .ccSupport()
-        .setupCrosstool(mockToolsConfig, "supports_fission: true");
-
-    useConfiguration("--fission=no");
-    ConfiguredTarget target = getConfiguredTarget("//x:foo");
-    Variables variables = getLinkBuildVariables(target, LinkTargetType.EXECUTABLE);
-    assertThat(variables.isAvailable(CppLinkActionBuilder.IS_USING_FISSION_VARIABLE)).isFalse();
-
-    useConfiguration("--fission=yes");
-    ConfiguredTarget fissionTarget = getConfiguredTarget("//x:foo");
-    Variables fissionVariables = getLinkBuildVariables(fissionTarget, LinkTargetType.EXECUTABLE);
-    assertThat(fissionVariables.isAvailable(CppLinkActionBuilder.IS_USING_FISSION_VARIABLE)).isTrue();
   }
 }
