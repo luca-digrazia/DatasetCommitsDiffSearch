@@ -220,7 +220,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
    * changes.
    */
   private static final Set<SkyFunctionName> PACKAGE_LOCATOR_DEPENDENT_VALUES = ImmutableSet.of(
-          SkyFunctions.AST_FILE_LOOKUP,
           SkyFunctions.FILE_STATE,
           SkyFunctions.FILE,
           SkyFunctions.DIRECTORY_LISTING_STATE,

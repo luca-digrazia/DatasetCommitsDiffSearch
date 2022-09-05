@@ -214,10 +214,9 @@ class FilesystemValueChecker {
           SkyKey key = keyAndValue.getFirst();
           FileValue lastKnownData = actionValue.getAllOutputArtifactData().get(artifact);
           try {
-            FileValue newData = ActionMetadataHandler.fileValueFromArtifact(artifact, stat, tsgm);
+            FileValue newData = FileAndMetadataCache.fileValueFromArtifact(artifact, stat, tsgm);
             if (!newData.equals(lastKnownData)) {
-              updateIntraBuildModifiedCounter(stat != null ? stat.getLastChangeTime() : -1,
-                  lastKnownData.isSymlink(), newData.isSymlink());
+              updateIntraBuildModifiedCounter(stat != null ? stat.getLastChangeTime() : -1);
               modifiedOutputFilesCounter.getAndIncrement();
               dirtyKeys.add(key);
             }
@@ -231,11 +230,8 @@ class FilesystemValueChecker {
     };
   }
 
-  private void updateIntraBuildModifiedCounter(long time, boolean oldWasSymlink,
-      boolean newIsSymlink) {
-    if (lastExecutionTimeRange != null
-        && lastExecutionTimeRange.contains(time)
-        && !(oldWasSymlink && newIsSymlink)) {
+  private void updateIntraBuildModifiedCounter(long time) throws IOException {
+    if (lastExecutionTimeRange != null && lastExecutionTimeRange.contains(time)) {
       modifiedOutputFilesIntraBuildCounter.incrementAndGet();
     }
   }
@@ -276,11 +272,11 @@ class FilesystemValueChecker {
       Artifact artifact = entry.getKey();
       FileValue lastKnownData = entry.getValue();
       try {
-        FileValue fileValue = ActionMetadataHandler.fileValueFromArtifact(artifact, null, tsgm);
+        FileValue fileValue = FileAndMetadataCache.fileValueFromArtifact(artifact, null, tsgm);
         if (!fileValue.equals(lastKnownData)) {
           updateIntraBuildModifiedCounter(fileValue.exists()
               ? fileValue.realRootedPath().asPath().getLastModifiedTime()
-              : -1, lastKnownData.isSymlink(), fileValue.isSymlink());
+              : -1);
           modifiedOutputFilesCounter.getAndIncrement();
           isDirty = true;
         }
@@ -308,11 +304,15 @@ class FilesystemValueChecker {
       executor.execute(wrapper.wrap(new Runnable() {
         @Override
         public void run() {
-          if (value != null) {
-            DirtyResult result = checker.check(key, value, tsgm);
-            if (result.isDirty()) {
-              batchResult.add(key, result.getNewValue());
-            }
+          if (value == null) {
+            // value will be null if the value is in error or part of a cycle.
+            // TODO(bazel-team): This is overly conservative.
+            batchResult.add(key, /*newValue=*/null);
+            return;
+          }
+          DirtyResult result = checker.check(key, value, tsgm);
+          if (result.isDirty()) {
+            batchResult.add(key, result.getNewValue());
           }
         }
       }));
