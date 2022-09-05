@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.PrerequisiteValidator;
-import com.google.devtools.build.lib.analysis.LocationExpander.Options;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
@@ -940,9 +939,7 @@ public final class RuleContext extends TargetContext
    * <p>This methods should be called only during initialization.
    */
   public void tokenizeAndExpandMakeVars(List<String> tokens, String attributeName, String value) {
-    LocationExpander locationExpander =
-        new LocationExpander(this, Options.ALLOW_DATA, Options.EXEC_PATHS);
-    tokenizeAndExpandMakeVars(tokens, attributeName, value, locationExpander);
+    tokenizeAndExpandMakeVars(tokens, attributeName, value, null);
   }
 
   /**
