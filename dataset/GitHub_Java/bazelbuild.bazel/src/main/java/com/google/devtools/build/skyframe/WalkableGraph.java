@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ public interface WalkableGraph {
 
   /** Provides a WalkableGraph on demand after preparing it. */
   interface WalkableGraphFactory {
-    EvaluationResult<SkyValue> prepareAndGet(Collection<String> roots, String offset,
+    EvaluationResult<SkyValue> prepareAndGet(Collection<String> roots,
         int numThreads, EventHandler eventHandler) throws InterruptedException;
   }
 }

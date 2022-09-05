@@ -26,7 +26,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
@@ -328,7 +327,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
           try {
             addIfUniqueLabel(getSubincludeTarget(
                 subinclude.getLocalTargetLabel("BUILD"), pkg), seenLabels, dependentFiles);
-          } catch (LabelSyntaxException e) {
+          } catch (Label.SyntaxException e) {
             throw new AssertionError("BUILD should always parse as a target name", e);
           }
         }
