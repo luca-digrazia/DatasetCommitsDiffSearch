@@ -73,6 +73,7 @@ public final class LinkCommandLine extends CommandLine {
   @Nullable private final PathFragment runtimeSolibDir;
   private final boolean nativeDeps;
   private final boolean useTestOnlyFlags;
+  private final List<String> noWholeArchiveFlags;
 
   @Nullable private final Artifact paramFile;
 
@@ -95,7 +96,9 @@ public final class LinkCommandLine extends CommandLine {
       @Nullable PathFragment runtimeSolibDir,
       boolean nativeDeps,
       boolean useTestOnlyFlags,
+      boolean needWholeArchive,
       @Nullable Artifact paramFile,
+      List<String> noWholeArchiveFlags,
       CcToolchainFeatures.Variables variables,
       @Nullable FeatureConfiguration featureConfiguration) {
 
@@ -123,6 +126,7 @@ public final class LinkCommandLine extends CommandLine {
     this.nativeDeps = nativeDeps;
     this.useTestOnlyFlags = useTestOnlyFlags;
     this.paramFile = paramFile;
+    this.noWholeArchiveFlags = noWholeArchiveFlags;
   }
 
   @Nullable
@@ -218,16 +222,19 @@ public final class LinkCommandLine extends CommandLine {
    * Splits the link command-line into a part to be written to a parameter file, and the remaining
    * actual command line to be executed (which references the parameter file). Should only be used
    * if getParamFile() is not null.
+   *
+   * @throws IllegalStateException if the command-line cannot be split
    */
   @VisibleForTesting
   final Pair<List<String>, List<String>> splitCommandline() {
     List<String> args = getRawLinkArgv();
     if (linkTargetType.staticness() == Staticness.STATIC) {
       // Ar link commands can also generate huge command lines.
-      List<String> paramFileArgs = new ArrayList<>();
+      List<String> paramFileArgs = args.subList(1, args.size());
       List<String> commandlineArgs = new ArrayList<>();
-      extractArgumentsForStaticLinkParamsFile(args, commandlineArgs, paramFileArgs);
+      commandlineArgs.add(args.get(0));
 
+      commandlineArgs.add("@" + paramFile.getExecPath().getPathString());
       return Pair.of(commandlineArgs, paramFileArgs);
     } else {
       // Gcc link commands tend to generate humongous commandlines for some targets, which may
@@ -235,14 +242,17 @@ public final class LinkCommandLine extends CommandLine {
       // a parameter file and pass any linker options through it.
       List<String> paramFileArgs = new ArrayList<>();
       List<String> commandlineArgs = new ArrayList<>();
-      extractArgumentsForDynamicLinkParamsFile(args, commandlineArgs, paramFileArgs);
+      extractArgumentsForParamFile(args, commandlineArgs, paramFileArgs);
 
+      commandlineArgs.add("-Wl,@" + paramFile.getExecPath().getPathString());
       return Pair.of(commandlineArgs, paramFileArgs);
     }
   }
 
   /**
    * Returns just the .params file portion of the command-line as a {@link CommandLine}.
+   *
+   * @throws IllegalStateException if the command-line cannot be split
    */
   CommandLine paramCmdLine() {
     Preconditions.checkNotNull(paramFile);
@@ -255,22 +265,8 @@ public final class LinkCommandLine extends CommandLine {
   }
 
 
-  public static void extractArgumentsForStaticLinkParamsFile(
-      List<String> args, List<String> commandlineArgs, List<String> paramFileArgs) {
-    commandlineArgs.add(args.get(0)); // ar command, must not be moved!
-    int argsSize = args.size();
-    for (int i = 1; i < argsSize; i++) {
-      String arg = args.get(i);
-      if (arg.startsWith("@")) {
-        commandlineArgs.add(arg); // params file, keep it in the command line
-      } else {
-        paramFileArgs.add(arg); // the rest goes to the params file
-      }
-    }
-  }
-
-  public static void extractArgumentsForDynamicLinkParamsFile(
-      List<String> args, List<String> commandlineArgs, List<String> paramFileArgs) {
+  public static void extractArgumentsForParamFile(List<String> args, List<String> commandlineArgs,
+      List<String> paramFileArgs) {
     // Note, that it is not important that all linker arguments are extracted so that
     // they can be moved into a parameter file, but the vast majority should.
     commandlineArgs.add(args.get(0));   // gcc command, must not be moved!
@@ -316,15 +312,13 @@ public final class LinkCommandLine extends CommandLine {
     }
   }
   
-  private ImmutableList<String> getToolchainFlags() {
+  private void addToolchainFlags(List<String> argv) {
     boolean fullyStatic = (linkStaticness == LinkStaticness.FULLY_STATIC);
     boolean mostlyStatic = (linkStaticness == LinkStaticness.MOSTLY_STATIC);
     boolean sharedLinkopts =
         linkTargetType == LinkTargetType.DYNAMIC_LIBRARY
             || linkopts.contains("-shared")
             || cppConfiguration.getLinkOptions().contains("-shared");
-
-    List<String> toolchainFlags = new ArrayList<>();
 
     /*
      * For backwards compatibility, linkopts come _after_ inputFiles.
@@ -338,22 +332,22 @@ public final class LinkCommandLine extends CommandLine {
      * (global defaults, per-target linkopts, and command-line linkopts),
      * we have no idea what the right order should be, or if anyone cares.
      */
-    toolchainFlags.addAll(linkopts);
+    argv.addAll(linkopts);
     // Extra toolchain link options based on the output's link staticness.
     if (fullyStatic) {
-      toolchainFlags.addAll(cppConfiguration.getFullyStaticLinkOptions(features, sharedLinkopts));
+      argv.addAll(cppConfiguration.getFullyStaticLinkOptions(features, sharedLinkopts));
     } else if (mostlyStatic) {
-      toolchainFlags.addAll(cppConfiguration.getMostlyStaticLinkOptions(features, sharedLinkopts));
+      argv.addAll(cppConfiguration.getMostlyStaticLinkOptions(features, sharedLinkopts));
     } else {
-      toolchainFlags.addAll(cppConfiguration.getDynamicLinkOptions(features, sharedLinkopts));
+      argv.addAll(cppConfiguration.getDynamicLinkOptions(features, sharedLinkopts));
     }
 
     // Extra test-specific link options.
     if (useTestOnlyFlags) {
-      toolchainFlags.addAll(cppConfiguration.getTestOnlyLinkOptions());
+      argv.addAll(cppConfiguration.getTestOnlyLinkOptions());
     }
 
-    toolchainFlags.addAll(cppConfiguration.getLinkOptions());
+    argv.addAll(cppConfiguration.getLinkOptions());
 
     // -pie is not compatible with shared and should be
     // removed when the latter is part of the link command. Should we need to further
@@ -361,15 +355,13 @@ public final class LinkCommandLine extends CommandLine {
     // command line / CROSSTOOL flags that distinguish them. But as long as this is
     // the only relevant use case we're just special-casing it here.
     if (linkTargetType == LinkTargetType.DYNAMIC_LIBRARY) {
-      Iterables.removeIf(toolchainFlags, Predicates.equalTo("-pie"));
+      Iterables.removeIf(argv, Predicates.equalTo("-pie"));
     }
 
     // Fission mode: debug info is in .dwo files instead of .o files. Inform the linker of this.
     if (linkTargetType.staticness() == Staticness.DYNAMIC && cppConfiguration.useFission()) {
-      toolchainFlags.add("-Wl,--gdb-index");
+      argv.add("-Wl,--gdb-index");
     }
-
-    return ImmutableList.copyOf(toolchainFlags);
   }
 
   /**
@@ -387,26 +379,16 @@ public final class LinkCommandLine extends CommandLine {
     switch (linkTargetType) {
       case EXECUTABLE:
         argv.add(cppConfiguration.getCppExecutable().getPathString());
-        argv.addAll(
-            featureConfiguration.getCommandLine(
-                actionName,
-                new Variables.Builder()
-                    .addAll(variables)
-                    .addStringSequenceVariable(
-                        CppLinkActionBuilder.LEGACY_LINK_FLAGS_VARIABLE, getToolchainFlags())
-                    .build()));
+        argv.addAll(featureConfiguration.getCommandLine(actionName, variables));
+        argv.addAll(noWholeArchiveFlags);
+        addToolchainFlags(argv);
         break;
 
       case DYNAMIC_LIBRARY:
         argv.add(toolPath);
-        argv.addAll(
-            featureConfiguration.getCommandLine(
-                actionName,
-                new Variables.Builder()
-                    .addAll(variables)
-                    .addStringSequenceVariable(
-                        CppLinkActionBuilder.LEGACY_LINK_FLAGS_VARIABLE, getToolchainFlags())
-                    .build()));
+        argv.addAll(featureConfiguration.getCommandLine(actionName, variables));
+        argv.addAll(noWholeArchiveFlags);
+        addToolchainFlags(argv);
         break;
 
       case STATIC_LIBRARY:
@@ -419,6 +401,7 @@ public final class LinkCommandLine extends CommandLine {
         argv.addAll(cppConfiguration.getArFlags());
         argv.add(output.getExecPathString());
         argv.addAll(featureConfiguration.getCommandLine(actionName, variables));
+        argv.addAll(noWholeArchiveFlags);
         break;
 
         // Since the objc case is not hardcoded in CppConfiguration, we can use the actual tool.
@@ -434,6 +417,7 @@ public final class LinkCommandLine extends CommandLine {
       default:
         throw new IllegalArgumentException();
     }
+
     return argv;
   }
 
@@ -657,10 +641,12 @@ public final class LinkCommandLine extends CommandLine {
     @Nullable private PathFragment runtimeSolibDir;
     private boolean nativeDeps;
     private boolean useTestOnlyFlags;
+    private boolean needWholeArchive;
     @Nullable private Artifact paramFile;
     @Nullable private CcToolchainProvider toolchain;
     private Variables variables;
     private FeatureConfiguration featureConfiguration;
+    private List<String> noWholeArchiveFlags = ImmutableList.of();
 
     // This interface is needed to support tests that don't create a
     // ruleContext, in which case the configuration and action owner
@@ -733,7 +719,9 @@ public final class LinkCommandLine extends CommandLine {
           runtimeSolibDir,
           nativeDeps,
           useTestOnlyFlags,
+          needWholeArchive,
           paramFile,
+          noWholeArchiveFlags,
           variables,
           featureConfiguration);
     }
@@ -884,6 +872,16 @@ public final class LinkCommandLine extends CommandLine {
 
     public Builder setRuntimeSolibDir(PathFragment runtimeSolibDir) {
       this.runtimeSolibDir = runtimeSolibDir;
+      return this;
+    }
+
+    /**
+     * Set flags that should not be in a --whole_archive block.
+     *
+     * <p>TODO(b/30228443): Refactor into action_configs.
+     */
+    public Builder setNoWholeArchiveFlags(List<String> noWholeArchiveFlags) {
+      this.noWholeArchiveFlags = noWholeArchiveFlags;
       return this;
     }
   }
