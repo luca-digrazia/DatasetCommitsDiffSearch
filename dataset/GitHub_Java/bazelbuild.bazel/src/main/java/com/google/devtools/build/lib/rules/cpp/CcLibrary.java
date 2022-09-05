@@ -136,27 +136,16 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
       helper.addLinkstamps(ruleContext.getPrerequisites("linkstamp", Mode.TARGET));
     }
 
-    Artifact soImplArtifact = null;
-    boolean createDynamicLibrary =
-        !linkStatic && appearsToHaveObjectFiles(ruleContext.attributes());
+    PathFragment soImplFilename = null;
     if (ruleContext.getRule().isAttrDefined("outs", Type.STRING_LIST)) {
       List<String> outs = ruleContext.attributes().get("outs", Type.STRING_LIST);
       if (outs.size() > 1) {
         ruleContext.attributeError("outs", "must be a singleton list");
       } else if (outs.size() == 1) {
-        PathFragment soImplFilename = new PathFragment(ruleContext.getLabel().getName());
-        if (LinkTargetType.DYNAMIC_LIBRARY != LinkTargetType.EXECUTABLE) {
-          soImplFilename = soImplFilename.replaceName(
-              "lib" + soImplFilename.getBaseName() + LinkTargetType.DYNAMIC_LIBRARY.getExtension());
-        }
+        soImplFilename = CppHelper.getLinkedFilename(ruleContext, LinkTargetType.DYNAMIC_LIBRARY);
         soImplFilename = soImplFilename.replaceName(outs.get(0));
         if (!soImplFilename.getPathString().endsWith(".so")) { // Sanity check.
           ruleContext.attributeError("outs", "file name must end in '.so'");
-        }
-
-        if (createDynamicLibrary) {
-          soImplArtifact = ruleContext.getPackageRelativeArtifact(
-              soImplFilename, ruleContext.getConfiguration().getBinDirectory());
         }
       }
     }
@@ -177,8 +166,10 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
                                    + "Did you mean to use 'linkstatic=1' instead?");
     }
 
+    boolean createDynamicLibrary =
+        !linkStatic && appearsToHaveObjectFiles(ruleContext.attributes());
     helper.setCreateDynamicLibrary(createDynamicLibrary);
-    helper.setDynamicLibrary(soImplArtifact);
+    helper.setDynamicLibraryPath(soImplFilename);
 
     // If "srcs" is configurable, the .so output is always declared because the logic that
     // determines implicit outs doesn't know which value of "srcs" will ultimately get chosen. Here,
@@ -186,8 +177,9 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     // .so with. If that's the case, register a fake generating action to prevent a "no generating
     // action for this artifact" error.
     if (!createDynamicLibrary && ruleContext.attributes().isConfigurable("srcs", Type.LABEL_LIST)) {
-      Artifact solibArtifact = CppHelper.getLinkedArtifact(
-          ruleContext, LinkTargetType.DYNAMIC_LIBRARY);
+      PathFragment solib = CppHelper.getLinkedFilename(ruleContext, LinkTargetType.DYNAMIC_LIBRARY);
+      Artifact solibArtifact = ruleContext.getAnalysisEnvironment()
+          .getDerivedArtifact(solib, ruleContext.getBinOrGenfilesDirectory());
       ruleContext.registerAction(new FailAction(ruleContext.getActionOwner(),
           ImmutableList.of(solibArtifact), "configurable \"srcs\" triggers an implicit .so output "
           + "even though there are no sources to compile in this configuration"));
