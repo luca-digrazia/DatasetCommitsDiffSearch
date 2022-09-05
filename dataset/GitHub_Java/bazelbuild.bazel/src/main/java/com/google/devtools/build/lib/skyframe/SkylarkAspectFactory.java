@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.AspectDescriptor;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -51,11 +50,9 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
       ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters)
       throws InterruptedException {
     try (Mutability mutability = Mutability.create("aspect")) {
-      AspectDescriptor aspectDescriptor = new AspectDescriptor(
-          skylarkAspect.getAspectClass(), parameters);
       SkylarkRuleContext skylarkRuleContext;
       try {
-        skylarkRuleContext = new SkylarkRuleContext(ruleContext, aspectDescriptor);
+        skylarkRuleContext = new SkylarkRuleContext(ruleContext, skylarkAspect);
       } catch (EvalException e) {
         ruleContext.ruleError(e.getMessage());
         return null;
@@ -85,7 +82,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
         }
 
         ConfiguredAspect.Builder builder = new ConfiguredAspect.Builder(
-            aspectDescriptor, ruleContext);
+            skylarkAspect.getAspectClass(), parameters, ruleContext);
 
         SkylarkClassObject struct = (SkylarkClassObject) aspectSkylarkObject;
         Location loc = struct.getCreationLoc();

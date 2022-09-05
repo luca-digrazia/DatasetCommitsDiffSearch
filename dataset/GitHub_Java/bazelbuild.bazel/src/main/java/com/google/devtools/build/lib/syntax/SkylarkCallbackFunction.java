@@ -40,7 +40,6 @@ public class SkylarkCallbackFunction {
       throws EvalException, InterruptedException {
     try (Mutability mutability = Mutability.create("callback %s", callback)) {
       Environment env = Environment.builder(mutability)
-          .setSemantics(funcallEnv.getSemantics())
           .setEventHandler(funcallEnv.getEventHandler())
           .setGlobals(funcallEnv.getGlobals())
           .build();
@@ -55,7 +54,7 @@ public class SkylarkCallbackFunction {
    * required from the specified context.
    */
   private ImmutableList<Object> buildArgumentList(ClassObject ctx, Object... arguments) {
-    Builder<Object> builder = ImmutableList.builder();
+    Builder<Object> builder = ImmutableList.<Object>builder();
     ImmutableList<String> names = getParameterNames();
     int requiredParameters = names.size() - arguments.length;
     for (int pos = 0; pos < requiredParameters; ++pos) {

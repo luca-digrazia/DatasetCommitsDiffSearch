@@ -17,30 +17,19 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.syntax.BazelLibrary;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
-import com.google.devtools.common.options.OptionsParser;
 
 /**
  * Describes a particular testing mode by determining how the
  * appropriate {@code Environment} has to be created
  */
 public abstract class TestMode {
-  private static SkylarkSemanticsOptions parseSkylarkSemanticsOptions(String... skylarkOptions)
-      throws Exception {
-    OptionsParser parser = OptionsParser.newOptionsParser(SkylarkSemanticsOptions.class);
-    parser.parse(skylarkOptions);
-    return parser.getOptions(SkylarkSemanticsOptions.class);
-  }
-
   public static final TestMode BUILD =
       new TestMode() {
         @Override
-        public Environment createEnvironment(EventHandler eventHandler, String... skylarkOptions)
-            throws Exception {
+        public Environment createEnvironment(EventHandler eventHandler, Environment environment) {
           return Environment.builder(Mutability.create("build test"))
-              .setGlobals(BazelLibrary.GLOBALS)
+              .setGlobals(environment == null ? BazelLibrary.GLOBALS : environment.getGlobals())
               .setEventHandler(eventHandler)
-              .setSemantics(TestMode.parseSkylarkSemanticsOptions(skylarkOptions))
               .build();
         }
       };
@@ -48,16 +37,13 @@ public abstract class TestMode {
   public static final TestMode SKYLARK =
       new TestMode() {
         @Override
-        public Environment createEnvironment(EventHandler eventHandler, String... skylarkOptions)
-            throws Exception {
+        public Environment createEnvironment(EventHandler eventHandler, Environment environment) {
           return Environment.builder(Mutability.create("skylark test"))
-              .setGlobals(BazelLibrary.GLOBALS)
+              .setGlobals(environment == null ? BazelLibrary.GLOBALS : environment.getGlobals())
               .setEventHandler(eventHandler)
-              .setSemantics(TestMode.parseSkylarkSemanticsOptions(skylarkOptions))
               .build();
         }
       };
 
-  public abstract Environment createEnvironment(EventHandler eventHandler, String... skylarkOptions)
-      throws Exception;
+  public abstract Environment createEnvironment(EventHandler eventHandler, Environment environment);
 }

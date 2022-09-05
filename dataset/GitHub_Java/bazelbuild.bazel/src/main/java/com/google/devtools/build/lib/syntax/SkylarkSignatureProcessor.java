@@ -50,8 +50,8 @@ public class SkylarkSignatureProcessor {
     Preconditions.checkArgument(name.equals(annotation.name()),
         "%s != %s", name, annotation.name());
     ArrayList<Parameter<Object, SkylarkType>> paramList = new ArrayList<>();
-    HashMap<String, SkylarkType> enforcedTypes =
-        enforcedTypesList == null ? null : new HashMap<>();
+    HashMap<String, SkylarkType> enforcedTypes = enforcedTypesList == null
+        ? null : new HashMap<String, SkylarkType>();
 
     HashMap<String, String> doc = new HashMap<>();
     boolean documented = annotation.documented();
@@ -89,7 +89,7 @@ public class SkylarkSignatureProcessor {
                 /*mandatory=*/false, /*star=*/false, /*starStar=*/true, /*defaultValue=*/null));
       }
       FunctionSignature.WithValues<Object, SkylarkType> signature =
-          FunctionSignature.WithValues.of(paramList);
+          FunctionSignature.WithValues.<Object, SkylarkType>of(paramList);
       for (String paramName : signature.getSignature().getNames()) {
         if (enforcedTypesList != null) {
           enforcedTypesList.add(enforcedTypes.get(paramName));
@@ -175,7 +175,6 @@ public class SkylarkSignatureProcessor {
       return Runtime.NONE;
     } else {
       try (Mutability mutability = Mutability.create("initialization")) {
-        // Note that this Skylark environment ignores command line flags.
         Environment env =
             Environment.builder(mutability)
                 .setGlobals(Environment.CONSTANTS_ONLY)

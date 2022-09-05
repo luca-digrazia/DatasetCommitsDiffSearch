@@ -145,7 +145,6 @@ public class EnvironmentTest extends EvaluationTestCase {
             "reversed",
             "sorted",
             "str",
-            "tuple",
             "zip"),
         outerEnv.getVariableNames());
     assertEquals(
@@ -178,7 +177,6 @@ public class EnvironmentTest extends EvaluationTestCase {
             "reversed",
             "sorted",
             "str",
-            "tuple",
             "zip"),
         innerEnv.getVariableNames());
   }
