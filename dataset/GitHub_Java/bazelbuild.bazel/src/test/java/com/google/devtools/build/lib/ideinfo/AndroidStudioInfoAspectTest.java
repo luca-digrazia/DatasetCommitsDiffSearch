@@ -71,7 +71,8 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
     ArtifactLocation location = ruleIdeInfo.getBuildFileArtifactLocation();
     assertThat(location.getRelativePath()).isEqualTo("com/google/example/BUILD");
     assertThat(location.getIsSource()).isTrue();
-    if (isNativeTest()) {  // These will not be implemented in Skylark aspect.
+    if (isNativeTest()) {
+      // These will not be implemented in Skylark aspect.
       assertThat(ruleIdeInfo.getBuildFile()).isEqualTo(buildFilePath.toString());
       assertThat(Paths.get(location.getRootPath(), location.getRelativePath()).toString())
           .isEqualTo(buildFilePath.toString());
@@ -229,6 +230,10 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
 
   @Test
   public void testJavaLibraryWithExports() throws Exception {
+    if (!isNativeTest()) {
+      return;
+    }
+
     scratch.file(
         "com/google/example/BUILD",
         "java_library(",
@@ -277,6 +282,10 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
 
   @Test
   public void testJavaLibraryWithTransitiveExports() throws Exception {
+    if (!isNativeTest()) {
+      return;
+    }
+
     scratch.file(
         "com/google/example/BUILD",
         "java_library(",
@@ -361,6 +370,10 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
 
   @Test
   public void testJavaImportWithExports() throws Exception {
+    if (!isNativeTest()) {
+      return;
+    }
+
     scratch.file(
         "com/google/example/BUILD",
         "java_library(",
@@ -451,6 +464,10 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
 
   @Test
   public void testAspectIsPropagatedAcrossExports() throws Exception {
+    if (!isNativeTest()) {
+      return;
+    }
+
     scratch.file(
         "com/google/example/BUILD",
         "java_library(",
@@ -568,10 +585,12 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
                 "libl.jar", "libl-ijar.jar", "libl-src.jar"),
             jarString("com/google/example",
                 "l_resources.jar", "l_resources-ijar.jar", "l_resources-src.jar"));
-    assertThat(
-            transform(
-                ruleInfo.getAndroidRuleIdeInfo().getResourcesList(), ARTIFACT_TO_RELATIVE_PATH))
-        .containsExactly("com/google/example/res");
+    if (isNativeTest()) {
+      assertThat(
+              transform(
+                  ruleInfo.getAndroidRuleIdeInfo().getResourcesList(), ARTIFACT_TO_RELATIVE_PATH))
+          .containsExactly("com/google/example/res");
+    }
     assertThat(ruleInfo.getAndroidRuleIdeInfo().getManifest().getRelativePath())
         .isEqualTo("com/google/example/AndroidManifest.xml");
     assertThat(ruleInfo.getAndroidRuleIdeInfo().getJavaPackage()).isEqualTo("com.google.example");
@@ -623,10 +642,12 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
             jarString("com/google/example",
                 "b_resources.jar", "b_resources-ijar.jar", "b_resources-src.jar"));
 
-    assertThat(
-            transform(
-                ruleInfo.getAndroidRuleIdeInfo().getResourcesList(), ARTIFACT_TO_RELATIVE_PATH))
-        .containsExactly("com/google/example/res");
+    if (isNativeTest()) {
+      assertThat(
+              transform(
+                  ruleInfo.getAndroidRuleIdeInfo().getResourcesList(), ARTIFACT_TO_RELATIVE_PATH))
+          .containsExactly("com/google/example/res");
+    }
     assertThat(ruleInfo.getAndroidRuleIdeInfo().getManifest().getRelativePath())
         .isEqualTo("com/google/example/AndroidManifest.xml");
     assertThat(ruleInfo.getAndroidRuleIdeInfo().getJavaPackage()).isEqualTo("com.google.example");
@@ -677,6 +698,10 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
 
   @Test
   public void testAndroidLibraryWithoutAidlHasNoIdlJars() throws Exception {
+    if (!isNativeTest()) {
+      return;
+    }
+
     scratch.file(
         "java/com/google/example/BUILD",
         "android_library(",
@@ -693,6 +718,10 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
 
   @Test
   public void testAndroidLibraryWithAidlHasIdlJars() throws Exception {
+    if (!isNativeTest()) {
+      return;
+    }
+
     scratch.file(
         "java/com/google/example/BUILD",
         "android_library(",
@@ -799,6 +828,23 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
   }
 
   @Test
+  public void testNonConformingPackageName() throws Exception {
+    scratch.file(
+        "bad/package/google/example/BUILD",
+        "android_library(",
+        "  name = 'test',",
+        "  srcs = ['Test.java'],",
+        ")"
+    );
+    Map<String, RuleIdeInfo> ruleIdeInfos = buildRuleIdeInfo("//bad/package/google/example:test");
+    RuleIdeInfo ruleInfo = getRuleInfoAndVerifyLabel(
+        "//bad/package/google/example:test", ruleIdeInfos);
+
+    assertThat(ruleInfo.getAndroidRuleIdeInfo().getJavaPackage())
+        .isEqualTo("bad.package.google.example");
+  }
+
+  @Test
   public void testTags() throws Exception {
     scratch.file(
         "com/google/example/BUILD",
@@ -815,6 +861,10 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
 
   @Test
   public void testAndroidLibraryWithoutSourcesExportsDependencies() throws Exception {
+    if (!isNativeTest()) {
+      return;
+    }
+
     scratch.file(
         "java/com/google/example/BUILD",
         "android_library(",
@@ -894,6 +944,10 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
 
   @Test
   public void testRuntimeDepsAddedToProto() throws Exception {
+    if (!isNativeTest()) {
+      return;
+    }
+
     scratch.file(
         "com/google/example/BUILD",
         "java_library(",
@@ -927,6 +981,10 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
 
   @Test
   public void testAndroidLibraryGeneratesResourceClass() throws Exception {
+    if (!isNativeTest()) {
+      return;
+    }
+
     scratch.file(
         "java/com/google/example/BUILD",
         "android_library(",
