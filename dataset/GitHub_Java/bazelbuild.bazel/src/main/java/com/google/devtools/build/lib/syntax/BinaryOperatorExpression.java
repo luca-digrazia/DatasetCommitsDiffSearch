@@ -110,13 +110,8 @@ public final class BinaryOperatorExpression extends Expression {
     }
   }
 
-  /**
-   * Helper method. Reused from AugmentedAssignmentStatement class which falls back to this method
-   * in most of the cases.
-   */
-  public static Object evaluate(
-      Operator operator, Expression lhs, Expression rhs, Environment env, Location location)
-      throws EvalException, InterruptedException {
+  @Override
+  Object doEval(Environment env) throws EvalException, InterruptedException {
     Object lval = lhs.eval(env);
 
     // Short-circuit operators
@@ -140,22 +135,22 @@ public final class BinaryOperatorExpression extends Expression {
 
     switch (operator) {
       case PLUS:
-        return plus(lval, rval, env, location);
+        return plus(lval, rval, env, getLocation());
 
       case PIPE:
-        return pipe(lval, rval, location);
+        return pipe(lval, rval, getLocation());
 
       case MINUS:
-        return minus(lval, rval, location);
+        return minus(lval, rval, getLocation());
 
       case MULT:
-        return mult(lval, rval, env, location);
+        return mult(lval, rval, env, getLocation());
 
       case DIVIDE:
-        return divide(lval, rval, location);
+        return divide(lval, rval, getLocation());
 
       case PERCENT:
-        return percent(lval, rval, location);
+        return percent(lval, rval, getLocation());
 
       case EQUALS_EQUALS:
         return lval.equals(rval);
@@ -164,31 +159,26 @@ public final class BinaryOperatorExpression extends Expression {
         return !lval.equals(rval);
 
       case LESS:
-        return compare(lval, rval, location) < 0;
+        return compare(lval, rval, getLocation()) < 0;
 
       case LESS_EQUALS:
-        return compare(lval, rval, location) <= 0;
+        return compare(lval, rval, getLocation()) <= 0;
 
       case GREATER:
-        return compare(lval, rval, location) > 0;
+        return compare(lval, rval, getLocation()) > 0;
 
       case GREATER_EQUALS:
-        return compare(lval, rval, location) >= 0;
+        return compare(lval, rval, getLocation()) >= 0;
 
       case IN:
-        return in(lval, rval, location);
+        return in(lval, rval, getLocation());
 
       case NOT_IN:
-        return !in(lval, rval, location);
+        return !in(lval, rval, getLocation());
 
       default:
         throw new AssertionError("Unsupported binary operator: " + operator);
     } // endswitch
-  }
-
-  @Override
-  Object doEval(Environment env) throws EvalException, InterruptedException {
-    return evaluate(operator, lhs, rhs, env, getLocation());
   }
 
   @Override
