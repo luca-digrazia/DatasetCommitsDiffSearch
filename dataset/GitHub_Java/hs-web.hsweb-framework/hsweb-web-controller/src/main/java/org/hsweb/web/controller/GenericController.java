@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 http://hsweb.me
+ * Copyright 2015-2016 https://github.com/hs-web
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,9 @@
 package org.hsweb.web.controller;
 
 import com.alibaba.fastjson.JSON;
-import org.hsweb.commons.ClassUtils;
+import org.hsweb.web.core.authorize.annotation.Authorize;
 import org.hsweb.web.bean.common.QueryParam;
 import org.hsweb.web.bean.po.GenericPo;
-import org.hsweb.web.core.authorize.annotation.Authorize;
 import org.hsweb.web.core.exception.BusinessException;
 import org.hsweb.web.core.exception.NotFoundException;
 import org.hsweb.web.core.logger.annotation.AccessLogger;
@@ -30,10 +29,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.hsweb.commons.ClassUtils;
 
+import java.util.ArrayList;
 import java.util.Arrays;
-
-import static org.hsweb.web.core.message.ResponseMessage.*;
+import java.util.List;
 
 /**
  * 通用控制器,此控制器实现了通用的增删改查功能
@@ -85,7 +85,7 @@ public abstract class GenericController<PO, PK> {
             data = getService().select(param);
         else
             data = getService().selectPager(param);
-        return ok(data)
+        return ResponseMessage.ok(data)
                 .include(getPOType(), param.getIncludes())
                 .exclude(getPOType(), param.getExcludes())
                 .onlyData();
@@ -105,7 +105,7 @@ public abstract class GenericController<PO, PK> {
         PO po = getService().selectByPk(id);
         if (po == null)
             throw new NotFoundException("data is not found!");
-        return ok(po);
+        return ResponseMessage.ok(po);
     }
 
 
@@ -120,7 +120,7 @@ public abstract class GenericController<PO, PK> {
     @Authorize(action = "R")
     public ResponseMessage total(QueryParam param) {
         // 获取条件查询
-        return ok(getService().total(param));
+        return ResponseMessage.ok(getService().total(param));
     }
 
     /**
@@ -134,9 +134,9 @@ public abstract class GenericController<PO, PK> {
     @AccessLogger("新增")
     @Authorize(action = "C")
     @ResponseStatus(HttpStatus.CREATED)
-    public ResponseMessage add(@RequestBody PO object) {
+    public ResponseMessage add(@RequestBody(required = true) PO object) {
         PK pk = getService().insert(object);
-        return created(pk);
+        return ResponseMessage.created(pk);
     }
 
     /**
@@ -153,7 +153,7 @@ public abstract class GenericController<PO, PK> {
         PO old = getService().selectByPk(id);
         assertFound(old, "data is not found!");
         getService().delete(id);
-        return ok();
+        return ResponseMessage.ok();
     }
 
     /**
@@ -167,14 +167,14 @@ public abstract class GenericController<PO, PK> {
     @RequestMapping(value = "/{id}", method = RequestMethod.PUT)
     @AccessLogger("修改")
     @Authorize(action = "U")
-    public ResponseMessage update(@PathVariable("id") PK id, @RequestBody PO object) {
+    public ResponseMessage update(@PathVariable("id") PK id, @RequestBody(required = true) PO object) {
         PO old = getService().selectByPk(id);
         assertFound(old, "data is not found!");
         if (object instanceof GenericPo) {
             ((GenericPo) object).setId(id);
         }
         int number = getService().update(object);
-        return ok(number);
+        return ResponseMessage.ok(number);
     }
 
     /**
@@ -187,7 +187,7 @@ public abstract class GenericController<PO, PK> {
     @RequestMapping(method = RequestMethod.PUT)
     @AccessLogger("批量修改")
     @Authorize(action = "U")
-    public ResponseMessage update(@RequestBody String json) {
+    public ResponseMessage update(@RequestBody(required = true) String json) {
         int number;
         if (json.startsWith("[")) {
             number = getService().update(JSON.parseArray(json, getPOType()));
@@ -196,7 +196,7 @@ public abstract class GenericController<PO, PK> {
         } else {
             throw new BusinessException("请求数据格式错误!");
         }
-        return ok(number);
+        return ResponseMessage.ok(number);
     }
 
     /**
