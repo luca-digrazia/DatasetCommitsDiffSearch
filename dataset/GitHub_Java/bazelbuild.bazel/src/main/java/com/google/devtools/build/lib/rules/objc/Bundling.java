@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.ASSET_CATALOG;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.BUNDLE_FILE;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_SWIFT;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MERGE_ZIP;
@@ -37,9 +36,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.DottedVersion;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.HashSet;
@@ -61,7 +58,7 @@ final class Bundling {
     private String primaryBundleId;
     private String fallbackBundleId;
     private String architecture;
-    private DottedVersion minimumOsVersion;
+    private String minimumOsVersion;
 
     public Builder setName(String name) {
       this.name = name;
@@ -70,7 +67,7 @@ final class Bundling {
 
     /**
      * Sets the CPU architecture this bundling was constructed for. Legal value are any that may be
-     * set on {@link AppleConfiguration#getIosCpu()}.
+     * set on {@link ObjcConfiguration#getIosCpu()}.
      */
     public Builder setArchitecture(String architecture) {
       this.architecture = architecture;
@@ -108,7 +105,7 @@ final class Bundling {
      * any such added plists plus some additional information).
      */
     public Builder addInfoplistInputFromRule(RuleContext ruleContext) {
-      if (ruleContext.attributes().has("options", BuildType.LABEL)) {
+      if (ruleContext.attributes().has("options", Type.LABEL)) {
         OptionsProvider optionsProvider = ruleContext
             .getPrerequisite("options", Mode.TARGET, OptionsProvider.class);
         if (optionsProvider != null) {
@@ -141,7 +138,7 @@ final class Bundling {
      * Sets the minimum OS version for this bundle which will be used when constructing the bundle's
      * plist.
      */
-    public Builder setMinimumOsVersion(DottedVersion minimumOsVersion) {
+    public Builder setMinimumOsVersion(String minimumOsVersion) {
       this.minimumOsVersion = minimumOsVersion;
       return this;
     }
@@ -169,11 +166,6 @@ final class Bundling {
       for (Artifact storyboard : objcProvider.get(STORYBOARD)) {
         mergeZipBuilder.add(intermediateArtifacts.compiledStoryboardZip(storyboard));
       }
-
-      if (objcProvider.is(USES_SWIFT)) {
-        mergeZipBuilder.add(intermediateArtifacts.swiftFrameworksFileZip());
-      }
-
       return mergeZipBuilder.build();
     }
 
@@ -304,7 +296,7 @@ final class Bundling {
   private final NestedSet<Artifact> mergeZips;
   private final String primaryBundleId;
   private final String fallbackBundleId;
-  private final DottedVersion minimumOsVersion;
+  private final String minimumOsVersion;
   private final NestedSet<Artifact> bundleInfoplistInputs;
   private final NestedSet<Bundling> nestedBundlings;
 
@@ -320,7 +312,7 @@ final class Bundling {
       String primaryBundleId,
       String fallbackBundleId,
       String architecture,
-      DottedVersion minimumOsVersion,
+      String minimumOsVersion,
       NestedSet<Artifact> bundleInfoplistInputs,
       NestedSet<Bundling> nestedBundlings) {
     this.nestedBundlings = Preconditions.checkNotNull(nestedBundlings);
@@ -442,7 +434,7 @@ final class Bundling {
   public NestedSet<Artifact> getBundleContentArtifacts() {
     return bundleContentArtifacts;
   }
-
+  
   /**
    * Returns primary bundle ID to use, can be null.
    */
@@ -468,7 +460,7 @@ final class Bundling {
    * Returns the minimum iOS version this bundle's plist and resources should be generated for
    * (does <b>not</b> affect the minimum OS version its binary is compiled with).
    */
-  public DottedVersion getMinimumOsVersion() {
+  public String getMinimumOsVersion() {
     return minimumOsVersion;
   }
 }
