@@ -26,9 +26,10 @@ import javax.annotation.Nullable;
 @ThreadCompatible
 public class AbstractCriticalPathComponent<C extends AbstractCriticalPathComponent<C>> {
 
-  // These two fields are values of BlazeClock.nanoTime() at the relevant points in time.
-  private long startNanos;
-  private long finishNanos = 0;
+  /** Start time in nanoseconds. Only to be used for measuring elapsed time. */
+  private long relativeStartNanos;
+  /** Finish time for the action in nanoseconds. Only to be used for measuring elapsed time. */
+  private long relativeFinishNanos = 0;
   protected volatile boolean isRunning = true;
 
   /** We keep here the critical path time for the most expensive child. */
@@ -43,9 +44,9 @@ public class AbstractCriticalPathComponent<C extends AbstractCriticalPathCompone
   @Nullable
   private C child;
 
-  public AbstractCriticalPathComponent(Action action, long startNanos) {
+  public AbstractCriticalPathComponent(Action action, long relativeStartNanos) {
     this.action = action;
-    this.startNanos = startNanos;
+    this.relativeStartNanos = relativeStartNanos;
   }
 
   /**
@@ -58,10 +59,11 @@ public class AbstractCriticalPathComponent<C extends AbstractCriticalPathCompone
    * necessarily use the correct getElapsedTimeNanos(). But we do not want to block action execution
    * because of this. So in certain conditions we might see another path as the critical path.
    */
-  public synchronized boolean finishActionExecution(long startNanos, long finishNanos) {
-    if (isRunning || finishNanos - startNanos > getElapsedTimeNanos()) {
-      this.startNanos = startNanos;
-      this.finishNanos = finishNanos;
+  public synchronized boolean finishActionExecution(long relativeStartNanos,
+      long relativeFinishNanos) {
+    if (isRunning || relativeFinishNanos - relativeStartNanos > getElapsedTimeNanos()) {
+      this.relativeStartNanos = relativeStartNanos;
+      this.relativeFinishNanos = relativeFinishNanos;
       isRunning = false;
       return true;
     }
@@ -90,13 +92,9 @@ public class AbstractCriticalPathComponent<C extends AbstractCriticalPathCompone
     return TimeUnit.NANOSECONDS.toMillis(getElapsedTimeNanos());
   }
 
-  long getStartNanos() {
-    return startNanos;
-  }
-
   long getElapsedTimeNanos() {
     Preconditions.checkState(!isRunning, "Still running %s", action);
-    return finishNanos - startNanos;
+    return relativeFinishNanos - relativeStartNanos;
   }
 
   /**
@@ -143,7 +141,7 @@ public class AbstractCriticalPathComponent<C extends AbstractCriticalPathCompone
   public long getStartWallTimeMillis(Clock clock) {
     long millis = clock.currentTimeMillis();
     long nanoElapsed = clock.nanoTime();
-    return millis - TimeUnit.NANOSECONDS.toMillis((nanoElapsed - startNanos));
+    return millis - TimeUnit.NANOSECONDS.toMillis((nanoElapsed - relativeStartNanos));
   }
 }
 
