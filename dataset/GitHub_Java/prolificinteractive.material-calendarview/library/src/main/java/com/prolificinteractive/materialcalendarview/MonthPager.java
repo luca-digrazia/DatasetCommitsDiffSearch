@@ -9,8 +9,7 @@ import android.view.MotionEvent;
  * @author <a href="http://www.lusfold.com" target="_blank">Lusfold</a>
  */
 public class MonthPager extends ViewPager {
-
-    private boolean pagingEnabled = true;
+    private boolean scrollable = true;
 
     public MonthPager(Context context) {
         super(context);
@@ -20,9 +19,15 @@ public class MonthPager extends ViewPager {
         super(context, attrs);
     }
 
+    /**
+     * enable disable {@link #setCurrentItem(int)} to scroll
+     *
+     * @param x
+     * @param y
+     */
     @Override
     public void scrollTo(int x, int y) {
-        if (pagingEnabled) {
+        if (scrollable) {
             super.scrollTo(x, y);
         }
     }
@@ -30,21 +35,27 @@ public class MonthPager extends ViewPager {
     /**
      * enable disable viewpager scroll
      *
-     * @param pagingEnabled false to disable paging, true for paging (default)
+     * @param scrollable
      */
-    public void setPagingEnabled(boolean pagingEnabled) {
-        this.pagingEnabled = pagingEnabled;
+    public void setScrollable(boolean scrollable) {
+        this.scrollable = scrollable;
     }
 
     /**
-     * @return is this viewpager allowed to page
+     * @return is this viewpager scrollable
      */
-    public boolean isPagingEnabled() {
-        return pagingEnabled;
+    public boolean isScrollable() {
+        return scrollable;
     }
 
+    /**
+     * enable disable touch to scroll
+     *
+     * @param ev
+     * @return
+     */
     @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
-        return pagingEnabled && super.onInterceptTouchEvent(ev);
+        return scrollable ? super.onInterceptTouchEvent(ev) : false;
     }
 }

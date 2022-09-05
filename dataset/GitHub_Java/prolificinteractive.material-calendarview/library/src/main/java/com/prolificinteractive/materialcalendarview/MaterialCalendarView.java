@@ -113,8 +113,7 @@ public class MaterialCalendarView extends ViewGroup {
     public static final int SHOW_NONE = 0;
 
     /**
-     * Show dates from the proceeding and successive months, in a disabled state.
-     * This flag also enables the {@link #SHOW_OUT_OF_RANGE} flag to prevent odd blank areas.
+     * Show dates from the proceeding and successive months, in a disabled state
      */
     public static final int SHOW_OTHER_MONTHS = 1;
 
@@ -125,8 +124,7 @@ public class MaterialCalendarView extends ViewGroup {
     public static final int SHOW_OUT_OF_RANGE = 2;
 
     /**
-     * Show days that are individually disabled with decorators.
-     * This will only show dates in the current month and inside the minimum and maximum date range.
+     * Show days that are individually disabled with decorators
      */
     public static final int SHOW_DECORATED_DISABLED = 4;
 
@@ -464,7 +462,7 @@ public class MaterialCalendarView extends ViewGroup {
      * @return true if there is a future month that can be shown
      */
     private boolean canGoForward() {
-        return pager.isPagingEnabled() && pager.getCurrentItem() < (adapter.getCount() - 1);
+        return pager.isScrollable() ? pager.getCurrentItem() < (adapter.getCount() - 1) : false;
     }
 
     /**
@@ -473,7 +471,7 @@ public class MaterialCalendarView extends ViewGroup {
      * @return true if there is a previous month that can be shown
      */
     private boolean canGoBack() {
-        return pager.isPagingEnabled() && pager.getCurrentItem() > 0;
+        return pager.isScrollable() ? pager.getCurrentItem() > 0 : false;
     }
 
     /**
@@ -1177,26 +1175,14 @@ public class MaterialCalendarView extends ViewGroup {
      * Show Other Dates Utils
      */
 
-    /**
-     * @param showOtherDates int flag for show other dates
-     * @return true if the other months flag is set
-     */
     public static boolean showOtherMonths(@ShowOtherDates int showOtherDates) {
         return (showOtherDates & SHOW_OTHER_MONTHS) != 0;
     }
 
-    /**
-     * @param showOtherDates int flag for show other dates
-     * @return true if the out of range flag is set
-     */
     public static boolean showOutOfRange(@ShowOtherDates int showOtherDates) {
         return (showOtherDates & SHOW_OUT_OF_RANGE) != 0;
     }
 
-    /**
-     * @param showOtherDates int flag for show other dates
-     * @return true if the decorated disabled flag is set
-     */
     public static boolean showDecoratedDisabled(@ShowOtherDates int showOtherDates) {
         return (showOtherDates & SHOW_DECORATED_DISABLED) != 0;
     }
@@ -1404,19 +1390,12 @@ public class MaterialCalendarView extends ViewGroup {
     }
 
     /**
-     * Enable or disable the ability to swipe between months.
+     * enable disable pager scroll
      *
-     * @param pagingEnabled pass false to disable paging, true to enable (default)
+     * @param scrollable
      */
-    public void setPagingEnabled(boolean pagingEnabled) {
-        pager.setPagingEnabled(pagingEnabled);
+    public void setScrollable(boolean scrollable) {
+        pager.setScrollable(scrollable);
         updateUi();
-    }
-
-    /**
-     * @return true if swiping months is enabled, false if disabled. Default is true.
-     */
-    public boolean isPagingEnabled() {
-        return pager.isPagingEnabled();
     }
 }
