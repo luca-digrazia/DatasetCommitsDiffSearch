@@ -36,8 +36,6 @@ public class XcodeVersionRule implements RuleDefinition {
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
     return builder
         .requiresConfigurationFragments(AppleConfiguration.class)
-        .exemptFromConstraintChecking(
-            "this rule refines configuration variables and does not build actual content")
         /* <!-- #BLAZE_RULE(proto_library).ATTRIBUTE(version) -->
         The official version number of a version of Xcode.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
@@ -64,7 +62,11 @@ public class XcodeVersionRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = xcode_version, TYPE = OTHER, FAMILY = Workspace)[GENERIC_RULE] -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>Represents a single official xcode version with acceptable aliases for that xcode version.
 See the <code>xcode_config</code> rule.</p>
+
+${ATTRIBUTE_DEFINITION}
 
 <!-- #END_BLAZE_RULE -->*/

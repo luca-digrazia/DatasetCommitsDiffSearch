@@ -38,8 +38,6 @@ public class XcodeConfigRule implements RuleDefinition {
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
     return builder
         .requiresConfigurationFragments(AppleConfiguration.class)
-        .exemptFromConstraintChecking(
-            "this rule refines configuration variables and does not build actual content")
         /* <!-- #BLAZE_RULE(proto_library).ATTRIBUTE(version) -->
         The default official version of xcode to use.
         ${SYNOPSIS}
@@ -82,8 +80,12 @@ public class XcodeConfigRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = xcode_config, TYPE = OTHER, FAMILY = Workspace)[GENERIC_RULE] -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>A single target of this rule can be referenced by the <code>--xcode_config</code> build flag to
 translate the <code>--xcode_version</code> flag into an accepted official xcode version. This
 allows selection of a an official xcode version from a number of registered aliases.</p>
+
+${ATTRIBUTE_DEFINITION}
 
 <!-- #END_BLAZE_RULE -->*/

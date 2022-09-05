@@ -1,4 +1,4 @@
-// Copyright 2017 The Bazel Authors. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,81 +11,43 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package com.google.devtools.build.lib.rules.apple;
 
-import com.google.common.base.Preconditions;
+import com.google.common.base.Optional;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import javax.annotation.Nullable;
 
 /**
- * The set of Apple versions computed from command line options and the {@code xcode_config} rule.
+ * Provides a version of xcode based on a combination of the {@code --xcode_version} build flag
+ * and a {@code xcode_config} target. This version of xcode should be used for selecting apple
+ * toolchains and SDKs.
  */
 @Immutable
-public class XcodeConfigProvider implements TransitiveInfoProvider {
-  private final DottedVersion iosSdkVersion;
-  private final DottedVersion iosMinimumOsVersion;
-  private final DottedVersion watchosSdkVersion;
-  private final DottedVersion watchosMinimumOsVersion;
-  private final DottedVersion tvosSdkVersion;
-  private final DottedVersion tvosMinimumOsVersion;
-  private final DottedVersion macosSdkVersion;
-  private final DottedVersion macosMinimumOsVersion;
-  @Nullable private final DottedVersion xcodeVersion;
-
-  public XcodeConfigProvider(
-      DottedVersion iosSdkVersion, DottedVersion iosMinimumOsVersion,
-      DottedVersion watchosSdkVersion, DottedVersion watchosMinimumOsVersion,
-      DottedVersion tvosSdkVersion, DottedVersion tvosMinimumOsVersion,
-      DottedVersion macosSdkVersion, DottedVersion macosMinimumOsVersion,
-      DottedVersion xcodeVersion) {
-    this.iosSdkVersion = Preconditions.checkNotNull(iosSdkVersion);
-    this.iosMinimumOsVersion = Preconditions.checkNotNull(iosMinimumOsVersion);
-    this.watchosSdkVersion = Preconditions.checkNotNull(watchosSdkVersion);
-    this.watchosMinimumOsVersion = Preconditions.checkNotNull(watchosMinimumOsVersion);
-    this.tvosSdkVersion = Preconditions.checkNotNull(tvosSdkVersion);
-    this.tvosMinimumOsVersion = Preconditions.checkNotNull(tvosMinimumOsVersion);
-    this.macosSdkVersion = Preconditions.checkNotNull(macosSdkVersion);
-    this.macosMinimumOsVersion = Preconditions.checkNotNull(macosMinimumOsVersion);
-    this.xcodeVersion = xcodeVersion;
+public final class XcodeConfigProvider implements TransitiveInfoProvider {
+  private final Optional<DottedVersion> xcodeVersion;
+  
+  XcodeConfigProvider(DottedVersion xcodeVersion) {
+    this.xcodeVersion = Optional.of(xcodeVersion);
+  }
+  
+  private XcodeConfigProvider() {
+    this.xcodeVersion = Optional.absent();
+  }
+  
+  /**
+   * Returns a {@link XcodeConfigProvider} with no xcode version specified. The host system
+   * default xcode should be used. See {@link #getXcodeVersion}.
+   */
+  static XcodeConfigProvider hostSystemDefault() {
+    return new XcodeConfigProvider();
   }
 
-  public DottedVersion getXcodeVersion() {
+  /**
+   * Returns either an explicit xcode version which should be used in actions which require an
+   * apple toolchain, or {@link Optional#absent} if the host system default should be used.
+   */
+  public Optional<DottedVersion> getXcodeVersion() {
     return xcodeVersion;
-  }
-
-  public DottedVersion getMinimumOsForPlatformType(ApplePlatform.PlatformType platformType) {
-    // TODO(b/37240784): Look into using only a single minimum OS flag tied to the current
-    // apple_platform_type.
-    switch (platformType) {
-      case IOS:
-        return iosMinimumOsVersion;
-      case TVOS:
-        return tvosMinimumOsVersion;
-      case WATCHOS:
-        return watchosMinimumOsVersion;
-      case MACOS:
-        return macosMinimumOsVersion;
-      default:
-        throw new IllegalArgumentException("Unhandled platform type: " + platformType);
-    }
-  }
-
-  public DottedVersion getSdkVersionForPlatform(ApplePlatform platform) {
-    switch (platform) {
-      case IOS_DEVICE:
-      case IOS_SIMULATOR:
-        return iosSdkVersion;
-      case TVOS_DEVICE:
-      case TVOS_SIMULATOR:
-        return tvosSdkVersion;
-      case WATCHOS_DEVICE:
-      case WATCHOS_SIMULATOR:
-        return watchosSdkVersion;
-      case MACOS:
-        return macosSdkVersion;
-      default:
-        throw new IllegalArgumentException("Unhandled platform: " + platform);
-    }
   }
 }

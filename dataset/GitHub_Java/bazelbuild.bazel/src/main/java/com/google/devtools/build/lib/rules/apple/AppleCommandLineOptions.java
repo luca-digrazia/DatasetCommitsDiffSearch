@@ -33,7 +33,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
   @Option(
     name = "xcode_version",
     defaultValue = "null",
-    category = "build",
+    category = "undocumented",
     converter = DottedVersionConverter.class,
     help =
         "If specified, uses xcode of the given version for relevant build actions. "

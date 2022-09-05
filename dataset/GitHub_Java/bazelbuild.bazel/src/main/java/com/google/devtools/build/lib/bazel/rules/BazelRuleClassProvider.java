@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryRul
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidBinaryRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidLibraryRule;
-import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidRuleClasses.BazelAndroidToolsDefaultsJarRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidSemantics;
 import com.google.devtools.build.lib.bazel.rules.common.BazelActionListenerRule;
 import com.google.devtools.build.lib.bazel.rules.common.BazelExtraActionRule;
@@ -309,7 +308,7 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new JavaToolchainRule());
 
     builder.addRuleDefinition(new AndroidRuleClasses.AndroidSdkRule());
-    builder.addRuleDefinition(new BazelAndroidToolsDefaultsJarRule());
+    builder.addRuleDefinition(new AndroidRuleClasses.AndroidToolsDefaultsJarRule());
     builder.addRuleDefinition(new AndroidRuleClasses.AndroidBaseRule());
     builder.addRuleDefinition(new AndroidRuleClasses.AndroidAaptBaseRule());
     builder.addRuleDefinition(new AndroidRuleClasses.AndroidResourceSupportRule());
