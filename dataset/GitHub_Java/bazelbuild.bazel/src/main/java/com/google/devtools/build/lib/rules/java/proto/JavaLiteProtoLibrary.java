@@ -14,10 +14,9 @@
 
 package com.google.devtools.build.lib.rules.java.proto;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode.TARGET;
 import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
-import static com.google.devtools.build.lib.rules.java.proto.JavaLiteProtoAspect.PROTO_TOOLCHAIN_ATTR;
+import static com.google.devtools.build.lib.rules.java.proto.JavaLiteProtoAspect.LITE_PROTO_RUNTIME_ATTR;
 
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Iterables;
@@ -29,9 +28,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
@@ -41,7 +38,6 @@ import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.ProguardLibrary;
 import com.google.devtools.build.lib.rules.java.ProguardSpecProvider;
-import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainProvider;
 
 /** Implementation of the java_lite_proto_library rule. */
 public class JavaLiteProtoLibrary implements RuleConfiguredTargetFactory {
@@ -78,56 +74,27 @@ public class JavaLiteProtoLibrary implements RuleConfiguredTargetFactory {
       filesToBuild.addTransitive(provider.getJars());
     }
 
-    JavaRuleOutputJarsProvider javaRuleOutputJarsProvider =
-        JavaRuleOutputJarsProvider.builder().build();
-    JavaSkylarkApiProvider.Builder skylarkApiProvider =
-        JavaSkylarkApiProvider.builder()
-            .setRuleOutputJarsProvider(javaRuleOutputJarsProvider)
-            .setSourceJarsProvider(sourceJarsProvider)
-            .setCompilationArgsProvider(dependencyArgsProviders);
-
     return new RuleConfiguredTargetBuilder(ruleContext)
         .setFilesToBuild(filesToBuild.build())
-        .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, skylarkApiProvider.build())
         .addProvider(RunfilesProvider.class, RunfilesProvider.withData(Runfiles.EMPTY, runfiles))
         .addOutputGroup(
             OutputGroupProvider.DEFAULT, NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER))
         .add(JavaCompilationArgsProvider.class, dependencyArgsProviders)
         .add(JavaSourceJarsProvider.class, sourceJarsProvider)
         .add(JavaRunfilesProvider.class, new JavaRunfilesProvider(runfiles))
-        .add(ProguardSpecProvider.class, getJavaLiteRuntimeSpec(ruleContext))
-        .add(JavaRuleOutputJarsProvider.class, javaRuleOutputJarsProvider)
+        .add(
+            ProguardSpecProvider.class,
+            new ProguardSpecProvider(
+                new ProguardLibrary(ruleContext)
+                    .collectProguardSpecs(
+                        ImmutableMultimap.of(Mode.TARGET, LITE_PROTO_RUNTIME_ATTR))))
+        .add(JavaRuleOutputJarsProvider.class, JavaRuleOutputJarsProvider.builder().build())
+        .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, new JavaSkylarkApiProvider())
         .build();
   }
 
   private <C extends TransitiveInfoProvider> Iterable<C> getDeps(
       RuleContext ruleContext, Class<C> clazz) {
     return ruleContext.getPrerequisites("deps", TARGET, clazz);
-  }
-
-  private ProguardSpecProvider getJavaLiteRuntimeSpec(RuleContext ruleContext) {
-    NestedSet<Artifact> specs =
-        new ProguardLibrary(ruleContext).collectProguardSpecs(ImmutableMultimap.<Mode, String>of());
-
-    TransitiveInfoCollection runtime = getProtoToolchainProvider(ruleContext).runtime();
-    if (runtime == null) {
-      return new ProguardSpecProvider(specs);
-    }
-
-    ProguardSpecProvider specProvider = runtime.getProvider(ProguardSpecProvider.class);
-    if (specProvider == null) {
-      return new ProguardSpecProvider(specs);
-    }
-
-    return new ProguardSpecProvider(
-        NestedSetBuilder.fromNestedSet(specs)
-            .addTransitive(specProvider.getTransitiveProguardSpecs())
-            .build());
-  }
-
-  private ProtoLangToolchainProvider getProtoToolchainProvider(RuleContext ruleContext) {
-    return checkNotNull(
-        ruleContext.getPrerequisite(
-            PROTO_TOOLCHAIN_ATTR, TARGET, ProtoLangToolchainProvider.class));
   }
 }
