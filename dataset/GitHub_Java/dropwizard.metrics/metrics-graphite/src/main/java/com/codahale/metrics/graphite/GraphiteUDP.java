@@ -64,7 +64,14 @@ public class GraphiteUDP implements GraphiteSender {
     @Override
     public void send(String name, String value, long timestamp) throws IOException {
         try {
-            String str = sanitize(name) + ' ' + sanitize(value) + ' ' + Long.toString(timestamp) + '\n';
+            StringBuilder buf = new StringBuilder();
+            buf.append(sanitize(name));
+            buf.append(' ');
+            buf.append(sanitize(value));
+            buf.append(' ');
+            buf.append(Long.toString(timestamp));
+            buf.append('\n');
+            String str = buf.toString();
             ByteBuffer byteBuffer = ByteBuffer.wrap(str.getBytes(UTF_8));
             datagramChannel.send(byteBuffer, address);
             this.failures = 0;

@@ -13,6 +13,8 @@ import static org.mockito.Mockito.when;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 import org.python.core.PyList;
 import org.python.core.PyTuple;
 

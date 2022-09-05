@@ -131,7 +131,12 @@ public class GraphiteRabbitMQ implements GraphiteSender {
             final String sanitizedName = sanitize(name);
             final String sanitizedValue = sanitize(value);
 
-            final String message = sanitizedName + ' ' + sanitizedValue + ' ' + Long.toString(timestamp) + '\n';
+            final String message =
+                    new StringBuilder()
+                            .append(sanitizedName).append(' ')
+                            .append(sanitizedValue).append(' ')
+                            .append(Long.toString(timestamp)).append('\n').toString();
+
             channel.basicPublish(exchange, sanitizedName, null, message.getBytes(UTF_8));
         } catch (IOException e) {
             failures++;

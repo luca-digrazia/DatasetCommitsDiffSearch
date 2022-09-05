@@ -4,12 +4,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.SocketFactory;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
+
+import java.io.*;
 import java.net.InetSocketAddress;
-import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.charset.Charset;
@@ -39,7 +36,7 @@ public class Graphite implements GraphiteSender {
      * {@link SocketFactory}.
      *
      * @param hostname The hostname of the Carbon server
-     * @param port     The port of the Carbon server
+     * @param port The port of the Carbon server
      */
     public Graphite(String hostname, int port) {
         this(hostname, port, SocketFactory.getDefault());
@@ -48,8 +45,8 @@ public class Graphite implements GraphiteSender {
     /**
      * Creates a new client which connects to the given address and socket factory.
      *
-     * @param hostname      The hostname of the Carbon server
-     * @param port          The port of the Carbon server
+     * @param hostname The hostname of the Carbon server
+     * @param port The port of the Carbon server
      * @param socketFactory the socket factory
      */
     public Graphite(String hostname, int port, SocketFactory socketFactory) {
@@ -60,8 +57,8 @@ public class Graphite implements GraphiteSender {
      * Creates a new client which connects to the given address and socket factory using the given
      * character set.
      *
-     * @param hostname      The hostname of the Carbon server
-     * @param port          The port of the Carbon server
+     * @param hostname The hostname of the Carbon server
+     * @param port The port of the Carbon server
      * @param socketFactory the socket factory
      * @param charset       the character set used by the server
      */
@@ -115,16 +112,16 @@ public class Graphite implements GraphiteSender {
             throw new IllegalStateException("Already connected");
         }
         InetSocketAddress address = this.address;
-        // the previous dns retry logic did not work, as address.getAddress would always return the cached value
-        // this version of the simplified logic will always cause a dns request if hostname has been supplied.
-        // InetAddress.getByName forces the dns lookup
-        // if an InetSocketAddress was supplied at create time that will take precedence.
-        if (address == null || hostname != null) {
-            address = new InetSocketAddress(InetAddress.getByName(hostname), port);
+        if (address == null) {
+            address = new InetSocketAddress(hostname, port);
         }
-
         if (address.getAddress() == null) {
-            throw new UnknownHostException(address.getHostName());
+            // retry lookup, just in case the DNS changed
+            address = new InetSocketAddress(address.getHostName(),address.getPort());
+
+            if (address.getAddress() == null) {
+                throw new UnknownHostException(address.getHostName());
+            }
         }
 
         this.socket = socketFactory.createSocket(address.getAddress(), address.getPort());
@@ -133,7 +130,7 @@ public class Graphite implements GraphiteSender {
 
     @Override
     public boolean isConnected() {
-        return socket != null && socket.isConnected() && !socket.isClosed();
+    		return socket != null && socket.isConnected() && !socket.isClosed();
     }
 
     @Override
