@@ -362,14 +362,13 @@ public class BlazeCommandDispatcher {
     // Setup log filtering
     BlazeCommandEventHandler.Options eventHandlerOptions =
         optionsParser.getOptions(BlazeCommandEventHandler.Options.class);
-    OutErr colorfulOutErr = outErr;
     if (!eventHandlerOptions.useColor()) {
-      outErr = ansiStripOut(ansiStripErr(outErr));
       if (!commandAnnotation.binaryStdOut()) {
-        colorfulOutErr = ansiStripOut(colorfulOutErr);
+        outErr = ansiStripOut(outErr);
       }
+
       if (!commandAnnotation.binaryStdErr()) {
-        colorfulOutErr = ansiStripErr(colorfulOutErr);
+        outErr = ansiStripErr(outErr);
       }
     }
 
@@ -385,17 +384,6 @@ public class BlazeCommandDispatcher {
     EventHandler handler = createEventHandler(outErr, eventHandlerOptions);
     Reporter reporter = runtime.getReporter();
     reporter.addHandler(handler);
-
-    // We register an ANSI-allowing handler associated with {@code handler} so that ANSI control
-    // codes can be re-introduced later even if blaze is invoked with --color=no. This is useful
-    // for commands such as 'blaze run' where the output of the final executable shouldn't be
-    // modified.
-    EventHandler ansiAllowingHandler = null;
-    if (!eventHandlerOptions.useColor()) {
-      ansiAllowingHandler = createEventHandler(colorfulOutErr, eventHandlerOptions);
-      reporter.registerAnsiAllowingHandler(handler, ansiAllowingHandler);
-    }
-
     try {
       // While a Blaze command is active, direct all errors to the client's
       // event handler (and out/err streams).
@@ -448,10 +436,6 @@ public class BlazeCommandDispatcher {
       System.setErr(savedErr);
       reporter.removeHandler(handler);
       releaseHandler(handler);
-      if (!eventHandlerOptions.useColor()) {
-        reporter.removeHandler(ansiAllowingHandler);
-        releaseHandler(ansiAllowingHandler);
-      }
       runtime.getTimestampGranularityMonitor().waitForTimestampGranularity(outErr);
     }
   }
