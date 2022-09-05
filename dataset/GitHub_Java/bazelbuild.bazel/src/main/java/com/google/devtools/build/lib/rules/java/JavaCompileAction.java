@@ -378,7 +378,7 @@ public class JavaCompileAction extends AbstractAction {
         }
       };
 
-      getContext(executor).exec(spawn, actionExecutionContext);
+      executor.getSpawnActionContext(getMnemonic()).exec(spawn, actionExecutionContext);
     } catch (ExecException e) {
       throw e.toActionExecutionException("Java compilation in rule '" + getOwner().getLabel() + "'",
           executor.getVerboseFailures(), this);
@@ -422,7 +422,8 @@ public class JavaCompileAction extends AbstractAction {
 
   @Override
   public ResourceSet estimateResourceConsumption(Executor executor) {
-    if (getContext(executor).isRemotable(getMnemonic(), true)) {
+    SpawnActionContext context = getContext(executor);
+    if (context.isRemotable(getMnemonic(), true)) {
       return ResourceSet.ZERO;
     }
     return LOCAL_RESOURCES;
@@ -676,8 +677,9 @@ public class JavaCompileAction extends AbstractAction {
   /**
    * Gets the name of the target that produced the given jar artifact.
    *
-   * <p>When specifying jars directly in the "srcs" attribute of a rule (mostly for third_party
-   * libraries), there is no generating action, so we just return the jar name in label form.
+   * When specifying jars directly in the "srcs" attribute of a rule (mostly
+   * for third_party libraries), there is no generating action, so we just
+   * return the jar name in label form.
    */
   private static Label getTargetName(Artifact jar) {
     return Preconditions.checkNotNull(jar.getOwner(), jar);
@@ -907,6 +909,7 @@ public class JavaCompileAction extends AbstractAction {
           directJars,
           strictJavaDeps,
           compileTimeDependencyArtifacts,
+
           semantics);
     }
 
