@@ -211,7 +211,6 @@ package android.taobao.atlas.framework.bundlestorage;
 import android.taobao.atlas.framework.Framework;
 import android.taobao.atlas.runtime.RuntimeVariables;
 import android.taobao.atlas.versionInfo.BaselineInfoManager;
-import android.util.Log;
 
 import java.io.File;
 import java.io.FilenameFilter;
@@ -222,14 +221,17 @@ import java.util.List;
 
 public class BundleArchive {
 
+    public final static String DEPRECATED_MARK = Framework.DEPRECATED_MARK;
     public final static String DEXPATCH_DIR = "dexpatch/";
+
     private File                                         bundleDir = null;
     private  final BundleArchiveRevision                currentRevision;
 
     // reload
     public BundleArchive(String location,File bundleDir,String uniqueTag,long dexPatchVersion) throws IOException {
         this.bundleDir = bundleDir;
-        if (RuntimeVariables.sCurrentProcessName.equals(RuntimeVariables.androidApplication.getPackageName()) && !Framework.updateHappend) {
+        String processName = RuntimeVariables.getProcessName(RuntimeVariables.androidApplication);
+        if (processName.equals(RuntimeVariables.androidApplication.getPackageName())) {
             purge(uniqueTag,dexPatchVersion);
         }
         File revisionDir ;
@@ -293,7 +295,7 @@ public class BundleArchive {
 
     //update
     public BundleArchiveRevision newRevision(String location,File bundleDir, File input,String uniqueTag,long dexPatchVersion) throws IOException {
-        if(!RuntimeVariables.sCurrentProcessName.equals(RuntimeVariables.androidApplication.getPackageName())){
+        if(!Framework.getCurProcessName().equals(RuntimeVariables.androidApplication.getPackageName())){
             throw new RuntimeException("can not update bundle in child process");
         }
         if(dexPatchVersion>0){
@@ -345,35 +347,29 @@ public class BundleArchive {
     /**
      * This method removes all old revisions associated with the archive and keeps only the current revision.
      **/
-    public synchronized void purge(final String uniqueTag, final long dexPatchVersion) {
+    public void purge(String uniqueTag, final long dexPatchVersion) {
         // remove old dexpatch
         File dexPatchDir = new File(bundleDir,DEXPATCH_DIR);
         File[] dexPatchs = dexPatchDir.listFiles(new FilenameFilter() {
             @Override
             public boolean accept(File dir, String filename) {
-                long version = 0;
-                try {
-                    version = Long.parseLong(filename);
-                }catch(Throwable e){}
-                if(dexPatchVersion>0 && !filename.equals(dexPatchVersion+"") && dexPatchVersion>version){
+                if(dexPatchVersion>0 && !filename.equals(dexPatchVersion+"")){
+                    return true;
+                }else{
                     return true;
                 }
-                return false;
             }
         });
         if(dexPatchs!=null){
             for(File patch : dexPatchs){
-                if(patch.isDirectory()) {
-                    Framework.deleteDirectory(patch);
-                }
+                Framework.deleteDirectory(patch);
             }
         }
 
         // remove old update version
         File[] dirs = bundleDir.listFiles();
         for(File dir : dirs){
-            if(dir.isDirectory() && !dir.getName().contains("dexpatch") && !dir.getName().equals(uniqueTag)){
-                Log.e("BundleArchive","purge "+bundleDir +" : "+dir.getName());
+            if(!dir.getName().contains("dexpatch") && !dir.getName().equals(uniqueTag)){
                 Framework.deleteDirectory(dir);
             }
         }

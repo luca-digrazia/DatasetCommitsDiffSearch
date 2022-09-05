@@ -209,23 +209,39 @@
 package android.taobao.atlas.framework;
 
 import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
+import android.taobao.atlas.framework.bundlestorage.Archive;
 import android.taobao.atlas.framework.bundlestorage.BundleArchive;
+import android.taobao.atlas.framework.bundlestorage.BundleArchiveRevision;
 import android.taobao.atlas.runtime.RuntimeVariables;
+import android.taobao.atlas.runtime.newcomponent.AdditionalPackageManager;
 import android.taobao.atlas.runtime.DelegateResources;
+import android.taobao.atlas.util.FileUtils;
+import android.taobao.atlas.util.IOUtil;
 import android.taobao.atlas.util.log.impl.AtlasMonitor;
 import android.taobao.atlas.versionInfo.BaselineInfoManager;
 import android.util.Log;
+
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleEvent;
 import org.osgi.framework.BundleException;
+import org.osgi.framework.BundleListener;
 import org.osgi.framework.FrameworkEvent;
+import org.osgi.framework.FrameworkListener;
+
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.util.HashMap;
+import java.security.ProtectionDomain;
+import java.util.ArrayList;
+import java.util.Dictionary;
+import java.util.Hashtable;
 import java.util.List;
-import java.util.Map;
+import java.util.SortedMap;
 
 public final class BundleImpl implements Bundle {
 
@@ -253,6 +269,22 @@ public final class BundleImpl implements Bundle {
      * the bundle classloader.
      */
     BundleClassLoader               classloader;
+
+    /**
+     * the bundle context.
+     */
+    private final BundleContext context;
+
+    /**
+     * List of framework listeners registered by this bundle. Is initialized in a lazy way.
+     */
+    List<FrameworkListener>         registeredFrameworkListeners = null;
+
+    /**
+     * List of bundle listeners registered by this bundle. Is initialized in a lazy way.
+     */
+    List<BundleListener>            registeredBundleListeners    = null;
+
     boolean disabled = false;
     /**
      * create a new bundle object from InputStream. This is used when a new bundle is installed.
@@ -262,10 +294,12 @@ public final class BundleImpl implements Bundle {
      * @throws BundleException if something goes wrong.
      * @throws IOException
      */
-    BundleImpl(final File bundleDir, final String location, final InputStream stream,
+    BundleImpl(final File bundleDir, final String location, final BundleContext context, final InputStream stream,
                final File file, String unique_tag, boolean autoload, long dexPatchVersion) throws BundleException, IOException{
         long start = System.currentTimeMillis();
+
         this.location = location;
+        this.context = context;
         this.bundleDir = bundleDir;
         Framework.notifyBundleListeners(BundleEvent.BEFORE_INSTALL, this);
         if (stream != null) {
@@ -298,15 +332,13 @@ public final class BundleImpl implements Bundle {
         this.location = bcontext.location;
         long dexPatchVersion = BaselineInfoManager.instance().getDexPatchBundleVersion(location);
         Framework.notifyBundleListeners(BundleEvent.BEFORE_INSTALL, this);
+
+        this.context = bcontext;
         this.bundleDir = bundleDir;
         this.state = Bundle.INSTALLED;
         try {
             if(dexPatchVersion>0){
-                try {
-                    this.archive = new BundleArchive(location, bundleDir, bcontext.bundle_tag, dexPatchVersion);
-                }catch(Throwable e){
-                    this.archive = new BundleArchive(location, bundleDir, bcontext.bundle_tag, -1);
-                }
+                this.archive = new BundleArchive(location, bundleDir, bcontext.bundle_tag,dexPatchVersion);
             }else {
                 this.archive = new BundleArchive(location, bundleDir, bcontext.bundle_tag,-1);
             }
@@ -314,9 +346,8 @@ public final class BundleImpl implements Bundle {
             if(e instanceof BundleArchive.MisMatchException){
                 this.archive = null;
                 BaselineInfoManager.instance().rollbackHardly();
-                Map<String, Object> detail = new HashMap<>();
-                detail.put("BundleImpl", "BundleImpl create failed!");
-                AtlasMonitor.getInstance().report(AtlasMonitor.DD_BUNDLE_MISMATCH, detail, e);
+                AtlasMonitor.getInstance().trace(AtlasMonitor.DD_BUNDLE_MISMATCH,
+                        false, "0", e==null?"":e.getMessage(), "");
                 throw e;
             }else {
                 throw new BundleException("Could not load bundle " + location, e.getCause());

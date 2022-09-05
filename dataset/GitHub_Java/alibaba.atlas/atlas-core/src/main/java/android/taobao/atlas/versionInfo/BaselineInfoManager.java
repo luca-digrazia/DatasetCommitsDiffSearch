@@ -206,259 +206,208 @@
  *
  */
 
-package android.taobao.atlas.startup.patch;
+package android.taobao.atlas.versionInfo;
 
-import android.app.PreVerifier;
-import android.content.Context;
-import android.os.Looper;
-import android.taobao.atlas.startup.patch.releaser.BundleReleaser;
+import android.content.pm.PackageInfo;
+import android.taobao.atlas.framework.Atlas;
+import android.taobao.atlas.runtime.RuntimeVariables;
+import android.taobao.atlas.util.WrapperUtil;
 import android.text.TextUtils;
-import dalvik.system.DexFile;
+import android.util.Pair;
+
 import java.io.*;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.util.zip.ZipFile;
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Set;
 
 /**
- * Created by guanjie on 15/6/4.
+ * Created by guanjie on 15/9/10.
  */
- class KernalBundleArchive {
+public class BaselineInfoManager{
 
-    public static final String TAG = "KernalBundleArchive";
-    private static final String BUNDLE_NAME = "com_taobao_maindex.zip";
-    public final static String DEXPATCH_DIR = "dexpatch/";
-    /**
-     * Size of reading buffers.
-     */
-    private static final int BUFFER_SIZE = 0x4000;
-    private File bundleDir;
-    /**
-     * the bundle revision file location.
-     */
-    private File   revisionDir;
-    private File   libraryDirectory;
-    private DexFile[] odexFile;
-    private boolean hasResources = false;
-    private Context mContext;
+    private static BaselineInfoManager sBaseInfoManager;
 
-    //reload
-    public KernalBundleArchive(Context context, File bundleDir,String version,long dexPatchVersion,String process) throws IOException {
-        if(Boolean.FALSE.booleanValue()){
-            String.valueOf(PreVerifier.class);
-        }
-        mContext = context;
-        this.bundleDir = bundleDir;
-        if(process.equals(KernalConstants.baseContext.getPackageName())) {
-            purge(version, dexPatchVersion);
-        }
-        if(dexPatchVersion>0){
-            revisionDir = new File(bundleDir,DEXPATCH_DIR+dexPatchVersion);
-        }
-        if(!revisionDir.exists()){
-            //dexpatch目录不存在可降级，dexpatch改动必须向前兼容
-            revisionDir = new File(bundleDir,version);
-        }
+    private Object mVersionManager;
 
-        if (!revisionDir.exists()) {
-            throw new IOException("can not find kernal bundle");
+    public synchronized static BaselineInfoManager instance(){
+        if(sBaseInfoManager==null){
+            sBaseInfoManager = new BaselineInfoManager();
         }
-        libraryDirectory = new File(revisionDir,"lib");
-        File bundleFile = new File(revisionDir, BUNDLE_NAME);
-        boolean success = new KernalBundleRelease(revisionDir,true).release(bundleFile,true);
-        if (!success||odexFile == null){
-            throw new IOException("process patch failed!");
-        }
+        return sBaseInfoManager;
     }
 
-    //create
-    public KernalBundleArchive(final File bundleDir, File file,String version,long dexPatchVersion) throws IOException {
-        this.bundleDir = bundleDir;
-        if(dexPatchVersion>0) {
-            revisionDir = new File(bundleDir, DEXPATCH_DIR+dexPatchVersion);
-        }else{
-            revisionDir = new File(bundleDir, version);
-        }
-        if (!revisionDir.exists()) {
-            revisionDir.mkdirs();
-        }
-        File bundleFile = new File(revisionDir, BUNDLE_NAME);
-        if (!file.renameTo(bundleFile)) {
-            copyInputStreamToFile(new FileInputStream(file), bundleFile);
-        }
-        ZipFile zip = new ZipFile(bundleFile);
-        hasResources = false;
-
-        if (zip.getEntry("resources.arsc") != null || new File(revisionDir, "newAssets/assets").exists()) {
-            hasResources = true;
-        }
-        zip.close();
-        libraryDirectory = new File(revisionDir, "lib");
-        boolean success = new KernalBundleRelease(revisionDir,false).release(bundleFile,false);
-        if (!success||odexFile == null){
-            throw new IOException("process mainDex failed!");
-        }
+    private BaselineInfoManager(){
     }
 
-    /**
-     * This method removes all old revisions associated with the archive and keeps only the current revision.
-     **/
-    public void purge(String uniqueTag, final long dexPatchVersion) {
-        // remove old dexpatch
-        File dexPatchDir = new File(bundleDir,DEXPATCH_DIR);
-        File[] dexPatchs = dexPatchDir.listFiles(new FilenameFilter() {
-            @Override
-            public boolean accept(File dir, String filename) {
-                if(dexPatchVersion>0 && !filename.equals(dexPatchVersion+"")){
-                    return true;
-                }else{
-                    return true;
-                }
-            }
-        });
-        if(dexPatchs!=null){
-            for(File patch : dexPatchs){
-                deleteDirectory(patch);
-            }
-        }
-
-        // remove old update version
-        File[] dirs = bundleDir.listFiles();
-        for(File dir : dirs){
-            if(!dir.getName().contains("dexpatch") && !dir.getName().equals(uniqueTag)){
-                deleteDirectory(dir);
-            }
-        }
+    @Override
+    public String toString(){
+        return mVersionManager.toString();
     }
 
-
-
-    /**
-     * copy input to output stream - available in several StreamUtils or Streams classes
-     */
-    public static void copy(InputStream input, OutputStream output) throws IOException {
-        byte[] readContent = new byte[BUFFER_SIZE];
-        int bytesRead;
-        while ((bytesRead = input.read(readContent)) != -1) {
-            output.write(readContent, 0, bytesRead);
-        }
-    }
-
-
-    public File getLibraryDirectory(){
-        return libraryDirectory;
-    }
-
-    public DexFile[] getOdexFile(){
-        return odexFile;
-    }
-
-    public File getArchiveFile(){
-        return new File(revisionDir,BUNDLE_NAME);
-    }
-
-    public File getRevisionDir(){
-        return revisionDir;
-    }
-
-    public static void deleteDirectory(final File path) {
-        final File[] files = path.listFiles();
-        if (files == null){
-            return;
-        }
-        for (int i = 0; i < files.length; i++) {
-            if (files[i].isDirectory()) {
-                deleteDirectory(files[i]);
-            } else {
-                files[i].delete();
-            }
-        }
-        path.delete();
-    }
-
-    public static String substringAfter(String str, String separator) {
-        if (TextUtils.isEmpty(str)) {
-            return str;
-        }
-        if (separator == null) {
-            return "";
-        }
-        int pos = str.indexOf(separator);
-        if (pos == -1) {
-            return "";
-        }
-        return str.substring(pos + separator.length());
-    }
-
-    public static void copyInputStreamToFile(InputStream input, File file) throws IOException {
-        FileOutputStream os = null;
-        FileChannel channel = null;
+    public void reset(){
         try {
-            // copy 文件
-            os = new FileOutputStream(file);
-            channel = os.getChannel();
-            byte[] buffers = new byte[1024];
-            int realLength;
-            while ((realLength = input.read(buffers)) > 0) {
-                channel.write(ByteBuffer.wrap(buffers, 0, realLength));
-            }
-        } finally {
-            if (input != null) try {
-                input.close();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            if (channel != null) try {
-                channel.close();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            if (os != null) try {
-                os.close();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            mVersionManager.getClass().getDeclaredMethod("reset").invoke(mVersionManager);
+        } catch (Throwable e) {
+            e.printStackTrace();
         }
     }
 
-    /**
-     * 写这个类而不用匿名内部类的原因：
-     * 如果之前发生过动态部署，则再次进行update的时候饮用的第二个内部类与Archive不同于同一个dex，会引发PRE_VERIFY
-     */
-    public class KernalBundleRelease{
-        private BundleReleaser mBundlereleaser;
-        public KernalBundleRelease(File dir,boolean hasReleasedBefore) {
-            mBundlereleaser = new BundleReleaser(dir,hasReleasedBefore);
-        }
-
-        public boolean release(final File bundleFile,final boolean start) throws IOException{
-            final Boolean[] success = {true};
-            mBundlereleaser.release(new BundleReleaser.ProcessCallBack() {
-                @Override
-                public void onFailed() throws IOException {
-                    success[0] = false;
-                    odexFile = null;
-                    mBundlereleaser.close();
-
-                }
-
-                @Override
-                public void onFinish(int event) {
-                    if (event == BundleReleaser.MSG_ID_DEX_OPT_DONE){
-                        odexFile = mBundlereleaser.getDexFile();
-                    }
-                }
-
-                @Override
-                public void onAllFinish() {
-                    mBundlereleaser.close();
-                }
-            },bundleFile,start);
-            if(Thread.currentThread().getId()!=Looper.getMainLooper().getThread().getId()) {
-                Looper.loop();
-            }
-            return success[0];
+    public void removeBaseLineInfo(){
+        try {
+            mVersionManager.getClass().getDeclaredMethod("removeBaseLineInfo").invoke(mVersionManager);
+        } catch (Throwable e) {
+            e.printStackTrace();
         }
     }
 
+    public String getBaseBundleVersion(String bundleName){
+        try {
+            return (String)mVersionManager.getClass().getDeclaredMethod("getBaseBundleVersion",String.class).invoke(mVersionManager,bundleName);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public long getDexPatchBundleVersion(String bundleName){
+        try {
+            return (long)mVersionManager.getClass().getDeclaredMethod("getDexPatchBundleVersion",String.class).invoke(mVersionManager,bundleName);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        return -1;
+    }
+
+    public boolean isUpdated(String bundleName){
+        try {
+            return (boolean)mVersionManager.getClass().getDeclaredMethod("isUpdated",String.class).invoke(mVersionManager,bundleName);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    public boolean isDexPatched(String bundleName){
+        try {
+            return (boolean)mVersionManager.getClass().getDeclaredMethod("isDexPatched",String.class).invoke(mVersionManager,bundleName);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    public boolean isCachePreVersion(){
+        try {
+            return (boolean)mVersionManager.getClass().getDeclaredMethod("isCachePreVersion").invoke(mVersionManager);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    public String currentVersionName(){
+        try {
+            return (String)mVersionManager.getClass().getDeclaredMethod("currentVersionName").invoke(mVersionManager);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        return "";
+    }
+
+    public void rollbackHardly(){
+        try {
+            mVersionManager.getClass().getDeclaredMethod("rollbackHardly").invoke(mVersionManager);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+    }
+
+    public String lastVersionName(){
+        try {
+            return (String)mVersionManager.getClass().getDeclaredMethod("lastVersionName").invoke(mVersionManager);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        return "";
+    }
+
+    public Set<String> getUpdateBundles(){
+        try {
+            return (Set<String>)mVersionManager.getClass().getDeclaredMethod("getUpdateBundles").invoke(mVersionManager);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        return new HashMap<String,String>().keySet();
+    }
+
+    private void rollbackInternal(boolean dexPatch,List<String> bundles){
+        try {
+            if(dexPatch) {
+                mVersionManager.getClass().getDeclaredMethod("dexpatchRollback", List.class).invoke(mVersionManager,bundles);
+            }else{
+                mVersionManager.getClass().getDeclaredMethod("upgradeRollback").invoke(mVersionManager);
+            }
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void rollback(boolean upgrade,List<String> rollbackBundles){
+        if(upgrade) {
+            if (!TextUtils.isEmpty(lastVersionName())) {
+                List<String> bundles = new ArrayList<String>(getUpdateBundles());
+                PackageInfo info = WrapperUtil.getPackageInfo(RuntimeVariables.androidApplication);
+                if (RuntimeVariables.sCachePreVersionBundles && bundles != null && !info.versionName.equals(lastVersionName()) && bundles.size() > 0) {
+                    rollbackInternal(false,null);
+                } else {
+                    //回滚到安装时期
+                    rollbackHardly();
+                }
+            } else {
+                rollbackHardly();
+            }
+        }else{
+            rollbackInternal(true,rollbackBundles);
+        }
+
+    }
+
+    public void saveBaselineInfo(String newBaselineVersion, HashMap<String,String> infos) throws IOException{
+        try {
+            mVersionManager.getClass().getDeclaredMethod("updateVersionInfo",boolean.class,String.class,HashMap.class,boolean.class).invoke(
+                    mVersionManager,true,newBaselineVersion,infos,RuntimeVariables.sCachePreVersionBundles
+            );
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        } catch (InvocationTargetException e) {
+            e.printStackTrace();
+        } catch (NoSuchMethodException e) {
+            e.printStackTrace();
+        }
+
+        WrapperUtil.persisitKeyPointLog(newBaselineVersion);
+    }
+
+    public void saveDexPathInfo(HashMap<String,String> infos) throws IOException{
+        try {
+            mVersionManager.getClass().getDeclaredMethod("updateVersionInfo",boolean.class,String.class,HashMap.class,boolean.class).invoke(
+                    mVersionManager,false,"",infos,RuntimeVariables.sCachePreVersionBundles
+            );
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        } catch (InvocationTargetException e) {
+            e.printStackTrace();
+        } catch (NoSuchMethodException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static class UpdateBundleInfo{
+        public String name;
+        public String version;
+        public String size;
+    }
 
 }

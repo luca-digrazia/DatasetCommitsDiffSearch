@@ -213,6 +213,7 @@ import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
 import android.taobao.atlas.framework.Framework;
 import android.taobao.atlas.util.*;
 import android.taobao.atlas.util.log.impl.AtlasMonitor;
+import android.taobao.atlas.versionInfo.BaselineInfoManager;
 import android.text.TextUtils;
 import android.taobao.atlas.hack.AtlasHacks;
 import android.taobao.atlas.runtime.RuntimeVariables;
@@ -226,9 +227,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -451,9 +450,8 @@ public class BundleArchiveRevision {
                 odexFile.delete();
             }
             Log.e("Framework","Failed optDexFile '" + bundleFile.getAbsolutePath() + "' >>> ", e);
-            Map<String, Object> detail = new HashMap<>();
-            detail.put("optDexFile", bundleFile.getAbsolutePath());
-            AtlasMonitor.getInstance().report(AtlasMonitor.CONTAINER_DEXOPT_FAIL, detail, e);
+            AtlasMonitor.getInstance().trace(AtlasMonitor.CONTAINER_DEXOPT_FAIL,
+                    false, "0", e==null?"":e.getMessage(), bundleFile.getName());
         } finally {
             AtlasFileLock.getInstance().unLock(odexFile);
         }
@@ -520,9 +518,8 @@ public class BundleArchiveRevision {
                 }
             }
         }catch(IOException e){
-            Map<String, Object> detail = new HashMap<>();
-            detail.put("installSoLib", bundle.getAbsolutePath());
-            AtlasMonitor.getInstance().report(AtlasMonitor.CONTAINER_SOLIB_UNZIP_FAIL, detail, e);
+            AtlasMonitor.getInstance().trace(AtlasMonitor.CONTAINER_SOLIB_UNZIP_FAIL,
+                    false, "0", e==null?"":e.getMessage(), bundle.getName());
             throw e;
         }finally{
         	if(null!=zip){

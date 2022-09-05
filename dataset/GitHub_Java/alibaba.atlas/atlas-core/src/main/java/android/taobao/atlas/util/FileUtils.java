@@ -206,259 +206,110 @@
  *
  */
 
-package android.taobao.atlas.startup.patch;
+package android.taobao.atlas.util;
 
-import android.app.PreVerifier;
-import android.content.Context;
-import android.os.Looper;
-import android.taobao.atlas.startup.patch.releaser.BundleReleaser;
-import android.text.TextUtils;
-import dalvik.system.DexFile;
-import java.io.*;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.util.zip.ZipFile;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
-/**
- * Created by guanjie on 15/6/4.
- */
- class KernalBundleArchive {
+import android.os.Build;
+import android.os.Environment;
+import android.os.StatFs;
 
-    public static final String TAG = "KernalBundleArchive";
-    private static final String BUNDLE_NAME = "com_taobao_maindex.zip";
-    public final static String DEXPATCH_DIR = "dexpatch/";
-    /**
-     * Size of reading buffers.
-     */
-    private static final int BUFFER_SIZE = 0x4000;
-    private File bundleDir;
-    /**
-     * the bundle revision file location.
-     */
-    private File   revisionDir;
-    private File   libraryDirectory;
-    private DexFile[] odexFile;
-    private boolean hasResources = false;
-    private Context mContext;
+public class FileUtils {
+	
+	public static boolean CheckFileValidation(String path) {
+		boolean flag = false;
+		FileInputStream in = null;
+		try{
+			in = new FileInputStream(path);
+		} catch (FileNotFoundException e){
+			flag = false;
+		}
+		
+		if ((flag == true) && (in != null)){
+			try{
+				if (in.available() <= 0)
+					flag = false;
+			}catch(IOException e){
+				flag = false;
+			}
+		}
+		return flag;
+	}
 
-    //reload
-    public KernalBundleArchive(Context context, File bundleDir,String version,long dexPatchVersion,String process) throws IOException {
-        if(Boolean.FALSE.booleanValue()){
-            String.valueOf(PreVerifier.class);
+	public static String getDataAvailableSpace(){
+		long avliableSpace = 0;
+		avliableSpace = FileUtils.getUsableSpace(Environment.getDataDirectory());
+		return String.valueOf(avliableSpace);
+	}
+	
+    public static long getUsableSpace(File path) {
+        if (path == null) {
+            return -1;
         }
-        mContext = context;
-        this.bundleDir = bundleDir;
-        if(process.equals(KernalConstants.baseContext.getPackageName())) {
-            purge(version, dexPatchVersion);
-        }
-        if(dexPatchVersion>0){
-            revisionDir = new File(bundleDir,DEXPATCH_DIR+dexPatchVersion);
-        }
-        if(!revisionDir.exists()){
-            //dexpatch目录不存在可降级，dexpatch改动必须向前兼容
-            revisionDir = new File(bundleDir,version);
-        }
-
-        if (!revisionDir.exists()) {
-            throw new IOException("can not find kernal bundle");
-        }
-        libraryDirectory = new File(revisionDir,"lib");
-        File bundleFile = new File(revisionDir, BUNDLE_NAME);
-        boolean success = new KernalBundleRelease(revisionDir,true).release(bundleFile,true);
-        if (!success||odexFile == null){
-            throw new IOException("process patch failed!");
-        }
-    }
-
-    //create
-    public KernalBundleArchive(final File bundleDir, File file,String version,long dexPatchVersion) throws IOException {
-        this.bundleDir = bundleDir;
-        if(dexPatchVersion>0) {
-            revisionDir = new File(bundleDir, DEXPATCH_DIR+dexPatchVersion);
-        }else{
-            revisionDir = new File(bundleDir, version);
-        }
-        if (!revisionDir.exists()) {
-            revisionDir.mkdirs();
-        }
-        File bundleFile = new File(revisionDir, BUNDLE_NAME);
-        if (!file.renameTo(bundleFile)) {
-            copyInputStreamToFile(new FileInputStream(file), bundleFile);
-        }
-        ZipFile zip = new ZipFile(bundleFile);
-        hasResources = false;
-
-        if (zip.getEntry("resources.arsc") != null || new File(revisionDir, "newAssets/assets").exists()) {
-            hasResources = true;
-        }
-        zip.close();
-        libraryDirectory = new File(revisionDir, "lib");
-        boolean success = new KernalBundleRelease(revisionDir,false).release(bundleFile,false);
-        if (!success||odexFile == null){
-            throw new IOException("process mainDex failed!");
-        }
-    }
-
-    /**
-     * This method removes all old revisions associated with the archive and keeps only the current revision.
-     **/
-    public void purge(String uniqueTag, final long dexPatchVersion) {
-        // remove old dexpatch
-        File dexPatchDir = new File(bundleDir,DEXPATCH_DIR);
-        File[] dexPatchs = dexPatchDir.listFiles(new FilenameFilter() {
-            @Override
-            public boolean accept(File dir, String filename) {
-                if(dexPatchVersion>0 && !filename.equals(dexPatchVersion+"")){
-                    return true;
-                }else{
-                    return true;
-                }
-            }
-        });
-        if(dexPatchs!=null){
-            for(File patch : dexPatchs){
-                deleteDirectory(patch);
-            }
-        }
-
-        // remove old update version
-        File[] dirs = bundleDir.listFiles();
-        for(File dir : dirs){
-            if(!dir.getName().contains("dexpatch") && !dir.getName().equals(uniqueTag)){
-                deleteDirectory(dir);
-            }
-        }
-    }
-
-
-
-    /**
-     * copy input to output stream - available in several StreamUtils or Streams classes
-     */
-    public static void copy(InputStream input, OutputStream output) throws IOException {
-        byte[] readContent = new byte[BUFFER_SIZE];
-        int bytesRead;
-        while ((bytesRead = input.read(readContent)) != -1) {
-            output.write(readContent, 0, bytesRead);
-        }
-    }
-
-
-    public File getLibraryDirectory(){
-        return libraryDirectory;
-    }
-
-    public DexFile[] getOdexFile(){
-        return odexFile;
-    }
-
-    public File getArchiveFile(){
-        return new File(revisionDir,BUNDLE_NAME);
-    }
-
-    public File getRevisionDir(){
-        return revisionDir;
-    }
-
-    public static void deleteDirectory(final File path) {
-        final File[] files = path.listFiles();
-        if (files == null){
-            return;
-        }
-        for (int i = 0; i < files.length; i++) {
-            if (files[i].isDirectory()) {
-                deleteDirectory(files[i]);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.GINGERBREAD) {
+            return path.getUsableSpace()/1024/1024;
+        } else {
+            if (!path.exists()) {
+                return 0;
             } else {
-                files[i].delete();
-            }
-        }
-        path.delete();
-    }
-
-    public static String substringAfter(String str, String separator) {
-        if (TextUtils.isEmpty(str)) {
-            return str;
-        }
-        if (separator == null) {
-            return "";
-        }
-        int pos = str.indexOf(separator);
-        if (pos == -1) {
-            return "";
-        }
-        return str.substring(pos + separator.length());
-    }
-
-    public static void copyInputStreamToFile(InputStream input, File file) throws IOException {
-        FileOutputStream os = null;
-        FileChannel channel = null;
-        try {
-            // copy 文件
-            os = new FileOutputStream(file);
-            channel = os.getChannel();
-            byte[] buffers = new byte[1024];
-            int realLength;
-            while ((realLength = input.read(buffers)) > 0) {
-                channel.write(ByteBuffer.wrap(buffers, 0, realLength));
-            }
-        } finally {
-            if (input != null) try {
-                input.close();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            if (channel != null) try {
-                channel.close();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            if (os != null) try {
-                os.close();
-            } catch (Exception e) {
-                e.printStackTrace();
+                final StatFs stats = new StatFs(path.getPath());
+                return (long) stats.getBlockSize() * (long) stats.getAvailableBlocks()/1024/1024;
             }
         }
     }
-
-    /**
-     * 写这个类而不用匿名内部类的原因：
-     * 如果之前发生过动态部署，则再次进行update的时候饮用的第二个内部类与Archive不同于同一个dex，会引发PRE_VERIFY
-     */
-    public class KernalBundleRelease{
-        private BundleReleaser mBundlereleaser;
-        public KernalBundleRelease(File dir,boolean hasReleasedBefore) {
-            mBundlereleaser = new BundleReleaser(dir,hasReleasedBefore);
+    
+    public static long folderSize(File directory) {
+        long length = 0;
+        for (File file : directory.listFiles()) {
+            if (file.isFile())
+                length += file.length();
+            else
+                length += folderSize(file);
         }
-
-        public boolean release(final File bundleFile,final boolean start) throws IOException{
-            final Boolean[] success = {true};
-            mBundlereleaser.release(new BundleReleaser.ProcessCallBack() {
-                @Override
-                public void onFailed() throws IOException {
-                    success[0] = false;
-                    odexFile = null;
-                    mBundlereleaser.close();
-
-                }
-
-                @Override
-                public void onFinish(int event) {
-                    if (event == BundleReleaser.MSG_ID_DEX_OPT_DONE){
-                        odexFile = mBundlereleaser.getDexFile();
-                    }
-                }
-
-                @Override
-                public void onAllFinish() {
-                    mBundlereleaser.close();
-                }
-            },bundleFile,start);
-            if(Thread.currentThread().getId()!=Looper.getMainLooper().getThread().getId()) {
-                Looper.loop();
-            }
-            return success[0];
-        }
+        return length;
     }
+ 
+	private static String getFreeInodes(){
+		try {
+			long f_ffree = -1;
+			long f_favail = -1;
+			Class clsStatFs = Class.forName("android.os.StatFs");
+			Method doStat = clsStatFs.getDeclaredMethod("doStat", String.class);
+			doStat.setAccessible(true);
+			final Object stat = doStat.invoke(null, Environment.getDataDirectory().getAbsolutePath());
+			Class clsStructStatFs = stat.getClass();
+			Field filed_f_free = clsStructStatFs.getDeclaredField("f_ffree");
+			Field filed_f_favail = null;
+			try{
+				filed_f_favail = clsStructStatFs.getDeclaredField("f_favail");
+			} catch(Exception e){
+			}
+			f_ffree = filed_f_free.getLong(stat);
+			if (filed_f_favail != null){
+				f_favail = filed_f_favail.getLong(stat);
+			}
+			return "avaiable free nodes: " +  f_ffree + (f_favail == -1 ? ("avaiable free nodes for non-root:  " + f_favail) : "");
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return "";
+	}
+	
+	public static String getAvailableDisk(){
+	    String avliableSpace = "";
 
+	    try{
+			avliableSpace = getUsableSpace(Environment.getDataDirectory())+"M";
+	    } catch(Exception e){
+	    }
+
+	    return avliableSpace;
+	}
 
 }

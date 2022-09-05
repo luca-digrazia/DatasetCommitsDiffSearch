@@ -230,8 +230,12 @@ public class AtlasBundleInfoManager {
     public static final String TAG = "AtlasBundleInfoManager";
 
     private static AtlasBundleInfoManager sManager;
+    private final String LIST_FILE_DIR ;
+    private final String BUNDLE_LIST_FILE_PREFIX = "bundleInfo-";
     private BundleListing mCurrentBundleListing;
+    private static final String CHARSET = "UTF-8";
 
+    //
     private static HashMap<String,ActivityInfo> activityInfos;
     private static HashMap<String,ServiceInfo>  serviceInfos;
     private static HashMap<String,ActivityInfo> receiverInfos;
@@ -246,6 +250,12 @@ public class AtlasBundleInfoManager {
     }
 
     private AtlasBundleInfoManager(){
+        Context context = RuntimeVariables.androidApplication;
+        LIST_FILE_DIR = context.getFilesDir().getAbsolutePath()+ File.separatorChar+"bundlelisting"+File.separatorChar;
+        File file = new File(LIST_FILE_DIR);
+        if(!file.exists()){
+            file.mkdirs();
+        }
     }
 
     public BundleListing getBundleInfo(){
@@ -254,8 +264,8 @@ public class AtlasBundleInfoManager {
     }
 
     /*
-     * Get all dependent bundles for the designated bundle
-     */
+ * Get all dependent bundles for the designated bundle
+ */
     public List<String> getDependencyForBundle(String bundleName){
         InitBundleInfoByVersionIfNeed();
         if (mCurrentBundleListing == null || mCurrentBundleListing.getBundles()==null || mCurrentBundleListing.getBundles().size() ==0){
@@ -336,6 +346,9 @@ public class AtlasBundleInfoManager {
         return null;
     }
 
+    /*
+ * Return designated bundle info
+ */
     public BundleListing.BundleInfo getBundleInfo(String name){
         InitBundleInfoByVersionIfNeed();
         if (mCurrentBundleListing == null || mCurrentBundleListing.getBundles()==null || mCurrentBundleListing.getBundles().size() ==0){
@@ -356,6 +369,84 @@ public class AtlasBundleInfoManager {
         return null;
     }
 
+//    public void persistListToFile (final BundleListing listing,final String version){
+//        if (null == listing){
+//            return;
+//        }
+//        if(Thread.currentThread().getId() == Looper.getMainLooper().getThread().getId()){
+//            new AsyncTask<String, String, String>() {
+//                @Override
+//                protected String doInBackground(String... params) {
+//                    persistListToFileInternal(listing, version);
+//                    return "";
+//                }
+//            }.execute();
+//        }else{
+//            persistListToFileInternal(listing,version);
+//        }
+//
+//    }
+
+//    public void persistListToFileInternal(final BundleListing listing,final String version){
+//        String content= BundleListingUtil.toJSONString(listing.getBundles());
+//        Log.d(TAG, "new listing = " + content);
+//        String fileName = String.format("%s%s.json",BUNDLE_LIST_FILE_PREFIX,version);
+//        File bundleInfoFile = new File(String.format("%s%s",LIST_FILE_DIR,fileName));
+//        for (int i = 0;i <3;i++){
+//            if(!bundleInfoFile.exists()){
+//                try {
+//                    bundleInfoFile.createNewFile();
+//                }catch (IOException e){
+//                    e.printStackTrace();
+//                }
+//            }
+//        }
+//        try {
+//            BufferedWriter bufferWritter = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(bundleInfoFile),CHARSET));
+//            bufferWritter.write(content);
+//            bufferWritter.close();
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+//    }
+
+    /**
+     * 更新当前清单
+     * @param updateBundles 更新的bundle列表
+     * @param newVersion 主客新版本
+     */
+ //   public void saveNewBundlelisingWithMerge(List<BundleListing.BundleInfo> updateBundles,String newVersion){
+//        Log.d(TAG,"mergeCurrentListWithUpdate");
+//        InitBundleInfoByVersionIfNeed();
+//        BundleListing cloneListing = BundleListing.clone(mCurrentBundleListing);
+//        if(cloneListing==null || cloneListing.getBundles()==null){
+//            Log.e("BundleInfoManager","list is null is impossible");
+//            return;
+//        }
+//        Log.d(TAG,"old listing size = "+ cloneListing.getBundles().size());
+//
+//        for(BundleListing.BundleInfo updateInfo : updateBundles){
+//            BundleListing.BundleInfo oldInfo = cloneListing.getBundles().get(updateInfo.getPkgName());
+//            if(oldInfo!=null){
+//                oldInfo.setVersion(updateInfo.getVersion());
+//                oldInfo.setMd5(updateInfo.getMd5());
+//                oldInfo.setSize(updateInfo.getSize());
+//                oldInfo.setDependency(updateInfo.getDependency());
+//                oldInfo.setUrl(updateInfo.getUrl());
+//            }else{
+//                BundleListing.BundleInfo info = new BundleListing.BundleInfo();
+//                info.setPkgName(updateInfo.getPkgName());
+//                info.setVersion(updateInfo.getVersion());
+//                info.setMd5(updateInfo.getMd5());
+//                info.setSize(updateInfo.getSize());
+//                info.setDependency(updateInfo.getDependency());
+//                info.setUrl(updateInfo.getUrl());
+//                cloneListing.insertBundle(info);
+//            }
+//        }
+//        persistListToFile(cloneListing,newVersion);
+//    }
+
     /**
      * 根据版本载入清单
      */
@@ -366,18 +457,14 @@ public class AtlasBundleInfoManager {
                 try {
                     LinkedHashMap<String,BundleListing.BundleInfo> infos = BundleListingUtil.parseArray(bundleInfoStr);
                     if (infos == null) {
-                        Map<String, Object> detail = new HashMap<>();
-                        detail.put("InitBundleInfoByVersionIfNeed",bundleInfoStr);
-                        AtlasMonitor.getInstance().report(AtlasMonitor.CONTAINER_BUNDLEINFO_PARSE_FAIL, detail, new RuntimeException("the infos is null!"));
+                        AtlasMonitor.getInstance().trace(AtlasMonitor.CONTAINER_BUNDLEINFO_PARSE_FAIL,
+                                false, "0", "", bundleInfoStr);
                     }
                     BundleListing listing = new BundleListing();
                     listing.setBundles(infos);
                     mCurrentBundleListing = listing;
                 }catch(Throwable e){
-                    Map<String, Object> detail = new HashMap<>();
-                    detail.put("InitBundleInfoByVersionIfNeed",bundleInfoStr);
-                    AtlasMonitor.getInstance().report(AtlasMonitor.CONTAINER_BUNDLEINFO_PARSE_FAIL, detail, e);
-                    throw new RuntimeException("parse bundleinfo failed");
+                    e.printStackTrace();
                 }
             }else{
                 throw new RuntimeException("read bundleInfo failed");
@@ -385,6 +472,46 @@ public class AtlasBundleInfoManager {
         }
 
     }
+
+
+//    private String getFromAssets(String fileName,Context context){
+//        BufferedReader bufReader = null;
+//        try {
+//            InputStreamReader inputReader = new InputStreamReader(context.getResources().getAssets().open(fileName), CHARSET);
+//            bufReader = new BufferedReader(inputReader);
+//            String line="";
+//            String result="";
+//            while((line = bufReader.readLine()) != null)
+//                result += line;
+//            return result;
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//            return null;
+//        } finally {
+//            if(bufReader!=null){
+//                try {
+//                    bufReader.close();
+//                } catch (IOException e) {
+//                    e.printStackTrace();
+//                }
+//            }
+//        }
+//    }
+//
+//    private String getFromFile(String fileName){
+//        File file = new File(fileName);
+//        Long fileLength = file.length();
+//        byte[] filecontent = new byte[fileLength.intValue()];
+//        try {
+//            FileInputStream in = new FileInputStream(file);
+//            in.read(filecontent);
+//            in.close();
+//            return new String(filecontent,CHARSET);
+//        } catch (Throwable e) {
+//            e.printStackTrace();
+//        }
+//        return null;
+//    }
 
     private String findBundleByComponentName(String componentClassName){
         getComponentInfoFromManifestIfNeed();
