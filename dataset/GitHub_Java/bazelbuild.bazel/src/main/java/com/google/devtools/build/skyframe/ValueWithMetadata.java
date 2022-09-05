@@ -116,7 +116,7 @@ public abstract class ValueWithMetadata implements SkyValue {
 
     @Override
     public int hashCode() {
-      return 31 * value.hashCode() + transitiveEvents.shallowHashCode();
+      return 31 * value.hashCode() + transitiveEvents.hashCode();
     }
 
     @Override
