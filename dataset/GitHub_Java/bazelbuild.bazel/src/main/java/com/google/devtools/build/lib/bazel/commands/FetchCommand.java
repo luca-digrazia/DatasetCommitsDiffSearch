@@ -17,6 +17,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
@@ -65,7 +66,7 @@ public final class FetchCommand implements BlazeCommand {
     if (options.getResidue().isEmpty()) {
       env.getReporter().handle(Event.error(String.format(
           "missing fetch expression. Type '%s help fetch' for syntax and help",
-          env.getRuntime().getProductName())));
+          Constants.PRODUCT_NAME)));
       return ExitCode.COMMAND_LINE_ERROR;
     }
 
@@ -93,12 +94,15 @@ public final class FetchCommand implements BlazeCommand {
     JavaOptions javaOptions = options.getOptions(JavaOptions.class);
     ImmutableList.Builder<String> labelsToLoad = new ImmutableList.Builder<String>()
         .addAll(options.getResidue());
-
-    // TODO(kchodorow): Remove this when OS X isn't as hacky about finding the JVM. Our test
-    // framework currently doesn't set up the JDK normally on OS X, so attempting to fetch
-    // tools/jdk:jdk will cause errors.
-    labelsToLoad.add(String.valueOf(javaOptions.javaToolchain));
-
+    if (String.valueOf(javaOptions.javaLangtoolsJar).equals(
+        runtime.getRuleClassProvider().getToolsRepository() + JavaOptions.DEFAULT_LANGTOOLS)) {
+      labelsToLoad.add(javaOptions.javaBase);
+    } else {
+      // TODO(kchodroow): Remove this when OS X isn't as hacky about finding the JVM. Our test
+      // framework currently doesn't set up the JDK normally on OS X, so attempting to fetch
+      // tools/jdk:jdk will cause errors.
+      labelsToLoad.add(String.valueOf(javaOptions.javaToolchain));
+    }
     String query = Joiner.on(" union ").join(labelsToLoad.build());
     query = "deps(" + query + ")";
 
