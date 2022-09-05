@@ -75,13 +75,9 @@ public class Timer implements Metered, Sampling {
      * @param clock     the {@link Clock} implementation the timer should use
      */
     public Timer(Reservoir reservoir, Clock clock) {
-        this(new Meter(clock), new Histogram(reservoir), clock);
-    }
-
-    public Timer(Meter meter, Histogram histogram, Clock clock) {
-        this.meter = meter;
-        this.histogram = histogram;
+        this.meter = new Meter(clock);
         this.clock = clock;
+        this.histogram = new Histogram(reservoir);
     }
 
     /**
