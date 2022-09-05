@@ -16,12 +16,13 @@ package com.google.devtools.build.skyframe;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 
 /** Tests for {@link ErrorTransienceValue}. */
 @RunWith(JUnit4.class)
@@ -35,7 +36,7 @@ public class ErrorTransienceValueTest {
       objOut.writeObject(ErrorTransienceValue.INSTANCE);
       fail("Expected exception");
     } catch (UnsupportedOperationException e) {
-      assertThat(e).hasMessageThat().isEqualTo("Java serialization not supported");
+      assertThat(e).hasMessage("Java serialization not supported");
     }
   }
 

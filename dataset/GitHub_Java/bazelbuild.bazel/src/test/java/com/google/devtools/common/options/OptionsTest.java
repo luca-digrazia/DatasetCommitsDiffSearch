@@ -16,14 +16,15 @@ package com.google.devtools.common.options;
 
 import static com.google.common.truth.Truth.assertThat;
 import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.google.common.collect.Iterables;
 import com.google.common.testing.EqualsTester;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.Map;
-import java.util.TreeSet;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -65,31 +66,6 @@ public class OptionsTest {
             defaultValue = "null",
             expansion = { "--host=special.google.com", "--port=8080"})
     public Void special;
-
-    // Interestingly, the class needs to be public, or else the default constructor ends up not
-    // being public and the expander can't be instantiated.
-    /** SpecialExpansion */
-    public static class SpecialExpansion implements ExpansionFunction {
-      @Override
-      public String[] getExpansion(IsolatedOptionsData optionsData) {
-        TreeSet<String> flags = new TreeSet<>();
-        for (Map.Entry<String, ?> entry : optionsData.getAllNamedFields()) {
-          if (entry.getKey().startsWith("specialexp_")) {
-            flags.add("--" + entry.getKey());
-          }
-        }
-        return Iterables.toArray(flags, String.class);
-      }
-    }
-
-    @Option(name = "specialexp_foo", defaultValue = "false")
-    public boolean specialExpFoo;
-
-    @Option(name = "specialexp_bar", defaultValue = "false")
-    public boolean specialExpBar;
-
-    @Option(name = "specialexp", defaultValue = "null", expansionFunction = SpecialExpansion.class)
-    public Void specialExp;
   }
 
   @Test
@@ -97,14 +73,15 @@ public class OptionsTest {
     // TODO(bazel-team): don't include trailing space after last word in line.
     String input = "The quick brown fox jumps over the lazy dog.";
 
-    assertThat(OptionsUsage.paragraphFill(input, 2, 13))
-        .isEqualTo("  The quick \n  brown fox \n  jumps over \n  the lazy \n" + "  dog.");
-    assertThat(OptionsUsage.paragraphFill(input, 3, 19))
-        .isEqualTo("   The quick brown \n   fox jumps over \n   the lazy dog.");
+    assertEquals("  The quick \n  brown fox \n  jumps over \n  the lazy \n"
+                 + "  dog.",
+                 OptionsUsage.paragraphFill(input, 2, 13));
+    assertEquals("   The quick brown \n   fox jumps over \n   the lazy dog.",
+                 OptionsUsage.paragraphFill(input, 3, 19));
 
     String input2 = "The quick brown fox jumps\nAnother paragraph.";
-    assertThat(OptionsUsage.paragraphFill(input2, 2, 23))
-        .isEqualTo("  The quick brown fox \n  jumps\n  Another paragraph.");
+    assertEquals("  The quick brown fox \n  jumps\n  Another paragraph.",
+                 OptionsUsage.paragraphFill(input2, 2, 23));
   }
 
   @Test
@@ -113,11 +90,11 @@ public class OptionsTest {
     String[] remainingArgs = options.getRemainingArgs();
     HttpOptions webFlags = options.getOptions();
 
-    assertThat(webFlags.host).isEqualTo("www.google.com");
-    assertThat(webFlags.port).isEqualTo(80);
-    assertThat(webFlags.isDebugging).isEqualTo(false);
-    assertThat(webFlags.triState).isEqualTo(TriState.AUTO);
-    assertThat(remainingArgs.length).isEqualTo(0);
+    assertEquals("www.google.com", webFlags.host);
+    assertEquals(80, webFlags.port);
+    assertEquals(false, webFlags.isDebugging);
+    assertEquals(TriState.AUTO, webFlags.triState);
+    assertEquals(0, remainingArgs.length);
   }
 
   @Test
@@ -133,27 +110,28 @@ public class OptionsTest {
 
     String toString = left.toString();
     // Don't rely on Set.toString iteration order:
-    assertThat(toString)
-        .startsWith("com.google.devtools.common.options.OptionsTest" + "$HttpOptions{");
-    assertThat(toString).contains("host=foo");
-    assertThat(toString).contains("port=80");
-    assertThat(toString).endsWith("}");
+    assertTrue(toString.startsWith(
+                   "com.google.devtools.common.options.OptionsTest"
+                   + "$HttpOptions{"));
+    assertTrue(toString.contains("host=foo"));
+    assertTrue(toString.contains("port=80"));
+    assertTrue(toString.endsWith("}"));
 
     new EqualsTester().addEqualityGroup(left).testEquals();
-    assertThat(left.toString()).isEqualTo(likeLeft.toString());
-    assertThat(left).isEqualTo(likeLeft);
-    assertThat(likeLeft).isEqualTo(left);
-    assertThat(left).isNotEqualTo(right);
-    assertThat(right).isNotEqualTo(left);
-    assertThat(left).isNotEqualTo(null);
-    assertThat(likeLeft).isNotEqualTo(null);
-    assertThat(likeLeft.hashCode()).isEqualTo(likeLeft.hashCode());
-    assertThat(likeLeft.hashCode()).isEqualTo(left.hashCode());
+    assertTrue(left.toString().equals(likeLeft.toString()));
+    assertTrue(left.equals(likeLeft));
+    assertTrue(likeLeft.equals(left));
+    assertFalse(left.equals(right));
+    assertFalse(right.equals(left));
+    assertFalse(left.equals(null));
+    assertFalse(likeLeft.equals(null));
+    assertEquals(likeLeft.hashCode(), likeLeft.hashCode());
+    assertEquals(left.hashCode(), likeLeft.hashCode());
     // Strictly speaking this is not required for hashCode to be correct,
     // but a good hashCode should be different at least for some values. So,
     // we're making sure that at least this particular pair of inputs yields
     // different values.
-    assertThat(left.hashCode()).isNotEqualTo(right.hashCode());
+    assertFalse(left.hashCode() == right.hashCode());
   }
 
   @Test
@@ -163,12 +141,11 @@ public class OptionsTest {
 
     String[] args2 = { "-p", "80", "--host", "foo" };
     HttpOptions options2 =  Options.parse(HttpOptions.class, args2).getOptions();
-    // Order/abbreviations shouldn't matter.
-    assertThat(options1).isEqualTo(options2);
+    assertEquals("order/abbreviations shouldn't matter", options1, options2);
 
-    // Explicitly setting a default shouldn't matter.
-    assertThat(Options.parse(HttpOptions.class, "--port", "80").getOptions())
-        .isEqualTo(Options.parse(HttpOptions.class).getOptions());
+    assertEquals("explicitly setting a default shouldn't matter",
+        Options.parse(HttpOptions.class, "--port", "80").getOptions(),
+        Options.parse(HttpOptions.class).getOptions());
 
     assertThat(Options.parse(HttpOptions.class, "--port", "3").getOptions())
         .isNotEqualTo(Options.parse(HttpOptions.class).getOptions());
@@ -184,10 +161,10 @@ public class OptionsTest {
     String[] remainingArgs = options.getRemainingArgs();
     HttpOptions webFlags = options.getOptions();
 
-    assertThat(webFlags.host).isEqualTo("google.com");
-    assertThat(webFlags.port).isEqualTo(8080);
-    assertThat(webFlags.isDebugging).isEqualTo(true);
-    assertThat(remainingArgs.length).isEqualTo(0);
+    assertEquals("google.com", webFlags.host);
+    assertEquals(8080, webFlags.port);
+    assertEquals(true, webFlags.isDebugging);
+    assertEquals(0, remainingArgs.length);
   }
 
   @Test
@@ -199,10 +176,10 @@ public class OptionsTest {
     String[] remainingArgs = options.getRemainingArgs();
     HttpOptions webFlags = options.getOptions();
 
-    assertThat(webFlags.host).isEqualTo("google.com");
-    assertThat(webFlags.port).isEqualTo(8080);
-    assertThat(webFlags.isDebugging).isEqualTo(true);
-    assertThat(remainingArgs.length).isEqualTo(0);
+    assertEquals("google.com", webFlags.host);
+    assertEquals(8080, webFlags.port);
+    assertEquals(true, webFlags.isDebugging);
+    assertEquals(0, remainingArgs.length);
   }
 
   @Test
@@ -210,8 +187,8 @@ public class OptionsTest {
     Options<HttpOptions> options =
         Options.parse(HttpOptions.class, new String[]{"--nodebug", "--notristate"});
     HttpOptions webFlags = options.getOptions();
-    assertThat(webFlags.isDebugging).isEqualTo(false);
-    assertThat(webFlags.triState).isEqualTo(TriState.NO);
+    assertEquals(false, webFlags.isDebugging);
+    assertEquals(TriState.NO, webFlags.triState);
   }
 
   @Test
@@ -219,8 +196,8 @@ public class OptionsTest {
     Options<HttpOptions> options =
         Options.parse(HttpOptions.class, new String[]{"--no_debug", "--no_tristate"});
     HttpOptions webFlags = options.getOptions();
-    assertThat(webFlags.isDebugging).isEqualTo(false);
-    assertThat(webFlags.triState).isEqualTo(TriState.NO);
+    assertEquals(false, webFlags.isDebugging);
+    assertEquals(TriState.NO, webFlags.triState);
   }
 
   @Test
@@ -228,8 +205,8 @@ public class OptionsTest {
     Options<HttpOptions> options =
         Options.parse(HttpOptions.class, new String[]{"-d-", "-t-"});
     HttpOptions webFlags = options.getOptions();
-    assertThat(webFlags.isDebugging).isEqualTo(false);
-    assertThat(webFlags.triState).isEqualTo(TriState.NO);
+    assertEquals(false, webFlags.isDebugging);
+    assertEquals(TriState.NO, webFlags.triState);
   }
 
   @Test
@@ -237,8 +214,8 @@ public class OptionsTest {
     Options<HttpOptions> options =
         Options.parse(HttpOptions.class, new String[]{"--debug=0", "--tristate=0"});
     HttpOptions webFlags = options.getOptions();
-    assertThat(webFlags.isDebugging).isEqualTo(false);
-    assertThat(webFlags.triState).isEqualTo(TriState.NO);
+    assertEquals(false, webFlags.isDebugging);
+    assertEquals(TriState.NO, webFlags.triState);
   }
 
   @Test
@@ -246,8 +223,8 @@ public class OptionsTest {
     Options<HttpOptions> options =
         Options.parse(HttpOptions.class, new String[]{"--debug=1", "--tristate=1"});
     HttpOptions webFlags = options.getOptions();
-    assertThat(webFlags.isDebugging).isEqualTo(true);
-    assertThat(webFlags.triState).isEqualTo(TriState.YES);
+    assertEquals(true, webFlags.isDebugging);
+    assertEquals(TriState.YES, webFlags.triState);
   }
 
   @Test
@@ -255,7 +232,7 @@ public class OptionsTest {
     String[] args = {"these", "aint", "options"};
     Options<HttpOptions> options = Options.parse(HttpOptions.class, args);
     String[] remainingArgs = options.getRemainingArgs();
-    assertThat(asList(remainingArgs)).isEqualTo(asList(args));
+    assertEquals(asList(args), asList(remainingArgs));
   }
 
   @Test
@@ -269,7 +246,7 @@ public class OptionsTest {
     String[] notoptions = {"notta", "option" };
     Options<HttpOptions> options = Options.parse(HttpOptions.class, args);
     String[] remainingArgs = options.getRemainingArgs();
-    assertThat(asList(remainingArgs)).isEqualTo(asList(notoptions));
+    assertEquals(asList(notoptions), asList(remainingArgs));
   }
 
   @Test
@@ -279,7 +256,7 @@ public class OptionsTest {
       Options.parse(HttpOptions.class, args);
       fail();
     } catch (OptionsParsingException e) {
-      assertThat(e.getMessage()).isEqualTo("Unrecognized option: --unknown");
+      assertEquals("Unrecognized option: --unknown", e.getMessage());
     }
   }
 
@@ -290,7 +267,7 @@ public class OptionsTest {
       Options.parse(HttpOptions.class, args);
       fail();
     } catch (OptionsParsingException e) {
-      assertThat(e.getMessage()).isEqualTo("Expected value after --port");
+      assertEquals("Expected value after --port", e.getMessage());
     }
   }
 
@@ -299,7 +276,7 @@ public class OptionsTest {
     String[] args = {"--port=80", "--port", "81"};
     Options<HttpOptions> options = Options.parse(HttpOptions.class, args);
     HttpOptions webFlags = options.getOptions();
-    assertThat(webFlags.port).isEqualTo(81);
+    assertEquals(81, webFlags.port);
   }
 
   @Test
@@ -307,7 +284,7 @@ public class OptionsTest {
     String[] args = {"--port=80", "-p", "81"};
     Options<HttpOptions> options = Options.parse(HttpOptions.class, args);
     HttpOptions webFlags = options.getOptions();
-    assertThat(webFlags.port).isEqualTo(81);
+    assertEquals(81, webFlags.port);
   }
 
   @Test
@@ -323,10 +300,8 @@ public class OptionsTest {
       Options.parse(HttpOptions.class, new String[]{"--debug=not_a_boolean"});
       fail();
     } catch (OptionsParsingException e) {
-      assertThat(e.getMessage())
-          .isEqualTo(
-              "While parsing option --debug=not_a_boolean: "
-                  + "\'not_a_boolean\' is not a boolean");
+      assertEquals("While parsing option --debug=not_a_boolean: "
+                   + "\'not_a_boolean\' is not a boolean", e.getMessage());
     }
   }
 
@@ -336,38 +311,29 @@ public class OptionsTest {
       Options.parse(HttpOptions.class, new String[]{"--nodebug=1"});
       fail();
     } catch (OptionsParsingException e) {
-      assertThat(e.getMessage()).isEqualTo("Unexpected value after boolean option: --nodebug=1");
+      assertEquals("Unexpected value after boolean option: --nodebug=1", e.getMessage());
     }
   }
 
   @Test
-  public void usageForBuiltinTypesNoExpansion() {
+  public void usageForBuiltinTypes() {
     String usage = Options.getUsage(HttpOptions.class);
     // We can't rely on the option ordering.
-    assertThat(usage)
-        .contains("  --[no]debug [-d] (a boolean; default: \"false\")\n" + "    debug");
-    assertThat(usage)
-        .contains(
-            "  --host (a string; default: \"www.google.com\")\n"
-                + "    The URL at which the server will be running.");
-    assertThat(usage)
-        .contains(
-            "  --port [-p] (an integer; default: \"80\")\n"
-                + "    The port at which the server will be running.");
-    assertThat(usage)
-        .contains(
-            "  --[no]tristate [-t] (a tri-state (auto, yes, no); default: \"auto\")\n"
-                + "    tri-state option returning auto by default");
-  }
-
-  @Test
-  public void usageForExpansion() {
-    String usage = Options.getUsage(HttpOptions.class);
-    assertThat(usage)
-        .contains("  --special\n    Expands to: --host=special.google.com --port=8080");
-    // Expansion functions aren't evaluated since we're just grabbing the usage for an OptionsBase
-    // subclass and not for a completed parser. The completed case is covered in OptionsParserTest.
-    assertThat(usage).contains("  --specialexp\n    Expands to unknown options.");
+    assertTrue(usage.contains(
+            "  --[no]debug [-d] (a boolean; default: \"false\")\n" +
+            "    debug"));
+    assertTrue(usage.contains(
+            "  --host (a string; default: \"www.google.com\")\n" +
+            "    The URL at which the server will be running."));
+    assertTrue(usage.contains(
+            "  --port [-p] (an integer; default: \"80\")\n" +
+            "    The port at which the server will be running."));
+    assertTrue(usage.contains(
+            "  --special\n" +
+            "    Expands to: --host=special.google.com --port=8080"));
+    assertTrue(usage.contains(
+        "  --[no]tristate [-t] (a tri-state (auto, yes, no); default: \"auto\")\n" +
+        "    tri-state option returning auto by default"));
   }
 
   public static class NullTestOptions extends OptionsBase {
@@ -386,13 +352,13 @@ public class OptionsTest {
   @Test
   public void usageForNullDefault() {
     String usage = Options.getUsage(NullTestOptions.class);
-    assertThat(usage)
-        .contains(
-            "  --host (a string; default: see description)\n"
-                + "    The URL at which the server will be running.");
-    assertThat(usage)
-        .contains(
-            "  --none\n" + "    An expanded option.\n" + "    Expands to: --host=www.google.com");
+    assertTrue(usage.contains(
+            "  --host (a string; default: see description)\n" +
+            "    The URL at which the server will be running."));
+    assertTrue(usage.contains(
+            "  --none\n" +
+            "    An expanded option.\n" +
+            "    Expands to: --host=www.google.com"));
   }
 
   public static class MyURLConverter implements Converter<URL> {
@@ -428,7 +394,7 @@ public class OptionsTest {
     Options<UsesCustomConverter> options =
       Options.parse(UsesCustomConverter.class, new String[0]);
     URL expected = new URL("http://www.google.com/");
-    assertThat(options.getOptions().url).isEqualTo(expected);
+    assertEquals(expected, options.getOptions().url);
   }
 
   @Test
@@ -438,18 +404,17 @@ public class OptionsTest {
       Options.parse(UsesCustomConverter.class, args);
       fail();
     } catch (OptionsParsingException e) {
-      assertThat(e.getMessage())
-          .isEqualTo(
-              "While parsing option --url=a_malformed:url: "
-                  + "Could not convert 'a_malformed:url': "
-                  + "no protocol: a_malformed:url");
+      assertEquals("While parsing option --url=a_malformed:url: "
+                   + "Could not convert 'a_malformed:url': "
+                   + "no protocol: a_malformed:url", e.getMessage());
     }
   }
 
   @Test
   public void usageWithCustomConverter() {
-    assertThat(Options.getUsage(UsesCustomConverter.class))
-        .isEqualTo("  --url (a url; default: \"http://www.google.com/\")\n");
+    assertEquals(
+        "  --url (a url; default: \"http://www.google.com/\")\n",
+        Options.getUsage(UsesCustomConverter.class));
   }
 
   @Test
@@ -458,7 +423,7 @@ public class OptionsTest {
       Options.parse(HttpOptions.class, new String[]{"--no-debug"});
       fail();
     } catch (OptionsParsingException e) {
-      assertThat(e.getMessage()).isEqualTo("Unrecognized option: --no-debug");
+      assertEquals("Unrecognized option: --no-debug", e.getMessage());
     }
   }
 
@@ -469,7 +434,7 @@ public class OptionsTest {
   @Test
   public void nullDefaultForReferenceTypeOption() throws Exception {
     J options = Options.parse(J.class, NO_ARGS).getOptions();
-    assertThat(options.string).isNull();
+    assertNull(options.string);
   }
 
   public static class K extends OptionsBase {
@@ -486,10 +451,9 @@ public class OptionsTest {
       Options.parse(K.class, NO_ARGS).getOptions();
       fail();
     } catch (IllegalStateException e) {
-      assertThat(e.getMessage())
-          .isEqualTo(
-              "OptionsParsingException while retrieving default for "
-                  + "int1: 'null' is not an int");
+      assertEquals("OptionsParsingException while retrieving default for "
+                   + "int1: 'null' is not an int",
+                   e.getMessage());
     }
   }
 
@@ -499,30 +463,30 @@ public class OptionsTest {
     HttpOptions options =
         Options.parse(HttpOptions.class,
                       new String[] { "--host", "null" }).getOptions();
-    assertThat(options.host).isEqualTo("null");
+    assertEquals("null", options.host);
   }
 
   @Test
   public void nonDecimalRadicesForIntegerOptions() throws Exception {
     Options<HttpOptions> options =
         Options.parse(HttpOptions.class, new String[] { "--port", "0x51"});
-    assertThat(options.getOptions().port).isEqualTo(81);
+    assertEquals(81, options.getOptions().port);
   }
 
   @Test
   public void expansionOptionSimple() throws Exception {
     Options<HttpOptions> options =
       Options.parse(HttpOptions.class, new String[] {"--special"});
-    assertThat(options.getOptions().host).isEqualTo("special.google.com");
-    assertThat(options.getOptions().port).isEqualTo(8080);
+    assertEquals("special.google.com", options.getOptions().host);
+    assertEquals(8080, options.getOptions().port);
   }
 
   @Test
   public void expansionOptionOverride() throws Exception {
     Options<HttpOptions> options =
       Options.parse(HttpOptions.class, new String[] {"--port=90", "--special", "--host=foo"});
-    assertThat(options.getOptions().host).isEqualTo("foo");
-    assertThat(options.getOptions().port).isEqualTo(8080);
+    assertEquals("foo", options.getOptions().host);
+    assertEquals(8080, options.getOptions().port);
   }
 
   @Test
@@ -531,14 +495,6 @@ public class OptionsTest {
       Options.parse(HttpOptions.class, new String[] { "--host=special.google.com", "--port=8080"});
     Options<HttpOptions> options2 =
       Options.parse(HttpOptions.class, new String[] { "--special" });
-    assertThat(options1.getOptions()).isEqualTo(options2.getOptions());
-  }
-
-  @Test
-  public void expansionFunction() throws Exception {
-    Options<HttpOptions> options1 = Options.parse(HttpOptions.class, new String[] {"--specialexp"});
-    Options<HttpOptions> options2 =
-        Options.parse(HttpOptions.class, new String[] {"--specialexp_foo", "--specialexp_bar"});
-    assertThat(options1.getOptions()).isEqualTo(options2.getOptions());
+    assertEquals(options1.getOptions(), options2.getOptions());
   }
 }
