@@ -1,22 +1,24 @@
 package org.nlpcn.es4sql;
 
 import com.alibaba.druid.sql.ast.SQLExpr;
+import com.alibaba.druid.sql.ast.expr.SQLIdentifierExpr;
 import com.alibaba.druid.sql.ast.expr.SQLPropertyExpr;
 import com.alibaba.druid.sql.ast.expr.SQLQueryExpr;
+import org.elasticsearch.common.collect.ImmutableMap;
+import org.elasticsearch.search.SearchHit;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.nlpcn.es4sql.domain.*;
-import org.nlpcn.es4sql.domain.hints.Hint;
-import org.nlpcn.es4sql.domain.hints.HintType;
 import org.nlpcn.es4sql.exception.SqlParseException;
 import org.nlpcn.es4sql.parse.ElasticSqlExprParser;
 import org.nlpcn.es4sql.parse.SqlParser;
+import org.nlpcn.es4sql.query.ESHashJoinQueryAction;
 
 import java.io.IOException;
 import java.sql.SQLFeatureNotSupportedException;
-import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import static org.nlpcn.es4sql.TestsConstants.TEST_INDEX;
 
@@ -186,80 +188,23 @@ public class SqlParserTests {
         Assert.assertTrue("condition not exist: c.name.lastname = h.name",conditionExist(conditions, "c.name.lastname", "h.name", Condition.OPEAR.EQ));
     }
 
-
     @Test
-    public void limitHintsOnJoin() throws SqlParseException {
-        String query = String.format("select /*! JOIN_TABLES_LIMIT(1000,null) */ c.name.firstname,c.parents.father , h.name,h.words from %s/gotCharacters c " +
+    public void hints() throws SQLFeatureNotSupportedException, IOException, SqlParseException {
+        String query = String.format("select /*! SECOND_TABLE_FILTERS */ c.name.firstname,c.parents.father , h.name,h.words from %s/gotCharacters c " +
                 "use KEY (termsFilter) "+
                 "JOIN %s/gotHouses h " +
                 "on c.name.lastname = h.name  " +
                 "where c.name.firstname='Daenerys'", TEST_INDEX,TEST_INDEX);
         JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
-        List<Hint> hints = joinSelect.getHints();
-        Assert.assertNotNull(hints);
-        Assert.assertEquals("hints size was not 1", 1, hints.size());
-        Hint hint  = hints.get(0);
-        Assert.assertEquals(HintType.JOIN_LIMIT,hint.getType());
-        Object[] params = hint.getParams();
-        Assert.assertNotNull(params);
-        Assert.assertEquals("params size was not 2", 2, params.length);
-        Assert.assertEquals(1000,params[0]);
-        Assert.assertEquals(null,params[1]);
+        //use KEY (termsFilter) --> ((SQLExprTableSource)((SQLJoinTableSource)query.from).left).hints [com.alibaba.druid.sql.dialect.mysql.ast.MySqlUseIndexHint@2a742aa2]
+        ///*! SQL_NO_CACHE */   --> query.getHints()
+        ////*! SECOND_TABLE_FILTERS */ => query.getHints() CHOSEN :)
+        List<Condition> conditions = joinSelect.getConnectedConditions();
+        Assert.assertNotNull(conditions);
+        Assert.assertEquals(1,conditions.size());
+        Assert.assertTrue("condition not exist: c.name.lastname = h.name",conditionExist(conditions, "c.name.lastname", "h.name", Condition.OPEAR.EQ));
     }
 
-    @Test
-    public void hashTermsFilterHint() throws SqlParseException {
-        String query = String.format("select /*! HASH_WITH_TERMS_FILTER*/ c.name.firstname,c.parents.father , h.name,h.words from %s/gotCharacters c " +
-                "use KEY (termsFilter) "+
-                "JOIN %s/gotHouses h " +
-                "on c.name.lastname = h.name  " +
-                "where c.name.firstname='Daenerys'", TEST_INDEX,TEST_INDEX);
-        JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
-        List<Hint> hints = joinSelect.getHints();
-        Assert.assertNotNull(hints);
-        Assert.assertEquals("hints size was not 1", 1, hints.size());
-        Hint hint  = hints.get(0);
-        Assert.assertEquals(HintType.HASH_WITH_TERMS_FILTER,hint.getType());
-    }
-
-    @Test
-    public void multipleHints() throws SqlParseException {
-        String query = String.format("select /*! HASH_WITH_TERMS_FILTER*/ /*! JOIN_TABLES_LIMIT(1000,null) */ " +
-                " /*! JOIN_TABLES_LIMIT(100,200) */ " +
-                "c.name.firstname,c.parents.father , h.name,h.words from %s/gotCharacters c " +
-                "use KEY (termsFilter) "+
-                "JOIN %s/gotHouses h " +
-                "on c.name.lastname = h.name  " +
-                "where c.name.firstname='Daenerys'", TEST_INDEX,TEST_INDEX);
-
-        JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
-        List<Hint> hints = joinSelect.getHints();
-
-        Assert.assertNotNull(hints);
-        Assert.assertEquals("hints size was not 3", 3, hints.size());
-        Hint firstHint  = hints.get(0);
-        Assert.assertEquals(HintType.HASH_WITH_TERMS_FILTER, firstHint.getType());
-        Hint secondHint  = hints.get(1);
-        Assert.assertEquals(HintType.JOIN_LIMIT, secondHint.getType());
-        Assert.assertEquals(1000,secondHint.getParams()[0]);
-        Assert.assertEquals(null,secondHint.getParams()[1]);
-        Hint thirdHint  = hints.get(2);
-        Assert.assertEquals(100,thirdHint.getParams()[0]);
-        Assert.assertEquals(200,thirdHint.getParams()[1]);
-        Assert.assertEquals(HintType.JOIN_LIMIT, thirdHint.getType());
-    }
-
-    @Test
-    public void searchWithOdbcTimeFormatParse() throws SqlParseException {
-        String query = String.format("SELECT insert_time FROM %s/odbc WHERE insert_time < {ts '2015-03-15 00:00:00.000'}", TEST_INDEX);
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        LinkedList<Where> wheres = select.getWhere().getWheres();
-        Assert.assertEquals(1,wheres.size());
-        Condition condition = (Condition) wheres.get(0);
-        Assert.assertEquals("{ts '2015-03-15 00:00:00.000'}",condition.getValue().toString());
-
-    }
     private SQLExpr queryToExpr(String query) {
         return new ElasticSqlExprParser(query).expr();
     }

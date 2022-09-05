@@ -1,10 +1,7 @@
 package org.nlpcn.es4sql.query;
 
-import org.elasticsearch.action.search.MultiSearchResponse;
 import org.elasticsearch.client.Client;
 import org.nlpcn.es4sql.domain.*;
-import org.nlpcn.es4sql.domain.hints.Hint;
-import org.nlpcn.es4sql.domain.hints.HintType;
 import org.nlpcn.es4sql.exception.SqlParseException;
 
 import java.util.*;
@@ -37,25 +34,13 @@ public class ESHashJoinQueryAction extends QueryAction  {
 
         hashRequest.setJoinType(joinSelect.getJoinType());
 
-        hashRequest.setTotalLimit(joinSelect.getTotalLimit());
-
         updateHashRequestWithHints(hashRequest);
 
         return hashRequest;
     }
 
     private void updateHashRequestWithHints(HashJoinElasticRequestBuilder hashRequest) {
-        for(Hint hint : joinSelect.getHints()){
-            if(hint.getType() == HintType.HASH_WITH_TERMS_FILTER) {
-                hashRequest.setUseTermFiltersOptimization(true);
-            }
-            if(hint.getType() == HintType.JOIN_LIMIT){
-                Object[] params = hint.getParams();
-                hashRequest.getFirstTable().setHintLimit((Integer) params[0]);
-                hashRequest.getSecondTable().setHintLimit((Integer) params[1]);
-            }
-        }
-
+        hashRequest.setUseTermFiltersOptimization(joinSelect.getHints().contains(Hint.HASH_WITH_TERMS_FILTER));
     }
 
     private List<Map.Entry<Field, Field>> getComparisonFields(String t1Alias, String t2Alias, List<Condition> connectedConditions) throws SqlParseException {

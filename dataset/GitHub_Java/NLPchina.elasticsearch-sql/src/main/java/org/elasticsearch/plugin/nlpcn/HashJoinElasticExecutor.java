@@ -1,13 +1,8 @@
 package org.elasticsearch.plugin.nlpcn;
 
 import com.alibaba.druid.sql.ast.statement.SQLJoinTableSource;
-import com.google.common.collect.ImmutableMap;
-import org.elasticsearch.action.search.SearchRequestBuilder;
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.text.StringText;
-import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentType;
@@ -40,18 +35,12 @@ import java.util.*;
 public class HashJoinElasticExecutor {
     private HashJoinElasticRequestBuilder requestBuilder;
     private SearchHits results ;
-    private MetaSearchResult metaResults;
     private Client client;
     private boolean useQueryTermsFilterOptimization = false;
-
-    private final int MAX_RESULTS_ON_ONE_FETCH = 10000;
-    private final int MAX_RESULTS_FOR_FIRST_TABLE = 100000;
-
     public HashJoinElasticExecutor(Client client,HashJoinElasticRequestBuilder requestBuilder) {
         this.client = client;
         this.requestBuilder = requestBuilder;
         this.useQueryTermsFilterOptimization = requestBuilder.isUseTermFiltersOptimization();
-        metaResults = new MetaSearchResult();
     }
 
     public SearchHits getHits(){
@@ -69,7 +58,7 @@ public class HashJoinElasticExecutor {
     }
 
     //use our deserializer instead of results toXcontent because the source field is differnet from sourceAsMap.
-    public String resultAsString() throws IOException {
+    private String resultAsString() throws IOException {
         Object[] searchHits;
         searchHits = new Object[(int) this.results.totalHits()];
         int i = 0;
@@ -82,25 +71,17 @@ public class HashJoinElasticExecutor {
             searchHits[i] = value;
             i++;
         }
-        HashMap<String,Object> hits = new HashMap<>();
-        hits.put("total",this.results.totalHits());
-        hits.put("max_score",this.results.maxScore());
-        hits.put("hits",searchHits);
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON).prettyPrint();
-         builder.startObject();
-            builder.field("took", metaResults.getTookImMilli());
-            builder.field("timed_out",metaResults.isTimedOut());
-            builder.field("_shards",ImmutableMap.of("total",metaResults.getTotalNumOfShards(),
-                                                    "successful",metaResults.getSuccessfulShards()
-                                                    ,"failed",metaResults.getFailedShards()));
-            builder.field("hits",hits) ;
-        builder.endObject();
 
+        builder.startObject("hits");
+            builder.field("total").value(this.results.totalHits());
+            builder.field("max_score").value(this.results.maxScore());
+            builder.array("hits",searchHits);
+        builder.endObject();
         return builder.string();
     }
 
     public void run() throws IOException, SqlParseException {
-        long timeBefore = System.currentTimeMillis();
         Map<String,List<Object>> optimizationTermsFilterStructure = new HashMap<>();
         List<Map.Entry<Field, Field>> t1ToT2FieldsComparison = requestBuilder.getT1ToT2FieldsComparison();
 
@@ -114,82 +95,47 @@ public class HashJoinElasticExecutor {
 
         List<InternalSearchHit> combinedResult = createCombinedResults(optimizationTermsFilterStructure, t1ToT2FieldsComparison, comparisonKeyToSearchHits, secondTableRequest);
 
-        int currentNumOfResults = combinedResult.size();
-        if(requestBuilder.getJoinType() == SQLJoinTableSource.JoinType.LEFT_OUTER_JOIN && currentNumOfResults < requestBuilder.getTotalLimit()){
-            addUnmatchedResults(combinedResult,comparisonKeyToSearchHits.values(),requestBuilder.getSecondTable().getReturnedFields(), currentNumOfResults);
+        if(requestBuilder.getJoinType() == SQLJoinTableSource.JoinType.LEFT_OUTER_JOIN){
+            addUnmatchedResults(combinedResult,comparisonKeyToSearchHits.values(),requestBuilder.getSecondTable().getReturnedFields(),combinedResult.size());
         }
         InternalSearchHit[] hits = combinedResult.toArray(new InternalSearchHit[combinedResult.size()]);
         this.results = new InternalSearchHits(hits,combinedResult.size(),1.0f);
-        long joinTimeInMilli = System.currentTimeMillis() - timeBefore;
-        this.metaResults.setTookImMilli(joinTimeInMilli);
+
     }
 
     private List<InternalSearchHit> createCombinedResults(Map<String, List<Object>> optimizationTermsFilterStructure, List<Map.Entry<Field, Field>> t1ToT2FieldsComparison, Map<String, SearchHitsResult> comparisonKeyToSearchHits, TableInJoinRequestBuilder secondTableRequest) {
         List<InternalSearchHit> combinedResult = new ArrayList<>();
         int resultIds = 0;
-        int totalLimit = this.requestBuilder.getTotalLimit();
-        Integer hintLimit = secondTableRequest.getHintLimit();
-        SearchResponse searchResponse;
-        boolean finishedScrolling;
-        if(hintLimit!=null && hintLimit < MAX_RESULTS_ON_ONE_FETCH) {
-            searchResponse = secondTableRequest.getRequestBuilder().setSize(hintLimit).get();
-            finishedScrolling = true;
-        }
-        else {
-            searchResponse = secondTableRequest.getRequestBuilder()
-                                            .setSearchType(SearchType.SCAN)
-                                            .setScroll(new TimeValue(60000))
-                                            .setSize(MAX_RESULTS_ON_ONE_FETCH).get();
-            searchResponse = client.prepareSearchScroll(searchResponse.getScrollId()).setScroll(new TimeValue(600000)).get();
-            finishedScrolling = false;
-        }
-        updateMetaSearchResults(searchResponse);
+        SearchHits secondTableHits = secondTableRequest.getRequestBuilder().get().getHits();
+        for(SearchHit secondTableHit : secondTableHits){
 
-        boolean limitReached =false;
-        int fetchedSoFarFromSecondTable = 0;
-        while(!limitReached ) {
-            SearchHit[] secondTableHits = searchResponse.getHits().getHits();
-            fetchedSoFarFromSecondTable += secondTableHits.length;
-            for (SearchHit secondTableHit : secondTableHits) {
-                if (limitReached) break;
-                String key = getComparisonKey(t1ToT2FieldsComparison, secondTableHit, false, optimizationTermsFilterStructure);
+            String key = getComparisonKey(t1ToT2FieldsComparison,secondTableHit,false, optimizationTermsFilterStructure);
 
-                SearchHitsResult searchHitsResult = comparisonKeyToSearchHits.get(key);
+            SearchHitsResult searchHitsResult = comparisonKeyToSearchHits.get(key);
 
-                if (searchHitsResult != null && searchHitsResult.getSearchHits().size() > 0) {
-                    searchHitsResult.setMatchedWithOtherTable(true);
-                    List<InternalSearchHit> searchHits = searchHitsResult.getSearchHits();
-                    for (InternalSearchHit matchingHit : searchHits) {
-                        onlyReturnedFields(secondTableHit.sourceAsMap(), secondTableRequest.getReturnedFields());
+            if(searchHitsResult!=null && searchHitsResult.getSearchHits().size() > 0){
+                searchHitsResult.setMatchedWithOtherTable(true);
+                List<InternalSearchHit> searchHits = searchHitsResult.getSearchHits();
+                for(InternalSearchHit matchingHit : searchHits){
+                    onlyReturnedFields(secondTableHit.sourceAsMap(), secondTableRequest.getReturnedFields());
 
-                        //todo: decide which id to put or type. or maby its ok this way. just need to doc.
-                        InternalSearchHit searchHit = new InternalSearchHit(resultIds, matchingHit.id() + "|" + secondTableHit.getId(), new StringText(matchingHit.getType() + "|" + secondTableHit.getType()), matchingHit.getFields());
-                        searchHit.sourceRef(matchingHit.getSourceRef());
-                        searchHit.sourceAsMap().clear();
-                        searchHit.sourceAsMap().putAll(matchingHit.sourceAsMap());
-                        mergeSourceAndAddAliases(secondTableHit.getSource(), searchHit);
+                    //todo: decide which id to put or type. or maby its ok this way. just need to doc.
+                    InternalSearchHit searchHit = new InternalSearchHit(resultIds, matchingHit.id() + "|" + secondTableHit.getId(), new StringText(matchingHit.getType() + "|" + secondTableHit.getType()), matchingHit.getFields());
+                    searchHit.sourceRef(matchingHit.getSourceRef());
+                    searchHit.sourceAsMap().clear();
+                    searchHit.sourceAsMap().putAll(matchingHit.sourceAsMap());
+                    mergeSourceAndAddAliases(secondTableHit.getSource(), searchHit);
 
-                        combinedResult.add(searchHit);
-                        resultIds++;
-                        if (resultIds >= totalLimit) {
-                            limitReached = true;
-                            break;
-                        }
-                    }
+                    combinedResult.add(searchHit);
+                    resultIds++;
                 }
-            }
-            if(!finishedScrolling){
-                if(secondTableHits.length>0 && (hintLimit == null || fetchedSoFarFromSecondTable  >= hintLimit)){
-                    searchResponse = client.prepareSearchScroll(searchResponse.getScrollId()).setScroll(new TimeValue(600000)).execute().actionGet();
-                }
-                else break;
             }
         }
         return combinedResult;
     }
 
     private Map<String, SearchHitsResult> createKeyToResultsAndFillOptimizationStructure(Map<String, List<Object>> optimizationTermsFilterStructure, List<Map.Entry<Field, Field>> t1ToT2FieldsComparison, TableInJoinRequestBuilder firstTableRequest) {
-        List<SearchHit> firstTableHits =  fetchAllHits(firstTableRequest.getRequestBuilder(),firstTableRequest.getHintLimit());
+        SearchHits firstTableHits = firstTableRequest.getRequestBuilder().get().getHits();
         Map<String,SearchHitsResult> comparisonKeyToSearchHits = new HashMap<>();
 
         int resultIds = 1;
@@ -211,50 +157,6 @@ public class HashJoinElasticExecutor {
         return comparisonKeyToSearchHits;
     }
 
-    private List<SearchHit> fetchAllHits(SearchRequestBuilder requestBuilder, Integer hintLimit) {
-        if(hintLimit != null && hintLimit < MAX_RESULTS_ON_ONE_FETCH ) {
-            requestBuilder.setSize(hintLimit);
-            SearchResponse searchResponse = requestBuilder.get();
-            updateMetaSearchResults(searchResponse);
-            return  Arrays.asList(searchResponse.getHits().getHits());
-        }
-        return scrollTillLimit(requestBuilder, hintLimit);
-    }
-
-    private List<SearchHit> scrollTillLimit(SearchRequestBuilder requestBuilder, Integer hintLimit) {
-        SearchResponse scrollResp = requestBuilder.setSearchType(SearchType.SCAN)
-                                                .setScroll(new TimeValue(60000))
-                                                .setSize(MAX_RESULTS_ON_ONE_FETCH).get();
-
-        scrollResp = client.prepareSearchScroll(scrollResp.getScrollId()).setScroll(new TimeValue(600000)).get();
-        updateMetaSearchResults(scrollResp);
-        List<SearchHit> hitsWithScan = new ArrayList<>();
-        int curentNumOfResults = 0;
-        SearchHit[] hits = scrollResp.getHits().hits();
-
-        if(hintLimit == null) hintLimit = MAX_RESULTS_FOR_FIRST_TABLE;
-
-        while (hits.length != 0 && curentNumOfResults < hintLimit) {
-            curentNumOfResults += hits.length;
-            Collections.addAll(hitsWithScan, hits);
-            if(curentNumOfResults >= MAX_RESULTS_FOR_FIRST_TABLE ) {
-                //todo: log or exception?
-                System.out.println("too many results for first table, stoping at:" + curentNumOfResults);
-                break;
-            }
-            scrollResp = client.prepareSearchScroll(scrollResp.getScrollId()).setScroll(new TimeValue(600000)).execute().actionGet();
-            hits = scrollResp.getHits().getHits();
-        }
-        return hitsWithScan;
-    }
-
-    private void updateMetaSearchResults( SearchResponse searchResponse) {
-        this.metaResults.addSuccessfulShards(searchResponse.getSuccessfulShards());
-        this.metaResults.addFailedShards(searchResponse.getFailedShards());
-        this.metaResults.addTotalNumOfShards(searchResponse.getTotalShards());
-        this.metaResults.updateTimeOut(searchResponse.isTimedOut());
-    }
-
     private boolean needToOptimize(Map<String, List<Object>> optimizationTermsFilterStructure) {
         return useQueryTermsFilterOptimization && optimizationTermsFilterStructure!=null && optimizationTermsFilterStructure.size()>0;
     }
@@ -262,36 +164,35 @@ public class HashJoinElasticExecutor {
     private void updateRequestWithTermsFilter(Map<String, List<Object>> optimizationTermsFilterStructure, TableInJoinRequestBuilder secondTableRequest) throws SqlParseException {
         Select select = secondTableRequest.getOriginalSelect();
         //todo: change to list with or when more than one object is allowed, and do foreach on map
-        BoolFilterBuilder andFilter = FilterBuilders.boolFilter();
-        BoolQueryBuilder andQuery = QueryBuilders.boolQuery();
+        BoolFilterBuilder orFilter = FilterBuilders.boolFilter();
+        BoolQueryBuilder orQuery = QueryBuilders.boolQuery();
         for(Map.Entry<String,List<Object>> keyToValues : optimizationTermsFilterStructure.entrySet()){
             String fieldName = keyToValues.getKey();
             List<Object> values = keyToValues.getValue();
-            if(select.isQuery) andQuery.must(QueryBuilders.termsQuery(fieldName, values));
-            else andFilter.must(FilterBuilders.termsFilter(fieldName, values));
+            if(select.isQuery) orQuery.should(QueryBuilders.termsQuery(fieldName,values));
+            else orFilter.should(FilterBuilders.termsFilter(fieldName,values));
         }
         Where where = select.getWhere();
         if (select.isQuery) {
             BoolQueryBuilder boolQuery;
             if(where != null ){
                 boolQuery = QueryMaker.explan(where);
-                boolQuery.must(andQuery);
+                boolQuery.must(orQuery);
             }
-            else boolQuery = andQuery;
+            else boolQuery = orQuery;
             secondTableRequest.getRequestBuilder().setQuery(boolQuery);
         } else {
             BoolFilterBuilder boolFilter;
             if(where!=null) {
                 boolFilter = FilterMaker.explan(where);
-                boolFilter.must(andFilter);
+                boolFilter.must(orFilter);
             }
-            else boolFilter = andFilter;
+            else boolFilter = orFilter;
             secondTableRequest.getRequestBuilder().setQuery(QueryBuilders.filteredQuery(null, boolFilter));
         }
     }
 
     private void addUnmatchedResults(List<InternalSearchHit> combinedResults, Collection<SearchHitsResult> firstTableSearchHits, List<Field> secondTableReturnedFields,int currentNumOfIds) {
-        boolean limitReached = false;
         for(SearchHitsResult hitsResult : firstTableSearchHits){
             if(!hitsResult.isMatchedWithOtherTable()){
                 for(SearchHit hit: hitsResult.getSearchHits() ) {
@@ -305,14 +206,8 @@ public class HashJoinElasticExecutor {
 
                     combinedResults.add(searchHit);
                     currentNumOfIds++;
-                    if(currentNumOfIds >= requestBuilder.getTotalLimit()){
-                        limitReached = true;
-                        break;
-                    }
-
                 }
             }
-            if(limitReached) break;
         }
     }
 
