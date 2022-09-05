@@ -215,7 +215,6 @@ import com.android.apkzlib.zfile.ApkZFileCreatorFactory;
 import com.android.apkzlib.zfile.NativeLibrariesPackagingMode;
 import com.android.apkzlib.zip.ZFileOptions;
 import com.android.apkzlib.zip.compress.BestAndDefaultDeflateExecutorCompressor;
-
 import com.android.builder.signing.DefaultSigningConfig;
 import com.android.builder.signing.SigningException;
 import com.android.ide.common.signing.CertificateInfo;
@@ -231,9 +230,9 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
-
-import java.security.PrivateKey;
-import java.util.*;
+import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -262,12 +261,13 @@ public class LocalSignHelper {
                                DefaultSigningConfig signingConfig,
                                String signName) throws IOException, SigningException {
 
-
             if (outputFile.exists()) {
                 FileUtils.deleteQuietly(outputFile);
             }else {
                 FileUtils.forceMkdir(outputFile.getParentFile());
             }
+            LocalSignedJarBuilder signedJarBuilder = null;
+            FileInputStream inputStream = null;
 
             try {
 
@@ -281,11 +281,7 @@ public class LocalSignHelper {
                     if (certificateInfo == null) {
                         throw new SigningException("Failed to read key from keystore");
                     }
-                    System.err.println("LocalSign:"+signingConfig.toString());
-                } else {
-                    throw new SigningException("SigningConfig not found or incomplete");
                 }
-
 
                 Predicate<String> noCompressPredicate = getNoCompressPredicate(inputFile.getAbsolutePath());
                         ApkCreatorFactory.CreationData creationData =
@@ -317,7 +313,18 @@ public class LocalSignHelper {
                 throw new SigningException(e.getMessage(), e);
 
             } finally {
-
+                if (null != signedJarBuilder) {
+                    try {
+                        signedJarBuilder.close();
+                    } catch (Exception e) {
+                    }
+                }
+                if (null != inputStream) {
+                    try {
+                        inputStream.close();
+                    } catch (Exception e) {
+                    }
+                }
             }
 
 
@@ -361,19 +368,5 @@ public class LocalSignHelper {
             }
         }
         return s -> noCompressEntries.contains(s);
-    }
-
-    private static Predicate<String> getNoCompressPredicate(File inputFile) throws IOException {
-        List<String> paths = new ArrayList<>();
-        ZipFile zFile = new ZipFile(inputFile);
-        Enumeration<? extends ZipEntry>enumeration =  zFile.entries();
-        while (enumeration.hasMoreElements()){
-            ZipEntry zipEntry = enumeration.nextElement();
-            if (zipEntry.getMethod()==0){
-                paths.add(zipEntry.getName());
-            }
-        }
-        return s -> paths.contains(s);
-
     }
 }
