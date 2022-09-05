@@ -108,7 +108,9 @@ public abstract class ProtoSourcesProvider implements TransitiveInfoProvider {
    */
   @SkylarkCallable(
     name = "descriptor_set",
-    doc = "The FileDescriptorSet of all transitive sources.",
+    doc =
+        "The FileDescriptorSet of all transitive sources. Returns None if "
+            + "--output_descriptor_set isn't enabled or if there are no sources",
     structField = true,
     allowReturnNones = true
   )
