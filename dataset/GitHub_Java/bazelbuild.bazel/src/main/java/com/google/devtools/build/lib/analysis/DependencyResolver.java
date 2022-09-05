@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.ArrayList;
@@ -49,6 +50,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import javax.annotation.Nullable;
 
@@ -58,6 +61,7 @@ import javax.annotation.Nullable;
  * <p>Includes logic to derive the right configurations depending on transition type.
  */
 public abstract class DependencyResolver {
+
   protected DependencyResolver() {
   }
 
@@ -171,7 +175,7 @@ public abstract class DependencyResolver {
     ImmutableSortedKeyListMultimap.Builder<Attribute, LabelAndConfiguration> result =
         ImmutableSortedKeyListMultimap.builder();
 
-    resolveExplicitAttributes(configuration, attributeMap, result);
+    resolveExplicitAttributes(rule, configuration, attributeMap, result);
     resolveImplicitAttributes(rule, configuration, attributeMap, attributes, result);
     resolveLateBoundAttributes(rule, configuration, hostConfiguration, attributeMap, attributes,
         result);
@@ -240,20 +244,59 @@ public abstract class DependencyResolver {
     }
   }
 
-  private void resolveExplicitAttributes(final BuildConfiguration configuration,
+  private void resolveExplicitAttributes(Rule rule, final BuildConfiguration configuration,
       AttributeMap attributes,
       final ImmutableSortedKeyListMultimap.Builder<Attribute, LabelAndConfiguration> builder) {
     attributes.visitLabels(
         new AttributeMap.AcceptsLabelAttribute() {
           @Override
           public void acceptLabelAttribute(Label label, Attribute attribute) {
-            if (attribute.getType() == BuildType.NODEP_LABEL || attribute.isImplicit()
-                || attribute.isLateBound()) {
+            String attributeName = attribute.getName();
+            if (attributeName.equals("abi_deps")) {
+              // abi_deps is handled specially: we visit only the branch that
+              // needs to be taken based on the configuration.
               return;
             }
+
+            if (attribute.getType() == BuildType.NODEP_LABEL) {
+              return;
+            }
+
+            if (attribute.isImplicit() || attribute.isLateBound()) {
+              return;
+            }
+
             builder.put(attribute, LabelAndConfiguration.of(label, configuration));
           }
         });
+
+    // TODO(bazel-team): Remove this in favor of the new configurable attributes.
+    if (attributes.getAttributeDefinition("abi_deps") != null) {
+      Attribute depsAttribute = attributes.getAttributeDefinition("deps");
+      MakeVariableExpander.Context context = new ConfigurationMakeVariableContext(
+          rule.getPackage(), configuration);
+      String abi = null;
+      try {
+        abi = MakeVariableExpander.expand(attributes.get("abi", Type.STRING), context);
+      } catch (MakeVariableExpander.ExpansionException e) {
+        // Ignore this. It will be handled during the analysis phase.
+      }
+
+      if (abi != null) {
+        for (Map.Entry<String, List<Label>> entry
+            : attributes.get("abi_deps", BuildType.LABEL_LIST_DICT).entrySet()) {
+          try {
+            if (Pattern.matches(entry.getKey(), abi)) {
+              for (Label label : entry.getValue()) {
+                builder.put(depsAttribute, LabelAndConfiguration.of(label, configuration));
+              }
+            }
+          } catch (PatternSyntaxException e) {
+            // Ignore this. It will be handled during the analysis phase.
+          }
+        }
+      }
+    }
   }
 
   private void resolveImplicitAttributes(Rule rule, BuildConfiguration configuration,
@@ -407,7 +450,7 @@ public abstract class DependencyResolver {
   }
 
   private ImmutableSet<AspectDescriptor> requiredAspects(
-      Aspect aspect, Attribute attribute, final Target target, Rule originalRule) {
+      Aspect aspect, Attribute attribute, Target target, Rule originalRule) {
     if (!(target instanceof Rule)) {
       return ImmutableSet.of();
     }
@@ -416,7 +459,7 @@ public abstract class DependencyResolver {
     RuleClass ruleClass = ((Rule) target).getRuleClassObject();
     ImmutableSet.Builder<AspectDescriptor> result = ImmutableSet.builder();
     for (Aspect aspectCandidate : aspectCandidates) {
-      if (ruleClass.canHaveAnyProvider() || Sets.difference(
+      if (Sets.difference(
               aspectCandidate.getDefinition().getRequiredProviders(),
               ruleClass.getAdvertisedProviders())
           .isEmpty()) {
@@ -442,9 +485,9 @@ public abstract class DependencyResolver {
           aspect.getDefinition().getAttributeAspects().get(attribute.getName())) {
         if (aspectClass.equals(aspect.getAspectClass())) {
           aspectCandidates.add(aspect);
-        } else if (aspectClass instanceof NativeAspectClass) {
+        } else if (aspectClass instanceof NativeAspectClass<?>) {
           aspectCandidates.add(
-              Aspect.forNative((NativeAspectClass) aspectClass, aspect.getParameters()));
+              Aspect.forNative((NativeAspectClass<?>) aspectClass, aspect.getParameters()));
         } else {
           // If we ever want to support this specifying arbitrary aspects for Skylark aspects,
           // we will need to do a Skyframe call here to load an up-to-date definition.
@@ -456,9 +499,8 @@ public abstract class DependencyResolver {
     return aspectCandidates;
   }
 
-  private void visitRule(Rule rule,
-      ListMultimap<Attribute, LabelAndConfiguration> labelMap, NestedSetBuilder<Label> rootCauses,
-      ListMultimap<Attribute, Dependency> outgoingEdges) {
+  private void visitRule(Rule rule, ListMultimap<Attribute, LabelAndConfiguration> labelMap,
+      NestedSetBuilder<Label> rootCauses, ListMultimap<Attribute, Dependency> outgoingEdges) {
     visitRule(rule, /*aspect=*/ null, labelMap, rootCauses, outgoingEdges);
   }
 

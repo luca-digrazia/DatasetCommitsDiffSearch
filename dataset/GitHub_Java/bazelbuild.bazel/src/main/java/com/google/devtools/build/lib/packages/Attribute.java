@@ -19,12 +19,11 @@ import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.packages.NativeAspectClass.NativeAspectFactory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
@@ -62,9 +61,6 @@ public final class Attribute implements Comparable<Attribute> {
 
   public static final Predicate<RuleClass> NO_RULE = Predicates.alwaysFalse();
 
-  /**
-   * Wraps the information necessary to construct an Aspect.
-   */
   private abstract static class RuleAspect<C extends AspectClass> {
     protected final C aspectClass;
     protected final Function<Rule, AspectParameters> parametersExtractor;
@@ -74,19 +70,11 @@ public final class Attribute implements Comparable<Attribute> {
       this.parametersExtractor = parametersExtractor;
     }
 
-    public String getName() {
-      return this.aspectClass.getName();
-    }
-
-    public ImmutableSet<String> getRequiredParameters() {
-      return ImmutableSet.<String>of();
-    }
-
     public abstract Aspect getAspect(Rule rule);
   }
 
-  private static class NativeRuleAspect extends RuleAspect<NativeAspectClass> {
-    public NativeRuleAspect(NativeAspectClass aspectClass,
+  private static class NativeRuleAspect extends RuleAspect<NativeAspectClass<?>> {
+    public NativeRuleAspect(NativeAspectClass<?> aspectClass,
         Function<Rule, AspectParameters> parametersExtractor) {
       super(aspectClass, parametersExtractor);
     }
@@ -98,40 +86,19 @@ public final class Attribute implements Comparable<Attribute> {
   }
 
   private static class SkylarkRuleAspect extends RuleAspect<SkylarkAspectClass> {
-    private final SkylarkAspect aspect;
+    private final AspectDefinition definition;
 
-    public SkylarkRuleAspect(SkylarkAspect aspect) {
-      super(aspect.getAspectClass(), aspect.getDefaultParametersExtractor());
-      this.aspect = aspect;
-    }
-
-    @Override
-    public ImmutableSet<String> getRequiredParameters() {
-      return aspect.getParamAttributes();
+    public SkylarkRuleAspect(SkylarkAspectClass aspectClass, AspectDefinition definition) {
+      super(aspectClass, NO_PARAMETERS);
+      this.definition = definition;
     }
 
     @Override
     public Aspect getAspect(Rule rule) {
-      AspectParameters parameters = parametersExtractor.apply(rule);
-      return Aspect.forSkylark(aspectClass, aspect.getDefinition(parameters), parameters);
-    }
-  }
-
-  /**
-   * A RuleAspect that just wraps a pre-existing Aspect that doesn't vary with the Rule.
-   * For instance, this may come from a DeserializedSkylarkAspect.
-   */
-  private static class PredefinedRuleAspect extends RuleAspect<AspectClass> {
-    private Aspect aspect;
-
-    public PredefinedRuleAspect(Aspect aspect) {
-      super(aspect.getAspectClass(), null);
-      this.aspect = aspect;
-    }
-
-    @Override
-    public Aspect getAspect(Rule rule) {
-      return aspect;
+      return Aspect.forSkylark(
+          aspectClass,
+          definition,
+          parametersExtractor.apply(rule));
     }
   }
 
@@ -184,7 +151,7 @@ public final class Attribute implements Comparable<Attribute> {
     // TODO(bazel-team): Move this elsewhere.
     DATA,
 
-    /**
+    /** 
      * Transition to one or more configurations. To obtain the actual child configurations,
      * invoke {@link Attribute#getSplitTransition(Rule)}. See {@link SplitTransition}.
      **/
@@ -330,7 +297,7 @@ public final class Attribute implements Comparable<Attribute> {
      */
     SplitTransition<?> apply(Rule fromRule);
   }
-
+  
   /**
    * Implementation of {@link SplitTransitionProvider} that returns a single {@link SplitTransition}
    * regardless of the originating rule.
@@ -384,13 +351,14 @@ public final class Attribute implements Comparable<Attribute> {
     }
   }
 
-  public ImmutableMap<String, ImmutableSet<String>> getRequiredAspectParameters() {
-    ImmutableMap.Builder<String, ImmutableSet<String>> paramBuilder = ImmutableMap.builder();
-    for (RuleAspect<?> aspect : aspects) {
-      paramBuilder.put(aspect.getName(), aspect.getRequiredParameters());
-    }
-    return paramBuilder.build();
-  }
+  private static final Function<Rule, AspectParameters> NO_PARAMETERS =
+      new Function<Rule, AspectParameters>() {
+        @Override
+        public AspectParameters apply(Rule input) {
+          return AspectParameters.EMPTY;
+        }
+      };
+
 
   /**
    * Creates a new attribute builder.
@@ -429,8 +397,6 @@ public final class Attribute implements Comparable<Attribute> {
     private PredicateWithMessage<Object> allowedValues = null;
     private ImmutableList<ImmutableSet<String>> mandatoryProvidersList =
         ImmutableList.<ImmutableSet<String>>of();
-    private ImmutableList<Class<? extends TransitiveInfoProvider>> mandatoryNativeProviders =
-        ImmutableList.of();
     private Set<RuleAspect> aspects = new LinkedHashSet<>();
 
     /**
@@ -838,22 +804,6 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     /**
-     * Sets a list of mandatory native providers. Every configured target occurring in this label
-     * type attribute has to provide all the providers, otherwise an error is produced during the
-     * analysis phase.
-     */
-    @SafeVarargs
-    public final Builder<TYPE> mandatoryNativeProviders(
-        Class<? extends TransitiveInfoProvider>... providers) {
-      Preconditions.checkState(
-          (type == BuildType.LABEL) || (type == BuildType.LABEL_LIST),
-          "must be a label-valued type");
-      this.mandatoryNativeProviders =
-          ImmutableList.<Class<? extends TransitiveInfoProvider>>copyOf(providers);
-      return this;
-    }
-
-    /**
      * Sets a list of sets of mandatory Skylark providers. Every configured target occurring in
      * this label type attribute has to provide all the providers from one of those sets,
      * otherwise an error is produced during the analysis phase.
@@ -877,13 +827,32 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     /**
+     * Asserts that a particular aspect probably needs to be computed for all direct dependencies
+     * through this attribute.
+     */
+    public <T extends NativeAspectFactory> Builder<TYPE> aspect(Class<T> aspect) {
+      return this.aspect(aspect, NO_PARAMETERS);
+    }
+
+    /**
+     * Asserts that a particular parameterized aspect probably needs to be computed for all direct
+     * dependencies through this attribute.
+     *
+     * @param evaluator function that extracts aspect parameters from rule.
+     */
+    public <T extends NativeAspectFactory> Builder<TYPE> aspect(
+        Class<T> aspect, Function<Rule, AspectParameters> evaluator) {
+      return this.aspect(new NativeAspectClass<T>(aspect), evaluator);
+    }
+
+    /**
      * Asserts that a particular parameterized aspect probably needs to be computed for all direct
      * dependencies through this attribute.
      *
      * @param evaluator function that extracts aspect parameters from rule.
      */
     public Builder<TYPE> aspect(
-        NativeAspectClass aspect, Function<Rule, AspectParameters> evaluator) {
+        NativeAspectClass<?> aspect, Function<Rule, AspectParameters> evaluator) {
       this.aspects.add(new NativeRuleAspect(aspect, evaluator));
       return this;
     }
@@ -892,7 +861,7 @@ public final class Attribute implements Comparable<Attribute> {
      * Asserts that a particular parameterized aspect probably needs to be computed for all direct
      * dependencies through this attribute.
      */
-    public Builder<TYPE> aspect(NativeAspectClass aspect) {
+    public Builder<TYPE> aspect(NativeAspectClass<?> aspect) {
       Function<Rule, AspectParameters> noParameters =
           new Function<Rule, AspectParameters>() {
             @Override
@@ -903,13 +872,8 @@ public final class Attribute implements Comparable<Attribute> {
       return this.aspect(aspect, noParameters);
     }
 
-    public Builder<TYPE> aspect(SkylarkAspect skylarkAspect) {
-      this.aspects.add(new SkylarkRuleAspect(skylarkAspect));
-      return this;
-    }
-
-    public Builder<TYPE> aspect(final Aspect aspect) {
-      this.aspects.add(new PredefinedRuleAspect(aspect));
+    public Builder<TYPE> aspect(SkylarkAspectClass aspectClass, AspectDefinition definition) {
+      this.aspects.add(new SkylarkRuleAspect(aspectClass, definition));
       return this;
     }
 
@@ -995,7 +959,6 @@ public final class Attribute implements Comparable<Attribute> {
           condition,
           allowedValues,
           mandatoryProvidersList,
-          mandatoryNativeProviders,
           ImmutableSet.copyOf(aspects));
     }
   }
@@ -1281,8 +1244,6 @@ public final class Attribute implements Comparable<Attribute> {
 
   private final ImmutableList<ImmutableSet<String>> mandatoryProvidersList;
 
-  private final ImmutableList<Class<? extends TransitiveInfoProvider>> mandatoryNativeProviders;
-
   private final ImmutableSet<RuleAspect> aspects;
 
   /**
@@ -1315,7 +1276,6 @@ public final class Attribute implements Comparable<Attribute> {
       Predicate<AttributeMap> condition,
       PredicateWithMessage<Object> allowedValues,
       ImmutableList<ImmutableSet<String>> mandatoryProvidersList,
-      ImmutableList<Class<? extends TransitiveInfoProvider>> mandatoryNativeProviders,
       ImmutableSet<RuleAspect> aspects) {
     Preconditions.checkNotNull(configTransition);
     Preconditions.checkArgument(
@@ -1350,7 +1310,6 @@ public final class Attribute implements Comparable<Attribute> {
     this.condition = condition;
     this.allowedValues = allowedValues;
     this.mandatoryProvidersList = mandatoryProvidersList;
-    this.mandatoryNativeProviders = mandatoryNativeProviders;
     this.aspects = aspects;
   }
 
@@ -1448,10 +1407,10 @@ public final class Attribute implements Comparable<Attribute> {
   }
 
   /**
-   * Returns the split configuration transition for this attribute.
-   *
+   * Returns the split configuration transition for this attribute. 
+   * 
    * @param rule the originating {@link Rule} which owns this attribute
-   * @throws IllegalStateException if {@link #hasSplitConfigurationTransition} is not true
+   * @throws IllegalStateException if {@link #hasSplitConfigurationTransition} is not true 
    */
   public SplitTransition<?> getSplitTransition(Rule rule) {
     Preconditions.checkState(hasSplitConfigurationTransition());
@@ -1547,11 +1506,6 @@ public final class Attribute implements Comparable<Attribute> {
    */
   public ImmutableList<ImmutableSet<String>> getMandatoryProvidersList() {
     return mandatoryProvidersList;
-  }
-
-  /** Returns the list of mandatory native providers. */
-  public ImmutableList<Class<? extends TransitiveInfoProvider>> getMandatoryNativeProviders() {
-    return mandatoryNativeProviders;
   }
 
   public FileTypeSet getAllowedFileTypesPredicate() {
@@ -1674,9 +1628,8 @@ public final class Attribute implements Comparable<Attribute> {
   /**
    * Returns a replica builder of this Attribute.
    */
-  public <TYPE> Attribute.Builder<TYPE> cloneBuilder(Type<TYPE> tp) {
-    Preconditions.checkArgument(tp == this.type);
-    Builder<TYPE> builder = new Builder<TYPE>(name, tp);
+  public Attribute.Builder<?> cloneBuilder() {
+    Builder<?> builder = new Builder<>(name, this.type);
     builder.allowedFileTypesForLabels = allowedFileTypesForLabels;
     builder.allowedRuleClassesForLabels = allowedRuleClassesForLabels;
     builder.allowedRuleClassesForLabelsWarning = allowedRuleClassesForLabelsWarning;
@@ -1692,9 +1645,5 @@ public final class Attribute implements Comparable<Attribute> {
     builder.aspects = new LinkedHashSet<>(aspects);
 
     return builder;
-  }
-
-  public Attribute.Builder<?> cloneBuilder() {
-    return cloneBuilder(this.type);
   }
 }

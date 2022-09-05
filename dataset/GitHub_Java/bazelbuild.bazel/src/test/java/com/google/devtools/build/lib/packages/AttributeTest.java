@@ -22,6 +22,9 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.syntax.Type.INTEGER;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
 import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Predicates;
@@ -34,35 +37,39 @@ import com.google.devtools.build.lib.packages.Attribute.SplitTransitionProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Tests of Attribute code. */
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * Tests of Attribute code.
+ */
 @RunWith(JUnit4.class)
 public class AttributeTest {
 
   private void assertDefaultValue(Object expected, Attribute attr) {
-    assertThat(attr.getDefaultValue(null)).isEqualTo(expected);
+    assertEquals(expected, attr.getDefaultValue(null));
   }
 
   private void assertType(Type<?> expectedType, Attribute attr) {
-    assertThat(attr.getType()).isEqualTo(expectedType);
+    assertEquals(expectedType, attr.getType());
   }
 
   @Test
   public void testBasics() throws Exception {
     Attribute attr = attr("foo", Type.INTEGER).mandatory().value(3).build();
-    assertThat(attr.getName()).isEqualTo("foo");
-    assertThat(attr.getDefaultValue(null)).isEqualTo(3);
-    assertThat(attr.getType()).isEqualTo(Type.INTEGER);
-    assertThat(attr.isMandatory()).isTrue();
-    assertThat(attr.isDocumented()).isTrue();
+    assertEquals("foo", attr.getName());
+    assertEquals(3, attr.getDefaultValue(null));
+    assertEquals(Type.INTEGER, attr.getType());
+    assertTrue(attr.isMandatory());
+    assertTrue(attr.isDocumented());
     attr = attr("$foo", Type.INTEGER).build();
-    assertThat(attr.isDocumented()).isFalse();
+    assertFalse(attr.isDocumented());
   }
 
   @Test
@@ -78,9 +85,9 @@ public class AttributeTest {
   @Test
   public void testNonEmpty() throws Exception {
     Attribute attr = attr("foo", BuildType.LABEL_LIST).nonEmpty().legacyAllowAnyFileType().build();
-    assertThat(attr.getName()).isEqualTo("foo");
-    assertThat(attr.getType()).isEqualTo(BuildType.LABEL_LIST);
-    assertThat(attr.isNonEmpty()).isTrue();
+    assertEquals("foo", attr.getName());
+    assertEquals(BuildType.LABEL_LIST, attr.getType());
+    assertTrue(attr.isNonEmpty());
   }
 
   @Test
@@ -212,16 +219,16 @@ public class AttributeTest {
         attr("x", LABEL_LIST)
             .allowedFileTypes(txtFiles)
             .mandatory()
-            .aspect(TestAspects.SIMPLE_ASPECT)
+            .aspect(TestAspects.SimpleAspect.class)
             .build();
 
     {
       Attribute childAttr1 = parentAttr.cloneBuilder().build();
-      assertThat(childAttr1.getName()).isEqualTo("x");
-      assertThat(childAttr1.getAllowedFileTypesPredicate()).isEqualTo(txtFiles);
-      assertThat(childAttr1.getAllowedRuleClassesPredicate()).isEqualTo(Predicates.alwaysTrue());
-      assertThat(childAttr1.isMandatory()).isTrue();
-      assertThat(childAttr1.isNonEmpty()).isFalse();
+      assertEquals("x", childAttr1.getName());
+      assertEquals(txtFiles, childAttr1.getAllowedFileTypesPredicate());
+      assertEquals(Predicates.alwaysTrue(), childAttr1.getAllowedRuleClassesPredicate());
+      assertTrue(childAttr1.isMandatory());
+      assertFalse(childAttr1.isNonEmpty());
       assertThat(childAttr1.getAspects(null /* rule */)).hasSize(1);
     }
 
@@ -231,19 +238,19 @@ public class AttributeTest {
               .cloneBuilder()
               .nonEmpty()
               .allowedRuleClasses(ruleClasses)
-              .aspect(TestAspects.ERROR_ASPECT)
+              .aspect(TestAspects.ErrorAspect.class)
               .build();
-      assertThat(childAttr2.getName()).isEqualTo("x");
-      assertThat(childAttr2.getAllowedFileTypesPredicate()).isEqualTo(txtFiles);
-      assertThat(childAttr2.getAllowedRuleClassesPredicate()).isEqualTo(ruleClasses);
-      assertThat(childAttr2.isMandatory()).isTrue();
-      assertThat(childAttr2.isNonEmpty()).isTrue();
+      assertEquals("x", childAttr2.getName());
+      assertEquals(txtFiles, childAttr2.getAllowedFileTypesPredicate());
+      assertEquals(ruleClasses, childAttr2.getAllowedRuleClassesPredicate());
+      assertTrue(childAttr2.isMandatory());
+      assertTrue(childAttr2.isNonEmpty());
       assertThat(childAttr2.getAspects(null /* rule */)).hasSize(2);
     }
 
-    // Check if the parent attribute is unchanged
-    assertThat(parentAttr.isNonEmpty()).isFalse();
-    assertThat(parentAttr.getAllowedRuleClassesPredicate()).isEqualTo(Predicates.alwaysTrue());
+    //Check if the parent attribute is unchanged
+    assertFalse(parentAttr.isNonEmpty());
+    assertEquals(Predicates.alwaysTrue(), parentAttr.getAllowedRuleClassesPredicate());
   }
 
   /**
@@ -251,19 +258,10 @@ public class AttributeTest {
    */
   @Test
   public void testConfigurability() {
-    assertThat(
-            attr("foo_configurable", BuildType.LABEL_LIST)
-                .legacyAllowAnyFileType()
-                .build()
-                .isConfigurable())
-        .isTrue();
-    assertThat(
-            attr("foo_nonconfigurable", BuildType.LABEL_LIST)
-                .legacyAllowAnyFileType()
-                .nonconfigurable("test")
-                .build()
-                .isConfigurable())
-        .isFalse();
+    assertTrue(attr("foo_configurable", BuildType.LABEL_LIST).legacyAllowAnyFileType().build()
+        .isConfigurable());
+    assertFalse(attr("foo_nonconfigurable", BuildType.LABEL_LIST).legacyAllowAnyFileType()
+        .nonconfigurable("test").build().isConfigurable());
   }
 
   @Test
@@ -271,7 +269,7 @@ public class AttributeTest {
     TestSplitTransition splitTransition = new TestSplitTransition();
     Attribute attr = attr("foo", LABEL).cfg(splitTransition).allowedFileTypes().build();
     assertThat(attr.getConfigurationTransition()).isEqualTo(SPLIT);
-    assertThat(attr.hasSplitConfigurationTransition()).isTrue();
+    assertTrue(attr.hasSplitConfigurationTransition());
     assertThat(attr.getSplitTransition(null)).isEqualTo(splitTransition);
   }
 
@@ -281,15 +279,15 @@ public class AttributeTest {
     Attribute attr =
         attr("foo", LABEL).cfg(splitTransitionProvider).allowedFileTypes().build();
     assertThat(attr.getConfigurationTransition()).isEqualTo(SPLIT);
-    assertThat(attr.hasSplitConfigurationTransition()).isTrue();
-    assertThat(attr.getSplitTransition(null) instanceof TestSplitTransition).isTrue();
+    assertTrue(attr.hasSplitConfigurationTransition());
+    assertTrue(attr.getSplitTransition(null) instanceof TestSplitTransition);
   }
 
   @Test
   public void testHostTransition() throws Exception {
     Attribute attr = attr("foo", LABEL).cfg(HOST).allowedFileTypes().build();
     assertThat(attr.getConfigurationTransition()).isEqualTo(HOST);
-    assertThat(attr.hasSplitConfigurationTransition()).isFalse();
+    assertFalse(attr.hasSplitConfigurationTransition());
   }
 
   private static class TestSplitTransition implements SplitTransition<BuildOptions> {
@@ -308,21 +306,6 @@ public class AttributeTest {
     @Override
     public SplitTransition<?> apply(Rule fromRule) {
       return new TestSplitTransition();
-    }
-  }
-
-  @Test
-  public void allowedRuleClassesAndAllowedRuleClassesWithWarningsCannotOverlap() throws Exception {
-    try {
-      attr("x", LABEL_LIST)
-          .allowedRuleClasses("foo", "bar", "baz")
-          .allowedRuleClassesWithWarning("bar")
-          .allowedFileTypes()
-          .build();
-      fail("Expected illegal state exception because rule classes and rule classes with warning "
-          + "overlap");
-    } catch (IllegalStateException e) {
-      assertThat(e).hasMessageThat().contains("may not contain the same rule classes");
     }
   }
 }
