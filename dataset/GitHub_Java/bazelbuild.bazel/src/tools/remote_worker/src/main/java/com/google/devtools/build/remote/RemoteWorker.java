@@ -14,13 +14,13 @@
 
 package com.google.devtools.build.remote;
 
-import com.google.devtools.build.lib.remote.ConcurrentMapActionCache;
 import com.google.devtools.build.lib.remote.HazelcastCacheFactory;
+import com.google.devtools.build.lib.remote.MemcacheActionCache;
 import com.google.devtools.build.lib.remote.MemcacheWorkExecutor;
 import com.google.devtools.build.lib.remote.RemoteOptions;
 import com.google.devtools.build.lib.remote.RemoteProtocol.RemoteWorkRequest;
 import com.google.devtools.build.lib.remote.RemoteProtocol.RemoteWorkResponse;
-import com.google.devtools.build.lib.remote.RemoteWorkGrpc.RemoteWorkImplBase;
+import com.google.devtools.build.lib.remote.RemoteWorkGrpc;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.ProcessUtils;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -29,9 +29,11 @@ import com.google.devtools.build.lib.vfs.JavaIoFileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.UnixFileSystem;
 import com.google.devtools.common.options.OptionsParser;
+
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Collections;
@@ -41,10 +43,10 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Implements a remote worker that accepts work items as protobufs. The server implementation is
- * based on grpc.
+ * Implements a remote worker that accepts work items as protobufs.
+ * The server implementation is based on grpc.
  */
-public class RemoteWorker extends RemoteWorkImplBase {
+public class RemoteWorker implements RemoteWorkGrpc.RemoteWork {
   private static final Logger LOG = Logger.getLogger(RemoteWorker.class.getName());
   private static final boolean LOG_FINER = LOG.isLoggable(Level.FINER);
   private final Path workPath;
@@ -69,8 +71,8 @@ public class RemoteWorker extends RemoteWorkImplBase {
     Path tempRoot = workPath.getRelative("build-" + UUID.randomUUID().toString());
     try {
       FileSystemUtils.createDirectoryAndParents(tempRoot);
-      final ConcurrentMapActionCache actionCache =
-          new ConcurrentMapActionCache(tempRoot, remoteOptions, cache);
+      final MemcacheActionCache actionCache =
+          new MemcacheActionCache(tempRoot, remoteOptions, cache);
       final MemcacheWorkExecutor workExecutor =
           MemcacheWorkExecutor.createLocalWorkExecutor(actionCache, tempRoot);
       if (LOG_FINER) {
@@ -120,13 +122,15 @@ public class RemoteWorker extends RemoteWorkImplBase {
     System.out.println("*** Starting Hazelcast server.");
     ConcurrentMap<String, byte[]> cache = new HazelcastCacheFactory().create(remoteOptions);
 
-    System.out.println("*** Starting grpc server on all locally bound IPs on port "
-        + remoteWorkerOptions.listenPort + ".");
+    System.out.println(
+        "*** Starting grpc server at 0.0.0.0:" + remoteWorkerOptions.listenPort + ".");
     Path workPath = getFileSystem().getPath(remoteWorkerOptions.workPath);
     FileSystemUtils.createDirectoryAndParents(workPath);
     RemoteWorker worker = new RemoteWorker(workPath, remoteOptions, remoteWorkerOptions, cache);
     final Server server =
-        ServerBuilder.forPort(remoteWorkerOptions.listenPort).addService(worker).build();
+        ServerBuilder.forPort(remoteWorkerOptions.listenPort)
+            .addService(RemoteWorkGrpc.bindService(worker))
+            .build();
     server.start();
 
     final Path pidFile;
