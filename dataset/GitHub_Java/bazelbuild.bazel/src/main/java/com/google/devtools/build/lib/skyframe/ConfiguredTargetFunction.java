@@ -193,9 +193,6 @@ final class ConfiguredTargetFunction implements SkyFunction {
       return ans;
     } catch (DependencyEvaluationException e) {
       throw new ConfiguredTargetFunctionException(e.getRootCauseSkyKey(), e.getCause());
-    } catch (AspectCreationException e) {
-      throw new ConfiguredTargetFunctionException(
-          new ConfiguredValueCreationException(e.getMessage()));
     }
   }
 
@@ -227,7 +224,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
       AspectDefinition aspectDefinition, AspectParameters aspectParameters, 
       Set<ConfigMatchingProvider> configConditions, RuleClassProvider ruleClassProvider,
       BuildConfiguration hostConfiguration, NestedSetBuilder<Package> transitivePackages)
-      throws DependencyEvaluationException, AspectCreationException {
+      throws DependencyEvaluationException {
 
     // Create the map from attributes to list of (target, configuration) pairs.
     ListMultimap<Attribute, Dependency> depValueNames;
@@ -486,7 +483,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
   private static ListMultimap<SkyKey, Aspect> resolveAspectDependencies(Environment env,
       Map<SkyKey, ConfiguredTarget> configuredTargetMap, Iterable<Dependency> deps,
       NestedSetBuilder<Package> transitivePackages)
-      throws AspectCreationException {
+      throws DependencyEvaluationException {
     ListMultimap<SkyKey, Aspect> result = ArrayListMultimap.create();
     Set<SkyKey> aspectKeys = new HashSet<>();
     for (Dependency dep : deps) {
@@ -520,12 +517,12 @@ final class ConfiguredTargetFunction implements SkyFunction {
         } catch (ConfiguredValueCreationException e) {
           // The configured target should have been created in resolveConfiguredTargetDependencies()
           throw new IllegalStateException(e);
-        } catch (NoSuchThingException e) {
+        } catch (NoSuchThingException | AspectCreationException e) {
           AspectFactory<?, ?, ?> depAspectFactory =
               AspectFactory.Util.create(depAspect.getAspectFactory());
-          throw new AspectCreationException(
+          throw new DependencyEvaluationException(new ConfiguredValueCreationException(
               String.format("Evaluation of aspect %s on %s failed: %s",
-                  depAspectFactory.getDefinition().getName(), dep.getLabel(), e.toString()));
+                  depAspectFactory.getDefinition().getName(), dep.getLabel(), e.toString())));
         }
 
         if (aspectValue == null) {

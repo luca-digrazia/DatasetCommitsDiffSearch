@@ -129,8 +129,6 @@ public final class AspectFunction implements SkyFunction {
           transitivePackages);
     } catch (DependencyEvaluationException e) {
       throw new AspectFunctionException(e.getRootCauseSkyKey(), e.getCause());
-    } catch (AspectCreationException e) {
-      throw new AspectFunctionException(e);
     }
   }
 
