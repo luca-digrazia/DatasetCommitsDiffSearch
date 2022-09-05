@@ -15,7 +15,6 @@ package com.google.devtools.build.skyframe;
 
 import com.google.common.base.Function;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
-import com.google.devtools.build.lib.concurrent.ErrorHandler;
 import com.google.devtools.build.lib.concurrent.ExecutorParams;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.DeletingNodeVisitor;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.DirtyingNodeVisitor;
@@ -90,8 +89,7 @@ public final class EagerInvalidator {
       InvalidationState state,
       DirtyKeyTracker dirtyKeyTracker,
       ForkJoinPool forkJoinPool,
-      boolean supportInterruptions,
-      ErrorHandler errorHandler) {
+      boolean supportInterruptions) {
     state.update(diff);
     return state.isEmpty()
         ? null
@@ -101,8 +99,7 @@ public final class EagerInvalidator {
             state,
             dirtyKeyTracker,
             forkJoinPool,
-            supportInterruptions,
-            errorHandler);
+            supportInterruptions);
   }
 
   /**
@@ -136,8 +133,7 @@ public final class EagerInvalidator {
       InvalidationState state,
       DirtyKeyTracker dirtyKeyTracker,
       ForkJoinPool forkJoinPool,
-      boolean supportInterruptions,
-      ErrorHandler errorHandler)
+      boolean supportInterruptions)
       throws InterruptedException {
     DirtyingNodeVisitor visitor =
         createInvalidatingVisitorIfNeeded(
@@ -147,8 +143,7 @@ public final class EagerInvalidator {
             state,
             dirtyKeyTracker,
             forkJoinPool,
-            supportInterruptions,
-            errorHandler);
+            supportInterruptions);
     if (visitor != null) {
       visitor.run();
     }

@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
 import com.google.devtools.build.lib.concurrent.ErrorClassifier;
@@ -32,6 +33,7 @@ import com.google.devtools.build.skyframe.ThinNodeEntry.MarkedDirtyResult;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -159,6 +161,8 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
     return executor.getInterruptionLatchForTestingOnly();
   }
 
+  protected abstract long count();
+
   protected void informInvalidationReceiver(SkyKey key,
       EvaluationProgressReceiver.InvalidationState state) {
     if (invalidationReceiver != null) {
@@ -242,6 +246,11 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
         boolean traverseGraph, DirtyKeyTracker dirtyKeyTracker) {
       super(graph, invalidationReceiver, state, dirtyKeyTracker);
       this.traverseGraph = traverseGraph;
+    }
+
+    @Override
+    protected long count() {
+      return visited.size();
     }
 
     @Override
@@ -331,13 +340,9 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
   /** A node-dirtying implementation. */
   static class DirtyingNodeVisitor extends InvalidatingNodeVisitor<ThinNodeQueryableGraph> {
 
-    private final Set<SkyKey> changed =
+    private final Set<Pair<SkyKey, InvalidationType>> visited =
         Collections.newSetFromMap(
-            new ConcurrentHashMap<SkyKey, Boolean>(
-                EXPECTED_VISITED_SET_SIZE, .75f, DEFAULT_THREAD_COUNT));
-    private final Set<SkyKey> dirtied =
-        Collections.newSetFromMap(
-            new ConcurrentHashMap<SkyKey, Boolean>(
+            new ConcurrentHashMap<Pair<SkyKey, InvalidationType>, Boolean>(
                 EXPECTED_VISITED_SET_SIZE, .75f, DEFAULT_THREAD_COUNT));
     private final boolean supportInterruptions;
 
@@ -367,6 +372,11 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
     }
 
     @Override
+    protected long count() {
+      return visited.size();
+    }
+
+    @Override
     protected boolean getSupportInterruptions() {
       return supportInterruptions;
     }
@@ -388,7 +398,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
      * {@link NodeEntry} ignores the second marking.
      *
      * The invariant that we do not process a (SkyKey, InvalidationType) pair twice is enforced by
-     * the {@link #changed} and {@link #dirtied} sets.
+     * the {@link #visited} set.
      *
      * The "invariant" is also enforced across builds by checking to see if the entry is already
      * marked changed, or if it is already marked dirty and we are just going to mark it dirty
@@ -399,29 +409,30 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
      */
     @Override
     @ThreadSafe
-    public void visit(
-        Iterable<SkyKey> keys, final InvalidationType invalidationType, final boolean mustExist) {
+    public void visit(Iterable<SkyKey> keys, final InvalidationType invalidationType,
+        final boolean mustExist) {
       Preconditions.checkState(invalidationType != InvalidationType.DELETED, keys);
       final boolean isChanged = (invalidationType == InvalidationType.CHANGED);
-      Set<SkyKey> setToCheck = isChanged ? changed : dirtied;
       int size = Iterables.size(keys);
-      ArrayList<SkyKey> keysToGet = new ArrayList<>(size);
+      ArrayList<Pair<SkyKey, InvalidationType>> invalidationPairs = new ArrayList<>(size);
       for (SkyKey key : keys) {
-        if (setToCheck.add(key)) {
-          keysToGet.add(key);
+        Pair<SkyKey, InvalidationType> invalidationPair = Pair.of(key, invalidationType);
+        if (visited.add(invalidationPair)) {
+          invalidationPairs.add(invalidationPair);
         }
       }
+      List<SkyKey> keysToGet =
+          Lists.transform(invalidationPairs, Pair.<SkyKey, InvalidationType>firstFunction());
       if (supportInterruptions) {
-        for (SkyKey key : keysToGet) {
-          pendingVisitations.add(Pair.of(key, invalidationType));
-        }
+        pendingVisitations.addAll(invalidationPairs);
       }
       final Map<SkyKey, ? extends ThinNodeEntry> entries = graph.getBatch(keysToGet);
-      for (final SkyKey key : keysToGet) {
+      for (final Pair<SkyKey, InvalidationType> invalidationPair : invalidationPairs) {
         executor.execute(
             new Runnable() {
               @Override
               public void run() {
+                SkyKey key = invalidationPair.getFirst();
                 ThinNodeEntry entry = entries.get(key);
 
                 if (entry == null) {
@@ -431,7 +442,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
                           + "node",
                       key);
                   if (supportInterruptions) {
-                    pendingVisitations.remove(Pair.of(key, invalidationType));
+                    pendingVisitations.remove(invalidationPair);
                   }
                   return;
                 }
@@ -440,7 +451,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
                   // If this node is already marked changed, or we are only marking this node
                   // dirty, and it already is, move along.
                   if (supportInterruptions) {
-                    pendingVisitations.remove(Pair.of(key, invalidationType));
+                    pendingVisitations.remove(invalidationPair);
                   }
                   return;
                 }
@@ -453,7 +464,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
                 if (markedDirtyResult == null) {
                   // Another thread has already dirtied this node. Don't do anything in this thread.
                   if (supportInterruptions) {
-                    pendingVisitations.remove(Pair.of(key, invalidationType));
+                    pendingVisitations.remove(invalidationPair);
                   }
                   return;
                 }
@@ -466,7 +477,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
                 dirtyKeyTracker.dirty(key);
                 // Remove the node from the set as the last operation.
                 if (supportInterruptions) {
-                  pendingVisitations.remove(Pair.of(key, invalidationType));
+                  pendingVisitations.remove(invalidationPair);
                 }
               }
             });
