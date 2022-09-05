@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@ package com.google.devtools.build.lib.rules.java;
 
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.LABEL;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 
 /**
  * A base rule for building the java_import rule.
@@ -37,8 +36,6 @@ public class JavaImportBaseRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
     return builder
-        .requiresConfigurationFragments(JavaConfiguration.class, CppConfiguration.class,
-            J2ObjcConfiguration.class)
         .add(attr(":host_jdk", LABEL)
             .cfg(HOST)
             .value(JavaSemantics.HOST_JDK))
@@ -74,7 +71,6 @@ public class JavaImportBaseRule implements RuleDefinition {
         .add(attr("constraints", STRING_LIST)
             .orderIndependent()
             .nonconfigurable("used in Attribute.validityPredicate implementations (loading time)"))
-        .advertiseProvider(JavaSourceInfoProvider.class)
         .advertiseProvider(JavaCompilationArgsProvider.class)
         .build();
   }
@@ -84,13 +80,17 @@ public class JavaImportBaseRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("$java_import_base")
         .type(RuleClassType.ABSTRACT)
-        .ancestors(BaseRuleClasses.RuleBase.class, ProguardLibraryRule.class)
+        .ancestors(BaseRuleClasses.RuleBase.class)
         .build();
   }
 }
 /*<!-- #BLAZE_RULE (NAME = java_import, TYPE = LIBRARY, FAMILY = Java) -->
 
+${ATTRIBUTE_SIGNATURE}
+
   <p>This rule allows the use of precompiled JAR files as libraries for
   <code><a href="#java_library">java_library</a></code> rules.</p>
+
+${ATTRIBUTE_DEFINITION}
 
 <!-- #END_BLAZE_RULE -->*/

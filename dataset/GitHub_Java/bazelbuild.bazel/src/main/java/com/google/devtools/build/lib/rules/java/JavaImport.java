@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
@@ -88,7 +89,7 @@ public class JavaImport implements RuleConfiguredTargetFactory {
     // runfiles from this target or its dependencies.
     Runfiles runfiles = neverLink ?
         Runfiles.EMPTY :
-        new Runfiles.Builder(ruleContext.getWorkspaceName())
+        new Runfiles.Builder()
             // add the jars to the runfiles
             .addArtifacts(common.getJavaCompilationArtifacts().getRuntimeJars())
             .addTargets(targets, RunfilesProvider.DEFAULT_RUNFILES)
@@ -111,24 +112,10 @@ public class JavaImport implements RuleConfiguredTargetFactory {
     filesBuilder.addAll(jars);
 
     semantics.addProviders(
-        ruleContext,
-        common,
-        ImmutableList.<String>of(),
-        null /* classJar */,
-        srcJar /* srcJar */,
-        null /* genJar */,
-        null /* gensrcJar */,
-        compilationToRuntimeJarMap.build(),
-        helper,
-        filesBuilder,
-        ruleBuilder);
+        ruleContext, common, ImmutableList.<String>of(), null,
+        srcJar, null, compilationToRuntimeJarMap.build(), helper, filesBuilder, ruleBuilder);
 
     NestedSet<Artifact> filesToBuild = filesBuilder.build();
-
-    JavaSourceInfoProvider javaSourceInfoProvider = new JavaSourceInfoProvider.Builder()
-        .setJarFiles(jars)
-        .setSourceJarsForJarFiles(srcJars)
-        .build();
 
     common.addTransitiveInfoProviders(ruleBuilder, filesToBuild, null);
     return ruleBuilder
@@ -143,7 +130,8 @@ public class JavaImport implements RuleConfiguredTargetFactory {
         .add(JavaNativeLibraryProvider.class, new JavaNativeLibraryProvider(
             transitiveJavaNativeLibraries))
         .add(CppCompilationContext.class, transitiveCppDeps)
-        .add(JavaSourceInfoProvider.class, javaSourceInfoProvider)
+        .add(JavaSourceInfoProvider.class, new JavaSourceInfoProvider(
+            NestedSetBuilder.wrap(Order.STABLE_ORDER, srcJars)))
         .add(JavaSourceJarsProvider.class, new JavaSourceJarsProvider(
             transitiveJavaSourceJars, srcJars))
         .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveJavaSourceJars)
