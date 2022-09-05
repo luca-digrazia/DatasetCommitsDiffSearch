@@ -41,11 +41,7 @@ public class AdminServlet extends HttpServlet {
     private final PingServlet pingServlet;
     private final ThreadDumpServlet threadDumpServlet;
 
-    private String metricsUri;
-    private String pingUri;
-    private String threadsUri;
-    private String healthcheckUri;
-    private String serviceName;
+    private String metricsUri, pingUri, threadsUri, healthcheckUri, contextPath, serviceName;
 
     public AdminServlet() {
         this(new HealthCheckServlet(), new MetricsServlet(), new PingServlet(),
@@ -81,6 +77,7 @@ public class AdminServlet extends HttpServlet {
         threadDumpServlet.init(config);
 
         final ServletContext context = config.getServletContext();
+        this.contextPath = context.getContextPath();
         this.metricsUri = getParam(config.getInitParameter("metrics-uri"), this.metricsUri);
         this.pingUri = getParam(config.getInitParameter("ping-uri"), this.pingUri);
         this.threadsUri = getParam(config.getInitParameter("threads-uri"), this.threadsUri);
@@ -89,14 +86,14 @@ public class AdminServlet extends HttpServlet {
     }
     
     public void setServiceName(String serviceName) {
-        this.serviceName = serviceName;
+    	this.serviceName = serviceName;
     }
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         resp.setHeader("Cache-Control", "must-revalidate,no-cache,no-store");
         final String uri = req.getPathInfo();
-        final String path = req.getContextPath() + req.getServletPath();
+        final String path = this.contextPath + req.getServletPath();
         if (uri == null || uri.equals("/")) {
             resp.setStatus(HttpServletResponse.SC_OK);
             resp.setContentType(CONTENT_TYPE);
