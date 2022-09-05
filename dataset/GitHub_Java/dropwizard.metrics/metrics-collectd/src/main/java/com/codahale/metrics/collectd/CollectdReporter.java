@@ -153,7 +153,6 @@ public class CollectdReporter extends ScheduledReporter {
     }
 
     @Override
-    @SuppressWarnings("rawtypes")
     public void report(SortedMap<String, Gauge> gauges, SortedMap<String, Counter> counters,
             SortedMap<String, Histogram> histograms, SortedMap<String, Meter> meters, SortedMap<String, Timer> timers) {
         MetaData.Builder metaData = new MetaData.Builder(hostName, clock.getTime() / 1000, period)
@@ -206,7 +205,6 @@ public class CollectdReporter extends ScheduledReporter {
         }
     }
 
-    @SuppressWarnings("rawtypes")
     private void serializeGauge(MetaData.Builder metaData, Gauge metric) {
         if (metric.getValue() instanceof Number) {
             write(metaData.typeInstance("value").get(), (Number) metric.getValue());
