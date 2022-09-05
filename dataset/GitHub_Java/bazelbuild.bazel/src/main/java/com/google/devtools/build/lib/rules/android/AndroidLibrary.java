@@ -96,7 +96,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
           null /* versionName */,
           false,
           null /* proguardCfgOut */,
-          null, /* mainDexProguardCfg */
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_MANIFEST),
           null /* mergedResourcesOut */);
       if (ruleContext.hasErrors()) {
@@ -178,7 +177,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
 
     new AarGeneratorBuilder(ruleContext)
       .withPrimary(primaryResources)
-      .withManifest(aar != null ? aar.getManifest() : primaryResources.getManifest())
+      .withManifest(primaryResources.getManifest())
       .withRtxt(primaryResources.getRTxt())
       .withClasses(classesJar)
       .setAAROut(aarOut)

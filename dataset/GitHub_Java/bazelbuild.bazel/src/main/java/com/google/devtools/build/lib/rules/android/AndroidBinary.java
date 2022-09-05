@@ -365,7 +365,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         splitResourceApk,
         resourceClasses,
         ImmutableList.<Artifact>of(),
-        ImmutableList.<Artifact>of(),
         proguardMapping);
   }
 
@@ -386,7 +385,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       ResourceApk splitResourceApk,
       JavaTargetAttributes resourceClasses,
       ImmutableList<Artifact> apksUnderTest,
-      ImmutableList<Artifact> additionalMergedManifests,
       Artifact proguardMapping) throws InterruptedException {
 
     ImmutableList<Artifact> proguardSpecs = ProguardHelper.collectTransitiveProguardSpecs(
@@ -450,14 +448,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     filesBuilder.add(binaryJar);
     filesBuilder.add(unsignedApk);
     filesBuilder.add(zipAlignedApk);
-
-    Artifact deployInfo = ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.DEPLOY_INFO);
-    AndroidDeployInfoAction.createDeployInfoAction(ruleContext,
-        deployInfo,
-        applicationManifest.getManifest(),
-        additionalMergedManifests,
-        Iterables.concat(ImmutableList.of(zipAlignedApk), apksUnderTest));
-    filesBuilder.add(deployInfo);
 
     NestedSet<Artifact> filesToBuild = filesBuilder.build();
 
@@ -527,25 +517,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         incrementalApk,
         nativeLibs,
         stubData);
-
-    Artifact incrementalDeployInfo = ruleContext.getImplicitOutputArtifact(
-        AndroidRuleClasses.DEPLOY_INFO_INCREMENTAL);
-
-    AndroidDeployInfoAction.createDeployInfoAction(ruleContext,
-        incrementalDeployInfo,
-        applicationManifest.getManifest(),
-        additionalMergedManifests,
-        ImmutableList.<Artifact>of());
-
-    NestedSet<Artifact> fullOutputGroup = NestedSetBuilder.<Artifact>stableOrder()
-        .add(fullDeployMarker)
-        .add(incrementalDeployInfo)
-        .build();
-
-    NestedSet<Artifact> incrementalOutputGroup = NestedSetBuilder.<Artifact>stableOrder()
-        .add(incrementalDeployMarker)
-        .add(incrementalDeployInfo)
-        .build();
 
     NestedSetBuilder<Artifact> splitApkSetBuilder = NestedSetBuilder.compileOrder();
 
@@ -628,19 +599,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     createSplitInstallAction(ruleContext, splitDeployMarker, argsArtifact, splitMainApk,
         splitApks, stubData);
 
-    Artifact splitDeployInfo = ruleContext.getImplicitOutputArtifact(
-        AndroidRuleClasses.DEPLOY_INFO_SPLIT);
-    AndroidDeployInfoAction.createDeployInfoAction(
-        ruleContext,
-        splitDeployInfo,
-        applicationManifest.getManifest(),
-        additionalMergedManifests,
-        ImmutableList.<Artifact>of());
-
     NestedSet<Artifact> splitOutputGroup = NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(allSplitApks)
         .add(splitDeployMarker)
-        .add(splitDeployInfo)
         .build();
 
     Artifact apkManifest =
@@ -692,13 +653,10 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .add(
             ApkProvider.class,
             new ApkProvider(
-                NestedSetBuilder.create(Order.STABLE_ORDER, zipAlignedApk),
-                coverageMetadata,
-                NestedSetBuilder.create(Order.STABLE_ORDER, applicationManifest.getManifest())
-            ))
+                NestedSetBuilder.create(Order.STABLE_ORDER, zipAlignedApk), coverageMetadata))
         .add(AndroidPreDexJarProvider.class, new AndroidPreDexJarProvider(jarToDex))
-        .addOutputGroup("mobile_install_full", fullOutputGroup)
-        .addOutputGroup("mobile_install_incremental", incrementalOutputGroup)
+        .addOutputGroup("mobile_install_full", fullDeployMarker)
+        .addOutputGroup("mobile_install_incremental", incrementalDeployMarker)
         .addOutputGroup("mobile_install_split", splitOutputGroup)
         .addOutputGroup("apk_manifest", apkManifest)
         .addOutputGroup("apk_manifest_text", apkManifestText);

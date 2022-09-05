@@ -28,6 +28,7 @@ import static com.google.devtools.build.lib.util.FileTypeSet.ANY_FILE;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -49,7 +50,7 @@ import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
-import com.google.devtools.build.lib.rules.java.ProguardHelper;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 
 import java.util.ArrayList;
@@ -136,12 +137,6 @@ public final class AndroidRuleClasses {
       fromTemplates("%{name}_files/apk_manifest");
   public static final SafeImplicitOutputsFunction APK_MANIFEST_TEXT =
       fromTemplates("%{name}_files/apk_manifest_text");
-  public static final SafeImplicitOutputsFunction DEPLOY_INFO =
-      fromTemplates("%{name}_files/deploy_info.deployinfo.pb");
-  public static final SafeImplicitOutputsFunction DEPLOY_INFO_INCREMENTAL =
-      fromTemplates("%{name}_files/deploy_info_incremental.deployinfo.pb");
-  public static final SafeImplicitOutputsFunction DEPLOY_INFO_SPLIT =
-      fromTemplates("%{name}_files/deploy_info_split.deployinfo.pb");
 
   // This needs to be in its own directory because ApkBuilder only has a function (-rf) for source
   // folders but not source files, and it's easiest to guarantee that nothing gets put beside this
@@ -168,20 +163,19 @@ public final class AndroidRuleClasses {
   public static final String DEFAULT_RESOURCE_SHRINKER =
       "//tools/android:resource_shrinker";
   public static final String DEFAULT_AAR_GENERATOR = "//tools/android:aar_generator";
-  public static final String DEFAULT_SDK = "//tools/android:sdk";
 
-  /**
-   * The default label of android_sdk option
-   */
-  public static final class AndroidSdkLabel extends LateBoundLabel<BuildConfiguration> {
-    public AndroidSdkLabel(Label androidSdk) {
-      super(androidSdk, AndroidConfiguration.class);
-    }
-    @Override
-    public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
-      return configuration.getFragment(AndroidConfiguration.class).getSdk();
-    }
-  }
+  public static final Label DEFAULT_ANDROID_SDK =
+      Label.parseAbsoluteUnchecked(
+          Constants.ANDROID_DEFAULT_SDK);
+
+  public static final LateBoundLabel<BuildConfiguration> ANDROID_SDK =
+      new LateBoundLabel<BuildConfiguration>(DEFAULT_ANDROID_SDK, AndroidConfiguration.class) {
+        @Override
+        public Label resolve(Rule rule, AttributeMap attributes,
+            BuildConfiguration configuration) {
+          return configuration.getFragment(AndroidConfiguration.class).getSdk();
+        }
+      };
 
   public static final SplitTransition<BuildOptions> ANDROID_SPLIT_TRANSITION =
       new SplitTransition<BuildOptions>() {
@@ -254,42 +248,42 @@ public final class AndroidRuleClasses {
       "proto_library" // TODO(gregce): remove this line when no such dependencies exist
   };
 
-  public static final boolean hasProguardSpecs(AttributeMap rule) {
-    // The below is a hack to support configurable attributes (proguard_specs seems like
-    // too valuable an attribute to make nonconfigurable, and we don't currently
-    // have the ability to know the configuration when determining implicit outputs).
-    // An IllegalArgumentException gets triggered if the attribute instance is configurable.
-    // We assume, heuristically, that means every configurable value is a non-empty list.
-    //
-    // TODO(bazel-team): find a stronger approach for this. One simple approach is to somehow
-    // receive 'rule' as an AggregatingAttributeMapper instead of a RawAttributeMapper,
-    // check that all possible values are non-empty, and simply don't support configurable
-    // instances that mix empty and non-empty lists. A more ambitious approach would be
-    // to somehow determine implicit outputs after the configuration is known. A third
-    // approach is to refactor the Android rule logic to avoid these dependencies in the
-    // first place.
-    try {
-      return !rule.get("proguard_specs", LABEL_LIST).isEmpty();
-    } catch (IllegalArgumentException e) {
-      // We assume at this point the attribute instance is configurable.
-      return true;
-    }
-  }
-
   public static final SafeImplicitOutputsFunction ANDROID_BINARY_IMPLICIT_OUTPUTS =
       new SafeImplicitOutputsFunction() {
 
         @Override
         public Iterable<String> getImplicitOutputs(AttributeMap rule) {
+          boolean mapping = rule.get("proguard_generate_mapping", Type.BOOLEAN);
           List<SafeImplicitOutputsFunction> functions = Lists.newArrayList();
           functions.add(AndroidRuleClasses.ANDROID_BINARY_APK);
           functions.add(AndroidRuleClasses.ANDROID_BINARY_UNSIGNED_APK);
           functions.add(AndroidRuleClasses.ANDROID_BINARY_DEPLOY_JAR);
 
-          if (hasProguardSpecs(rule)) {
+          // The below is a hack to support configurable attributes (proguard_specs seems like
+          // too valuable an attribute to make nonconfigurable, and we don't currently
+          // have the ability to know the configuration when determining implicit outputs).
+          // An IllegalArgumentException gets triggered if the attribute instance is configurable.
+          // We assume, heuristically, that means every configurable value is a non-empty list.
+          //
+          // TODO(bazel-team): find a stronger approach for this. One simple approach is to somehow
+          // receive 'rule' as an AggregatingAttributeMapper instead of a RawAttributeMapper,
+          // check that all possible values are non-empty, and simply don't support configurable
+          // instances that mix empty and non-empty lists. A more ambitious approach would be
+          // to somehow determine implicit outputs after the configuration is known. A third
+          // approach is to refactor the Android rule logic to avoid these dependencies in the
+          // first place.
+          boolean hasProguardSpecs;
+          try {
+            hasProguardSpecs = !rule.get("proguard_specs", LABEL_LIST).isEmpty();
+          } catch (IllegalArgumentException e) {
+            // We assume at this point the attribute instance is configurable.
+            hasProguardSpecs = true;
+          }
+
+          if (hasProguardSpecs) {
             functions.add(AndroidRuleClasses.ANDROID_BINARY_PROGUARD_JAR);
             functions.add(JavaSemantics.JAVA_BINARY_PROGUARD_CONFIG);
-            if (ProguardHelper.genProguardMapping(rule)) {
+            if (mapping) {
               functions.add(JavaSemantics.JAVA_BINARY_PROGUARD_MAP);
             }
           }
@@ -496,7 +490,7 @@ public final class AndroidRuleClasses {
       return builder
           .add(attr(":android_sdk", LABEL)
               .allowedRuleClasses("android_sdk", "filegroup")
-              .value(new AndroidSdkLabel(env.getToolsLabel(AndroidRuleClasses.DEFAULT_SDK))))
+              .value(ANDROID_SDK))
           /* <!-- #BLAZE_RULE($android_base).ATTRIBUTE(plugins) -->
           Java compiler plugins to run at compile-time.
           Every <code>java_plugin</code> specified in
@@ -543,19 +537,6 @@ public final class AndroidRuleClasses {
    * Base class for Android rule definitions that produce binaries.
    */
   public static final class AndroidBinaryBaseRule implements RuleDefinition {
-
-    private final AndroidNeverlinkAspect androidNeverlinkAspect;
-    private final DexArchiveAspect dexArchiveAspect;
-    private final JackAspect jackAspect;
-
-    public AndroidBinaryBaseRule(AndroidNeverlinkAspect androidNeverlinkAspect,
-        DexArchiveAspect dexArchiveAspect,
-        JackAspect jackAspect) {
-      this.androidNeverlinkAspect = androidNeverlinkAspect;
-      this.dexArchiveAspect = dexArchiveAspect;
-      this.jackAspect = jackAspect;
-    }
-
     @Override
     public RuleClass build(RuleClass.Builder builder, final RuleDefinitionEnvironment env) {
       return builder
@@ -588,9 +569,9 @@ public final class AndroidRuleClasses {
               .cfg(ANDROID_SPLIT_TRANSITION)
               .allowedRuleClasses(ALLOWED_DEPENDENCIES)
               .allowedFileTypes()
-              .aspect(androidNeverlinkAspect)
-              .aspect(dexArchiveAspect)
-              .aspect(jackAspect))
+              .aspect(AndroidNeverlinkAspect.class)
+              .aspect(DexArchiveAspect.class)
+              .aspect(JackAspect.class))
           // Proguard rule specifying master list of classes to keep during legacy multidexing.
           .add(attr("$build_incremental_dexmanifest", LABEL).cfg(HOST).exec()
               .value(env.getToolsLabel(BUILD_INCREMENTAL_DEXMANIFEST_LABEL)))
@@ -793,4 +774,3 @@ com/google/common/base/Objects.class
     }
   }
 }
-
