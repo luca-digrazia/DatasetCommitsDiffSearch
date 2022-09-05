@@ -698,10 +698,6 @@ public final class Lexer {
         addToken(new Token(TokenKind.MINUS, pos - 1, pos));
         break;
       }
-      case '|': {
-        addToken(new Token(TokenKind.PIPE, pos - 1, pos));
-        break;
-      }
       case '=': {
         addToken(new Token(TokenKind.EQUALS, pos - 1, pos));
         break;

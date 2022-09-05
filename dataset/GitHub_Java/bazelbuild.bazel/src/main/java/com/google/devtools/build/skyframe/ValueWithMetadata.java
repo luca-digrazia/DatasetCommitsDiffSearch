@@ -49,11 +49,9 @@ public abstract class ValueWithMetadata implements SkyValue {
    * Builds a value entry value that has a value value, and possibly an error (constructed from its
    * children's errors).
    *
-   * <p>This is public only for use in alternative {@code MemoizingEvaluator} implementations.
+   * <p>This is intended only for use in alternative {@code MemoizingEvaluator} implementations.
    */
-  public static SkyValue normal(
-      @Nullable SkyValue value,
-      @Nullable ErrorInfo errorInfo,
+  static SkyValue normal(@Nullable SkyValue value, @Nullable ErrorInfo errorInfo,
       NestedSet<TaggedEvents> transitiveEvents) {
     Preconditions.checkState(value != null || errorInfo != null,
         "Value and error cannot both be null");
@@ -64,6 +62,7 @@ public abstract class ValueWithMetadata implements SkyValue {
     }
     return new ErrorInfoValue(errorInfo, value, transitiveEvents);
   }
+
 
   @Nullable SkyValue getValue() {
     return value;
@@ -125,7 +124,7 @@ public abstract class ValueWithMetadata implements SkyValue {
   }
 
   /** Implementation of {@link ValueWithMetadata} for the error case. */
-  private static final class ErrorInfoValue extends ValueWithMetadata {
+  public static final class ErrorInfoValue extends ValueWithMetadata {
 
     private final ErrorInfo errorInfo;
     private final NestedSet<TaggedEvents> transitiveEvents;

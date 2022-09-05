@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -171,6 +171,7 @@ public abstract class LineNumberTable implements Serializable {
    * Line number table implementation for source files that have been
    * preprocessed. Ignores newlines and uses only #line directives.
    */
+  // TODO(bazel-team): Use binary search instead of linear search.
   @Immutable
   public static class HashLine extends LineNumberTable {
 

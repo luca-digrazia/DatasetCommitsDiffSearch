@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,12 +15,11 @@ package com.google.devtools.build.lib.events;
 
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.common.base.Preconditions;
 
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Objects;
-
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
@@ -47,29 +46,37 @@ public final class Event implements Serializable {
   @Nullable
   private final String tag;
 
-  private Event(EventKind kind, @Nullable Location location, String message, @Nullable String tag) {
-    this.kind = Preconditions.checkNotNull(kind);
-    this.location = location;
-    this.message = Preconditions.checkNotNull(message);
-    this.messageBytes = null;
-    this.tag = tag;
-  }
-
-  private Event(
-      EventKind kind, @Nullable Location location, byte[] messageBytes, @Nullable String tag) {
-    this.kind = Preconditions.checkNotNull(kind);
-    this.location = location;
-    this.message = null;
-    this.messageBytes = Preconditions.checkNotNull(messageBytes);
-    this.tag = tag;
-  }
-
   public Event withTag(String tag) {
     if (this.message != null) {
       return new Event(this.kind, this.location, this.message, tag);
     } else {
       return new Event(this.kind, this.location, this.messageBytes, tag);
     }
+  }
+
+  public Event(EventKind kind, @Nullable Location location, String message) {
+    this(kind, location, message, null);
+  }
+
+  public Event(EventKind kind, @Nullable Location location, String message, @Nullable String tag) {
+    this.kind = kind;
+    this.location = location;
+    this.message = Preconditions.checkNotNull(message);
+    this.messageBytes = null;
+    this.tag = tag;
+  }
+
+  public Event(EventKind kind, @Nullable Location location, byte[] messageBytes) {
+    this(kind, location, messageBytes, null);
+  }
+
+  public Event(
+      EventKind kind, @Nullable Location location, byte[] messageBytes, @Nullable String tag) {
+    this.kind = kind;
+    this.location = location;
+    this.message = null;
+    this.messageBytes = Preconditions.checkNotNull(messageBytes);
+    this.tag = tag;
   }
 
   public String getMessage() {
@@ -138,40 +145,32 @@ public final class Event implements Serializable {
     }
   }
 
-  public static Event of(EventKind kind, @Nullable Location location, String message) {
-    return new Event(kind, location, message, null);
-  }
-
-  public static Event of(EventKind kind, @Nullable Location location, byte[] messageBytes) {
-    return new Event(kind, location, messageBytes, null);
-  }
-
   /**
    * Reports a warning.
    */
-  public static Event warn(@Nullable Location location, String message) {
-    return new Event(EventKind.WARNING, location, message, null);
+  public static Event warn(Location location, String message) {
+    return new Event(EventKind.WARNING, location, message);
   }
 
   /**
    * Reports an error.
    */
-  public static Event error(@Nullable Location location, String message){
-    return new Event(EventKind.ERROR, location, message, null);
+  public static Event error(Location location, String message){
+    return new Event(EventKind.ERROR, location, message);
   }
 
   /**
    * Reports atemporal statements about the build, i.e. they're true for the duration of execution.
    */
-  public static Event info(@Nullable Location location, String message) {
-    return new Event(EventKind.INFO, location, message, null);
+  public static Event info(Location location, String message) {
+    return new Event(EventKind.INFO, location, message);
   }
 
   /**
    * Reports a temporal statement about the build.
    */
-  public static Event progress(@Nullable Location location, String message) {
-    return new Event(EventKind.PROGRESS, location, message, null);
+  public static Event progress(Location location, String message) {
+    return new Event(EventKind.PROGRESS, location, message);
   }
 
   /**
