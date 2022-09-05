@@ -33,23 +33,12 @@ public class DisplayMetricsInfo implements Parcelable {
     private int densityDpi;
     private float scaledDensity;
     private float xdpi;
-    private int screenWidthDp;
-    private int screenHeightDp;
 
     public DisplayMetricsInfo(float density, int densityDpi, float scaledDensity, float xdpi) {
         this.density = density;
         this.densityDpi = densityDpi;
         this.scaledDensity = scaledDensity;
         this.xdpi = xdpi;
-    }
-
-    public DisplayMetricsInfo(float density, int densityDpi, float scaledDensity, float xdpi, int screenWidthDp, int screenHeightDp) {
-        this.density = density;
-        this.densityDpi = densityDpi;
-        this.scaledDensity = scaledDensity;
-        this.xdpi = xdpi;
-        this.screenWidthDp = screenWidthDp;
-        this.screenHeightDp = screenHeightDp;
     }
 
     public float getDensity() {
@@ -84,22 +73,6 @@ public class DisplayMetricsInfo implements Parcelable {
         this.xdpi = xdpi;
     }
 
-    public int getScreenWidthDp() {
-        return screenWidthDp;
-    }
-
-    public void setScreenWidthDp(int screenWidthDp) {
-        this.screenWidthDp = screenWidthDp;
-    }
-
-    public int getScreenHeightDp() {
-        return screenHeightDp;
-    }
-
-    public void setScreenHeightDp(int screenHeightDp) {
-        this.screenHeightDp = screenHeightDp;
-    }
-
     @Override
     public int describeContents() {
         return 0;
@@ -111,8 +84,6 @@ public class DisplayMetricsInfo implements Parcelable {
         dest.writeInt(this.densityDpi);
         dest.writeFloat(this.scaledDensity);
         dest.writeFloat(this.xdpi);
-        dest.writeInt(this.screenWidthDp);
-        dest.writeInt(this.screenHeightDp);
     }
 
     protected DisplayMetricsInfo(Parcel in) {
@@ -120,8 +91,6 @@ public class DisplayMetricsInfo implements Parcelable {
         this.densityDpi = in.readInt();
         this.scaledDensity = in.readFloat();
         this.xdpi = in.readFloat();
-        this.screenWidthDp = in.readInt();
-        this.screenHeightDp = in.readInt();
     }
 
     public static final Creator<DisplayMetricsInfo> CREATOR = new Creator<DisplayMetricsInfo>() {
@@ -143,8 +112,6 @@ public class DisplayMetricsInfo implements Parcelable {
                 ", densityDpi=" + densityDpi +
                 ", scaledDensity=" + scaledDensity +
                 ", xdpi=" + xdpi +
-                ", screenWidthDp=" + screenWidthDp +
-                ", screenHeightDp=" + screenHeightDp +
                 '}';
     }
 }
