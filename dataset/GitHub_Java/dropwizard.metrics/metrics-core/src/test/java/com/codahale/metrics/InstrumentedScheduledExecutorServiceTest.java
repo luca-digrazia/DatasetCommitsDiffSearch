@@ -257,21 +257,24 @@ public class InstrumentedScheduledExecutorServiceTest {
         assertThat(scheduledOverrun.getCount()).isZero();
         assertThat(percentOfPeriod.getCount()).isZero();
 
-        ScheduledFuture<?> theFuture = instrumentedScheduledExecutor.scheduleWithFixedDelay(() -> {
-            assertThat(submitted.getCount()).isZero();
+        ScheduledFuture<?> theFuture = instrumentedScheduledExecutor.scheduleWithFixedDelay(new Runnable() {
+            @Override
+            public void run() {
+                assertThat(submitted.getCount()).isZero();
 
-            assertThat(running.getCount()).isEqualTo(1);
+                assertThat(running.getCount()).isEqualTo(1);
 
-            assertThat(scheduledOnce.getCount()).isEqualTo(0);
-            assertThat(scheduledRepetitively.getCount()).isEqualTo(1);
+                assertThat(scheduledOnce.getCount()).isEqualTo(0);
+                assertThat(scheduledRepetitively.getCount()).isEqualTo(1);
 
-            try {
-                TimeUnit.MILLISECONDS.sleep(50);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
+                try {
+                    TimeUnit.MILLISECONDS.sleep(50);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
+
+                return;
             }
-
-            return;
         }, 10L, 10L, TimeUnit.MILLISECONDS);
 
         TimeUnit.MILLISECONDS.sleep(100);

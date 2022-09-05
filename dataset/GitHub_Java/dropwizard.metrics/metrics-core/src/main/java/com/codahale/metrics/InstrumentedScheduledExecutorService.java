@@ -3,24 +3,18 @@ package com.codahale.metrics;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * An {@link ScheduledExecutorService} that monitors the number of tasks submitted, running,
  * completed and also keeps a {@link Timer} for the task duration.
- * <p>
+ * <p/>
  * It will register the metrics using the given (or auto-generated) name as classifier, e.g:
  * "your-executor-service.submitted", "your-executor-service.running", etc.
  */
 public class InstrumentedScheduledExecutorService implements ScheduledExecutorService {
-    private static final AtomicLong NAME_COUNTER = new AtomicLong();
+    private static final AtomicLong nameCounter = new AtomicLong();
 
     private final ScheduledExecutorService delegate;
 
@@ -41,7 +35,7 @@ public class InstrumentedScheduledExecutorService implements ScheduledExecutorSe
      * @param registry {@link MetricRegistry} that will contain the metrics.
      */
     public InstrumentedScheduledExecutorService(ScheduledExecutorService delegate, MetricRegistry registry) {
-        this(delegate, registry, "instrumented-scheduled-executor-service-" + NAME_COUNTER.incrementAndGet());
+        this(delegate, registry, "instrumented-scheduled-executor-service-" + nameCounter.incrementAndGet());
     }
 
     /**
