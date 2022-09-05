@@ -22,7 +22,7 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Ordering;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
+import com.google.devtools.build.lib.actions.Action.MiddlemanType;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.shell.ShellUtils;
@@ -86,6 +86,10 @@ import javax.annotation.Nullable;
  * <li>A 'Fileset' special Artifact. This is a legacy type of Artifact and should not be used
  * by new rule implementations.
  * </ul>
+ * <p/>
+ * This class implements {@link Artifact}, and is modeled as an Artifact "containing" itself
+ * as an Artifact.
+ * <p/>
  * <p>This class is "theoretically" final; it should not be subclassed except by
  * {@link SpecialArtifact}.
  */
@@ -494,33 +498,6 @@ public class Artifact
   }
 
   /**
-   * For targets in external repositories, this returns the path the artifact live at in the
-   * runfiles tree. For local targets, it returns the rootRelativePath.
-   */
-  public final PathFragment getRunfilesPath() {
-    PathFragment relativePath = rootRelativePath;
-    if (relativePath.segmentCount() > 1
-        && relativePath.getSegment(0).equals(Label.EXTERNAL_PATH_PREFIX)) {
-      // Turn external/repo/foo into ../repo/foo.
-      relativePath = relativePath.relativeTo(Label.EXTERNAL_PATH_PREFIX);
-      relativePath = new PathFragment("..").getRelative(relativePath);
-    }
-    return relativePath;
-  }
-
-  @SkylarkCallable(
-      name = "short_path",
-      structField = true,
-      doc =
-          "The path of this file relative to its root. This excludes the aforementioned "
-              + "<i>root</i>, i.e. configuration-specific fragments of the path. This is also the "
-              + "path under which the file is mapped if it's in the runfiles of a binary."
-  )
-  public final String getRunfilesPathString() {
-    return getRunfilesPath().getPathString();
-  }
-
-  /**
    * Returns this.getExecPath().getPathString().
    */
   @Override
@@ -549,6 +526,14 @@ public class Artifact
     return ShellUtils.shellEscape(getExecPathString());
   }
 
+  @SkylarkCallable(
+    name = "short_path",
+    structField = true,
+    doc =
+        "The path of this file relative to its root. This excludes the aforementioned "
+            + "<i>root</i>, i.e. configuration-specific fragments of the path. This is also the "
+            + "path under which the file is mapped if it's in the runfiles of a binary."
+  )
   public final String getRootRelativePathString() {
     return getRootRelativePath().getPathString();
   }

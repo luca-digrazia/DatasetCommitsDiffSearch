@@ -131,7 +131,7 @@ public final class RuleContext extends TargetContext
      * Targets from FilesetEntry.files, or null if the user omitted it.
      */
     @Nullable
-    public ImmutableList<TransitiveInfoCollection> getFiles() {
+    public List<TransitiveInfoCollection> getFiles() {
       return files;
     }
   }
@@ -584,7 +584,8 @@ public final class RuleContext extends TargetContext
   public List<? extends TransitiveInfoCollection> getPrerequisites(String attributeName,
       Mode mode) {
     Attribute attributeDefinition = getAttribute(attributeName);
-    if ((mode == Mode.TARGET) && (attributeDefinition.hasSplitConfigurationTransition())) {
+    if ((mode == Mode.TARGET)
+        && (attributeDefinition.getConfigurationTransition() instanceof SplitTransition)) {
       // TODO(bazel-team): If you request a split-configured attribute in the target configuration,
       // we return only the list of configured targets for the first architecture; this is for
       // backwards compatibility with existing code in cases where the call to getPrerequisites is
@@ -616,7 +617,8 @@ public final class RuleContext extends TargetContext
     checkAttribute(attributeName, Mode.SPLIT);
 
     Attribute attributeDefinition = getAttribute(attributeName);
-    SplitTransition<?> transition = attributeDefinition.getSplitTransition(rule);
+    SplitTransition<?> transition =
+        (SplitTransition<?>) attributeDefinition.getConfigurationTransition();
     List<BuildConfiguration> configurations =
         getConfiguration().getTransitions().getSplitConfigurations(transition);
     if (configurations.size() == 1) {
@@ -780,7 +782,7 @@ public final class RuleContext extends TargetContext
    * @param attributeName the name of the attribute to process
    * @return a list of strings containing the expanded and tokenized values for the attribute
    */
-  public ImmutableList<String> getTokenizedStringListAttr(String attributeName) {
+  public List<String> getTokenizedStringListAttr(String attributeName) {
     return getExpandedStringListAttr(attributeName, Tokenize.YES);
   }
 
@@ -791,7 +793,7 @@ public final class RuleContext extends TargetContext
    * @param attributeName the name of the attribute to process
    * @return a list of strings containing the processed values for the attribute
    */
-  public ImmutableList<String> getExpandedStringListAttr(String attributeName, Tokenize tokenize) {
+  public List<String> getExpandedStringListAttr(String attributeName, Tokenize tokenize) {
     if (!getRule().isAttrDefined(attributeName, Type.STRING_LIST)) {
       // TODO(bazel-team): This should be an error.
       return ImmutableList.of();
@@ -967,7 +969,7 @@ public final class RuleContext extends TargetContext
             + " is not configured for the data configuration");
       }
     } else if (mode == Mode.SPLIT) {
-      if (!(attributeDefinition.hasSplitConfigurationTransition())) {
+      if (!(attributeDefinition.getConfigurationTransition() instanceof SplitTransition)) {
         throw new IllegalStateException(getRule().getLocation() + ": "
             + getRuleClassNameForLogging() + " attribute " + attributeName
             + " is not configured for a split transition");
@@ -996,7 +998,7 @@ public final class RuleContext extends TargetContext
       return Mode.TARGET;
     } else if (attributeDefinition.getConfigurationTransition() == ConfigurationTransition.DATA) {
       return Mode.DATA;
-    } else if (attributeDefinition.hasSplitConfigurationTransition()) {
+    } else if (attributeDefinition.getConfigurationTransition() instanceof SplitTransition) {
       return Mode.SPLIT;
     }
     throw new IllegalStateException(getRule().getLocation() + ": "

@@ -285,7 +285,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     ensureTargetsVisited(buildOptions.getAllLabels().values());
     skyframeExecutor.invalidateConfigurationCollection();
     return skyframeExecutor.createConfigurations(reporter, configurationFactory, buildOptions,
-        ImmutableSet.<String>of(), false);
+        directories, ImmutableSet.<String>of(), false);
   }
 
   protected Target getTarget(String label)
