@@ -25,41 +25,25 @@ import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.flags.CommandNameCache;
 import com.google.devtools.build.lib.flags.InvocationPolicyEnforcer;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
-import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
-import java.io.ByteArrayOutputStream;
-import java.util.Arrays;
-import java.util.List;
+
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.io.ByteArrayOutputStream;
+import java.util.List;
+
 @RunWith(JUnit4.class)
 public class InvocationPolicyEnforcerTest {
 
   public static final String STRING_FLAG_DEFAULT = "test string default";
 
-  /** Test converter that splits a string by commas to produce a list. */
-  public static class ToListConverter implements Converter<List<String>> {
-
-    public ToListConverter() {}
-
-    @Override
-    public List<String> convert(String input) throws OptionsParsingException {
-      return Arrays.asList(input.split(","));
-    }
-
-    @Override
-    public String getTypeDescription() {
-      return "a list of strings";
-    }
-  }
-  
   public static class TestOptions extends OptionsBase {
 
     /*
@@ -78,18 +62,6 @@ public class InvocationPolicyEnforcerTest {
         defaultValue = "", // default value is ignored when allowMultiple = true.
         allowMultiple = true)
     public List<String> testMultipleString;
-
-    /*
-     * Flags with converters that return lists
-     */
-
-    @Option(
-      name = "test_list_converters",
-      defaultValue = "",
-      allowMultiple = true,
-      converter = ToListConverter.class
-    )
-    public List<String> testListConverters;
 
     /*
      * Expansion flags
@@ -785,73 +757,6 @@ public class InvocationPolicyEnforcerTest {
     }
   }
 
-  @Test
-  public void testAllowValuesSetsNewValue() throws Exception {
-    InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder.addFlagPoliciesBuilder()
-        .setFlagName("test_string")
-        .getAllowValuesBuilder()
-            .addAllowedValues("foo")
-            .addAllowedValues("bar")
-            .setNewValue("foo");
-
-    InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=baz");
-
-    TestOptions testOptions = getTestOptions();
-    assertEquals("baz", testOptions.testString);
-
-    enforcer.enforce(parser, "build");
-
-    testOptions = getTestOptions();
-    assertEquals("foo", testOptions.testString);
-  }
-
-  @Test
-  public void testAllowValuesSetsDefaultValue() throws Exception {
-    InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder.addFlagPoliciesBuilder()
-        .setFlagName("test_string")
-        .getAllowValuesBuilder()
-            .addAllowedValues("foo")
-            .addAllowedValues(STRING_FLAG_DEFAULT)
-            .getUseDefaultBuilder();
-
-    InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=bar");
-
-    TestOptions testOptions = getTestOptions();
-    assertEquals("bar", testOptions.testString);
-
-    enforcer.enforce(parser, "build");
-
-    testOptions = getTestOptions();
-    assertEquals(STRING_FLAG_DEFAULT, testOptions.testString);
-  }
-
-  @Test
-  public void testAllowValuesSetsDefaultValueForRepeatableFlag() throws Exception {
-    InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder.addFlagPoliciesBuilder()
-        .setFlagName("test_multiple_string")
-        .getAllowValuesBuilder()
-            .addAllowedValues("foo")
-            .addAllowedValues("bar")
-            .getUseDefaultBuilder();
-
-    InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_multiple_string=foo", "--test_multiple_string=baz");
-
-    TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testMultipleString).containsExactly("foo", "baz").inOrder();
-
-    enforcer.enforce(parser, "build");
-
-    testOptions = getTestOptions();
-    // Default value for repeatable flags is always empty.
-    assertThat(testOptions.testMultipleString).isEmpty();
-  }
-  
   /**
    * Tests that AllowValues sets its default value when the user doesn't provide a value and the
    * flag's default value is disallowed.
@@ -865,7 +770,7 @@ public class InvocationPolicyEnforcerTest {
             // default value from flag's definition is not allowed
             .addAllowedValues("foo")
             .addAllowedValues("bar")
-            .setNewValue("new default");
+            .setNewDefaultValue("new default");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
 
@@ -905,31 +810,6 @@ public class InvocationPolicyEnforcerTest {
     }
   }
 
-  @Test
-  public void testAllowValuesDisallowsListConverterFlagValues() throws Exception {
-    InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
-        .setFlagName("test_list_converters")
-        .getAllowValuesBuilder()
-        .addAllowedValues("a");
-
-    InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_list_converters=a,b,c");
-
-    TestOptions testOptions = getTestOptions();
-    assertEquals(Arrays.asList("a", "b", "c"), testOptions.testListConverters);
-
-    try {
-      enforcer.enforce(parser, "build");
-      fail();
-    } catch (OptionsParsingException e) {
-      assertThat(e.getMessage())
-          .contains(
-              "Flag value 'b' for flag 'test_list_converters' is not allowed by invocation policy");
-    }
-  }
-  
   /*************************************************************************************************
    * Tests for DisallowValues
    ************************************************************************************************/
@@ -1006,98 +886,13 @@ public class InvocationPolicyEnforcerTest {
   }
 
   @Test
-  public void testDisallowValuesSetsNewValue() throws Exception {
-    InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder.addFlagPoliciesBuilder()
-        .setFlagName("test_string")
-        .getDisallowValuesBuilder()
-            .addDisallowedValues("user value")
-            .setNewValue("baz");
-
-    InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=user value");
-
-    TestOptions testOptions = getTestOptions();
-    assertEquals("user value", testOptions.testString);
-
-    enforcer.enforce(parser, "build");
-
-    // Should now be "baz" because the policy forces disallowed values to "baz"
-    testOptions = getTestOptions();
-    assertEquals("baz", testOptions.testString);
-  }
-
-  @Test
-  public void testDisallowValuesSetsDefaultValue() throws Exception {
-    InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder.addFlagPoliciesBuilder()
-        .setFlagName("test_string")
-        .getDisallowValuesBuilder()
-            .addDisallowedValues("user value")
-            .getUseDefaultBuilder();
-
-    InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_string=user value");
-
-    TestOptions testOptions = getTestOptions();
-    assertEquals("user value", testOptions.testString);
-
-    enforcer.enforce(parser, "build");
-
-    testOptions = getTestOptions();
-    assertEquals(STRING_FLAG_DEFAULT, testOptions.testString);
-  }
-
-  @Test
-  public void testDisallowValuesSetsDefaultValueForRepeatableFlag() throws Exception {
-    InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder.addFlagPoliciesBuilder()
-        .setFlagName("test_multiple_string")
-        .getDisallowValuesBuilder()
-            .addDisallowedValues("user value")
-            .getUseDefaultBuilder();
-
-    InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_multiple_string=user value");
-
-    TestOptions testOptions = getTestOptions();
-    assertThat(testOptions.testMultipleString).containsExactly("user value");
-
-    enforcer.enforce(parser, "build");
-
-    testOptions = getTestOptions();
-    // Default for repeatable flags is always empty.
-    assertThat(testOptions.testMultipleString).isEmpty();
-  }
-
-  @Test
-  public void testDisallowValuesRaisesErrorIfDefaultIsDisallowedAndSetsUseDefault()
-      throws Exception {
+  public void testDisallowValuesSetsNewDefaultWhenFlagDefaultIsDisallowed() throws Exception {
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
     invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("test_string")
         .getDisallowValuesBuilder()
             .addDisallowedValues(STRING_FLAG_DEFAULT)
-            .getUseDefaultBuilder();
-
-    InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-
-    try {
-      enforcer.enforce(parser, "build");
-      fail();
-    } catch (OptionsParsingException e) {
-      assertThat(e.getMessage()).contains("but also specifies to use the default value");
-    }
-  }
-  
-  @Test
-  public void testDisallowValuesSetsNewValueWhenDefaultIsDisallowed() throws Exception {
-    InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder.addFlagPoliciesBuilder()
-        .setFlagName("test_string")
-        .getDisallowValuesBuilder()
-            .addDisallowedValues(STRING_FLAG_DEFAULT)
-            .setNewValue("baz");
+            .setNewDefaultValue("baz");
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
 
@@ -1132,31 +927,6 @@ public class InvocationPolicyEnforcerTest {
       fail();
     } catch (OptionsParsingException e) {
       // expected.
-    }
-  }
-
-  @Test
-  public void testDisallowValuesDisallowsListConverterFlag() throws Exception {
-    InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
-        .setFlagName("test_list_converters")
-        .getDisallowValuesBuilder()
-        .addDisallowedValues("a");
-
-    InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
-    parser.parse("--test_list_converters=a,b,c");
-
-    TestOptions testOptions = getTestOptions();
-    assertEquals(Arrays.asList("a", "b", "c"), testOptions.testListConverters);
-
-    try {
-      enforcer.enforce(parser, "build");
-      fail();
-    } catch (OptionsParsingException e) {
-      assertThat(e.getMessage())
-          .contains(
-              "Flag value 'a' for flag 'test_list_converters' is not allowed by invocation policy");
     }
   }
   

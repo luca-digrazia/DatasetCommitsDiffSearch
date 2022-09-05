@@ -25,6 +25,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Option {
+
   /**
    * The name of the option ("--name").
    */
@@ -39,12 +40,6 @@ public @interface Option {
    * A help string for the usage information.
    */
   String help() default "";
-
-  /**
-   * A short text string to describe the type of the expected value. E.g., <code>regex</code>. This
-   * is ignored for boolean, tristate, boolean_or_enum, and void options.
-   */
-  String valueHelp() default "";
 
   /**
    * The default value for the option. This method should only be invoked
@@ -77,33 +72,6 @@ public @interface Option {
    * A string describing the category of options that this belongs to. {@link
    * OptionsParser#describeOptions} prints options of the same category grouped
    * together.
-   *
-   * <p>There are three special category values:
-   * <ul>
-   * <li>{@code "undocumented"}: options which are useful for (some subset of) users, but not meant
-   *     to be publicly advertised. For example, experimental options which are only meant to be
-   *     used by specific testers or team members, but which should otherwise be treated normally.
-   *     These options will not be listed in the usage info displayed for the {@code --help} option.
-   *     They are otherwise normal - {@link OptionsParser.UnparsedOptionValueDescription#isHidden()}
-   *     returns {@code false} for them, and they can be parsed normally from the command line or
-   *     RC files.
-   * <li>{@code "hidden"}: options which users should not pass or know about, but which are used
-   *     by the program (e.g., communication between a command-line client and a backend server).
-   *     Like {@code "undocumented"} options, these options will not be listed in the usage info
-   *     displayed for the {@code --help} option. However, in addition to this, calling
-   *     {@link OptionsParser.UnparsedOptionValueDescription#isHidden()} on these options will
-   *     return {@code true} - for example, this can be checked to strip out such secret options
-   *     when logging or otherwise reporting the command line to the user. This category does not
-   *     affect the option in any other way; it can still be parsed normally from the command line
-   *     or an RC file.
-   * <li>{@code "internal"}: options which are purely for internal use within the JVM, and should
-   *     never be shown to the user, nor ever need to be parsed by the options parser.
-   *     Like {@code "hidden"} options, these options will not be listed in the usage info displayed
-   *     for the --help option, and are considered hidden by
-   *     {@link OptionsParser.UnparsedOptionValueDescription#isHidden()}. Unlike those, this type of
-   *     option cannot be parsed by any call to {@link OptionsParser#parse} - it will be treated as
-   *     if it was not defined.
-   * </ul>
    */
   String category() default "misc";
 

@@ -18,6 +18,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Functions;
 import com.google.common.base.Strings;
 import com.google.common.base.Verify;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.common.io.BaseEncoding;
@@ -33,13 +34,14 @@ import com.google.devtools.common.options.OptionsParser.OptionValueDescription;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.TextFormat;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.logging.Level;
 import java.util.logging.Logger;
+
 import javax.annotation.Nullable;
 
 /**
@@ -100,10 +102,6 @@ public final class InvocationPolicyEnforcer {
    */
   public InvocationPolicyEnforcer(@Nullable InvocationPolicy invocationPolicy) {
     this.invocationPolicy = invocationPolicy;
-  }
-
-  public InvocationPolicy getInvocationPolicy() {
-    return invocationPolicy;
   }
 
   /**
@@ -177,7 +175,7 @@ public final class InvocationPolicyEnforcer {
           break;
 
         case USE_DEFAULT:
-          applyUseDefaultOperation(parser, "UseDefault", flagName);
+          applyUseDefaultOperation(parser, flagName);
           break;
 
         case ALLOW_VALUES:
@@ -185,8 +183,7 @@ public final class InvocationPolicyEnforcer {
           FilterValueOperation.ALLOW_VALUE_OPERATION.apply(
               parser,
               allowValues.getAllowedValuesList(),
-              allowValues.hasNewValue() ? allowValues.getNewValue() : null,
-              allowValues.hasUseDefault(),
+              allowValues.hasNewDefaultValue() ? allowValues.getNewDefaultValue() : null,
               flagName,
               valueDescription,
               optionDescription);
@@ -197,8 +194,7 @@ public final class InvocationPolicyEnforcer {
           FilterValueOperation.DISALLOW_VALUE_OPERATION.apply(
               parser,
               disallowValues.getDisallowedValuesList(),
-              disallowValues.hasNewValue() ? disallowValues.getNewValue() : null,
-              disallowValues.hasUseDefault(),
+              disallowValues.hasNewDefaultValue() ? disallowValues.getNewDefaultValue() : null,
               flagName,
               valueDescription,
               optionDescription);
@@ -217,16 +213,6 @@ public final class InvocationPolicyEnforcer {
           break;
       }
     }
-  }
-
-  private static void logInApplySetValueOperation(String formattingString, Object... objects) {
-    // Finding the caller here is relatively expensive and shows up in profiling, so provide it
-    // manually.
-    log.logp(
-        Level.INFO,
-        "InvocationPolicyEnforcer",
-        "applySetValueOperation",
-        String.format(formattingString, objects));
   }
 
   private static void applySetValueOperation(
@@ -259,13 +245,14 @@ public final class InvocationPolicyEnforcer {
     if (setValue.getOverridable() && valueDescription != null) {
       // The user set the value for the flag but the flag policy is overridable, so keep the user's
       // value.
-      logInApplySetValueOperation(
-          "Keeping value '%s' from source '%s' for flag '%s' "
-              + "because the invocation policy specifying the value(s) '%s' is overridable",
-          valueDescription.getValue(),
-          valueDescription.getSource(),
-          flagName,
-          setValue.getFlagValueList());
+      log.info(
+          String.format(
+              "Keeping value '%s' from source '%s' for flag '%s' "
+                  + "because the invocation policy specifying the value(s) '%s' is overridable",
+              valueDescription.getValue(),
+              valueDescription.getSource(),
+              flagName,
+              setValue.getFlagValueList()));
     } else {
 
       if (!setValue.getAppend()) {
@@ -276,23 +263,30 @@ public final class InvocationPolicyEnforcer {
       // Set all the flag values from the policy.
       for (String flagValue : setValue.getFlagValueList()) {
         if (valueDescription == null) {
-          logInApplySetValueOperation(
-              "Setting value for flag '%s' from invocation "
-                  + "policy to '%s', overriding the default value '%s'",
-              flagName, flagValue, optionDescription.getDefaultValue());
+          log.info(
+              String.format(
+                  "Setting value for flag '%s' from invocation "
+                      + "policy to '%s', overriding the default value '%s'",
+                  flagName,
+                  flagValue,
+                  optionDescription.getDefaultValue()));
         } else {
-          logInApplySetValueOperation(
-              "Setting value for flag '%s' from invocation "
-                  + "policy to '%s', overriding value '%s' from '%s'",
-              flagName, flagValue, valueDescription.getValue(), valueDescription.getSource());
+          log.info(
+              String.format(
+                  "Setting value for flag '%s' from invocation "
+                      + "policy to '%s', overriding value '%s' from '%s'",
+                  flagName,
+                  flagValue,
+                  valueDescription.getValue(),
+                  valueDescription.getSource()));
         }
         setFlagValue(parser, flagName, flagValue);
       }
     }
   }
 
-  private static void applyUseDefaultOperation(
-      OptionsParser parser, String policyType, String flagName) throws OptionsParsingException {
+  private static void applyUseDefaultOperation(OptionsParser parser, String flagName)
+      throws OptionsParsingException {
 
     Map<String, OptionValueDescription> clearedValues = parser.clearValue(flagName);
     for (Entry<String, OptionValueDescription> clearedValue : clearedValues.entrySet()) {
@@ -308,10 +302,9 @@ public final class InvocationPolicyEnforcer {
       log.info(
           String.format(
               "Using default value '%s' for flag '%s' as "
-                  + "specified by %s invocation policy, overriding original value '%s' from '%s'",
+                  + "specified by invocation policy, overriding original value '%s' from '%s'",
               clearedFlagDefaultValue,
               clearedFlagName,
-              policyType,
               originalValue,
               source));
     }
@@ -325,7 +318,7 @@ public final class InvocationPolicyEnforcer {
     private static final FilterValueOperation ALLOW_VALUE_OPERATION =
         new FilterValueOperation("Allow") {
           @Override
-          boolean isFlagValueAllowed(Set<Object> convertedPolicyValues, Object value) {
+          boolean filter(Set<Object> convertedPolicyValues, Object value) {
             return convertedPolicyValues.contains(value);
           }
         };
@@ -333,7 +326,7 @@ public final class InvocationPolicyEnforcer {
     private static final FilterValueOperation DISALLOW_VALUE_OPERATION =
         new FilterValueOperation("Disallow") {
           @Override
-          boolean isFlagValueAllowed(Set<Object> convertedPolicyValues, Object value) {
+          boolean filter(Set<Object> convertedPolicyValues, Object value) {
             // In a disallow operation, the values that the flag policy specifies are not allowed,
             // so the value is allowed if the set of policy values does not contain the current
             // flag value.
@@ -354,13 +347,12 @@ public final class InvocationPolicyEnforcer {
      * @param value The user value of the flag.
      * @return True if the value should be allowed, false if it should not.
      */
-    abstract boolean isFlagValueAllowed(Set<Object> convertedPolicyValues, Object value);
+    abstract boolean filter(Set<Object> convertedPolicyValues, Object value);
 
     void apply(
         OptionsParser parser,
         List<String> policyValues,
-        String newValue,
-        boolean useDefault,
+        String newDefaultValue,
         String flagName,
         OptionValueDescription valueDescription,
         OptionDescription optionDescription)
@@ -376,25 +368,6 @@ public final class InvocationPolicyEnforcer {
         convertedPolicyValues.add(optionDescription.getConverter().convert(value));
       }
 
-      // Check that if the default value of the flag is disallowed by the policy, that the policy
-      // does not also set use_default. Otherwise the default value would will still be set if the
-      // user uses a disallowed value. This doesn't apply to repeatable flags since the default
-      // value for repeatable flags is always the empty list.
-      if (!optionDescription.getAllowMultiple()) {
-
-        boolean defaultValueAllowed =
-            isFlagValueAllowed(convertedPolicyValues, optionDescription.getDefaultValue());
-        if (!defaultValueAllowed && useDefault) {
-          throw new OptionsParsingException(
-              String.format(
-                  "%sValues policy disallows the default value '%s' for flag '%s' but also "
-                      + "specifies to use the default value",
-                  policyType,
-                  optionDescription.getDefaultValue(),
-                  flagName));
-        }
-      }
-
       if (valueDescription == null) {
         // Nothing has set the value yet, so check that the default value from the flag's
         // definition is allowed. The else case below (i.e. valueDescription is not null) checks for
@@ -404,52 +377,45 @@ public final class InvocationPolicyEnforcer {
         checkDefaultValue(
             parser,
             policyValues,
-            newValue,
+            newDefaultValue,
             flagName,
             optionDescription,
             convertedPolicyValues);
       } else {
         checkUserValue(
-            parser,
-            policyValues,
-            newValue,
-            useDefault,
-            flagName,
-            valueDescription,
-            optionDescription,
-            convertedPolicyValues);
+            policyValues, flagName, valueDescription, optionDescription, convertedPolicyValues);
       }
     }
 
     void checkDefaultValue(
         OptionsParser parser,
         List<String> policyValues,
-        String newValue,
+        String newDefaultValue,
         String flagName,
         OptionDescription optionDescription,
         Set<Object> convertedPolicyValues)
         throws OptionsParsingException {
 
-      if (!isFlagValueAllowed(convertedPolicyValues, optionDescription.getDefaultValue())) {
-        if (newValue != null) {
+      if (!filter(convertedPolicyValues, optionDescription.getDefaultValue())) {
+        if (newDefaultValue != null) {
           // Use the default value from the policy.
           log.info(
               String.format(
-                  "Overriding default value '%s' for flag '%s' with value '%s' "
+                  "Overriding default value '%s' for flag '%s' with new default value '%s' "
                       + "specified by invocation policy. %sed values are: %s",
                   optionDescription.getDefaultValue(),
                   flagName,
-                  newValue,
+                  newDefaultValue,
                   policyType,
                   policyValues));
           parser.clearValue(flagName);
-          setFlagValue(parser, flagName, newValue);
+          setFlagValue(parser, flagName, newDefaultValue);
         } else {
-          // The operation disallows the default value, but doesn't supply a new value.
+          // The operation disallows the default value, but doesn't supply its own default.
           throw new OptionsParsingException(
               String.format(
                   "Default flag value '%s' for flag '%s' is not allowed by invocation policy, but "
-                      + "the policy does not provide a new value. "
+                      + "the policy does not provide a new default value. "
                       + "%sed values are: %s",
                   optionDescription.getDefaultValue(),
                   flagName,
@@ -460,64 +426,34 @@ public final class InvocationPolicyEnforcer {
     }
 
     void checkUserValue(
-        OptionsParser parser,
         List<String> policyValues,
-        String newValue,
-        boolean useDefault,
         String flagName,
         OptionValueDescription valueDescription,
         OptionDescription optionDescription,
         Set<Object> convertedPolicyValues)
         throws OptionsParsingException {
-      
+
+      // Get the option values: there might be one of them or a list of them, so convert everything
+      // to a list (possibly of just the one value).
+      List<?> optionValues;
       if (optionDescription.getAllowMultiple()) {
         // allowMultiple requires that the type of the option be List<T>, so cast from Object
         // to List<?>.
-        List<?> optionValues = (List<?>) valueDescription.getValue();
-        for (Object value : optionValues) {
-          if (!isFlagValueAllowed(convertedPolicyValues, value)) {
-            if (useDefault) {
-              applyUseDefaultOperation(parser, policyType + "Values", flagName);
-            } else {
-              throw new OptionsParsingException(
-                  String.format(
-                      "Flag value '%s' for flag '%s' is not allowed by invocation policy. "
-                          + "%sed values are: %s",
-                      value,
-                      flagName,
-                      policyType,
-                      policyValues));
-            }
-          }
-        }
-
+        optionValues = (List<?>) valueDescription.getValue();
       } else {
+        optionValues = ImmutableList.of(valueDescription.getValue());
+      }
 
-        if (!isFlagValueAllowed(convertedPolicyValues, valueDescription.getValue())) {
-          if (newValue != null) {
-            log.info(
-                String.format(
-                    "Overriding disallowed value '%s' for flag '%s' with value '%s' "
-                        + "specified by invocation policy. %sed values are: %s",
-                    valueDescription.getValue(),
-                    flagName,
-                    newValue,
-                    policyType,
-                    policyValues));
-            parser.clearValue(flagName);
-            setFlagValue(parser, flagName, newValue);
-          } else if (useDefault) {
-            applyUseDefaultOperation(parser, policyType + "Values", flagName);
-          } else {
-            throw new OptionsParsingException(
-                String.format(
-                    "Flag value '%s' for flag '%s' is not allowed by invocation policy and the "
-                        + "policy does not specify a new value. %sed values are: %s",
-                    valueDescription.getValue(),
-                    flagName,
-                    policyType,
-                    policyValues));
-          }
+      for (Object value : optionValues) {
+        if (!filter(convertedPolicyValues, value)) {
+          throw new OptionsParsingException(
+              String.format(
+                  "Flag value '%s' for flag '%s' is not allowed by invocation policy. "
+                      + "%sed values are: %s",
+                  value,
+                  flagName,
+                  policyType,
+                  policyValues));
         }
       }
     }
