@@ -66,7 +66,6 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
   private final RemoteActionCache remoteActionCache;
   private final RemoteWorkExecutor remoteWorkExecutor;
   private final boolean verboseFailures;
-  private final boolean remoteAcceptCached;
 
   RemoteSpawnStrategy(
       Map<String, String> clientEnv,
@@ -81,7 +80,6 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
     this.verboseFailures = verboseFailures;
     this.remoteActionCache = actionCache;
     this.remoteWorkExecutor = workExecutor;
-    this.remoteAcceptCached = options.remoteAcceptCached;
   }
 
   private Action buildAction(
@@ -197,9 +195,8 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
 
       // Look up action cache, and reuse the action output if it is found.
       actionKey = ContentDigests.computeActionKey(action);
-      ActionResult result = this.remoteAcceptCached
-          ? remoteActionCache.getCachedActionResult(actionKey) : null;
-      boolean acceptCachedResult = this.remoteAcceptCached;
+      ActionResult result = remoteActionCache.getCachedActionResult(actionKey);
+      boolean acceptCached = true;
       if (result != null) {
         // We don't cache failed actions, so we know the outputs exist.
         // For now, download all outputs locally; in the future, we can reuse the digests to
@@ -208,7 +205,7 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
           remoteActionCache.downloadAllResults(result, execRoot);
           return;
         } catch (CacheNotFoundException e) {
-          acceptCachedResult = false; // Retry the action remotely and invalidate the results.
+          acceptCached = false; // Retry the action remotely and invalidate the results.
         }
       }
 
@@ -225,7 +222,7 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
       ExecuteRequest.Builder request =
           ExecuteRequest.newBuilder()
               .setAction(action)
-              .setAcceptCached(acceptCachedResult)
+              .setAcceptCached(acceptCached)
               .setTotalInputFileCount(inputs.size())
               .setTimeoutMillis(1000 * Spawns.getTimeoutSeconds(spawn, 120));
       // TODO(olaola): set sensible local and remote timouts.
