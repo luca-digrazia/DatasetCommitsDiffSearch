@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.protobuf.ByteString;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -72,7 +71,7 @@ public class FileAndMetadataCache implements ActionInputFileCache, MetadataHandl
   /** This should never be read directly. Use {@link #getInputFileArtifactValue} instead. */
   private final Map<Artifact, FileArtifactValue> inputArtifactData;
   private final Map<Artifact, Collection<Artifact>> expandedInputMiddlemen;
-  private final File execRoot;
+  private final Path execRoot;
   private final Map<ByteString, Artifact> reverseMap = new ConcurrentHashMap<>();
   private final ConcurrentMap<Artifact, FileValue> outputArtifactData =
       new ConcurrentHashMap<>();
@@ -88,7 +87,7 @@ public class FileAndMetadataCache implements ActionInputFileCache, MetadataHandl
   private static final Interner<ByteString> BYTE_INTERNER = Interners.newWeakInterner();
 
   public FileAndMetadataCache(Map<Artifact, FileArtifactValue> inputArtifactData,
-      Map<Artifact, Collection<Artifact>> expandedInputMiddlemen, File execRoot,
+      Map<Artifact, Collection<Artifact>> expandedInputMiddlemen, Path execRoot,
       Iterable<Artifact> outputs, @Nullable SkyFunction.Environment env,
       TimestampGranularityMonitor tsgm) {
     this.inputArtifactData = Preconditions.checkNotNull(inputArtifactData);
@@ -109,8 +108,7 @@ public class FileAndMetadataCache implements ActionInputFileCache, MetadataHandl
   }
 
   private static Metadata metadataFromValue(FileArtifactValue value) throws FileNotFoundException {
-    if (value == FileArtifactValue.MISSING_FILE_MARKER
-        || value == FileArtifactValue.OMITTED_FILE_MARKER) {
+    if (value == FileArtifactValue.MISSING_FILE_MARKER) {
       throw new FileNotFoundException();
     }
     // If the file is empty or a directory, we need to return the mtime because the action cache
@@ -411,13 +409,16 @@ public class FileAndMetadataCache implements ActionInputFileCache, MetadataHandl
 
   @Nullable
   @Override
-  public File getFileFromDigest(ByteString digest) throws IOException {
-    Artifact artifact = reverseMap.get(digest);
-    if (artifact != null) {
-      String relPath = artifact.getExecPathString();
-      return relPath.startsWith("/") ? new File(relPath) : new File(execRoot, relPath);
+  public Artifact getInputFromDigest(ByteString digest) throws IOException {
+    return reverseMap.get(digest);
+  }
+
+  @Override
+  public Path getInputPath(ActionInput input) {
+    if (input instanceof Artifact) {
+      return ((Artifact) input).getPath();
     }
-    return null;
+    return execRoot.getRelative(input.getExecPathString());
   }
 
   @Nullable
