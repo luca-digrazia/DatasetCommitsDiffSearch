@@ -14,10 +14,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * 默认权限权限定义
- *
- * @author zhouhao
- * @since 3.0
+ * Created by zhouhao on 2017/8/13.
  */
 public class DefaultBasicAuthorizeDefinition implements AuthorizeDefinition {
     private boolean dataAccessControl;
