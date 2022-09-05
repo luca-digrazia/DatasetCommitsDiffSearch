@@ -32,13 +32,11 @@ public class DisplayMetricsInfo implements Parcelable {
     private float density;
     private int densityDpi;
     private float scaledDensity;
-    private float xdpi;
 
-    public DisplayMetricsInfo(float density, int densityDpi, float scaledDensity, float xdpi) {
+    public DisplayMetricsInfo(float density, int densityDpi, float scaledDensity) {
         this.density = density;
         this.densityDpi = densityDpi;
         this.scaledDensity = scaledDensity;
-        this.xdpi = xdpi;
     }
 
     public float getDensity() {
@@ -65,14 +63,6 @@ public class DisplayMetricsInfo implements Parcelable {
         this.scaledDensity = scaledDensity;
     }
 
-    public float getXdpi() {
-        return xdpi;
-    }
-
-    public void setXdpi(float xdpi) {
-        this.xdpi = xdpi;
-    }
-
     @Override
     public int describeContents() {
         return 0;
@@ -83,14 +73,12 @@ public class DisplayMetricsInfo implements Parcelable {
         dest.writeFloat(this.density);
         dest.writeInt(this.densityDpi);
         dest.writeFloat(this.scaledDensity);
-        dest.writeFloat(this.xdpi);
     }
 
     protected DisplayMetricsInfo(Parcel in) {
         this.density = in.readFloat();
         this.densityDpi = in.readInt();
         this.scaledDensity = in.readFloat();
-        this.xdpi = in.readFloat();
     }
 
     public static final Creator<DisplayMetricsInfo> CREATOR = new Creator<DisplayMetricsInfo>() {
@@ -111,7 +99,6 @@ public class DisplayMetricsInfo implements Parcelable {
                 "density=" + density +
                 ", densityDpi=" + densityDpi +
                 ", scaledDensity=" + scaledDensity +
-                ", xdpi=" + xdpi +
                 '}';
     }
 }
