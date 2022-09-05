@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019 http://www.hswebframework.org
+ *  Copyright 2016 http://www.hswebframework.org
  *  
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ public interface AuthorizationSettingEntity extends GenericEntity<String> {
     |                属性名常量                |
     ===========================================*/
     /**
-     * 设置类型(维度),如: role
+     * 设置类型,如: role
      *
      * @see org.hswebframework.web.service.authorization.AuthorizationSettingTypeSupplier
      */
