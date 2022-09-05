@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgs.ClasspathType;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
-import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -223,7 +222,8 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
   private boolean shouldInstrumentJar() {
     // TODO(bazel-team): What about source jars?
     return getConfiguration().isCodeCoverageEnabled() && attributes.hasSourceFiles() &&
-        InstrumentedFilesCollector.shouldIncludeLocalSources(getRuleContext());
+        getConfiguration().getInstrumentationFilter().isIncluded(
+            getRuleContext().getLabel().toString());
   }
 
   private boolean shouldUseHeaderCompilation() {
@@ -340,34 +340,25 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
    */
   public void createGenJarAction(Artifact classJar, Artifact manifestProto,
       Artifact genClassJar) {
-    ImmutableList<String> jvmOpts =
-        ImmutableList.of("-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1", GENCLASS_MAX_MEMORY);
-    getRuleContext()
-        .registerAction(
-            new SpawnAction.Builder()
-                .addInput(manifestProto)
-                .addInput(classJar)
-                .addOutput(genClassJar)
-                .addTransitiveInputs(getHostJavabaseInputsNonStatic(getRuleContext()))
-                .setJarExecutable(
-                    getRuleContext()
-                        .getHostConfiguration()
-                        .getFragment(Jvm.class)
-                        .getJavaExecutable(),
-                    getGenClassJar(ruleContext),
-                    jvmOpts)
-                .setCommandLine(
-                    CustomCommandLine.builder()
-                        .addExecPath("--manifest_proto", manifestProto)
-                        .addExecPath("--class_jar", classJar)
-                        .addExecPath("--output_jar", genClassJar)
-                        .add("--temp_dir")
-                        .addPath(tempDir(genClassJar))
-                        .build())
-                .useParameterFile(ParameterFileType.SHELL_QUOTED)
-                .setProgressMessage("Building genclass jar " + genClassJar.prettyPrint())
-                .setMnemonic("JavaSourceJar")
-                .build(getRuleContext()));
+    getRuleContext().registerAction(new SpawnAction.Builder()
+      .addInput(manifestProto)
+      .addInput(classJar)
+      .addOutput(genClassJar)
+      .addTransitiveInputs(getHostJavabaseInputsNonStatic(getRuleContext()))
+      .setJarExecutable(
+          getRuleContext().getHostConfiguration().getFragment(Jvm.class).getJavaExecutable(),
+          getGenClassJar(ruleContext),
+          ImmutableList.of("-client", GENCLASS_MAX_MEMORY))
+      .setCommandLine(CustomCommandLine.builder()
+          .addExecPath("--manifest_proto", manifestProto)
+          .addExecPath("--class_jar", classJar)
+          .addExecPath("--output_jar", genClassJar)
+          .add("--temp_dir").addPath(tempDir(genClassJar))
+          .build())
+      .useParameterFile(ParameterFileType.SHELL_QUOTED)
+      .setProgressMessage("Building genclass jar " + genClassJar.prettyPrint())
+      .setMnemonic("JavaSourceJar")
+      .build(getRuleContext()));
   }
 
   /** Returns the GenClass deploy jar Artifact. */
