@@ -51,6 +51,7 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionContext.Reply;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.util.DependencySet;
@@ -507,6 +508,7 @@ public class CppCompileAction extends AbstractAction
       Collection<Artifact> usedModules = context.getUsedModules(usePic, initialResultSet);
       initialResultSet.addAll(usedModules);
       initialResult = initialResultSet;
+      this.overwrittenVariables = getOverwrittenVariables(usedModules);
     }
 
     this.additionalInputs = initialResult;
@@ -535,8 +537,7 @@ public class CppCompileAction extends AbstractAction
   @Override
   public Iterable<Artifact> getInputsWhenSkippingInputDiscovery() {
     if (useHeaderModules && cppConfiguration.getSkipUnusedModules()) {
-      this.additionalInputs = context.getTransitiveModules(usePic).toCollection();
-      return this.additionalInputs;
+      return context.getTransitiveModules(usePic);
     }
     return null;
   }
@@ -1039,6 +1040,12 @@ public class CppCompileAction extends AbstractAction
 
   @Override protected void setInputs(Iterable<Artifact> inputs) {
     super.setInputs(inputs);
+    // We need to update overwrittenVariables as those variables might e.g. contain references to
+    // module files that were determined to be unnecessary by input discovery. If we leave them in,
+    // they might lead to unavailable files if e.g. the action is recreated from cache. In addition
+    // to updating the variables here, we also need to update them when they actually change, e.g.
+    // in discoverInputs().
+    this.overwrittenVariables = getOverwrittenVariables(getInputs());
   }
 
   @Override
@@ -1143,7 +1150,11 @@ public class CppCompileAction extends AbstractAction
     // itself is fully determined by the input source files and module maps.
     // A better long-term solution would be to make the compiler to find them automatically and
     // never hand in the .pcm files explicitly on the command line in the first place.
-    f.addStrings(cppCompileCommandLine.getArgv(getInternalOutputFile(), null));
+    Variables overwrittenVariables = this.overwrittenVariables;
+    this.overwrittenVariables = getOverwrittenVariables(ImmutableList.<Artifact>of());
+    // TODO(djasper): Make getArgv() accept a variables parameter.
+    f.addStrings(getArgv());
+    this.overwrittenVariables = overwrittenVariables;
 
     /*
      * getArgv() above captures all changes which affect the compilation
@@ -1169,15 +1180,6 @@ public class CppCompileAction extends AbstractAction
   public void execute(
       ActionExecutionContext actionExecutionContext)
           throws ActionExecutionException, InterruptedException {
- 
-    if (useHeaderModules) {
-      // If modules pruning is used, modules will be supplied via additionalInputs, otherwise they
-      // are regular inputs.
-      Preconditions.checkNotNull(additionalInputs);
-      this.overwrittenVariables =
-          getOverwrittenVariables(shouldPruneModules ? additionalInputs : getInputs());
-    }
-
     Executor executor = actionExecutionContext.getExecutor();
     CppCompileActionContext.Reply reply;
     try {

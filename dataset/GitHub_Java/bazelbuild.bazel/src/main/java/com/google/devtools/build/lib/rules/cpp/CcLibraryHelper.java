@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.rules.cpp;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicates;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSetMultimap;
@@ -34,13 +33,11 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
-import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
@@ -872,7 +869,7 @@ public final class CcLibraryHelper {
     Preconditions.checkState(
         // 'cc_inc_library' rules do not compile, and thus are not affected by LIPO.
         ruleContext.getRule().getRuleClass().equals("cc_inc_library")
-            || ruleContext.isAttrDefined(":lipo_context_collector", BuildType.LABEL));
+        || ruleContext.getRule().isAttrDefined(":lipo_context_collector", BuildType.LABEL));
 
     if (checkDepsGenerateCpp) {
       for (LanguageDependentFragment dep :
@@ -1105,110 +1102,11 @@ public final class CcLibraryHelper {
         .addVariablesExtension(variablesExtensions);
   }
 
-  @Immutable
-  private static class PublicHeaders {
-    private final ImmutableList<Artifact> headers;
-    private final @Nullable PathFragment virtualIncludePath;
-
-    private PublicHeaders(ImmutableList<Artifact> headers, PathFragment virtualIncludePath) {
-      this.headers = headers;
-      this.virtualIncludePath = virtualIncludePath;
-    }
-
-    public ImmutableList<Artifact> getHeaders() {
-      return headers;
-    }
-
-    @Nullable
-    public PathFragment getVirtualIncludePath() {
-      return virtualIncludePath;
-    }
-  }
-
-  private PublicHeaders computePublicHeaders() {
-    if (!ruleContext.attributes().has("strip_include_prefix", Type.STRING)
-        || !ruleContext.attributes().has("include_prefix", Type.STRING)) {
-      return new PublicHeaders(ImmutableList.copyOf(publicHeaders), null);
-    }
-
-    PathFragment prefix =
-        ruleContext.attributes().isAttributeValueExplicitlySpecified("include_prefix")
-            ? new PathFragment(ruleContext.attributes().get("include_prefix", Type.STRING))
-            : null;
-
-    PathFragment stripPrefix;
-    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("strip_include_prefix")) {
-      stripPrefix = new PathFragment(
-          ruleContext.attributes().get("strip_include_prefix", Type.STRING));
-      if (stripPrefix.isAbsolute()) {
-        stripPrefix = ruleContext.getLabel().getPackageIdentifier().getRepository().getSourceRoot()
-            .getRelative(stripPrefix.toRelative());
-      } else {
-        stripPrefix = ruleContext.getPackageDirectory().getRelative(stripPrefix);
-      }
-    } else if (prefix != null) {
-      stripPrefix = ruleContext.getPackageDirectory();
-    } else {
-      stripPrefix = null;
-    }
-
-    if (stripPrefix == null && prefix == null) {
-      // Simple case, no magic needed
-      return new PublicHeaders(ImmutableList.copyOf(publicHeaders), null);
-    }
-
-    if (stripPrefix.containsUplevelReferences()) {
-      ruleContext.attributeError("strip_include_prefix",
-          "should not contain uplevel references");
-    }
-
-    if (prefix != null && prefix.containsUplevelReferences()) {
-      ruleContext.attributeError("include_prefix", "should not contain uplevel references");
-    }
-
-    if (prefix != null && prefix.isAbsolute()) {
-      ruleContext.attributeError("include_prefix", "should be a relative path");
-    }
-
-    if (ruleContext.hasErrors()) {
-      return new PublicHeaders(ImmutableList.<Artifact>of(), null);
-    }
-
-    ImmutableList.Builder<Artifact> virtualHeaders = ImmutableList.builder();
-
-    for (Artifact originalHeader : publicHeaders) {
-      if (!originalHeader.getRootRelativePath().startsWith(stripPrefix)) {
-        ruleContext.ruleError(String.format(
-            "header '%s' is not under the specified strip prefix '%s'",
-            originalHeader.getExecPathString(), stripPrefix.getPathString()));
-        continue;
-      }
-
-      PathFragment includePath = originalHeader.getRootRelativePath().relativeTo(stripPrefix);
-      if (prefix != null) {
-        includePath = prefix.getRelative(includePath);
-      }
-
-      Artifact virtualHeader = ruleContext.getUniqueDirectoryArtifact("_virtual_includes",
-          includePath, ruleContext.getBinOrGenfilesDirectory());
-      ruleContext.registerAction(new SymlinkAction(
-          ruleContext.getActionOwner(), originalHeader, virtualHeader,
-          "Symlinking virtual headers for " + ruleContext.getLabel()));
-      virtualHeaders.add(virtualHeader);
-    }
-
-    return new PublicHeaders(virtualHeaders.build(),
-        ruleContext.getBinOrGenfilesDirectory().getExecPath().getRelative(
-            ruleContext.getUniqueDirectory("_virtual_includes")));
-  }
-
   /**
    * Create context for cc compile action from generated inputs.
    */
   private CppCompilationContext initializeCppCompilationContext(
       CppModel model, boolean forInterface, boolean createModuleMapActions) {
-    PublicHeaders publicHeaders = computePublicHeaders();
-
     CppCompilationContext.Builder contextBuilder =
         new CppCompilationContext.Builder(ruleContext, forInterface);
 
@@ -1233,10 +1131,6 @@ public final class CcLibraryHelper {
       contextBuilder.addIncludeDir(includeDir);
     }
 
-    if (publicHeaders.getVirtualIncludePath() != null) {
-      contextBuilder.addIncludeDir(publicHeaders.getVirtualIncludePath());
-    }
-
     contextBuilder.mergeDependentContexts(
         AnalysisUtils.getProviders(
             forInterface ? interfaceDeps : implementationDeps, CppCompilationContext.class));
@@ -1247,14 +1141,14 @@ public final class CcLibraryHelper {
     contextBuilder.addDefines(defines);
 
     // There are no ordering constraints for declared include dirs/srcs, or the pregrepped headers.
-    contextBuilder.addDeclaredIncludeSrcs(publicHeaders.getHeaders());
+    contextBuilder.addDeclaredIncludeSrcs(publicHeaders);
     contextBuilder.addDeclaredIncludeSrcs(publicTextualHeaders);
     contextBuilder.addDeclaredIncludeSrcs(privateHeaders);
-    contextBuilder.addModularHdrs(publicHeaders.getHeaders());
+    contextBuilder.addModularHdrs(publicHeaders);
     contextBuilder.addModularHdrs(privateHeaders);
     contextBuilder.addTextualHdrs(publicTextualHeaders);
     contextBuilder.addPregreppedHeaderMap(
-        CppHelper.createExtractInclusions(ruleContext, semantics, publicHeaders.getHeaders()));
+        CppHelper.createExtractInclusions(ruleContext, semantics, publicHeaders));
     contextBuilder.addPregreppedHeaderMap(
         CppHelper.createExtractInclusions(ruleContext, semantics, publicTextualHeaders));
     contextBuilder.addPregreppedHeaderMap(
@@ -1280,6 +1174,10 @@ public final class CcLibraryHelper {
               ? CppHelper.createDefaultCppModuleMap(ruleContext)
               : injectedCppModuleMap;
       contextBuilder.setCppModuleMap(cppModuleMap);
+      if (featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES)
+          && featureConfiguration.isEnabled(CppRuleClasses.TRANSITIVE_MODULE_MAPS)) {
+        contextBuilder.setProvideTransitiveModuleMaps(true);
+      }
       if (createModuleMapActions) {
         // TODO(djasper): The separation of interface and implementation dependencies doesn't work
         // in conjunction with layering_check yet (and never has). In the long run to properly
@@ -1293,11 +1191,10 @@ public final class CcLibraryHelper {
                 ruleContext.getActionOwner(),
                 cppModuleMap,
                 privateHeaders,
-                publicHeaders.getHeaders(),
+                publicHeaders,
                 collectModuleMaps(),
                 additionalExportedHeaders,
-                featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES)
-                    || featureConfiguration.isEnabled(CppRuleClasses.COMPILE_ALL_MODULES),
+                featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES),
                 featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAP_HOME_CWD),
                 featureConfiguration.isEnabled(CppRuleClasses.GENERATE_SUBMODULES),
                 !featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAP_WITHOUT_EXTERN_MODULE));
