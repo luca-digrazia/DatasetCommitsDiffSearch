@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.vfs.Path;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -33,7 +34,7 @@ import java.util.List;
 @SkylarkModule(
   name = "path",
   category = SkylarkModuleCategory.NONE,
-  doc = "A structure representing a file to be used inside a repository."
+  doc = "A structure representing a file to be used inside a repository"
 )
 final class SkylarkPath {
   private final Path path;
