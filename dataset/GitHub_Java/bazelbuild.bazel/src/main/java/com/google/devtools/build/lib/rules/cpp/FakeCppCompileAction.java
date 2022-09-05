@@ -18,6 +18,7 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -35,7 +36,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -137,10 +137,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       }
     }
     IncludeScanningContext scanningContext = executor.getContext(IncludeScanningContext.class);
-    NestedSet<Artifact> discoveredInputs =
-        discoverInputsFromDotdFiles(
-            executor.getExecRoot(), scanningContext.getArtifactResolver(), reply);
-    reply = null; // Clear in-memory .d files early.
+    updateActionInputs(executor.getExecRoot(), scanningContext.getArtifactResolver(), reply);
 
     // Even cc_fake_binary rules need to properly declare their dependencies...
     // In fact, they need to declare their dependencies even more than cc_binary rules do.
@@ -149,10 +146,7 @@ public class FakeCppCompileAction extends CppCompileAction {
     // listed in the "srcs" of the cc_fake_binary or in the "srcs" of a cc_library that it
     // depends on.
     try {
-      validateInclusions(
-          discoveredInputs,
-          actionExecutionContext.getMiddlemanExpander(),
-          executor.getEventHandler());
+      validateInclusions(actionExecutionContext.getMiddlemanExpander(), executor.getEventHandler());
     } catch (ActionExecutionException e) {
       // TODO(bazel-team): (2009) make this into an error, once most of the current warnings
       // are fixed.
@@ -160,8 +154,6 @@ public class FakeCppCompileAction extends CppCompileAction {
           getOwner().getLocation(),
           e.getMessage() + ";\n  this warning may eventually become an error"));
     }
-
-    updateActionInputs(discoveredInputs);
 
     // Generate a fake ".o" file containing the command line needed to generate
     // the real object file.
@@ -214,6 +206,11 @@ public class FakeCppCompileAction extends CppCompileAction {
 
   @Override
   public String getMnemonic() { return "FakeCppCompile"; }
+
+  @Override
+  public String describeStrategy(Executor executor) {
+    return "fake";
+  }
 
   @Override
   public ResourceSet estimateResourceConsumptionLocal() {
