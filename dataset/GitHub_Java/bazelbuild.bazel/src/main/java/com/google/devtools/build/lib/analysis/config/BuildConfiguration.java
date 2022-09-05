@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.analysis.config;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.google.common.base.Verify;
@@ -47,7 +46,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.Attribute.Configurator;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.Attribute.Transition;
@@ -1799,22 +1797,11 @@ public final class BuildConfiguration {
       }
       getCurrentTransitions().configurationHook(fromRule, attribute, toTarget, this);
 
-      Rule associatedRule = toTarget.getAssociatedRule();
-      PatchTransition ruleClassTransition = (PatchTransition)
-          associatedRule.getRuleClassObject().getTransition();
-
-      if (ruleClassTransition != null) {
-        if (currentTransition == ConfigurationTransition.NONE) {
-          currentTransition = ruleClassTransition;
-        } else {
-          currentTransition = new ComposingSplitTransition(ruleClassTransition, currentTransition);
-        }
-      }
-
       // We don't support rule class configurators (which might imply composed transitions).
       // The only current use of that is LIPO, which can't currently be invoked with dynamic
       // configurations (e.g. this code can never get called for LIPO builds). So check that
       // if there is a configurator, it's for LIPO, in which case we can ignore it.
+      Rule associatedRule = toTarget.getAssociatedRule();
       if (associatedRule != null) {
         @SuppressWarnings("unchecked")
         RuleClass.Configurator<?, ?> func =
@@ -2398,11 +2385,6 @@ public final class BuildConfiguration {
 
   public String getCpu() {
     return options.cpu;
-  }
-
-  @VisibleForTesting
-  public String getHostCpu() {
-    return options.hostCpu;
   }
 
   public boolean runfilesEnabled() {
