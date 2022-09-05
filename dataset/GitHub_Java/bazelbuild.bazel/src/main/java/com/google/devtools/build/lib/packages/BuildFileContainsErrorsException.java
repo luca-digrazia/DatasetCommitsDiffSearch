@@ -23,7 +23,6 @@ import java.io.IOException;
  * be read or had syntax errors.
  */
 public class BuildFileContainsErrorsException extends NoSuchPackageException {
-
   public BuildFileContainsErrorsException(PackageIdentifier packageIdentifier) {
     super(
         packageIdentifier,
@@ -31,16 +30,11 @@ public class BuildFileContainsErrorsException extends NoSuchPackageException {
   }
 
   public BuildFileContainsErrorsException(PackageIdentifier packageIdentifier, String message) {
-    super(packageIdentifier, message);
+    super(packageIdentifier, "error loading package", message);
   }
 
   public BuildFileContainsErrorsException(PackageIdentifier packageIdentifier, String message,
       IOException cause) {
-    super(packageIdentifier, message, cause);
-  }
-
-  @Override
-  public String getMessage() {
-    return String.format("%s '%s': %s", "error loading package", getPackageId(), getRawMessage());
+    super(packageIdentifier, "error loading package", message, cause);
   }
 }
