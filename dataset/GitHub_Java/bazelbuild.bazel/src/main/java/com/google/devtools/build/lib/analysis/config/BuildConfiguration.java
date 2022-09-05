@@ -769,12 +769,6 @@ public final class BuildConfiguration implements Serializable {
     )
     public List<Label> targetEnvironments;
 
-    @Option(name = "objc_gcov_binary",
-        converter = LabelConverter.class,
-        defaultValue = "//third_party/gcov:gcov_for_xcode",
-        category = "undocumented")
-    public Label objcGcovBinary;
-
     @Override
     public FragmentOptions getHost(boolean fallback) {
       Options host = (Options) getDefault();
@@ -824,9 +818,6 @@ public final class BuildConfiguration implements Serializable {
       labelMap.putAll("plugins", pluginList);
       if ((runUnder != null) && (runUnder.getLabel() != null)) {
         labelMap.put("RunUnder", runUnder.getLabel());
-      }
-      if (collectCodeCoverage) {
-        labelMap.put("objc_gcov", objcGcovBinary);
       }
     }
   }
