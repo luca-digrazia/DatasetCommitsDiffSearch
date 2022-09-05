@@ -362,10 +362,7 @@ public class GraphiteReporter extends ScheduledReporter {
         } else if (o instanceof BigInteger) {
             return format(((BigInteger) o).doubleValue());
         } else if (o instanceof BigDecimal) {
-            return format(((BigDecimal) o).doubleValue());
-        } else if (o instanceof Boolean) {
-            return format(((Boolean) o) ? 1 : 0);
-        }
+            return format(((BigDecimal) o).doubleValue());        }
         return null;
     }
 
