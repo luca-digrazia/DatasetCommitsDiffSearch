@@ -31,7 +31,6 @@ import java.lang.annotation.*;
  *
  * @author zhouhao
  * @see DataAccessController
- * @see Authorize#dataAccess()
  * @since 3.0
  */
 @Target({ElementType.TYPE, ElementType.METHOD})
@@ -40,14 +39,13 @@ import java.lang.annotation.*;
 public @interface RequiresDataAccess {
 
     /**
-     * @return permission id ,如果为空将继承 {@link Authorize#permission()}
+     * @return permission id
      * @see Permission#getId()
-     *
      */
-    String permission() default "";
+    String permission();
 
     /**
-     * @return action array ,如果为空将继承 {@link Authorize#action()}
+     * @return action array
      * @see DataAccessConfig#getAction()
      */
     String[] action() default {};
