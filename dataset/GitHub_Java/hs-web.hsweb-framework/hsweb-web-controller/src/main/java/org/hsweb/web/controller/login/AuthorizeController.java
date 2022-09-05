@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 http://hsweb.me
+ * Copyright 2015-2016 https://github.com/hs-web
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,12 @@
 
 package org.hsweb.web.controller.login;
 
+import org.apache.commons.beanutils.BeanUtils;
 import org.apache.commons.beanutils.BeanUtilsBean;
-import org.hsweb.commons.MD5;
+import org.hsweb.web.bean.common.QueryParam;
 import org.hsweb.web.bean.po.user.User;
 import org.hsweb.web.core.authorize.annotation.Authorize;
+import org.hsweb.web.core.exception.AuthorizeException;
 import org.hsweb.web.core.exception.AuthorizeForbiddenException;
 import org.hsweb.web.core.exception.NotFoundException;
 import org.hsweb.web.core.logger.annotation.AccessLogger;
@@ -36,10 +38,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.hsweb.commons.MD5;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.lang.reflect.InvocationTargetException;
+import java.math.BigInteger;
 
 /**
  * 授权控制器,用于登录系统
@@ -105,7 +110,8 @@ public class AuthorizeController {
     @Authorize
     public ResponseMessage onlineInfo() {
         return ResponseMessage.ok(httpSessionManager.tryGetAllUser())
-                .include(User.class, "id", "username", "name", "phone", "email");
+                .include(User.class, "id", "username", "name", "phone", "email")
+                .exclude(User.class, "password");
     }
 
     /**

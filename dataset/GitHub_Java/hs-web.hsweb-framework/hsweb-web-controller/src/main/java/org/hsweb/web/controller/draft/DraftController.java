@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 http://hsweb.me/
+ * Copyright 2015-2016 https://github.com/hs-web/
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,6 @@ public class DraftController {
         draft.setId(Draft.createUID());
         draft.setCreateDate(new Date());
         draft.setCreatorId(user.getId());
-        draft.setKey(key);
         return ResponseMessage.ok(draftService.createDraft(key, draft));
     }
 
@@ -91,7 +90,7 @@ public class DraftController {
     @AccessLogger("删除草稿")
     public ResponseMessage removeDraft(@PathVariable("key") String key, @PathVariable("id") String id) {
         User user = WebUtil.getLoginUser();
-        return ResponseMessage.ok(draftService.removeDraft(key, user.getId(), id));
+        return ResponseMessage.ok(draftService.removeDraft(key, id, user.getId()));
     }
 
 

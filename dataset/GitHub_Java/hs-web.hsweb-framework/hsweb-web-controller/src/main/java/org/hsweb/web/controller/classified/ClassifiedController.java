@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 http://hsweb.me
+ * Copyright 2015-2016 https://github.com/hs-web
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,28 +48,12 @@ public class ClassifiedController extends GenericController<Classified, String> 
 
     /**
      * 根据类型查询分类 {@link GenericController#list(QueryParam)}
-     * 已过时，在正式版中删除 todo
      *
      * @param type  分类类型
      * @param param 查询参数
      * @return 查询结果
      */
     @RequestMapping(value = "/byType/{type}")
-    @Deprecated
-    public ResponseMessage listByTypeOld(@PathVariable("type") String type, QueryParam param) {
-        param.where("type", type);
-        return list(param);
-    }
-
-
-    /**
-     * 根据类型查询分类 {@link GenericController#list(QueryParam)}
-     *
-     * @param type  分类类型
-     * @param param 查询参数
-     * @return 查询结果
-     */
-    @RequestMapping(value = "/type/{type}")
     public ResponseMessage listByType(@PathVariable("type") String type, QueryParam param) {
         param.where("type", type);
         return list(param);

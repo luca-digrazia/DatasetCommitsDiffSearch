@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 http://hsweb.me
+ * Copyright 2015-2016 https://github.com/hs-web
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,6 @@ public class ModuleMetaController extends GenericController<ModuleMeta, String> 
     public ResponseMessage userModuleMeta(@PathVariable String key) {
         User user = WebUtil.getLoginUser();
         List<UserRole> roles = user.getUserRoles();
-        if (roles == null) roles = new ArrayList<>();
         String[] roleIdList = roles
                 .stream()
                 .map(userRole -> userRole.getRoleId())
