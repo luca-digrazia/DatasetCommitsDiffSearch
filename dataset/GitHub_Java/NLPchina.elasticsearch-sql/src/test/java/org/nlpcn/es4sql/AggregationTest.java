@@ -6,9 +6,7 @@ import com.google.common.collect.DiscreteDomain;
 import com.google.common.collect.Range;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.Aggregations;
-import org.elasticsearch.search.aggregations.bucket.filter.InternalFilter;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoHashGrid;
 import org.elasticsearch.search.aggregations.bucket.geogrid.InternalGeoHashGrid;
 import org.elasticsearch.search.aggregations.bucket.nested.InternalNested;
@@ -413,7 +411,7 @@ public class AggregationTest {
     @Test
     public void groupByOnNestedFieldTest() throws Exception {
         Aggregations result = query(String.format("SELECT COUNT(*) FROM %s/nestedType GROUP BY nested(message.info)", TEST_INDEX));
-        InternalNested nested = result.get("message.info@NESTED");
+        InternalNested nested = result.get("message.infoNested");
         Terms infos = nested.getAggregations().get("message.info");
         Assert.assertEquals(3,infos.getBuckets().size());
         for(Terms.Bucket bucket : infos.getBuckets()) {
@@ -433,46 +431,6 @@ public class AggregationTest {
             }
         }
     }
-
-    @Test
-    public void groupByTestWithFilter() throws Exception {
-        Aggregations result = query(String.format("SELECT COUNT(*) FROM %s/account GROUP BY filter(gender='m'),gender", TEST_INDEX));
-        InternalFilter filter = result.get("filter(gender = 'm')@FILTER");
-        Terms gender = filter.getAggregations().get("gender");
-
-        for(Terms.Bucket bucket : gender.getBuckets()) {
-            String key = bucket.getKey().toString();
-            long count = ((ValueCount) bucket.getAggregations().get("COUNT(*)")).getValue();
-            if(key.equalsIgnoreCase("m")) {
-                Assert.assertEquals(507, count);
-            }
-            else {
-                throw new Exception(String.format("Unexpected key. expected: only m. found: %s", key));
-            }
-        }
-    }
-
-
-    @Test
-    public void groupByOnNestedFieldWithFilterTest() throws Exception {
-        Aggregations result = query(String.format("SELECT COUNT(*) FROM %s/nestedType GROUP BY  nested(message.info),filter('myFilter',message.info = 'a')", TEST_INDEX));
-        InternalNested nested = result.get("message.info@NESTED");
-        InternalFilter filter = nested.getAggregations().get("myFilter@FILTER");
-        Terms infos = filter.getAggregations().get("message.info");
-        Assert.assertEquals(1,infos.getBuckets().size());
-        for(Terms.Bucket bucket : infos.getBuckets()) {
-            String key = bucket.getKey().toString();
-            long count = ((ValueCount) bucket.getAggregations().get("COUNT(*)")).getValue();
-            if(key.equalsIgnoreCase("a")) {
-                Assert.assertEquals(2, count);
-            }
-
-            else {
-                throw new Exception(String.format("Unexpected key. expected: only a . found: %s", key));
-            }
-        }
-    }
-
 
 
 }
