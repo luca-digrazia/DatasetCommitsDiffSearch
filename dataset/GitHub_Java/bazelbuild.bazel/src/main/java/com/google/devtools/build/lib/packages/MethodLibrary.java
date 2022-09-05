@@ -472,7 +472,8 @@ public class MethodLibrary {
         Location loc) throws EvalException, ConversionException {
       int res = stringFind(false, self, sub, start, end, "'end' argument to rindex");
       if (res < 0) {
-        throw new EvalException(loc, Printer.format("substring %r not found in %r", sub, self));
+        throw new EvalException(loc, String.format("substring %s not found in %s",
+                Printer.repr(sub), Printer.repr(self)));
       }
       return res;
     }
@@ -497,7 +498,8 @@ public class MethodLibrary {
         Location loc) throws EvalException, ConversionException {
       int res = stringFind(true, self, sub, start, end, "'end' argument to index");
       if (res < 0) {
-        throw new EvalException(loc, Printer.format("substring %r not found in %r", sub, self));
+        throw new EvalException(loc, String.format("substring %s not found in %s",
+                Printer.repr(sub), Printer.repr(self)));
       }
       return res;
     }
@@ -716,7 +718,8 @@ public class MethodLibrary {
       } else if (self instanceof Map<?, ?>) {
         Map<?, ?> dictionary = (Map<?, ?>) self;
         if (!dictionary.containsKey(key)) {
-          throw new EvalException(loc, Printer.format("Key %r not found in dictionary", key));
+          throw new EvalException(loc, String.format("Key %s not found in dictionary",
+                  Printer.repr(key)));
         }
         return dictionary.get(key);
 
@@ -919,7 +922,7 @@ public class MethodLibrary {
         }
       } else {
         throw new EvalException(loc,
-            Printer.format("%r is not of type string or int or bool", x));
+            String.format("%s is not of type string or int or bool", Printer.repr(x)));
       }
     }
   };
@@ -1118,8 +1121,8 @@ public class MethodLibrary {
         if (defaultValue != Environment.NONE) {
           return defaultValue;
         } else {
-          throw new EvalException(loc, Printer.format("Object of type '%s' has no field %r",
-                  EvalUtils.getDataTypeName(obj), name));
+          throw new EvalException(loc, String.format("Object of type '%s' has no field %s",
+                  EvalUtils.getDataTypeName(obj), Printer.repr(name)));
         }
       }
       return result;

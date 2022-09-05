@@ -80,13 +80,8 @@ public abstract class EvalUtils {
       try {
         return ((Comparable<Object>) o1).compareTo(o2);
       } catch (ClassCastException e) {
-        try {
-          // Different types -> let the class names decide
-          return o1.getClass().getName().compareTo(o2.getClass().getName());
-        } catch (NullPointerException ex) {
-          throw new ComparisonException(
-              "Cannot compare " + getDataTypeName(o1) + " with " + EvalUtils.getDataTypeName(o2));
-        }
+        throw new ComparisonException(
+            "Cannot compare " + getDataTypeName(o1) + " with " + EvalUtils.getDataTypeName(o2));
       }
     }
   };

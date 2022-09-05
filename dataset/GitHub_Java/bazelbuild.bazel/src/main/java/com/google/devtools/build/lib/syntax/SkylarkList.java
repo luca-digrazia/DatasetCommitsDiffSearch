@@ -362,15 +362,23 @@ public abstract class SkylarkList implements Iterable<Object> {
     if (elements.isEmpty()) {
       return EMPTY_LIST;
     }
-    return new SimpleSkylarkList(ImmutableList.copyOf(elements), false, getContentType(elements));
+    return new SimpleSkylarkList(
+        ImmutableList.copyOf(elements), false, getContentType(elements, loc));
   }
 
-  private static SkylarkType getContentType(Collection<?> elements)
+  private static SkylarkType getContentType(Collection<?> elements, Location loc)
       throws EvalException {
     SkylarkType type = SkylarkType.TOP;
     for (Object element : elements) {
       SkylarkType elementType = SkylarkType.typeOf(element);
-      type = SkylarkType.intersection(type, elementType);
+      SkylarkType inter = SkylarkType.intersection(type, elementType);
+      if (inter == SkylarkType.BOTTOM) {
+        throw new EvalException(loc, String.format(
+            "Incompatible types in list: found a %s but the previous elements were %ss",
+            elementType, type));
+      } else {
+        type = inter;
+      }
     }
     return type;
   }
@@ -391,6 +399,10 @@ public abstract class SkylarkList implements Iterable<Object> {
       return left;
     }
     SkylarkType type = SkylarkType.intersection(left.contentType, right.contentType);
+    if (type == SkylarkType.BOTTOM) {
+      throw new EvalException(loc, String.format("cannot concatenate list of %s with list of %s",
+              left.contentType, right.contentType));
+    }
     return new ConcatenatedSkylarkList(left, right, left.isTuple(), type);
   }
 
