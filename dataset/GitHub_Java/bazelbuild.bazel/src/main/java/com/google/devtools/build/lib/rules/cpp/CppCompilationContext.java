@@ -662,10 +662,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
       // LIPO collector must not add compilation prerequisites in order to avoid
       // the creation of a middleman action.
       for (Artifact prerequisite : prerequisites) {
-        String basename = prerequisite.getFilename();
-        Preconditions.checkArgument(!Link.OBJECT_FILETYPES.matches(basename));
-        Preconditions.checkArgument(!Link.ARCHIVE_LIBRARY_FILETYPES.matches(basename));
-        Preconditions.checkArgument(!Link.SHARED_LIBRARY_FILETYPES.matches(basename));
+        Preconditions.checkArgument(!Link.OBJECT_FILETYPES.matches(prerequisite.getFilename()));
       }
       Iterables.addAll(compilationPrerequisites, prerequisites);
       return this;

@@ -80,7 +80,6 @@ public final class CppModel {
   private final List<String> linkopts = new ArrayList<>();
   private LinkTargetType linkType = LinkTargetType.STATIC_LIBRARY;
   private boolean neverLink;
-  private final List<Artifact> linkActionInputs = new ArrayList<>();
   private boolean allowInterfaceSharedObjects;
   private boolean createDynamicLibrary = true;
   private Artifact soImplArtifact;
@@ -217,14 +216,6 @@ public final class CppModel {
 
   public CppModel setNeverLink(boolean neverLink) {
     this.neverLink = neverLink;
-    return this;
-  }
-  
-  /**
-   * Adds an artifact to the inputs of any link actions created by this CppModel.
-   */
-  public CppModel addLinkActionInputs(Collection<Artifact> inputs) {
-    this.linkActionInputs.addAll(inputs);
     return this;
   }
 
@@ -863,9 +854,7 @@ public final class CppModel {
             .addLTOBitcodeFiles(ccOutputs.getLtoBitcodeFiles())
             .setLinkType(linkType)
             .setLinkStaticness(LinkStaticness.FULLY_STATIC)
-            .addActionInputs(linkActionInputs)
             .setLibraryIdentifier(libraryIdentifier)
-            .addVariablesExtension(variablesExtensions)
             .setFeatureConfiguration(featureConfiguration)
             .build();
     env.registerAction(maybePicAction);
@@ -890,9 +879,7 @@ public final class CppModel {
               .addLTOBitcodeFiles(ccOutputs.getLtoBitcodeFiles())
               .setLinkType(picLinkType)
               .setLinkStaticness(LinkStaticness.FULLY_STATIC)
-              .addActionInputs(linkActionInputs)
               .setLibraryIdentifier(libraryIdentifier)
-              .addVariablesExtension(variablesExtensions)
               .setFeatureConfiguration(featureConfiguration)
               .build();
       env.registerAction(picAction);
@@ -941,15 +928,13 @@ public final class CppModel {
             .addLTOBitcodeFiles(ccOutputs.getLtoBitcodeFiles())
             .setLinkType(LinkTargetType.DYNAMIC_LIBRARY)
             .setLinkStaticness(LinkStaticness.DYNAMIC)
-            .addActionInputs(linkActionInputs)
             .setLibraryIdentifier(mainLibraryIdentifier)
             .addLinkopts(linkopts)
             .addLinkopts(sonameLinkopts)
             .setRuntimeInputs(
                 CppHelper.getToolchain(ruleContext).getDynamicRuntimeLinkMiddleman(),
                 CppHelper.getToolchain(ruleContext).getDynamicRuntimeLinkInputs())
-            .setFeatureConfiguration(featureConfiguration)
-            .addVariablesExtension(variablesExtensions);
+            .setFeatureConfiguration(featureConfiguration);
 
     if (!ccOutputs.getLtoBitcodeFiles().isEmpty()
         && featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)) {
