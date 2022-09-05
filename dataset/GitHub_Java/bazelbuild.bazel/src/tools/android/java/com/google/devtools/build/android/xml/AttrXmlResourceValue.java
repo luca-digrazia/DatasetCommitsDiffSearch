@@ -13,9 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.android.xml;
 
-import static com.google.common.base.Predicates.equalTo;
-import static com.google.common.base.Predicates.not;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
@@ -27,7 +24,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMap.Builder;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.android.AndroidDataWritingVisitor;
-import com.google.devtools.build.android.AndroidDataWritingVisitor.ValuesResourceDefinition;
 import com.google.devtools.build.android.FullyQualifiedName;
 import com.google.devtools.build.android.XmlResourceValue;
 import com.google.devtools.build.android.XmlResourceValues;
@@ -57,21 +53,24 @@ import javax.xml.stream.events.XMLEvent;
 /**
  * Represents an Android Resource custom attribute.
  *
- * <p>Attribute are the most complicated Android resource, and therefore the least documented. Most
- * of the information about them is found by reading the android compatibility library source. An
+ * <p>
+ * Attribute are the most complicated Android resource, and therefore the least documented. Most of
+ * the information about them is found by reading the android compatibility library source. An
  * Attribute defines a parameter that can be passed into a view class -- as such you can think of
  * attributes as creating slots for other resources to fit into. Each slot will have at least one
  * format, and can have multiples. Simple attributes (color, boolean, reference, dimension, float,
  * integer, string, and fraction) are defined as &lt;attr name="<em>name</em>" format=
- * "<em>format</em>" /&gt; while the complex ones, flag and enum, have sub parentTags: &lt;attr
- * name= "<em>name</em>" &gt&lt;flag name="<em>name</em>" value="<em>value</em>"&gt; &lt;/attr&gt;.
+ * "<em>format</em>" /&gt; while the complex ones, flag and enum, have sub tags: &lt;attr name=
+ * "<em>name</em>" &gt&lt;flag name="<em>name</em>" value="<em>value</em>"&gt; &lt;/attr&gt;.
  *
- * <p>Attributes also have a double duty as defining validation logic for layout resources -- each
+ * <p>
+ * Attributes also have a double duty as defining validation logic for layout resources -- each
  * layout attribute *must* have a corresponding attribute which will be used to validate the
  * value/resource reference defined in it.
  *
- * <p>AttrXmlValue, due to the multiple types of attributes is actually a composite class that
- * contains multiple {@link XmlResourceValue} instances for each resource.
+ * <p>
+ * AttrXmlValue, due to the multiple types of attributes is actually a composite class that contains
+ * multiple {@link XmlResourceValue} instances for each resource.
  */
 @Immutable
 public class AttrXmlResourceValue implements XmlResourceValue {
@@ -114,7 +113,7 @@ public class AttrXmlResourceValue implements XmlResourceValue {
   private static void endAttrElement(XMLEventReader reader) throws XMLStreamException {
     XMLEvent endTag = reader.nextTag();
     if (!endTag.isEndElement() || !QName.valueOf("attr").equals(endTag.asEndElement().getName())) {
-      throw new XMLStreamException("Unexpected ParentTag:" + endTag, endTag.getLocation());
+      throw new XMLStreamException("Unexpected Tag:" + endTag, endTag.getLocation());
     }
   }
 
@@ -150,7 +149,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     return of(ImmutableMap.copyOf(Arrays.asList(entries)));
   }
 
-  @SuppressWarnings("deprecation")
   public static XmlResourceValue from(SerializeFormat.DataValueXml proto)
       throws InvalidProtocolBufferException {
     Builder<String, ResourceXmlAttrValue> formats =
@@ -292,33 +290,34 @@ public class AttrXmlResourceValue implements XmlResourceValue {
   public void write(
       FullyQualifiedName key, Path source, AndroidDataWritingVisitor mergedDataWriter) {
 
-    if (formats.isEmpty()) {
-      mergedDataWriter
-          .define(key)
-          .derivedFrom(source)
-          .startTag("attr")
-          .named(key)
-          .closeTag()
-          .endTag()
-          .save();
-    } else {
-      ImmutableList<String> formatKeys =
-          FluentIterable.from(formats.keySet())
-              .filter(not(equalTo(FLAGS)))
-              .filter(not(equalTo(ENUM)))
-              .toSortedList(Ordering.natural());
-      ValuesResourceDefinition definition =
-          mergedDataWriter
-              .define(key)
-              .derivedFrom(source)
-              .startTag("attr")
-              .named(key)
-              .optional().attribute("format").setTo(Joiner.on("|").join(formatKeys))
-              .closeTag();
-      for (ResourceXmlAttrValue value : formats.values()) {
-        definition = value.writeTo(definition);
+    ImmutableList<String> formatKeys = Ordering.natural().immutableSortedCopy(formats.keySet());
+    if (formatKeys.isEmpty()) {
+      mergedDataWriter.writeToValuesXml(
+          key,
+          ImmutableList.of(
+              String.format("<!-- %s -->", source),
+              String.format("<attr name='%s'/>", key.name())));
+    } else if (formats.containsKey(FLAGS) || formats.containsKey(ENUM)) {
+      FluentIterable<String> iterable =
+          FluentIterable.from(
+              ImmutableList.of(
+                  String.format("<!-- %s -->", source),
+                  formatKeys.isEmpty()
+                      ? String.format("<attr name='%s'>", key.name())
+                      : String.format(
+                          "<attr format='%s' name='%s' >",
+                          Joiner.on('|').join(formatKeys), key.name())));
+      for (String formatKey : formatKeys) {
+        iterable = formats.get(formatKey).appendTo(iterable);
       }
-      definition.endTag().save();
+      mergedDataWriter.writeToValuesXml(key, iterable.append("</attr>"));
+    } else {
+      mergedDataWriter.writeToValuesXml(
+          key,
+          ImmutableList.of(
+              String.format("<!-- %s -->", source),
+              String.format(
+                  "<attr format='%s' name='%s'/>", Joiner.on('|').join(formatKeys), key.name())));
     }
   }
 
@@ -346,8 +345,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
   @CheckReturnValue
   interface ResourceXmlAttrValue {
     FluentIterable<String> appendTo(FluentIterable<String> iterable);
-
-    ValuesResourceDefinition writeTo(ValuesResourceDefinition writer);
 
     SerializeFormat.DataValueXml appendTo(SerializeFormat.DataValueXml.Builder builder);
   }
@@ -415,21 +412,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     public SerializeFormat.DataValueXml appendTo(SerializeFormat.DataValueXml.Builder builder) {
       return builder.putAllMappedStringValue(values).build();
     }
-
-    @Override
-    public ValuesResourceDefinition writeTo(ValuesResourceDefinition writer) {
-      for (Entry<String, String> entry : values.entrySet()) {
-        writer =
-            writer
-                .startTag("enum")
-                .attribute("name")
-                .setTo(entry.getKey())
-                .attribute("value")
-                .setTo(entry.getValue())
-                .closeUnaryTag();
-      }
-      return writer;
-    }
   }
 
   /** Represents an Android Flag Attribute resource. */
@@ -496,21 +478,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     public SerializeFormat.DataValueXml appendTo(SerializeFormat.DataValueXml.Builder builder) {
       return builder.putAllMappedStringValue(values).build();
     }
-
-    @Override
-    public ValuesResourceDefinition writeTo(ValuesResourceDefinition writer) {
-      for (Entry<String, String> entry : values.entrySet()) {
-        writer =
-            writer
-                .startTag("flag")
-                .attribute("name")
-                .setTo(entry.getKey())
-                .attribute("value")
-                .setTo(entry.getValue())
-                .closeUnaryTag();
-      }
-      return writer;
-    }
   }
 
   /** Represents an Android Reference Attribute resource. */
@@ -537,11 +504,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     public SerializeFormat.DataValueXml appendTo(SerializeFormat.DataValueXml.Builder builder) {
       return builder.build();
     }
-
-    @Override
-    public ValuesResourceDefinition writeTo(ValuesResourceDefinition writer) {
-      return writer;
-    }
   }
 
   /** Represents an Android Color Attribute resource. */
@@ -566,11 +528,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     @Override
     public SerializeFormat.DataValueXml appendTo(SerializeFormat.DataValueXml.Builder builder) {
       return builder.build();
-    }
-
-    @Override
-    public ValuesResourceDefinition writeTo(ValuesResourceDefinition writer) {
-      return writer;
     }
   }
 
@@ -597,11 +554,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     public SerializeFormat.DataValueXml appendTo(SerializeFormat.DataValueXml.Builder builder) {
       return builder.build();
     }
-
-    @Override
-    public ValuesResourceDefinition writeTo(ValuesResourceDefinition writer) {
-      return writer;
-    }
   }
 
   /** Represents an Android Float Attribute resource. */
@@ -626,11 +578,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     @Override
     public SerializeFormat.DataValueXml appendTo(SerializeFormat.DataValueXml.Builder builder) {
       return builder.build();
-    }
-
-    @Override
-    public ValuesResourceDefinition writeTo(ValuesResourceDefinition writer) {
-      return writer;
     }
   }
 
@@ -658,11 +605,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     public SerializeFormat.DataValueXml appendTo(SerializeFormat.DataValueXml.Builder builder) {
       return builder.build();
     }
-
-    @Override
-    public ValuesResourceDefinition writeTo(ValuesResourceDefinition writer) {
-      return writer;
-    }
   }
 
   /** Represents an Android Integer Attribute resource. */
@@ -687,11 +629,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     @Override
     public SerializeFormat.DataValueXml appendTo(SerializeFormat.DataValueXml.Builder builder) {
       return builder.build();
-    }
-
-    @Override
-    public ValuesResourceDefinition writeTo(ValuesResourceDefinition writer) {
-      return writer;
     }
   }
 
@@ -718,11 +655,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     public SerializeFormat.DataValueXml appendTo(SerializeFormat.DataValueXml.Builder builder) {
       return builder.build();
     }
-
-    @Override
-    public ValuesResourceDefinition writeTo(ValuesResourceDefinition writer) {
-      return writer;
-    }
   }
 
   /** Represents an Android Fraction Attribute resource. */
@@ -747,11 +679,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     @Override
     public SerializeFormat.DataValueXml appendTo(SerializeFormat.DataValueXml.Builder builder) {
       return builder.build();
-    }
-
-    @Override
-    public ValuesResourceDefinition writeTo(ValuesResourceDefinition writer) {
-      return writer;
     }
   }
 }
