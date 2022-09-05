@@ -340,8 +340,6 @@ public class CcToolchainFeatures implements Serializable {
     private final ImmutableSet<String> usedVariables;
     private String iterateOverVariable;
     private final ImmutableSet<String> expandIfAllAvailable;
-    private final String expandIfTrue;
-    private final String expandIfFalse;
 
     /**
      * TODO(b/32655571): Cleanup and get rid of usedVariables field once implicit iteration is not
@@ -377,14 +375,14 @@ public class CcToolchainFeatures implements Serializable {
       this.usedVariables = usedVariables.build();
       this.expandables = expandables.build();
       this.expandIfAllAvailable = ImmutableSet.copyOf(flagGroup.getExpandIfAllAvailableList());
-      this.expandIfTrue = flagGroup.getExpandIfTrue();
-      this.expandIfFalse = flagGroup.getExpandIfFalse();
     }
     
     @Override
     public void expand(Variables variables, final List<String> commandLine) {
-      if (!canBeExpanded(variables)) {
-        return;
+      for (String variable : expandIfAllAvailable) {
+        if (!variables.isAvailable(variable)) {
+          return;
+        }
       }
       if (iterateOverVariable == null) {
         // TODO(b/32655571): Remove branch once implicit iteration is not needed anymore.
@@ -402,25 +400,6 @@ public class CcToolchainFeatures implements Serializable {
           expandable.expand(variables, commandLine);
         }
       }
-    }
-
-    private boolean canBeExpanded(Variables variables) {
-      for (String variable : expandIfAllAvailable) {
-        if (!variables.isAvailable(variable)) {
-          return false;
-        }
-      }
-      if (expandIfTrue != null
-          && variables.isAvailable(expandIfTrue)
-          && !variables.getVariable(expandIfTrue).isTruthy()) {
-        return false;
-      }
-      if (expandIfFalse != null
-          && variables.isAvailable(expandIfFalse)
-          && variables.getVariable(expandIfFalse).isTruthy()) {
-        return false;
-      }
-      return true;
     }
 
     private Set<String> getUsedVariables() {
@@ -819,9 +798,6 @@ public class CcToolchainFeatures implements Serializable {
        * @param variableName name of the variable value at hand, for better exception message.
        */
       VariableValue getFieldValue(String variableName, String field);
-
-      /** Return true if the variable is truthy */
-      boolean isTruthy();
     }
 
     /** Interface for VariableValue builders */
@@ -929,12 +905,6 @@ public class CcToolchainFeatures implements Serializable {
       }
 
       /** Adds a field to the structure. */
-      public StructureBuilder addField(String name, int value) {
-        fields.put(name, new IntegerValue(value));
-        return this;
-      }
-
-      /** Adds a field to the structure. */
       public StructureBuilder addField(String name, ImmutableList<String> values) {
         fields.put(name, new StringSequence(values));
         return this;
@@ -992,11 +962,6 @@ public class CcToolchainFeatures implements Serializable {
                     + "found sequence",
                 variableName));
       }
-
-      @Override
-      public boolean isTruthy() {
-        return !values.isEmpty();
-      }
     }
 
     /**
@@ -1045,11 +1010,6 @@ public class CcToolchainFeatures implements Serializable {
                     + "found sequence",
                 variableName));
       }
-
-      @Override
-      public boolean isTruthy() {
-        return !Iterables.isEmpty(values);
-      }
     }
 
     /** Sequence of arbitrary VariableValue objects. */
@@ -1088,11 +1048,6 @@ public class CcToolchainFeatures implements Serializable {
                 "Invalid toolchain configuration: Cannot expand variable '%s': expected string, "
                     + "found sequence",
                 variableName));
-      }
-
-      @Override
-      public boolean isTruthy() {
-        return values.isEmpty();
       }
     }
 
@@ -1140,11 +1095,6 @@ public class CcToolchainFeatures implements Serializable {
       public boolean isSequence() {
         return false;
       }
-
-      @Override
-      public boolean isTruthy() {
-        return !value.isEmpty();
-      }
     }
 
     /**
@@ -1187,59 +1137,6 @@ public class CcToolchainFeatures implements Serializable {
       @Override
       public boolean isSequence() {
         return false;
-      }
-
-      @Override
-      public boolean isTruthy() {
-        return !value.isEmpty();
-      }
-    }
-
-    /**
-     * The leaves in the variable sequence node tree are simple integer values. Note that this
-     * should never live outside of {@code expand}, as the object overhead is prohibitively
-     * expensive.
-     */
-    @Immutable
-    static final class IntegerValue implements VariableValue {
-
-      private final int value;
-
-      public IntegerValue(int value) {
-        this.value = value;
-      }
-
-      @Override
-      public String getStringValue(String variableName) {
-        return Integer.toString(value);
-      }
-
-      @Override
-      public Iterable<? extends VariableValue> getSequenceValue(String variableName) {
-        throw new ExpansionException(
-            String.format(
-                "Invalid toolchain configuration: Cannot expand variable '%s': expected sequence, "
-                    + "found integer",
-                variableName));
-      }
-
-      @Override
-      public VariableValue getFieldValue(String variableName, String field) {
-        throw new ExpansionException(
-            String.format(
-                "Invalid toolchain configuration: Cannot expand variable '%s.%s': variable '%s' is "
-                    + "integer, expected structure",
-                variableName, field, variableName));
-      }
-
-      @Override
-      public boolean isSequence() {
-        return false;
-      }
-
-      @Override
-      public boolean isTruthy() {
-        return value != 0;
       }
     }
 
@@ -1571,7 +1468,7 @@ public class CcToolchainFeatures implements Serializable {
     }
 
     /** @return whether an action config for the blaze action with the given name is enabled. */
-    boolean actionIsConfigured(String actionName) {
+    public boolean actionIsConfigured(String actionName) {
       return enabledActionConfigActionNames.contains(actionName);
     }
 
