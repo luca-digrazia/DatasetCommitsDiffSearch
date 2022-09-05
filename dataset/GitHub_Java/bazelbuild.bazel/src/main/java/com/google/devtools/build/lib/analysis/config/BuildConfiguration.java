@@ -33,18 +33,17 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MutableClassToInstanceMap;
 import com.google.devtools.build.lib.actions.Root;
+import com.google.devtools.build.lib.analysis.AspectDescriptor;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection.Transitions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.Configurator;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
@@ -816,19 +815,6 @@ public final class BuildConfiguration {
         converter = LabelConverter.class,
         help = "Use action_listener to attach an extra_action to existing build actions.")
     public List<Label> actionListeners;
-
-    // TODO(bazel-team): Either remove this flag once transparent compression is shown to not
-    // noticeably affect running time, or keep this flag and move it into a new configuration
-    // fragment.
-    @Option(
-      name = "experimental_transparent_compression",
-      defaultValue = "true",
-      category = "undocumented",
-      help =
-          "Enables gzip compression for the contents of FileWriteActions, which reduces "
-              + "memory usage in the analysis phase at the expense of additional time overhead."
-    )
-    public boolean transparentCompression;
 
     @Option(name = "is host configuration",
         defaultValue = "false",
@@ -2293,17 +2279,9 @@ public final class BuildConfiguration {
   }
 
   /**
-   * Returns whether FileWriteAction may transparently compress its contents in the analysis phase
-   * to save memory. Semantics are not affected.
-   */
-  public FileWriteAction.Compression transparentCompression() {
-    return FileWriteAction.Compression.fromBoolean(options.transparentCompression);
-  }
-
-  /**
-   * Returns whether we should use dynamically instantiated build configurations vs. static
-   * configurations (e.g. predefined in {@link
-   * com.google.devtools.build.lib.analysis.ConfigurationCollectionFactory}).
+   * Returns whether we should use dynamically instantiated build configurations
+   * vs. static configurations (e.g. predefined in
+   * {@link com.google.devtools.build.lib.analysis.ConfigurationCollectionFactory}).
    */
   public boolean useDynamicConfigurations() {
     return options.useDynamicConfigurations != Options.DynamicConfigsMode.OFF;

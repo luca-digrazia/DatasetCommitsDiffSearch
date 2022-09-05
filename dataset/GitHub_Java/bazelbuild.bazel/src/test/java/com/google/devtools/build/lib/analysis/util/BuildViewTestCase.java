@@ -48,6 +48,7 @@ import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
+import com.google.devtools.build.lib.analysis.AspectDescriptor;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView;
 import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
@@ -94,7 +95,6 @@ import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.flags.InvocationPolicyEnforcer;
 import com.google.devtools.build.lib.packages.AspectClass;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -784,15 +784,17 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   /**
    * Create and return a configured scratch rule.
    *
-   * @param packageName the package name of the rule.
+   * @param packageName the package name ofthe rule.
    * @param ruleName the name of the rule.
    * @param lines the text of the rule.
    * @return the configured target instance for the created rule.
    * @throws IOException
    * @throws Exception
    */
-  protected ConfiguredTarget scratchConfiguredTarget(
-      String packageName, String ruleName, String... lines) throws IOException, Exception {
+  protected ConfiguredTarget scratchConfiguredTarget(String packageName,
+                                                     String ruleName,
+                                                     String... lines)
+      throws IOException, Exception {
     return scratchConfiguredTarget(packageName, ruleName, targetConfig, lines);
   }
 
