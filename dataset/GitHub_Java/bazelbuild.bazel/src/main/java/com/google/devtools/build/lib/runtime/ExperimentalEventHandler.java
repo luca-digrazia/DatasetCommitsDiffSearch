@@ -34,13 +34,9 @@ import com.google.devtools.build.lib.util.io.AnsiTerminal;
 import com.google.devtools.build.lib.util.io.AnsiTerminalWriter;
 import com.google.devtools.build.lib.util.io.LineCountingAnsiTerminalWriter;
 import com.google.devtools.build.lib.util.io.LineWrappingAnsiTerminalWriter;
-import com.google.devtools.build.lib.util.io.LoggingTerminalWriter;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
-
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -60,9 +56,6 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
   /** Periodic update interval of a time-dependent progress bar if it cannot be updated in place */
   static final long LONG_REFRESH_MILLIS = 5000L;
 
-  private static final DateTimeFormatter TIMESTAMP_FORMAT =
-      DateTimeFormat.forPattern("(HH:mm:ss.SSS) ");
-
   private final long minimalDelayMillis;
   private final boolean cursorControl;
   private final Clock clock;
@@ -71,8 +64,6 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
   private final ExperimentalStateTracker stateTracker;
   private final long minimalUpdateInterval;
   private final boolean showProgress;
-  private final boolean progressInTermTitle;
-  private final boolean showTimestamp;
   private long lastRefreshMillis;
   private long mustRefreshAfterMillis;
   private int numLinesProgressBar;
@@ -91,8 +82,6 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
     this.terminal = new AnsiTerminal(outErr.getErrorStream());
     this.terminalWidth = (options.terminalColumns > 0 ? options.terminalColumns : 80);
     this.showProgress = options.showProgress;
-    this.progressInTermTitle = options.progressInTermTitle;
-    this.showTimestamp = options.showTimestamp;
     this.clock = clock;
     this.debugAllEvents = options.experimentalUiDebugAllEvents;
     // If we have cursor control, we try to fit in the terminal width to avoid having
@@ -115,29 +104,17 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
     ignoreRefreshLimitOnce();
   }
 
-  /**
-   * Flush buffers for stdout and stderr. Return if either of them flushed a non-zero number of
-   * symbols.
-   */
-  private synchronized boolean flushStdOutStdErrBuffers() {
-    boolean didFlush = false;
+  private synchronized void flushStdOutStdErrBuffers() {
     try {
-      if (stdoutBuffer.length > 0) {
-        outErr.getOutputStream().write(stdoutBuffer);
-        outErr.getOutputStream().flush();
-        stdoutBuffer = new byte[] {};
-        didFlush = true;
-      }
-      if (stderrBuffer.length > 0) {
-        outErr.getErrorStream().write(stderrBuffer);
-        outErr.getErrorStream().flush();
-        stderrBuffer = new byte[] {};
-        didFlush = true;
-      }
+      outErr.getOutputStream().write(stdoutBuffer);
+      outErr.getOutputStream().flush();
+      stdoutBuffer = new byte[] {};
+      outErr.getErrorStream().write(stderrBuffer);
+      outErr.getErrorStream().flush();
+      stderrBuffer = new byte[] {};
     } catch (IOException e) {
       LOG.warning("IO Error writing to output stream: " + e);
     }
-    return didFlush;
   }
 
   @Override
@@ -195,31 +172,21 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
           case WARNING:
           case INFO:
           case SUBCOMMAND:
-            boolean incompleteLine;
             if (showProgress && !buildComplete) {
               clearProgressBar();
             }
-            incompleteLine = flushStdOutStdErrBuffers();
-            if (incompleteLine) {
-              crlf();
-            }
+            flushStdOutStdErrBuffers();
+            crlf();
             setEventKindColor(event.getKind());
             terminal.writeString(event.getKind() + ": ");
             terminal.resetTerminal();
-            incompleteLine = true;
-            if (showTimestamp) {
-              terminal.writeString(TIMESTAMP_FORMAT.print(clock.currentTimeMillis()));
-            }
             if (event.getLocation() != null) {
               terminal.writeString(event.getLocation() + ": ");
             }
             if (event.getMessage() != null) {
               terminal.writeString(event.getMessage());
-              incompleteLine = !event.getMessage().endsWith("\n");
             }
-            if (incompleteLine) {
-              crlf();
-            }
+            crlf();
             if (showProgress && !buildComplete) {
               addProgressBar();
             }
@@ -303,13 +270,7 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
 
   @Subscribe
   public void buildComplete(BuildCompleteEvent event) {
-    // The final progress bar will flow into the scroll-back buffer, to if treat
-    // it as an event and add a time stamp, if events are supposed to have a time stmap.
-    if (showTimestamp) {
-      stateTracker.buildComplete(event, TIMESTAMP_FORMAT.print(clock.currentTimeMillis()));
-    } else {
-      stateTracker.buildComplete(event);
-    }
+    stateTracker.buildComplete(event);
     ignoreRefreshLimitOnce();
     refresh();
     buildComplete = true;
@@ -472,12 +433,6 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
   }
 
   private void startUpdateThread() {
-    // Refuse to start an update thread once the build is complete; such a situation might
-    // arise if the completion of the build is reported (shortly) before the completion of
-    // the last action is reported.
-    if (buildComplete) {
-      return;
-    }
     Thread threadToStart = null;
     synchronized (this) {
       if (updateThread == null) {
@@ -563,10 +518,5 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
     stateTracker.writeProgressBar(terminalWriter, /* shortVersion=*/ !cursorControl);
     terminalWriter.newline();
     numLinesProgressBar = countingTerminalWriter.getWrittenLines();
-    if (progressInTermTitle) {
-      LoggingTerminalWriter stringWriter = new LoggingTerminalWriter(true);
-      stateTracker.writeProgressBar(stringWriter, true);
-      terminal.setTitle(stringWriter.getTranscript());
-    }
   }
 }
