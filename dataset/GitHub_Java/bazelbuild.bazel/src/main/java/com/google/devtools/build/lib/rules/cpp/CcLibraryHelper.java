@@ -18,7 +18,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
@@ -38,7 +37,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariablesExtension;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
@@ -73,9 +71,8 @@ import javax.annotation.Nullable;
 public final class CcLibraryHelper {
 
   /**
-   * A group of source file types and action names for builds controlled by CcLibraryHelper.
-   * Determines what file types CcLibraryHelper considers sources and what action configs are
-   * configured in the CROSSTOOL.
+   * A group of source file types for builds controlled by CcLibraryHelper.  Determines what
+   * file types CcLibraryHelper considers sources.
    */
   public static enum SourceCategory {
     CC(
@@ -84,15 +81,7 @@ public final class CcLibraryHelper {
             CppFileTypes.CPP_HEADER,
             CppFileTypes.C_SOURCE,
             CppFileTypes.ASSEMBLER,
-            CppFileTypes.ASSEMBLER_WITH_C_PREPROCESSOR),
-        ImmutableSet.<String>of(
-            CppCompileAction.C_COMPILE,
-            CppCompileAction.CPP_COMPILE,
-            CppCompileAction.CPP_HEADER_PARSING,
-            CppCompileAction.CPP_HEADER_PREPROCESSING,
-            CppCompileAction.CPP_MODULE_COMPILE,
-            CppCompileAction.ASSEMBLE,
-            CppCompileAction.PREPROCESS_ASSEMBLE)),
+            CppFileTypes.ASSEMBLER_WITH_C_PREPROCESSOR)),
     CC_AND_OBJC(
         FileTypeSet.of(
             CppFileTypes.CPP_SOURCE,
@@ -101,42 +90,22 @@ public final class CcLibraryHelper {
             CppFileTypes.OBJCPP_SOURCE,
             CppFileTypes.C_SOURCE,
             CppFileTypes.ASSEMBLER,
-            CppFileTypes.ASSEMBLER_WITH_C_PREPROCESSOR),
-        ImmutableSet.<String>of(
-            CppCompileAction.C_COMPILE,
-            CppCompileAction.CPP_COMPILE,
-            CppCompileAction.OBJC_COMPILE,
-            CppCompileAction.OBJCPP_COMPILE,
-            CppCompileAction.CPP_HEADER_PARSING,
-            CppCompileAction.CPP_HEADER_PREPROCESSING,
-            CppCompileAction.CPP_MODULE_COMPILE,
-            CppCompileAction.ASSEMBLE,
-            CppCompileAction.PREPROCESS_ASSEMBLE));
-            
+            CppFileTypes.ASSEMBLER_WITH_C_PREPROCESSOR));
 
     private final FileTypeSet sourceTypeSet;
-    private final Set<String> actionConfigSet;
 
-    private SourceCategory(FileTypeSet sourceTypeSet, Set<String> actionConfigSet) {
+    private SourceCategory(FileTypeSet sourceTypeSet) {
       this.sourceTypeSet = sourceTypeSet;
-      this.actionConfigSet = actionConfigSet;
     }
 
     /**
-     * Returns the set of file types that are valid for this category.
+     * Returns the set of file types that are valid for this catagory.
      */
     public FileTypeSet getSourceTypes() {
       return sourceTypeSet;
     }
-    
-    /**
-     * Returns the set of enabled actions for this category.
-     */
-    public Set<String> getActionConfigSet() {
-      return actionConfigSet;
-    }
   }
-
+  
   /** Function for extracting module maps from CppCompilationDependencies. */
   public static final Function<TransitiveInfoCollection, CppModuleMap> CPP_DEPS_TO_MODULES =
     new Function<TransitiveInfoCollection, CppModuleMap>() {
@@ -257,8 +226,7 @@ public final class CcLibraryHelper {
   private boolean checkDepsGenerateCpp = true;
   private boolean emitCompileProviders;
   private SourceCategory sourceCatagory;
-  private List<VariablesExtension> variablesExtensions = new ArrayList<>();
-  
+
   private final FeatureConfiguration featureConfiguration;
 
   /**
@@ -281,15 +249,6 @@ public final class CcLibraryHelper {
     this.sourceCatagory = Preconditions.checkNotNull(sourceCatagory);
   }
 
-  public CcLibraryHelper(
-      RuleContext ruleContext, CppSemantics semantics, SourceCategory sourceCategory) {
-    this(
-        ruleContext,
-        semantics,
-        CcCommon.configureFeatures(ruleContext, sourceCategory),
-        sourceCategory);
-  }
-  
   /**
    * Creates a CcLibraryHelper for cpp source files.
    *
@@ -660,15 +619,6 @@ public final class CcLibraryHelper {
   }
 
   /**
-   * Adds a variableExtension to template the crosstool.
-   */
-  public CcLibraryHelper addVariableExtension(VariablesExtension variableExtension) {
-    Preconditions.checkNotNull(variableExtension);
-    this.variablesExtensions.add(variableExtension);
-    return this;
-  }
-  
-  /**
    * Overrides the path for the generated dynamic library - this should only be called if the
    * dynamic library is an implicit or explicit output of the rule, i.e., if it is accessible by
    * name from other rules in the same package. Set to {@code null} to use the default computation.
@@ -947,8 +897,7 @@ public final class CcLibraryHelper {
         .setNoCopts(nocopts)
         .setDynamicLibrary(dynamicLibrary)
         .addLinkopts(linkopts)
-        .setFeatureConfiguration(featureConfiguration)
-        .addVariablesExtension(variablesExtensions);
+        .setFeatureConfiguration(featureConfiguration);
   }
 
   /**
