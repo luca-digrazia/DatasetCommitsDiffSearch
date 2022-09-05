@@ -13,15 +13,18 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.base.Preconditions;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSetMultimap;
-import com.google.common.collect.LinkedHashMultimap;
-import com.google.common.collect.SetMultimap;
+import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
-import com.google.devtools.build.lib.packages.Attribute.Transition;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.syntax.FragmentClassNameResolver;
+
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -62,29 +65,35 @@ public final class ConfigurationFragmentPolicy {
    * Builder to construct a new ConfigurationFragmentPolicy.
    */
   public static final class Builder {
-    /**
-     * Sets of configuration fragment classes required by this rule, a set for each configuration.
-     * Duplicate entries will automatically be ignored by the SetMultimap.
-     */
-    private final SetMultimap<Transition, Class<?>> requiredConfigurationFragments
-        = LinkedHashMultimap.create();
-    /**
-     * Sets of configuration fragment names required by this rule, a set for each configuration.
-     * Duplicate entries will automatically be ignored by the SetMultimap.
-     */
-    private final SetMultimap<Transition, String> requiredConfigurationFragmentNames
-        = LinkedHashMultimap.create();
+    private final Multimap<ConfigurationTransition, Class<?>> requiredConfigurationFragments
+        = ArrayListMultimap.create();
+    private final Map<ConfigurationTransition, ImmutableSet<String>>
+        requiredConfigurationFragmentNames = new LinkedHashMap<>();
     private MissingFragmentPolicy missingFragmentPolicy = MissingFragmentPolicy.FAIL_ANALYSIS;
+    private FragmentClassNameResolver fragmentNameResolver;
 
     /**
      * Declares that the implementation of the associated rule class requires the given
-     * fragments to be present in this rule's target configuration only.
+     * fragments to be present in this rule's host and target configurations.
      *
      * <p>The value is inherited by subclasses.
      */
     public Builder requiresConfigurationFragments(Collection<Class<?>> configurationFragments) {
-      requiresConfigurationFragments(ConfigurationTransition.NONE, configurationFragments);
+      requiredConfigurationFragments.putAll(ConfigurationTransition.HOST, configurationFragments);
+      requiredConfigurationFragments.putAll(ConfigurationTransition.NONE, configurationFragments);
       return this;
+    }
+
+    /**
+     * Declares that the implementation of the associated rule class requires the given
+     * fragments to be present in this rule's host and target configurations.
+     *
+     * <p>The value is inherited by subclasses.
+     */
+    public Builder requiresConfigurationFragments(Class<?>... configurationFragments) {
+      Collection<Class<?>> asList = new ArrayList();
+      Collections.addAll(asList, configurationFragments);
+      return requiresConfigurationFragments(asList);
     }
 
     /**
@@ -94,31 +103,11 @@ public final class ConfigurationFragmentPolicy {
      *
      * <p>The value is inherited by subclasses.
      */
-    public Builder requiresConfigurationFragments(Attribute.Transition transition,
-        Collection<Class<?>> configurationFragments) {
-      // We can relax this assumption if needed. But it's already sketchy to let a rule see more
-      // than its own configuration. So we don't want to casually proliferate this pattern.
-      Preconditions.checkArgument(
-          transition == Attribute.ConfigurationTransition.NONE || transition.isHostTransition());
-      requiredConfigurationFragments.putAll(transition, configurationFragments);
-      return this;
-    }
-
-    /**
-     * Declares that the implementation of the associated rule class requires the given
-     * fragments to be present in this rule's target configuration only.
-     *
-     * <p>In contrast to {@link #requiresConfigurationFragments(Collection)}, this method takes the
-     * names of fragments (as determined by {@link SkylarkModule.Resolver}) instead of their
-     * classes.
-     *
-     * <p>The value is inherited by subclasses.
-     */
-    public Builder requiresConfigurationFragmentsBySkylarkModuleName(
-        Collection<String> configurationFragmentNames) {
-
-      requiresConfigurationFragmentsBySkylarkModuleName(
-          Attribute.ConfigurationTransition.NONE, configurationFragmentNames);
+    public Builder requiresConfigurationFragments(ConfigurationTransition transition,
+        Class<?>... configurationFragments) {
+      for (Class<?> fragment : configurationFragments) {
+        requiredConfigurationFragments.put(transition, fragment);
+      }
       return this;
     }
 
@@ -127,29 +116,14 @@ public final class ConfigurationFragmentPolicy {
      * configuration. Valid transition values are HOST for the host configuration and NONE for
      * the target configuration.
      *
-     * <p>In contrast to {@link #requiresConfigurationFragments(Transition,
-     * Collection)}, this method takes the names of fragments (as determined by
-     * {@link SkylarkModule.Resolver}) instead of their
-     * classes.
+     * <p>In contrast to {@link #requiresConfigurationFragments(Class...)}, this method takes the
+     * names of fragments instead of their classes.
      */
-    public Builder requiresConfigurationFragmentsBySkylarkModuleName(Transition transition,
-        Collection<String> configurationFragmentNames) {
-      // We can relax this assumption if needed. But it's already sketchy to let a rule see more
-      // than its own configuration. So we don't want to casually proliferate this pattern.
-      Preconditions.checkArgument(
-          transition == ConfigurationTransition.NONE || transition.isHostTransition());
-      requiredConfigurationFragmentNames.putAll(transition, configurationFragmentNames);
-      return this;
-    }
-
-    /**
-     * Adds the configuration fragments from the {@code other} policy to this Builder.
-     *
-     * <p>Does not change the missing fragment policy.
-     */
-    public Builder includeConfigurationFragmentsFrom(ConfigurationFragmentPolicy other) {
-      requiredConfigurationFragments.putAll(other.requiredConfigurationFragments);
-      requiredConfigurationFragmentNames.putAll(other.requiredConfigurationFragmentNames);
+    public Builder requiresConfigurationFragments(
+        FragmentClassNameResolver fragmentNameResolver,
+        Map<ConfigurationTransition, ImmutableSet<String>> configurationFragmentNames) {
+      requiredConfigurationFragmentNames.putAll(configurationFragmentNames);
+      this.fragmentNameResolver = fragmentNameResolver;
       return this;
     }
 
@@ -164,8 +138,9 @@ public final class ConfigurationFragmentPolicy {
 
     public ConfigurationFragmentPolicy build() {
       return new ConfigurationFragmentPolicy(
-          ImmutableSetMultimap.copyOf(requiredConfigurationFragments),
-          ImmutableSetMultimap.copyOf(requiredConfigurationFragmentNames),
+          ImmutableMultimap.copyOf(requiredConfigurationFragments),
+          ImmutableMap.copyOf(requiredConfigurationFragmentNames),
+          fragmentNameResolver,
           missingFragmentPolicy);
     }
   }
@@ -174,15 +149,20 @@ public final class ConfigurationFragmentPolicy {
    * A dictionary that maps configurations (NONE for target configuration, HOST for host
    * configuration) to required configuration fragments.
    */
-  private final ImmutableSetMultimap<Transition, Class<?>>
-      requiredConfigurationFragments;
+  private final ImmutableMultimap<ConfigurationTransition, Class<?>> requiredConfigurationFragments;
 
   /**
    * A dictionary that maps configurations (NONE for target configuration, HOST for host
-   * configuration) to lists of Skylark module names of required configuration fragments.
+   * configuration) to lists of names of required configuration fragments.
    */
-  private final ImmutableSetMultimap<Transition, String>
+  private final ImmutableMap<ConfigurationTransition, ImmutableSet<String>>
       requiredConfigurationFragmentNames;
+
+  /**
+   * Used to resolve the names of fragments in order to compare them to values in {@link
+   * #requiredConfigurationFragmentNames}
+   */
+  private final FragmentClassNameResolver fragmentNameResolver;
 
   /**
    * What to do during analysis if a configuration fragment is missing.
@@ -190,11 +170,14 @@ public final class ConfigurationFragmentPolicy {
   private final MissingFragmentPolicy missingFragmentPolicy;
 
   private ConfigurationFragmentPolicy(
-      ImmutableSetMultimap<Transition, Class<?>> requiredConfigurationFragments,
-      ImmutableSetMultimap<Transition, String> requiredConfigurationFragmentNames,
+      ImmutableMultimap<ConfigurationTransition, Class<?>> requiredConfigurationFragments,
+      ImmutableMap<ConfigurationTransition, ImmutableSet<String>>
+          requiredConfigurationFragmentNames,
+      FragmentClassNameResolver fragmentNameResolver,
       MissingFragmentPolicy missingFragmentPolicy) {
     this.requiredConfigurationFragments = requiredConfigurationFragments;
     this.requiredConfigurationFragmentNames = requiredConfigurationFragmentNames;
+    this.fragmentNameResolver = fragmentNameResolver;
     this.missingFragmentPolicy = missingFragmentPolicy;
   }
 
@@ -209,23 +192,16 @@ public final class ConfigurationFragmentPolicy {
   /**
    * Checks if the configuration fragment may be accessed (i.e., if it's declared) in the specified
    * configuration (target or host).
-   *
-   * <p>Note that, currently, all native fragments are included regardless of whether they were
-   * specified in the same configuration that was passed.
    */
   public boolean isLegalConfigurationFragment(
-      Class<?> configurationFragment, Transition config) {
-    return requiredConfigurationFragments.containsValue(configurationFragment)
+      Class<?> configurationFragment, ConfigurationTransition config) {
+    return getRequiredConfigurationFragments().contains(configurationFragment)
         || hasLegalFragmentName(configurationFragment, config);
   }
 
-  /**
-   * Checks if the configuration fragment may be accessed (i.e., if it's declared) in any
-   * configuration.
-   */
   public boolean isLegalConfigurationFragment(Class<?> configurationFragment) {
-    return requiredConfigurationFragments.containsValue(configurationFragment)
-        || hasLegalFragmentName(configurationFragment);
+    // NONE means target configuration.
+    return isLegalConfigurationFragment(configurationFragment, ConfigurationTransition.NONE);
   }
 
   /**
@@ -233,29 +209,14 @@ public final class ConfigurationFragmentPolicy {
    * specified configuration (target or host).
    */
   private boolean hasLegalFragmentName(
-      Class<?> configurationFragment, Transition transition) {
-    String name = SkylarkModule.Resolver.resolveName(configurationFragment);
-    if (requiredConfigurationFragmentNames.containsEntry(transition, name)) {
-      return true;
-    } else if (transition == ConfigurationTransition.HOST) {
-      // We can get rid of this check when we remove ConfigurationTransition.HOST. This essentially
-      // makes ConfigurationTransition.HOST and HostTransition.INSTANCE interchangeable.
-      for (Map.Entry<Transition, String> entry : requiredConfigurationFragmentNames.entries()) {
-        if (entry.getKey().isHostTransition() && entry.getValue().equals(name)) {
-          return true;
-        }
-      }
+      Class<?> configurationFragment, ConfigurationTransition config) {
+    if (fragmentNameResolver == null) {
+      return false;
     }
-    return false;
-  }
 
-  /**
-   * Checks whether the name of the given fragment class was declared as required in any
-   * configuration.
-   */
-  private boolean hasLegalFragmentName(Class<?> configurationFragment) {
-    return requiredConfigurationFragmentNames.containsValue(
-        SkylarkModule.Resolver.resolveName(configurationFragment));
+    String name = fragmentNameResolver.resolveName(configurationFragment);
+    ImmutableSet<String> fragmentNames = requiredConfigurationFragmentNames.get(config);
+    return (name != null && fragmentNames != null && fragmentNames.contains(name));
   }
 
   /**
