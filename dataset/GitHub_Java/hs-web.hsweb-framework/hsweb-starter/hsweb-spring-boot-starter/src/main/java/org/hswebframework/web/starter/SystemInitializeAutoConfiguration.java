@@ -18,7 +18,6 @@
 
 package org.hswebframework.web.starter;
 
-import lombok.extern.slf4j.Slf4j;
 import org.hswebframework.ezorm.rdb.executor.SqlExecutor;
 import org.hswebframework.ezorm.rdb.meta.RDBDatabaseMetaData;
 import org.hswebframework.ezorm.rdb.meta.parser.H2TableMetaParser;
@@ -64,7 +63,6 @@ import java.util.stream.Stream;
 @Configuration
 @EnableConfigurationProperties(AppProperties.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@Slf4j
 public class SystemInitializeAutoConfiguration implements CommandLineRunner, BeanPostProcessor {
 
     @Autowired
@@ -109,14 +107,9 @@ public class SystemInitializeAutoConfiguration implements CommandLineRunner, Bea
 
     @Override
     public void run(String... args) throws Exception {
-
-        if (!appProperties.isAutoInit()) {
-            log.debug("app auto init is disabled");
-            return;
-        }
         DatabaseType type = DataSourceHolder.currentDatabaseType();
         SystemVersion version = appProperties.build();
-        if (version.getName() == null) {
+        if(version.getName()==null){
             version.setName("unknown");
         }
         Connection connection = null;
