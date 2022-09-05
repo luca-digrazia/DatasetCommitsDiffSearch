@@ -36,7 +36,7 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.graph.Node;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.NativeAspectClass;
+import com.google.devtools.build.lib.packages.NativeAspectClass.NativeAspectFactory;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.rules.SkylarkModules;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
-import com.google.devtools.build.lib.syntax.Environment.Phase;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.common.options.OptionsClassProvider;
 
@@ -94,7 +93,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
     private final Map<String, RuleClass> ruleClassMap = new HashMap<>();
     private final Map<String, RuleDefinition> ruleDefinitionMap = new HashMap<>();
-    private final Map<String, NativeAspectClass> nativeAspectClassMap =
+    private final Map<String, Class<? extends NativeAspectFactory>> aspectFactoryMap =
         new HashMap<>();
     private final Map<Class<? extends RuleDefinition>, RuleClass> ruleMap = new HashMap<>();
     private final Digraph<Class<? extends RuleDefinition>> dependencyGraph =
@@ -162,8 +161,10 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       return this;
     }
 
-    public Builder addNativeAspectClass(NativeAspectClass aspectFactoryClass) {
-      nativeAspectClassMap.put(aspectFactoryClass.getName(), aspectFactoryClass);
+    public Builder addAspectFactory(
+        String name, Class<? extends ConfiguredNativeAspectFactory> configuredAspectFactoryClass) {
+      aspectFactoryMap.put(name, configuredAspectFactoryClass);
+
       return this;
     }
 
@@ -263,7 +264,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
           toolsRepository,
           ImmutableMap.copyOf(ruleClassMap),
           ImmutableMap.copyOf(ruleDefinitionMap),
-          ImmutableMap.copyOf(nativeAspectClassMap),
+          ImmutableMap.copyOf(aspectFactoryMap),
           defaultWorkspaceFilePrefix.toString(),
           defaultWorkspaceFileSuffix.toString(),
           ImmutableList.copyOf(buildInfoFactories),
@@ -343,7 +344,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   /**
    * Maps aspect name to the aspect factory meta class.
    */
-  private final ImmutableMap<String, NativeAspectClass> nativeAspectClassMap;
+  private final ImmutableMap<String, Class<? extends NativeAspectFactory>> aspectFactoryMap;
 
   /**
    * The configuration options that affect the behavior of the rules.
@@ -380,7 +381,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       String toolsRepository,
       ImmutableMap<String, RuleClass> ruleClassMap,
       ImmutableMap<String, RuleDefinition> ruleDefinitionMap,
-      ImmutableMap<String, NativeAspectClass> nativeAspectClassMap,
+      ImmutableMap<String, Class<? extends NativeAspectFactory>> aspectFactoryMap,
       String defaultWorkspaceFilePrefix,
       String defaultWorkspaceFileSuffix,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
@@ -397,7 +398,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     this.toolsRepository = toolsRepository;
     this.ruleClassMap = ruleClassMap;
     this.ruleDefinitionMap = ruleDefinitionMap;
-    this.nativeAspectClassMap = nativeAspectClassMap;
+    this.aspectFactoryMap = aspectFactoryMap;
     this.defaultWorkspaceFilePrefix = defaultWorkspaceFilePrefix;
     this.defaultWorkspaceFileSuffix = defaultWorkspaceFileSuffix;
     this.buildInfoFactories = buildInfoFactories;
@@ -435,13 +436,8 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   }
 
   @Override
-  public Map<String, NativeAspectClass> getNativeAspectClassMap() {
-    return nativeAspectClassMap;
-  }
-
-  @Override
-  public NativeAspectClass getNativeAspectClass(String key) {
-    return nativeAspectClassMap.get(key);
+  public Map<String, Class<? extends NativeAspectFactory>> getAspectFactoryMap() {
+    return aspectFactoryMap;
   }
 
   /**
@@ -538,8 +534,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
         .setEventHandler(eventHandler)
         .setFileContentHashCode(astFileContentHashCode)
         .setImportedExtensions(importMap)
-        .setToolsRepository(toolsRepository)
-        .setPhase(Phase.LOADING)
+        .setLoadingPhase()
         .build();
   }
 
