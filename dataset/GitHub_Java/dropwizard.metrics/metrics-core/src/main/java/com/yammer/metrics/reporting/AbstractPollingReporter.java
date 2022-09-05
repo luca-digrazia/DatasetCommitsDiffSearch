@@ -2,29 +2,61 @@ package com.yammer.metrics.reporting;
 
 import com.yammer.metrics.core.MetricsRegistry;
 
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * An abstract base class for all reporter implementations which periodically poll registered
+ * metrics (e.g., to send the data to another service).
+ */
 public abstract class AbstractPollingReporter extends AbstractReporter implements Runnable {
-  private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
-  private long pollingTime;
-  private TimeUnit pollingTimeUnit;
+    private final ScheduledExecutorService executor;
 
-  protected AbstractPollingReporter(MetricsRegistry metricsRegistry, String name) {
-    super(metricsRegistry, name);
-  }
+    /**
+     * Creates a new {@link AbstractPollingReporter} instance.
+     *
+     * @param registry    the {@link MetricsRegistry} containing the metrics this reporter will
+     *                    report
+     * @param name        the reporter's name
+     * @see AbstractReporter#AbstractReporter(MetricsRegistry)
+     */
+    protected AbstractPollingReporter(MetricsRegistry registry, String name) {
+        super(registry);
+        this.executor = registry.newScheduledThreadPool(1, name);
+    }
 
-  public final void start(long pollingTime, TimeUnit pollingTimeUnit) {
-    executor.scheduleWithFixedDelay(this, pollingTime, pollingTime, pollingTimeUnit);
-  }
+    /**
+     * Starts the reporter polling at the given period.
+     *
+     * @param period    the amount of time between polls
+     * @param unit      the unit for {@code period}
+     */
+    public void start(long period, TimeUnit unit) {
+        executor.scheduleAtFixedRate(this, period, period, unit);
+    }
 
-  public void shutdown(long waitTime, TimeUnit waitTimeMillis) throws InterruptedException {
-    executor.shutdown();
-    executor.awaitTermination(waitTime, waitTimeMillis);
-  }
+    /**
+     * Shuts down the reporter polling, waiting the specific amount of time for any current polls to
+     * complete.
+     *
+     * @param timeout    the maximum time to wait
+     * @param unit       the unit for {@code timeout}
+     * @throws InterruptedException if interrupted while waiting
+     */
+    public void shutdown(long timeout, TimeUnit unit) throws InterruptedException {
+        executor.shutdown();
+        executor.awaitTermination(timeout, unit);
+    }
 
-  public void shutdown() {
-    executor.shutdown();
-  }
+    @Override
+    public void shutdown() {
+        executor.shutdown();
+        super.shutdown();
+    }
+
+    /**
+     * The method called when a a poll is scheduled to occur.
+     */
+    @Override
+    public abstract void run();
 }
