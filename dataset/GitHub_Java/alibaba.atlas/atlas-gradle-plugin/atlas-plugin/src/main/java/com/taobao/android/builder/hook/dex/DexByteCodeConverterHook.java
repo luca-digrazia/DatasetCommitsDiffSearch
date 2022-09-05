@@ -36,7 +36,7 @@ import static com.google.common.base.Preconditions.*;
 
 /**
  * @author lilong
- * @create 2017-05-12 Morning in the afternoon
+ * @create 2017-05-12 下午7:43
  */
 
 public class DexByteCodeConverterHook extends DexByteCodeConverter {
@@ -137,11 +137,17 @@ public class DexByteCodeConverterHook extends DexByteCodeConverter {
             throws IOException, ProcessException {
         final String submission = Joiner.on(',').join(builder.getInputs());
         mLogger.verbose("Dexing in-process : %1$s", submission);
-        Stopwatch stopwatch = Stopwatch.createStarted();
-        ProcessResult result = DexWrapperHook.run(builder, dexOptions, outputHandler);
-        result.assertNormalExitValue();
-        mLogger.verbose("Dexing %1$s took %2$s.", submission, stopwatch.toString());
-
+        try {
+            sDexExecutorService.submit(() -> {
+                Stopwatch stopwatch = Stopwatch.createStarted();
+                ProcessResult result = DexWrapperHook.run(builder, dexOptions, outputHandler);
+                result.assertNormalExitValue();
+                mLogger.verbose("Dexing %1$s took %2$s.", submission, stopwatch.toString());
+                return null;
+            }).get();
+        } catch (Exception e) {
+            throw new ProcessException(e);
+        }
     }
 
     private void dexOutOfProcess(
@@ -195,7 +201,7 @@ public class DexByteCodeConverterHook extends DexByteCodeConverter {
                             "dexOptions is specifying a maximum number of %1$d concurrent dx processes,"
                                     + " but the Gradle daemon was initialized with %2$d.\n"
                                     + "To initialize with a different maximum value,"
-                                    + " first stop the Gradle daemon by calling 'gradlew - stop '.",
+                                    + " first stop the Gradle daemon by calling ‘gradlew —-stop’.",
                             dexOptions.getMaxProcessCount(),
                             DEX_PROCESS_COUNT.get());
                 }
