@@ -284,8 +284,8 @@ public final class BinaryOperatorExpression extends Expression {
 
   @Override
   SkylarkType validate(ValidationEnvironment env) throws EvalException {
-    SkylarkType ltype = SkylarkType.typeForInference(lhs.validate(env));
-    SkylarkType rtype = SkylarkType.typeForInference(rhs.validate(env));
+    SkylarkType ltype = lhs.validate(env);
+    SkylarkType rtype = rhs.validate(env);
 
     switch (operator) {
       case AND: {

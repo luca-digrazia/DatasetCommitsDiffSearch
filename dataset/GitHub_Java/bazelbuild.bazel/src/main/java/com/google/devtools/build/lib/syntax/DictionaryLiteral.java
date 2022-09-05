@@ -106,10 +106,17 @@ public class DictionaryLiteral extends Expression {
   }
 
   @Override
-  void validate(ValidationEnvironment env) throws EvalException {
+  SkylarkType validate(ValidationEnvironment env) throws EvalException {
+    SkylarkType type = SkylarkType.UNKNOWN;
     for (DictionaryEntryLiteral entry : entries) {
-      entry.key.validate(env);
+      SkylarkType nextType = entry.key.validate(env);
       entry.value.validate(env);
+      if (!nextType.isSimple()) {
+        throw new EvalException(getLocation(),
+            String.format("Dict cannot contain composite type '%s' as key", nextType));
+      }
+      type = type.infer(nextType, "dict literal", entry.getLocation(), getLocation());
     }
+    return SkylarkType.of(SkylarkType.MAP, type);
   }
 }
