@@ -287,15 +287,6 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkPrin
    */
   @Override
   public String toString() {
-    return getCanonicalForm();
-  }
-
-  /**
-   * Renders this label in canonical form.
-   *
-   * <p>invariant: {@code parseAbsolute(x.toString()).equals(x)}
-   */
-  public String getCanonicalForm() {
     return packageIdentifier.getRepository() + "//" + packageIdentifier.getPackageFragment()
         + ":" + name;
   }

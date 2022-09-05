@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.analysis.config.PackageProviderForConfigurations;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCppRuleClasses.CppTransition;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
@@ -63,7 +62,7 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
       Cache<String, BuildConfiguration> cache,
       PackageProviderForConfigurations packageProvider,
       BuildOptions buildOptions,
-      EventHandler eventHandler,
+      EventHandler errorEventListener,
       boolean performSanityCheck) throws InvalidConfigurationException {
     // Target configuration
     BuildConfiguration targetConfiguration = configurationFactory.getConfiguration(
@@ -108,23 +107,20 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
       return null;
     }
 
+
     // Sanity check that the implicit labels are all in the transitive closure of explicit ones.
     // This also registers all targets in the cache entry and validates them on subsequent requests.
     Set<Label> reachableLabels = new HashSet<>();
     if (performSanityCheck) {
       // We allow the package provider to be null for testing.
-      for (Map.Entry<String, Label> entry : buildOptions.getAllLabels().entries()) {
-        Label label = entry.getValue();
+      for (Label label : buildOptions.getAllLabels().values()) {
         try {
           collectTransitiveClosure(packageProvider, reachableLabels, label);
         } catch (NoSuchThingException e) {
-          eventHandler.handle(Event.error(e.getMessage()));
-          throw new InvalidConfigurationException(
-              String.format("Failed to load required %s target: '%s'", entry.getKey(), label));
+          // We've loaded the transitive closure of the labels-to-load above, and made sure that
+          // there are no errors loading it, so this can't happen.
+          throw new IllegalStateException(e);
         }
-      }
-      if (packageProvider.valuesMissing()) {
-        return null;
       }
       sanityCheckImplicitLabels(reachableLabels, targetConfiguration);
       sanityCheckImplicitLabels(reachableLabels, hostConfiguration);
@@ -132,7 +128,7 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
 
     BuildConfiguration result = setupTransitions(
         targetConfiguration, dataConfiguration, hostConfiguration, splitTransitionsTable);
-    result.reportInvalidOptions(eventHandler);
+    result.reportInvalidOptions(errorEventListener);
     return result;
   }
 

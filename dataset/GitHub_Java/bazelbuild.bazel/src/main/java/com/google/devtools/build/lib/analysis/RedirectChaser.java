@@ -19,13 +19,16 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AbstractAttributeMapper;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.NoSuchThingException;
+import com.google.devtools.build.lib.packages.NoSuchPackageException;
+import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.syntax.Type;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -72,7 +75,6 @@ public final class RedirectChaser {
   @Nullable
   public static Label followRedirects(ConfigurationEnvironment env, Label label, String name)
       throws InvalidConfigurationException {
-    Label oldLabel = null;
     Set<Label> visitedLabels = new HashSet<>();
     visitedLabels.add(label);
     try {
@@ -83,25 +85,24 @@ public final class RedirectChaser {
         }
         Label newLabel = getFilegroupRedirect(possibleRedirect);
         if (newLabel == null) {
-          newLabel = getBindOrAliasRedirect(possibleRedirect);
+          newLabel = getBindRedirect(possibleRedirect);
         }
+
         if (newLabel == null) {
           return label;
         }
 
         newLabel = label.resolveRepositoryRelative(newLabel);
-        oldLabel = label;
         label = newLabel;
         if (!visitedLabels.add(label)) {
           throw new InvalidConfigurationException("The " + name + " points to a filegroup which "
               + "recursively includes itself. The label " + label + " is part of the loop");
         }
       }
-    } catch (NoSuchThingException e) {
-      String prefix = oldLabel == null
-          ? ""
-          : "in target '" + oldLabel + "': ";
-      throw new InvalidConfigurationException(prefix + e.getMessage(), e);
+    } catch (NoSuchPackageException e) {
+      throw new InvalidConfigurationException(e.getMessage(), e);
+    } catch (NoSuchTargetException e) {
+      return label;
     }
   }
 
@@ -124,14 +125,13 @@ public final class RedirectChaser {
     return labels.get(0);
   }
 
-  private static Label getBindOrAliasRedirect(Target target)
-      throws InvalidConfigurationException {
+  private static Label getBindRedirect(Target target) throws InvalidConfigurationException {
     if (!(target instanceof Rule)) {
       return null;
     }
 
     Rule rule = (Rule) target;
-    if (!rule.getRuleClass().equals("bind") && !rule.getRuleClass().equals("alias")) {
+    if (!rule.getRuleClass().equals("bind")) {
       return null;
     }
 
