@@ -81,8 +81,8 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     JavaTargetAttributes attributes = helper.getAttributes();
     if (attributes.hasMessages()) {
-      helper.setTranslations(
-          semantics.translate(ruleContext, javaConfig, attributes.getMessages()));
+      helper.addTranslations(semantics.translate(ruleContext, javaConfig,
+          attributes.getMessages()));
     }
 
     ruleContext.checkSrcsSamePackage(true);

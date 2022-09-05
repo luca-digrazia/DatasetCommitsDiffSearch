@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryAarProvider.Aar;
 import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
@@ -82,7 +81,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       resourceApk = applicationManifest.packWithDataAndResources(
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK),
           ruleContext,
-          true, /* isLibrary */
           ResourceDependencies.fromRuleDeps(ruleContext, JavaCommon.isNeverLink(ruleContext)),
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_SYMBOLS_TXT),
@@ -94,22 +92,14 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
           null /* versionName */,
           false,
           null /* proguardCfgOut */,
-          ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_MANIFEST),
-          null /* mergedResourcesOut */);
+          ruleContext.getImplicitOutputArtifact(
+                  AndroidRuleClasses.ANDROID_LIBRARY_MANIFEST));
       if (ruleContext.hasErrors()) {
         return null;
       }
     } else {
       resourceApk = ResourceApk.fromTransitiveResources(
           ResourceDependencies.fromRuleResourceAndDeps(ruleContext, false /* neverlink */));
-    }
-
-    if (!ruleContext.getFragment(AndroidConfiguration.class).allowSrcsLessAndroidLibraryDeps()
-        && !definesLocalResources
-        && ruleContext.attributes().get("srcs", BuildType.LABEL_LIST).isEmpty()
-        && ruleContext.attributes().get("idl_srcs", BuildType.LABEL_LIST).isEmpty()
-        && !ruleContext.attributes().get("deps", BuildType.LABEL_LIST).isEmpty()) {
-      ruleContext.attributeError("deps", "deps not allowed without srcs; move to exports?");
     }
 
     JavaTargetAttributes javaTargetAttributes = androidCommon.init(
@@ -160,17 +150,18 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT), null);
 
       primaryResources = new AndroidResourcesProcessorBuilder(ruleContext)
-          .setLibrary(true)
-          .setApkOut(apk)
-          .setRTxtOut(resourceContainer.getRTxt())
-          .setManifestOut(ruleContext.getImplicitOutputArtifact(
-              AndroidRuleClasses.ANDROID_LIBRARY_MANIFEST))
-          .setSourceJarOut(resourceContainer.getJavaSourceJar())
-          .setJavaPackage(resourceContainer.getJavaPackage())
-          .withPrimary(resourceContainer)
-          .withDependencies(resourceApk.getResourceDependencies())
-          .setDebug(ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT)
-          .build(ruleContext);
+              .setApkOut(apk)
+              .setRTxtOut(resourceContainer.getRTxt())
+              .setManifestOut(
+                  ruleContext.getImplicitOutputArtifact(
+                      AndroidRuleClasses.ANDROID_LIBRARY_MANIFEST))
+              .setSourceJarOut(resourceContainer.getJavaSourceJar())
+              .setJavaPackage(resourceContainer.getJavaPackage())
+              .withPrimary(resourceContainer)
+              .withDependencies(resourceApk.getResourceDependencies())
+              .setDebug(
+                  ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT)
+              .build(ruleContext);
     }
 
     new AarGeneratorBuilder(ruleContext)
