@@ -13,11 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
-import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 
 import java.util.Map;
 import java.util.TreeMap;
@@ -34,27 +30,20 @@ import java.util.TreeMap;
  *       })
  * </pre>
  */
-@SkylarkModule(name = "selector",
-    doc = "A selector between configuration-dependent entities.",
-    documented = false)
-public final class SelectorValue implements SkylarkValue {
+public final class SelectorValue {
   // TODO(bazel-team): Selectors are currently split between .packages and .syntax . They should
   // really all be in .packages, but then we'd need to figure out a way how to extend binary
   // operators, which is a non-trivial problem.
-  private final ImmutableMap<?, ?> dictionary;
+  private final Map<?, ?> dictionary;
   private final Class<?> type;
 
   public SelectorValue(Map<?, ?> dictionary) {
     // Put the dict through a sorting to avoid depending on insertion order.
-    this.dictionary = ImmutableMap.copyOf(new TreeMap<>(dictionary));
+    this.dictionary = new TreeMap<>(dictionary);
     this.type = dictionary.isEmpty() ? null : Iterables.get(dictionary.values(), 0).getClass();
   }
 
-  /**
-   * Returns an {@link ImmutableMap} containing the entries in the map provided to {@link
-   * #SelectorValue} in sorted order.
-   */
-  public ImmutableMap<?, ?> getDictionary() {
+  public Map<?, ?> getDictionary() {
     return dictionary;
   }
 
@@ -64,16 +53,6 @@ public final class SelectorValue implements SkylarkValue {
 
   @Override
   public String toString() {
-    return Printer.repr(this);
-  }
-
-  @Override
-  public void write(Appendable buffer, char quotationMark) {
-    Printer.formatTo(buffer, "selector(%r)", Tuple.of(dictionary));
-  }
-
-  @Override
-  public boolean isImmutable() {
-    return false;
+    return "selector({...})";
   }
 }
