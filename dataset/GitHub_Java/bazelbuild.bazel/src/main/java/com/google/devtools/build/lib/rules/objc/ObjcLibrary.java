@@ -43,7 +43,7 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
    */
   private static class ObjcLibraryCcLinkParamsStore extends CcLinkParamsStore {
 
-    private final ObjcCommon common;
+    private ObjcCommon common;
 
     public ObjcLibraryCcLinkParamsStore(ObjcCommon common) {
       this.common = common;
@@ -76,7 +76,6 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
         .addDefines(ruleContext.getTokenizedStringListAttr("defines"))
         .setCompilationArtifacts(CompilationSupport.compilationArtifacts(ruleContext))
         .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
-        .addRuntimeDeps(ruleContext.getPrerequisites("runtime_deps", Mode.TARGET))
         .addDepObjcProviders(
             ruleContext.getPrerequisites("bundles", Mode.TARGET, ObjcProvider.class))
         .addNonPropagatedDepObjcProviders(

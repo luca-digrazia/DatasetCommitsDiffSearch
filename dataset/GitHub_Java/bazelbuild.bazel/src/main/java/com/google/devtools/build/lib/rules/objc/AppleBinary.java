@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransitionProvider;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
@@ -143,11 +144,11 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         .registerCombineArchitecturesAction(
             binariesToLipo.build(),
             ruleIntermediateArtifacts.combinedArchitectureBinary(),
-            appleConfiguration.getMultiArchPlatform(PlatformType.IOS))
+            appleConfiguration.getPlatform(PlatformType.IOS))
         .registerCombineArchitecturesAction(
             archivesToLipo.build(),
             ruleContext.getImplicitOutputArtifact(AppleBinaryRule.LIPO_ARCHIVE),
-            appleConfiguration.getMultiArchPlatform(PlatformType.IOS));
+            appleConfiguration.getPlatform(PlatformType.IOS));
 
     RuleConfiguredTargetBuilder targetBuilder =
         ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build());
