@@ -3,6 +3,7 @@ package org.hswebframework.web.service;
 import org.hswebframework.web.commons.entity.GenericEntity;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 
 import java.util.List;
 
