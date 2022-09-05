@@ -527,22 +527,20 @@ public class LoadingPhaseRunnerTest {
 
   @Test
   public void testTopLevelTargetErrorsPrintedExactlyOnce_NoKeepGoing() throws Exception {
-    tester.addFile("bad/BUILD",
-        "sh_binary(name = 'bad', srcs = ['bad.sh'])",
-        "undefined_symbol");
+    // 42 is not a valid bash_version, and this is detected during package loading.
+    tester.addFile("bad/BUILD", "sh_binary(name = 'bad', srcs = ['bad.sh'], bash_version = '42')");
     try {
       tester.load("//bad");
       fail();
     } catch (TargetParsingException expected) {
     }
-    tester.assertContainsEventWithFrequency("name 'undefined_symbol' is not defined", 1);
+    tester.assertContainsEventWithFrequency("invalid value in 'bash_version' attribute", 1);
   }
 
   @Test
   public void testTopLevelTargetErrorsPrintedExactlyOnce_KeepGoing() throws Exception {
-    tester.addFile("bad/BUILD",
-        "sh_binary(name = 'bad', srcs = ['bad.sh'])",
-        "undefined_symbol");
+    // 42 is not a valid bash_version, and this is detected during package loading.
+    tester.addFile("bad/BUILD", "sh_binary(name = 'bad', srcs = ['bad.sh'], bash_version = '42')");
     LoadingResult loadingResult = tester.loadKeepGoing("//bad");
     if (runsLoadingPhase()) {
       // The legacy loading phase runner reports a loading error, but no target pattern error in
@@ -555,7 +553,7 @@ public class LoadingPhaseRunnerTest {
     } else {
       assertThat(loadingResult.hasTargetPatternError()).isTrue();
     }
-    tester.assertContainsEventWithFrequency("name 'undefined_symbol' is not defined", 1);
+    tester.assertContainsEventWithFrequency("invalid value in 'bash_version' attribute", 1);
   }
 
   @Test

@@ -15,13 +15,16 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.TestFilter;
 import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
@@ -102,7 +105,8 @@ public final class TargetPatternPhaseValue implements SkyValue {
   }
 
   public LoadingResult toLoadingResult() {
-    return new LoadingResult(hasError(), hasPostExpansionError(), getTargets(), getTestsToRun());
+    return new LoadingResult(hasError(), hasPostExpansionError(), getTargets(), getTestsToRun(),
+        ImmutableMap.<PackageIdentifier, Path>of());
   }
 
   @SuppressWarnings("unused")
@@ -124,7 +128,7 @@ public final class TargetPatternPhaseValue implements SkyValue {
   @ThreadSafe
   public static SkyKey key(ImmutableList<String> targetPatterns, String offset,
       boolean compileOneDependency, boolean buildTestsOnly, boolean determineTests,
-      @Nullable TestFilter testFilter) {
+      TestFilter testFilter) {
     return new SkyKey(SkyFunctions.TARGET_PATTERN_PHASE, new TargetPatternList(
         targetPatterns, offset, compileOneDependency, buildTestsOnly, determineTests, testFilter));
   }
@@ -140,20 +144,17 @@ public final class TargetPatternPhaseValue implements SkyValue {
     private final boolean compileOneDependency;
     private final boolean buildTestsOnly;
     private final boolean determineTests;
-    @Nullable private final TestFilter testFilter;
+    private final TestFilter testFilter;
 
     public TargetPatternList(ImmutableList<String> targetPatterns, String offset,
         boolean compileOneDependency, boolean buildTestsOnly, boolean determineTests,
-        @Nullable TestFilter testFilter) {
-      this.targetPatterns = Preconditions.checkNotNull(targetPatterns);
-      this.offset = Preconditions.checkNotNull(offset);
+        TestFilter testFilter) {
+      this.targetPatterns = targetPatterns;
+      this.offset = offset;
       this.compileOneDependency = compileOneDependency;
       this.buildTestsOnly = buildTestsOnly;
       this.determineTests = determineTests;
       this.testFilter = testFilter;
-      if (buildTestsOnly || determineTests) {
-        Preconditions.checkNotNull(testFilter);
-      }
     }
 
     public ImmutableList<String> getTargetPatterns() {
@@ -182,22 +183,13 @@ public final class TargetPatternPhaseValue implements SkyValue {
 
     @Override
     public String toString() {
-      StringBuilder result = new StringBuilder();
-      result.append(targetPatterns);
-      if (!offset.isEmpty()) {
-        result.append(" OFFSET=").append(offset);
-      }
-      result.append(compileOneDependency ? " COMPILE_ONE_DEPENDENCY" : "");
-      result.append(buildTestsOnly ? " BUILD_TESTS_ONLY" : "");
-      result.append(determineTests ? " DETERMINE_TESTS" : "");
-      result.append(testFilter != null ? testFilter : "");
-      return result.toString();
+      return targetPatterns.toString();
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(targetPatterns, offset, compileOneDependency, buildTestsOnly,
-          determineTests, testFilter);
+      return Objects.hash(targetPatterns, compileOneDependency, buildTestsOnly, determineTests,
+          testFilter);
     }
 
     @Override
@@ -210,11 +202,10 @@ public final class TargetPatternPhaseValue implements SkyValue {
       }
       TargetPatternList other = (TargetPatternList) obj;
       return other.targetPatterns.equals(this.targetPatterns)
-          && other.offset.equals(this.offset)
           && other.compileOneDependency == compileOneDependency
           && other.buildTestsOnly == buildTestsOnly
           && other.determineTests == determineTests
-          && Objects.equals(other.testFilter, testFilter);
+          && other.testFilter.equals(testFilter);
     }
   }
 }
