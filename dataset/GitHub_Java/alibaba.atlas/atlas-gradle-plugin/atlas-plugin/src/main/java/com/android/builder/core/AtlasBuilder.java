@@ -281,6 +281,8 @@ import com.taobao.android.builder.hook.dex.DexByteCodeConverterHook;
 import com.taobao.android.builder.tools.FileNameUtils;
 import com.taobao.android.builder.tools.MD5Util;
 import com.taobao.android.builder.tools.Profiler;
+import com.taobao.android.builder.tools.cache.FileCacheCenter;
+import com.taobao.android.builder.tools.cache.FileCacheException;
 import com.taobao.android.builder.tools.concurrent.ExecutorServicesHelper;
 import com.taobao.android.builder.tools.manifest.ManifestFileUtils;
 import com.taobao.android.builder.tools.zip.ZipUtils;
@@ -305,9 +307,9 @@ public class AtlasBuilder extends AndroidBuilder {
 
     private static Logger sLogger = LoggerFactory.getLogger(AtlasBuilder.class);
 
+    public static final String PRE_DEXCACHE_TYPE = "pre-dex-0.06";
+
     protected AtlasExtension atlasExtension;
-
-
 
     public MultiDexer multiDexer;
 
@@ -928,7 +930,7 @@ public class AtlasBuilder extends AndroidBuilder {
             Profiler.release();
         }
 
-        if (AtlasBuildContext.sBuilderAdapter.fileCache.isCacheEnabled() && inputs.size() > 1) {
+        if (AtlasBuildContext.sBuilderAdapter.isBuildCacheEnabled() && inputs.size() > 1) {
 
             Profiler.enter("jar2dex");
 
@@ -1014,10 +1016,14 @@ public class AtlasBuilder extends AndroidBuilder {
                     File dexFile = new File(outDexFolder, "classes.dex");
 
                     dex.writeTo(dexFile);
+
+                    if (!dexFile.exists()){
+                        sLogger.error("dexmerge failed, not dex file found , inputs : "  + dexs.size());
+                    }
                 }
 
             } else {
-                sLogger.warn("no dex found to  " + outDexFolder.getAbsolutePath());
+                sLogger.error("no dex found to  " + outDexFolder.getAbsolutePath());
             }
             Profiler.release();
 
@@ -1075,7 +1081,7 @@ public class AtlasBuilder extends AndroidBuilder {
                               @NonNull ProcessOutputHandler processOutputHandler)
         throws IOException, InterruptedException, ProcessException {
 
-        if (!AtlasBuildContext.sBuilderAdapter.dexCacheEnabled) {
+        if (!AtlasBuildContext.sBuilderAdapter.dexCacheEnabled || multiDex) {
             super.preDexLibrary(inputFile, outFile, multiDex, dexOptions, processOutputHandler);
             return;
         }
@@ -1095,7 +1101,13 @@ public class AtlasBuilder extends AndroidBuilder {
             }
 
             if (StringUtils.isNotEmpty(md5)) {
-                AtlasBuildContext.sBuilderAdapter.fileCache.fetchFile(md5, dexFile, "pre-dex");
+
+                try {
+                    FileCacheCenter.fetchFile(PRE_DEXCACHE_TYPE,md5, false, true, dexFile);
+                } catch (FileCacheException e) {
+                    sLogger.error(e.getMessage(),e);
+                }
+
                 if (dexFile.exists() && dexFile.length() > 0) {
                     sLogger.info("[mtldex] hit cache dex for {} , {}",
                                  inputFile.getAbsolutePath(),
@@ -1129,8 +1141,25 @@ public class AtlasBuilder extends AndroidBuilder {
 
         super.preDexLibrary(inputFile, outFile, multiDex, defaultDexOptions, processOutputHandler);
 
+        if (multiDex){
+            return;
+        }
+
+        if (!dexFile.exists() || dexFile.length() == 0){
+            sLogger.warn("dex failed " + dexFile.getAbsolutePath() + "->" + inputFile.getAbsolutePath());
+            return;
+        }
+
+        sLogger.warn("dex success " + dexFile.getAbsolutePath() + "->" + inputFile.getAbsolutePath());
+
         if (StringUtils.isNotEmpty(md5) && dexFile.exists()) {
-            AtlasBuildContext.sBuilderAdapter.fileCache.cacheFile(md5, dexFile, "pre-dex");
+
+            try {
+                FileCacheCenter.cacheFile(PRE_DEXCACHE_TYPE,md5, dexFile, true);
+            } catch (FileCacheException e) {
+                sLogger.error(e.getMessage(),e);
+            }
+
         }
     }
 
@@ -1299,7 +1328,7 @@ public class AtlasBuilder extends AndroidBuilder {
     @NonNull
     public DexByteCodeConverter getDexByteCodeConverter() {
 
-        if (AtlasBuildContext.appVariantContext == null||AtlasBuildContext.appVariantContext.getBuildType().getDexConfig()==null||!AtlasBuildContext.appVariantContext.getBuildType().getDexConfig().isUseMyDex()){
+        if (AtlasBuildContext.appVariantContext.getBuildType().getDexConfig()==null||!AtlasBuildContext.appVariantContext.getBuildType().getDexConfig().isUseMyDex()){
             return super.getDexByteCodeConverter();
         }
         if (dexByteCodeConverter == null){
