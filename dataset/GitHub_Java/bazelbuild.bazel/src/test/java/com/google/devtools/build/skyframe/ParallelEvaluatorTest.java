@@ -46,6 +46,7 @@ import com.google.devtools.build.skyframe.GraphTester.StringValue;
 import com.google.devtools.build.skyframe.NotifyingHelper.EventType;
 import com.google.devtools.build.skyframe.NotifyingHelper.Listener;
 import com.google.devtools.build.skyframe.NotifyingHelper.Order;
+import com.google.devtools.build.skyframe.ParallelEvaluator.EventFilter;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import java.util.ArrayList;
 import java.util.Arrays;

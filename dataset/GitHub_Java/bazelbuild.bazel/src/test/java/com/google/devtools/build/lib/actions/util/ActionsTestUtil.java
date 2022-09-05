@@ -19,7 +19,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -93,7 +92,6 @@ public final class ActionsTestUtil {
         new SingleBuildFileCache(execRoot.getPathString(), execRoot.getFileSystem()),
         metadataHandler,
         fileOutErr,
-        ImmutableMap.of(),
         actionGraph == null
             ? createDummyArtifactExpander()
             : ActionInputHelper.actionGraphArtifactExpander(actionGraph));
@@ -105,18 +103,15 @@ public final class ActionsTestUtil {
     return ActionExecutionContext.forInputDiscovery(
         executor,
         new SingleBuildFileCache(execRoot.getPathString(), execRoot.getFileSystem()),
-        metadataHandler,
-        fileOutErr,
-        ImmutableMap.of(),
-        new BlockingSkyFunctionEnvironment(
-            buildDriver, executor == null ? null : executor.getEventHandler()));
+        metadataHandler, fileOutErr,
+        new BlockingSkyFunctionEnvironment(buildDriver,
+            executor == null ? null : executor.getEventHandler()));
   }
 
   public static ActionExecutionContext createContext(EventHandler eventHandler) {
     DummyExecutor dummyExecutor = new DummyExecutor(eventHandler);
     return new ActionExecutionContext(
-        dummyExecutor, null, null, null, ImmutableMap.<String, String>of(),
-        createDummyArtifactExpander());
+        dummyExecutor, null, null, null, createDummyArtifactExpander());
   }
 
   private static ArtifactExpander createDummyArtifactExpander() {
