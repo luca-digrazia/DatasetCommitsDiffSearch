@@ -74,7 +74,6 @@ public enum TokenKind {
   RETURN("return"),
   RPAREN(")"),
   SEMI(";"),
-  SLASH("/"),
   STAR("*"),
   STAR_STAR("**"),
   STRING("string"),

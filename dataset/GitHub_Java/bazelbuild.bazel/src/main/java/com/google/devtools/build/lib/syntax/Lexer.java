@@ -164,8 +164,7 @@ public final class Lexer {
 
     @Override
     public PathFragment getPath() {
-      Path path = lineNumberTable.getPath(getStartOffset());
-      return path != null ? path.asFragment() : null;
+      return lineNumberTable.getPath(getStartOffset()).asFragment();
     }
 
     @Override
@@ -683,10 +682,6 @@ public final class Lexer {
       }
       case '%': {
         addToken(new Token(TokenKind.PERCENT, pos - 1, pos));
-        break;
-      }
-      case '/': {
-        addToken(new Token(TokenKind.SLASH, pos - 1, pos));
         break;
       }
       case ';': {
