@@ -56,7 +56,6 @@ public class ErrorTransienceValueTest {
   }
 
   @Test
-  @SuppressWarnings("SelfEquals")
   public void testIsntEqualToSelf() {
     // assertThat(...).isNotEqualTo(...) does ref equality check, so use equals explicitly.
     assertThat(ErrorTransienceValue.INSTANCE.equals(ErrorTransienceValue.INSTANCE)).isFalse();

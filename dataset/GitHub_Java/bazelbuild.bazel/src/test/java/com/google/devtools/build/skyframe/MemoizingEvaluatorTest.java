@@ -136,7 +136,7 @@ public class MemoizingEvaluatorTest {
 
   @Before
   public void initializeReporter() {
-    eventCollector = new EventCollector();
+    eventCollector = new EventCollector(EventKind.ALL_EVENTS);
     reporter = new Reporter(eventCollector);
     tester.resetPlayedEvents();
   }

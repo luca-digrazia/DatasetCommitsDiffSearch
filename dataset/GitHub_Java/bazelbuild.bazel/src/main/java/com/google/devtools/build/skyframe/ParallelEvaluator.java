@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import static com.google.devtools.build.skyframe.SkyKeyInterner.SKY_KEY_INTERNER;
-
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
@@ -24,6 +22,8 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Interner;
+import com.google.common.collect.Interners;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -146,6 +146,8 @@ public final class ParallelEvaluator implements Evaluator {
   private final DirtyKeyTracker dirtyKeyTracker;
   private final Receiver<Collection<SkyKey>> inflightKeysReceiver;
   private final EventFilter storedEventFilter;
+
+  private static final Interner<SkyKey> KEY_CANONICALIZER =  Interners.newWeakInterner();
 
   public ParallelEvaluator(
       ProcessableGraph graph,
@@ -379,7 +381,7 @@ public final class ParallelEvaluator implements Evaluator {
       Set<SkyKey> keys = Sets.newLinkedHashSetWithExpectedSize(depKeys.size());
       for (SkyKey depKey : depKeys) {
         // Canonicalize SkyKeys to save memory.
-        keys.add(SKY_KEY_INTERNER.intern(depKey));
+        keys.add(KEY_CANONICALIZER.intern(depKey));
       }
       depKeys = keys;
       Map<SkyKey, ValueWithMetadata> values = getValuesMaybeFromError(depKeys, bubbleErrorInfo);
