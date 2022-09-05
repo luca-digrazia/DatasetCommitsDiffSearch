@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2016 http://www.hswebframework.org
+ *  * Copyright 2019 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ package org.hswebframework.web.starter;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.serializer.SerializerFeature;
+import lombok.extern.slf4j.Slf4j;
 import org.hswebframework.utils.ListUtils;
 import org.hswebframework.utils.StringUtils;
 
@@ -67,7 +68,9 @@ public class SystemVersion extends Version {
     }
 
     public Dependency getDependency(String groupId, String artifactId) {
-        if (depCache == null) initDepCache();
+        if (depCache == null) {
+            initDepCache();
+        }
         return depCache.get(getDepKey(groupId, artifactId));
     }
 
@@ -178,11 +181,11 @@ public class SystemVersion extends Version {
     }
 }
 
-
+@Slf4j
 class Version implements Comparable<Version> {
-    protected String name;
-    protected String comment;
-    protected String website;
+    protected String  name;
+    protected String  comment;
+    protected String  website;
     protected int     majorVersion    = 1;
     protected int     minorVersion    = 0;
     protected int     revisionVersion = 0;
@@ -196,12 +199,24 @@ class Version implements Comparable<Version> {
     }
 
     public void setVersion(String version) {
+        if (null == version) {
+            return;
+        }
+        version = version.toLowerCase();
+
         boolean snapshot = version.toLowerCase().contains("snapshot");
-        version = version.toLowerCase().replace(".snapshot", "").replace("-snapshot", "");
-        String[] ver = version.split("[.]");
+
+        String[] ver = version.split("[-]")[0].split("[.]");
         Integer[] numberVer = ListUtils.stringArr2intArr(ver);
-        if (numberVer.length < 1 || Arrays.stream(numberVer).anyMatch(Objects::isNull)) {
-            throw new UnsupportedOperationException("format version " + version + " error  ");
+        if (numberVer.length == 0) {
+            numberVer = new Integer[]{1, 0, 0};
+            log.warn("解析版本号失败:{},将使用默认版本号:1.0.0,请检查hsweb-starter.js配置内容!", version);
+        }
+
+        for (int i = 0; i < numberVer.length; i++) {
+            if (numberVer[i] == null) {
+                numberVer[i] = 0;
+            }
         }
         setVersion(numberVer[0],
                 numberVer.length <= 1 ? 0 : numberVer[1],
@@ -227,7 +242,9 @@ class Version implements Comparable<Version> {
     }
 
     public String getWebsite() {
-        if (website == null) website = "";
+        if (website == null) {
+            website = "";
+        }
         return website;
     }
 
@@ -269,14 +286,18 @@ class Version implements Comparable<Version> {
 
     @Override
     public int compareTo(Version o) {
-        if (null == o) return -1;
-        if (o.getMajorVersion() > this.getMajorVersion()) return -1;
+        if (null == o) {
+            return -1;
+        }
+        if (o.getMajorVersion() > this.getMajorVersion()) {
+            return -1;
+        }
         if (o.getMajorVersion() == this.getMajorVersion()) {
-            if (o.getMinorVersion() > this.getMinorVersion()) return -1;
+            if (o.getMinorVersion() > this.getMinorVersion()) {
+                return -1;
+            }
             if (o.getMinorVersion() == this.getMinorVersion()) {
-                if (o.getRevisionVersion() > this.getRevisionVersion()) return -1;
-                if (o.getRevisionVersion() == this.getRevisionVersion()) return 0;
-                return 1;
+                return Integer.compare(this.getRevisionVersion(), o.getRevisionVersion());
             } else {
                 return 1;
             }
@@ -286,18 +307,17 @@ class Version implements Comparable<Version> {
     }
 
     public String versionToString() {
-        return new StringBuilder()
-                .append(majorVersion).append(".")
-                .append(minorVersion).append(".")
-                .append(revisionVersion).append(snapshot ? "-SNAPSHOT" : "").toString();
+        return String.valueOf(majorVersion) + "." +
+                minorVersion + "." +
+                revisionVersion + (snapshot ? "-SNAPSHOT" : "");
     }
 
     @Override
     public String toString() {
-        return new StringBuilder(name).append(" version ")
-                .append(majorVersion).append(".")
-                .append(minorVersion).append(".")
-                .append(revisionVersion).append(snapshot ? "-SNAPSHOT" : "").toString();
+        return name + " version " +
+                majorVersion + "." +
+                minorVersion + "." +
+                revisionVersion + (snapshot ? "-SNAPSHOT" : "");
     }
 
 }
