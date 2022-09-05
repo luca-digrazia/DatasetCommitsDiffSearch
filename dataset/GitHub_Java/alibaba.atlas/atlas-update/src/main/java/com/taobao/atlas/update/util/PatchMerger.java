@@ -8,6 +8,7 @@ import android.taobao.atlas.framework.Framework;
 import android.taobao.atlas.framework.bundlestorage.BundleArchive;
 import android.taobao.atlas.runtime.RuntimeVariables;
 import android.taobao.atlas.util.ApkUtils;
+import android.taobao.atlas.util.IOUtil;
 import android.taobao.atlas.util.WrapperUtil;
 import android.taobao.atlas.versionInfo.BaselineInfoManager;
 import android.text.TextUtils;
@@ -82,6 +83,9 @@ public class PatchMerger {
             //find original bundle and store in pair struct
             for (int x = 0; x < updateInfo.updateBundles.size(); x++) {
                 UpdateInfo.Item item = updateInfo.updateBundles.get(x);
+                if(item.inherit){
+                    continue;
+                }
                 String bundleName = item.name;
                 String entryNamePrefix = String.format("%s%s", "lib", bundleName.replace(".", "_"));
                 String entryName = entryNamePrefix + ".so";
@@ -91,7 +95,7 @@ public class PatchMerger {
                     File targetBundle = new File(outputDirectory, entryName);
                     OutputStream outputStream = new FileOutputStream(targetBundle);
                     InputStream inputStream = patchZip.getInputStream(entry);
-                    copyStream(inputStream, outputStream);
+                    IOUtil.copyStream(inputStream, outputStream);
                     mergeOutputs.put(bundleName, new Pair<>(targetBundle.getAbsolutePath(), item));
                 } else {
                     if(item.reset){
@@ -157,6 +161,9 @@ public class PatchMerger {
      * @return
      */
     public File findOriginalBundleFile(String bundleName, String bundleDirIfNeedCreate, UpdateInfo.Item item) throws IOException {
+        if("com.taobao.dynamic.test".equals(bundleName)){
+            return getOriginalBundleFromApk(bundleName,bundleDirIfNeedCreate);
+        }
         if (bundleName.equals(MAIN_DEX)){
             if(!updateInfo.dexPatch) {
                 return new File(RuntimeVariables.androidApplication.getApplicationInfo().sourceDir);
@@ -212,15 +219,23 @@ public class PatchMerger {
         if (oldBundle.exists()) {
             return oldBundle;
         } else {
-            if (apkZip == null) {
-                apkZip = new ZipFile(RuntimeVariables.androidApplication.getApplicationInfo().sourceDir);
+            InputStream oldBundleStream = null;
+            try {
+                oldBundleStream = RuntimeVariables.originalResources.getAssets().open(oldBundleFileName);
+            }catch (Throwable e){}
+            if(oldBundleStream==null) {
+                if (apkZip == null) {
+                    apkZip = new ZipFile(RuntimeVariables.androidApplication.getApplicationInfo().sourceDir);
+                }
+                String entryName = String.format("lib/armeabi/%s", oldBundleFileName);
+                if (apkZip.getEntry(entryName) != null) {
+                    oldBundleStream = apkZip.getInputStream(apkZip.getEntry(entryName));
+//                    return oldBundle;
+                }
             }
-            String entryName = String.format("lib/armeabi/%s", oldBundleFileName);
-            if (apkZip.getEntry(entryName) != null) {
-                InputStream inputStream = apkZip.getInputStream(apkZip.getEntry(entryName));
+            if(oldBundleStream!= null){
                 oldBundle = new File(bundleDirIfNeedCreate, oldBundleFileName);
-                ApkUtils.copyInputStreamToFile(inputStream, oldBundle);
-                return oldBundle;
+                ApkUtils.copyInputStreamToFile(oldBundleStream, oldBundle);
             }
         }
         return oldBundle;
@@ -241,32 +256,4 @@ public class PatchMerger {
         return (lowDisk || supportMerge)&&bundleName.equals(MAIN_DEX);
 
     }
-
-    private void copyStream(InputStream in, OutputStream out) throws IOException {
-
-        try {
-            int c;
-            byte[] by = new byte[BUFFEREDSIZE];
-            while ((c = in.read(by)) != -1) {
-                out.write(by, 0, c);
-            }
-            out.flush();
-        } catch (IOException e) {
-            throw e;
-        } finally {
-            closeQuitely(out);
-            closeQuitely(in);
-        }
-    }
-
-
-    private void closeQuitely(Closeable stream) {
-        try {
-            if (stream != null)
-                stream.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
 }
