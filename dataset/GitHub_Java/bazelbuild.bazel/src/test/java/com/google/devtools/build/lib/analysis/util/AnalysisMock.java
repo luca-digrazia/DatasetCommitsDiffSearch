@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,15 +14,10 @@
 package com.google.devtools.build.lib.analysis.util;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfigurationCollectionFactory;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
-import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.skyframe.SkyFunction;
-import com.google.devtools.build.skyframe.SkyFunctionName;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -38,12 +33,6 @@ public abstract class AnalysisMock {
    */
   public abstract void setupMockClient(MockToolsConfig mockToolsConfig) throws IOException;
 
-  /**
-   * This is called from test setup to create any necessary mock workspace files in the
-   * <code>_embedded_binaries</code> directory.
-   */
-  public abstract void setupMockWorkspaceFiles(Path embeddedBinariesRoot) throws IOException;
-
   public abstract ConfigurationFactory createConfigurationFactory();
 
   public abstract ConfigurationCollectionFactory createConfigurationCollectionFactory();
@@ -51,9 +40,6 @@ public abstract class AnalysisMock {
   public abstract Collection<String> getOptionOverrides();
 
   public abstract ImmutableList<Class<? extends FragmentOptions>> getBuildOptions();
-
-  public abstract ImmutableMap<SkyFunctionName, SkyFunction> getSkyFunctions(
-      BlazeDirectories directories);
 
   public static class Delegate extends AnalysisMock {
     private final AnalysisMock delegate;
@@ -65,11 +51,6 @@ public abstract class AnalysisMock {
     @Override
     public void setupMockClient(MockToolsConfig mockToolsConfig) throws IOException {
       delegate.setupMockClient(mockToolsConfig);
-    }
-
-    @Override
-    public void setupMockWorkspaceFiles(Path embeddedBinariesRoot) throws IOException {
-      delegate.setupMockWorkspaceFiles(embeddedBinariesRoot);
     }
 
     @Override
@@ -90,12 +71,6 @@ public abstract class AnalysisMock {
     @Override
     public ImmutableList<Class<? extends FragmentOptions>> getBuildOptions() {
       return delegate.getBuildOptions();
-    }
-
-    @Override
-    public ImmutableMap<SkyFunctionName, SkyFunction> getSkyFunctions(
-        BlazeDirectories directories) {
-      return delegate.getSkyFunctions(directories);
     }
   }
 }

@@ -17,6 +17,7 @@ import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
+import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.bazel.rules.BazelConfiguration;
 import com.google.devtools.build.lib.bazel.rules.BazelConfigurationCollection;
@@ -83,7 +84,17 @@ public class BazelAnalysisMock extends AnalysisMock {
   }
 
   @Override
+  public ConfigurationCollectionFactory createConfigurationCollectionFactory() {
+    return new BazelConfigurationCollection();
+  }
+
+  @Override
   public Collection<String> getOptionOverrides() {
     return ImmutableList.of();
+  }
+
+  @Override
+  public ImmutableList<Class<? extends FragmentOptions>> getBuildOptions() {
+    throw new UnsupportedOperationException();
   }
 }
