@@ -10,7 +10,6 @@ import org.hswebframework.web.authorization.token.UserToken;
 import org.hswebframework.web.authorization.token.UserTokenHolder;
 import org.hswebframework.web.authorization.token.UserTokenManager;
 import org.hswebframework.web.controller.message.ResponseMessage;
-import org.hswebframework.web.logging.AccessLogger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -71,6 +70,14 @@ public class UserTokenInfoController {
     @Authorize(action = Permission.ACTION_GET)
     public ResponseMessage<Void> changeUserState(@ApiParam("用户ID") @PathVariable String userId, @ApiParam("要修改的状态") @PathVariable TokenState state) {
         userTokenManager.changeUserState(userId, state);
+        return ResponseMessage.ok();
+    }
+
+    @PutMapping("/check")
+    @ApiOperation("检查所有已过期的token并移除")
+    @Authorize(action = Permission.ACTION_UPDATE)
+    public ResponseMessage<Void> checkExpiredToken() {
+        userTokenManager.checkExpiredToken();
         return ResponseMessage.ok();
     }
 
