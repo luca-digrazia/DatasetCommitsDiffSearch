@@ -72,7 +72,6 @@ import org.junit.runners.JUnit4;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -121,25 +120,6 @@ public class LoadingPhaseRunnerTest {
           ImmutableMap.of(PackageIdentifier.createInDefaultRepo("base"), tester.getWorkspace()),
           loadingResult.getPackageRoots());
     }
-  }
-
-  @Test
-  public void testSmokeWithCallback() throws Exception {
-    tester.addFile("base/BUILD",
-        "filegroup(name = 'hello', srcs = ['foo.txt'])");
-    final List<Target> targetsNotified = new ArrayList<>();
-    tester.setCallback(new LoadingCallback() {
-      @Override
-      public void notifyTargets(Collection<Target> targets) throws LoadingFailedException {
-        targetsNotified.addAll(targets);
-      }
-
-      @Override
-      public void notifyVisitedPackages(Set<PackageIdentifier> visitedPackages) {
-      }
-    });
-    assertNoErrors(tester.load("//base:hello"));
-    assertThat(targetsNotified).containsExactlyElementsIn(getTargets("//base:hello"));
   }
 
   @Test
@@ -582,7 +562,6 @@ public class LoadingPhaseRunnerTest {
 
     private LoadingOptions options;
     private final StoredEventHandler storedErrors;
-    private LoadingCallback loadingCallback;
 
     private Set<Target> filteredTargets;
     private Set<Target> testFilteredTargets;
@@ -625,10 +604,6 @@ public class LoadingPhaseRunnerTest {
       this.options = Options.getDefaults(LoadingOptions.class);
     }
 
-    public void setCallback(LoadingCallback loadingCallback) {
-      this.loadingCallback = loadingCallback;
-    }
-
     public void useLoadingOptions(String... options) throws OptionsParsingException {
       OptionsParser parser = OptionsParser.newOptionsParser(LoadingOptions.class);
       parser.parse(ImmutableList.copyOf(options));
@@ -662,7 +637,7 @@ public class LoadingPhaseRunnerTest {
         eventBus.register(listener);
         result = loadingPhaseRunner.execute(storedErrors, eventBus,
             ImmutableList.copyOf(patterns), options, ImmutableListMultimap.<String, Label>of(),
-            keepGoing, /*enableLoading=*/true, determineTests, loadingCallback);
+            keepGoing, /*enableLoading=*/true, determineTests, /*callback=*/null);
         this.filteredTargets = listener.filteredTargets;
         this.testFilteredTargets = listener.testFilteredTargets;
       } catch (LoadingFailedException e) {
