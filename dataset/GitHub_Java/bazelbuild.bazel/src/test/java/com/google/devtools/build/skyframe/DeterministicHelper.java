@@ -16,10 +16,12 @@ package com.google.devtools.build.skyframe;
 import com.google.common.collect.Iterables;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+
 import javax.annotation.Nullable;
 
 /**
@@ -40,8 +42,8 @@ public class DeterministicHelper extends NotifyingHelper {
         }
 
         @Override
-        public QueryableGraph transform(QueryableGraph graph) {
-          return new DeterministicQueryableGraph(graph, listener);
+        public InvalidatableGraph transform(InvalidatableGraph graph) {
+          return new DeterministicInvalidatableGraph(graph, listener);
         }
 
         @Override
@@ -76,23 +78,20 @@ public class DeterministicHelper extends NotifyingHelper {
     return entry == null ? null : new DeterministicValueEntry(key, entry);
   }
 
-  private static Map<SkyKey, ? extends NodeEntry> makeDeterministic(
-      Map<SkyKey, ? extends NodeEntry> map) {
+  private static Map<SkyKey, NodeEntry> makeDeterministic(Map<SkyKey, NodeEntry> map) {
     Map<SkyKey, NodeEntry> result = new TreeMap<>(ALPHABETICAL_SKYKEY_COMPARATOR);
     result.putAll(map);
     return result;
   }
 
-  private static class DeterministicQueryableGraph extends NotifyingQueryableGraph {
-    DeterministicQueryableGraph(QueryableGraph delegate, Listener graphListener) {
+  private static class DeterministicInvalidatableGraph extends NotifyingInvalidatableGraph {
+    DeterministicInvalidatableGraph(InvalidatableGraph delegate, Listener graphListener) {
       super(delegate, new DeterministicHelper(graphListener));
     }
 
     @Override
-    public Map<SkyKey, ? extends NodeEntry> getBatch(
-        @Nullable SkyKey requestor, Reason reason, Iterable<SkyKey> keys)
-        throws InterruptedException {
-      return makeDeterministic(super.getBatch(requestor, reason, keys));
+    public Map<SkyKey, NodeEntry> getBatchForInvalidation(Iterable<SkyKey> keys) {
+      return makeDeterministic(super.getBatchForInvalidation(keys));
     }
   }
 
@@ -111,17 +110,18 @@ public class DeterministicHelper extends NotifyingHelper {
     }
 
     @Override
-    public Map<SkyKey, ? extends NodeEntry> createIfAbsentBatch(
-        @Nullable SkyKey requestor, Reason reason, Iterable<SkyKey> keys)
-        throws InterruptedException {
+    public Map<SkyKey, NodeEntry> createIfAbsentBatch(
+        @Nullable SkyKey requestor, Reason reason, Iterable<SkyKey> keys) {
       return makeDeterministic(super.createIfAbsentBatch(requestor, reason, keys));
     }
 
     @Override
-    public Map<SkyKey, ? extends NodeEntry> getBatch(
-        @Nullable SkyKey requestor, Reason reason, Iterable<SkyKey> keys)
-        throws InterruptedException {
-      return makeDeterministic(super.getBatch(requestor, reason, keys));
+    public Map<SkyKey, NodeEntry> getBatchWithFieldHints(
+        @Nullable SkyKey requestor,
+        Reason reason,
+        Iterable<SkyKey> keys,
+        EnumSet<NodeEntryField> fields) {
+      return makeDeterministic(super.getBatchWithFieldHints(requestor, reason, keys, fields));
     }
   }
 
@@ -135,7 +135,7 @@ public class DeterministicHelper extends NotifyingHelper {
     }
 
     @Override
-    public synchronized Collection<SkyKey> getReverseDeps() throws InterruptedException {
+    public synchronized Collection<SkyKey> getReverseDeps() {
       TreeSet<SkyKey> result = new TreeSet<>(ALPHABETICAL_SKYKEY_COMPARATOR);
       Iterables.addAll(result, super.getReverseDeps());
       return result;

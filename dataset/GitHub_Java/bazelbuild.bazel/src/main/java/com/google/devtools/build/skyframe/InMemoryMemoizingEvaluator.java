@@ -27,6 +27,7 @@ import com.google.devtools.build.skyframe.Differencer.Diff;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.DeletingInvalidationState;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.DirtyingInvalidationState;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.InvalidationState;
+import com.google.devtools.build.skyframe.ParallelEvaluator.EventFilter;
 import com.google.devtools.build.skyframe.ParallelEvaluator.Receiver;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import java.io.PrintStream;
@@ -38,6 +39,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import javax.annotation.Nullable;
 
 /**
@@ -110,16 +112,13 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
   @Override
   public void delete(final Predicate<SkyKey> deletePredicate) {
     valuesToDelete.addAll(
-        Maps.filterEntries(
-                graph.getAllValues(),
-                new Predicate<Entry<SkyKey, ? extends NodeEntry>>() {
-                  @Override
-                  public boolean apply(Entry<SkyKey, ? extends NodeEntry> input) {
-                    Preconditions.checkNotNull(input.getKey(), "Null SkyKey in entry: %s", input);
-                    return input.getValue().isDirty() || deletePredicate.apply(input.getKey());
-                  }
-                })
-            .keySet());
+        Maps.filterEntries(graph.getAllValues(), new Predicate<Entry<SkyKey, NodeEntry>>() {
+          @Override
+          public boolean apply(Entry<SkyKey, NodeEntry> input) {
+            Preconditions.checkNotNull(input.getKey(), "Null SkyKey in entry: %s", input);
+            return input.getValue().isDirty() || deletePredicate.apply(input.getKey());
+          }
+        }).keySet());
   }
 
   @Override
@@ -210,18 +209,12 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
       SkyValue newValue = entry.getValue();
       NodeEntry prevEntry = graph.get(null, Reason.OTHER, key);
       if (prevEntry != null && prevEntry.isDone()) {
-        try {
-          Iterable<SkyKey> directDeps = prevEntry.getDirectDeps();
-          Preconditions.checkState(
-              Iterables.isEmpty(directDeps), "existing entry for %s has deps: %s", key, directDeps);
-          if (newValue.equals(prevEntry.getValue())
-              && !valuesToDirty.contains(key)
-              && !valuesToDelete.contains(key)) {
-            it.remove();
-          }
-        } catch (InterruptedException e) {
-          throw new IllegalStateException(
-              "InMemoryGraph does not throw: " + entry + ", " + prevEntry, e);
+        Iterable<SkyKey> directDeps = prevEntry.getDirectDeps();
+        Preconditions.checkState(Iterables.isEmpty(directDeps),
+            "existing entry for %s has deps: %s", key, directDeps);
+        if (newValue.equals(prevEntry.getValue())
+            && !valuesToDirty.contains(key) && !valuesToDelete.contains(key)) {
+          it.remove();
         }
       }
     }
@@ -234,11 +227,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
     if (valuesToInject.isEmpty()) {
       return;
     }
-    try {
-      ParallelEvaluator.injectValues(valuesToInject, version, graph, dirtyKeyTracker);
-    } catch (InterruptedException e) {
-      throw new IllegalStateException("InMemoryGraph doesn't throw interrupts", e);
-    }
+    ParallelEvaluator.injectValues(valuesToInject, version, graph, dirtyKeyTracker);
     // Start with a new map to avoid bloat since clear() does not downsize the map.
     valuesToInject = new HashMap<>();
   }
@@ -279,21 +268,13 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
   @Override
   @Nullable public SkyValue getExistingValueForTesting(SkyKey key) {
     NodeEntry entry = getExistingEntryForTesting(key);
-    try {
-      return isDone(entry) ? entry.getValue() : null;
-    } catch (InterruptedException e) {
-      throw new IllegalStateException("InMemoryGraph does not throw" + key + ", " + entry, e);
-    }
+    return isDone(entry) ? entry.getValue() : null;
   }
 
   @Override
   @Nullable public ErrorInfo getExistingErrorForTesting(SkyKey key) {
     NodeEntry entry = getExistingEntryForTesting(key);
-    try {
-      return isDone(entry) ? entry.getErrorInfo() : null;
-    } catch (InterruptedException e) {
-      throw new IllegalStateException("InMemoryGraph does not throw" + key + ", " + entry, e);
-    }
+    return isDone(entry) ? entry.getErrorInfo() : null;
   }
 
   @Nullable
@@ -319,11 +300,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
       for (NodeEntry entry : graph.getAllValues().values()) {
         nodes++;
         if (entry.isDone()) {
-          try {
-            edges += Iterables.size(entry.getDirectDeps());
-          } catch (InterruptedException e) {
-            throw new IllegalStateException("InMemoryGraph doesn't throw: " + entry, e);
-          }
+          edges += Iterables.size(entry.getDirectDeps());
         }
       }
       out.println("Node count: " + nodes);
@@ -338,18 +315,14 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
             }
           };
 
-      for (Entry<SkyKey, ? extends NodeEntry> mapPair : graph.getAllValues().entrySet()) {
+      for (Entry<SkyKey, NodeEntry> mapPair : graph.getAllValues().entrySet()) {
         SkyKey key = mapPair.getKey();
         NodeEntry entry = mapPair.getValue();
         if (entry.isDone()) {
           out.print(keyFormatter.apply(key));
           out.print("|");
-          try {
-            out.println(
-                Joiner.on('|').join(Iterables.transform(entry.getDirectDeps(), keyFormatter)));
-          } catch (InterruptedException e) {
-            throw new IllegalStateException("InMemoryGraph doesn't throw: " + entry, e);
-          }
+          out.println(Joiner.on('|').join(
+              Iterables.transform(entry.getDirectDeps(), keyFormatter)));
         }
       }
     }

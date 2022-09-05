@@ -51,11 +51,13 @@ import com.google.devtools.build.skyframe.NodeEntry.DependencyState;
 import com.google.devtools.build.skyframe.NodeEntry.DirtyState;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import com.google.devtools.build.skyframe.SkyFunctionException.ReifiedSkyFunctionException;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -69,6 +71,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
+
 import javax.annotation.Nullable;
 
 /**
@@ -224,7 +227,7 @@ public final class ParallelEvaluator implements Evaluator {
       SkyKey parent,
       Reason reason,
       Iterable<SkyKey> keys) {
-    return graph.getBatch(parent, reason, keys);
+    return graph.getBatchWithFieldHints(parent, reason, keys, NodeEntryField.VALUE_ONLY);
   }
 
   /** Receives the events from the NestedSet and delegates to the reporter. */
@@ -664,10 +667,11 @@ public final class ParallelEvaluator implements Evaluator {
         // Remove the rdep on this entry for each of its old deps that is no longer a direct dep.
         Set<SkyKey> depsToRemove =
             Sets.difference(oldDeps, primaryEntry.getTemporaryDirectDeps().toSet());
-        Collection<NodeEntry> oldDepEntries = graph.getBatch(
+        Collection<NodeEntry> oldDepEntries = graph.getBatchWithFieldHints(
             skyKey,
             Reason.RDEP_REMOVAL,
-            depsToRemove).values();
+            depsToRemove,
+            EnumSet.of(NodeEntryField.INDIVIDUAL_REVERSE_DEPS)).values();
         for (NodeEntry oldDepEntry : oldDepEntries) {
           oldDepEntry.removeReverseDep(skyKey);
         }
@@ -931,7 +935,11 @@ public final class ParallelEvaluator implements Evaluator {
             // We check the deps for errors so that we don't continue building this node if it has
             // a child error.
             Map<SkyKey, NodeEntry> entriesToCheck =
-                graph.getBatch(skyKey, Reason.OTHER, directDepsToCheck);
+                graph.getBatchWithFieldHints(
+                    skyKey,
+                    Reason.EVALUATION,
+                    directDepsToCheck,
+                    EnumSet.of(NodeEntryField.VALUE, NodeEntryField.INDIVIDUAL_REVERSE_DEPS));
             for (Map.Entry<SkyKey, NodeEntry> entry : entriesToCheck.entrySet()) {
               if (entry.getValue().isDone() && entry.getValue().getErrorInfo() != null) {
                 // If any child has an error, we arbitrarily add a dep on the first one (needed
@@ -1103,7 +1111,11 @@ public final class ParallelEvaluator implements Evaluator {
         registerNewlyDiscoveredDepsForDoneEntry(
             skyKey,
             state,
-            graph.getBatch(skyKey, Reason.RDEP_ADDITION, env.newlyRequestedDeps),
+            graph.getBatchWithFieldHints(
+                skyKey,
+                Reason.RDEP_ADDITION,
+                env.newlyRequestedDeps,
+                EnumSet.of(NodeEntryField.INDIVIDUAL_REVERSE_DEPS)),
             oldDeps,
             env);
         env.commit(state, /*enqueueParents=*/true);
@@ -1123,25 +1135,29 @@ public final class ParallelEvaluator implements Evaluator {
             skyKey,
             state,
             childErrorKey);
-        if (newDirectDeps.contains(childErrorKey)) {
-          // Add this dep if it was just requested. In certain rare race conditions (see
-          // MemoizingEvaluatorTest.cachedErrorCausesRestart) this dep may have already been
-          // requested.
-          state.addTemporaryDirectDeps(GroupedListHelper.create(ImmutableList.of(childErrorKey)));
-          DependencyState childErrorState;
-          if (oldDeps.contains(childErrorKey)) {
-            childErrorState = childErrorEntry.checkIfDoneForDirtyReverseDep(skyKey);
-          } else {
-            childErrorState = childErrorEntry.addReverseDepAndCheckIfDone(skyKey);
-          }
-          Preconditions.checkState(
-              childErrorState == DependencyState.DONE,
-              "skyKey: %s, state: %s childErrorKey: %s",
-              skyKey,
-              state,
-              childErrorKey,
-              childErrorEntry);
+        Preconditions.checkState(
+            !state.getTemporaryDirectDeps().expensiveContains(childErrorKey),
+            "Done error was already known: %s %s %s %s",
+            skyKey,
+            state,
+            childErrorKey,
+            childErrorEntry);
+        Preconditions.checkState(
+            newDirectDeps.contains(childErrorKey), "%s %s %s", state, childErrorKey, newDirectDeps);
+        state.addTemporaryDirectDeps(GroupedListHelper.create(ImmutableList.of(childErrorKey)));
+        DependencyState childErrorState;
+        if (oldDeps.contains(childErrorKey)) {
+          childErrorState = childErrorEntry.checkIfDoneForDirtyReverseDep(skyKey);
+        } else {
+          childErrorState = childErrorEntry.addReverseDepAndCheckIfDone(skyKey);
         }
+        Preconditions.checkState(
+            childErrorState == DependencyState.DONE,
+            "skyKey: %s, state: %s childErrorKey: %s",
+            skyKey,
+            state,
+            childErrorKey,
+            childErrorEntry);
         ErrorInfo childErrorInfo = Preconditions.checkNotNull(childErrorEntry.getErrorInfo());
         visitor.preventNewEvaluations();
         throw SchedulerException.ofError(childErrorInfo, childErrorKey);
@@ -1225,7 +1241,7 @@ public final class ParallelEvaluator implements Evaluator {
     // importantly, these hints are not respected for not-done nodes. If they are, we may need to
     // alter this hint.
     Map<SkyKey, NodeEntry> batch =
-        graph.getBatch(skyKey, Reason.SIGNAL_DEP, keys);
+        graph.getBatchWithFieldHints(skyKey, Reason.SIGNAL_DEP, keys, NodeEntryField.NO_FIELDS);
     if (visitor != null) {
       for (SkyKey key : keys) {
         NodeEntry entry = Preconditions.checkNotNull(batch.get(key), key);
@@ -1323,7 +1339,7 @@ public final class ParallelEvaluator implements Evaluator {
     // directly without launching the heavy machinery, spawning threads, etc.
     // Inform progressReceiver that these nodes are done to be consistent with the main code path.
     boolean allAreDone = true;
-    Map<SkyKey, NodeEntry> batch = getBatchValues(null, Reason.PRE_OR_POST_EVALUATION, skyKeySet);
+    Map<SkyKey, NodeEntry> batch = getBatchValues(null, Reason.EVALUATION, skyKeySet);
     for (SkyKey key : skyKeySet) {
       if (!isDoneForBuild(batch.get(key))) {
         allAreDone = false;
@@ -1342,7 +1358,7 @@ public final class ParallelEvaluator implements Evaluator {
     if (!keepGoing) {
       Set<SkyKey> cachedErrorKeys = new HashSet<>();
       for (SkyKey skyKey : skyKeySet) {
-        NodeEntry entry = graph.get(null, Reason.PRE_OR_POST_EVALUATION, skyKey);
+        NodeEntry entry = graph.get(null, Reason.EVALUATION, skyKey);
         if (entry == null) {
           continue;
         }
@@ -1386,10 +1402,9 @@ public final class ParallelEvaluator implements Evaluator {
     // We unconditionally add the ErrorTransienceValue here, to ensure that it will be created, and
     // in the graph, by the time that it is needed. Creating it on demand in a parallel context sets
     // up a race condition, because there is no way to atomically create a node and set its value.
-    NodeEntry errorTransienceEntry = Iterables.getOnlyElement(graph.createIfAbsentBatch(
-            null,
-            Reason.PRE_OR_POST_EVALUATION,
-            ImmutableList.of(ErrorTransienceValue.KEY)).values());
+    NodeEntry errorTransienceEntry = Iterables.getOnlyElement(
+        graph.createIfAbsentBatch(
+            null, Reason.EVALUATION, ImmutableList.of(ErrorTransienceValue.KEY)).values());
     if (!errorTransienceEntry.isDone()) {
       injectValues(
           ImmutableMap.of(ErrorTransienceValue.KEY, (SkyValue) ErrorTransienceValue.INSTANCE),
@@ -1398,7 +1413,7 @@ public final class ParallelEvaluator implements Evaluator {
           dirtyKeyTracker);
     }
     for (Map.Entry<SkyKey, NodeEntry> e
-        : graph.createIfAbsentBatch(null, Reason.PRE_OR_POST_EVALUATION, skyKeys).entrySet()) {
+        : graph.createIfAbsentBatch(null, Reason.EVALUATION, skyKeys).entrySet()) {
       SkyKey skyKey = e.getKey();
       NodeEntry entry = e.getValue();
       // This must be equivalent to the code in enqueueChild above, in order to be thread-safe.
@@ -1671,7 +1686,7 @@ public final class ParallelEvaluator implements Evaluator {
     for (SkyKey skyKey : skyKeys) {
       SkyValue unwrappedValue = maybeGetValueFromError(
           skyKey,
-          graph.get(null, Reason.PRE_OR_POST_EVALUATION, skyKey),
+          graph.get(null, Reason.EVALUATION, skyKey),
           bubbleErrorInfo);
       ValueWithMetadata valueWithMetadata =
           unwrappedValue == NULL_MARKER ? null : ValueWithMetadata.wrapWithMetadata(unwrappedValue);
@@ -1922,8 +1937,8 @@ public final class ParallelEvaluator implements Evaluator {
       // out.
       // TODO(janakr): If graph implementations start using these hints for not-done nodes, we may
       // have to change this.
-      Map<SkyKey, NodeEntry> childrenNodes =
-          graph.getBatch(key, Reason.EXISTENCE_CHECKING, children);
+      Map<SkyKey, NodeEntry> childrenNodes = graph.getBatchWithFieldHints(
+          key, Reason.CYCLE_CHECKING, children, NodeEntryField.NO_FIELDS);
       Preconditions.checkState(childrenNodes.size() == Iterables.size(children), childrenNodes);
       children = Maps.filterValues(childrenNodes, new Predicate<NodeEntry>() {
         @Override

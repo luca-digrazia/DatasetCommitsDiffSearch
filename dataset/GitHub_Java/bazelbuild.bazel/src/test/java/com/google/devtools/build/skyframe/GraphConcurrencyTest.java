@@ -31,6 +31,9 @@ import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.GraphTester.StringValue;
 import com.google.devtools.build.skyframe.NodeEntry.DependencyState;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
+import org.junit.Before;
+import org.junit.Test;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -40,8 +43,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import org.junit.Before;
-import org.junit.Test;
 
 /** Base class for concurrency sanity tests on {@link EvaluableGraph} implementations. */
 public abstract class GraphConcurrencyTest {
@@ -75,12 +76,12 @@ public abstract class GraphConcurrencyTest {
   }
 
   @Test
-  public void createIfAbsentBatchSanity() throws InterruptedException {
+  public void createIfAbsentBatchSanity() {
     graph.createIfAbsentBatch(null, Reason.OTHER, ImmutableList.of(key("cat"), key("dog")));
   }
 
   @Test
-  public void createIfAbsentConcurrentWithGet() throws InterruptedException {
+  public void createIfAbsentConcurrentWithGet() {
     int numIters = 50;
     final SkyKey key = key("key");
     for (int i = 0; i < numIters; i++) {
@@ -90,11 +91,7 @@ public abstract class GraphConcurrencyTest {
                   new Runnable() {
                     @Override
                     public void run() {
-                      try {
-                        graph.get(null, Reason.OTHER, key);
-                      } catch (InterruptedException e) {
-                        throw new IllegalStateException(e);
-                      }
+                      graph.get(null, Reason.OTHER, key);
                     }
                   }));
       t.start();
@@ -114,11 +111,7 @@ public abstract class GraphConcurrencyTest {
           public void run() {
             TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
                 startThreads, "threads not started");
-            try {
-              graph.createIfAbsentBatch(null, Reason.OTHER, ImmutableList.of(key));
-            } catch (InterruptedException e) {
-              throw new IllegalStateException(e);
-            }
+            graph.createIfAbsentBatch(null, Reason.OTHER, ImmutableList.of(key));
           }
         };
     Runnable noCreateRunnable =
@@ -127,11 +120,7 @@ public abstract class GraphConcurrencyTest {
           public void run() {
             TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
                 startThreads, "threads not started");
-            try {
-              graph.get(null, Reason.OTHER, key);
-            } catch (InterruptedException e) {
-              throw new IllegalStateException(e);
-            }
+            graph.get(null, Reason.OTHER, key);
           }
         };
     List<Thread> threads = new ArrayList<>(2 * numThreads);
@@ -193,13 +182,13 @@ public abstract class GraphConcurrencyTest {
                     .isNotEqualTo(DependencyState.DONE);
                 waitForAddedRdep.countDown();
                 waitForSetValue.await(TestUtils.WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                for (int k = chunkSize; k <= numIterations; k++) {
-                  entry.removeReverseDep(key("rdep" + j));
-                  entry.addReverseDepAndCheckIfDone(key("rdep" + j));
-                  entry.getReverseDeps();
-                }
               } catch (InterruptedException e) {
                 fail("Test failed: " + e.toString());
+              }
+              for (int k = chunkSize; k <= numIterations; k++) {
+                entry.removeReverseDep(key("rdep" + j));
+                entry.addReverseDepAndCheckIfDone(key("rdep" + j));
+                entry.getReverseDeps();
               }
             }
           };
@@ -245,47 +234,29 @@ public abstract class GraphConcurrencyTest {
           final Iterable<SkyKey> keys = ImmutableList.of(key1, key2);
           Runnable r =
               new Runnable() {
-                @Override
                 public void run() {
                   for (SkyKey key : keys) {
-                    NodeEntry entry = null;
-                    try {
-                      entry = graph.get(null, Reason.OTHER, key);
-                    } catch (InterruptedException e) {
-                      throw new IllegalStateException(e);
-                    }
+                    NodeEntry entry = graph.get(null, Reason.OTHER, key);
                     if (entry == null) {
                       nodeCreated.add(key);
                     }
                   }
-                  Map<SkyKey, ? extends NodeEntry> entries;
-                  try {
-                    entries = graph.createIfAbsentBatch(null, Reason.OTHER, keys);
-                  } catch (InterruptedException e) {
-                    throw new IllegalStateException(e);
-                  }
+                  Map<SkyKey, NodeEntry> entries =
+                      graph.createIfAbsentBatch(null, Reason.OTHER, keys);
                   for (Integer keyNum : ImmutableList.of(keyNum1, keyNum2)) {
                     SkyKey key = key("foo" + keyNum);
                     NodeEntry entry = entries.get(key);
                     // {@code entry.addReverseDepAndCheckIfDone(null)} should return
                     // NEEDS_SCHEDULING at most once.
-                    try {
-                      if (startEvaluation(entry).equals(DependencyState.NEEDS_SCHEDULING)) {
-                        assertTrue(valuesSet.add(key));
-                        // Set to done.
-                        entry.setValue(new StringValue("bar" + keyNum), startingVersion);
-                        assertThat(entry.isDone()).isTrue();
-                      }
-                    } catch (InterruptedException e) {
-                      throw new IllegalStateException(key + ", " + entry, e);
+                    if (startEvaluation(entry).equals(DependencyState.NEEDS_SCHEDULING)) {
+                      assertTrue(valuesSet.add(key));
+                      // Set to done.
+                      entry.setValue(new StringValue("bar" + keyNum), startingVersion);
+                      assertThat(entry.isDone()).isTrue();
                     }
                   }
                   // This shouldn't cause any problems from the other threads.
-                  try {
-                    graph.createIfAbsentBatch(null, Reason.OTHER, keys);
-                  } catch (InterruptedException e) {
-                    throw new IllegalStateException(e);
-                  }
+                  graph.createIfAbsentBatch(null, Reason.OTHER, keys);
                 }
               };
           pool.execute(wrapper.wrap(r));
@@ -307,7 +278,8 @@ public abstract class GraphConcurrencyTest {
 
   /**
    * Initially calling {@link NodeEntry#setValue} and then making sure concurrent calls to {@link
-   * QueryableGraph#get} and {@link QueryableGraph#getBatch} do not interfere with the node.
+   * QueryableGraph#get} and {@link QueryableGraph#getBatchWithFieldHints} do not interfere with the
+   * node.
    */
   @Test
   public void testDoneToDirty() throws Exception {
@@ -319,7 +291,7 @@ public abstract class GraphConcurrencyTest {
     for (int i = 0; i < numKeys; i++) {
       keys.add(key("foo" + i));
     }
-    Map<SkyKey, ? extends NodeEntry> entries = graph.createIfAbsentBatch(null, Reason.OTHER, keys);
+    Map<SkyKey, NodeEntry> entries = graph.createIfAbsentBatch(null, Reason.OTHER, keys);
     for (int i = 0; i < numKeys; i++) {
       NodeEntry entry = entries.get(key("foo" + i));
       startEvaluation(entry);
@@ -353,25 +325,15 @@ public abstract class GraphConcurrencyTest {
               } catch (InterruptedException e) {
                 throw new AssertionError(e);
               }
-              NodeEntry entry = null;
-              try {
-                entry = graph.get(null, Reason.OTHER, key("foo" + keyNum));
-              } catch (InterruptedException e) {
-                throw new IllegalStateException(e);
-              }
-              try {
-                entry.markDirty(true);
-
-                // Make some changes, like adding a dep and rdep.
-                entry.addReverseDepAndCheckIfDone(key("rdep"));
-                entry.markRebuilding();
-                addTemporaryDirectDep(entry, key("dep"));
-                entry.signalDep();
-
-                entry.setValue(new StringValue("bar" + keyNum), getNextVersion(startingVersion));
-              } catch (InterruptedException e) {
-                throw new IllegalStateException(keyNum + ", " + entry, e);
-              }
+              NodeEntry entry = graph.get(null, Reason.OTHER, key("foo" + keyNum));
+              entry.markDirty(true);
+              // Make some changes, like adding a dep and rdep.
+              entry.addReverseDepAndCheckIfDone(key("rdep"));
+              entry.markRebuilding();
+              addTemporaryDirectDep(entry, key("dep"));
+              entry.signalDep();
+              // Move node from dirty back to done.
+              entry.setValue(new StringValue("bar" + keyNum), getNextVersion(startingVersion));
             }
           };
 
@@ -385,18 +347,13 @@ public abstract class GraphConcurrencyTest {
               } catch (InterruptedException e) {
                 throw new AssertionError(e);
               }
-              NodeEntry entry = null;
-              try {
-                entry = graph.get(null, Reason.OTHER, key("foo" + keyNum));
-              } catch (InterruptedException e) {
-                throw new IllegalStateException(e);
-              }
+              NodeEntry entry = graph.get(null, Reason.OTHER, key("foo" + keyNum));
               assertNotNull(entry);
               // Requests for the value are made at the same time that the version increments from
               // the base. Check that there is no problem in requesting the version and that the
               // number is sane.
-              assertThat(entry.getVersion())
-                  .isAnyOf(startingVersion, getNextVersion(startingVersion));
+              assertThat(entry.getVersion()).isAnyOf(startingVersion,
+                  getNextVersion(startingVersion));
               getCountDownLatch.countDown();
             }
           };
@@ -423,12 +380,8 @@ public abstract class GraphConcurrencyTest {
               } catch (InterruptedException e) {
                 throw new AssertionError(e);
               }
-              Map<SkyKey, ? extends NodeEntry> batchMap = null;
-              try {
-                batchMap = graph.getBatch(null, Reason.OTHER, batch);
-              } catch (InterruptedException e) {
-                throw new IllegalStateException(e);
-              }
+              Map<SkyKey, NodeEntry> batchMap =
+                  graph.getBatchWithFieldHints(null, Reason.OTHER, batch, NodeEntryField.NO_FIELDS);
               getBatchCountDownLatch.countDown();
               assertThat(batchMap).hasSize(batch.size());
               for (NodeEntry entry : batchMap.values()) {
@@ -459,7 +412,7 @@ public abstract class GraphConcurrencyTest {
     }
   }
 
-  private static DependencyState startEvaluation(NodeEntry entry) throws InterruptedException {
+  private DependencyState startEvaluation(NodeEntry entry) {
     return entry.addReverseDepAndCheckIfDone(null);
   }
 
