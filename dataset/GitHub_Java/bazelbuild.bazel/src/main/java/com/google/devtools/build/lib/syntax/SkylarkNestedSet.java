@@ -194,6 +194,6 @@ public final class SkylarkNestedSet implements Iterable<Object> {
 
   @Override
   public String toString() {
-    return EvalUtils.prettyPrintValue(this);
+    return "set(" + set.toCollection() + ")";
   }
 }

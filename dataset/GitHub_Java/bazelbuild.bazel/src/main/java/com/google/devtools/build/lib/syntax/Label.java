@@ -50,15 +50,15 @@ public final class Label implements Comparable<Label>, Serializable {
   }
 
   /**
-   * Factory for Labels from absolute string form. e.g.
+   * Factory for Labels from absolute string form, possibly including a repository name prefix. For
+   * example:
    * <pre>
    * //foo/bar
-   * //foo/bar:quux
    * {@literal @}foo//bar
    * {@literal @}foo//bar:baz
    * </pre>
    */
-  public static Label parseAbsolute(String absName) throws SyntaxException {
+  public static Label parseRepositoryLabel(String absName) throws SyntaxException {
     String repo = PackageIdentifier.DEFAULT_REPOSITORY;
     int packageStartPos = absName.indexOf("//");
     if (packageStartPos > 0) {
@@ -67,9 +67,24 @@ public final class Label implements Comparable<Label>, Serializable {
     }
     try {
       LabelValidator.PackageAndTarget labelParts = LabelValidator.parseAbsoluteLabel(absName);
-      validate(labelParts.getPackageName(), labelParts.getTargetName());
       return new Label(new PackageIdentifier(repo, new PathFragment(labelParts.getPackageName())),
           labelParts.getTargetName());
+    } catch (BadLabelException e) {
+      throw new SyntaxException(e.getMessage());
+    }
+  }
+
+  /**
+   * Factory for Labels from absolute string form. e.g.
+   * <pre>
+   * //foo/bar
+   * //foo/bar:quux
+   * </pre>
+   */
+  public static Label parseAbsolute(String absName) throws SyntaxException {
+    try {
+      LabelValidator.PackageAndTarget labelParts = LabelValidator.parseAbsoluteLabel(absName);
+      return create(labelParts.getPackageName(), labelParts.getTargetName());
     } catch (BadLabelException e) {
       throw new SyntaxException(e.getMessage());
     }
@@ -135,7 +150,7 @@ public final class Label implements Comparable<Label>, Serializable {
   public static Label parseCommandLineLabel(String label, PathFragment workspaceRelativePath)
       throws SyntaxException {
     Preconditions.checkArgument(!workspaceRelativePath.isAbsolute());
-    if (LabelValidator.isAbsolute(label)) {
+    if (label.startsWith("//")) {
       return parseAbsolute(label);
     }
     int index = label.indexOf(':');
@@ -336,15 +351,15 @@ public final class Label implements Comparable<Label>, Serializable {
         "Resolves a label that is either absolute (starts with <code>//</code>) or relative to the"
       + " current package.<br>"
       + "For example:<br><ul>"
-      + "<pre class=language-python>\n"
-      + "Label(\"//foo/bar:baz\").relative(\":quux\") == Label(\"//foo/bar:quux\")\n"
-      + "Label(\"//foo/bar:baz\").relative(\"//wiz:quux\") == Label(\"//wiz:quux\")\n"
-      + "</pre>")
+      + "<li><code>:quux</code> relative to <code>//foo/bar:baz</code> is "
+      + "<code>//foo/bar:quux</code></li>"
+      + "<li><code>//wiz:quux</code> relative to <code>//foo/bar:baz</code> is "
+      + "<code>//wiz:quux</code></li></ul>")
   public Label getRelative(String relName) throws SyntaxException {
     if (relName.length() == 0) {
       throw new SyntaxException("empty package-relative label");
     }
-    if (LabelValidator.isAbsolute(relName)) {
+    if (relName.startsWith("//")) {
       return parseAbsolute(relName);
     } else if (relName.equals(":")) {
       throw new SyntaxException("':' is not a valid package-relative label");
@@ -352,30 +367,6 @@ public final class Label implements Comparable<Label>, Serializable {
       return getLocalTargetLabel(relName.substring(1));
     } else {
       return getLocalTargetLabel(relName);
-    }
-  }
-
-  /**
-   * Resolves the repository of a label in the context of another label.
-   *
-   * <p>This is necessary so that dependency edges in remote repositories do not need to explicitly
-   * mention their repository name. Otherwise, referring to e.g. <code>//a:b</code> in a remote
-   * repository would point back to the main repository, which is usually not what is intended.
-   */
-  public Label resolveRepositoryRelative(Label relative) {
-    if (packageIdentifier.getRepository().isDefault()
-        || !relative.packageIdentifier.getRepository().isDefault()) {
-      return relative;
-    } else {
-      try {
-        return new Label(
-            new PackageIdentifier(packageIdentifier.getRepository(), relative.getPackageFragment()),
-            relative.getName());
-      } catch (Label.SyntaxException e) {
-        // We are creating the new label from an existing one which is guaranteed to be valid, so
-        // this can't happen
-        throw new IllegalStateException(e);
-      }
     }
   }
 
