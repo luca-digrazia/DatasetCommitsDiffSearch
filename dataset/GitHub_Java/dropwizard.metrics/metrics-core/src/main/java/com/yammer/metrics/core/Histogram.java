@@ -24,7 +24,7 @@ public class Histogram implements Metric, Quantized, Summarized {
     /**
      * The type of sampling the histogram should be performing.
      */
-    enum SampleType {
+    public enum SampleType {
         /**
          * Uses a uniform sample of 1028 elements, which offers a 99.9% confidence level with a 5%
          * margin of error assuming a normal distribution.
@@ -66,7 +66,7 @@ public class Histogram implements Metric, Quantized, Summarized {
      *
      * @param type the type of sample to use
      */
-    Histogram(SampleType type) {
+    public Histogram(SampleType type) {
         this(type.newSample());
     }
 
@@ -75,7 +75,7 @@ public class Histogram implements Metric, Quantized, Summarized {
      *
      * @param sample the sample to create a histogram from
      */
-    Histogram(Sample sample) {
+    public Histogram(Sample sample) {
         this.sample = sample;
         clear();
     }
