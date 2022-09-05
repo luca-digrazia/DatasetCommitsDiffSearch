@@ -42,7 +42,6 @@ public class AtlasHotPatchManager implements BundleListener{
     private static final String TAG = "AtlasHotPatchManager";
     private static final AtlasHotPatchManager sPatchManager = new AtlasHotPatchManager();
     private static final String HOTFIX_NAME_POSTFIX = ".dex";
-    private final String MAIN_DEX_PKG = "com.taobao.maindex";
 
     private File sCurrentVersionPatchDir;
     private File meta;
@@ -81,7 +80,6 @@ public class AtlasHotPatchManager implements BundleListener{
                 e.printStackTrace();
             }
         patchMainDex();
-        Atlas.getInstance().addBundleListener(this);
     }
 
     /**
@@ -90,16 +88,13 @@ public class AtlasHotPatchManager implements BundleListener{
      * @throws IOException
      */
     public void installHotFixPatch(String targetVersion, HashMap<String,Pair<Long,InputStream>> patchEntries) throws IOException{
-        if(!sCurrentVersionPatchDir.getName().equals(targetVersion)){
-            throw new IllegalStateException("mismatch version error");
-        }
         if(!sCurrentVersionPatchDir.exists()){
             sCurrentVersionPatchDir.mkdirs();
         }
         if(!sCurrentVersionPatchDir.exists()){
             return;
         }
-        File sPatchVersionDir = sCurrentVersionPatchDir;
+        File sPatchVersionDir = new File(sCurrentVersionPatchDir,targetVersion);
         if(!sPatchVersionDir.exists()){
             sPatchVersionDir.mkdirs();
         }
@@ -122,15 +117,10 @@ public class AtlasHotPatchManager implements BundleListener{
                     File hotFixFile = new File(patchBundleDir, entry.getValue().first+HOTFIX_NAME_POSTFIX);
                     installDex(entry.getValue().second, hotFixFile);
                     hotpatchBundles.put(entry.getKey(),Long.valueOf(entry.getValue().first));
-                    String pkgName = entry.getKey();
-                    if (MAIN_DEX_PKG.equals(pkgName)){
-                        activePatch(pkgName,new Patch(hotFixFile,RuntimeVariables.androidApplication.getClassLoader()));
-                    }else {
-                        BundleImpl bundle = (BundleImpl) Atlas.getInstance().getBundle(entry.getKey());
-                        if(bundle!=null){
-                            Patch p = new Patch(hotFixFile,bundle.getClassLoader());
-                            activePatch(entry.getKey(),p);
-                        }
+                    BundleImpl bundle = (BundleImpl) Atlas.getInstance().getBundle(entry.getKey());
+                    if(bundle!=null){
+                        Patch p = new Patch(hotFixFile,bundle.getClassLoader());
+                        activePatch(entry.getKey(),p);
                     }
                 }catch(Exception e){
                     e.printStackTrace();
@@ -200,12 +190,12 @@ public class AtlasHotPatchManager implements BundleListener{
     }
 
     private void patchMainDex(){
-        if(hotpatchBundles.containsKey(MAIN_DEX_PKG)) {
-            final long version = hotpatchBundles.get(MAIN_DEX_PKG);
-            File maindexPatchFile = new File(sCurrentVersionPatchDir, MAIN_DEX_PKG+"/" + version + HOTFIX_NAME_POSTFIX);
+        if(hotpatchBundles.containsKey("com.taobao.maindex")) {
+            final long version = hotpatchBundles.get("com.taobao.maindex");
+            File maindexPatchFile = new File(sCurrentVersionPatchDir, "com.taobao.maindex/" + version + HOTFIX_NAME_POSTFIX);
             if (maindexPatchFile.exists()) {
                 purgeOldPatchsOfBundle(maindexPatchFile, version);
-                activePatch(MAIN_DEX_PKG, new Patch(maindexPatchFile, RuntimeVariables.androidApplication.getClassLoader()));
+                activePatch("com.taobao.maindex", new Patch(maindexPatchFile, RuntimeVariables.androidApplication.getClassLoader()));
             }
         }
     }
@@ -318,7 +308,7 @@ public class AtlasHotPatchManager implements BundleListener{
         private Patch(File patch,ClassLoader sourceClassLoader){
             file = patch;
             String patchNameWithoutPostFix = StringUtils.substringBetween(patch.getName(),"",HOTFIX_NAME_POSTFIX);
-            odexFile = new File(file.getParentFile(),patchNameWithoutPostFix+".odex");
+            odexFile = new File(file.getName(),patchNameWithoutPostFix+".odex");
             version = Integer.parseInt(patchNameWithoutPostFix);
             this.sourceClassLoader = sourceClassLoader;
         }
