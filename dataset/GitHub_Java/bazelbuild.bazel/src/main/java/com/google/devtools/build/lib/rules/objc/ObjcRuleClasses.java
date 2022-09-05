@@ -817,10 +817,7 @@ public class ObjcRuleClasses {
                         @Override
                         public Object getDefault(AttributeMap rule) {
                           return rule.get(IosTest.IS_XCTEST, Type.BOOLEAN)
-                              // No TOOLS_REPOSITORY prefix for the xctest_app tool; xcode projects
-                              // referencing a dependency under a repository do not work. Thus,
-                              // this target must be available in the target depot.
-                              ? env.getLabel("//tools/objc:xctest_app")
+                              ? env.getLabel(Constants.TOOLS_REPOSITORY + "//tools/objc:xctest_app")
                               : null;
                         }
                       })
@@ -834,10 +831,8 @@ public class ObjcRuleClasses {
                         @Override
                         public Object getDefault(AttributeMap rule) {
                           return rule.get(IosTest.IS_XCTEST, Type.BOOLEAN)
-                              // No TOOLS_REPOSITORY prefix for the xctest_app tool; xcode projects
-                              // referencing a dependency under a repository do not work. Thus,
-                              // this target must be available in the target depot.
-                              ? env.getLabel("//tools/objc:xctest_infoplist")
+                              ? env.getLabel(
+                                  Constants.TOOLS_REPOSITORY + "//tools/objc:xctest_infoplist")
                               : null;
                         }
                       })
