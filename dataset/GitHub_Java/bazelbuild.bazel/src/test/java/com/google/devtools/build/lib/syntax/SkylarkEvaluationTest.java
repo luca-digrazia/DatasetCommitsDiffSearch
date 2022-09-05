@@ -567,8 +567,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testStructPosArgs() throws Exception {
-    checkEvalError("struct(**kwarg) does not accept positional arguments, but got 1",
-        "x = struct(1, b = 2)\n");
+    checkEvalError("struct only supports keyword arguments", "x = struct(1, b = 2)\n");
   }
 
   @Test
@@ -788,9 +787,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testPrintBadKwargs() throws Exception {
-    checkEvalError(
-        "unexpected keywords 'end', 'other' in call to print(*args, sep: string = \" \")",
-        "print(end='x', other='y')");
+    checkEvalError("unexpected keywords: '[end, other]'", "print(end='x', other='y')");
   }
 
   @Test

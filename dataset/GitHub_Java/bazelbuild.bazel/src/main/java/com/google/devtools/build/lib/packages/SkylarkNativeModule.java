@@ -15,16 +15,17 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.devtools.build.lib.packages.Type.ConversionException;
-import com.google.devtools.build.lib.syntax.BuiltinFunction;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.GlobList;
+import com.google.devtools.build.lib.syntax.SkylarkFunction;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.syntax.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.SkylarkSignature.Param;
-import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
+
+import java.util.Map;
 
 /**
  * A class for the Skylark native module.
@@ -36,7 +37,6 @@ import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
     + "Extra helper functions:")
 public class SkylarkNativeModule {
 
-  // TODO(bazel-team): shouldn't we return a SkylarkList instead?
   @SkylarkSignature(name = "glob", objectType = SkylarkNativeModule.class,
       returnType = GlobList.class,
       doc = "Glob returns a list of every file in the current package that:<ul>\n"
@@ -55,15 +55,17 @@ public class SkylarkNativeModule {
       @Param(name = "exclude_directories", type = Integer.class, defaultValue = "1",
           doc = "A flag whether to exclude directories or not.")},
       useAst = true, useEnvironment = true)
-  private static final BuiltinFunction glob = new BuiltinFunction("glob") {
-      public GlobList<String> invoke(
-          SkylarkList includes, SkylarkList excludes, Integer excludeDirectories,
-          FuncallExpression ast, Environment env)
+  private static final SkylarkFunction glob = new SkylarkFunction("glob") {
+      @Override
+      public Object call(Map<String, Object> kwargs, FuncallExpression ast, Environment env)
           throws EvalException, ConversionException, InterruptedException {
-        return PackageFactory.callGlob(
-            null, false, includes, excludes, excludeDirectories != 0, ast, env);
-    }
-  };
+        return PackageFactory.callGlob(null, false, ast, env, new Object[] {
+              kwargs.get("includes"),
+              kwargs.get("excludes"),
+              kwargs.get("exclude_directories")
+            });
+      }
+    };
 
   @SkylarkSignature(name = "package_group", objectType = SkylarkNativeModule.class,
       returnType = Environment.NoneType.class,
@@ -80,12 +82,17 @@ public class SkylarkNativeModule {
           defaultValue = "[]",
           doc = "Other package groups that are included in this one.")},
       useAst = true, useEnvironment = true)
-  private static final BuiltinFunction packageGroup = new BuiltinFunction("package_group") {
-      public Environment.NoneType invoke(String name, SkylarkList packages, SkylarkList includes,
-                FuncallExpression ast, Environment env) throws EvalException, ConversionException {
-        return PackageFactory.callPackageFunction(name, packages, includes, ast, env);
-      }
-    };
+  private static final SkylarkFunction packageGroup = new SkylarkFunction("package_group") {
+    @Override
+    public Object call(Map<String, Object> kwargs, FuncallExpression ast, Environment env)
+        throws EvalException, ConversionException {
+      return PackageFactory.callPackageFunction(ast, env, new Object[] {
+          kwargs.get("name"),
+          kwargs.get("packages"),
+          kwargs.get("includes")
+      });
+    }
+  };
 
   @SkylarkSignature(name = "exports_files", objectType = SkylarkNativeModule.class,
       returnType = Environment.NoneType.class,
@@ -104,17 +111,17 @@ public class SkylarkNativeModule {
       @Param(name = "licenses", type = SkylarkList.class, generic1 = String.class, noneable = true,
           doc = "Licenses to be specified.")},
       useAst = true, useEnvironment = true)
-  private static final BuiltinFunction exportsFiles = new BuiltinFunction("exports_files") {
-      public Environment.NoneType invoke(SkylarkList srcs, Object visibility, Object licenses,
-          FuncallExpression ast, Environment env)
-          throws EvalException, ConversionException {
-        return PackageFactory.callExportsFiles(srcs, visibility, licenses, ast, env);
-      }
-    };
+  private static final SkylarkFunction exportsFiles = new SkylarkFunction("exports_files") {
+    @Override
+    public Object call(Map<String, Object> kwargs, FuncallExpression ast, Environment env)
+        throws EvalException, ConversionException {
+      return PackageFactory.callExportsFiles(ast, env, new Object[] {
+          kwargs.get("srcs"),
+          kwargs.get("visibility"),
+          kwargs.get("licenses")
+      });
+    }
+  };
 
   public static final SkylarkNativeModule NATIVE_MODULE = new SkylarkNativeModule();
-
-  static {
-    SkylarkSignatureProcessor.configureSkylarkFunctions(SkylarkNativeModule.class);
-  }
 }
