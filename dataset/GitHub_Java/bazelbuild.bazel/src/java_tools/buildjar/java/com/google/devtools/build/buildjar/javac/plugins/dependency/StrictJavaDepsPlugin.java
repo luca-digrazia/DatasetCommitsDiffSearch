@@ -210,9 +210,6 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
     /** The set of jars on the compilation bootclasspath. */
     private final Set<String> platformJars;
 
-    /** The set of generators we exempt from this testing. */
-    private final Set<String> exemptGenerators;
-
     public CheckingTreeScanner(DependencyModule dependencyModule, Log log,
         Set<String> missingTargets, Set<String> platformJars, JavaFileManager fileManager) {
       this.indirectJarsToTargets = dependencyModule.getIndirectMapping();
@@ -222,7 +219,6 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
       this.directDependenciesMap = dependencyModule.getExplicitDependenciesMap();
       this.platformJars = platformJars;
       this.fileManager = fileManager;
-      this.exemptGenerators = dependencyModule.getExemptGenerators();
     }
 
     Set<ClassSymbol> getSeenClasses() {
@@ -332,7 +328,7 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
 
     private static final String DAGGER_PROCESSOR_PREFIX = "dagger.";
 
-    public boolean generatedByDagger(JCTree.JCClassDecl tree) {
+    public static boolean generatedByDagger(JCTree.JCClassDecl tree) {
       if (tree.sym == null) {
         return false;
       }
@@ -347,11 +343,6 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
         // additional exemption for tiktok (b/21307381)
         if (value.equals(TIKTOK_COMPONENT_PROCESSOR_NAME)) {
           return true;
-        }
-        for (String exemptGenerator : exemptGenerators) {
-          if (value.equals(exemptGenerator)) {
-            return true;
-          }
         }
       }
       return false;
