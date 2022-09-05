@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -126,7 +125,15 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
     String actionOutputKey = hasher.hash().toString();
 
     // Timeout for running the remote spawn.
-    final int timeoutSeconds = Spawns.getTimeoutSeconds(spawn, 120);
+    int timeout = 120;
+    String timeoutStr = spawn.getExecutionInfo().get("timeout");
+    if (timeoutStr != null) {
+      try {
+        timeout = Integer.parseInt(timeoutStr);
+      } catch (NumberFormatException e) {
+        throw new UserExecException("could not parse timeout: ", e);
+      }
+    }
 
     try {
       // Look up action cache using |actionOutputKey|. Reuse the action output if it is found.
@@ -143,7 +150,7 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
           inputs,
           spawn.getEnvironment(),
           spawn.getOutputFiles(),
-          timeoutSeconds,
+          timeout,
           eventHandler,
           outErr)) {
         return;

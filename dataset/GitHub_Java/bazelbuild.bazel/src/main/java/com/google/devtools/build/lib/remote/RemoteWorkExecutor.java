@@ -14,53 +14,35 @@
 
 package com.google.devtools.build.lib.remote;
 
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.remote.ExecuteServiceGrpc.ExecuteServiceBlockingStub;
-import com.google.devtools.build.lib.remote.RemoteProtocol.ExecuteReply;
-import com.google.devtools.build.lib.remote.RemoteProtocol.ExecuteRequest;
-import com.google.devtools.build.lib.remote.RemoteProtocol.ExecutionStatus;
-import io.grpc.ManagedChannel;
-import java.util.Iterator;
-import java.util.concurrent.TimeUnit;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
+import com.google.devtools.build.lib.remote.RemoteProtocol.RemoteWorkResponse;
+import com.google.devtools.build.lib.vfs.Path;
+import java.io.IOException;
+import java.util.Collection;
 
-/** A remote work executor that uses gRPC for communicating the work, inputs and outputs. */
-@ThreadSafe
-public class RemoteWorkExecutor {
-  /** Channel over which to send work to run remotely. */
-  private final ManagedChannel channel;
-  private final RemoteOptions options;
-
-  public RemoteWorkExecutor(RemoteOptions options) throws InvalidConfigurationException {
-    this.options = options;
-    channel = RemoteUtils.createChannel(options.remoteWorker);
-  }
-
-  public static boolean isRemoteExecutionOptions(RemoteOptions options) {
-    return options.remoteWorker != null;
-  }
-
-  public ExecuteReply executeRemotely(ExecuteRequest request) {
-    ExecuteServiceBlockingStub stub =
-        ExecuteServiceGrpc.newBlockingStub(channel)
-            .withDeadlineAfter(
-                options.grpcTimeoutSeconds + request.getTimeoutMillis() / 1000, TimeUnit.SECONDS);
-    Iterator<ExecuteReply> replies = stub.execute(request);
-    ExecuteReply reply = null;
-    while (replies.hasNext()) {
-      reply = replies.next();
-      // We can handle the action execution progress here.
-    }
-    if (reply == null) {
-      return ExecuteReply.newBuilder()
-          .setStatus(
-              ExecutionStatus.newBuilder()
-                  .setExecuted(false)
-                  .setSucceeded(false)
-                  .setError(ExecutionStatus.ErrorCode.UNKNOWN_ERROR)
-                  .setErrorDetail("Remote server terminated the connection"))
-          .build();
-    }
-    return reply;
-  }
+/**
+ * Interface for exeucting work remotely.
+ */
+@ThreadCompatible
+public interface RemoteWorkExecutor {
+  /**
+   * Submit the work to this work executor. The output of running this action should be written to
+   * {@link RemoteActionCache} indexed by {@code actionOutputKey}.
+   *
+   * <p>Returns a future for the response of this work request.
+   */
+  ListenableFuture<RemoteWorkResponse> executeRemotely(
+      Path execRoot,
+      ActionInputFileCache cache,
+      String actionOutputKey,
+      Collection<String> arguments,
+      Collection<ActionInput> inputs,
+      ImmutableMap<String, String> environment,
+      Collection<? extends ActionInput> outputs,
+      int timeout)
+      throws IOException, WorkTooLargeException, InterruptedException;
 }
