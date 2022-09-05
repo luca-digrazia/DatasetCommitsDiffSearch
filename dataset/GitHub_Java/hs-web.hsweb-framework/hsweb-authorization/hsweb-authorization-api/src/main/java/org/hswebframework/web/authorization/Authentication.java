@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 http://www.hswebframework.org
+ * Copyright 2019 http://www.hswebframework.org
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,12 @@
 
 package org.hswebframework.web.authorization;
 
+import org.springframework.util.StringUtils;
+import reactor.core.publisher.Mono;
+
 import java.io.Serializable;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 用户授权信息,当前登录用户的权限信息,包括用户的基本信息,角色,权限集合等常用信息<br>
@@ -29,10 +30,11 @@ import java.util.Optional;
  * <ul>
  * <li>springmvc 入参方式: ResponseMessage myTest(Authorization auth){}</li>
  * <li>静态方法方式:AuthorizationHolder.get();</li>
+ * <li>响应式方式: return Authentication.currentReactive().map(auth->....)</li>
  * </ul>
  *
  * @author zhouhao
- * @see AuthenticationHolder
+ * @see ReactiveAuthenticationHolder
  * @see AuthenticationManager
  * @since 3.0
  */
@@ -41,20 +43,37 @@ public interface Authentication extends Serializable {
     /**
      * 获取当前登录的用户权限信息
      * <pre>
+     *     public Mono&lt;User&gt; getUser(){
+     *         return Authentication.currentReactive()
+     *                 .switchIfEmpty(Mono.error(new UnAuthorizedException()))
+     *                 .flatMap(autz->findUserByUserId(autz.getUser().getId()));
+     *     }
+     * </pre>
+     *
+     * @return 当前用户权限信息
+     * @see ReactiveAuthenticationHolder
+     * @since 4.0
+     */
+    static Mono<Authentication> currentReactive() {
+        return ReactiveAuthenticationHolder.get();
+    }
+
+    /**
+     * 非响应式环境适用
+     * <pre>
      *
      *   Authentication auth= Authentication.current().get();
      *   //如果权限信息不存在将抛出{@link NoSuchElementException}建议使用下面的方式获取
      *   Authentication auth=Authentication.current().orElse(null);
      *   //或者
-     *   Authentication auth=Authentication.current().orElseThrow(AuthorizeException::new);
+     *   Authentication auth=Authentication.current().orElseThrow(UnAuthorizedException::new);
      * </pre>
      *
-     * @return 返回Optional对象进行操作
+     * @return 当前用户权限信息
      * @see Optional
-     * @see AuthenticationHolder
      */
     static Optional<Authentication> current() {
-        return Optional.ofNullable(AuthenticationHolder.get());
+        return AuthenticationHolder.get();
     }
 
     /**
@@ -63,28 +82,75 @@ public interface Authentication extends Serializable {
     User getUser();
 
     /**
-     * @return 用户持有的角色集合
+     * @return 用户所有维度
+     * @since 4.0
      */
-    List<Role> getRoles();
+    List<Dimension> getDimensions();
 
     /**
      * @return 用户持有的权限集合
      */
     List<Permission> getPermissions();
 
-    /**
-     * 根据id获取角色,角色不存在则返回null
-     *
-     * @param id 角色id
-     * @return 角色信息
-     */
-    default Role getRole(String id) {
-        if (null == id) return null;
-        return getRoles().stream()
-                .filter(role -> role.getId().equals(id))
-                .findAny()
-                .orElse(null);
+
+    default boolean hasDimension(String type, String... id) {
+        return hasDimension(type, Arrays.asList(id));
     }
+
+    default boolean hasDimension(String type, Collection<String> id) {
+        if (id.isEmpty()) {
+            return !getDimensions(type).isEmpty();
+        }
+        return getDimensions(type)
+                .stream()
+                .anyMatch(p -> id.contains(p.getId()));
+    }
+
+    default boolean hasDimension(DimensionType type, String id) {
+        return getDimension(type, id).isPresent();
+    }
+
+    default Optional<Dimension> getDimension(String type, String id) {
+        if (StringUtils.isEmpty(type)) {
+            return Optional.empty();
+        }
+        return getDimensions()
+                .stream()
+                .filter(dimension -> dimension.getId().equals(id) && type.equalsIgnoreCase(dimension.getType().getId()))
+                .findFirst();
+    }
+
+    default Optional<Dimension> getDimension(DimensionType type, String id) {
+        if (type == null) {
+            return Optional.empty();
+        }
+        return getDimensions()
+                .stream()
+                .filter(dimension -> dimension.getId().equals(id) && type.isSameType(dimension.getType()))
+                .findFirst();
+    }
+
+
+    default List<Dimension> getDimensions(String type) {
+        if (StringUtils.isEmpty(type)) {
+            return Collections.emptyList();
+        }
+        return getDimensions()
+                .stream()
+                .filter(dimension -> dimension.getType().isSameType(type))
+                .collect(Collectors.toList());
+    }
+
+    default List<Dimension> getDimensions(DimensionType type) {
+        if (type == null) {
+            return Collections.emptyList();
+        }
+        return getDimensions()
+                .stream()
+                .filter(dimension -> dimension.getType().isSameType(type))
+                .collect(Collectors.toList());
+    }
+
 
     /**
      * 根据权限id获取权限信息,权限不存在则返回null
@@ -92,12 +158,30 @@ public interface Authentication extends Serializable {
      * @param id 权限id
      * @return 权限信息
      */
-    default Permission getPermission(String id) {
-        if (null == id) return null;
-        return getPermissions().parallelStream()
+    default Optional<Permission> getPermission(String id) {
+        if (null == id) {
+            return Optional.empty();
+        }
+        return getPermissions().stream()
                 .filter(permission -> permission.getId().equals(id))
-                .findAny()
-                .orElse(null);
+                .findAny();
+    }
+
+    /**
+     * 判断是否持有某权限以及对权限的可操作事件
+     *
+     * @param permissionId 权限id {@link Permission#getId()}
+     * @param actions      可操作事件 {@link Permission#getActions()} 如果为空,则不判断action,只判断permissionId
+     * @return 是否持有权限
+     */
+    default boolean hasPermission(String permissionId, String... actions) {
+        return hasPermission(permissionId, Arrays.asList(actions));
+    }
+
+    default boolean hasPermission(String permissionId, Collection<String> actions) {
+        return getPermission(permissionId)
+                .filter(permission -> actions.isEmpty() || permission.getActions().containsAll(actions))
+                .isPresent();
     }
 
     /**
@@ -111,38 +195,16 @@ public interface Authentication extends Serializable {
     <T extends Serializable> Optional<T> getAttribute(String name);
 
     /**
-     * 设置一个属性值,如果属性名称已经存在,则将其覆盖。<br>
-     * 注意:由于权限信息可能会被序列化,属性值必须实现{@link Serializable}接口
-     *
-     * @param name   属性名称
-     * @param object 属性值
-     * @see AuthenticationManager#sync(Authentication)
-     */
-    void setAttribute(String name, Serializable object);
-
-    /**
-     * 设置多个属性值,参数为map类型,key为属性名称,value为属性值
-     *
-     * @param attributes 属性值map
-     * @see AuthenticationManager#sync(Authentication)
-     */
-    void setAttributes(Map<String, Serializable> attributes);
-
-    /**
-     * 删除属性,并返回被删除的值
-     *
-     * @param name 属性名
-     * @param <T>  被删除的值类型
-     * @return 被删除的值
-     * @see AuthenticationManager#sync(Authentication)
-     */
-    <T extends Serializable> T removeAttributes(String name);
-
-    /**
-     * 获取全部属性,此属性为通过{@link this#setAttribute(String, Serializable)}或{@link this#setAttributes(Map)}设置的属性。
-     *
      * @return 全部属性集合
      */
     Map<String, Serializable> getAttributes();
+
+    /**
+     * 合并权限
+     *
+     * @param source 源权限信息
+     * @return 合并后的信息
+     */
+    Authentication merge(Authentication source);
 
 }
