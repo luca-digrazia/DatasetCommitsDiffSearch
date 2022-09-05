@@ -17,13 +17,11 @@ package com.google.devtools.build.lib.analysis;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionRegistry;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -107,13 +105,13 @@ public interface AnalysisEnvironment extends ActionRegistry {
    * If the artifact was created in another analysis environment (e.g. by a different configured
    * target instance) or the artifact is a source artifact, it returns null.
    */
-  ActionAnalysisMetadata getLocalGeneratingAction(Artifact artifact);
+  Action getLocalGeneratingAction(Artifact artifact);
 
   /**
    * Returns the actions that were registered so far with this analysis environment, that is, all
    * the actions that were created by the current target being analyzed.
    */
-  Iterable<ActionAnalysisMetadata> getRegisteredActions();
+  Iterable<Action> getRegisteredActions();
 
   /**
    * Returns the Skyframe SkyFunction.Environment if available. Otherwise, null.
@@ -138,11 +136,10 @@ public interface AnalysisEnvironment extends ActionRegistry {
   /**
    * Returns the Artifacts that contain the workspace status for the current build request.
    *
-   * @param ruleContext the rule to use for error reporting.
-   * @param config the current build configuration.
+   * @param ruleContext the rule to use for error reporting and to determine the
+   *        configuration
    */
-  ImmutableList<Artifact> getBuildInfo(
-      RuleContext ruleContext, BuildInfoKey key, BuildConfiguration config);
+  ImmutableList<Artifact> getBuildInfo(RuleContext ruleContext, BuildInfoKey key);
 
   /**
    * Returns the set of orphan Artifacts (i.e. Artifacts without generating action). Should only be

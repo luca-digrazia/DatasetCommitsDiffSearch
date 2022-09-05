@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.BinaryFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
@@ -57,26 +56,12 @@ public final class XcodeSupport {
       fromTemplates("%{name}.xcodeproj/project.pbxproj");
 
   private final RuleContext ruleContext;
-  private final IntermediateArtifacts intermediateArtifacts;
-  private final Label xcodeTargetLabel;
 
   /**
    * Creates a new xcode support for the given context.
    */
-  XcodeSupport(RuleContext ruleContext)  {
-    this(ruleContext, ObjcRuleClasses.intermediateArtifacts(ruleContext), ruleContext.getLabel());
-  }
-
-  /**
-   * Creates a new xcode support for the given context and {@link IntermediateArtifacts} with given
-   * target label.
-   */
-  public XcodeSupport(
-      RuleContext ruleContext, IntermediateArtifacts intermediateArtifacts,
-      Label xcodeTargetLabel) {
+  XcodeSupport(RuleContext ruleContext) {
     this.ruleContext = ruleContext;
-    this.intermediateArtifacts = intermediateArtifacts;
-    this.xcodeTargetLabel = xcodeTargetLabel;
   }
 
   /**
@@ -98,6 +83,9 @@ public final class XcodeSupport {
    * @return this xcode support
    */
   XcodeSupport addDummySource(XcodeProvider.Builder xcodeProviderBuilder) {
+    IntermediateArtifacts intermediateArtifacts =
+        ObjcRuleClasses.intermediateArtifacts(ruleContext);
+
     ruleContext.registerAction(new SymlinkAction(
         ruleContext.getActionOwner(),
         ruleContext.getPrerequisiteArtifact("$dummy_source", Mode.TARGET),
@@ -166,7 +154,7 @@ public final class XcodeSupport {
       ObjcProvider objcProvider, XcodeProductType productType, String architecture,
       ConfigurationDistinguisher configurationDistinguisher) {
     xcodeProviderBuilder
-        .setLabel(xcodeTargetLabel)
+        .setLabel(ruleContext.getLabel())
         .setArchitecture(architecture)
         .setConfigurationDistinguisher(configurationDistinguisher)
         .setObjcProvider(objcProvider)
@@ -222,7 +210,8 @@ public final class XcodeSupport {
   }
 
   private void registerXcodegenActions(XcodeProvider.Project project) throws InterruptedException {
-    Artifact controlFile = intermediateArtifacts.pbxprojControlArtifact();
+    Artifact controlFile =
+        ObjcRuleClasses.intermediateArtifacts(ruleContext).pbxprojControlArtifact();
 
     ruleContext.registerAction(new BinaryFileWriteAction(
         ruleContext.getActionOwner(),
