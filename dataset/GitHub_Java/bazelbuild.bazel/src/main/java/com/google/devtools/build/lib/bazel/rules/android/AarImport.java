@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.PopulateTreeArtifactAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -36,7 +35,6 @@ import com.google.devtools.build.lib.rules.android.ResourceApk;
 import com.google.devtools.build.lib.rules.android.ResourceDependencies;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
@@ -93,24 +91,21 @@ public class AarImport implements RuleConfiguredTargetFactory {
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST),
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP));
 
-    NestedSetBuilder<Artifact> filesToBuildBuilder =
-        NestedSetBuilder.<Artifact>stableOrder().add(resources).add(classesJar);
-
-    JavaRuleOutputJarsProvider.Builder jarProviderBuilder = new JavaRuleOutputJarsProvider.Builder()
-        .addOutputJar(classesJar, null, null);
-    for (TransitiveInfoCollection export : ruleContext.getPrerequisites("exports", Mode.TARGET)) {
-      for (OutputJar jar : export.getProvider(JavaRuleOutputJarsProvider.class).getOutputJars()) {
-        jarProviderBuilder.addOutputJar(jar);
-        filesToBuildBuilder.add(jar.getClassJar());
-      }
-    }
-
     return ruleBuilder
-        .setFilesToBuild(filesToBuildBuilder.build())
+        .setFilesToBuild(
+            NestedSetBuilder
+                .<Artifact>stableOrder()
+                .add(resources)
+                .add(classesJar)
+                .build())
         .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
         .addProvider(
             AndroidResourcesProvider.class, resourceApk.toResourceProvider(ruleContext.getLabel()))
-        .addProvider(JavaRuleOutputJarsProvider.class, jarProviderBuilder.build())
+        .addProvider(
+            JavaRuleOutputJarsProvider.class,
+            new JavaRuleOutputJarsProvider.Builder()
+                .addOutputJar(classesJar, null, null)
+                .build())
         .build();
   }
 
