@@ -1,8 +1,6 @@
 package org.elasticsearch.plugin.nlpcn.executors;
 
-import com.sun.org.apache.xpath.internal.operations.Mult;
-import org.elasticsearch.cluster.routing.allocation.decider.Decision;
-import org.elasticsearch.common.base.Joiner;
+import com.google.common.base.Joiner;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.aggregations.Aggregation;
@@ -13,12 +11,8 @@ import org.elasticsearch.search.aggregations.bucket.SingleBucketAggregation;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoHashGrid;
 import org.elasticsearch.search.aggregations.metrics.MetricsAggregator;
 import org.elasticsearch.search.aggregations.metrics.NumericMetricsAggregation;
-import org.elasticsearch.search.aggregations.metrics.percentiles.Percentile;
-import org.elasticsearch.search.aggregations.metrics.percentiles.Percentiles;
 import org.elasticsearch.search.aggregations.metrics.scripted.ScriptedMetric;
-import org.elasticsearch.search.aggregations.metrics.stats.Stats;
 import org.elasticsearch.search.aggregations.metrics.stats.extended.ExtendedStats;
-import org.nlpcn.es4sql.Util;
 
 import java.util.*;
 
@@ -26,17 +20,13 @@ import java.util.*;
  * Created by Eliran on 27/12/2015.
  */
 public class CSVResultsExtractor {
-    private final boolean includeType;
-    private final boolean includeScore;
     private int currentLineIndex;
 
-    public CSVResultsExtractor(boolean includeScore, boolean includeType) {
-        this.includeScore = includeScore;
-        this.includeType = includeType;
+    public CSVResultsExtractor() {
         this.currentLineIndex = 0;
     }
 
-    public CSVResult extractResults(Object queryResult, boolean flat, String separator) throws CsvExtractorException {
+    public CSVResult extractResults(Object queryResult, boolean flat, String separator) {
         if(queryResult instanceof SearchHits){
             SearchHit[] hits = ((SearchHits) queryResult).getHits();
             List<Map<String,Object>> docsAsMap = new ArrayList<>();
@@ -56,6 +46,7 @@ public class CSVResultsExtractor {
             }
 
             //todo: need to handle more options for aggregations:
+            //NumericMetricsAggregation.Multi : ExtendedStats,Stats,Percentiles
             //Aggregations that inhrit from base
             //ScriptedMetric
             //TopHits
@@ -67,7 +58,7 @@ public class CSVResultsExtractor {
         return null;
     }
 
-    private  void handleAggregations(Aggregations aggregations, List<String> headers, List<List<String>> lines) throws CsvExtractorException {
+    private  void handleAggregations(Aggregations aggregations, List<String> headers, List<List<String>> lines) {
         if(allNumericAggregations(aggregations)){
             lines.get(this.currentLineIndex).addAll(fillHeaderAndCreateLineForNumericAggregations(aggregations, headers));
             return;
@@ -75,7 +66,7 @@ public class CSVResultsExtractor {
         //aggregations with size one only supported when not metrics.
         List<Aggregation> aggregationList = aggregations.asList();
         if(aggregationList.size() > 1){
-            throw new CsvExtractorException("currently support only one aggregation at same level (Except for numeric metrics)");
+            //todo: throw exception
         }
         Aggregation aggregation = aggregationList.get(0);
         //we want to skip singleBucketAggregations (nested,reverse_nested,filters)
@@ -105,7 +96,7 @@ public class CSVResultsExtractor {
             boolean firstLine = true;
             for (MultiBucketsAggregation.Bucket bucket : buckets) {
                 //each bucket need to add new line with current line copied => except for first line
-                String key = bucket.getKeyAsText().string();
+                String key = bucket.getKeyAsString();
                 if(firstLine){
                     firstLine = false;
                 }
@@ -122,7 +113,7 @@ public class CSVResultsExtractor {
 
     }
 
-    private  List<String> fillHeaderAndCreateLineForNumericAggregations(Aggregations aggregations, List<String> header) throws CsvExtractorException {
+    private  List<String> fillHeaderAndCreateLineForNumericAggregations(Aggregations aggregations, List<String> header) {
         List<String> line = new ArrayList<>();
         List<Aggregation> aggregationList = aggregations.asList();
         for(Aggregation aggregation : aggregationList){
@@ -131,69 +122,17 @@ public class CSVResultsExtractor {
         return line;
     }
 
-    private  void handleNumericMetricAggregation(List<String> header, List<String> line, Aggregation aggregation) throws CsvExtractorException {
+    private  void handleNumericMetricAggregation(List<String> header, List<String> line, Aggregation aggregation) {
         String name = aggregation.getName();
-
+        if(!header.contains(name)){
+            header.add(aggregation.getName());
+        }
         if(aggregation instanceof NumericMetricsAggregation.SingleValue){
-            if(!header.contains(name)){
-                header.add(name);
-            }
             line.add(((NumericMetricsAggregation.SingleValue) aggregation).getValueAsString());
         }
         //todo:Numeric MultiValue - Stats,ExtendedStats,Percentile...
-        else if(aggregation instanceof NumericMetricsAggregation.MultiValue){
-            if(aggregation instanceof Stats) {
-                String[] statsHeaders = new String[]{"count", "sum", "avg", "min", "max"};
-                boolean isExtendedStats = aggregation instanceof ExtendedStats;
-                if(isExtendedStats){
-                    String[] extendedHeaders = new String[]{"sumOfSquares", "variance", "stdDeviation"};
-                    statsHeaders = Util.concatStringsArrays(statsHeaders,extendedHeaders);
-                }
-                mergeHeadersWithPrefix(header, name, statsHeaders);
-                Stats stats = (Stats) aggregation;
-                line.add(stats.getCountAsString());
-                line.add(stats.getSumAsString());
-                line.add(stats.getAvgAsString());
-                line.add(stats.getMinAsString());
-                line.add(stats.getMaxAsString());
-                if(isExtendedStats){
-                    ExtendedStats extendedStats = (ExtendedStats) aggregation;
-                    line.add(extendedStats.getSumOfSquaresAsString());
-                    line.add(extendedStats.getVarianceAsString());
-                    line.add(extendedStats.getStdDeviationAsString());
-                }
-            }
-            else if( aggregation instanceof Percentiles){
-                String[] percentileHeaders = new String[]{"1.0", "5.0", "25.0", "50.0", "75.0", "95.0", "99.0"};
-                mergeHeadersWithPrefix(header, name, percentileHeaders);
-                Percentiles percentiles = (Percentiles) aggregation;
-                line.add(percentiles.percentileAsString(1.0));
-                line.add(percentiles.percentileAsString(5.0));
-                line.add(percentiles.percentileAsString(25.0));
-                line.add(percentiles.percentileAsString(50.0));
-                line.add(percentiles.percentileAsString(75));
-                line.add(percentiles.percentileAsString(95.0));
-                line.add(percentiles.percentileAsString(99.0));
-            }
-            else {
-                throw new CsvExtractorException("unknown NumericMetricsAggregation.MultiValue:" + aggregation.getClass());
-            }
-
-        }
         else {
-            throw new CsvExtractorException("unknown NumericMetricsAggregation" + aggregation.getClass());
-        }
-    }
 
-    private void mergeHeadersWithPrefix(List<String> header, String prefix, String[] newHeaders) {
-        for (int i = 0; i < newHeaders.length; i++) {
-            String newHeader = newHeaders[i];
-            if(prefix != null && !prefix.equals("")) {
-                newHeader = prefix + "." + newHeader;
-            }
-            if (!header.contains(newHeader)) {
-                header.add(newHeader);
-            }
         }
     }
 
@@ -235,19 +174,7 @@ public class CSVResultsExtractor {
         for(SearchHit hit : hits){
             Map<String, Object> doc = hit.sourceAsMap();
             mergeHeaders(csvHeaders,doc,flat);
-            if(this.includeScore){
-                doc.put("_score",hit.score());
-            }
-            if(this.includeType){
-                doc.put("_type",hit.type());
-            }
             docsAsMap.add(doc);
-        }
-        if (this.includeScore){
-            csvHeaders.add("_score");
-        }
-        if (this.includeType){
-            csvHeaders.add("_type");
         }
         return new ArrayList<>(csvHeaders);
     }
