@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -45,7 +44,6 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
-import java.util.Map.Entry;
 import javax.annotation.Nullable;
 
 /**
@@ -185,6 +183,12 @@ public abstract class AbstractAction implements Action, SkylarkValue {
   @Override
   public Iterable<Artifact> discoverInputsStage2(SkyFunction.Environment env)
       throws ActionExecutionException, InterruptedException {
+    return null;
+  }
+
+  @Nullable
+  @Override
+  public Iterable<Artifact> getInputsWhenSkippingInputDiscovery() {
     return null;
   }
 
@@ -466,29 +470,12 @@ public abstract class AbstractAction implements Action, SkylarkValue {
             .setOwner(owner.getLabel().toString())
             .setId(getKey())
             .setMnemonic(getMnemonic());
-    Iterable<AspectDescriptor> aspectDescriptors = owner.getAspectDescriptors();
-    AspectDescriptor lastAspect = null;
-
-    for (AspectDescriptor aspectDescriptor : aspectDescriptors) {
-      ExtraActionInfo.AspectDescriptor.Builder builder =
-          ExtraActionInfo.AspectDescriptor.newBuilder()
-            .setAspectName(aspectDescriptor.getAspectClass().getName());
-      for (Entry<String, Collection<String>> entry :
-          aspectDescriptor.getParameters().getAttributes().asMap().entrySet()) {
-          builder.putAspectParameters(
-            entry.getKey(),
-            ExtraActionInfo.AspectDescriptor.StringList.newBuilder()
-                .addAllValue(entry.getValue())
-                .build()
-          );
-      }
-      lastAspect = aspectDescriptor;
+    if (owner.getAspectName() != null) {
+      result.setAspectName(owner.getAspectName());
     }
-    if (lastAspect != null) {
-      result.setAspectName(lastAspect.getAspectClass().getName());
-
+    if (owner.getAspectParameters() != null) {
       for (Map.Entry<String, Collection<String>> entry :
-          lastAspect.getParameters().getAttributes().asMap().entrySet()) {
+          owner.getAspectParameters().getAttributes().asMap().entrySet()) {
         result.putAspectParameters(
             entry.getKey(),
             ExtraActionInfo.StringList.newBuilder().addAllValue(entry.getValue()).build());

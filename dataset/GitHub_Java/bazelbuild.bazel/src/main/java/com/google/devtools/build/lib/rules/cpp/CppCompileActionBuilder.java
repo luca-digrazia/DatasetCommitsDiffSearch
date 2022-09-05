@@ -263,8 +263,7 @@ public class CppCompileActionBuilder {
     if (!fake && !shouldScanIncludes) {
       realMandatoryInputsBuilder.addTransitive(context.getDeclaredIncludeSrcs());
     }
-    boolean shouldPruneModules =
-        cppConfiguration.getPruneCppModules() && shouldScanIncludes && useHeaderModules;
+    boolean shouldPruneModules = shouldScanIncludes && useHeaderModules;
     if (useHeaderModules && !shouldPruneModules) {
       realMandatoryInputsBuilder.addTransitive(context.getTransitiveModules(usePic));
     }

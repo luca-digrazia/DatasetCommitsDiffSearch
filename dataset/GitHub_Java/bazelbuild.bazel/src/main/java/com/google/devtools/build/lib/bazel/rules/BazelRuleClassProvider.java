@@ -162,7 +162,6 @@ import com.google.devtools.build.lib.rules.repository.BindRule;
 import com.google.devtools.build.lib.rules.repository.LocalRepositoryRule;
 import com.google.devtools.build.lib.rules.repository.NewLocalRepositoryRule;
 import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
-import com.google.devtools.build.lib.rules.test.SkylarkTestingModule;
 import com.google.devtools.build.lib.rules.test.TestSuiteRule;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
@@ -196,22 +195,29 @@ public class BazelRuleClassProvider {
     private void validateDirectPrerequisiteVisibility(
         RuleContext.Builder context, ConfiguredTarget prerequisite, String attrName) {
       Rule rule = context.getRule();
+      if (rule.getLabel().getPackageFragment().equals(Label.EXTERNAL_PACKAGE_NAME)) {
+        // //external: labels are special. They have access to everything and visibility is checked
+        // at the edge that points to the //external: label.
+        return;
+      }
       Target prerequisiteTarget = prerequisite.getTarget();
+      Label prerequisiteLabel = prerequisiteTarget.getLabel();
       if (!context.getRule().getLabel().getPackageIdentifier().equals(
-              AliasProvider.getDependencyLabel(prerequisite).getPackageIdentifier())
+              prerequisite.getTarget().getLabel().getPackageIdentifier())
           && !context.isVisible(prerequisite)) {
         if (!context.getConfiguration().checkVisibility()) {
           context.ruleWarning(String.format("Target '%s' violates visibility of target "
-              + "%s. Continuing because --nocheck_visibility is active",
-              rule.getLabel(), AliasProvider.printLabelWithAliasChain(prerequisite)));
+              + "'%s'. Continuing because --nocheck_visibility is active",
+              rule.getLabel(), prerequisiteLabel));
         } else {
           // Oddly enough, we use reportError rather than ruleError here.
           context.reportError(rule.getLocation(),
-              String.format("Target %s is not visible from target '%s'. Check "
+              String.format("Target '%s' is not visible from target '%s'%s. Check "
                   + "the visibility declaration of the former target if you think "
                   + "the dependency is legitimate",
-                  AliasProvider.printLabelWithAliasChain(prerequisite),
-                  rule.getLabel()));
+                  prerequisiteLabel,
+                  rule.getLabel(),
+                  AliasProvider.printVisibilityChain(prerequisite)));
         }
       }
 
@@ -224,9 +230,9 @@ public class BazelRuleClassProvider {
                 + rule.getRuleClass()
                 + " rule "
                 + rule.getLabel()
-                + ": package group "
-                + AliasProvider.printLabelWithAliasChain(prerequisite)
-                + " is misplaced here "
+                + ": package group '"
+                + prerequisiteLabel
+                + "' is misplaced here "
                 + "(they are only allowed in the visibility attribute)");
       }
     }
@@ -242,11 +248,12 @@ public class BazelRuleClassProvider {
       }
 
       Target prerequisiteTarget = prerequisite.getTarget();
+      Label prerequisiteLabel = prerequisiteTarget.getLabel();
       String thisPackage = rule.getLabel().getPackageName();
 
       if (isTestOnlyRule(prerequisiteTarget) && !isTestOnlyRule(rule)) {
-        String message = "non-test target '" + rule.getLabel() + "' depends on testonly target "
-            + AliasProvider.printLabelWithAliasChain(prerequisite)
+        String message = "non-test target '" + rule.getLabel() + "' depends on testonly target '"
+            + prerequisiteLabel + "'" + AliasProvider.printVisibilityChain(prerequisite)
             + " and doesn't have testonly attribute set";
         if (thisPackage.startsWith("experimental/")) {
           context.ruleWarning(message);
@@ -278,7 +285,6 @@ public class BazelRuleClassProvider {
     OBJC_RULES.init(builder);
     J2OBJC_RULES.init(builder);
     ANDROID_STUDIO_ASPECT.init(builder);
-    TESTING_SUPPORT.init(builder);
     VARIOUS_WORKSPACE_RULES.init(builder);
 
     // This rule is a little special: it needs to depend on every configuration fragment that has
@@ -377,19 +383,6 @@ public class BazelRuleClassProvider {
           builder.addConfigurationFragment(new ProtoConfiguration.Loader());
           builder.addRuleDefinition(new BazelProtoLibraryRule());
           builder.addRuleDefinition(new ProtoLangToolchainRule());
-        }
-
-        @Override
-        public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CORE_RULES);
-        }
-      };
-
-  public static final RuleSet TESTING_SUPPORT =
-      new RuleSet() {
-        @Override
-        public void init(Builder builder) {
-          builder.addSkylarkAccessibleTopLevels("testing", new SkylarkTestingModule());
         }
 
         @Override
@@ -635,7 +628,7 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new ObjcXcodeprojRule());
           builder.addRuleDefinition(new ObjcRuleClasses.CoptsRule());
           builder.addRuleDefinition(new ObjcRuleClasses.BundlingRule());
-          builder.addRuleDefinition(new ObjcRuleClasses.DylibDependingRule(objcProtoAspect));
+          builder.addRuleDefinition(new ObjcRuleClasses.DylibDependingRule());
           builder.addRuleDefinition(new ObjcRuleClasses.ReleaseBundlingRule());
           builder.addRuleDefinition(new ObjcRuleClasses.SimulatorRule());
           builder.addRuleDefinition(new ObjcRuleClasses.CompilingRule());

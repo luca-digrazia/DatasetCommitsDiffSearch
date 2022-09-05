@@ -62,7 +62,15 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
   private final ModuleInfo moduleInfo;
   private final ModuleInfo picModuleInfo;
 
+  /**
+   * The module maps from all targets the current target depends on transitively.
+   */
+  private final NestedSet<Artifact> transitiveModuleMaps;
+
   private final CppModuleMap cppModuleMap;
+  
+  // True if this context is for a compilation that needs transitive module maps.
+  private final boolean provideTransitiveModuleMaps;
   
   // Derived from depsContexts.
   private final ImmutableSet<Artifact> compilationPrerequisites;
@@ -76,8 +84,10 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
       NestedSet<Pair<Artifact, Artifact>> pregreppedHdrs,
       ModuleInfo moduleInfo,
       ModuleInfo picModuleInfo,
+      NestedSet<Artifact> transitiveModuleMaps,
       NestedSet<Artifact> directModuleMaps,
-      CppModuleMap cppModuleMap) {
+      CppModuleMap cppModuleMap,
+      boolean provideTransitiveModuleMaps) {
     Preconditions.checkNotNull(commandLineContext);
     this.commandLineContext = commandLineContext;
     this.declaredIncludeDirs = declaredIncludeDirs;
@@ -87,7 +97,9 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
     this.pregreppedHdrs = pregreppedHdrs;
     this.moduleInfo = moduleInfo;
     this.picModuleInfo = picModuleInfo;
+    this.transitiveModuleMaps = transitiveModuleMaps;
     this.cppModuleMap = cppModuleMap;
+    this.provideTransitiveModuleMaps = provideTransitiveModuleMaps;
     this.compilationPrerequisites = compilationPrerequisites;
   }
 
@@ -214,6 +226,9 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
   public NestedSet<Artifact> getAdditionalInputs() {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
     builder.addTransitive(directModuleMaps);
+    if (provideTransitiveModuleMaps) {
+      builder.addTransitive(transitiveModuleMaps);
+    }
     if (cppModuleMap != null) {
       builder.add(cppModuleMap.getArtifact());
     }
@@ -225,6 +240,13 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
    */
   public NestedSet<Artifact> getDirectModuleMaps() {
     return directModuleMaps;
+  }
+
+  /**
+   * @return modules maps in the transitive closure that are not from direct dependencies.
+   */
+  private NestedSet<Artifact> getTransitiveModuleMaps() {
+    return transitiveModuleMaps;
   }
 
   /**
@@ -261,8 +283,10 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
         context.pregreppedHdrs,
         context.moduleInfo,
         context.picModuleInfo,
+        context.transitiveModuleMaps,
         context.directModuleMaps,
-        context.cppModuleMap);
+        context.cppModuleMap,
+        context.provideTransitiveModuleMaps);
   }
 
   /**
@@ -310,8 +334,10 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
         mergeSets(ownerContext.pregreppedHdrs, libContext.pregreppedHdrs),
         moduleInfo.build(),
         picModuleInfo.build(),
+        mergeSets(ownerContext.transitiveModuleMaps, libContext.transitiveModuleMaps),
         mergeSets(ownerContext.directModuleMaps, libContext.directModuleMaps),
-        libContext.cppModuleMap);
+        libContext.cppModuleMap,
+        libContext.provideTransitiveModuleMaps);
   }
   
   /**
@@ -370,9 +396,11 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
         NestedSetBuilder.stableOrder();
     private final ModuleInfo.Builder moduleInfo = new ModuleInfo.Builder();
     private final ModuleInfo.Builder picModuleInfo = new ModuleInfo.Builder();
+    private final NestedSetBuilder<Artifact> transitiveModuleMaps = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<Artifact> directModuleMaps = NestedSetBuilder.stableOrder();
     private final Set<String> defines = new LinkedHashSet<>();
     private CppModuleMap cppModuleMap;
+    private boolean provideTransitiveModuleMaps = false;
 
     /** The rule that owns the context */
     private final RuleContext ruleContext;
@@ -430,6 +458,15 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
       pregreppedHdrs.addTransitive(otherContext.getPregreppedHeaders());
       moduleInfo.addTransitive(otherContext.moduleInfo);
       picModuleInfo.addTransitive(otherContext.picModuleInfo);
+
+      NestedSet<Artifact> othersTransitiveModuleMaps = otherContext.getTransitiveModuleMaps();
+      NestedSet<Artifact> othersDirectModuleMaps = otherContext.getDirectModuleMaps();
+
+      // Forward transitive information.
+      // The other target's transitive module maps do not include its direct module maps, so we
+      // add both.
+      transitiveModuleMaps.addTransitive(othersTransitiveModuleMaps);
+      transitiveModuleMaps.addTransitive(othersDirectModuleMaps);
 
       // All module maps of direct dependencies are inputs to the current compile independently of
       // the build type.
@@ -622,6 +659,14 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
     }
 
     /**
+     * Sets that the context will be used by a compilation that needs transitive module maps.
+     */
+    public Builder setProvideTransitiveModuleMaps(boolean provideTransitiveModuleMaps) {
+      this.provideTransitiveModuleMaps = provideTransitiveModuleMaps;
+      return this;
+    }
+
+    /**
      * Builds the {@link CppCompilationContext}.
      */
     public CppCompilationContext build() {
@@ -654,8 +699,10 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
           pregreppedHdrs.build(),
           moduleInfo.build(),
           picModuleInfo.build(),
+          transitiveModuleMaps.build(),
           directModuleMaps.build(),
-          cppModuleMap);
+          cppModuleMap,
+          provideTransitiveModuleMaps);
     }
 
     /**
