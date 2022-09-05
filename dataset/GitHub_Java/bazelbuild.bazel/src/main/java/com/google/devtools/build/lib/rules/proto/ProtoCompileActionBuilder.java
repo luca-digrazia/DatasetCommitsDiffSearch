@@ -211,7 +211,7 @@ public class ProtoCompileActionBuilder {
     }
   }
 
-  private SpawnAction.Builder createAction() throws MissingPrerequisiteException {
+  private SpawnAction.Builder createAction() {
     SpawnAction.Builder result =
         new SpawnAction.Builder().addTransitiveInputs(supportData.getTransitiveImports());
 
@@ -222,7 +222,7 @@ public class ProtoCompileActionBuilder {
 
     FilesToRunProvider compilerTarget =
         ruleContext.getExecutablePrerequisite(":proto_compiler", RuleConfiguredTarget.Mode.HOST);
-    if (compilerTarget == null) {
+    if (ruleContext.hasErrors()) {
       throw new MissingPrerequisiteException();
     }
 
@@ -246,21 +246,20 @@ public class ProtoCompileActionBuilder {
   }
 
   @Nullable
-  private FilesToRunProvider getLangPluginTarget() throws MissingPrerequisiteException {
+  private FilesToRunProvider getLangPluginTarget() {
     if (langPluginName == null) {
       return null;
     }
     FilesToRunProvider result =
         ruleContext.getExecutablePrerequisite(langPluginName, RuleConfiguredTarget.Mode.HOST);
-    if (result == null) {
+    if (ruleContext.hasErrors()) {
       throw new MissingPrerequisiteException();
     }
     return result;
   }
 
   /** Commandline generator for protoc invocations. */
-  private CustomCommandLine.Builder createProtoCompilerCommandLine()
-      throws MissingPrerequisiteException {
+  private CustomCommandLine.Builder createProtoCompilerCommandLine() {
     CustomCommandLine.Builder result = CustomCommandLine.builder();
 
     if (langPluginName == null) {
@@ -328,17 +327,7 @@ public class ProtoCompileActionBuilder {
       ImmutableList.Builder<String> builder = ImmutableList.builder();
       for (Artifact artifact : transitiveImports) {
         builder.add(
-            "-I"
-                + artifact
-                    .getRootRelativePath()
-                    .relativeTo(
-                        artifact
-                            .getOwnerLabel()
-                            .getPackageIdentifier()
-                            .getRepository()
-                            .getPathUnderExecRoot())
-                + "="
-                + artifact.getExecPathString());
+            "-I" + artifact.getRootRelativePathString() + "=" + artifact.getExecPathString());
       }
       if (protosInDirectDependencies != null) {
         ArrayList<String> rootRelativePaths = new ArrayList<>();
@@ -352,7 +341,7 @@ public class ProtoCompileActionBuilder {
   }
 
   /** Signifies that a prerequisite could not be satisfied. */
-  private static class MissingPrerequisiteException extends Exception {}
+  private static class MissingPrerequisiteException extends RuntimeException {}
 
   public static void writeDescriptorSet(
       RuleContext ruleContext,
@@ -422,8 +411,8 @@ public class ProtoCompileActionBuilder {
 
     FilesToRunProvider compilerTarget =
         ruleContext.getExecutablePrerequisite(":proto_compiler", RuleConfiguredTarget.Mode.HOST);
-    if (compilerTarget == null) {
-      return;
+    if (ruleContext.hasErrors()) {
+      throw new MissingPrerequisiteException();
     }
 
     result

@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
@@ -108,7 +107,7 @@ public class CcProtoAspect extends NativeAspectClass implements ConfiguredAspect
   public AspectDefinition getDefinition(AspectParameters aspectParameters) {
     AspectDefinition.Builder result =
         new AspectDefinition.Builder(this)
-            .propagateAlongAttribute("deps")
+            .attributeAspect("deps", this)
             .requiresConfigurationFragments(CppConfiguration.class, ProtoConfiguration.class)
             .requireProviders(ProtoSupportDataProvider.class)
             .add(
@@ -178,11 +177,11 @@ public class CcProtoAspect extends NativeAspectClass implements ConfiguredAspect
         // proto_library pretends to not generate them either.
         boolean hasDepWithoutPbH = false;
         NestedSetBuilder<Artifact> transitiveHeaders = NestedSetBuilder.stableOrder();
-        for (ProtoCcHeaderProvider provider :
+        for (ProtoCcHeaderProvider headerProvider :
             ruleContext.getPrerequisites("deps", TARGET, ProtoCcHeaderProvider.class)) {
-          helper.addPublicTextualHeaders(provider.getHeaders());
-          transitiveHeaders.addTransitive(provider.getHeaders());
-          hasDepWithoutPbH = hasDepWithoutPbH || !provider.getGeneratesPbH();
+          helper.addPublicTextualHeaders(headerProvider.getHeaders());
+          transitiveHeaders.addTransitive(headerProvider.getHeaders());
+          hasDepWithoutPbH = hasDepWithoutPbH || !headerProvider.getGeneratesPbH();
         }
         headerProvider = new ProtoCcHeaderProvider(transitiveHeaders.build(), !hasDepWithoutPbH);
       }
@@ -275,17 +274,7 @@ public class CcProtoAspect extends NativeAspectClass implements ConfiguredAspect
     }
 
     private void createProtoCompileAction(SupportData supportData, Collection<Artifact> outputs) {
-      String genfilesPath =
-          ruleContext
-              .getConfiguration()
-              .getGenfilesFragment()
-              .getRelative(
-                  ruleContext
-                      .getLabel()
-                      .getPackageIdentifier()
-                      .getRepository()
-                      .getPathUnderExecRoot())
-              .getPathString();
+      String genfilesPath = ruleContext.getConfiguration().getGenfilesFragment().getPathString();
 
       ImmutableList.Builder<ToolchainInvocation> invocations = ImmutableList.builder();
       invocations.add(
@@ -308,11 +297,9 @@ public class CcProtoAspect extends NativeAspectClass implements ConfiguredAspect
     }
 
     public void addProviders(ConfiguredAspect.Builder builder) {
-      builder.addProvider(
-          new CcProtoLibraryProviders(
-              filesBuilder.build(),
-              ccLibraryProviders.toBuilder().add(new OutputGroupProvider(outputGroups)).build()));
       builder.addProviders(ccLibraryProviders);
+      builder.addProvider(new CcProtoLibraryFilesToBuilderProvider(filesBuilder.build()));
+      builder.addProvider(new CcProtoLibraryOutputGroupProvider(outputGroups));
       if (headerProvider != null) {
         builder.addProvider(headerProvider);
       }
