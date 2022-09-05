@@ -16,6 +16,66 @@ import java.util.*;
  */
 public class ResponseMessage implements Serializable {
     private static final long serialVersionUID = 8992436576262574064L;
+    private transient static final Logger LOGGER = LoggerFactory.getLogger(ResponseMessage.class);
+
+    /**
+     * message处理类，可以自定义message处理方案
+     */
+    private transient static final Map<Class, MessageHandler> handlers = new HashMap<>();
+
+    /**
+     * 注册一个消息处理器
+     *
+     * @param dataType 消息类型
+     * @param handler  处理器实例
+     * @return 已注册的消息处理器
+     */
+    public static final <T> MessageHandler<T> registerMessageHandler(Class<T> dataType, MessageHandler<T> handler) {
+        return handlers.put(dataType, handler);
+    }
+
+    /**
+     * 注销一个消息处理器
+     *
+     * @param dataType 消息类型
+     * @return 已注册的消息处理器
+     */
+    public static final <T> MessageHandler<T> cancelMessageHandler(Class<T> dataType) {
+        return handlers.remove(dataType);
+    }
+
+    /**
+     * 注册默认的消息处理
+     */
+    static {
+        registerMessageHandler(Object.class, (message, msg) -> msg);
+        //默认异常信息处理
+        registerMessageHandler(Throwable.class, (message, msg) -> {
+            LOGGER.error("", msg);
+            return msg.getMessage();
+        });
+        //默认业务异常信息处理
+        registerMessageHandler(BusinessException.class, (message, msg) -> {
+            LOGGER.error(msg.getMessage());
+            return msg.getMessage();
+        });
+        //权限验证异常
+        registerMessageHandler(AuthorizeException.class, (message, msg) -> {
+            message.setCode("502");
+            return msg.getMessage();
+        });
+        //权限验证异常
+        registerMessageHandler(ValidationException.class, (message, msg) -> {
+            message.setCode("400");
+            return msg.getMessage();
+        });
+
+    }
+
+    private static final <T> MessageHandler<T> getMessageHandler(Class<T> type) {
+        return handlers.get(type);
+    }
+
     /**
      * 是否成功
      */
@@ -27,15 +87,14 @@ public class ResponseMessage implements Serializable {
     private Object data;
 
     /**
-     * 反馈信息
-     */
-    private String message;
-
-    /**
      * 响应码
      */
-    private int code;
+    private String code;
 
+    /**
+     * 进行响应的元数据,不会被序列化,只是提供aop和拦截器访问
+     */
+    private transient Object sourceData;
 
     /**
      * 过滤字段：指定需要序列化的字段
@@ -54,52 +113,60 @@ public class ResponseMessage implements Serializable {
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
         map.put("success", this.success);
-        if (data != null)
-            map.put("data", this.getData());
-        if (message != null)
-            map.put("message", this.getMessage());
+        map.put("data", this.getData());
         map.put("code", this.getCode());
         return map;
     }
 
-    protected ResponseMessage(String message) {
-        this.code = 500;
-        this.message = message;
-        this.success = false;
-    }
-
-    protected ResponseMessage(boolean success, Object data) {
-        this.code = success ? 200 : 500;
-        this.data = data;
+    public ResponseMessage(boolean success, Object data) {
+        this.code = success ? "200" : "500";
+        if (data == null)
+            data = "null";
+        sourceData = data;
+        //获取消息处理器
+        MessageHandler messageHandler = getMessageHandler(data.getClass());
+        if (messageHandler == null) {
+            if (data instanceof Throwable) {
+                //未获取到指定的异常信息处理器，使用通用异常处理器
+                messageHandler = getMessageHandler(Throwable.class);
+            } else {
+                messageHandler = getMessageHandler(Object.class);
+            }
+        }
         this.success = success;
+        if (messageHandler == null)
+            this.data = data;
+        else
+            this.data = messageHandler.handle(this, data);
+
     }
 
-    protected ResponseMessage(boolean success, Object data, int code) {
+    public ResponseMessage(boolean success, Object data, String code) {
         this(success, data);
         this.code = code;
     }
 
 
-    public ResponseMessage include(Class<?> type, String... fields) {
-        return include(type, Arrays.asList(fields));
+    public ResponseMessage include(Class<?> type, String... fileds) {
+        return include(type, Arrays.asList(fileds));
     }
 
-    public ResponseMessage include(Class<?> type, Collection<String> fields) {
+    public ResponseMessage include(Class<?> type, Collection<String> fileds) {
         if (includes == null)
             includes = new HashMap<>();
-        getStringListFormMap(includes, type).addAll(fields);
+        getStringListFormMap(includes, type).addAll(fileds);
         return this;
     }
 
-    public ResponseMessage exclude(Class type, Collection<String> fields) {
+    public ResponseMessage exclude(Class type, Collection<String> fileds) {
         if (excludes == null)
             excludes = new HashMap<>();
-        getStringListFormMap(excludes, type).addAll(fields);
+        getStringListFormMap(excludes, type).addAll(fileds);
         return this;
     }
 
-    public ResponseMessage exclude(Class type, String... fields) {
-        return exclude(type, Arrays.asList(fields));
+    public ResponseMessage exclude(Class type, String... fileds) {
+        return exclude(type, Arrays.asList(fileds));
     }
 
     protected Set<String> getStringListFormMap(Map<Class<?>, Set<String>> map, Class type) {
@@ -123,9 +190,8 @@ public class ResponseMessage implements Serializable {
         return data;
     }
 
-    public ResponseMessage setData(Object data) {
+    public void setData(String data) {
         this.data = data;
-        return this;
     }
 
     @Override
@@ -133,13 +199,20 @@ public class ResponseMessage implements Serializable {
         return JSON.toJSONStringWithDateFormat(this, DateTimeUtils.YEAR_MONTH_DAY_HOUR_MINUTE_SECOND);
     }
 
-    public int getCode() {
+    public String getCode() {
         return code;
     }
 
-    public ResponseMessage setCode(int code) {
+    public void setCode(String code) {
         this.code = code;
-        return this;
+    }
+
+    public interface MessageHandler<T> {
+        Object handle(ResponseMessage message, T msg);
+    }
+
+    public Object getSourceData() {
+        return sourceData;
     }
 
     public static ResponseMessage fromJson(String json) {
@@ -174,33 +247,5 @@ public class ResponseMessage implements Serializable {
 
     public String getCallback() {
         return callback;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public void setMessage(String message) {
-        this.message = message;
-    }
-
-    public static ResponseMessage ok() {
-        return ok(null);
-    }
-
-    public static ResponseMessage ok(Object data) {
-        return new ResponseMessage(true, data);
-    }
-
-    public static ResponseMessage created(Object data) {
-        return new ResponseMessage(true, data, 201);
-    }
-
-    public static ResponseMessage error(String message) {
-        return new ResponseMessage(message);
-    }
-
-    public static ResponseMessage error(String message, int code) {
-        return new ResponseMessage(message).setCode(code);
     }
 }
