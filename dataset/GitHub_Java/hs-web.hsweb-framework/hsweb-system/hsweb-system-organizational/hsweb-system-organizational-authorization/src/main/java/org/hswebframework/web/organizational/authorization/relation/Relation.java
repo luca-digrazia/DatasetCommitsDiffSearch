@@ -12,26 +12,6 @@ import java.io.Serializable;
 public interface Relation extends Serializable {
 
     /**
-     * 默认类型:机构
-     */
-    String TYPE_ORG = "org";
-
-    /**
-     * 默认类型:部门
-     */
-    String TYPE_DEPARTMENT = "department";
-
-    /**
-     * 默认类型:岗位
-     */
-    String TYPE_POSITION = "position";
-
-    /**
-     * 默认类型:人员
-     */
-    String TYPE_PERSON = "person";
-
-    /**
      * @return 关系类型，如:person,department
      */
     String getType();
@@ -48,9 +28,8 @@ public interface Relation extends Serializable {
 
     /**
      * @return 关系目标对象，用于获取建立关系对象完整信息，返回值的类型可能随着{@link this#getType()}的不同而变化
-     * @see RelationTargetSupplier
      */
-    Serializable getTargetObject();
+    Object getTargetObject();
 
     /**
      * @return 关系名称，与{@link this#getType()} 对应，如: 经理,员工
@@ -134,14 +113,11 @@ public interface Relation extends Serializable {
         ALL;
 
         public static Direction fromString(String direction) {
-            if (direction == null) {
-                return null;
-            }
+            if (direction == null) return null;
             for (Direction dir : values()) {
                 //以名称开头则认为是同一个方向
-                if (dir.name().startsWith(direction.toUpperCase())) {
+                if (dir.name().startsWith(direction.toUpperCase()))
                     return dir;
-                }
             }
             return null;
         }

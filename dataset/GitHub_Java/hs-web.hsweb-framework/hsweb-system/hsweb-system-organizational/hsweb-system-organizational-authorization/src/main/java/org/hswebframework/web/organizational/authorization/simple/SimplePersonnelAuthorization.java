@@ -40,7 +40,7 @@ public class SimplePersonnelAuthorization implements PersonnelAuthorization {
     }
 
     @Override
-    public Relations getRelations() {
+    public Relations getPersonRelations() {
         // TODO: 2017/7/26
         throw new  UnsupportedOperationException("not support yet");
 
