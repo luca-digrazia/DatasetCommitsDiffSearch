@@ -13,9 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
 
 import com.google.devtools.build.lib.vfs.util.FileSystems;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -28,17 +30,19 @@ public class FileSystemsTest {
 
   @Test
   public void testFileSystemsCreatesOnlyOneDefaultNative() {
-    assertThat(FileSystems.getNativeFileSystem()).isSameAs(FileSystems.getNativeFileSystem());
+    assertSame(FileSystems.getNativeFileSystem(),
+               FileSystems.getNativeFileSystem());
   }
 
   @Test
   public void testFileSystemsCreatesOnlyOneDefaultJavaIo() {
-    assertThat(FileSystems.getJavaIoFileSystem()).isSameAs(FileSystems.getJavaIoFileSystem());
+    assertSame(FileSystems.getJavaIoFileSystem(),
+               FileSystems.getJavaIoFileSystem());
   }
 
   @Test
   public void testFileSystemsCanSwitchDefaults() {
-    assertThat(FileSystems.getJavaIoFileSystem())
-        .isNotSameInstanceAs(FileSystems.getNativeFileSystem());
+    assertNotSame(FileSystems.getNativeFileSystem(),
+                  FileSystems.getJavaIoFileSystem());
   }
 }

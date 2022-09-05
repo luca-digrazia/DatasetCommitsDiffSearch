@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.vfs;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.vfs.util.FileSystems;
@@ -36,14 +37,14 @@ public class UnixPathGetParentTest {
   private Path testRoot;
 
   @Before
-  public void setUp() throws Exception {
-    unixFs = FileSystems.initDefaultAsNative();
+  public final void createTestRoot() throws Exception  {
+    unixFs = FileSystems.getNativeFileSystem();
     testRoot = unixFs.getPath(TestUtils.tmpDir()).getRelative("UnixPathGetParentTest");
     FileSystemUtils.createDirectoryAndParents(testRoot);
   }
 
   @After
-  public void tearDown() throws Exception {
+  public final void deleteTestRoot() throws Exception  {
     FileSystemUtils.deleteTree(testRoot); // (comment out during debugging)
   }
 
@@ -53,7 +54,7 @@ public class UnixPathGetParentTest {
 
   @Test
   public void testAbsoluteRootHasNoParent() {
-    assertEquals(null, getParent("/"));
+    assertNull(getParent("/"));
   }
 
   @Test

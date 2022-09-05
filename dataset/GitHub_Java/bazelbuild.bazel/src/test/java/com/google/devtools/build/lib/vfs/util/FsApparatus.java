@@ -13,14 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs.util;
 
-import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.testutil.TestUtils;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.StringUtilities;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -69,7 +69,7 @@ public class FsApparatus {
   }
 
   private FsApparatus() {
-    fileSystem = new InMemoryFileSystem(BlazeClock.instance(), DigestHashFunction.MD5);
+    fileSystem = new InMemoryFileSystem(BlazeClock.instance());
     workingDir = fileSystem.getPath("/");
   }
 

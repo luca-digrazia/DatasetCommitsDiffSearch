@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.vfs.util;
 
 import com.google.common.base.Verify;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.JavaIoFileSystem;
@@ -56,12 +55,7 @@ public final class FileSystems {
       }
     } else {
       if (defaultNativeFileSystem == null) {
-        try {
-          defaultNativeFileSystem = (FileSystem)
-              Class.forName(TestConstants.TEST_REAL_UNIX_FILE_SYSTEM).newInstance();
-        } catch (Exception e) {
-          throw new IllegalStateException(e);
-        }
+        defaultNativeFileSystem = new UnixFileSystem();
       } else {
         Verify.verify(defaultNativeFileSystem instanceof UnixFileSystem);
       }
