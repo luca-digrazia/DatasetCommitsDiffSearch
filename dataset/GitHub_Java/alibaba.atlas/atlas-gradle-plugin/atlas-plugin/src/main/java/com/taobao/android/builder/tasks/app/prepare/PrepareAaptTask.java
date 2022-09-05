@@ -259,8 +259,7 @@ public class PrepareAaptTask extends BaseTask {
                 aaptOptions.getAdditionalParameters().add("-B");
                 aaptOptions.getAdditionalParameters().add(baseApk.getAbsolutePath());
             }
-            if (appVariantContext.getAtlasExtension().getTBuildConfig().isIncremental() &&
-                !appVariantContext.getBuildType().getPatchConfig().isCreateTPatch()) {
+            if (appVariantContext.getAtlasExtension().getTBuildConfig().isIncremental()) {
                 aaptOptions.getAdditionalParameters().add("--vm-safemode");
                 aaptOptions.getAdditionalParameters().add("--merge");
             }
