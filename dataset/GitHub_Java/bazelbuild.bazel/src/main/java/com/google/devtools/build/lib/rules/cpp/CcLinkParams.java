@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -25,7 +26,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.Collection;
 import java.util.List;
@@ -155,7 +155,7 @@ public final class CcLinkParams {
           librariesBuilder.build(), extraLinkTimeLibraries);
     }
 
-    public boolean add(CcLinkParamsStore store) {
+    private boolean add(CcLinkParamsStore store) {
       if (store != null) {
         CcLinkParams args = store.get(linkingStatically, linkShared);
         addTransitiveArgs(args);
