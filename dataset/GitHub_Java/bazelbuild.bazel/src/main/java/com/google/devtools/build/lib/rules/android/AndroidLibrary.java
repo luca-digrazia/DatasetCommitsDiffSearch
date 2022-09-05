@@ -70,10 +70,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         collectTransitiveProguardConfigs(ruleContext);
     AndroidIdlProvider transitiveIdlImportData = collectTransitiveIdlImports(ruleContext);
     AndroidTools tools = AndroidTools.fromRuleContext(ruleContext);
-    if (tools == null) {
-      return null;
-    }
-
     if (LocalResourceContainer.definesAndroidResources(ruleContext.attributes())) {
       try {
         if (!LocalResourceContainer.validateRuleContext(ruleContext)) {
@@ -87,7 +83,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK),
             ruleContext, transitiveResources, tools,
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
-            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_SYMBOLS_TXT),
             ImmutableList.<String>of(), /* configurationFilters */
             ImmutableList.<String>of(), /* uncompressedExtensions */
             ImmutableList.<String>of(), /* densities */
@@ -206,7 +201,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
             ImmutableList.<Artifact>of(), ImmutableList.<Artifact>of(),
             ImmutableList.<PathFragment>of(), ImmutableList.<PathFragment>of(),
             ruleContext.attributes().get("exports_manifest", Type.BOOLEAN),
-            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT), null);
+            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT));
 
         primaryResources = new AndroidResourcesProcessorBuilder(tools, ruleContext)
                 .setApkOut(apk)
