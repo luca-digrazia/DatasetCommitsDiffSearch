@@ -38,6 +38,7 @@ import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsParsingException;
+
 import java.util.List;
 import java.util.Set;
 
@@ -230,6 +231,13 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
             help = "Specifies Android SDK/platform that is used to build Android applications.")
     public Label sdk;
 
+    @Option(name = "legacy_android_native_support",
+        defaultValue = "true",
+        category = "semantics",
+        help = "Switches back to old native support for android_binaries. Disable to link together "
+            + "native deps of android_binaries into a single .so by default.")
+    public boolean legacyNativeSupport;
+
     // TODO(bazel-team): Maybe merge this with --android_cpu above.
     @Option(name = "fat_apk_cpu",
             converter = Converters.CommaSeparatedOptionListConverter.class,
@@ -367,7 +375,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   public static class Loader implements ConfigurationFragmentFactory {
     @Override
     public Fragment create(ConfigurationEnvironment env, BuildOptions buildOptions)
-        throws InvalidConfigurationException, InterruptedException {
+        throws InvalidConfigurationException {
       AndroidConfiguration.Options androidOptions =
           buildOptions.get(AndroidConfiguration.Options.class);
       Label androidSdk = RedirectChaser.followRedirects(env, androidOptions.sdk, "android_sdk");
@@ -390,6 +398,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   private final Label sdk;
   private final StrictDepsMode strictDeps;
+  private final boolean legacyNativeSupport;
   private final String cpu;
   private final boolean incrementalNativeLibs;
   private final ConfigurationDistinguisher configurationDistinguisher;
@@ -407,6 +416,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.sdk = androidSdk;
     this.incrementalNativeLibs = options.incrementalNativeLibs;
     this.strictDeps = options.strictDeps;
+    this.legacyNativeSupport = options.legacyNativeSupport;
     this.cpu = options.cpu;
     this.configurationDistinguisher = options.configurationDistinguisher;
     this.useJackForDexing = options.useJackForDexing;
@@ -432,6 +442,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public Label getSdk() {
     return sdk;
+  }
+
+  public boolean getLegacyNativeSupport() {
+    return legacyNativeSupport;
   }
 
   public StrictDepsMode getStrictDeps() {
