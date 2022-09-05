@@ -184,7 +184,7 @@ class X86Crosstools {
     String llvmTriple = llvmArch + "-none-linux-android";
 
     return CToolchain.newBuilder()
-        .setCompiler("clang" + clangVersion)
+        .setCompiler("gcc-" + gccVersion + "-clang" + clangVersion)
 
         // Compiler flags
         .addCompilerFlag("-gcc-toolchain")
