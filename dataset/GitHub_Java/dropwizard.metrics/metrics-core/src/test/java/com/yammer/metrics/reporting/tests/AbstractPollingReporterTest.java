@@ -23,9 +23,9 @@ import static org.mockito.Mockito.*;
 public abstract class AbstractPollingReporterTest {
 
     protected final Clock clock = mock(Clock.class);
-    protected AbstractPollingReporter reporter;
-    protected ByteArrayOutputStream out;
-    protected TestMetricsRegistry registry;
+    private AbstractPollingReporter reporter;
+    private ByteArrayOutputStream out;
+    private TestMetricsRegistry registry;
 
     @Before
     public void init() throws Exception {
@@ -36,13 +36,13 @@ public abstract class AbstractPollingReporterTest {
         reporter = createReporter(registry, out, clock);
     }
 
-    protected static class TestMetricsRegistry extends MetricsRegistry {
+    private static class TestMetricsRegistry extends MetricsRegistry {
         public <T extends Metric> T add(MetricName name, T metric) {
             return getOrAdd(name, metric);
         }
     }
 
-    protected <T extends Metric> void assertReporterOutput(Callable<T> action, String... expected) throws Exception {
+    protected final <T extends Metric> void assertReporterOutput(Callable<T> action, String... expected) throws Exception {
         // Invoke the callable to trigger (ie, mark()/inc()/etc) and return the metric
         final T metric = action.call();
         try {
