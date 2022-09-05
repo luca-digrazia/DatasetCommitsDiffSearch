@@ -14,13 +14,15 @@
 
 package com.google.testing.junit.runner.junit4;
 
+import com.google.common.base.Supplier;
 import com.google.testing.junit.runner.model.TestSuiteModel;
 import com.google.testing.junit.runner.model.TestSuiteModel.Builder;
-import com.google.testing.junit.runner.util.Supplier;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+
 import org.junit.runner.Description;
 import org.junit.runner.Request;
+
+import javax.inject.Inject;
+import javax.inject.Singleton;
 
 /**
  * Builds a {@link TestSuiteModel} for JUnit4 tests.
@@ -47,12 +49,9 @@ class JUnit4TestModelBuilder implements Supplier<TestSuiteModel> {
   @Override
   public TestSuiteModel get() {
     Description root = request.getRunner().getDescription();
-    // A test class annotated with @Ignore effectively has no test methods,
-    // which is what isSuite() tests for.
     if (!root.isSuite()) {
-      return builder.build(suiteName);
-    } else {
-      return builder.build(suiteName, root);
+      throw new IllegalArgumentException("Top test must be a suite");
     }
+    return builder.build(suiteName, root);
   }
 }
