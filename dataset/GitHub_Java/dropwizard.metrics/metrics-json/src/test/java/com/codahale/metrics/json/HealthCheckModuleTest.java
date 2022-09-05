@@ -18,33 +18,26 @@ public class HealthCheckModuleTest {
 
     @Test
     public void serializesAHealthyResult() throws Exception {
-        HealthCheck.Result result = HealthCheck.Result.healthy();
-        assertThat(mapper.writeValueAsString(result))
-            .isEqualTo("{\"healthy\":true,\"duration\":0,\"timestamp\":\"" + result.getTimestamp() + "\"}");
+        assertThat(mapper.writeValueAsString(HealthCheck.Result.healthy()))
+            .isEqualTo("{\"healthy\":true,\"duration\":0}");
     }
 
     @Test
     public void serializesAHealthyResultWithAMessage() throws Exception {
-        HealthCheck.Result result = HealthCheck.Result.healthy("yay for %s", "me");
-        assertThat(mapper.writeValueAsString(result))
+        assertThat(mapper.writeValueAsString(HealthCheck.Result.healthy("yay for %s", "me")))
             .isEqualTo("{" +
                 "\"healthy\":true," +
                 "\"message\":\"yay for me\"," +
-                "\"duration\":0," +
-                "\"timestamp\":\"" + result.getTimestamp() + "\"" +
-                "}");
+                "\"duration\":0}");
     }
 
     @Test
     public void serializesAnUnhealthyResult() throws Exception {
-        HealthCheck.Result result = HealthCheck.Result.unhealthy("boo");
-        assertThat(mapper.writeValueAsString(result))
+        assertThat(mapper.writeValueAsString(HealthCheck.Result.unhealthy("boo")))
             .isEqualTo("{" +
                 "\"healthy\":false," +
                 "\"message\":\"boo\"," +
-                "\"duration\":0," +
-                "\"timestamp\":\"" + result.getTimestamp() + "\"" +
-                "}");
+                "\"duration\":0}");
     }
 
     @Test
@@ -55,8 +48,7 @@ public class HealthCheckModuleTest {
             new StackTraceElement("Blah", "bloo", "Blah.java", 100)
         });
 
-        HealthCheck.Result result = HealthCheck.Result.unhealthy(e);
-        assertThat(mapper.writeValueAsString(result))
+        assertThat(mapper.writeValueAsString(HealthCheck.Result.unhealthy(e)))
             .isEqualTo("{" +
                 "\"healthy\":false," +
                 "\"message\":\"oh no\"," +
@@ -64,8 +56,7 @@ public class HealthCheckModuleTest {
                 "\"message\":\"oh no\"," +
                 "\"stack\":[\"Blah.bloo(Blah.java:100)\"]" +
                 "}," +
-                "\"duration\":0," +
-                "\"timestamp\":\"" + result.getTimestamp() + "\"" +
+                "\"duration\":0" +
                 "}");
     }
 
@@ -84,8 +75,7 @@ public class HealthCheckModuleTest {
         });
         when(b.getCause()).thenReturn(a);
 
-        HealthCheck.Result result = HealthCheck.Result.unhealthy(b);
-        assertThat(mapper.writeValueAsString(result))
+        assertThat(mapper.writeValueAsString(HealthCheck.Result.unhealthy(b)))
             .isEqualTo("{" +
                 "\"healthy\":false," +
                 "\"message\":\"oh well\"," +
@@ -97,8 +87,7 @@ public class HealthCheckModuleTest {
                 "\"stack\":[\"Blah.bloo(Blah.java:100)\"]" +
                 "}" +
                 "}," +
-                "\"duration\":0," +
-                "\"timestamp\":\"" + result.getTimestamp() + "\"" +
+                "\"duration\":0" +
                 "}");
     }
 
@@ -134,8 +123,7 @@ public class HealthCheckModuleTest {
                 "\"String\":\"string\"," +
                 "\"complex\":{" +
                 "\"field\":\"value\"" +
-                "}," +
-                "\"timestamp\":\"" + result.getTimestamp() + "\"" +
+                "}" +
                 "}");
     }
 }

@@ -43,7 +43,6 @@ public class HealthCheckModule extends Module {
                 }
             }
 
-            json.writeStringField("timestamp", result.getTimestamp());
             json.writeEndObject();
         }
 
