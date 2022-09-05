@@ -16,15 +16,15 @@
  *
  */
 
-package org.hswebframework.web.message;
+package org.hswebframework.web.message.support;
 
-import java.util.function.Consumer;
+import org.hswebframework.web.message.Message;
+
+import java.io.Serializable;
 
 /**
  * @author zhouhao
  */
-public interface MessageSubscribe<M extends Message> {
-    MessageSubscribe<M> onMessage(Consumer<M> consumer);
-
-    void cancel();
+public interface ObjectMessage<T extends Serializable> extends Message {
+    T getObject();
 }
