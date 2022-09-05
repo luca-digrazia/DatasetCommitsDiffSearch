@@ -82,7 +82,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
   private final AppleBitcodeMode bitcodeMode;
   private final Label xcodeConfigLabel;
   @Nullable private final Label defaultProvisioningProfileLabel;
-  private final boolean disableNativeSwiftRules;
 
   AppleConfiguration(AppleCommandLineOptions appleOptions,
       Optional<DottedVersion> xcodeVersionOverride,
@@ -116,7 +115,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     this.xcodeConfigLabel =
         Preconditions.checkNotNull(appleOptions.xcodeVersionConfig, "xcodeConfigLabel");
     this.defaultProvisioningProfileLabel = appleOptions.defaultProvisioningProfile;
-    this.disableNativeSwiftRules = appleOptions.disableNativeSwiftRules;
   }
 
   /**
@@ -476,13 +474,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
       return null;
     }
     return Joiner.on('-').join(components);
-  }
-
-  /**
-   * Whether the native Swift support should be disabled. Used to deprecate said functionality.
-   */
-  public boolean disableNativeSwiftRules() {
-    return disableNativeSwiftRules;
   }
 
   /**
