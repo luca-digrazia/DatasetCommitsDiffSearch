@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.skyframe.EvaluationResultSubjectFactory.assertThatEvaluationResult;
-import static com.google.devtools.build.skyframe.WalkableGraphUtils.exists;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -62,7 +61,7 @@ public class PrepareDepsOfPatternsFunctionTest extends BuildViewTestCase {
     assertValidValue(walkableGraph, getKeyForLabel(Label.create("@//foo", "foo")));
 
     // And the graph does not contain a value for the target "@//foo:foo2".
-    assertFalse(exists(getKeyForLabel(Label.create("@//foo", "foo2")), walkableGraph));
+    assertFalse(walkableGraph.exists(getKeyForLabel(Label.create("@//foo", "foo2"))));
   }
 
   @Test
@@ -107,7 +106,7 @@ public class PrepareDepsOfPatternsFunctionTest extends BuildViewTestCase {
     WalkableGraph walkableGraph = getGraphFromPatternsEvaluation(patternSequence);
 
     // Then the graph does not contain an entry for ":foo",
-    assertFalse(exists(getKeyForLabel(Label.create("@//foo", "foo")), walkableGraph));
+    assertFalse(walkableGraph.exists(getKeyForLabel(Label.create("@//foo", "foo"))));
   }
 
   @Test
@@ -189,7 +188,7 @@ public class PrepareDepsOfPatternsFunctionTest extends BuildViewTestCase {
     assertContainsEvent("Skipping '" + bogusPattern + "': ");
 
     // And then the graph contains a value for the legit target pattern's target "@//foo:foo".
-    assertTrue(exists(getKeyForLabel(Label.create("@//foo", "foo")), walkableGraph));
+    assertTrue(walkableGraph.exists(getKeyForLabel(Label.create("@//foo", "foo"))));
   }
 
   // Helpers:
@@ -261,6 +260,7 @@ public class PrepareDepsOfPatternsFunctionTest extends BuildViewTestCase {
   private static void assertValidValue(
       WalkableGraph graph, SkyKey key, boolean expectTransitiveException)
       throws InterruptedException {
+    assertTrue(graph.exists(key));
     assertNotNull(graph.getValue(key));
     if (expectTransitiveException) {
       assertNotNull(graph.getException(key));
@@ -271,6 +271,7 @@ public class PrepareDepsOfPatternsFunctionTest extends BuildViewTestCase {
 
   private static Exception assertException(WalkableGraph graph, SkyKey key)
       throws InterruptedException {
+    assertTrue(graph.exists(key));
     assertNull(graph.getValue(key));
     Exception exception = graph.getException(key);
     assertNotNull(exception);

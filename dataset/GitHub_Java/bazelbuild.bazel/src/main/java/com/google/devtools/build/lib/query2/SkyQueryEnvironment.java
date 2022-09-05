@@ -136,7 +136,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   private MultisetSemaphore<PackageIdentifier> packageSemaphore;
   protected WalkableGraph graph;
   private InterruptibleSupplier<ImmutableSet<PathFragment>> blacklistPatternsSupplier;
-  private GraphBackedRecursivePackageProvider graphBackedRecursivePackageProvider;
   private ForkJoinPool forkJoinPool;
   private RecursivePackageProviderBackedTargetPatternResolver resolver;
   private final SkyKey universeKey;
@@ -204,38 +203,26 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   private void beforeEvaluateQuery() throws InterruptedException {
-    boolean resolverNeedsRecreation = false;
-    if (graph == null || !graphFactory.isUpToDate(universeKey)) {
-      // If this environment is uninitialized or the graph factory needs to evaluate, do so. We
-      // assume here that this environment cannot be initialized-but-stale if the factory is up
-      // to date.
-      EvaluationResult<SkyValue> result;
-      try (AutoProfiler p = AutoProfiler.logged("evaluation and walkable graph", LOG)) {
-        result = graphFactory.prepareAndGet(universeKey, loadingPhaseThreads, eventHandler);
-      }
-      checkEvaluationResult(result);
+    EvaluationResult<SkyValue> result;
+    try (AutoProfiler p = AutoProfiler.logged("evaluation and walkable graph", LOG)) {
+      result = graphFactory.prepareAndGet(universeKey, loadingPhaseThreads, eventHandler);
+    }
+    checkEvaluationResult(result);
 
-      packageSemaphore = makeFreshPackageMultisetSemaphore();
-      graph = result.getWalkableGraph();
-      blacklistPatternsSupplier = InterruptibleSupplier.Memoize.of(new BlacklistSupplier(graph));
+    packageSemaphore = makeFreshPackageMultisetSemaphore();
+    graph = result.getWalkableGraph();
+    blacklistPatternsSupplier = InterruptibleSupplier.Memoize.of(new BlacklistSupplier(graph));
 
-      graphBackedRecursivePackageProvider =
-          new GraphBackedRecursivePackageProvider(graph, universeTargetPatternKeys, pkgPath);
-      resolverNeedsRecreation = true;
-    }
-    if (forkJoinPool == null) {
-      forkJoinPool =
-          NamedForkJoinPool.newNamedPool("QueryEnvironment", queryEvaluationParallelismLevel);
-      resolverNeedsRecreation = true;
-    }
-    if (resolverNeedsRecreation) {
-      resolver =
-          new RecursivePackageProviderBackedTargetPatternResolver(
-              graphBackedRecursivePackageProvider,
-              eventHandler,
-              TargetPatternEvaluator.DEFAULT_FILTERING_POLICY,
-              packageSemaphore);
-    }
+    GraphBackedRecursivePackageProvider graphBackedRecursivePackageProvider =
+        new GraphBackedRecursivePackageProvider(graph, universeTargetPatternKeys, pkgPath);
+    forkJoinPool =
+        NamedForkJoinPool.newNamedPool("QueryEnvironment", queryEvaluationParallelismLevel);
+    resolver =
+        new RecursivePackageProviderBackedTargetPatternResolver(
+            graphBackedRecursivePackageProvider,
+            eventHandler,
+            TargetPatternEvaluator.DEFAULT_FILTERING_POLICY,
+            packageSemaphore);
   }
 
   protected MultisetSemaphore<PackageIdentifier> makeFreshPackageMultisetSemaphore() {
@@ -332,21 +319,14 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   protected void evalTopLevelInternal(
       QueryExpression expr, OutputFormatterCallback<Target> callback)
           throws QueryException, InterruptedException {
-    boolean poolNeedsShutdown = true;
     try {
       super.evalTopLevelInternal(expr, callback);
-      poolNeedsShutdown = false;
     } finally {
-      if (poolNeedsShutdown) {
-        // Force termination of remaining tasks if evaluation failed abruptly (e.g. was
-        // interrupted). We don't want to leave any dangling threads running tasks.
-        forkJoinPool.shutdownNow();
-      }
+      // Force termination of remaining tasks - if evaluateQuery was successful there should be
+      // none, if it failed abruptly (e.g. was interrupted) we don't want to leave any dangling
+      // threads running tasks.
+      forkJoinPool.shutdownNow();
       forkJoinPool.awaitQuiescence(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
-      if (poolNeedsShutdown) {
-        // Signal that pool must be recreated on the next invocation.
-        forkJoinPool = null;
-      }
     }
   }
 
