@@ -25,8 +25,6 @@ import org.hswebframework.web.authorization.oauth2.client.request.OAuth2Session;
 import org.hswebframework.web.authorization.oauth2.client.response.OAuth2Response;
 import org.springframework.util.Assert;
 
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 
 import static org.hswebframework.web.authorization.oauth2.client.OAuth2Constants.*;
@@ -49,10 +47,6 @@ public class DefaultOAuth2Session implements OAuth2Session {
     protected String scope = "";
 
     private Consumer<AccessTokenInfo> onTokenChange;
-
-    private boolean authorized = false;
-
-    private ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 
     public void setRequestBuilderFactory(OAuth2RequestBuilderFactory requestBuilderFactory) {
         this.requestBuilderFactory = requestBuilderFactory;
@@ -108,21 +102,12 @@ public class DefaultOAuth2Session implements OAuth2Session {
 
     @Override
     public OAuth2Session authorize() {
-        readWriteLock.writeLock().lock();
-        if (authorized) {
-            return this;
-        }
-        try {
-            AccessTokenInfo accessTokenInfo = accessTokenRequest
-                    .param(OAuth2Constants.scope, scope)
-                    .post().onError(OAuth2Response.throwOnError)
-                    .as(AccessTokenInfo.class);
-            accessTokenInfo.setCreateTime(System.currentTimeMillis());
-            setAccessTokenInfo(accessTokenInfo);
-            authorized = true;
-        } finally {
-            readWriteLock.writeLock().unlock();
-        }
+        AccessTokenInfo accessTokenInfo = accessTokenRequest
+                .param(OAuth2Constants.scope, scope)
+                .post().onError(OAuth2Response.throwOnError)
+                .as(AccessTokenInfo.class);
+        accessTokenInfo.setCreateTime(System.currentTimeMillis());
+        setAccessTokenInfo(accessTokenInfo);
         return this;
     }
 
@@ -151,22 +136,17 @@ public class DefaultOAuth2Session implements OAuth2Session {
         if (accessTokenInfo == null) {
             return;
         }
-        readWriteLock.writeLock().lock();
-        try {
-            OAuth2Request request = createRequest(getRealUrl(serverConfig.getAccessTokenUrl()));
-            applyBasicAuthParam(request);
-            AccessTokenInfo tokenInfo = request
-                    .param(OAuth2Constants.scope, scope)
-                    .param(OAuth2Constants.grant_type, GrantType.refresh_token)
-                    .param(GrantType.refresh_token, accessTokenInfo.getRefreshToken())
-                    .post().onError(OAuth2Response.throwOnError)
-                    .as(AccessTokenInfo.class);
-            tokenInfo.setCreateTime(accessTokenInfo.getCreateTime());
-            tokenInfo.setUpdateTime(System.currentTimeMillis());
-            setAccessTokenInfo(tokenInfo);
-        } finally {
-            readWriteLock.writeLock().unlock();
-        }
+        OAuth2Request request = createRequest(getRealUrl(serverConfig.getAccessTokenUrl()));
+        applyBasicAuthParam(request);
+        AccessTokenInfo tokenInfo = request
+                .param(OAuth2Constants.scope, scope)
+                .param(OAuth2Constants.grant_type, GrantType.refresh_token)
+                .param(GrantType.refresh_token, accessTokenInfo.getRefreshToken())
+                .post().onError(OAuth2Response.throwOnError)
+                .as(AccessTokenInfo.class);
+        tokenInfo.setCreateTime(accessTokenInfo.getCreateTime());
+        tokenInfo.setUpdateTime(System.currentTimeMillis());
+        setAccessTokenInfo(tokenInfo);
     }
 
 
