@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.packages.PackageGroupsRuleVisibility;
 import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.SkylarkRuleConfiguredTargetBuilder;
@@ -226,12 +225,9 @@ public final class ConfiguredTargetFactory {
       return null;
     }
     if (!rule.getRuleClassObject().getRequiredConfigurationFragments().isEmpty()) {
-      MissingFragmentPolicy missingFragmentPolicy =
-          rule.getRuleClassObject().missingFragmentPolicy();
-      if (missingFragmentPolicy != MissingFragmentPolicy.IGNORE
-          && !configuration.hasAllFragments(
-              rule.getRuleClassObject().getRequiredConfigurationFragments())) {
-        if (missingFragmentPolicy == MissingFragmentPolicy.FAIL_ANALYSIS) {
+      if (!configuration.hasAllFragments(
+          rule.getRuleClassObject().getRequiredConfigurationFragments())) {
+        if (rule.getRuleClassObject().failIfMissingConfigurationFragment()) {
           ruleContext.ruleError(missingFragmentError(ruleContext));
           return null;
         }

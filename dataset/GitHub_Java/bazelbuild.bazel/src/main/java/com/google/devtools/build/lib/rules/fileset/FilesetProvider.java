@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import javax.annotation.Nullable;
 
 /**
  * Information needed by a Fileset to do the right thing when it depends on another Fileset.
@@ -28,10 +27,6 @@ public interface FilesetProvider extends TransitiveInfoProvider {
   Artifact getFilesetInputManifest();
   PathFragment getFilesetLinkDir();
 
-  /**
-   * Returns a list of the traversals that went into this Fileset. Only used by Skyframe-native
-   * filesets, so will be null if Skyframe-native filesets are not enabled.
-   */
-  @Nullable
+  /** Returns a list of the traversals that went into this Fileset.*/
   ImmutableList<FilesetTraversalParams> getTraversals();
 }
