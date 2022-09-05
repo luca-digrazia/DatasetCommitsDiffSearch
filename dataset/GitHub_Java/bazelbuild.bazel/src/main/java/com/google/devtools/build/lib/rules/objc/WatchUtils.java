@@ -163,11 +163,12 @@ final class WatchUtils {
             watchSupportZip.getFilename(),
             watchKitSupportDirName));
 
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
     ruleContext.registerAction(
         ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                appleConfiguration,
-                appleConfiguration.getMultiArchPlatform(PlatformType.WATCHOS))
+                ruleContext,
+                ruleContext
+                    .getFragment(AppleConfiguration.class)
+                    .getMultiArchPlatform(PlatformType.WATCHOS))
             .setProgressMessage("Copying Watchkit support to app bundle")
             .setShellCommand(ImmutableList.of("/bin/bash", "-c", Joiner.on(" ").join(command)))
             .addOutput(watchSupportZip)
@@ -192,8 +193,7 @@ final class WatchUtils {
         XcodeprojBuildSetting.newBuilder()
             .setName("IPHONEOS_DEPLOYMENT_TARGET")
             .setValue(determineMinimumIosVersion(
-                ruleContext.getFragment(AppleConfiguration.class)
-                    .getMinimumOsForPlatformType(PlatformType.IOS)).toString())
+                ObjcRuleClasses.objcConfiguration(ruleContext).getMinimumOs()).toString())
             .build());
     return xcodeSettings.build();
   }

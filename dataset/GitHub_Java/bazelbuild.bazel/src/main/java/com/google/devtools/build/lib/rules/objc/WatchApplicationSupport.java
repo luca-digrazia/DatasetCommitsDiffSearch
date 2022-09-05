@@ -191,10 +191,11 @@ final class WatchApplicationSupport {
 
     PlatformType appPlatformType = watchOSVersion == WatchOSVersion.OS1
          ? PlatformType.IOS : PlatformType.WATCHOS;
+    Platform appPlatform = appleConfiguration.getMultiArchPlatform(appPlatformType);
     DottedVersion minimumOsVersion = appPlatformType == PlatformType.IOS
         ? WatchUtils.determineMinimumIosVersion(
-            appleConfiguration.getMinimumOsForPlatformType(PlatformType.IOS))
-        : appleConfiguration.getMinimumOsForPlatformType(PlatformType.WATCHOS);
+            ObjcRuleClasses.objcConfiguration(ruleContext).getMinimumOs())
+        : appleConfiguration.getSdkVersionForPlatform(appPlatform);
 
     ReleaseBundlingSupport releaseBundlingSupport =
         new ReleaseBundlingSupport(
@@ -297,9 +298,7 @@ final class WatchApplicationSupport {
 
   private ObjcProvider objcProvider(Iterable<Artifact> innerBundleZips) {
     ObjcProvider.Builder objcProviderBuilder = new ObjcProvider.Builder();
-    if (watchOSVersion != WatchOSVersion.OS1) {
-      objcProviderBuilder.addAll(MERGE_ZIP, innerBundleZips);
-    }
+    objcProviderBuilder.addAll(MERGE_ZIP, innerBundleZips);
 
     // Add all resource files applicable to watch application from dependency providers.
     for (Attribute attribute : dependencyAttributes) {

@@ -35,23 +35,20 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
+import com.google.devtools.build.lib.rules.apple.Platform;
+import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.LinkedBinary;
 import com.google.devtools.build.lib.syntax.Type;
+
 import javax.annotation.Nullable;
 
 /**
  * Contains support methods to build watch extension bundle - does normal bundle processing -
  * compiling and linking the binary, resources, plists and creates a final (signed if necessary)
  * bundle.
- *
- * @deprecated The native bundling rules have been deprecated. This class will be removed in the
- *     future.
  */
-@Deprecated
 public class Watch2ExtensionSupport {
 
   private final RuleContext ruleContext;
@@ -115,6 +112,7 @@ public class Watch2ExtensionSupport {
     }
 
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+    Platform appPlatform = appleConfiguration.getMultiArchPlatform(PlatformType.WATCHOS);
 
     ReleaseBundlingSupport releaseBundlingSupport =
         new ReleaseBundlingSupport(
@@ -123,7 +121,7 @@ public class Watch2ExtensionSupport {
             LinkedBinary.DEPENDENCIES_ONLY,
             ReleaseBundlingSupport.EXTENSION_BUNDLE_DIR_FORMAT,
             bundleName,
-            appleConfiguration.getMinimumOsForPlatformType(PlatformType.WATCHOS),
+            appleConfiguration.getSdkVersionForPlatform(appPlatform),
             releaseBundling.build(),
             appleConfiguration.getMultiArchPlatform(PlatformType.WATCHOS));
 
@@ -178,10 +176,7 @@ public class Watch2ExtensionSupport {
     }
 
     Iterable<ObjcProvider> binaryDependencies() {
-      TransitiveInfoCollection info = ruleContext.getPrerequisite("binary", Mode.TARGET);
-      AppleExecutableBinaryProvider binaryProvider =
-          info.get(AppleExecutableBinaryProvider.SKYLARK_CONSTRUCTOR);
-      return ImmutableList.of(binaryProvider.getDepsObjcProvider());
+      return ruleContext.getPrerequisites("binary", Mode.TARGET, ObjcProvider.class);
     }
 
     @Nullable
