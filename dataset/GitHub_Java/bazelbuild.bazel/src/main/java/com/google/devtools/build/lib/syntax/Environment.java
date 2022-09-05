@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -393,9 +393,19 @@ public final class Environment implements Freezable {
   // TODO(bazel-team): Delete this function.
   // This function is currently used in various functions that change their behavior with respect to
   // lists depending on the Skylark-ness of the code; lists should be unified between the two modes.
-  @VisibleForTesting
-  public boolean isSkylark() {
+  boolean isSkylark() {
     return isSkylark;
+  }
+
+  /**
+   * Is the caller of the current function executing Skylark code?
+   * @return true if this is skylark was enabled when this code was read.
+   */
+  // TODO(bazel-team): Delete this function.
+  // This function is currently used by MethodLibrary to modify behavior of lists
+  // depending on the Skylark-ness of the code; lists should be unified between the two modes.
+  boolean isCallerSkylark() {
+    return continuation.isSkylark;
   }
 
   @Override
@@ -797,6 +807,11 @@ public final class Environment implements Freezable {
     }
 
     Object value = ext.get(nameInLoadedFile);
+    // TODO(bazel-team): Unify data structures between Skylark and BUILD,
+    // and stop doing the conversions below:
+    if (!isSkylark) {
+      value = SkylarkType.convertFromSkylark(value);
+    }
 
     try {
       update(symbol.getName(), value);
@@ -885,7 +900,7 @@ public final class Environment implements Freezable {
    * @param input a list of lines of code
    */
   @VisibleForTesting
-  public List<Statement> parseFile(String... input) {
+  List<Statement> parseFile(String... input) {
     return parseFileWithComments(input).statements;
   }
 
