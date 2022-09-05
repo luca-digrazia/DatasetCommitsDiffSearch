@@ -16,18 +16,14 @@
 package me.jessyan.autosize;
 
 import android.app.Activity;
+import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.util.DisplayMetrics;
-
-import java.lang.reflect.Field;
-import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import android.util.SparseArray;
 
 import me.jessyan.autosize.external.ExternalAdaptInfo;
 import me.jessyan.autosize.external.ExternalAdaptManager;
 import me.jessyan.autosize.internal.CustomAdapt;
-import me.jessyan.autosize.utils.LogUtils;
 import me.jessyan.autosize.utils.Preconditions;
 
 /**
@@ -41,7 +37,11 @@ import me.jessyan.autosize.utils.Preconditions;
  * ================================================
  */
 public final class AutoSizeCompat {
-    private static Map<String, DisplayMetricsInfo> mCache = new ConcurrentHashMap<>();
+    private static SparseArray<DisplayMetricsInfo> mCache = new SparseArray<>();
+    private static final int MODE_SHIFT = 30;
+    private static final int MODE_MASK  = 0x3 << MODE_SHIFT;
+    private static final int MODE_ON_WIDTH  = 1 << MODE_SHIFT;
+    private static final int MODE_DEVICE_SIZE  = 2 << MODE_SHIFT;
 
     private AutoSizeCompat() {
         throw new IllegalStateException("you can't instantiate me!");
@@ -61,10 +61,10 @@ public final class AutoSizeCompat {
     }
 
     /**
-     * 使用 {@link Activity} 或 {@link android.support.v4.app.Fragment} 的自定义参数进行适配
+     * 使用 {@link Activity} 或 Fragment 的自定义参数进行适配
      *
      * @param resources   {@link Resources}
-     * @param customAdapt {@link Activity} 或 {@link android.support.v4.app.Fragment} 需实现 {@link CustomAdapt}
+     * @param customAdapt {@link Activity} 或 Fragment 需实现 {@link CustomAdapt}
      */
     public static void autoConvertDensityOfCustomAdapt(Resources resources, CustomAdapt customAdapt) {
         Preconditions.checkNotNull(customAdapt, "customAdapt == null");
@@ -82,10 +82,10 @@ public final class AutoSizeCompat {
     }
 
     /**
-     * 使用外部三方库的 {@link Activity} 或 {@link android.support.v4.app.Fragment} 的自定义适配参数进行适配
+     * 使用外部三方库的 {@link Activity} 或 Fragment 的自定义适配参数进行适配
      *
      * @param resources         {@link Resources}
-     * @param externalAdaptInfo 三方库的 {@link Activity} 或 {@link android.support.v4.app.Fragment} 提供的适配参数, 需要配合 {@link ExternalAdaptManager#addExternalAdaptInfoOfActivity(Class, ExternalAdaptInfo)}
+     * @param externalAdaptInfo 三方库的 {@link Activity} 或 Fragment 提供的适配参数, 需要配合 {@link ExternalAdaptManager#addExternalAdaptInfoOfActivity(Class, ExternalAdaptInfo)}
      */
     public static void autoConvertDensityOfExternalAdaptInfo(Resources resources, ExternalAdaptInfo externalAdaptInfo) {
         Preconditions.checkNotNull(externalAdaptInfo, "externalAdaptInfo == null");
@@ -136,6 +136,7 @@ public final class AutoSizeCompat {
      */
     public static void autoConvertDensity(Resources resources, float sizeInDp, boolean isBaseOnWidth) {
         Preconditions.checkNotNull(resources, "resources == null");
+        Preconditions.checkMainThread();
 
         float subunitsDesignSize = isBaseOnWidth ? AutoSizeConfig.getInstance().getUnitsManager().getDesignWidth()
                 : AutoSizeConfig.getInstance().getUnitsManager().getDesignHeight();
@@ -143,10 +144,10 @@ public final class AutoSizeCompat {
 
         int screenSize = isBaseOnWidth ? AutoSizeConfig.getInstance().getScreenWidth()
                 : AutoSizeConfig.getInstance().getScreenHeight();
-        String key = sizeInDp + "|" + subunitsDesignSize + "|" + isBaseOnWidth + "|"
-                + AutoSizeConfig.getInstance().isUseDeviceSize() + "|"
-                + AutoSizeConfig.getInstance().getInitScaledDensity() + "|"
-                + screenSize;
+
+        int key = Math.round((sizeInDp + subunitsDesignSize + screenSize) * AutoSizeConfig.getInstance().getInitScaledDensity()) & ~MODE_MASK;
+        key = isBaseOnWidth ? (key | MODE_ON_WIDTH) : (key & ~MODE_ON_WIDTH);
+        key = AutoSizeConfig.getInstance().isUseDeviceSize() ? (key | MODE_DEVICE_SIZE) : (key & ~MODE_DEVICE_SIZE);
 
         DisplayMetricsInfo displayMetricsInfo = mCache.get(key);
 
@@ -154,6 +155,8 @@ public final class AutoSizeCompat {
         int targetDensityDpi = 0;
         float targetScaledDensity = 0;
         float targetXdpi = 0;
+        int targetScreenWidthDp;
+        int targetScreenHeightDp;
 
         if (displayMetricsInfo == null) {
             if (isBaseOnWidth) {
@@ -161,10 +164,17 @@ public final class AutoSizeCompat {
             } else {
                 targetDensity = AutoSizeConfig.getInstance().getScreenHeight() * 1.0f / sizeInDp;
             }
-            float scale = AutoSizeConfig.getInstance().isExcludeFontScale() ? 1 : AutoSizeConfig.getInstance().
-                    getInitScaledDensity() * 1.0f / AutoSizeConfig.getInstance().getInitDensity();
-            targetScaledDensity = targetDensity * scale;
+            if (AutoSizeConfig.getInstance().getPrivateFontScale() > 0) {
+                targetScaledDensity = targetDensity * AutoSizeConfig.getInstance().getPrivateFontScale();
+            } else {
+                float systemFontScale = AutoSizeConfig.getInstance().isExcludeFontScale() ? 1 : AutoSizeConfig.getInstance().
+                        getInitScaledDensity() * 1.0f / AutoSizeConfig.getInstance().getInitDensity();
+                targetScaledDensity = targetDensity * systemFontScale;
+            }
             targetDensityDpi = (int) (targetDensity * 160);
+
+            targetScreenWidthDp = (int) (AutoSizeConfig.getInstance().getScreenWidth() / targetDensity);
+            targetScreenHeightDp = (int) (AutoSizeConfig.getInstance().getScreenHeight() / targetDensity);
 
             if (isBaseOnWidth) {
                 targetXdpi = AutoSizeConfig.getInstance().getScreenWidth() * 1.0f / subunitsDesignSize;
@@ -172,20 +182,18 @@ public final class AutoSizeCompat {
                 targetXdpi = AutoSizeConfig.getInstance().getScreenHeight() * 1.0f / subunitsDesignSize;
             }
 
-            mCache.put(key, new DisplayMetricsInfo(targetDensity, targetDensityDpi, targetScaledDensity, targetXdpi));
+            mCache.put(key, new DisplayMetricsInfo(targetDensity, targetDensityDpi, targetScaledDensity, targetXdpi, targetScreenWidthDp, targetScreenHeightDp));
         } else {
             targetDensity = displayMetricsInfo.getDensity();
             targetDensityDpi = displayMetricsInfo.getDensityDpi();
             targetScaledDensity = displayMetricsInfo.getScaledDensity();
             targetXdpi = displayMetricsInfo.getXdpi();
+            targetScreenWidthDp = displayMetricsInfo.getScreenWidthDp();
+            targetScreenHeightDp = displayMetricsInfo.getScreenHeightDp();
         }
 
         setDensity(resources, targetDensity, targetDensityDpi, targetScaledDensity, targetXdpi);
-
-        LogUtils.d(String.format(Locale.ENGLISH, "AutoSizeCompat is running! \nAdapt Info: isBaseOnWidth = %s, %s = %f, %s = %f, targetDensity = %f, targetScaledDensity = %f, targetDensityDpi = %d, targetXdpi = %f"
-                , isBaseOnWidth, isBaseOnWidth ? "designWidthInDp"
-                        : "designHeightInDp", sizeInDp, isBaseOnWidth ? "designWidthInSubunits" : "designHeightInSubunits", subunitsDesignSize
-                , targetDensity, targetScaledDensity, targetDensityDpi, targetXdpi));
+        setScreenSizeDp(resources, targetScreenWidthDp, targetScreenHeightDp);
     }
 
     /**
@@ -194,6 +202,7 @@ public final class AutoSizeCompat {
      * @param resources {@link Resources}
      */
     public static void cancelAdapt(Resources resources) {
+        Preconditions.checkMainThread();
         float initXdpi = AutoSizeConfig.getInstance().getInitXdpi();
         switch (AutoSizeConfig.getInstance().getUnitsManager().getSupportSubunits()) {
             case PT:
@@ -208,6 +217,9 @@ public final class AutoSizeCompat {
                 , AutoSizeConfig.getInstance().getInitDensityDpi()
                 , AutoSizeConfig.getInstance().getInitScaledDensity()
                 , initXdpi);
+        setScreenSizeDp(resources
+                , AutoSizeConfig.getInstance().getInitScreenWidthDp()
+                , AutoSizeConfig.getInstance().getInitScreenHeightDp());
     }
 
     /**
@@ -220,22 +232,20 @@ public final class AutoSizeCompat {
      * @param xdpi          {@link DisplayMetrics#xdpi}
      */
     private static void setDensity(Resources resources, float density, int densityDpi, float scaledDensity, float xdpi) {
+        DisplayMetrics activityDisplayMetrics = resources.getDisplayMetrics();
+        setDensity(activityDisplayMetrics, density, densityDpi, scaledDensity, xdpi);
+        DisplayMetrics appDisplayMetrics = AutoSizeConfig.getInstance().getApplication().getResources().getDisplayMetrics();
+        setDensity(appDisplayMetrics, density, densityDpi, scaledDensity, xdpi);
+
         //兼容 MIUI
         DisplayMetrics activityDisplayMetricsOnMIUI = getMetricsOnMiui(resources);
         DisplayMetrics appDisplayMetricsOnMIUI = getMetricsOnMiui(AutoSizeConfig.getInstance().getApplication().getResources());
 
         if (activityDisplayMetricsOnMIUI != null) {
             setDensity(activityDisplayMetricsOnMIUI, density, densityDpi, scaledDensity, xdpi);
-        } else {
-            DisplayMetrics activityDisplayMetrics = resources.getDisplayMetrics();
-            setDensity(activityDisplayMetrics, density, densityDpi, scaledDensity, xdpi);
         }
-
         if (appDisplayMetricsOnMIUI != null) {
             setDensity(appDisplayMetricsOnMIUI, density, densityDpi, scaledDensity, xdpi);
-        } else {
-            DisplayMetrics appDisplayMetrics = AutoSizeConfig.getInstance().getApplication().getResources().getDisplayMetrics();
-            setDensity(appDisplayMetrics, density, densityDpi, scaledDensity, xdpi);
         }
     }
 
@@ -273,6 +283,35 @@ public final class AutoSizeCompat {
     }
 
     /**
+     * 给 {@link Configuration} 赋值
+     *
+     * @param resources      {@link Resources}
+     * @param screenWidthDp  {@link Configuration#screenWidthDp}
+     * @param screenHeightDp {@link Configuration#screenHeightDp}
+     */
+    private static void setScreenSizeDp(Resources resources, int screenWidthDp, int screenHeightDp) {
+        if (AutoSizeConfig.getInstance().getUnitsManager().isSupportDP() && AutoSizeConfig.getInstance().getUnitsManager().isSupportScreenSizeDP()) {
+            Configuration activityConfiguration = resources.getConfiguration();
+            setScreenSizeDp(activityConfiguration, screenWidthDp, screenHeightDp);
+
+            Configuration appConfiguration = AutoSizeConfig.getInstance().getApplication().getResources().getConfiguration();
+            setScreenSizeDp(appConfiguration, screenWidthDp, screenHeightDp);
+        }
+    }
+
+    /**
+     * Configuration赋值
+     *
+     * @param configuration  {@link Configuration}
+     * @param screenWidthDp  {@link Configuration#screenWidthDp}
+     * @param screenHeightDp {@link Configuration#screenHeightDp}
+     */
+    private static void setScreenSizeDp(Configuration configuration, int screenWidthDp, int screenHeightDp) {
+        configuration.screenWidthDp = screenWidthDp;
+        configuration.screenHeightDp = screenHeightDp;
+    }
+
+    /**
      * 解决 MIUI 更改框架导致的 MIUI7 + Android5.1.1 上出现的失效问题 (以及极少数基于这部分 MIUI 去掉 ART 然后置入 XPosed 的手机)
      * 来源于: https://github.com/Firedamp/Rudeness/blob/master/rudeness-sdk/src/main/java/com/bulong/rudeness/RudenessScreenHelper.java#L61:5
      *
@@ -280,11 +319,9 @@ public final class AutoSizeCompat {
      * @return {@link DisplayMetrics}, 可能为 {@code null}
      */
     private static DisplayMetrics getMetricsOnMiui(Resources resources) {
-        if ("MiuiResources".equals(resources.getClass().getSimpleName()) || "XResources".equals(resources.getClass().getSimpleName())) {
+        if (AutoSizeConfig.getInstance().isMiui() && AutoSizeConfig.getInstance().getTmpMetricsField() != null) {
             try {
-                Field field = Resources.class.getDeclaredField("mTmpMetrics");
-                field.setAccessible(true);
-                return (DisplayMetrics) field.get(resources);
+                return (DisplayMetrics) AutoSizeConfig.getInstance().getTmpMetricsField().get(resources);
             } catch (Exception e) {
                 return null;
             }
