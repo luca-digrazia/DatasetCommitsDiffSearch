@@ -1,9 +1,7 @@
 package com.yammer.metrics.stats;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
 
 import static java.lang.Math.floor;
 
@@ -26,10 +24,10 @@ public class Snapshot {
      * @param values    an unordered set of values in the sample
      */
     public Snapshot(Collection<Long> values) {
-        final Object[] copy = values.toArray();
-        this.values = new double[copy.length];
-        for (int i = 0; i < copy.length; i++) {
-            this.values[i] = (Long) copy[i];
+        this.values = new double[values.size()];
+        int i = 0;
+        for (Long value : values) {
+            this.values[i++] = value;
         }
         Arrays.sort(this.values);
     }
@@ -145,22 +143,5 @@ public class Snapshot {
      */
     public double[] getValues() {
         return Arrays.copyOf(values, values.length);
-    }
-
-    /**
-     * Writes the values of the sample to the given file.
-     *
-     * @param output the file to which the values will be written
-     * @throws IOException if there is an error writing the values
-     */
-    public void dump(File output) throws IOException {
-        final PrintWriter writer = new PrintWriter(output);
-        try {
-            for (double value : values) {
-                writer.printf("%f\n", value);
-            }
-        } finally {
-            writer.close();
-        }
     }
 }
