@@ -42,6 +42,7 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -97,6 +98,7 @@ public final class SkyframeBuildView {
   // has been invalidated after graph pruning has been executed.
   private Set<ConfiguredTargetValue> dirtyConfiguredTargets = Sets.newConcurrentHashSet();
   private volatile boolean anyConfiguredTargetDeleted = false;
+  private SkyKey configurationKey = null;
 
   public SkyframeBuildView(ConfiguredTargetFactory factory,
       ArtifactFactory artifactFactory,
@@ -111,6 +113,10 @@ public final class SkyframeBuildView {
 
   public void setWarningListener(@Nullable EventHandler warningListener) {
     this.warningListener = warningListener;
+  }
+
+  public void setConfigurationSkyKey(SkyKey skyKey) {
+    this.configurationKey = skyKey;
   }
 
   public void resetEvaluatedConfiguredTargetKeysSet() {
@@ -338,19 +344,25 @@ public final class SkyframeBuildView {
    */
   // TODO(bazel-team): Allow analysis to return null so the value builder can exit and wait for a
   // restart deps are not present.
-  private boolean getWorkspaceStatusValues(Environment env, BuildConfiguration config) {
+  private boolean getWorkspaceStatusValues(Environment env) {
     env.getValue(WorkspaceStatusValue.SKY_KEY);
     Map<BuildInfoKey, BuildInfoFactory> buildInfoFactories =
         PrecomputedValue.BUILD_INFO_FACTORIES.get(env);
     if (buildInfoFactories == null) {
       return false;
     }
+    BuildConfigurationCollection configurations = getBuildConfigurationCollection(env);
+    if (configurations == null) {
+      return false;
+    }
     // These factories may each create their own build info artifacts, all depending on the basic
     // build-info.txt and build-changelist.txt.
     List<SkyKey> depKeys = Lists.newArrayList();
     for (BuildInfoKey key : buildInfoFactories.keySet()) {
-      if (buildInfoFactories.get(key).isEnabled(config)) {
-        depKeys.add(BuildInfoCollectionValue.key(new BuildInfoKeyAndConfig(key, config)));
+      for (BuildConfiguration config : configurations.getAllConfigurations()) {
+        if (buildInfoFactories.get(key).isEnabled(config)) {
+          depKeys.add(BuildInfoCollectionValue.key(new BuildInfoKeyAndConfig(key, config)));
+        }
       }
     }
     env.getValues(depKeys);
@@ -360,13 +372,11 @@ public final class SkyframeBuildView {
   /** Returns null if any build-info values are not ready. */
   @Nullable
   CachingAnalysisEnvironment createAnalysisEnvironment(ArtifactOwner owner,
-      boolean isSystemEnv, EventHandler eventHandler,
-      Environment env, BuildConfiguration config) {
-    if (config != null && !getWorkspaceStatusValues(env, config)) {
+      boolean isSystemEnv, boolean extendedSanityChecks, EventHandler eventHandler,
+      Environment env, boolean allowRegisteringActions) {
+    if (!getWorkspaceStatusValues(env)) {
       return null;
     }
-    boolean extendedSanityChecks = config != null && config.extendedSanityChecks();
-    boolean allowRegisteringActions = config == null || config.isActionsEnabled();
     return new CachingAnalysisEnvironment(
         artifactFactory, owner, isSystemEnv, extendedSanityChecks, eventHandler, env,
         allowRegisteringActions, binTools);
@@ -402,8 +412,16 @@ public final class SkyframeBuildView {
   }
 
   @Nullable
+  private BuildConfigurationCollection getBuildConfigurationCollection(Environment env) {
+    ConfigurationCollectionValue configurationsValue =
+        (ConfigurationCollectionValue) env.getValue(configurationKey);
+    return configurationsValue == null ? null : configurationsValue.getConfigurationCollection();
+  }
+
+  @Nullable
   SkyframeDependencyResolver createDependencyResolver(Environment env) {
-    return new SkyframeDependencyResolver(env);
+    BuildConfigurationCollection configurations = getBuildConfigurationCollection(env);
+    return configurations == null ? null : new SkyframeDependencyResolver(env);
   }
 
   /**

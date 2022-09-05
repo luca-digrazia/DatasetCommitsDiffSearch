@@ -70,8 +70,7 @@ public interface MutableActionGraph extends ActionGraph {
 
     public ActionConflictException(Artifact artifact, Action previousAction,
         Action attemptedAction) {
-      super(String.format("for %s, previous action: %s, attempted action: %s",
-          artifact, previousAction, attemptedAction));
+      super("for " + artifact);
       this.artifact = artifact;
       this.previousAction = previousAction;
       this.attemptedAction = attemptedAction;
@@ -140,8 +139,8 @@ public interface MutableActionGraph extends ActionGraph {
           bNull ? null : Label.print(bOwner.getLabel()));
       addStringDetail(sb, "RuleClass", aNull ? null : aOwner.getTargetKind(),
           bNull ? null : bOwner.getTargetKind());
-      addStringDetail(sb, "Configuration", aNull ? null : aOwner.getConfigurationChecksum(),
-          bNull ? null : bOwner.getConfigurationChecksum());
+      addStringDetail(sb, "Configuration", aNull ? null : aOwner.getConfigurationName(),
+          bNull ? null : bOwner.getConfigurationName());
       addStringDetail(sb, "Mnemonic", a.getMnemonic(), b.getMnemonic());
       addStringDetail(sb, "Progress message", a.getProgressMessage(), b.getProgressMessage());
 

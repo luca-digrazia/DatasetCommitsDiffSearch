@@ -57,7 +57,7 @@ public class ActionLookupValue implements SkyValue {
     this.generatingActionMap = ImmutableMap.copyOf(generatingActionMap);
   }
 
-  public Action getGeneratingAction(Artifact artifact) {
+  Action getGeneratingAction(Artifact artifact) {
     return generatingActionMap.get(artifact);
   }
 
@@ -87,7 +87,7 @@ public class ActionLookupValue implements SkyValue {
    *
    * <p>The methods of this class should only be called by {@link ActionLookupValue#key}.
    */
-  public abstract static class ActionLookupKey implements ArtifactOwner {
+  protected abstract static class ActionLookupKey implements ArtifactOwner {
     @Override
     public Label getLabel() {
       return null;
