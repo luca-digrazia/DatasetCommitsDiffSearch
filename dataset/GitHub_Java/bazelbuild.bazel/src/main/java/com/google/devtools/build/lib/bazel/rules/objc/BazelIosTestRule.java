@@ -18,13 +18,12 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.Type.LABEL;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
-import com.google.devtools.build.lib.rules.objc.ObjcConfiguration;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport;
 import com.google.devtools.build.lib.rules.objc.XcodeSupport;
@@ -32,34 +31,30 @@ import com.google.devtools.build.lib.rules.objc.XcodeSupport;
 /**
  * Rule definition for the ios_test rule.
  */
+@BlazeRule(name = "ios_test",
+    type = RuleClassType.TEST,
+    ancestors = {
+        BaseRuleClasses.BaseRule.class,
+        BaseRuleClasses.TestBaseRule.class,
+        ObjcRuleClasses.IosTestBaseRule.class, },
+    factoryClass = BazelIosTest.class)
 public final class BazelIosTestRule implements RuleDefinition {
   @Override
   public RuleClass build(RuleClass.Builder builder, final RuleDefinitionEnvironment env) {
     return builder
-        .requiresConfigurationFragments(ObjcConfiguration.class, J2ObjcConfiguration.class)
         /*<!-- #BLAZE_RULE(ios_test).IMPLICIT_OUTPUTS -->
         <ul>
           <li><code><var>name</var>.ipa</code>: the test bundle as an
               <code>.ipa</code> file
-          <li><code><var>name</var>.xcodeproj/project.pbxproj: An Xcode project file which can be
-              used to develop or build on a Mac.</li>
+          <li><code><var>name</var>.xcodeproj/project.pbxproj</code>: An Xcode project file which
+              can be used to develop or build on a Mac
+          <li><code><var>name</var>_xctest_app.ipa</code>: ipa for the {@code xctest_app} binary
         </ul>
         <!-- #END_BLAZE_RULE.IMPLICIT_OUTPUTS -->*/
-        .setImplicitOutputsFunction(
-            ImplicitOutputsFunction.fromFunctions(ReleaseBundlingSupport.IPA, XcodeSupport.PBXPROJ))
+        .setImplicitOutputsFunction(ImplicitOutputsFunction.fromFunctions(
+            ReleaseBundlingSupport.IPA, XcodeSupport.PBXPROJ, ObjcRuleClasses.XCTEST_APP_IPA))
         .add(attr(BazelIosTest.IOS_TEST_ON_BAZEL_ATTR, LABEL)
             .value(env.getLabel("//tools/objc:ios_test_on_bazel")).exec())
-        .build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("ios_test")
-        .type(RuleClassType.TEST)
-        .ancestors(BaseRuleClasses.BaseRule.class, BaseRuleClasses.TestBaseRule.class,
-            ObjcRuleClasses.IosTestBaseRule.class)
-        .factoryClass(BazelIosTest.class)
         .build();
   }
 }

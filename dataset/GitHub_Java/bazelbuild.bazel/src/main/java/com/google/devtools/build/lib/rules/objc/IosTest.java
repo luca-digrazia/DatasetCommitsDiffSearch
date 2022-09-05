@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Type;
@@ -45,7 +46,6 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
   public static final String TARGET_DEVICE = "target_device";
   public static final String IS_XCTEST = "xctest";
   public static final String XCTEST_APP = "xctest_app";
-  public static final String MEMLEAKS_DEP = "$memleaks_dep";
 
   @VisibleForTesting
   public static final String REQUIRES_SOURCE_ERROR =
@@ -102,6 +102,13 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
           "-bundle_loader", bundleLoader.getExecPathString());
 
       extraLinkInputs = new ExtraLinkInputs(bundleLoader);
+
+      ruleContext.registerAction(
+          new SymlinkAction(
+              ruleContext.getActionOwner(),
+              /*input=*/xcTestAppProvider(ruleContext).getIpa(),
+              /*output=*/ruleContext.getImplicitOutputArtifact(ObjcRuleClasses.XCTEST_APP_IPA),
+              "Symlink xctest_app .ipa"));
     }
 
     if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
@@ -118,7 +125,7 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
 
     ReleaseBundlingSupport releaseBundlingSupport = new ReleaseBundlingSupport(
         ruleContext, common.getObjcProvider(), optionsProvider, LinkedBinary.LOCAL_AND_DEPENDENCIES,
-        ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT);
+        "Payload/%s.app");
     releaseBundlingSupport
         .registerActions()
         .addXcodeSettings(xcodeProviderBuilder)
@@ -167,13 +174,6 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
       extraDepObjcProviders.add(xcTestAppProvider(ruleContext).getObjcProvider());
     }
 
-    // Add the memleaks library if the --ios_memleaks flag is true.  The library pauses the test
-    // after all tests have been executed so that leaks can be run.
-    ObjcConfiguration config = ruleContext.getFragment(ObjcConfiguration.class);
-    if (config.runMemleaks()) {
-      extraDepObjcProviders
-          .add(ruleContext.getPrerequisite(MEMLEAKS_DEP, Mode.TARGET, ObjcProvider.class));
-    }
     return ObjcLibrary.common(ruleContext, extraSdkFrameworks, /*alwayslink=*/false,
         new ObjcLibrary.ExtraImportLibraries(ObjcRuleClasses.j2ObjcLibraries(ruleContext)),
         extraDepObjcProviders);
