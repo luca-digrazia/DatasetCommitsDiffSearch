@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -53,8 +54,16 @@ public final class GlobFunction implements SkyFunction {
   public SkyValue compute(SkyKey skyKey, Environment env) throws GlobFunctionException {
     GlobDescriptor glob = (GlobDescriptor) skyKey.argument();
 
-    // Note that the glob's package is assumed to exist which implies that the package's BUILD file
-    // exists which implies that the package's directory exists.
+    PackageLookupValue globPkgLookupValue = (PackageLookupValue)
+        env.getValue(PackageLookupValue.key(glob.getPackageId()));
+    if (globPkgLookupValue == null) {
+      return null;
+    }
+    Preconditions.checkState(globPkgLookupValue.packageExists(), "%s isn't an existing package",
+        glob.getPackageId());
+    // Note that this implies that the package's BUILD file exists which implies that the
+    // package's directory exists.
+
     PathFragment globSubdir = glob.getSubdir();
     if (!globSubdir.equals(PathFragment.EMPTY_FRAGMENT)) {
       PackageLookupValue globSubdirPkgLookupValue = (PackageLookupValue) env.getValue(
@@ -94,8 +103,8 @@ public final class GlobFunction implements SkyFunction {
           matches.add(globSubdir);
         }
       } else {
-        SkyKey globKey = GlobValue.internalKey(glob.getPackageId(), glob.getPackageRoot(),
-            globSubdir, patternTail, glob.excludeDirs());
+        SkyKey globKey = GlobValue.internalKey(
+            glob.getPackageId(), globSubdir, patternTail, glob.excludeDirs());
         GlobValue globValue = (GlobValue) env.getValue(globKey);
         if (globValue == null) {
           return null;
@@ -105,7 +114,8 @@ public final class GlobFunction implements SkyFunction {
     }
 
     PathFragment dirPathFragment = glob.getPackageId().getPackageFragment().getRelative(globSubdir);
-    RootedPath dirRootedPath = RootedPath.toRootedPath(glob.getPackageRoot(), dirPathFragment);
+    RootedPath dirRootedPath = RootedPath.toRootedPath(globPkgLookupValue.getRoot(),
+        dirPathFragment);
     if (alwaysUseDirListing || containsGlobs(patternHead)) {
       // Pattern contains globs, so a directory listing is required.
       //
@@ -135,7 +145,7 @@ public final class GlobFunction implements SkyFunction {
           // For symlinks, look up the corresponding FileValue. This ensures that if the symlink
           // changes and "switches types" (say, from a file to a directory), this value will be
           // invalidated.
-          RootedPath symlinkRootedPath = RootedPath.toRootedPath(glob.getPackageRoot(),
+          RootedPath symlinkRootedPath = RootedPath.toRootedPath(globPkgLookupValue.getRoot(),
               dirPathFragment.getRelative(fileName));
           FileValue symlinkFileValue = (FileValue) env.getValue(FileValue.key(symlinkRootedPath));
           if (symlinkFileValue == null) {
@@ -156,7 +166,7 @@ public final class GlobFunction implements SkyFunction {
     } else {
       // Pattern does not contain globs, so a direct stat is enough.
       String fileName = patternHead;
-      RootedPath fileRootedPath = RootedPath.toRootedPath(glob.getPackageRoot(),
+      RootedPath fileRootedPath = RootedPath.toRootedPath(globPkgLookupValue.getRoot(),
           dirPathFragment.getRelative(fileName));
       FileValue fileValue = (FileValue) env.getValue(FileValue.key(fileRootedPath));
       if (fileValue == null) {
@@ -202,7 +212,7 @@ public final class GlobFunction implements SkyFunction {
       Environment env) {
     if (isDirectory && subdirPattern != null) {
       // This is a directory, and the pattern covers files under that directory.
-      SkyKey subdirGlobKey = GlobValue.internalKey(glob.getPackageId(), glob.getPackageRoot(),
+      SkyKey subdirGlobKey = GlobValue.internalKey(glob.getPackageId(),
           glob.getSubdir().getRelative(fileName), subdirPattern, glob.excludeDirs());
       GlobValue subdirGlob = (GlobValue) env.getValue(subdirGlobKey);
       if (subdirGlob == null) {
