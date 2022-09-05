@@ -68,7 +68,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -386,9 +385,11 @@ public class AndroidCommon {
   }
 
   JackCompilationHelper initJack(JavaTargetAttributes attributes, JavaSemantics javaSemantics) {
-    Map<PathFragment, Artifact> resourcesMap = new LinkedHashMap<>();
+    ImmutableMap.Builder<PathFragment, Artifact> resourcesBuilder = new ImmutableMap.Builder<>();
     for (Artifact resource : attributes.getResources()) {
-      resourcesMap.put(javaSemantics.getJavaResourcePath(resource.getRootRelativePath()), resource);
+      resourcesBuilder.put(
+          javaSemantics.getJavaResourcePath(resource.getRootRelativePath()),
+          resource);
     }
     return new JackCompilationHelper.Builder()
         // blaze infrastructure
@@ -402,7 +403,7 @@ public class AndroidCommon {
         .addJavaSources(attributes.getSourceFiles())
         .addSourceJars(attributes.getSourceJars())
         .addCompiledJars(attributes.getJarFiles())
-        .addResources(ImmutableMap.copyOf(resourcesMap))
+        .addResources(resourcesBuilder.build())
         .addProcessorNames(attributes.getProcessorNames())
         .addProcessorClasspathJars(attributes.getProcessorPath())
         .addExports(JavaCommon.getExports(ruleContext))
