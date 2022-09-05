@@ -11,9 +11,9 @@ import org.hsweb.web.core.authorize.ExpressionScopeBean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.hsweb.expands.script.engine.DynamicScriptEngine;
-import org.hsweb.expands.script.engine.DynamicScriptEngineFactory;
-import org.hsweb.expands.script.engine.ExecuteResult;
+import org.webbuilder.utils.script.engine.DynamicScriptEngine;
+import org.webbuilder.utils.script.engine.DynamicScriptEngineFactory;
+import org.webbuilder.utils.script.engine.ExecuteResult;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -38,47 +38,6 @@ public class AnnotationLockAopAdvice {
     @Autowired(required = false)
     private Map<String, ExpressionScopeBean> expressionScopeBeanMap;
 
-    @Around("@annotation(unLock)")
-    public Object unWriteLock(ProceedingJoinPoint pjp,
-                              org.hsweb.concurrent.lock.annotation.UnWriteLock unLock) throws Throwable {
-        String name = getLockName(pjp);
-        ReadWriteLock lock = readWriteLockMap.get(name);
-        try {
-            return pjp.proceed();
-        } finally {
-            logger.debug("unlock :{}", name);
-            if (lock != null)
-                unlock(lock.writeLock());
-        }
-    }
-
-    @Around("@annotation(unLock)")
-    public Object unReadLock(ProceedingJoinPoint pjp,
-                             org.hsweb.concurrent.lock.annotation.UnReadLock unLock) throws Throwable {
-        String name = getLockName(pjp);
-        ReadWriteLock lock = readWriteLockMap.get(name);
-        try {
-            return pjp.proceed();
-        } finally {
-            logger.debug("unlock :{}", name);
-            if (lock != null)
-                unlock(lock.readLock());
-        }
-    }
-
-    @Around("@annotation(unLock)")
-    public Object unlock(ProceedingJoinPoint pjp,
-                         org.hsweb.concurrent.lock.annotation.UnLock unLock) throws Throwable {
-        String name = getLockName(pjp);
-        Lock lock = lockMap.get(name);
-        try {
-            return pjp.proceed();
-        } finally {
-            logger.debug("unlock :{}", name);
-            unlock(lock);
-        }
-    }
-
     @Around("@annotation(lock)")
     public Object lock(ProceedingJoinPoint pjp,
                        org.hsweb.concurrent.lock.annotation.Lock lock) throws Throwable {
@@ -95,10 +54,8 @@ public class AnnotationLockAopAdvice {
             if (!locked) throw new LockException(name + "error");
             return pjp.proceed();
         } finally {
-            if (lock.autoUnLock()) {
-                logger.debug("unlock :{}", name);
-                unlock(_lock);
-            }
+            logger.debug("unlock :{}", name);
+            unlock(_lock);
         }
     }
 
@@ -119,10 +76,8 @@ public class AnnotationLockAopAdvice {
             if (!locked) throw new LockException(name + "error");
             return pjp.proceed();
         } finally {
-            if (lock.autoUnLock()) {
-                logger.debug("unlock readLock :{} ", name);
-                unlock(readLock);
-            }
+            logger.debug("unlock readLock :{} ", name);
+            unlock(readLock);
         }
     }
 
@@ -143,10 +98,8 @@ public class AnnotationLockAopAdvice {
             if (!locked) throw new LockException(name + "error");
             return pjp.proceed();
         } finally {
-            if (lock.autoUnLock()) {
-                logger.debug("unlock writeLock:{} ", name);
-                unlock(writeLock);
-            }
+            logger.debug("unlock writeLock:{} ", name);
+            unlock(writeLock);
         }
     }
 
@@ -189,7 +142,7 @@ public class AnnotationLockAopAdvice {
             try {
                 lock.unlock();
             } catch (Throwable e) {
-                logger.error("unlock error", e);
+                logger.error("unlock error",e);
             }
         }
     }
