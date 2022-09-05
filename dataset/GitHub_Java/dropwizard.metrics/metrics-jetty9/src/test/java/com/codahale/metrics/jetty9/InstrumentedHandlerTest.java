@@ -10,7 +10,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.assertThat;
 
 public class InstrumentedHandlerTest {
     private final HttpClient client = new HttpClient();
@@ -55,12 +55,6 @@ public class InstrumentedHandlerTest {
                         "org.eclipse.jetty.server.handler.DefaultHandler.handler.3xx-responses",
                         "org.eclipse.jetty.server.handler.DefaultHandler.handler.4xx-responses",
                         "org.eclipse.jetty.server.handler.DefaultHandler.handler.5xx-responses",
-                        "org.eclipse.jetty.server.handler.DefaultHandler.handler.percent-4xx-1m",
-                        "org.eclipse.jetty.server.handler.DefaultHandler.handler.percent-4xx-5m",
-                        "org.eclipse.jetty.server.handler.DefaultHandler.handler.percent-4xx-15m",
-                        "org.eclipse.jetty.server.handler.DefaultHandler.handler.percent-5xx-1m",
-                        "org.eclipse.jetty.server.handler.DefaultHandler.handler.percent-5xx-5m",
-                        "org.eclipse.jetty.server.handler.DefaultHandler.handler.percent-5xx-15m",
                         "org.eclipse.jetty.server.handler.DefaultHandler.handler.requests",
                         "org.eclipse.jetty.server.handler.DefaultHandler.handler.active-suspended",
                         "org.eclipse.jetty.server.handler.DefaultHandler.handler.async-dispatches",
