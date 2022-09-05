@@ -1289,7 +1289,7 @@ public final class PackageFactory {
    */
   // Used outside of bazel!
   public Package.Builder createPackageFromPreprocessingResult(
-      String workspaceName,
+      Package externalPkg,
       PackageIdentifier packageId,
       Path buildFile,
       Preprocessor.Result preprocessingResult,
@@ -1306,7 +1306,7 @@ public final class PackageFactory {
     AstAfterPreprocessing astAfterPreprocessing = new AstAfterPreprocessing(preprocessingResult,
         buildFileAST, localReporterForParsing);
     return createPackageFromPreprocessingAst(
-        workspaceName,
+        externalPkg,
         packageId,
         buildFile,
         astAfterPreprocessing,
@@ -1326,7 +1326,7 @@ public final class PackageFactory {
   }
 
   public Package.Builder createPackageFromPreprocessingAst(
-      String workspaceName,
+      Package externalPkg,
       PackageIdentifier packageId,
       Path buildFile,
       Preprocessor.AstAfterPreprocessing astAfterPreprocessing,
@@ -1344,7 +1344,7 @@ public final class PackageFactory {
       prefetchGlobs(packageId, astAfterPreprocessing.ast, astAfterPreprocessing.preprocessed,
           buildFile, globber, defaultVisibility, makeEnv);
       return evaluateBuildFile(
-          workspaceName,
+          externalPkg,
           packageId,
           astAfterPreprocessing.ast,
           buildFile,
@@ -1420,7 +1420,7 @@ public final class PackageFactory {
 
     Package result =
         createPackageFromPreprocessingResult(
-                externalPkg.getWorkspaceName(),
+                externalPkg,
                 packageId,
                 buildFile,
                 preprocessingResult,
@@ -1603,7 +1603,7 @@ public final class PackageFactory {
         builder.put(function.getName(), function);
       }
     }
-    return NativeClassObjectConstructor.STRUCT.create(
+    return SkylarkClassObjectConstructor.STRUCT.create(
         builder.build(), "no native function or rule '%s'");
   }
 
@@ -1661,7 +1661,7 @@ public final class PackageFactory {
    */
   @VisibleForTesting // used by PackageFactoryApparatus
   public Package.Builder evaluateBuildFile(
-      String workspaceName,
+      Package externalPkg,
       PackageIdentifier packageId,
       BuildFileAST buildFileAST,
       Path buildFilePath,
@@ -1694,7 +1694,7 @@ public final class PackageFactory {
           // set default_visibility once, be reseting the PackageBuilder.defaultVisibilitySet flag.
           .setDefaultVisibilitySet(false)
           .setSkylarkFileDependencies(skylarkFileDependencies)
-          .setWorkspaceName(workspaceName);
+          .setWorkspaceName(externalPkg.getWorkspaceName());
 
       Event.replayEventsOn(eventHandler, pastEvents);
 

@@ -145,8 +145,15 @@ public class WindowsSubprocess implements Subprocess {
     waitLatch = new CountDownLatch(1);
     // Every Windows process we start consumes a thread here. This is suboptimal, but seems to be
     // the sanest way to reconcile WaitForMultipleObjects() and Java-style interruption.
-    @SuppressWarnings("unused")
-    Future<?> possiblyIgnoredError = WAITER_POOL.submit(this::waiterThreadFunc);
+    @SuppressWarnings("unused") 
+    Future<?> possiblyIgnoredError =
+        WAITER_POOL.submit(
+            new Runnable() {
+              @Override
+              public void run() {
+                waiterThreadFunc();
+              }
+            });
   }
 
   private void waiterThreadFunc() {
