@@ -84,6 +84,7 @@ public final class AutoSizeConfig {
     private int mScreenWidth;
     /**
      * 设备的屏幕总高度, 单位 px, 如果 {@link #isUseDeviceSize} 为 {@code false}, 屏幕总高度会减去状态栏的高度
+     * 如果有导航栏也会减去导航栏的高度
      */
     private int mScreenHeight;
     /**
@@ -95,8 +96,8 @@ public final class AutoSizeConfig {
     private boolean isBaseOnWidth = true;
     /**
      * 此字段表示是否使用设备的实际尺寸做适配
-     * {@link #isUseDeviceSize} 为 {@code true} 表示屏幕高度 {@link #mScreenHeight} 包含状态栏的高度
-     * {@link #isUseDeviceSize} 为 {@code false} 表示 {@link #mScreenHeight} 会减去状态栏的高度, 默认为 {@code true}
+     * {@link #isUseDeviceSize} 为 {@code true} 表示屏幕高度 {@link #mScreenHeight} 包含状态栏的高度, 如果有导航栏也会包含导航栏的高度
+     * {@link #isUseDeviceSize} 为 {@code false} 表示 {@link #mScreenHeight} 会减去状态栏的高度, 如果有导航栏也会减去导航栏的高度, 默认为 {@code true}
      */
     private boolean isUseDeviceSize = true;
     /**
@@ -282,7 +283,7 @@ public final class AutoSizeConfig {
     /**
      * 是否使用设备的实际尺寸做适配
      *
-     * @param useDeviceSize {@code true} 为使用设备的实际尺寸 (包含状态栏), {@code false} 为不使用设备的实际尺寸 (不包含状态栏)
+     * @param useDeviceSize {@code true} 为使用设备的实际尺寸 (包含状态栏, 导航栏), {@code false} 为不使用 (不包含状态栏, 导航栏)
      * @see #isUseDeviceSize 详情请查看这个字段的注释
      */
     public AutoSizeConfig setUseDeviceSize(boolean useDeviceSize) {
@@ -388,7 +389,7 @@ public final class AutoSizeConfig {
      * @return {@link #mScreenHeight}
      */
     public int getScreenHeight() {
-        return isUseDeviceSize() ? mScreenHeight : mScreenHeight - ScreenUtils.getStatusBarHeight();
+        return isUseDeviceSize() ? mScreenHeight : mScreenHeight - ScreenUtils.getStatusBarHeight() - ScreenUtils.getHeightOfNavigationBar(getApplication());
     }
 
     /**
@@ -478,7 +479,7 @@ public final class AutoSizeConfig {
     /**
      * 设置屏幕高度
      *
-     * @param screenHeight 屏幕高度 (需要包含状态栏)
+     * @param screenHeight 屏幕高度 (包含状态栏和导航栏)
      */
     public void setScreenHeight(int screenHeight) {
         Preconditions.checkArgument(screenHeight > 0, "screenHeight must be > 0");
