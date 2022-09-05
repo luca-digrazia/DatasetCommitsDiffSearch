@@ -118,15 +118,12 @@ public class FullyQualifiedName implements DataKey {
           unHandledLanguageRegionQualifiers.add("b+sr+Latn");
           // Consume the next value, as it's been replaced.
           rawQualifiers.next();
-        } else if (qualifier.equals("anydpi")) {
-          unHandledDensityQualifiers.add(qualifier);
         } else if (qualifier.equals("watch")) {
           unHandledUIModeQualifiers.add(qualifier);
         } else {
           // This qualifier can probably be handled by FolderConfiguration.
           handledQualifiers.add(qualifier);
         }
-        
       }
       // Create a configuration
       FolderConfiguration config = FolderConfiguration.getConfigFromQualifiers(handledQualifiers);
@@ -285,9 +282,7 @@ public class FullyQualifiedName implements DataKey {
   }
 
   public static boolean isOverwritable(FullyQualifiedName name) {
-    return !(name.resourceType == ResourceType.ID
-        || name.resourceType == ResourceType.PUBLIC
-        || name.resourceType == ResourceType.STYLEABLE);
+    return !(name.resourceType == ResourceType.ID || name.resourceType == ResourceType.STYLEABLE);
   }
 
   /**
