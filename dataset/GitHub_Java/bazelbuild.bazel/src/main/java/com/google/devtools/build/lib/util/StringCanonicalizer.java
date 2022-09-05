@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.util;
 
+import com.google.common.base.Function;
 import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
+import com.google.common.collect.Interners;
 
 /**
  * Static singleton holder for the string interning pool.  Doesn't use {@link String#intern}
@@ -22,7 +23,15 @@ import com.google.devtools.build.lib.concurrent.BlazeInterners;
  */
 public final class StringCanonicalizer {
 
-  private static final Interner<String> interner = BlazeInterners.newWeakInterner();
+  private static final Interner<String> interner = Interners.newWeakInterner();
+
+  /** Functional interface, for use with e.g. transform */
+  public static final Function<String, String> INTERN = new Function<String, String>() {
+    @Override
+    public String apply(String x) {
+      return intern(x);
+    }
+  };
 
   private StringCanonicalizer() {
   }
