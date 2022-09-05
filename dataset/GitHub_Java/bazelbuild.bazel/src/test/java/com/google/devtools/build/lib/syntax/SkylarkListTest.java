@@ -43,11 +43,12 @@ public class SkylarkListTest extends EvaluationTestCase {
 
   @Test
   public void testIndexOutOfBounds() throws Exception {
-    checkEvalError(
-        "index out of range (index is 3, but sequence has 3 elements)", "['a', 'b', 'c'][3]");
-    checkEvalError(
-        "index out of range (index is 10, but sequence has 3 elements)", "['a', 'b', 'c'][10]");
-    checkEvalError("index out of range (index is 0, but sequence has 0 elements)", "[][0]");
+    checkEvalError("Index out of range (index is 3, but sequence has 3 elements)",
+        "['a', 'b', 'c'][3]");
+    checkEvalError("Index out of range (index is 10, but sequence has 3 elements)",
+        "['a', 'b', 'c'][10]");
+    checkEvalError("Index out of range (index is 0, but sequence has 0 elements)",
+        "[][0]");
   }
 
   @Test
@@ -57,8 +58,10 @@ public class SkylarkListTest extends EvaluationTestCase {
     assertThat(eval("l[-1]")).isEqualTo("c");
     assertThat(eval("l[-2]")).isEqualTo("b");
     assertThat(eval("l[-3]")).isEqualTo("a");
-    checkEvalError("index out of range (index is -4, but sequence has 3 elements)", "l[-4]");
-    checkEvalError("index out of range (index is -1, but sequence has 0 elements)", "[][-1]");
+    checkEvalError("Index out of range (index is -4, but sequence has 3 elements)",
+        "l[-4]");
+    checkEvalError("Index out of range (index is -1, but sequence has 0 elements)",
+        "[][-1]");
   }
 
   @SuppressWarnings("unchecked")
@@ -138,7 +141,7 @@ public class SkylarkListTest extends EvaluationTestCase {
     assertThat(listEval("l[-10:5:-1]")).isEmpty();
     assertThat(listEval("l[1:-8:-1]")).containsExactly("b", "a").inOrder();
 
-    checkEvalError("slice step cannot be zero", "l[2:5:0]");
+    checkEvalError("Slice step cannot be zero", "l[2:5:0]");
   }
 
   @Test
